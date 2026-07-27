@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import qs.Core
 
 PanelWindow {
     id: bar
@@ -8,13 +9,13 @@ PanelWindow {
     screen: modelData
     anchors { top: true; left: true; right: true }
     implicitHeight: 32
-    color: "#100F0F" // Flexoki black placeholder; Task 3 replaces with Theme token
+    color: Theme.color.background
 
     Text {
         anchors.centerIn: parent
         text: "formalshell"
-        color: "#CECDC3"
-        font.family: "monospace"
-        font.pixelSize: 13
+        color: Theme.color.foreground
+        font.family: Theme.font.family
+        font.pixelSize: Theme.font.body
     }
 }
