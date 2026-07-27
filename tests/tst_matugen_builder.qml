@@ -19,9 +19,13 @@ TestCase {
         verify(cfg.indexOf("/state/theme.json.tmp") >= 0);
     }
     function test_no_user_config() {
+        // matugen hard-rejects a config with no top-level [config] table, so
+        // a fresh install (no ~/.config/matugen/config.toml) must still get
+        // a bare one, ahead of the shell's own template blocks.
         var cfg = M.buildConfig({ shellTemplateDir: "/t", stateDir: "/s", userConfigText: null, dropInTexts: [] });
+        verify(cfg.indexOf("[config]") >= 0);
         verify(cfg.indexOf("[templates.formalshell]") >= 0);
-        verify(cfg.indexOf("[config]") === -1);
+        verify(cfg.indexOf("[config]") < cfg.indexOf("[templates.formalshell]"));
     }
     function test_extract_section() {
         var t = "[config]\na = 1\n[templates.x]\nb = 2\n";

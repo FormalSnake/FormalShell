@@ -30,10 +30,13 @@ function templateBlock(name, inputPath, outputPath) {
 function buildConfig(opts) {
     var parts = [];
 
-    if (opts.userConfigText) {
-        var userConfig = extractSection(opts.userConfigText, "config");
-        if (userConfig) parts.push(userConfig);
-    }
+    // matugen hard-rejects a config file with no top-level [config] table
+    // ("missing field `config`"), so this must always emit one — the user's
+    // verbatim section if they have one, otherwise a bare header. A fresh
+    // install with no ~/.config/matugen/config.toml must still produce a
+    // config matugen will run.
+    var userConfig = opts.userConfigText ? extractSection(opts.userConfigText, "config") : "";
+    parts.push(userConfig || "[config]");
 
     parts.push(templateBlock("formalshell",
         opts.shellTemplateDir + "/theme.json.tmpl", opts.stateDir + "/theme.json.tmp"));
