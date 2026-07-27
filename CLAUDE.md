@@ -29,6 +29,14 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   fallback, not just that `theme.json` was written.
 - `dev/smoke-niri.sh --dump` — same, plus calls the `debug` IPC target and
   cats the JSON reply; the two flags can combine.
+- `dev/smoke-niri.sh --menu` — same, plus drives the `menu` IPC target
+  in-session: `summon` opens it at root, `debug query` ranks a fuzzy search
+  against the live tree, `select` switches it into select mode (the
+  screenshot lands here — ledger cells, inverted cursor row, uppercase
+  breadcrumb), then `close` cancels the pending select and the resulting
+  `menu-selection.txt` is read back to confirm the `{cancelled:true}` write.
+  Combine with `--wallpaper` to verify the menu over matugen-recolored
+  colors (`docs/screenshots/menu-niri.png` is captured this way).
 - `dev/smoke-hyprland.sh` — the same loop for the second backend (nested
   Hyprland, `hyprctl`/exec-once instead of niri's `spawn-at-startup`). Nested
   Hyprland is flakier than nested niri in a sandboxed dev environment; if it

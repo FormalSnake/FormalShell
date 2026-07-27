@@ -16,8 +16,10 @@ including the niri IPC client, which talks to niri's Unix sockets directly
 via `Quickshell.Io.Socket`.
 
 `shell/shell.qml` is the entry point (`//@ pragma ShellId formalshell`). It
-instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar` per
-connected output, plus a top-level `Ipc` scope for debug/introspection.
+instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar` and
+one `Background` per connected output, a single non-per-screen `Menu`
+instance (it opens on the focused screen at summon time rather than living
+on every output), and the `Ipc` handlers (debug/theme/wallpaper/menu).
 
 ## Tree layout
 
@@ -27,6 +29,7 @@ shell/
   Core/
     State.qml                 singleton — state.json (wallpaper, mode), FileView+JsonAdapter
     Theme.qml                 singleton — Theme.color live off theme.json, Flexoki fallback statics
+    Config.qml                 singleton — read-only watched settings.json (menu.customPowerButtons, …)
     qmldir
   Theme/
     matugen.js                 pure JS, .pragma library — merged matugen TOML config builder
@@ -45,10 +48,21 @@ shell/
       NiriBackend.qml           two-socket JSON IPC client; applyThemeFragment() reloads config
     hyprland/
       HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
+  Components/
+    Cell.qml                    the shared ledger cell — selected/accent/hovered, bottom+right hairline
+                                 rules only (shared-rule contract, see below), default-property content
+    MetaLabel.qml                uppercase/letterspaced/dim caption Text for meta rows
+    qmldir
+  Menu/
+    model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
+    search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
+    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()
+    default-menu.jsonc           shipped default tree (apps, system/power, theme)
   Ipc/
-    DebugIpc.qml               IpcHandler target "debug", function dump(): string
+    DebugIpc.qml               IpcHandler target "debug", function dump(): string, query(q): string
     ThemeIpc.qml               IpcHandler target "theme", retheme()/mode()/status()
     WallpaperIpc.qml           IpcHandler target "wallpaper", set()/get()
+    MenuIpc.qml                 IpcHandler target "menu", toggle()/summon()/close()/refresh()/ping()/select()/input()
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region RowLayout
@@ -57,12 +71,17 @@ shell/
         ActiveWindow.qml        focused window's appId + title
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
+    Menu/
+      Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells
+      MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
 tests/
   tst_niri_reducer.qml         qmltestrunner tests for reducer.js
   tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
   tst_palette.qml              qmltestrunner tests for Theme/palette.js
+  tst_menu_model.qml            qmltestrunner tests for Menu/model.js
+  tst_menu_search.qml           qmltestrunner tests for Menu/search.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper) loop
+  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu) loop
   smoke-hyprland.sh             same, nested Hyprland
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`
@@ -162,11 +181,15 @@ event stream or JSON parsing to test in isolation.
 
 `shell/Ipc/DebugIpc.qml` registers `IpcHandler { target: "debug" }` with
 `function dump(): string` returning
-`JSON.stringify({ compositor, available, workspaces, windows, focusedWindowId, focusedWorkspaceId })`
-read straight off `CompositorService`. This is the textual verification hook
-used by both smoke scripts (`qs ipc --any-display -p <path> call debug dump`)
-and by hand during backend development — it's the fastest way to confirm a
-backend is wired correctly without reading a screenshot.
+`JSON.stringify({ compositor, available, workspaces, windows, focusedWindowId, focusedWorkspaceId, configLoaded })`
+read straight off `CompositorService`/`Core.Config`. This is the textual
+verification hook used by both smoke scripts (`qs ipc --any-display -p <path>
+call debug dump`) and by hand during backend development — it's the fastest
+way to confirm a backend is wired correctly without reading a screenshot.
+`function query(q: string): string` ranks `q` against the live menu tree
+(`Menu.qml#query()` → `search.js#rank()`) and returns the JSON result array,
+verifying the model/provider/scorer pipeline without keyboard injection
+(nested test sessions can't inject keystrokes into the surface itself).
 
 ## Theme engine data flow
 
@@ -205,6 +228,54 @@ than `FileView.setText()`: `FileView` silently skips both the write and its
 `saved()` signal when the new text is byte-identical to what's already on
 disk, which two back-to-back `retheme()` runs for the same wallpaper/mode
 routinely produce.
+
+## Menu data flow
+
+```
+shell/Menu/default-menu.jsonc                 ~/.config/formalshell/menu.jsonc
+  |  FileView (Menu.qml)                        |  FileView (Menu.qml, same bounded-retry pattern)
+  v                                              v
+Model.parseJsonc() -> defaultObj              Model.parseJsonc() -> userObj
+  \                                             /
+   \--------------- Model.buildTree(defaultObj, userObj) --------------/
+                       |  dotted-id hierarchy, per-key user-over-default merge,
+                       |  hidden:true drops a node+subtree, kind inferred from
+                       |  action/target/provider/else-submenu
+                       v
+                 Providers.applyProviders(tree, { apps: appsProvider })
+                       |  expands every "provider" node's children in-place
+                       |  (DesktopEntries.applications.values -> kind:"app" nodes)
+                       |  Config.get("menu.customPowerButtons") merged into the
+                       |  default object first, via Providers.customPowerButtonEntries()
+                       v
+                 { rootIds, nodes }             (recomputed reactively: Config.settings
+                                                  change, DesktopEntries change, jsonc reload)
+                       |
+                       |  on open()/level-descend only (never per-keystroke):
+                       v
+              one Process per when/checked condition -> _condResults cache
+                       |
+        +--------------+---------------------------+
+        v                                           v
+Model.visibleChildren(nodes, id, condResults)   Search.rank(nodes, query, condResults)
+  level browsing, self-pruning empty submenus      whole-tree fuzzy scoring (see search.js's
+  and links recursively                            five tiers), depth/decl-order tie-break, cap 40
+        \                                           /
+         \-----------------------------------------/
+                       v
+              Surfaces/Menu/MenuRow.qml  (a Cell: icon+label, ▸/✓ trailing
+                                           indicator, confirm-gate swap)
+```
+
+**Cell shared-rule contract.** `Components/Cell.qml` draws only its own
+bottom and right hairline rule (`Theme.color.rule`, `Theme.borderWidth`
+thick) — the container arranging a grid of cells (`Menu.qml`'s `ListView`,
+future bar/panel grids) is responsible for the outer top/left rule, so
+adjacent cells never double up a shared border. This is what makes
+DESIGN.md's "cells not cards, one hairline between neighbors" rule hold
+structurally rather than by convention: every row on every M4+ surface goes
+through `Cell`, so a `Rectangle`-with-border appearing outside `Components/`
+is drift, not a new pattern.
 
 ## Adding a backend
 

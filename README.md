@@ -10,16 +10,19 @@ consuming config needs near-zero glue.
 
 ## Status
 
-Pre-alpha. M1 (walking skeleton), M2 (compositor layer), and M3 (matugen
-theme engine) are done: a brutalist bar showing live workspaces and the
-active window, backed by a formal `CompositorBackend` contract with working
-niri and Hyprland implementations, and wallpaper-driven colors that recolor
-every bar token live and sync niri's window borders (see Theming below). CI
-(qmllint + headless qml-tests) and a nested-niri smoke loop are the
-verification tools for every change. Everything past that —
-menu/launcher, notifications, OSD, lock/screensaver, greeter, panels — is
-unbuilt; see `docs/superpowers/specs/2026-07-27-formalshell-design.md` for
-the full design.
+Pre-alpha. M1 (walking skeleton), M2 (compositor layer), M3 (matugen theme
+engine), and M4 (unified menu) are done: a brutalist bar showing live
+workspaces and the active window, backed by a formal `CompositorBackend`
+contract with working niri and Hyprland implementations; wallpaper-driven
+colors that recolor every bar token live and sync niri's window borders (see
+Theming below); and a ruled-ledger menu that's app launcher, system/power
+menu, and a `select`/`input` dmenu replacement in one fuzzy-searchable
+IPC-summonable surface (see Menu below). CI (qmllint + headless qml-tests)
+and a nested-niri smoke loop are the verification tools for every change.
+Everything past that — notifications, OSD, lock/screensaver, greeter,
+panels, clipboard history — is unbuilt; see
+`docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
+design.
 
 ## Screenshots
 
@@ -34,6 +37,14 @@ The screenshot above is from `dev/smoke-niri.sh --wallpaper`: a solid-color
 test wallpaper is set over IPC before the shot, so the background layer and
 the bar's colors are both matugen-derived rather than the static Flexoki
 fallback.
+
+![Menu on niri](docs/screenshots/menu-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --menu --wallpaper`: the menu
+is summoned over IPC, switched into `select` mode, and screenshotted over the
+same matugen-recolored wallpaper — the ledger contract (shared hairline
+rules, inverted cursor row, uppercase `SELECT / PICK` breadcrumb) is visible
+end to end.
 
 The Hyprland backend is implemented and its `debug` IPC dump has been
 verified against a live nested Hyprland session (workspaces, focused window,
@@ -111,6 +122,88 @@ qs ipc --any-display -p <store-path>/share/formalshell call theme mode toggle   
 qs ipc --any-display -p <store-path>/share/formalshell call theme status         # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
 ```
 
+## Menu
+
+One keyboard-driven, fuzzy-searchable surface is app launcher, system/power
+menu, and a `select`/`input` dmenu replacement at once — Omarchy-style,
+themed as a ruled ledger (see `docs/DESIGN.md`).
+
+**The tree.** FormalShell ships `shell/Menu/default-menu.jsonc`, a flat
+JSONC object keyed by dotted id (`system.power.reboot` implies parents
+`system` and `system.power`, auto-created as submenus if not declared
+themselves). An entry's kind is inferred from its keys: `action` → runs a
+command, `target` → link to another node, `provider` → populated at
+tree-build time (the `apps` node uses the `apps` provider, which turns every
+installed `.desktop` entry into a launchable row), anything else → plain
+submenu. `when`/`checked` are shell condition strings, batched into one
+`Process` per condition on menu-open (never per keystroke) — `when: "false"`
+hides a node outright, a real command's exit code decides visibility live
+(e.g. `system.logout`'s `test -n "$NIRI_SOCKET"` guard).
+
+**User overrides.** `~/.config/formalshell/menu.jsonc` merges **per-key over**
+the default tree — user wins field-by-field, and `"hidden": true` removes a
+default entry (and its whole subtree) without needing to redeclare it:
+
+```jsonc
+// ~/.config/formalshell/menu.jsonc
+{
+    "system.suspend": { "hidden": true },
+    "system.custom-user-node": { "label": "My Script", "action": "~/bin/my-script" }
+}
+```
+
+**Custom power buttons.** `~/.config/formalshell/settings.json`'s
+`menu.customPowerButtons` array is the first-class way to add entries under
+`System` — no `menu.jsonc` needed for the common case:
+
+```json
+{
+  "menu": {
+    "customPowerButtons": [
+      { "label": "Windows", "icon": "󰖳", "command": "systemctl reboot --boot-loader-entry=auto-windows", "confirm": true }
+    ]
+  }
+}
+```
+
+Each button becomes `system.custom.<i>` in the tree; `confirm: true` requires
+a second Enter on the row before the command runs (`CONFIRM <label>?`).
+
+**IPC.** Every route is summonable for direct compositor keybinds:
+`toggle(route)` (open if closed/close if open), `summon(route)` (always
+open), `close()`, `refresh()` (force a re-read of default+user jsonc —
+`settings.json` is already watched live, this is a manual fallback for an
+editor save an fs watcher missed), `ping()`. `route` is a node id
+(`"system"`) or alias, or `""` for root. Bind it directly in niri:
+
+```kdl
+binds {
+    Mod+Ntilde { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "menu" "summon" "clipboard"; }
+}
+```
+
+**`select`/`input` — the dmenu replacement.** `qs ipc call` is synchronous
+request/response but can't block on the menu's UI answer, so `select`/`input`
+correlate by a caller-supplied token and hand the answer back through a file
+instead of the IPC reply:
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call menu select "Pick a window" ' ["a","b","c"]' tok1
+qs ipc --any-display -p <store-path>/share/formalshell call menu input "Rename to" tok2
+
+# poll/read the answer:
+cat $XDG_STATE_HOME/formalshell/menu-selection.txt
+# => {"token":"tok1","value":"b"}          (a choice was made)
+# => {"token":"tok1","cancelled":true}     (Escape, or superseded by another open)
+```
+
+The leading space in `' ["a","b","c"]'` is required, not cosmetic: `qs ipc
+call`'s CLI11 argument parser auto-splits any positional argument that
+literally starts with `[` and ends with `]` (its vector-literal shorthand),
+which shreds a bare JSON array into extra positional arguments before it ever
+reaches the handler. A leading space defeats that check while `JSON.parse`
+still tolerates the whitespace.
+
 ## Dev loop
 
 ```bash
@@ -120,6 +213,7 @@ just test                # headless qmltestrunner over tests/
 just lint                # nix flake check -L (qml-tests + qmllint)
 just smoke               # nested niri + screenshot — the visual verification loop
 ./dev/smoke-niri.sh --wallpaper # same, plus sets a test wallpaper over IPC first
+./dev/smoke-niri.sh --menu      # same, plus drives the menu IPC (summon/select/close) in-session
 ./dev/smoke-hyprland.sh  # nested Hyprland equivalent (see Screenshots above)
 ```
 
