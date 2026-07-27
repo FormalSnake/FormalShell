@@ -5,3 +5,4 @@ result-*
 .qmlls.ini
 dev/.linux-builder/
 dev/.testvm/
+artifacts/
