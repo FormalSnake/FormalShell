@@ -49,6 +49,53 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `--prefer darkness|lightness` matched to `State.mode`. If you invoke
   matugen by hand while debugging, do the same or pass `--fallback-color`.
 
+## macOS verification loop (mac e2e rig)
+
+The Linux hosts (g815, e1504g) are currently offline. Until one returns, a
+macbook running Determinate Nix under nix-darwin is the only place any of
+this gets verified — nix-darwin's `nix.linux-builder.enable` is unavailable
+under `determinateNix.enable = true`, so the rig is hand-rolled as two
+layers, both driven from this repo (`docs/superpowers/plans/2026-07-28-mac-e2e-rig.md`
+has the full design rationale):
+
+- **Build layer** — `dev/linux-builder.sh {start|stop|status|register}` boots
+  the stock `darwin.linux-builder` VM in the background and registers it in
+  `/etc/nix/machines`, giving `nix build .#packages.aarch64-linux.<x>` a real
+  remote builder from the mac. Its only job is compiling aarch64-linux
+  closures (`formalshell`, quickshell, the testvm image itself); it does not
+  run any part of the shell.
+- **Runtime layer** — `nixosConfigurations.testvm` (`nix/testvm.nix`,
+  `packages.aarch64-darwin.testvm`) is a headless aarch64 NixOS VM booted
+  under HVF, pre-staged with `formalshell`/quickshell/niri/sway/matugen so
+  in-VM builds are near no-ops. Inside it, a systemd **user** service runs a
+  headless wlroots parent compositor (sway, `WLR_BACKENDS=headless`,
+  `WLR_RENDERER=pixman`) publishing `WAYLAND_DISPLAY` into the systemd user
+  environment — the same lookup `dev/smoke-niri.sh` already falls back to on
+  a real host. `dev/smoke-*.sh` then run **completely unchanged** inside,
+  nesting their own niri/Hyprland as a winit/wayland client of that parent
+  (software rendering throughout — Mesa llvmpipe for the nested compositor's
+  EGL, pixman for the parent — the same concession any CI-grade wlroots
+  testing makes).
+
+`dev/vm.sh` is the driver: `start` (build+boot headless, wait for ssh),
+`stop`, `status`, `sync` (rsync the **working tree** — not a commit — into
+`~/formalshell` inside the VM), `run <cmd…>` (ssh with cwd at the repo and
+the session env exported), `smoke [flags…]` (sync, run `dev/smoke-niri.sh`
+inside, then `scp` the `SMOKE_OK` screenshot plus any dump/status/query JSON
+back to `./artifacts/` on the mac), `shell` (interactive ssh). `justfile`
+wraps this as `vm-up`/`vm-down`/`vm-build`/`vm-test`/`vm-lint`/`vm-smoke
+*FLAGS` — the mac-side equivalents of `build`/`test`/`lint`/`smoke` above.
+Screenshots and JSON always land on the **mac** filesystem under
+`./artifacts/` (gitignored) — Read-verify them there exactly as you would
+`result/`'s output on a Linux host.
+
+The VM has no real desktop bus owner (nothing on the mac plays the role DMS
+plays on the Linux hosts), so `busctl --user status
+org.freedesktop.Notifications` legitimately answers ENXIO/no-owner every
+run; `dev/smoke-niri.sh`'s D-Bus isolation check tolerates that (`|| true` —
+a real "no owner" answer, not a connectivity failure) without changing
+behavior on hosts where a real owner exists.
+
 ## Hard rules
 
 - **Host-session safety**: the owner's live niri session is NOT a test target.

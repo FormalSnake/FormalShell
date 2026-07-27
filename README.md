@@ -217,6 +217,31 @@ just smoke               # nested niri + screenshot — the visual verification 
 ./dev/smoke-hyprland.sh  # nested Hyprland equivalent (see Screenshots above)
 ```
 
+### On a macbook
+
+Linux boxes aren't always around. On Determinate Nix under nix-darwin, a
+two-layer rig reproduces every command above from the mac itself — see
+`CLAUDE.md`'s "macOS verification loop" for the full design:
+
+```bash
+dev/linux-builder.sh start   # once: aarch64-linux builder (nix build .#packages.aarch64-linux.*)
+dev/linux-builder.sh register
+
+just vm-up                   # boot the headless aarch64 test VM (nix/testvm.nix)
+just vm-build                # nix build .#formalshell, inside the VM
+just vm-test                 # qmltestrunner, inside the VM
+just vm-lint                 # nix flake check -L, inside the VM
+just vm-smoke                # dev/smoke-niri.sh, unchanged, against a headless
+                              # sway parent compositor — screenshot pulled to ./artifacts/
+just vm-smoke --wallpaper --menu --notify --center   # same flags dev/smoke-niri.sh takes
+just vm-down
+```
+
+`dev/vm.sh sync` pushes the working tree (not a commit) into the VM before
+every `run`/`smoke`, so the edit-build-screenshot loop matches editing
+locally. Screenshots and JSON dumps land on the mac under `./artifacts/`
+(gitignored) instead of `result/`.
+
 ## License
 
 MIT — see `LICENSE`.

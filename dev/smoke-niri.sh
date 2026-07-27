@@ -136,7 +136,10 @@ trap restore_host_wayland_display EXIT
 # D-Bus isolation check (see the header comment): captured now, compared
 # against the same query once the nested session has torn down.
 host_notifications_owner() {
-  busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^PID=//p'
+  # `|| true`: busctl exits 1 with ENXIO when the name has no owner at all
+  # (e.g. no host desktop on the VM rig) — a legitimate answer, not a
+  # connectivity failure, so it must not trip `set -e`/pipefail here.
+  busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^PID=//p' || true
 }
 host_notifications_owner_before=$(host_notifications_owner)
 

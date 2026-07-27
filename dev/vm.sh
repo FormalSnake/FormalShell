@@ -162,8 +162,11 @@ cmd_smoke() {
     exit "$status"
   fi
 
+  # `grep -oE`, not an anchored `^SMOKE_OK` sed: --menu's own last line is a
+  # `cat` of selection.txt with no trailing newline, so the SMOKE_OK line
+  # lands appended to that JSON instead of starting its own line.
   local remote_png
-  remote_png=$(printf '%s\n' "$out" | sed -n 's/^SMOKE_OK //p' | tail -1)
+  remote_png=$(printf '%s\n' "$out" | grep -oE 'SMOKE_OK [^[:space:]]+' | tail -1 | awk '{print $2}')
   if [ -z "$remote_png" ]; then
     echo "testvm: no SMOKE_OK line in smoke output" >&2
     exit 1
@@ -176,8 +179,10 @@ cmd_smoke() {
   scp "${scp_opts[@]}" "test@localhost:$remote_png" "$local_png"
   echo "pulled screenshot: $local_png"
 
+  # Strip the marker wherever it landed (its own line, or appended to the
+  # last JSON line above) before saving whatever's left as the JSON sidecar.
   local rest
-  rest=$(printf '%s\n' "$out" | grep -v '^SMOKE_OK ' || true)
+  rest=$(printf '%s\n' "$out" | sed -E 's/SMOKE_OK [^[:space:]]+//' | sed '/^[[:space:]]*$/d')
   if [ -n "$(printf '%s' "$rest" | tr -d '[:space:]')" ]; then
     local local_json="$repo_root/artifacts/smoke-${ts}.json"
     printf '%s\n' "$rest" > "$local_json"
