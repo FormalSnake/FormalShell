@@ -70,13 +70,16 @@ function reduce(state, event) {
         var id = String(payload.id);
         var activated = state.workspaces.find(function (ws) { return ws.id === id; });
         var output = activated ? activated.output : null;
+        var focused = payload.focused;
         var workspaces = state.workspaces.map(function (ws) {
-            if (ws.id === id) return Object.assign({}, ws, { isActive: true });
-            if (ws.output === output) return Object.assign({}, ws, { isActive: false });
-            return ws;
+            var gotActivated = ws.id === id;
+            return Object.assign({}, ws, {
+                isActive: ws.output === output ? gotActivated : ws.isActive,
+                isFocused: focused ? gotActivated : ws.isFocused
+            });
         });
         var next = Object.assign({}, state, { workspaces: workspaces });
-        if (payload.focused) next.focusedWorkspaceId = id;
+        if (focused) next.focusedWorkspaceId = id;
         return next;
     }
 
@@ -137,7 +140,7 @@ function reduce(state, event) {
     }
 
     case "OverviewOpenedOrClosed":
-        return Object.assign({}, state, { overviewOpen: payload.isOpen });
+        return Object.assign({}, state, { overviewOpen: payload.is_open });
 
     case "ConfigLoaded":
         return Object.assign({}, state, { configLoadFailed: payload.failed });

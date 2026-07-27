@@ -35,6 +35,36 @@ TestCase {
         compare(s.windows[0].id, "8");
     }
 
+    function test_workspace_activated_updates_focus_and_active() {
+        var s = R.reduce(R.initialState(), { WorkspacesChanged: { workspaces: [
+            { id: 3, idx: 1, name: null, output: "eDP-1", is_urgent: false, is_active: true, is_focused: true, active_window_id: 7 },
+            { id: 9, idx: 2, name: "mail", output: "eDP-1", is_urgent: false, is_active: false, is_focused: false, active_window_id: null }
+        ]}});
+        s = R.reduce(s, { WorkspaceActivated: { id: 9, focused: true } });
+        compare(s.workspaces[0].isActive, false);
+        compare(s.workspaces[0].isFocused, false);
+        compare(s.workspaces[1].isActive, true);
+        compare(s.workspaces[1].isFocused, true);
+        compare(s.focusedWorkspaceId, "9");
+    }
+
+    function test_workspace_activated_without_focus_leaves_is_focused() {
+        var s = R.reduce(R.initialState(), { WorkspacesChanged: { workspaces: [
+            { id: 3, idx: 1, name: null, output: "eDP-1", is_urgent: false, is_active: true, is_focused: true, active_window_id: 7 },
+            { id: 9, idx: 2, name: "mail", output: "DP-2", is_urgent: false, is_active: false, is_focused: false, active_window_id: null }
+        ]}});
+        s = R.reduce(s, { WorkspaceActivated: { id: 9, focused: false } });
+        compare(s.workspaces[0].isFocused, true);
+        compare(s.workspaces[1].isActive, true);
+        compare(s.workspaces[1].isFocused, false);
+        compare(s.focusedWorkspaceId, "3");
+    }
+
+    function test_overview_opened_or_closed() {
+        var s = R.reduce(R.initialState(), { OverviewOpenedOrClosed: { is_open: true } });
+        compare(s.overviewOpen, true);
+    }
+
     function test_unknown_event_ignored() {
         var s0 = R.initialState();
         var s1 = R.reduce(s0, { SomeFutureEvent: { whatever: 1 } });
