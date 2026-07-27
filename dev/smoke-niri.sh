@@ -27,15 +27,41 @@ shell_path=$(readlink -f result/share/formalshell)
 # The nested instance is a Wayland client of the host compositor, so it needs
 # the host's WAYLAND_DISPLAY. This shell may not have it exported (e.g. a
 # non-interactive session) even though the host session is up; fall back to
-# asking the user systemd session, which niri-session always populates.
+# asking the user systemd session, which niri-session always populates. The
+# nested niri we're about to spawn also imports ITS OWN WAYLAND_DISPLAY into
+# that same systemd environment on startup, so the fallback must reject a
+# stale value left behind by an earlier nested run, and the host's value must
+# be restored once this run tears down so later services (this script's next
+# run, autostart.nix apps) don't inherit a dead display. A dead Wayland socket
+# file can outlive its compositor (no listener left to unlink it on exit), so
+# rejecting the fallback needs an actual liveness check, not just existence:
+# `ss` only lists a unix socket path here while something still has it bound
+# and listening.
+wayland_socket_live() {
+  ss -xl 2>/dev/null | awk -v p="$1" '$1 == "u_str" && $2 == "LISTEN" && $5 == p { found=1 } END { exit !found }'
+}
+
 wayland_display="${WAYLAND_DISPLAY:-}"
 if [ -z "$wayland_display" ]; then
-  wayland_display=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
+  fallback=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
+  if [ -n "$fallback" ] && wayland_socket_live "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$fallback"; then
+    wayland_display="$fallback"
+  fi
 fi
 if [ -z "$wayland_display" ]; then
-  echo "SMOKE_FAIL: no WAYLAND_DISPLAY found (host compositor not running?)" >&2
+  echo "SMOKE_FAIL: no live WAYLAND_DISPLAY found (host compositor not running?)" >&2
   exit 1
 fi
+
+host_wayland_display=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
+restore_host_wayland_display() {
+  if [ -n "$host_wayland_display" ]; then
+    systemctl --user set-environment WAYLAND_DISPLAY="$host_wayland_display" 2>/dev/null || true
+  else
+    systemctl --user unset-environment WAYLAND_DISPLAY 2>/dev/null || true
+  fi
+}
+trap restore_host_wayland_display EXIT
 
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
