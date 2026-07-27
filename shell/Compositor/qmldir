@@ -1,1 +1,2 @@
 singleton CompositorService CompositorService.qml
+BackendBase BackendBase.qml

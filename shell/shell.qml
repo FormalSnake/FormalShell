@@ -3,6 +3,7 @@ import Quickshell
 import QtQuick
 
 import qs.Surfaces.Bar
+import qs.Ipc
 
 ShellRoot {
     Variants {
@@ -12,4 +13,6 @@ ShellRoot {
             Bar {}
         }
     }
+
+    DebugIpc {}
 }

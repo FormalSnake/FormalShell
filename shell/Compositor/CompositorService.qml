@@ -2,6 +2,8 @@ pragma Singleton
 import Quickshell
 import QtQuick
 
+import qs.Compositor.niri
+
 Singleton {
     id: root
 
@@ -16,16 +18,23 @@ Singleton {
     }
 
     BackendBase {
-        id: backend
+        id: nullBackend
     }
 
-    readonly property alias available: backend.available
-    property alias workspaces: backend.workspaces
-    property alias windows: backend.windows
-    property alias outputs: backend.outputs
-    property alias focusedWindowId: backend.focusedWindowId
-    property alias focusedWorkspaceId: backend.focusedWorkspaceId
-    property alias focusedOutputName: backend.focusedOutputName
+    NiriBackend {
+        id: niriBackend
+    }
+
+    // Task 9 extends this to also pick a HyprlandBackend.
+    readonly property QtObject backend: root.compositor === "niri" ? niriBackend : nullBackend
+
+    readonly property bool available: backend.available
+    property var workspaces: backend.workspaces
+    property var windows: backend.windows
+    property var outputs: backend.outputs
+    property string focusedWindowId: backend.focusedWindowId
+    property string focusedWorkspaceId: backend.focusedWorkspaceId
+    property string focusedOutputName: backend.focusedOutputName
 
     signal configReloaded(bool failed)
 
