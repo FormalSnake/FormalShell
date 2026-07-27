@@ -46,6 +46,10 @@ PanelWindow {
     property string _defaultMenuText: ""
     property string _userMenuText: ""
 
+    // Set from shell.qml — the single Center instance, needed for
+    // "@ipc:notifications.showHistory" (see _dispatchInternal below).
+    property var center: null
+
     readonly property string _configDir: {
         const xdgConfig = Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config");
         return xdgConfig + "/formalshell";
@@ -417,6 +421,14 @@ PanelWindow {
         switch (name) {
         case "theme.toggleMode":
             Core.State.toggleMode();
+            break;
+        case "notifications.showHistory":
+            if (root.center) {
+                if (root.center.isOpen)
+                    root.center.close();
+                else
+                    root.center.open();
+            }
             break;
         default:
             console.warn("Menu: unknown internal action:", name);

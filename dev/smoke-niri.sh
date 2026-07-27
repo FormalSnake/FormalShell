@@ -14,6 +14,12 @@
 # on it now that the real IPC route is wired.
 # With --notify, fires `notify-send -u normal` then `-u critical` in-session
 # and screenshots the resulting toasts.
+# With --center, fires one more `notify-send -u normal` and waits for
+# non-critical popups to auto-expire into the `pending` tier before summoning
+# the notification center over the `notifications` IPC target and
+# screenshotting it — combine with --notify so there's a critical notify-send
+# still sitting sticky in the popup layer, visible over the center's own
+# corner (Toasts.qml sits on the Overlay layer, above the center's Top layer).
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -41,13 +47,15 @@ dump_mode=false
 wallpaper_mode=false
 menu_mode=false
 notify_mode=false
+center_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
     --menu) menu_mode=true; shift ;;
     --notify) notify_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify]" >&2; exit 1 ;;
+    --center) center_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center]" >&2; exit 1 ;;
   esac
 done
 
@@ -74,7 +82,7 @@ if $wallpaper_mode; then
   fi
 fi
 
-if $notify_mode; then
+if $notify_mode || $center_mode; then
   # Resolved to a real absolute path (not a "nix run ..." prefix): it's
   # embedded inside a generated `sh -c` string below, same requirement as
   # $qs_bin/$shell_path.
@@ -220,6 +228,15 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -u normal 'Test' 'Hello'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$notify_send_bin' -u critical 'Crit' 'Now'\""
   fi
+  if $center_mode; then
+    # A second normal notify-send, offset from notify_mode's own so the
+    # model's default 6s popup timeout has both non-critical popups clear of
+    # their expiry (and the 1s reducer tick has had a chance to run) well
+    # before the summon below — the critical one from notify_mode is sticky
+    # and stays a popup regardless.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$notify_send_bin' -u normal 'Second' 'World'\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications showHistory\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first.
@@ -227,7 +244,14 @@ fi
   if $menu_mode; then
     tail_gap=3
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # center_mode needs the popup->pending transition (see above) plus the
+  # showHistory summon to land before the screenshot; every other mode keeps
+  # the original 8s budget.
+  screenshot_delay=8
+  if $center_mode; then
+    screenshot_delay=15
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 HOME="$iso_home" \

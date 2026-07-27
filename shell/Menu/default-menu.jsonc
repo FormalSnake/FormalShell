@@ -22,6 +22,11 @@
         "icon": "󰍃",
         "when": "test -n \"$NIRI_SOCKET\""
     },
+    "system.notifications": {
+        "label": "Notifications",
+        "action": "@ipc:notifications.showHistory",
+        "icon": "󰂚"
+    },
 
     "theme": { "label": "Theme", "icon": "󰏘" },
     "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" },
