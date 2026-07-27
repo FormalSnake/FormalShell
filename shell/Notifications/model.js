@@ -1,0 +1,168 @@
+.pragma library
+
+// Pure three-tier notification state machine: popups (visible toasts) ->
+// pending (unseen, waiting in the history center) -> past (seen, pruned
+// after 15 minutes). Every function takes state in, returns state out —
+// no Date.now(), no mutation of the input.
+
+var MAX_POPUPS = 4;
+var DEFAULT_TIMEOUT_MS = 6000;
+var PAST_TTL_MS = 15 * 60 * 1000;
+
+function initialState() {
+    return { popups: [], pending: [], past: [], dnd: false, nextExpiry: null };
+}
+
+// Omarchy's narrow bypass: only urgency=critical notifications from
+// notify-send itself get through DND. A chat app marking its messages
+// critical does not qualify — senderIsNotifySend is set by the server
+// layer from the sender's app info, never inferred from urgency alone.
+function bypassesDnd(notif) {
+    return notif.urgency === 2 && notif.senderIsNotifySend === true;
+}
+
+function makeEntry(notif, now, expiresAt) {
+    return {
+        id: notif.id,
+        appName: notif.appName,
+        appIcon: notif.appIcon,
+        summary: notif.summary,
+        body: notif.body,
+        urgency: notif.urgency,
+        actions: notif.actions || [],
+        image: notif.image || "",
+        arrivedAt: now,
+        seenAt: null,
+        expiresAt: expiresAt
+    };
+}
+
+// null once there are no timed popups left; a sticky (expiresAt === 0)
+// critical popup never contributes a deadline.
+function recomputeNextExpiry(popups) {
+    var next = null;
+    popups.forEach(function (p) {
+        if (p.expiresAt === 0) return;
+        if (next === null || p.expiresAt < next) next = p.expiresAt;
+    });
+    return next;
+}
+
+function add(state, notif, now, opts) {
+    opts = opts || {};
+
+    if (state.dnd && !bypassesDnd(notif)) {
+        return Object.assign({}, state, {
+            pending: state.pending.concat([makeEntry(notif, now, null)])
+        });
+    }
+
+    var timeoutMs = opts.timeoutMs !== undefined ? opts.timeoutMs : DEFAULT_TIMEOUT_MS;
+    var expiresAt = notif.urgency === 2 ? 0 : now + timeoutMs;
+    var popups = state.popups.concat([makeEntry(notif, now, expiresAt)]);
+    var pending = state.pending;
+
+    if (popups.length > MAX_POPUPS) {
+        var overflow = popups.length - MAX_POPUPS;
+        pending = pending.concat(popups.slice(0, overflow));
+        popups = popups.slice(overflow);
+    }
+
+    return Object.assign({}, state, {
+        popups: popups,
+        pending: pending,
+        nextExpiry: recomputeNextExpiry(popups)
+    });
+}
+
+function expire(state, now) {
+    var popups = [];
+    var timedOut = [];
+    state.popups.forEach(function (p) {
+        if (p.expiresAt !== 0 && p.expiresAt <= now) timedOut.push(p);
+        else popups.push(p);
+    });
+    if (timedOut.length === 0) return state;
+
+    return Object.assign({}, state, {
+        popups: popups,
+        pending: state.pending.concat(timedOut),
+        nextExpiry: recomputeNextExpiry(popups)
+    });
+}
+
+// Only removes from the popups tier, marking the entry seen on its way
+// to past — this is the toast surface's dismiss ("X" cell, or the click
+// that acknowledges a popup still on screen).
+function dismissPopup(state, id, now) {
+    var idx = state.popups.findIndex(function (p) { return p.id === id; });
+    if (idx < 0) return state;
+
+    var entry = Object.assign({}, state.popups[idx], { seenAt: now });
+    var popups = state.popups.slice(0, idx).concat(state.popups.slice(idx + 1));
+
+    return Object.assign({}, state, {
+        popups: popups,
+        past: state.past.concat([entry]),
+        nextExpiry: recomputeNextExpiry(popups)
+    });
+}
+
+function markAllSeen(state, now) {
+    if (state.pending.length === 0) return state;
+    var seen = state.pending.map(function (p) { return Object.assign({}, p, { seenAt: now }); });
+    return Object.assign({}, state, { pending: [], past: state.past.concat(seen) });
+}
+
+function prunePast(state, now) {
+    var cutoff = now - PAST_TTL_MS;
+    var kept = state.past.filter(function (p) {
+        var at = p.seenAt !== null ? p.seenAt : p.arrivedAt;
+        return at >= cutoff;
+    });
+    if (kept.length === state.past.length) return state;
+    return Object.assign({}, state, { past: kept });
+}
+
+// General-purpose delete by id from whichever tier holds it (the history
+// center's per-row dismiss, on pending or past rows) — unlike
+// dismissPopup, this drops the entry outright rather than promoting it.
+function dismissOne(state, id) {
+    var popups = state.popups.filter(function (p) { return p.id !== id; });
+    var pending = state.pending.filter(function (p) { return p.id !== id; });
+    var past = state.past.filter(function (p) { return p.id !== id; });
+    if (popups.length === state.popups.length &&
+        pending.length === state.pending.length &&
+        past.length === state.past.length) {
+        return state;
+    }
+    return Object.assign({}, state, {
+        popups: popups,
+        pending: pending,
+        past: past,
+        nextExpiry: popups.length === state.popups.length ? state.nextExpiry : recomputeNextExpiry(popups)
+    });
+}
+
+function dismissAll(state) {
+    if (state.popups.length === 0) return state;
+    return Object.assign({}, state, { popups: [], nextExpiry: null });
+}
+
+function clearPending(state) {
+    if (state.pending.length === 0) return state;
+    return Object.assign({}, state, { pending: [] });
+}
+
+function setDnd(state, on) {
+    if (state.dnd === on) return state;
+    return Object.assign({}, state, { dnd: on });
+}
+
+// Not a reducer step — returns the entry itself (or null) for invokeLast:
+// the most recently arrived notification still live in popups or pending.
+function invokeTarget(state) {
+    return state.popups.concat(state.pending).reduce(function (latest, entry) {
+        return (latest === null || entry.arrivedAt > latest.arrivedAt) ? entry : latest;
+    }, null);
+}
