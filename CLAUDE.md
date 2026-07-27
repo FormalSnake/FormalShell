@@ -30,6 +30,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Hard rules
 
+- **Design language**: every UI surface follows `docs/DESIGN.md` (mek.gallery-derived
+  ruled-ledger grid: shared hairline rules, cells not cards, inversion for
+  selection, accent as full-bleed cells, uppercase meta labels, radius 0).
+  Read it before building or restyling any surface.
 - Pure QML/JS. No compiled companion binary. No Node/npm/bun anywhere.
 - Compositor window/workspace ids are **opaque strings** end to end. Never
   parse, compare numerically, or assume stability. The one exception is the
