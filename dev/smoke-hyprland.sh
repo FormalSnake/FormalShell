@@ -2,6 +2,15 @@
 # Nested-Hyprland smoke: mirrors dev/smoke-niri.sh for the second backend.
 # Runs the built shell in an isolated nested Hyprland session, dumps compositor
 # state via the `debug` IPC target, screenshots via grim, tears down.
+#
+# D-Bus isolation (M5 hard rule, see dev/smoke-niri.sh's header): the nested
+# Hyprland invocation runs under `dbus-run-session --`, giving formalshell's
+# NotificationServer a private session bus instead of the host's — the
+# host's is owned by DMS, and NotificationServer acquiring
+# org.freedesktop.Notifications on it would steal that name out from under
+# the real desktop. Verified every run: the host's
+# `busctl --user status org.freedesktop.Notifications` owner PID must be
+# identical before and after.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -65,6 +74,13 @@ restore_host_wayland_display() {
 }
 trap restore_host_wayland_display EXIT
 
+# D-Bus isolation check (see the header comment): captured now, compared
+# against the same query once the nested session has torn down.
+host_notifications_owner() {
+  busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^PID=//p'
+}
+host_notifications_owner_before=$(host_notifications_owner)
+
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 cfg=$(mktemp -d)/hyprland.conf
@@ -88,7 +104,13 @@ XDG_CONFIG_HOME="$iso_home/.config" \
 XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
-WAYLAND_DISPLAY="$wayland_display" timeout -k 10 30 $hyprland_bin --config "$cfg" || true
+WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout -k 10 30 $hyprland_bin --config "$cfg" || true
+
+host_notifications_owner_after=$(host_notifications_owner)
+if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then
+  echo "SMOKE_FAIL: host org.freedesktop.Notifications owner PID changed ($host_notifications_owner_before -> $host_notifications_owner_after) — nested NotificationServer touched the host bus" >&2
+  exit 1
+fi
 
 if [ -s "$dump_path" ]; then
   cat "$dump_path"
