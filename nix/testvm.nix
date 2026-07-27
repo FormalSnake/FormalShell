@@ -26,6 +26,18 @@ nixpkgs.lib.nixosSystem {
     ({ pkgs, ... }:
       let
         quickshellPkg = quickshell.packages.aarch64-linux.default;
+
+        # Only job: get WAYLAND_DISPLAY into the systemd --user environment,
+        # the exact lookup dev/smoke-niri.sh falls back to
+        # (`systemctl --user show-environment`). Mirrors the
+        # nixos/modules/programs/wayland/sway.nix upstream module's own
+        # generated /etc/sway/config.d/nixos.conf (import-environment then a
+        # belt-and-suspenders set-environment), minus the parts of that
+        # module (session target, XDG portals, display-manager wiring) that
+        # assume an interactive seat we don't have here.
+        swayHeadlessConfig = pkgs.writeText "sway-headless-testhost.conf" ''
+          exec "systemctl --user import-environment WAYLAND_DISPLAY DISPLAY; systemctl --user set-environment WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+        '';
       in
       {
         virtualisation = {
@@ -62,9 +74,38 @@ nixpkgs.lib.nixosSystem {
           isNormalUser = true;
           uid = 1000;
           extraGroups = [ "wheel" ];
+          # Without lingering, the systemd --user instance (and the
+          # compositor service below) only exists while "test" is logged
+          # in; ssh command sessions don't count as a login for this
+          # purpose the way the getty autologin does.
+          linger = true;
         };
         security.sudo.wheelNeedsPassword = false;
         services.getty.autologinUser = "test";
+
+        # Headless wlroots parent compositor — the Wayland "host session"
+        # dev/smoke-*.sh nests its own niri/Hyprland inside, same role
+        # niri-session plays on the real Linux hosts. graphics = false
+        # above means no DRM device in the guest, so this runs on
+        # wlroots' headless backend with the pixman software renderer.
+        systemd.user.services.testhost-compositor = {
+          description = "headless wlroots parent session for e2e smoke tests";
+          wantedBy = [ "default.target" ];
+          # sway's `exec` forks and calls execlp("sh", "sh", "-c", cmd, …) —
+          # a PATH search, not an absolute path. NixOS units otherwise only
+          # get a minimal PATH (coreutils/findutils/grep/sed/systemd); add
+          # bash so the config's `exec "…"` line (below) has an `sh` to run.
+          path = [ pkgs.bash ];
+          environment = {
+            WLR_BACKENDS = "headless";
+            WLR_RENDERER = "pixman";
+            WLR_LIBINPUT_NO_DEVICES = "1";
+          };
+          serviceConfig = {
+            ExecStart = "${pkgs.sway}/bin/sway --config ${swayHeadlessConfig}";
+            Restart = "on-failure";
+          };
+        };
 
         services.openssh = {
           enable = true;
