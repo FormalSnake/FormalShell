@@ -171,17 +171,47 @@ PanelWindow {
         return xdgState + "/formalshell";
     }
 
+    readonly property string _selectionPath: root._stateDir + "/menu-selection.txt"
+
     // Write-only: select()/input() answers land here as `{token, value}` /
-    // `{token, cancelled: true}` JSON, atomically (FileView's default).
-    // Callers poll/read the file themselves — see MenuIpc.qml's header
-    // comment for the full contract.
-    FileView {
-        id: selectionFile
-        path: root._stateDir + "/menu-selection.txt"
+    // `{token, cancelled: true}` JSON. Every write goes through a Process
+    // (`printf '%s' "$content" > "$path"`), never FileView.setText() —
+    // ThemeEngine.qml documents FileView silently skipping the write *and*
+    // the saved() signal when the new text is byte-identical to what it has
+    // cached, which a repeated identical answer hits every time, and which a
+    // caller-side truncate can't work around either (FileView compares
+    // against its own cached text, not what's actually on disk). Callers
+    // poll/read the file themselves — see MenuIpc.qml's header comment for
+    // the full contract.
+    function _writeSelectionFile(content) {
+        var proc = _selectionFileProcComponent.createObject(root, {});
+        proc.command = ["sh", "-c", 'printf \'%s\' "$2" > "$1"', "sh", root._selectionPath, content];
+        proc.running = true;
+    }
+
+    // Deletes whatever's currently on disk. Used to invalidate the channel
+    // before a brand-new select()/input() request's UI opens (see
+    // _beginSelectionRequest below).
+    function _clearSelectionFile() {
+        var proc = _selectionFileProcComponent.createObject(root, {});
+        proc.command = ["rm", "-f", root._selectionPath];
+        proc.running = true;
+    }
+
+    Component {
+        id: _selectionFileProcComponent
+
+        Process {
+            onExited: exitCode => {
+                if (exitCode !== 0)
+                    console.warn("Menu: selection-file write failed, code", exitCode);
+                destroy();
+            }
+        }
     }
 
     function _writeSelection(payload) {
-        selectionFile.setText(JSON.stringify(payload));
+        root._writeSelectionFile(JSON.stringify(payload));
     }
 
     // Leaving select/input mode without the caller ever getting an answer
@@ -196,6 +226,25 @@ PanelWindow {
             root._writeSelection({ token: root._selectToken, cancelled: true });
             root._mode = "menu";
         }
+    }
+
+    // Prepares the selection file for a brand-new select()/input() request,
+    // before that request's UI ever opens. Exactly one write happens
+    // either way: if another request was still pending, _abandonPendingSelect
+    // above already overwrote the file with that request's own cancel
+    // record — invalidating it for free — so nothing else is done; otherwise
+    // the file may still hold an already-resolved answer from an earlier,
+    // now-finished request (the README's own tok1/tok2 examples reuse a
+    // stable token across invocations, with no requirement that tokens be
+    // unique per run), so it's deleted outright. Deliberately not folded
+    // into _abandonPendingSelect itself — that function also runs from
+    // open()/close(), including right after _completeSelect() writes a real
+    // answer, where deleting the file would race the write just made.
+    function _beginSelectionRequest() {
+        var hadPending = root._mode !== "menu";
+        root._abandonPendingSelect();
+        if (!hadPending)
+            root._clearSelectionFile();
     }
 
     function open(route) {
@@ -220,7 +269,7 @@ PanelWindow {
     }
 
     function openSelect(prompt, options, token) {
-        root._abandonPendingSelect();
+        root._beginSelectionRequest();
         root._mode = "select";
         root._selectPrompt = prompt;
         root._selectOptions = options;
@@ -233,7 +282,7 @@ PanelWindow {
     }
 
     function openInput(prompt, token) {
-        root._abandonPendingSelect();
+        root._beginSelectionRequest();
         root._mode = "input";
         root._selectPrompt = prompt;
         root._selectOptions = [];
