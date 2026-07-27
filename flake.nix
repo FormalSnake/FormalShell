@@ -22,6 +22,8 @@
         default = formalshell;
       });
 
+      homeModules = { formalshell = ./nix/hm-module.nix; default = ./nix/hm-module.nix; };
+
       checks = forAllSystems (system: pkgs: {
         qml-tests = pkgs.runCommand "formalshell-qml-tests" {
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
