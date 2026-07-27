@@ -14,6 +14,7 @@ Singleton {
 
     readonly property var font: ({
         family: "monospace",
+        display: "monospace",
         baseSize: 13,
         caption: Math.round(13 * 0.833), bodySmall: Math.round(13 * 0.917),
         body: 13, subtitle: Math.round(13 * 1.083),
@@ -66,7 +67,16 @@ Singleton {
         } catch (e) {
             parsed = null;
         }
-        root.color = Palette.validate(parsed).ok ? parsed : Palette.fallback();
+        // Per-key fallback, not whole-file: a theme.json written before a
+        // token existed (or mid-write with one bad value) keeps every other
+        // live matugen color and only substitutes Flexoki for that key.
+        root.color = Palette.mergeWithFallback(parsed);
+    }
+
+    // { bg: <foreground>, fg: <background> } — the cursor-row/accent-cell
+    // inversion pair per DESIGN.md's "selection = inversion" rule.
+    function inverted() {
+        return { bg: color.foreground, fg: color.background };
     }
 
     function control(state) {
