@@ -63,6 +63,15 @@ Singleton {
     property bool running: false
     property bool pending: false
 
+    // Existence check for ThemeIpc's status(), tracked by hand rather than
+    // via FileView.loaded + watchChanges: QFileSystemWatcher silently fails
+    // to attach to a path (or its parent dir) that doesn't exist yet at
+    // construction time — the common case for a fresh state dir — so it
+    // never notices this singleton's own later out-of-band Process writes
+    // (verified by reproducing the stuck-false read against a real run).
+    // ThemeEngine is theme.json's only writer, so it can just say so itself.
+    property bool themeJsonPresent: false
+
     function retheme() {
         if (root.running) {
             root.pending = true;
@@ -106,6 +115,8 @@ Singleton {
             root._writeFile(root._themeJsonPath, JSON.stringify(Palette.fallback(), null, 2), exitCode => {
                 if (exitCode !== 0)
                     console.warn("ThemeEngine: failed to write fallback theme.json, code", exitCode);
+                else
+                    root.themeJsonPresent = true;
                 root._finish();
             });
             return;
@@ -171,23 +182,44 @@ Singleton {
                 root._finish();
                 return;
             }
-            // applyThemeFragment() lands on CompositorService in Task 6; guard so a
-            // retheme() before then can't throw mid-handler and wedge running=true.
-            if (typeof CompositorService.applyThemeFragment === "function")
-                CompositorService.applyThemeFragment();
+            root.themeJsonPresent = true;
+            CompositorService.applyThemeFragment();
             root._finish();
         }
     }
 
-    // Startup probe only — reads theme.json once to detect a first run;
-    // writes never go through here (see the FileView.setText() hazard above).
+    // Startup probe only — reads theme.json once to detect a first run and
+    // seed themeJsonPresent's initial value; writes never go through here
+    // (see the FileView.setText() hazard above). Every later transition of
+    // themeJsonPresent is set directly by the write sites above, not by
+    // watching this file.
     FileView {
         id: themeProbe
         path: root._themeJsonPath
 
+        onLoaded: root.themeJsonPresent = true
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound) {
+                root.themeJsonPresent = false;
+                root.retheme();
+            }
+        }
+    }
+
+    // Startup guarantee: a niri config's `include ".../niri-border.kdl"`
+    // must never hit a missing file. retheme() only ever produces this path
+    // via matugen's successful output, so a state dir that has never seen a
+    // successful run (fresh install, or wallpaper never set) leaves it
+    // absent — create it empty once, here, so the include is always safe.
+    // Never rewrites existing content: retheme()'s atomic rename is the only
+    // writer once matugen has actually run.
+    FileView {
+        id: borderProbe
+        path: root._borderKdlPath
+
         onLoadFailed: error => {
             if (error === FileViewError.FileNotFound)
-                root.retheme();
+                root._writeFile(root._borderKdlPath, "", function () {});
         }
     }
 

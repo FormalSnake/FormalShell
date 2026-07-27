@@ -2,11 +2,21 @@
 # Nested-niri smoke: run the built shell in an isolated niri window,
 # screenshot it, tear down. Prints the screenshot path on success.
 # With --dump, also calls the `debug` IPC target and cats the JSON reply.
+# With --wallpaper, generates a solid-color test PNG, drives it through
+# `wallpaper set` + `theme status` over IPC in-session before screenshotting,
+# so the screenshot proves the background/bar actually recolored.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 dump_mode=false
-[ "${1:-}" = "--dump" ] && dump_mode=true
+wallpaper_mode=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dump) dump_mode=true; shift ;;
+    --wallpaper) wallpaper_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper]" >&2; exit 1 ;;
+  esac
+done
 
 git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
 nix build .#formalshell
@@ -21,6 +31,14 @@ if command -v qs >/dev/null 2>&1; then
   qs_bin=qs
 else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
+fi
+
+if $wallpaper_mode; then
+  if command -v convert >/dev/null 2>&1; then
+    convert_bin=convert
+  else
+    convert_bin="nix run nixpkgs#imagemagick -- convert"
+  fi
 fi
 shell_path=$(readlink -f result/share/formalshell)
 
@@ -65,7 +83,14 @@ trap restore_host_wayland_display EXIT
 
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
+status_path="$shot_dir/status.json"
 cfg=$(mktemp -d)/config.kdl
+
+if $wallpaper_mode; then
+  wp_path="$shot_dir/wp.png"
+  $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -74,7 +99,11 @@ cfg=$(mktemp -d)/config.kdl
   if $dump_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > $dump_path 2>&1\""
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep 1 && niri msg action quit --skip-confirmation\""
+  if $wallpaper_mode; then
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call wallpaper set '$wp_path'\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call theme status > $status_path 2>&1\""
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep 1 && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 WAYLAND_DISPLAY="$wayland_display" timeout 30 $niri_bin --config "$cfg" || true
@@ -84,6 +113,14 @@ if $dump_mode; then
     cat "$dump_path"
   else
     echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+fi
+
+if $wallpaper_mode; then
+  if [ -s "$status_path" ]; then
+    cat "$status_path"
+  else
+    echo "SMOKE_FAIL: no theme status produced" >&2; exit 1
   fi
 fi
 

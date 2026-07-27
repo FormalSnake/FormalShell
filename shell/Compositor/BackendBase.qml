@@ -24,4 +24,5 @@ QtObject {
     function spawn(argv) {} // argv: list<string>, no shell interpolation
     function powerOffMonitors() {}
     function powerOnMonitors() {}
+    function applyThemeFragment() {} // niri-only; no-op on backends without one
 }

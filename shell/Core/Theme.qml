@@ -27,6 +27,22 @@ Singleton {
         return xdgState + "/formalshell";
     }
 
+    // Re-attempt the watch until it actually attaches: FileView's underlying
+    // QFileSystemWatcher silently fails to watch a path (or its parent dir)
+    // when neither exists yet, which is the normal state at shell startup —
+    // ThemeEngine hasn't written its first theme.json yet — so a bare
+    // watchChanges: true here would watch nothing, forever, and never notice
+    // ThemeEngine's later out-of-band Process writes (verified: theme.json
+    // changed on disk with matugen colors, this FileView never reloaded).
+    // reload() re-runs FileView's internal updateWatchedFiles(), so once the
+    // state dir exists — which happens within ThemeEngine's very first
+    // startup run — the watch attaches for real and takes over from here.
+    Timer {
+        id: rewatchTimer
+        interval: 300
+        onTriggered: themeJsonFile.reload()
+    }
+
     // Live theme.json watch: ThemeEngine writes this file atomically, we just
     // read it. Absent or failing palette.validate() (e.g. mid-write, or no
     // engine run yet) falls back to the static Flexoki defaults.
@@ -36,7 +52,11 @@ Singleton {
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root._applyThemeJson()
-        onLoadFailed: error => root.color = Palette.fallback()
+        onLoadFailed: error => {
+            root.color = Palette.fallback();
+            if (error === FileViewError.FileNotFound)
+                rewatchTimer.restart();
+        }
     }
 
     function _applyThemeJson() {

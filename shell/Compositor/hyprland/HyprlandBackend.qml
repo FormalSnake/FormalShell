@@ -122,6 +122,10 @@ Scope {
             Hyprland.dispatch("dpms on");
     }
 
+    // No niri-border.kdl equivalent on Hyprland (M3 ships the fragment for
+    // niri only) — no-op, matching BackendBase's contract default.
+    function applyThemeFragment() {}
+
     Connections {
         target: Hyprland
         function onRawEvent(event) {

@@ -52,6 +52,7 @@ Singleton {
     function spawn(argv) { backend.spawn(argv) }
     function powerOffMonitors() { backend.powerOffMonitors() }
     function powerOnMonitors() { backend.powerOnMonitors() }
+    function applyThemeFragment() { backend.applyThemeFragment() }
 
     Connections {
         target: backend

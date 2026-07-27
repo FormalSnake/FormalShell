@@ -44,6 +44,13 @@ Scope {
     function powerOnMonitors() {
         requestSocket.request({ Action: { PowerOnMonitors: {} } });
     }
+    // Reloads niri's current config file with no path argument (niri-ipc's
+    // Action::LoadConfigFile { path: Option<String> }, verified against
+    // niri-ipc/src/lib.rs and src/ipc/server.rs) — re-parses the `include`d
+    // niri-border.kdl fragment ThemeEngine just wrote.
+    function applyThemeFragment() {
+        requestSocket.request({ Action: { LoadConfigFile: {} } });
+    }
 
     function _connect() {
         if (root.socketPath === "")

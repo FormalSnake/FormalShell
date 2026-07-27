@@ -24,4 +24,6 @@ ShellRoot {
     }
 
     DebugIpc {}
+    ThemeIpc {}
+    WallpaperIpc {}
 }
