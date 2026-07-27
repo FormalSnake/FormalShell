@@ -21,12 +21,25 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   niri session, screenshots that session, tears it down, and prints the PNG
   path. This is THE visual verification loop for any bar/surface change —
   **Read the PNG, don't assume it looks right.**
+- `dev/smoke-niri.sh --wallpaper` — same, plus generates a solid-color test
+  PNG, drives it through the `wallpaper set` and `theme status` IPC targets
+  in-session before screenshotting, and prints the `theme status` JSON. This
+  is THE visual verification loop for any theming change — confirms the
+  background layer and bar tokens actually recolored away from the Flexoki
+  fallback, not just that `theme.json` was written.
+- `dev/smoke-niri.sh --dump` — same, plus calls the `debug` IPC target and
+  cats the JSON reply; the two flags can combine.
 - `dev/smoke-hyprland.sh` — the same loop for the second backend (nested
   Hyprland, `hyprctl`/exec-once instead of niri's `spawn-at-startup`). Nested
   Hyprland is flakier than nested niri in a sandboxed dev environment; if it
   won't screenshot, fall back to verifying the backend via qmllint plus the
   `debug` IPC dump (`qs ipc call debug dump`) rather than skipping
   verification.
+- matugen runs (`ThemeEngine`) need a live TTY-free color decision: an
+  unprefixed `matugen image` prompts on an ambiguous/near-solid source color,
+  which hangs forever under `Process` (no stdin). `ThemeEngine` always passes
+  `--prefer darkness|lightness` matched to `State.mode`. If you invoke
+  matugen by hand while debugging, do the same or pass `--fallback-color`.
 
 ## Hard rules
 

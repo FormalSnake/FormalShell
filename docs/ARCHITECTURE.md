@@ -23,9 +23,18 @@ connected output, plus a top-level `Ipc` scope for debug/introspection.
 
 ```
 shell/
-  shell.qml                  ShellRoot; Variants over Quickshell.screens -> Bar per screen
+  shell.qml                  ShellRoot; Variants over Quickshell.screens -> Bar/Background per screen
   Core/
-    Theme.qml                 singleton — brutalist Flexoki-dark token set
+    State.qml                 singleton — state.json (wallpaper, mode), FileView+JsonAdapter
+    Theme.qml                 singleton — Theme.color live off theme.json, Flexoki fallback statics
+    qmldir
+  Theme/
+    matugen.js                 pure JS, .pragma library — merged matugen TOML config builder
+    palette.js                 pure JS, .pragma library — theme.json validate() + Flexoki fallback()
+    ThemeEngine.qml             singleton — serialized matugen Process queue
+    templates/
+      theme.json.tmpl           matugen template rendering theme.json
+      niri-border.kdl.tmpl      matugen template rendering the niri layout{} border fragment
     qmldir
   Compositor/
     BackendBase.qml           the CompositorBackend contract (base component)
@@ -33,21 +42,27 @@ shell/
     qmldir
     niri/
       reducer.js               pure JS: niri EventStream -> contract state
-      NiriBackend.qml           two-socket JSON IPC client
+      NiriBackend.qml           two-socket JSON IPC client; applyThemeFragment() reloads config
     hyprland/
       HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
   Ipc/
     DebugIpc.qml               IpcHandler target "debug", function dump(): string
+    ThemeIpc.qml               IpcHandler target "theme", retheme()/mode()/status()
+    WallpaperIpc.qml           IpcHandler target "wallpaper", set()/get()
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region RowLayout
       widgets/
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
+    Background/
+      Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
 tests/
   tst_niri_reducer.qml         qmltestrunner tests for reducer.js
+  tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
+  tst_palette.qml              qmltestrunner tests for Theme/palette.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump) loop
+  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper) loop
   smoke-hyprland.sh             same, nested Hyprland
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`
@@ -79,6 +94,7 @@ function closeWindow(id) {}
 function spawn(argv) {}                   // argv: list<string>, no shell interpolation
 function powerOffMonitors() {}
 function powerOnMonitors() {}
+function applyThemeFragment() {}          // niri-only; no-op on backends without one
 ```
 
 `CompositorService` (the singleton facade, `import qs.Compositor`) exposes
@@ -151,6 +167,44 @@ read straight off `CompositorService`. This is the textual verification hook
 used by both smoke scripts (`qs ipc --any-display -p <path> call debug dump`)
 and by hand during backend development — it's the fastest way to confirm a
 backend is wired correctly without reading a screenshot.
+
+## Theme engine data flow
+
+```
+Core.State (state.json: wallpaper, mode)
+  |  Connections { onWallpaperChanged / onModeChanged -> ThemeEngine.retheme() }
+  v
+Theme.ThemeEngine (running/pending queue; a retheme() mid-run just sets pending)
+  |  reads ~/.config/matugen/config.toml + ~/.config/formalshell/matugen.d/*.toml (one `cat` Process)
+  |  Theme.matugen.js#buildConfig() -> matugen-merged.toml (spec merge order)
+  |  Process: matugen image <wallpaper> -m <mode> -c matugen-merged.toml --prefer darkness|lightness
+  |    (no wallpaper set: skip matugen, write Theme.palette.js#fallback() as theme.json directly)
+  v
+matugen renders templates/theme.json.tmpl + templates/niri-border.kdl.tmpl
+  -> <state-dir>/{theme.json,niri-border.kdl}.tmp
+  |  atomic `mv` into place on success
+  v
+$XDG_STATE_HOME/formalshell/theme.json          $XDG_STATE_HOME/formalshell/niri-border.kdl
+  |  FileView watch (Core/Theme.qml)               |  niri `include`s this path from its own config
+  v                                                  v
+Theme.color.* properties update live              CompositorService.applyThemeFragment()
+  -> every Bar/widget token recolors                -> niri: LoadConfigFile action reloads the
+     (plain property bindings, no restart)              running config, border colors apply live
+```
+
+`Core/Theme.qml` parses `theme.json`, validates it with `palette.js#validate()`,
+and falls back to `palette.js#fallback()` (the Flexoki statics) on absence or
+invalid content — so `Theme.color.*` is always a fully-populated 6-color
+object, matugen-driven or not. `Surfaces/Background/Background.qml` is the
+one other consumer of `State.wallpaper` directly: a per-screen
+`WlrLayershell.layer: WlrLayer.Background` surface showing the image, or a
+flat `Theme.color.background` fill when unset.
+
+`ThemeEngine` writes every file itself via a small `sh -c` `Process` rather
+than `FileView.setText()`: `FileView` silently skips both the write and its
+`saved()` signal when the new text is byte-identical to what's already on
+disk, which two back-to-back `retheme()` runs for the same wallpaper/mode
+routinely produce.
 
 ## Adding a backend
 
