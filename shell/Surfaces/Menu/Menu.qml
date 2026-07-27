@@ -2,11 +2,12 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import qs.Core
+import qs.Core as Core
 import qs.Compositor
 import qs.Components
 import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
+import "../../Menu/providers.js" as Providers
 
 // The unified menu (DESIGN.md §Concrete translations/Menu): a single
 // keyboard-exclusive top-layer window, centered on the focused output. Top
@@ -16,9 +17,13 @@ import "../../Menu/search.js" as Search
 // Escape/backspace-on-empty pop one level, confirm-gated actions need a
 // second Enter.
 //
-// _placeholderDefault below is a stand-in tree so this surface is testable
-// on its own; Task 6 replaces it with the real default-menu.jsonc + user
-// menu.jsonc + providers.js (apps, custom power buttons from Config).
+// Tree assembly: default-menu.jsonc (read once, it ships inside the
+// package) merged with Config's customPowerButtons (system.custom.N,
+// providers.customPowerButtonEntries()) go through Model.buildTree(), then
+// providers.applyProviders() expands "provider" nodes ("apps" ->
+// DesktopEntries) into real children. Recomputes whenever the jsonc text
+// loads or Core.Config.settings changes, so custom power buttons and the
+// installed-apps list never need a manual refresh.
 PanelWindow {
     id: root
 
@@ -29,17 +34,44 @@ PanelWindow {
     property var _condResults: ({})
     property var _checkedResults: ({})
 
-    readonly property var _placeholderDefault: ({
-        "system": { label: "System" },
-        "system.lock": { label: "Lock", action: "true", when: "true" },
-        "system.power": { label: "Power" },
-        "system.power.suspend": { label: "Suspend", action: "true" },
-        "system.power.reboot": { label: "Reboot", action: "true", confirm: true },
-        "system.power.shutdown": { label: "Shutdown", action: "true", confirm: true },
-        "theme": { label: "Theme" },
-        "theme.toggle-mode": { label: "Toggle Mode", action: "true", checked: "true" }
+    property string _defaultMenuText: ""
+
+    FileView {
+        id: defaultMenuFile
+        path: Quickshell.shellPath("Menu/default-menu.jsonc")
+        // default-menu.jsonc ships inside the package, so this load only
+        // ever races startup once — but Component.onCompleted's auto-open
+        // (and a very early `menu summon`, Task 7) can call open() before
+        // it lands, evaluating conditions against an empty tree with
+        // nothing left to ever re-check them. Re-running the batch here,
+        // once the real tree exists, closes that gap; _evalConditions()'s
+        // per-node `undefined` guard makes it a cheap no-op otherwise.
+        onLoaded: {
+            root._defaultMenuText = defaultMenuFile.text();
+            root._evalConditions();
+        }
+        onLoadFailed: error => console.warn("Menu: failed to load default-menu.jsonc:", error)
+    }
+
+    readonly property var _defaultObj: {
+        if (!root._defaultMenuText) return {};
+        var parsed;
+        try {
+            parsed = Model.parseJsonc(root._defaultMenuText);
+        } catch (e) {
+            console.warn("Menu: failed to parse default-menu.jsonc:", e.message);
+            return {};
+        }
+        var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
+        var merged = {};
+        Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
+        Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
+        return merged;
+    }
+
+    readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, {}), {
+        apps: function () { return Providers.appsProvider(DesktopEntries.applications.values); }
     })
-    readonly property var _tree: Model.buildTree(root._placeholderDefault, {})
     readonly property var _nodes: root._tree.nodes
 
     readonly property var _displayRows: {
@@ -68,7 +100,7 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
     readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
-    readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - Theme.borderWidth - searchCell.height))
+    readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - Core.Theme.borderWidth - searchCell.height))
 
     function open(route) {
         // Fresh session: last session's condition results must not leak
@@ -93,6 +125,17 @@ PanelWindow {
     function close() {
         root.isOpen = false;
         root._confirmPendingId = "";
+    }
+
+    // Debug-only: ranks `q` against the live tree without requiring the
+    // surface to be open — backs the `debug query` IPC hook used to verify
+    // the apps provider + fuzzy filtering where keyboard injection isn't
+    // available (nested test sessions).
+    function query(q) {
+        root._evalConditions();
+        return Search.rank(root._nodes, q, root._condResults).map(function (n) {
+            return { id: n.id, label: n.label, kind: n.kind };
+        });
     }
 
     function _resolveRoute(route) {
@@ -143,7 +186,12 @@ PanelWindow {
                 root._confirmPendingId = node.id;
                 return;
             }
-            CompositorService.spawn(["sh", "-c", node.action]);
+            root._runAction(node.action);
+            root.close();
+            return;
+        }
+        if (node.kind === "app") {
+            node._entry.execute();
             root.close();
             return;
         }
@@ -153,6 +201,28 @@ PanelWindow {
         }
         if (node.kind === "link") {
             root._enterLevel((node.target && root._nodes[node.target]) ? node.target : node.id);
+        }
+    }
+
+    // "@ipc:<name>" actions (see default-menu.jsonc's header comment)
+    // dispatch in-process instead of spawning a shell command — needed for
+    // anything that must run in the shell's own process, like toggling
+    // Core.State directly.
+    function _runAction(action) {
+        if (action.indexOf("@ipc:") === 0) {
+            root._dispatchInternal(action.slice(5));
+            return;
+        }
+        CompositorService.spawn(["sh", "-c", action]);
+    }
+
+    function _dispatchInternal(name) {
+        switch (name) {
+        case "theme.toggleMode":
+            Core.State.toggleMode();
+            break;
+        default:
+            console.warn("Menu: unknown internal action:", name);
         }
     }
 
@@ -211,9 +281,9 @@ PanelWindow {
 
     screen: root._screen
     visible: root.isOpen
-    color: Theme.color.background
+    color: Core.Theme.color.background
     implicitWidth: 560
-    implicitHeight: Theme.borderWidth + searchCell.height + root._rowsAreaHeight
+    implicitHeight: Core.Theme.borderWidth + searchCell.height + root._rowsAreaHeight
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -234,30 +304,30 @@ PanelWindow {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Theme.borderWidth
-        color: Theme.color.rule
+        height: Core.Theme.borderWidth
+        color: Core.Theme.color.rule
     }
 
     Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        width: Theme.borderWidth
-        color: Theme.color.rule
+        width: Core.Theme.borderWidth
+        color: Core.Theme.color.rule
     }
 
     Cell {
         id: searchCell
         anchors.top: topRule.bottom
         anchors.left: parent.left
-        anchors.leftMargin: Theme.borderWidth
-        width: root.implicitWidth - Theme.borderWidth
-        height: searchColumn.implicitHeight + Theme.spacing.sm * 2 + Theme.borderWidth
+        anchors.leftMargin: Core.Theme.borderWidth
+        width: root.implicitWidth - Core.Theme.borderWidth
+        height: searchColumn.implicitHeight + Core.Theme.spacing.sm * 2 + Core.Theme.borderWidth
 
         Column {
             id: searchColumn
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Core.Theme.spacing.xs
 
             MetaLabel {
                 text: root.breadcrumb
@@ -266,9 +336,9 @@ PanelWindow {
             TextInput {
                 id: searchInput
                 width: searchColumn.width
-                color: Theme.color.foreground
-                font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                color: Core.Theme.color.foreground
+                font.family: Core.Theme.font.family
+                font.pixelSize: Core.Theme.font.body
                 focus: true
                 selectByMouse: true
                 cursorVisible: true
@@ -313,8 +383,8 @@ PanelWindow {
         id: rowsView
         anchors.top: searchCell.bottom
         anchors.left: parent.left
-        anchors.leftMargin: Theme.borderWidth
-        width: root.implicitWidth - Theme.borderWidth
+        anchors.leftMargin: Core.Theme.borderWidth
+        width: root.implicitWidth - Core.Theme.borderWidth
         height: root._rowsAreaHeight
         clip: true
         model: root._displayRows

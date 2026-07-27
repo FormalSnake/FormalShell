@@ -8,6 +8,11 @@ import qs.Core as Core
 IpcHandler {
     target: "debug"
 
+    // Set from shell.qml — the menu instance to query() against. Menu.qml
+    // has no singleton of its own (only one instance, opened on demand), so
+    // DebugIpc can't reach it any other way.
+    property var menu: null
+
     // CompositorService is a lazily-instantiated singleton: nothing constructs
     // it (or connects its backend) until something reads one of its
     // properties. Touch it here, at DebugIpc's own construction, so the
@@ -31,5 +36,12 @@ IpcHandler {
             focusedWorkspaceId: CompositorService.focusedWorkspaceId,
             configLoaded: Core.Config.settings
         });
+    }
+
+    // `qs ipc call debug query "<text>"` — ranks a query against the live
+    // menu tree without opening the surface (no keyboard injection in a
+    // nested test session); verifies the apps provider + fuzzy filtering.
+    function query(q: string): string {
+        return JSON.stringify(menu ? menu.query(q) : []);
     }
 }

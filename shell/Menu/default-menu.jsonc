@@ -1,0 +1,29 @@
+// FormalShell's shipped default menu tree (dotted-id hierarchy, per-key
+// user-overridable at ~/.config/formalshell/menu.jsonc — see model.js's
+// buildTree()). Kind is inferred per entry: `action` -> action, `target` ->
+// link, `provider` -> submenu populated at tree-build time by providers.js
+// (see "apps" below), else a plain submenu.
+//
+// Internal actions: an `action` value prefixed `@ipc:` is dispatched
+// in-process instead of spawned via `sh -c` — Menu.qml's activation switches
+// on the name after the prefix (e.g. "@ipc:theme.toggleMode" ->
+// Core.State.toggleMode()). Use this for anything that must run in the
+// shell's own process rather than as a detached command.
+{
+    "apps": { "provider": "apps", "icon": "󰀻" },
+
+    "system": { "label": "System", "icon": "󰒓" },
+    "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
+    "system.suspend": { "action": "systemctl suspend", "icon": "󰤄" },
+    "system.reboot": { "action": "systemctl reboot", "icon": "󰜉", "confirm": true },
+    "system.shutdown": { "action": "systemctl poweroff", "icon": "󰤂", "confirm": true },
+    "system.logout": {
+        "action": "niri msg action quit --skip-confirmation",
+        "icon": "󰍃",
+        "when": "test -n \"$NIRI_SOCKET\""
+    },
+
+    "theme": { "label": "Theme", "icon": "󰏘" },
+    "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" },
+    "theme.wallpaper": { "when": "false" }
+}

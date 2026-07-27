@@ -100,11 +100,25 @@ trap restore_host_wayland_display EXIT
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
+query_path="$shot_dir/query.json"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
 # the host-session safety note at the top of this file.
 iso_home=$(mktemp -d)
+
+# A deterministic fixture .desktop entry — DesktopEntries scans
+# $XDG_DATA_HOME/applications, which is isolated below, so without this the
+# apps provider's list depends on whatever's installed on the host running
+# the smoke test.
+mkdir -p "$iso_home/.local/share/applications"
+cat > "$iso_home/.local/share/applications/formalshell-smoke-fixture.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Formal Test App
+Exec=true
+Icon=utilities-terminal
+EOF
 
 if $wallpaper_mode; then
   wp_path="$shot_dir/wp.png"
@@ -128,6 +142,9 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call wallpaper set '$wp_path'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call theme status > $status_path 2>&1\""
   fi
+  if $menu_mode; then
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
+  fi
   echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep 1 && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
@@ -135,6 +152,7 @@ HOME="$iso_home" \
 XDG_CONFIG_HOME="$iso_home/.config" \
 XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
+XDG_DATA_DIRS="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
 FORMALSHELL_SMOKE_OPEN_MENU="$menu_env" \
 WAYLAND_DISPLAY="$wayland_display" timeout 30 $niri_bin --config "$cfg" || true
@@ -152,6 +170,14 @@ if $wallpaper_mode; then
     cat "$status_path"
   else
     echo "SMOKE_FAIL: no theme status produced" >&2; exit 1
+  fi
+fi
+
+if $menu_mode; then
+  if [ -s "$query_path" ]; then
+    cat "$query_path"
+  else
+    echo "SMOKE_FAIL: no menu query result produced" >&2; exit 1
   fi
 fi
 

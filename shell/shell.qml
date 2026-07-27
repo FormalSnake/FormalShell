@@ -26,9 +26,9 @@ ShellRoot {
 
     // One instance, not per-screen: it opens on the focused screen at
     // summon time rather than living on every output.
-    Menu {}
+    Menu { id: menu }
 
-    DebugIpc {}
+    DebugIpc { menu: menu }
     ThemeIpc {}
     WallpaperIpc {}
 }
