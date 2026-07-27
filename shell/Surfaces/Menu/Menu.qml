@@ -71,6 +71,11 @@ PanelWindow {
     readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - Theme.borderWidth - searchCell.height))
 
     function open(route) {
+        // Fresh session: last session's condition results must not leak
+        // into this one (a `when`/`checked` shell command can change
+        // between opens — bluetooth power, mode toggle, device presence).
+        root._condResults = {};
+        root._checkedResults = {};
         var target = null;
         var resolved = route ? root._resolveRoute(route) : null;
         var node = resolved ? root._nodes[resolved] : null;
@@ -105,7 +110,7 @@ PanelWindow {
         root._cursorIndex = 0;
         root._confirmPendingId = "";
         searchInput.text = "";
-        root._evalLevelConditions();
+        root._evalConditions();
     }
 
     function _pop() {
@@ -151,12 +156,20 @@ PanelWindow {
         }
     }
 
-    // Shell-condition batch: `when`/`checked` for the current level's direct
-    // children only, run once per open()/_enterLevel() (never per-keystroke —
-    // search filters purely against whatever's already cached). Results are
-    // merged into fresh objects so QML's var-property change detection fires.
-    function _evalLevelConditions() {
-        Model.directChildren(root._nodes, root.currentNodeId).forEach(function (n) {
+    // Shell-condition batch: `when`/`checked` for EVERY node in the tree,
+    // not just the current level — whole-tree search (see _displayRows) can
+    // surface a node whose level the user hasn't descended into yet, and a
+    // submenu with an unevaluated-when child self-prunes to invisible
+    // (Model.visibleChildren), which would make that child undescendable and
+    // its own condition permanently unevaluated. Runs once per open()
+    // (open() clears both result caches first) and again on every
+    // _enterLevel(), where the `undefined` guards make repeat calls within
+    // the same session cheap no-ops. Never per-keystroke — search filters
+    // purely against whatever's already cached. Results are merged into
+    // fresh objects so QML's var-property change detection fires.
+    function _evalConditions() {
+        Object.keys(root._nodes).forEach(function (id) {
+            var n = root._nodes[id];
             if (n.when !== undefined && root._condResults[n.id] === undefined)
                 root._runCondition(n.id, n.when, "when");
             if (n.checked !== undefined && root._checkedResults[n.id] === undefined)

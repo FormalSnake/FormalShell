@@ -179,12 +179,23 @@ function directChildren(nodes, id) {
     return childIds.map(function (cid) { return nodes[cid]; }).filter(Boolean);
 }
 
-function visibleChildren(nodes, id, condResults) {
+// `_ancestry` tracks ids on the current recursion path (not a global
+// memo — two branches may legitimately share a target) so a link cycle
+// (a -> b -> a) bottoms out as "no visible children" instead of recursing
+// forever. Each call gets its own copy: siblings must not see each
+// other's marks, only actual ancestors matter.
+function visibleChildren(nodes, id, condResults, _ancestry) {
     condResults = condResults || {};
+    var ancestry = {};
+    for (var k in _ancestry) ancestry[k] = true;
+    if (id !== null && id !== undefined) {
+        if (ancestry[id]) return [];
+        ancestry[id] = true;
+    }
     return directChildren(nodes, id).filter(function (child) {
         if (!isWhenVisible(child, condResults)) return false;
         if (child.kind === "submenu" || child.kind === "link") {
-            return visibleChildren(nodes, child.id, condResults).length > 0;
+            return visibleChildren(nodes, child.id, condResults, ancestry).length > 0;
         }
         return true;
     });

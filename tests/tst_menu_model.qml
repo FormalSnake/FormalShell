@@ -132,6 +132,20 @@ TestCase {
         compare(obj.note, "see http://example.com for // details, still here");
     }
 
+    function test_visible_children_survives_mutually_referencing_links() {
+        var def = {
+            "a": { label: "A" },
+            "a.toB": { label: "To B", target: "b" },
+            "b": { label: "B" },
+            "b.toA": { label: "To A", target: "a" }
+        };
+        var tree = M.buildTree(def, {});
+        // Must terminate instead of recursing forever between the two
+        // links; a cycle with no other content bottoms out as invisible.
+        var visible = M.visibleChildren(tree.nodes, null, {});
+        compare(visible.length, 0);
+    }
+
     function test_parse_jsonc_throws_on_hard_syntax_error() {
         var threw = false;
         try {
