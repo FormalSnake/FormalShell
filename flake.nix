@@ -31,10 +31,26 @@
       '';
     in
     {
-      packages = forAllSystems (system: pkgs: rec {
-        formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; };
-        default = formalshell;
-      });
+      packages = nixpkgs.lib.recursiveUpdate
+        (forDarwin (system: pkgs: {
+          # The aarch64-linux build capability the mac's nix daemon offloads to —
+          # nixpkgs' own macOS remote-builder VM, pinned here rather than taken
+          # from the flake registry so the rig is reproducible with the repo.
+          # The override raises the guest off its 1-core/3G/20G defaults (a Qt
+          # build and a store image do not fit those); it only rebuilds the four
+          # darwin-side runner derivations, everything else still substitutes.
+          # Driven by dev/linux-builder.sh.
+          linux-builder = pkgs.darwin.linux-builder.override {
+            modules = [{
+              virtualisation.cores = 6;
+              virtualisation.darwin-builder = { memorySize = 10240; diskSize = 61440; };
+            }];
+          };
+        }))
+        (forAllSystems (system: pkgs: rec {
+          formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; };
+          default = formalshell;
+        }));
 
       homeModules = { formalshell = ./nix/hm-module.nix; default = ./nix/hm-module.nix; };
 

@@ -3,3 +3,4 @@ result-*
 .direnv/
 *.qmlc
 .qmlls.ini
+dev/.linux-builder/
