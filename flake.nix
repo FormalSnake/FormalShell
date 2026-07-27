@@ -22,6 +22,17 @@
         default = formalshell;
       });
 
+      checks = forAllSystems (system: pkgs: {
+        qml-tests = pkgs.runCommand "formalshell-qml-tests" {
+          nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
+          QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
+        } ''
+          cp -r ${./.}/shell shell; cp -r ${./.}/tests tests
+          QT_QPA_PLATFORM=offscreen qmltestrunner -input tests
+          touch $out
+        '';
+      });
+
       devShells = forAllSystems (system: pkgs: {
         default = pkgs.mkShell {
           packages = [
@@ -30,6 +41,7 @@
             pkgs.matugen
             pkgs.just
           ];
+          QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
           shellHook = ''
             [ -f .qmlls.ini ] || touch .qmlls.ini
           '';
