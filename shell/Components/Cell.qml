@@ -43,6 +43,15 @@ Item {
         anchors.topMargin: Theme.spacing.sm
         anchors.rightMargin: Theme.spacing.md + Theme.borderWidth
         anchors.bottomMargin: Theme.spacing.sm + Theme.borderWidth
+
+        // Item never derives implicit size from children — only positioners
+        // and Text/Image do that automatically — so without this,
+        // content.implicit* (read by root.implicit* above) is permanently 0
+        // no matter what's inside. childrenRect is the collective bounding
+        // box of content's actual children, which gives a bare Item the
+        // same auto-sizing behavior.
+        implicitWidth: childrenRect.width
+        implicitHeight: childrenRect.height
     }
 
     Rectangle {
