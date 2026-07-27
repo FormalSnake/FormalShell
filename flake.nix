@@ -46,6 +46,10 @@
               virtualisation.darwin-builder = { memorySize = 10240; diskSize = 61440; };
             }];
           };
+
+          # The runtime layer: darwin-runnable headless aarch64-linux test VM
+          # (nix/testvm.nix). Driven by dev/vm.sh.
+          testvm = self.nixosConfigurations.testvm.config.system.build.vm;
         }))
         (forAllSystems (system: pkgs: rec {
           formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; };
@@ -53,6 +57,10 @@
         }));
 
       homeModules = { formalshell = ./nix/hm-module.nix; default = ./nix/hm-module.nix; };
+
+      nixosConfigurations = {
+        testvm = import ./nix/testvm.nix { inherit self nixpkgs quickshell; };
+      };
 
       checks = nixpkgs.lib.recursiveUpdate
         (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; }))

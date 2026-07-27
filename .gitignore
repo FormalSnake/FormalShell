@@ -4,3 +4,4 @@ result-*
 *.qmlc
 .qmlls.ini
 dev/.linux-builder/
+dev/.testvm/
