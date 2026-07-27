@@ -39,7 +39,7 @@ nixpkgs.lib.nixosSystem {
           writableStoreUseTmpfs = false;
           useHostCerts = true;
           forwardPorts = [
-            { from = "host"; host.port = 2222; guest.port = 22; }
+            { from = "host"; host.address = "127.0.0.1"; host.port = 2222; guest.port = 22; }
           ];
           additionalPaths = [ nixpkgs.outPath quickshell.outPath ];
 
@@ -69,13 +69,12 @@ nixpkgs.lib.nixosSystem {
         services.openssh = {
           enable = true;
           authorizedKeysFiles = [ "/var/keys/%u_ed25519.pub" ];
-          # The 9p mapped-xattr share exposes /var/keys/*.pub with the
-          # real host uid (whoever ran ssh-keygen on the mac), which never
-          # matches the guest's root/test uid — sshd's ownership check on
-          # AuthorizedKeysFile rejects that unconditionally otherwise. A
-          # single-user throwaway VM reachable only via the host's own
-          # loopback port forward, so relaxing this is a non-issue.
-          settings.StrictModes = false;
+          # StrictModes stays at its default (on): the driver must pass
+          # $KEYS through `nix-store --add` before boot (same as
+          # nix-builder-vm.nix's run-builder), so the 9p mapped-xattr share
+          # reports /var/keys/*.pub owned by root instead of the host uid
+          # that ran ssh-keygen — sshd's AuthorizedKeysFile ownership check
+          # accepts root-owned files unconditionally.
         };
 
         environment.systemPackages = [
