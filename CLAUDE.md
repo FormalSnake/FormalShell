@@ -30,6 +30,14 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Hard rules
 
+- **Host-session safety**: the owner's live niri session is NOT a test target.
+  Never run the shell, the ThemeEngine, or any compositor action (especially
+  `load-config-file` / `applyThemeFragment`) in an environment carrying the
+  host's `NIRI_SOCKET`/`HYPRLAND_INSTANCE_SIGNATURE` — all runtime testing
+  happens inside nested sessions via `dev/smoke-*.sh` (which scrub and restore
+  the env). If you must run `qs` ad hoc, `unset NIRI_SOCKET` first or export
+  the nested session's socket explicitly. Observed failure mode: host niri
+  config reloads firing during isolated testing (2026-07-27).
 - **Design language**: every UI surface follows `docs/DESIGN.md` (mek.gallery-derived
   ruled-ledger grid: shared hairline rules, cells not cards, inversion for
   selection, accent as full-bleed cells, uppercase meta labels, radius 0).
