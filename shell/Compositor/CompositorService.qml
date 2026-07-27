@@ -3,6 +3,7 @@ import Quickshell
 import QtQuick
 
 import qs.Compositor.niri
+import qs.Compositor.hyprland
 
 Singleton {
     id: root
@@ -25,8 +26,15 @@ Singleton {
         id: niriBackend
     }
 
-    // Task 9 extends this to also pick a HyprlandBackend.
-    readonly property QtObject backend: root.compositor === "niri" ? niriBackend : nullBackend
+    HyprlandBackend {
+        id: hyprlandBackend
+    }
+
+    readonly property QtObject backend: {
+        if (root.compositor === "niri") return niriBackend;
+        if (root.compositor === "hyprland") return hyprlandBackend;
+        return nullBackend;
+    }
 
     readonly property bool available: backend.available
     property var workspaces: backend.workspaces
