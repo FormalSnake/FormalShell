@@ -34,6 +34,13 @@ IpcHandler {
     // fallback.
     readonly property bool _warmAudio: AudioService.available !== undefined
 
+    // Same lazy-singleton hazard again: BrightnessService's device query is
+    // an async Process spawned from Component.onCompleted, which doesn't run
+    // until something constructs the singleton. Touch it here so the
+    // brightnessctl round-trip has the whole shell-startup-to-first-IPC-call
+    // window to land before dump() reads it, instead of racing it.
+    readonly property bool _warmBrightness: BrightnessService.available !== undefined
+
     function dump(): string {
         return JSON.stringify({
             compositor: CompositorService.compositor,
@@ -47,6 +54,10 @@ IpcHandler {
                 volume: AudioService.volume,
                 muted: AudioService.muted,
                 available: AudioService.available
+            },
+            brightness: {
+                available: BrightnessService.available,
+                percent: BrightnessService.percent
             }
         });
     }
