@@ -17,6 +17,11 @@
       qsFor = system: quickshell.packages.${system}.default;
     in
     {
+      packages = forAllSystems (system: pkgs: rec {
+        formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; };
+        default = formalshell;
+      });
+
       devShells = forAllSystems (system: pkgs: {
         default = pkgs.mkShell {
           packages = [
