@@ -2,6 +2,7 @@ import Quickshell.Io
 
 import qs.Compositor
 import qs.Core as Core
+import qs.Services
 
 // `qs ipc call debug dump` — the scripted-verification hook every later
 // task uses to assert on live compositor state from outside the process.
@@ -26,6 +27,13 @@ IpcHandler {
     // instead, at construction, well before any call reaches dump().
     readonly property bool _warmConfig: Core.Config.settings !== undefined
 
+    // Same lazy-singleton hazard again: AudioService's PwObjectTracker only
+    // binds the default sink once something reads AudioService.available,
+    // constructing the singleton. Touch it here so the very first dump()
+    // already sees bound (valid) volume/muted values, not the unbound 0/false
+    // fallback.
+    readonly property bool _warmAudio: AudioService.available !== undefined
+
     function dump(): string {
         return JSON.stringify({
             compositor: CompositorService.compositor,
@@ -34,7 +42,12 @@ IpcHandler {
             windows: CompositorService.windows,
             focusedWindowId: CompositorService.focusedWindowId,
             focusedWorkspaceId: CompositorService.focusedWorkspaceId,
-            configLoaded: Core.Config.settings
+            configLoaded: Core.Config.settings,
+            audio: {
+                volume: AudioService.volume,
+                muted: AudioService.muted,
+                available: AudioService.available
+            }
         });
     }
 
