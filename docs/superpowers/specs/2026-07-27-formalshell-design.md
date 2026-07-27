@@ -161,7 +161,14 @@ pinning becomes a shell feature, not an external `inotifywait` systemd unit.
 screen's frozen wallpaper backdrop), no shadows, 2px borders, monospace
 everywhere via the fontconfig `monospace` alias (system mono font change
 reflows the entire shell, no restart), Nerd Font glyphs as the icon language
-(no SVG icon set). Animation posture: snappy functional micro-feedback
+(no SVG icon set).
+
+**Visual reference (added 2026-07-27): https://www.mek.gallery/** — the
+owner's canonical look, matugen-recolored. Codified as the "ruled ledger
+grid" language in the FormalShell repo's `docs/DESIGN.md` (cells sharing
+hairline rules instead of floating cards, selection by fg/bg inversion,
+accent as full-bleed cells, uppercase meta labels, dense spacing). That doc
+binds all UI surfaces from M4 on; M9 retrofits M1–M3 surfaces. Animation posture: snappy functional micro-feedback
 (120–420ms eased color/state transitions, Omarchy's "breathing" opacity pulse
 for active-process states); no showy choreography.
 
@@ -199,8 +206,22 @@ Any future settings UI writes exclusively to a mechanism that composes with
    explicitly preferred over DMS's): audio (Pipewire sliders per node),
    network (Wi-Fi list/connect via `Quickshell.Networking`), bluetooth
    (BlueZ), power/battery (profile picker, keyboard-navigable; charging
-   pulse animation), clock/calendar, **weather** (Omarchy's weather panel as
-   the model; open-meteo fetch). Location comes from a `Location` service:
+   pulse animation), clock/**calendar** — modeled on Omarchy quattro's
+   calendar widget (owner's favorite; use its implementation as the direct
+   reference): month grid + a **year-progress bar**, with the easter egg
+   kept and extended: double-clicking the progress bar prompts (via the
+   menu's `input` mode) for birth year and expected lifespan and the bar
+   can then show **% of life lived**; those two values are runtime state
+   (state.json — the shell never writes settings.json; settings.json keys
+   `calendar.birthYear`/`calendar.lifeExpectancy` may declaratively
+   override). Calendar **events from the GNOME calendar stack (GNOME
+   Online Accounts via Evolution Data Server) if feasible in pure QML** —
+   the M6 plan starts with a feasibility spike on EDS's D-Bus calendar API
+   (gdbus via Process is the candidate path); if EDS proves impractical
+   without a compiled helper, fall back to reading local ICS
+   files/khal-compatible sources and record EDS as a post-v1 item —
+   feasibility outcome documented either way, **weather** (Omarchy's
+   weather panel as the model; open-meteo fetch). Location comes from a `Location` service:
    **geoclue by default** via QtPositioning's `PositionSource` (the user's
    networks are registered in the Wi-Fi positioning DB), streaming updates so
    an early inaccurate seed never becomes permanent (PR #2914's lesson);
@@ -326,7 +347,8 @@ Mirrors Omarchy's own incremental phase history:
    `select`/`input` dmenu API; power submenu with custom buttons.
 5. Notifications + OSD.
 6. Clipboard history + panels (audio, network, bluetooth, power, clock,
-   weather).
+   calendar — Omarchy-quattro calendar widget with the life-progress
+   easter egg and the EDS/GOA events feasibility spike — weather).
 7. Now playing + Apple Music art; lock screen; screensaver (Idle service);
    image picker.
 8. Greeter + `nixosModules.formalshell-greeter`.
