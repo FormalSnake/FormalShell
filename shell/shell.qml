@@ -5,6 +5,7 @@ import QtQuick
 import qs.Surfaces.Background
 import qs.Surfaces.Bar
 import qs.Surfaces.Menu
+import qs.Surfaces.Notifications
 import qs.Ipc
 
 ShellRoot {
@@ -21,6 +22,14 @@ ShellRoot {
 
         delegate: Component {
             Bar {}
+        }
+    }
+
+    Variants {
+        model: Quickshell.screens
+
+        delegate: Component {
+            Toasts {}
         }
     }
 

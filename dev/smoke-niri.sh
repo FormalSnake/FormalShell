@@ -12,6 +12,17 @@
 # Menu.qml's FORMALSHELL_SMOKE_OPEN_MENU env-gated auto-open still exists
 # (harmless, useful for manual debugging) but this script no longer relies
 # on it now that the real IPC route is wired.
+# With --notify, fires `notify-send -u normal` then `-u critical` in-session
+# and screenshots the resulting toasts.
+#
+# D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
+# `dbus-run-session`, giving formalshell's NotificationServer (and anything
+# else that talks D-Bus in there) a private session bus instead of the
+# host's — the host's is owned by DMS, and NotificationServer acquiring
+# org.freedesktop.Notifications on it would steal that name out from under
+# the real desktop. Verified every run: the host's
+# `busctl --user status org.freedesktop.Notifications` owner PID must be
+# identical before and after.
 #
 # Host-session safety: the nested niri invocation (and everything it spawns —
 # formalshell, and in --wallpaper mode, matugen and the user's own matugen
@@ -29,12 +40,14 @@ cd "$(dirname "$0")/.."
 dump_mode=false
 wallpaper_mode=false
 menu_mode=false
+notify_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
     --menu) menu_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu]" >&2; exit 1 ;;
+    --notify) notify_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify]" >&2; exit 1 ;;
   esac
 done
 
@@ -58,6 +71,17 @@ if $wallpaper_mode; then
     convert_bin=convert
   else
     convert_bin="nix run nixpkgs#imagemagick -- convert"
+  fi
+fi
+
+if $notify_mode; then
+  # Resolved to a real absolute path (not a "nix run ..." prefix): it's
+  # embedded inside a generated `sh -c` string below, same requirement as
+  # $qs_bin/$shell_path.
+  if command -v notify-send >/dev/null 2>&1; then
+    notify_send_bin=$(command -v notify-send)
+  else
+    notify_send_bin=$(nix build 'nixpkgs#libnotify^out' --no-link --print-out-paths)/bin/notify-send
   fi
 fi
 shell_path=$(readlink -f result/share/formalshell)
@@ -100,6 +124,13 @@ restore_host_wayland_display() {
   fi
 }
 trap restore_host_wayland_display EXIT
+
+# D-Bus isolation check (see the header comment): captured now, compared
+# against the same query once the nested session has torn down.
+host_notifications_owner() {
+  busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^PID=//p'
+}
+host_notifications_owner_before=$(host_notifications_owner)
 
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
@@ -185,6 +216,10 @@ fi
     echo "spawn-at-startup \"bash\" \"$menu_select_script\""
     echo "spawn-at-startup \"bash\" \"$menu_finish_script\""
   fi
+  if $notify_mode; then
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -u normal 'Test' 'Hello'\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$notify_send_bin' -u critical 'Crit' 'Now'\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first.
@@ -201,7 +236,13 @@ XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
 XDG_DATA_DIRS="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
-WAYLAND_DISPLAY="$wayland_display" timeout 30 $niri_bin --config "$cfg" || true
+WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout 30 $niri_bin --config "$cfg" || true
+
+host_notifications_owner_after=$(host_notifications_owner)
+if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then
+  echo "SMOKE_FAIL: host org.freedesktop.Notifications owner PID changed ($host_notifications_owner_before -> $host_notifications_owner_after) — nested NotificationServer touched the host bus" >&2
+  exit 1
+fi
 
 if $dump_mode; then
   if [ -s "$dump_path" ]; then
@@ -230,6 +271,10 @@ if $menu_mode; then
   else
     echo "SMOKE_FAIL: menu close in select mode did not write {cancelled:true}" >&2; exit 1
   fi
+fi
+
+if $notify_mode; then
+  echo "host org.freedesktop.Notifications owner PID unchanged: $host_notifications_owner_after"
 fi
 
 if [ -f "$shot_dir/smoke.png" ]; then
