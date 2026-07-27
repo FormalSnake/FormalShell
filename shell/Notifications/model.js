@@ -75,6 +75,40 @@ function add(state, notif, now, opts) {
     });
 }
 
+// Applies a replaces_id update (the server mutates the existing
+// Notification object in place instead of emitting a new one — see
+// NotificationService.qml's onNotification comment) to whichever tier
+// currently holds the entry, without moving it between tiers or touching
+// arrivedAt/seenAt. A still-popped-up entry gets expiresAt recomputed from
+// the patched urgency exactly like add() does, so a later update isn't
+// silently cut off by the original arrival's clock.
+function update(state, id, patch, now) {
+    var idx = state.popups.findIndex(function (p) { return p.id === id; });
+    if (idx >= 0) {
+        var popups = state.popups.slice();
+        var entry = Object.assign({}, popups[idx], patch);
+        entry.expiresAt = entry.urgency === 2 ? 0 : now + DEFAULT_TIMEOUT_MS;
+        popups[idx] = entry;
+        return Object.assign({}, state, { popups: popups, nextExpiry: recomputeNextExpiry(popups) });
+    }
+
+    idx = state.pending.findIndex(function (p) { return p.id === id; });
+    if (idx >= 0) {
+        var pending = state.pending.slice();
+        pending[idx] = Object.assign({}, pending[idx], patch);
+        return Object.assign({}, state, { pending: pending });
+    }
+
+    idx = state.past.findIndex(function (p) { return p.id === id; });
+    if (idx >= 0) {
+        var past = state.past.slice();
+        past[idx] = Object.assign({}, past[idx], patch);
+        return Object.assign({}, state, { past: past });
+    }
+
+    return state;
+}
+
 function expire(state, now) {
     var popups = [];
     var timedOut = [];

@@ -126,6 +126,55 @@ TestCase {
         compare(s.pending.length, 0);
     }
 
+    function test_update_patches_popup_content_in_place_without_moving_tier() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1), 1000, {});
+        s = M.update(s, "a", { summary: "Song B" }, 5000);
+        compare(s.popups.length, 1);
+        compare(s.pending.length, 0);
+        compare(s.popups[0].summary, "Song B");
+        compare(s.popups[0].arrivedAt, 1000); // unchanged by a replace
+    }
+
+    function test_update_refreshes_expiry_for_still_popped_up_entry() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1), 1000, {}); // expires 7000
+        s = M.update(s, "a", { summary: "Song B" }, 6500); // past the original clock
+        compare(s.popups[0].expiresAt, 12500); // 6500 + 6000ms default, not expired
+    }
+
+    function test_update_keeps_sticky_expiry_for_critical_popup() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 2, { senderIsNotifySend: true }), 1000, {});
+        s = M.update(s, "a", { summary: "Song B" }, 5000);
+        compare(s.popups[0].expiresAt, 0);
+    }
+
+    function test_update_patches_pending_entry_without_touching_expiry() {
+        var s = M.initialState();
+        s = M.setDnd(s, true);
+        s = M.add(s, notif("a", 1), 1000, {});
+        s = M.update(s, "a", { summary: "Song B" }, 5000);
+        compare(s.pending.length, 1);
+        compare(s.pending[0].summary, "Song B");
+        compare(s.pending[0].expiresAt, null);
+    }
+
+    function test_update_unknown_id_is_noop() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1), 1000, {});
+        var updated = M.update(s, "missing", { summary: "Song B" }, 5000);
+        compare(updated, s);
+    }
+
+    function test_purity_update_does_not_mutate_input_state() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1), 1000, {});
+        var before = JSON.stringify(s);
+        M.update(s, "a", { summary: "Song B" }, 5000);
+        compare(JSON.stringify(s), before);
+    }
+
     function test_dismiss_popup_moves_to_past_marked_seen() {
         var s = M.initialState();
         s = M.add(s, notif("a", 1), 1000, {});

@@ -16,6 +16,13 @@ Singleton {
 
     property var _state: Model.initialState()
     property var _live: ({})
+    // Ids currently mid-flight through a dismiss()/expire() call WE made
+    // (dismissPopup, the expiry timer): the model was already updated
+    // before that call, so the closed() it triggers must be a no-op there.
+    // Anything closed WITHOUT this flag set — CloseNotification from the
+    // sender, an action's implicit close, a generation switch — never
+    // touched the model at all and must be dropped from it here.
+    property var _selfClosing: ({})
 
     readonly property var popups: root._state.popups
     readonly property var pending: root._state.pending
@@ -44,11 +51,52 @@ Singleton {
             notification.tracked = true;
             var id = notification.id;
             root._live[id] = notification;
+
+            // server.cpp's Notify() honours replaces_id by mutating this same
+            // Notification object in place (updateProperties) rather than
+            // emitting a new `notification` — this handler runs exactly
+            // once per id, and every subsequent replace only fires the
+            // per-property NOTIFY signals below. Resync the model entry
+            // from the live object on each one so replaces_id senders
+            // (progress bars, "Song A" -> "Song B") actually update instead
+            // of freezing the first-arrival snapshot.
+            function syncFromLive() {
+                if (root._live[id] !== notification)
+                    return;
+                root._state = Model.update(root._state, id, {
+                    appName: notification.appName,
+                    appIcon: notification.appIcon,
+                    summary: notification.summary,
+                    body: notification.body,
+                    urgency: notification.urgency,
+                    actions: (notification.actions ?? []).map(a => ({ key: a.identifier, label: a.text })),
+                    image: notification.image || "",
+                    senderIsNotifySend: notification.appName === "notify-send"
+                }, Date.now());
+            }
+            notification.appNameChanged.connect(syncFromLive);
+            notification.appIconChanged.connect(syncFromLive);
+            notification.summaryChanged.connect(syncFromLive);
+            notification.bodyChanged.connect(syncFromLive);
+            notification.urgencyChanged.connect(syncFromLive);
+            notification.actionsChanged.connect(syncFromLive);
+            notification.imageChanged.connect(syncFromLive);
+
             notification.closed.connect(function () {
                 // Guard against replaces_id handing this slot to a newer
                 // notification before the old one's closed signal lands.
                 if (root._live[id] === notification)
                     delete root._live[id];
+
+                if (root._selfClosing[id]) {
+                    delete root._selfClosing[id];
+                    return;
+                }
+                // Sender-initiated close (CloseNotification) or an action's
+                // implicit close on a non-resident notification: the model
+                // was never told, so it would otherwise sit in popups/pending
+                // forever — sticky critical ones with no other way out.
+                root._state = Model.dismissOne(root._state, id);
             });
 
             root._state = Model.add(root._state, {
@@ -84,9 +132,12 @@ Singleton {
                 if (stillPopup[id]) return;
                 var notif = root._live[id];
                 if (notif) {
+                    root._selfClosing[id] = true;
                     try {
                         notif.expire();
-                    } catch (e) {}
+                    } catch (e) {
+                        delete root._selfClosing[id];
+                    }
                 }
             });
             root._state = next;
@@ -104,9 +155,12 @@ Singleton {
         root._state = Model.dismissPopup(root._state, id, Date.now());
         var notif = root._live[id];
         if (notif) {
+            root._selfClosing[id] = true;
             try {
                 notif.dismiss();
-            } catch (e) {}
+            } catch (e) {
+                delete root._selfClosing[id];
+            }
         }
     }
 
