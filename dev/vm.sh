@@ -12,7 +12,8 @@
 # authorized_keys share: `nix-store --add` before boot so the 9p mapped-xattr
 # share reports the pubkey as root-owned, which is what lets sshd's
 # AuthorizedKeysFile ownership check (StrictModes, left at its secure
-# default) pass.
+# default) pass. Only the .pub is added — the store is world-readable and
+# the private key never needs to leave dev/.testvm/keys.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_root="$(pwd)"
@@ -69,8 +70,15 @@ cmd_start() {
   vm_pkg=$(nix build --no-link --print-out-paths "$repo_root#testvm")
   echo "built $vm_pkg"
 
+  # Copy just the pubkey into its own directory before adding to the
+  # store — `nix-store --add` on $keys_dir would put the private key
+  # (sshd never reads it; only the guest's authorized_keys .pub does)
+  # into the world-readable store too.
+  local pub_keys_dir="$work_dir/keys-pub"
+  mkdir -p "$pub_keys_dir"
+  cp "$priv_key.pub" "$pub_keys_dir/"
   local keys_store_path
-  keys_store_path=$(nix-store --add "$repo_root/$keys_dir")
+  keys_store_path=$(nix-store --add "$repo_root/$pub_keys_dir")
 
   (
     cd "$work_dir"
