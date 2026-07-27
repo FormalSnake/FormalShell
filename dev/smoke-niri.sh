@@ -5,6 +5,17 @@
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
 # so the screenshot proves the background/bar actually recolored.
+#
+# Host-session safety: the nested niri invocation (and everything it spawns —
+# formalshell, and in --wallpaper mode, matugen and the user's own matugen
+# ecosystem) runs under an isolated HOME/XDG_*_HOME, never this user's real
+# ones. Without this, ThemeEngine reads the owner's live
+# ~/.config/matugen/config.toml verbatim and re-executes every post_hook in
+# it (keyboard LEDs, ghostty/spicetify/niri reloads, …) against the real
+# desktop on every smoke run — observed 2026-07-27. WAYLAND_DISPLAY and
+# XDG_RUNTIME_DIR stay the host's: the nested compositor is a Wayland client
+# of the host and needs the real socket to connect and to publish its own
+# IPC/quickshell sockets.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -86,6 +97,10 @@ dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 cfg=$(mktemp -d)/config.kdl
 
+# Isolated HOME for the nested niri process and everything it spawns — see
+# the host-session safety note at the top of this file.
+iso_home=$(mktemp -d)
+
 if $wallpaper_mode; then
   wp_path="$shot_dir/wp.png"
   $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
@@ -106,6 +121,11 @@ fi
   echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep 1 && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
+HOME="$iso_home" \
+XDG_CONFIG_HOME="$iso_home/.config" \
+XDG_STATE_HOME="$iso_home/.local/state" \
+XDG_DATA_HOME="$iso_home/.local/share" \
+XDG_CACHE_HOME="$iso_home/.cache" \
 WAYLAND_DISPLAY="$wayland_display" timeout 30 $niri_bin --config "$cfg" || true
 
 if $dump_mode; then

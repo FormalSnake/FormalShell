@@ -68,6 +68,11 @@ trap restore_host_wayland_display EXIT
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 cfg=$(mktemp -d)/hyprland.conf
+
+# Isolated HOME for the nested Hyprland process and everything it spawns —
+# see dev/smoke-niri.sh's host-session safety note: formalshell must never
+# read/write this user's real matugen config or state dir during a smoke run.
+iso_home=$(mktemp -d)
 {
   echo "exec-once = $PWD/result/bin/formalshell"
   echo "exec-once = sh -c \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > '$dump_path' 2>&1\""
@@ -78,6 +83,11 @@ cfg=$(mktemp -d)/hyprland.conf
 # hang instead of exiting cleanly (observed when the exit-dispatch exec-once
 # itself failed), and a stuck nested compositor would otherwise sit on the
 # host's screen indefinitely.
+HOME="$iso_home" \
+XDG_CONFIG_HOME="$iso_home/.config" \
+XDG_STATE_HOME="$iso_home/.local/state" \
+XDG_DATA_HOME="$iso_home/.local/share" \
+XDG_CACHE_HOME="$iso_home/.cache" \
 WAYLAND_DISPLAY="$wayland_display" timeout -k 10 30 $hyprland_bin --config "$cfg" || true
 
 if [ -s "$dump_path" ]; then
