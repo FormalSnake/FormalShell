@@ -5,6 +5,9 @@
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
 # so the screenshot proves the background/bar actually recolored.
+# With --menu, sets FORMALSHELL_SMOKE_OPEN_MENU=1 so Menu.qml auto-opens at
+# root on startup — a temporary hook until Task 7 wires the real `menu
+# summon` IPC route.
 #
 # Host-session safety: the nested niri invocation (and everything it spawns —
 # formalshell, and in --wallpaper mode, matugen and the user's own matugen
@@ -21,11 +24,13 @@ cd "$(dirname "$0")/.."
 
 dump_mode=false
 wallpaper_mode=false
+menu_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper]" >&2; exit 1 ;;
+    --menu) menu_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu]" >&2; exit 1 ;;
   esac
 done
 
@@ -106,6 +111,11 @@ if $wallpaper_mode; then
   $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
 fi
 
+menu_env=""
+if $menu_mode; then
+  menu_env=1
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -126,6 +136,7 @@ XDG_CONFIG_HOME="$iso_home/.config" \
 XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
+FORMALSHELL_SMOKE_OPEN_MENU="$menu_env" \
 WAYLAND_DISPLAY="$wayland_display" timeout 30 $niri_bin --config "$cfg" || true
 
 if $dump_mode; then

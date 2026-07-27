@@ -4,6 +4,7 @@ import QtQuick
 
 import qs.Surfaces.Background
 import qs.Surfaces.Bar
+import qs.Surfaces.Menu
 import qs.Ipc
 
 ShellRoot {
@@ -22,6 +23,10 @@ ShellRoot {
             Bar {}
         }
     }
+
+    // One instance, not per-screen: it opens on the focused screen at
+    // summon time rather than living on every output.
+    Menu {}
 
     DebugIpc {}
     ThemeIpc {}
