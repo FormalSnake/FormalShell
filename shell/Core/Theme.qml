@@ -1,15 +1,13 @@
 pragma Singleton
 import Quickshell
+import Quickshell.Io
 import QtQuick
+import "../Theme/palette.js" as Palette
 
 Singleton {
     id: root
 
-    readonly property var color: ({
-        background: "#100F0F", backgroundAlt: "#1C1B1A",
-        foreground: "#CECDC3", foregroundDim: "#878580",
-        accent: "#4385BE", urgent: "#D14D41"
-    })
+    property var color: Palette.fallback()
 
     readonly property int borderWidth: 2
     readonly property int radius: 0
@@ -23,6 +21,33 @@ Singleton {
     })
 
     readonly property var spacing: ({ scale: 1.0, xs: 2, sm: 4, md: 8, lg: 16 })
+
+    readonly property string _stateDir: {
+        const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
+        return xdgState + "/formalshell";
+    }
+
+    // Live theme.json watch: ThemeEngine writes this file atomically, we just
+    // read it. Absent or failing palette.validate() (e.g. mid-write, or no
+    // engine run yet) falls back to the static Flexoki defaults.
+    FileView {
+        id: themeJsonFile
+        path: root._stateDir + "/theme.json"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: root._applyThemeJson()
+        onLoadFailed: error => root.color = Palette.fallback()
+    }
+
+    function _applyThemeJson() {
+        var parsed = null;
+        try {
+            parsed = JSON.parse(themeJsonFile.text());
+        } catch (e) {
+            parsed = null;
+        }
+        root.color = Palette.validate(parsed).ok ? parsed : Palette.fallback();
+    }
 
     function control(state) {
         switch (state) {
