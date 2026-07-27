@@ -34,7 +34,22 @@ PanelWindow {
     property var _condResults: ({})
     property var _checkedResults: ({})
 
+    // "menu" (tree navigation) | "select" | "input" — the dmenu-replacement
+    // modes summoned via MenuIpc's select()/input(). Both repurpose the same
+    // window/search field; _displayRows, breadcrumb and key handling branch
+    // on this. _abandonPendingSelect() is what resets it back to "menu".
+    property string _mode: "menu"
+    property string _selectPrompt: ""
+    property var _selectOptions: []
+    property string _selectToken: ""
+
     property string _defaultMenuText: ""
+    property string _userMenuText: ""
+
+    readonly property string _configDir: {
+        const xdgConfig = Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config");
+        return xdgConfig + "/formalshell";
+    }
 
     FileView {
         id: defaultMenuFile
@@ -53,6 +68,33 @@ PanelWindow {
         onLoadFailed: error => console.warn("Menu: failed to load default-menu.jsonc:", error)
     }
 
+    // ~/.config/formalshell/menu.jsonc — the per-key user overlay (plan-wide
+    // constraint: user wins, `"hidden": true` drops a default node). Same
+    // bounded-retry-until-watch-attaches pattern as Config.qml's
+    // settings.json: the file (and its parent dir) may not exist yet at
+    // first launch, so a bare watchChanges: true would never attach.
+    Timer {
+        id: userMenuRewatchTimer
+        interval: 300
+        onTriggered: userMenuFile.reload()
+    }
+
+    FileView {
+        id: userMenuFile
+        path: root._configDir + "/menu.jsonc"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            root._userMenuText = userMenuFile.text();
+            root._evalConditions();
+        }
+        onLoadFailed: error => {
+            root._userMenuText = "";
+            if (error === FileViewError.FileNotFound)
+                userMenuRewatchTimer.restart();
+        }
+    }
+
     readonly property var _defaultObj: {
         if (!root._defaultMenuText) return {};
         var parsed;
@@ -69,12 +111,30 @@ PanelWindow {
         return merged;
     }
 
-    readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, {}), {
+    readonly property var _userObj: {
+        if (!root._userMenuText) return {};
+        try {
+            return Model.parseJsonc(root._userMenuText);
+        } catch (e) {
+            console.warn("Menu: failed to parse menu.jsonc:", e.message);
+            return {};
+        }
+    }
+
+    readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, root._userObj), {
         apps: function () { return Providers.appsProvider(DesktopEntries.applications.values); }
     })
     readonly property var _nodes: root._tree.nodes
 
     readonly property var _displayRows: {
+        if (root._mode === "select") {
+            var query = searchInput.text.toLowerCase();
+            return root._selectOptions
+                .map(function (opt, i) { return { id: "select." + i, label: String(opt), icon: "", kind: "option" }; })
+                .filter(function (n) { return query.length === 0 || n.label.toLowerCase().indexOf(query) >= 0; });
+        }
+        if (root._mode === "input")
+            return [];
         var q = searchInput.text;
         return q.length > 0
             ? Search.rank(root._nodes, q, root._condResults)
@@ -82,6 +142,10 @@ PanelWindow {
     }
 
     readonly property string breadcrumb: {
+        if (root._mode === "select")
+            return "SELECT / " + root._selectPrompt.toUpperCase();
+        if (root._mode === "input")
+            return "INPUT / " + root._selectPrompt.toUpperCase();
         var parts = [];
         var id = root.currentNodeId;
         while (id !== null && root._nodes[id]) {
@@ -102,7 +166,40 @@ PanelWindow {
     readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
     readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - Core.Theme.borderWidth - searchCell.height))
 
+    readonly property string _stateDir: {
+        const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
+        return xdgState + "/formalshell";
+    }
+
+    // Write-only: select()/input() answers land here as `{token, value}` /
+    // `{token, cancelled: true}` JSON, atomically (FileView's default).
+    // Callers poll/read the file themselves — see MenuIpc.qml's header
+    // comment for the full contract.
+    FileView {
+        id: selectionFile
+        path: root._stateDir + "/menu-selection.txt"
+    }
+
+    function _writeSelection(payload) {
+        selectionFile.setText(JSON.stringify(payload));
+    }
+
+    // Leaving select/input mode without the caller ever getting an answer
+    // (a fresh open()/openSelect()/openInput() supersedes it, or the window
+    // is closed) must still resolve that caller's poll loop — write the
+    // cancel record before switching back to "menu". A no-op once already
+    // back in "menu" mode, so close() and _completeSelect()/_submitInput()
+    // (which set _mode = "menu" themselves before calling close()) never
+    // double-write.
+    function _abandonPendingSelect() {
+        if (root._mode !== "menu") {
+            root._writeSelection({ token: root._selectToken, cancelled: true });
+            root._mode = "menu";
+        }
+    }
+
     function open(route) {
+        root._abandonPendingSelect();
         // Fresh session: last session's condition results must not leak
         // into this one (a `when`/`checked` shell command can change
         // between opens — bluetooth power, mode toggle, device presence).
@@ -122,9 +219,56 @@ PanelWindow {
         Qt.callLater(function () { searchInput.forceActiveFocus(); });
     }
 
+    function openSelect(prompt, options, token) {
+        root._abandonPendingSelect();
+        root._mode = "select";
+        root._selectPrompt = prompt;
+        root._selectOptions = options;
+        root._selectToken = token;
+        root._cursorIndex = 0;
+        root._confirmPendingId = "";
+        searchInput.text = "";
+        root.isOpen = true;
+        Qt.callLater(function () { searchInput.forceActiveFocus(); });
+    }
+
+    function openInput(prompt, token) {
+        root._abandonPendingSelect();
+        root._mode = "input";
+        root._selectPrompt = prompt;
+        root._selectOptions = [];
+        root._selectToken = token;
+        root._cursorIndex = 0;
+        root._confirmPendingId = "";
+        searchInput.text = "";
+        root.isOpen = true;
+        Qt.callLater(function () { searchInput.forceActiveFocus(); });
+    }
+
     function close() {
+        root._abandonPendingSelect();
         root.isOpen = false;
         root._confirmPendingId = "";
+    }
+
+    // Force an immediate re-read of default+user jsonc — Config's settings
+    // watch is already live/reactive (_defaultObj recomputes on its own), so
+    // this is mainly a manual fallback for an editor save that an fs watcher
+    // missed (atomic-save tools can swap the inode).
+    function refresh() {
+        defaultMenuFile.reload();
+        userMenuFile.reload();
+        root._evalConditions();
+    }
+
+    function _completeSelect(value) {
+        root._writeSelection({ token: root._selectToken, value: value });
+        root._mode = "menu";
+        root.close();
+    }
+
+    function _submitInput() {
+        root._completeSelect(searchInput.text);
     }
 
     // Debug-only: ranks `q` against the live tree without requiring the
@@ -181,6 +325,10 @@ PanelWindow {
         var rows = root._displayRows;
         if (index < 0 || index >= rows.length) return;
         var node = rows[index];
+        if (node.kind === "option") {
+            root._completeSelect(node.label);
+            return;
+        }
         if (node.kind === "action") {
             if (node.confirm === true && root._confirmPendingId !== node.id) {
                 root._confirmPendingId = node.id;
@@ -360,15 +508,25 @@ PanelWindow {
                         break;
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
-                        root._activateRow(root._cursorIndex);
+                        if (root._mode === "input")
+                            root._submitInput();
+                        else
+                            root._activateRow(root._cursorIndex);
                         event.accepted = true;
                         break;
                     case Qt.Key_Escape:
-                        root._pop();
+                        // select/input have no tree level to pop out of —
+                        // Escape just cancels the request and closes (close()
+                        // writes the {cancelled:true} record via
+                        // _abandonPendingSelect()).
+                        if (root._mode !== "menu")
+                            root.close();
+                        else
+                            root._pop();
                         event.accepted = true;
                         break;
                     case Qt.Key_Backspace:
-                        if (searchInput.text.length === 0) {
+                        if (root._mode === "menu" && searchInput.text.length === 0) {
                             root._pop();
                             event.accepted = true;
                         }

@@ -5,9 +5,13 @@
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
 # so the screenshot proves the background/bar actually recolored.
-# With --menu, sets FORMALSHELL_SMOKE_OPEN_MENU=1 so Menu.qml auto-opens at
-# root on startup — a temporary hook until Task 7 wires the real `menu
-# summon` IPC route.
+# With --menu, drives the real `menu` IPC target in-session: `summon` opens
+# it at root, `select` switches it into select mode (screenshot proves the
+# option list renders), then `close` cancels the pending select and the
+# resulting selection.txt is read back to prove the {cancelled:true} write.
+# Menu.qml's FORMALSHELL_SMOKE_OPEN_MENU env-gated auto-open still exists
+# (harmless, useful for manual debugging) but this script no longer relies
+# on it now that the real IPC route is wired.
 #
 # Host-session safety: the nested niri invocation (and everything it spawns —
 # formalshell, and in --wallpaper mode, matugen and the user's own matugen
@@ -101,6 +105,7 @@ shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 query_path="$shot_dir/query.json"
+selection_path="$shot_dir/selection.txt"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -125,9 +130,41 @@ if $wallpaper_mode; then
   $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
 fi
 
-menu_env=""
+# --menu's IPC steps are written as standalone helper scripts (rather than
+# inline "sh -c" one-liners like the other modes) because `menu select`'s
+# JSON-array argument needs to survive quoting through both this generator
+# script and niri's own KDL string parsing — a real file sidesteps that
+# entirely. `menu_finish_script` runs after the screenshot (never before:
+# closing the surface would leave nothing to screenshot), cancelling the
+# still-pending select and reading back its {cancelled:true} write.
 if $menu_mode; then
-  menu_env=1
+  menu_open_script="$shot_dir/menu-open.sh"
+  cat > "$menu_open_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon ""
+EOF
+
+  # `qs ipc call`'s CLI11 arg parser auto-splits any positional argument that
+  # literally starts with "[" and ends with "]" into multiple comma-joined
+  # arguments (its vector-literal shorthand, CLI11's Option_inl.hpp) — a bare
+  # '["a","b","c"]' arrives at the handler as 3 extra arguments, not one JSON
+  # string. A leading space defeats the front()=='[' check without tripping
+  # JSON.parse, which tolerates surrounding whitespace.
+  menu_select_script="$shot_dir/menu-select.sh"
+  cat > "$menu_select_script" <<EOF
+#!/usr/bin/env bash
+sleep 6
+"$qs_bin" ipc --any-display -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
+EOF
+
+  menu_finish_script="$shot_dir/menu-finish.sh"
+  cat > "$menu_finish_script" <<EOF
+#!/usr/bin/env bash
+sleep 9
+"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
+EOF
 fi
 
 {
@@ -143,9 +180,19 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call theme status > $status_path 2>&1\""
   fi
   if $menu_mode; then
+    echo "spawn-at-startup \"bash\" \"$menu_open_script\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
+    echo "spawn-at-startup \"bash\" \"$menu_select_script\""
+    echo "spawn-at-startup \"bash\" \"$menu_finish_script\""
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep 1 && niri msg action quit --skip-confirmation\""
+  # menu_mode's finish script (menu close + selection read) fires 1s after
+  # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
+  # the other modes' 1s so it has time to land first.
+  tail_gap=1
+  if $menu_mode; then
+    tail_gap=3
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 HOME="$iso_home" \
@@ -154,7 +201,6 @@ XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
 XDG_DATA_DIRS="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
-FORMALSHELL_SMOKE_OPEN_MENU="$menu_env" \
 WAYLAND_DISPLAY="$wayland_display" timeout 30 $niri_bin --config "$cfg" || true
 
 if $dump_mode; then
@@ -178,6 +224,11 @@ if $menu_mode; then
     cat "$query_path"
   else
     echo "SMOKE_FAIL: no menu query result produced" >&2; exit 1
+  fi
+  if [ -s "$selection_path" ] && grep -q '"cancelled":true' "$selection_path"; then
+    cat "$selection_path"
+  else
+    echo "SMOKE_FAIL: menu close in select mode did not write {cancelled:true}" >&2; exit 1
   fi
 fi
 

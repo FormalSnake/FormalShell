@@ -31,4 +31,5 @@ ShellRoot {
     DebugIpc { menu: menu }
     ThemeIpc {}
     WallpaperIpc {}
+    MenuIpc { menu: menu }
 }
