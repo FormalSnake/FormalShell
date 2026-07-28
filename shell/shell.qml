@@ -6,6 +6,7 @@ import qs.Surfaces.Background
 import qs.Surfaces.Bar
 import qs.Surfaces.Menu
 import qs.Surfaces.Notifications
+import qs.Surfaces.Osd
 import qs.Ipc
 
 ShellRoot {
@@ -41,9 +42,14 @@ ShellRoot {
     // summon time.
     Center { id: notificationsCenter }
 
+    // Same reasoning again: one instance, shown on the focused screen at
+    // trigger time.
+    Osd { id: osd }
+
     DebugIpc { menu: menu }
     ThemeIpc {}
     WallpaperIpc {}
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
+    OsdIpc { osd: osd }
 }

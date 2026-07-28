@@ -21,6 +21,15 @@ Singleton {
 
     property string _device: ""
 
+    // Re-polls the device list. Load-bearing for the OSD (M5 Task 6): a
+    // brightness keybind runs `brightnessctl set 5%+` itself (bypassing
+    // set()/step() below) before calling the `osd brightness` IPC route, so
+    // this service's cached percent is stale by exactly one step until
+    // something re-reads it — no polling loop means that has to be explicit.
+    function refresh() {
+        listProc.running = true;
+    }
+
     function set(pct) {
         if (!root.available)
             return;

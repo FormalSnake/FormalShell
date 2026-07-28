@@ -140,9 +140,31 @@ nixpkgs.lib.nixosSystem {
           pkgs.bash
         ];
 
+        # No hardware sink exists in a headless VM, so AudioService.available
+        # would stay false forever and the OSD's volume/mute path would be
+        # unexercisable. A pipewire "adapter" node with the support.null-
+        # audio-sink factory (documented at the Virtual-Devices wiki linked
+        # from this very option's description) creates a real Audio/Sink
+        # node with no backing hardware — wireplumber then picks it as the
+        # default sink since it's the only one, and AudioService's
+        # Pipewire.defaultAudioSink binds it exactly as it would a real card.
         services.pipewire = {
           enable = true;
           pulse.enable = true;
+          extraConfig.pipewire."10-virtual-sink" = {
+            "context.objects" = [
+              {
+                factory = "adapter";
+                args = {
+                  "factory.name" = "support.null-audio-sink";
+                  "node.name" = "virtual-sink";
+                  "node.description" = "Virtual Sink";
+                  "media.class" = "Audio/Sink";
+                  "audio.position" = "FL,FR";
+                };
+              }
+            ];
+          };
         };
 
         hardware.graphics.enable = true;

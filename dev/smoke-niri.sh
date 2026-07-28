@@ -20,6 +20,17 @@
 # screenshotting it — combine with --notify so there's a critical notify-send
 # still sitting sticky in the popup layer, visible over the center's own
 # corner (Toasts.qml sits on the Overlay layer, above the center's Top layer).
+# With --osd, drives the bottom-center OSD three ways: `qs ipc call osd
+# volume` (manual trigger, screenshotted as osd-manual.png — its path is
+# printed on its own line since it isn't the run's canonical SMOKE_OK
+# artifact), then `wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` (the auto-show
+# trigger via AudioService.changed, screenshotted as this run's
+# smoke.png/SMOKE_OK), then `qs ipc call osd brightness` (screenshotted as
+# osd-brightness.png — the VM has no backlight device, so this only proves
+# the surface itself renders that kind correctly, not that hardware exists).
+# Each trigger is followed 1s later by its own screenshot — comfortably
+# inside the OSD's 1.6s auto-hide window — with enough gap between triggers
+# that the previous popup has long since auto-hidden before the next fires.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -48,6 +59,7 @@ wallpaper_mode=false
 menu_mode=false
 notify_mode=false
 center_mode=false
+osd_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -55,7 +67,8 @@ while [ $# -gt 0 ]; do
     --menu) menu_mode=true; shift ;;
     --notify) notify_mode=true; shift ;;
     --center) center_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center]" >&2; exit 1 ;;
+    --osd) osd_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd]" >&2; exit 1 ;;
   esac
 done
 
@@ -79,6 +92,14 @@ if $wallpaper_mode; then
     convert_bin=convert
   else
     convert_bin="nix run nixpkgs#imagemagick -- convert"
+  fi
+fi
+
+if $osd_mode; then
+  if command -v wpctl >/dev/null 2>&1; then
+    wpctl_bin=$(command -v wpctl)
+  else
+    wpctl_bin=$(nix build 'nixpkgs#wireplumber^out' --no-link --print-out-paths)/bin/wpctl
   fi
 fi
 
@@ -148,6 +169,8 @@ dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 query_path="$shot_dir/query.json"
 selection_path="$shot_dir/selection.txt"
+osd_manual_path="$shot_dir/osd-manual.png"
+osd_brightness_path="$shot_dir/osd-brightness.png"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -240,19 +263,44 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$notify_send_bin' -u normal 'Second' 'World'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications showHistory\""
   fi
+  if $osd_mode; then
+    # Manual trigger, screenshotted 1s later (well inside the 1.6s auto-hide
+    # window) — its own artifact, printed separately below rather than as
+    # this run's SMOKE_OK. wpctl fires at sleep 9, four seconds after the
+    # manual OSD (sleep4 + 1.6s hide) has long since gone, so the generic
+    # tail screenshot below (sleep 10) proves auto-show, not leftover
+    # visibility from the manual call. A third leg (sleep 13/14) drives the
+    # brightness kind too — BrightnessService.available is honestly false in
+    # the VM (no backlight device), so this only proves the surface itself
+    # renders that kind correctly (BRIGHTNESS label, 0% + empty bar), not
+    # that a real device exists.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call osd volume\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && niri msg action screenshot-screen --path $osd_manual_path\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 9 && '$wpctl_bin' set-volume @DEFAULT_AUDIO_SINK@ 30%\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call osd brightness\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && niri msg action screenshot-screen --path $osd_brightness_path\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
-  # the other modes' 1s so it has time to land first.
+  # the other modes' 1s so it has time to land first. osd_mode's brightness
+  # leg (sleep 13/14, see above) needs the same kind of buffer past its own
+  # sleep-10 screenshot.
   tail_gap=1
   if $menu_mode; then
     tail_gap=3
+  elif $osd_mode; then
+    tail_gap=5
   fi
   # center_mode needs the popup->pending transition (see above) plus the
-  # showHistory summon to land before the screenshot; every other mode keeps
-  # the original 8s budget.
+  # showHistory summon to land before the screenshot; osd_mode's final
+  # screenshot must land 1s after its sleep-9 wpctl trigger, still inside
+  # the OSD's auto-hide window; every other mode keeps the original 8s
+  # budget.
   screenshot_delay=8
   if $center_mode; then
     screenshot_delay=15
+  elif $osd_mode; then
+    screenshot_delay=10
   fi
   echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
@@ -302,6 +350,19 @@ fi
 
 if $notify_mode; then
   echo "host org.freedesktop.Notifications owner PID unchanged: $host_notifications_owner_after"
+fi
+
+if $osd_mode; then
+  if [ -f "$osd_manual_path" ]; then
+    echo "SMOKE_OSD_MANUAL $osd_manual_path"
+  else
+    echo "SMOKE_FAIL: no osd-manual screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$osd_brightness_path" ]; then
+    echo "SMOKE_OSD_BRIGHTNESS $osd_brightness_path"
+  else
+    echo "SMOKE_FAIL: no osd-brightness screenshot produced" >&2; exit 1
+  fi
 fi
 
 if [ -f "$shot_dir/smoke.png" ]; then
