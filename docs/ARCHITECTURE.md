@@ -18,10 +18,10 @@ via `Quickshell.Io.Socket`.
 `shell/shell.qml` is the entry point (`//@ pragma ShellId formalshell`). It
 instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar`, one
 `Background`, and one `Toasts` popup stack per connected output; a single
-non-per-screen `Menu`, `Center` (notification history), and `Osd` instance
-each (they open/show on the focused screen at summon/trigger time rather
-than living on every output); and the `Ipc` handlers
-(debug/theme/wallpaper/menu/notifications/osd).
+non-per-screen `Menu`, `Center` (notification history), `Osd`, and one
+instance each of the six `Panels/*.qml` popouts (they open/show on the
+focused screen at summon/trigger time rather than living on every output);
+and the `Ipc` handlers (debug/theme/wallpaper/menu/notifications/osd/panel/clipboard).
 
 ## Tree layout
 
@@ -54,15 +54,28 @@ shell/
     Cell.qml                    the shared ledger cell — selected/accent/hovered, bottom+right hairline
                                  rules only (shared-rule contract, see below), default-property content
     MetaLabel.qml                uppercase/letterspaced/dim caption Text for meta rows
+    Panel.qml                    the shared per-widget popout: ledger frame anchored under its opening
+                                  bar cell (anchorX real, -1 falls back to the bar's right region),
+                                  WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside
     qmldir
   Menu/
     model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
     search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
-    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()
-    default-menu.jsonc           shipped default tree (apps, system/power, theme)
+    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()
+    default-menu.jsonc           shipped default tree (apps, system/power, theme, clipboard)
+  Clipboard/
+    history.js                   pure JS, .pragma library — add()/remove()/clear()/sanitize(), 300-entry cap, dedup-to-front
+  Calendar/
+    progress.js                  pure JS, .pragma library — yearFraction()/lifeFraction()/resolveOverride()
+    ics.js                       pure JS, .pragma library — RFC 5545 VEVENT reader (unfold, DTSTART parse, no RRULE expansion)
+  Weather/
+    openmeteo.js                 pure JS, .pragma library — buildUrl()/parseResponse() with typed failure shapes
   Services/
     AudioService.qml            singleton — Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
     BrightnessService.qml       singleton — brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
+    ClipboardService.qml        singleton — wl-paste --watch capture, drives Clipboard/history.js, writes clipboard.json
+    LocationService.qml         singleton — QtPositioning PositionSource (geoclue2), settings.json lat/lon override
+    CalendarEventsService.qml   singleton — reads Calendar/ics.js over a khal/vdir-style directory (calendar.icsDir)
     qmldir
   Notifications/
     model.js                    pure JS, .pragma library — three-tier reducer (popups/pending/past), DND bypass rule
@@ -75,17 +88,32 @@ shell/
     MenuIpc.qml                 IpcHandler target "menu", toggle()/summon()/close()/refresh()/ping()/select()/input()
     NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/invokeLast()
     OsdIpc.qml                  IpcHandler target "osd", volume()/brightness()/media()/close()/state()
+    PanelIpc.qml                 IpcHandler target "panel", open(name)/close()/toggle(name)/state() — registry maps name -> Panel instance
+    ClipboardIpc.qml             IpcHandler target "clipboard", list()/copy(id)/remove(id)/clear()
   Surfaces/
     Bar/
-      Bar.qml                  PanelWindow; three-region RowLayout
+      Bar.qml                  PanelWindow; three-region Row (left/center/right), height tracks the tallest cell present
       widgets/
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
+        Clock.qml                center region: TIME meta label + live clock, opens the calendar panel
+        AudioWidget.qml          volume glyph + %, panel-open accent dot
+        Battery.qml               BAT / NN% meta idiom, hidden entirely when isLaptopBattery is false
+        NetworkWidget.qml         connection-state glyph, panel-open accent dot
+        BluetoothWidget.qml       adapter-state glyph, panel-open accent dot
+        WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
     Menu/
       Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
+    Panels/
+      AudioPanel.qml             Pipewire output/input node sliders (PwObjectTracker), MUTE toggle cells
+      CalendarPanel.qml          month grid + year/life-progress bar + TODAY events section
+      NetworkPanel.qml           WIRED/WI-FI grouped connections, 5-segment mono signal bar, connect/disconnect
+      BluetoothPanel.qml         adapter state + paired devices, or a dim "NO ADAPTER" cell
+      PowerPanel.qml              AC/battery row + keyboard-navigable power-profile picker (Up/Down/Enter)
+      WeatherPanel.qml            current-conditions header + FORECAST ledger off LocationService + open-meteo
     Notifications/
       Toasts.qml                 per-screen PanelWindow, Overlay layer; top-right popup column off NotificationService.popups
       Center.qml                  single-instance PanelWindow, Top layer; right-anchored PENDING/EARLIER sections + DND cell
@@ -99,8 +127,12 @@ tests/
   tst_menu_model.qml            qmltestrunner tests for Menu/model.js
   tst_menu_search.qml           qmltestrunner tests for Menu/search.js
   tst_notifications_model.qml   qmltestrunner tests for Notifications/model.js
+  tst_clipboard_history.qml     qmltestrunner tests for Clipboard/history.js
+  tst_calendar_progress.qml     qmltestrunner tests for Calendar/progress.js
+  tst_calendar_ics.qml          qmltestrunner tests for Calendar/ics.js
+  tst_openmeteo.qml             qmltestrunner tests for Weather/openmeteo.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd) loop, dbus-run-session isolated
+  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard) loop, dbus-run-session isolated
   smoke-hyprland.sh             same, nested Hyprland
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`
@@ -383,6 +415,104 @@ nested niri sessions (pipewire itself isn't restarted between runs), so a
 `AudioService.changed` only fires on an actual value change, so a repeat
 `--osd` run's auto-show leg can legitimately capture nothing new. This isn't
 a bug in the trigger; it's a property of testing against durable state.
+
+## Panel host + `panel` IPC data flow
+
+One shared `Components/Panel.qml` is instantiated once per panel kind in
+`shell.qml` (`audioPanelInstance`, `calendarPanelInstance`, …), each binding
+its backend directly — `Quickshell.Services.Pipewire`,
+`Quickshell.Networking`, `Quickshell.Bluetooth`, `Quickshell.Services.UPower`,
+or (for `WeatherPanel`) the shell's own `LocationService` plus a direct
+open-meteo fetch — rather than going through an intervening Services
+wrapper, the same "panel binds its backend directly" pattern
+`AudioPanel.qml` established first. A bar widget (`AudioWidget.qml`, …)
+opens its panel two ways:
+
+```
+click on the bar cell                          qs ipc call panel open/toggle <name>
+  -> panel.open(cell's own screen-relative x)     -> PanelIpc.qml: registry[name].open()
+     (anchorX real, computed within the            (no click happened, so anchorX stays
+      widget's own window — Wayland gives           unset — Panel.qml falls back to the
+      no cross-window global coordinates)            bar's right region, Theme.spacing.md in)
+  v                                               v
+Panel.qml: isOpen = true, forceActiveFocus() on its full-screen backdrop MouseArea
+  -> frame positions at (anchorX, barHeight), sized to its content's implicitHeight
+     (capped at 60% of screen height, Flickable scrolls beyond that)
+  -> click outside the frame, or Escape, closes it (backdrop's onClicked / Keys.onEscapePressed)
+```
+
+`shell/Ipc/PanelIpc.qml` (`target: "panel"`) is a spec addendum this repo's
+own M6 plan records rather than a conflict with `docs/superpowers/specs/2026-07-27-formalshell-design.md`'s
+§IPC list: per-widget popouts otherwise have no summon path for compositor
+keybinds, and no way to be verified headlessly in the smoke rig.
+`registry: { audio: audioPanelInstance, calendar: …, … }` is wired once in
+`shell.qml`; `open(name)`/`toggle(name)` look the instance up and call its
+own `open()`/`toggle()`, `close()` closes whichever panel is currently open
+(scans the registry for `isOpen`), `state()` returns that same panel's name
+or `""`. An unknown name returns `"error: unknown panel '<name>'"` from both
+`open()` and `toggle()` — never a silent no-op.
+
+## Clipboard data flow
+
+```
+wl-paste --type text --watch sh -c '… cat; printf "\0"'   (ClipboardService.qml, long-running Process)
+  |  NUL-delimited stdout (clipboard text can itself contain newlines)
+  |  a capture is skipped — no NUL emitted at all — when wl-paste itself
+  |  sets CLIPBOARD_STATE=sensitive (its own x-kde-passwordManagerHint signal)
+  v
+Clipboard/history.js#add(state, entry, now)   (.pragma library, pure)
+  |  sanitize() drops empty/whitespace-only text (the nil/clear watch-event shape)
+  |  re-copying existing content moves that entry to the front, keeping its
+  |  original id, instead of inserting a duplicate
+  |  300-entry cap drops the oldest
+  v
+$XDG_STATE_HOME/formalshell/clipboard.json      (FileView + JsonAdapter, same
+                                                  pattern as Core/State.qml)
+  |
+  +-- Ipc/ClipboardIpc.qml (target "clipboard"): list()/copy(id)/remove(id)/clear()
+  |
+  +-- Menu/providers.js#clipboardProvider(): one menu row per entry, newest
+        first; selecting a row runs `qs ipc --any-display -p <selfPath> call
+        clipboard copy <id>` — the exact same self-targeting invocation a
+        CLI caller would use, so the menu row is the IPC verb, not a second
+        code path
+```
+
+## Location → Weather chain
+
+```
+Services/LocationService.qml
+  QtPositioning.PositionSource (geoclue2 D-Bus backend), left continuously
+  `active` with a repeating updateInterval — never a one-shot update() — so
+  an early inaccurate geoclue fix is just replaced by the next one instead
+  of freezing in (the spec cites PR #2914's lesson by name for this)
+    |
+    |  settings.json's location.latitude/location.longitude, when BOTH are
+    |  present, override geoclue entirely (root._hasOverride) — the
+    |  documented fallback for geoclue's own known failure modes, and the
+    |  path exercised in the test VM, which has no Wi-Fi radio to associate
+    |  with in the first place
+    v
+  available / latitude / longitude              (all live property bindings)
+    |
+    v
+Surfaces/Panels/WeatherPanel.qml
+  "NO LOCATION" cell when !LocationService.available
+  otherwise: Weather/openmeteo.js#buildUrl(lat, lon) -> XMLHttpRequest ->
+  parseResponse(status, bodyText) -> { ok:true, current, forecast[] } or
+  { ok:false, error: "network_error"|"http_error"|"malformed_json"|"missing_fields" }
+    |
+    v
+  header meta row (condition label + temperature + glyph) + a FORECAST
+  ledger (one row per daily period, glyph + weekday + high/low mono temps
+  pinned right); an "UNAVAILABLE" cell carrying the `error` code replaces
+  the ledger on any fetch failure — never a stale or fabricated forecast
+```
+
+`WeatherPanel.qml` owns its own `XMLHttpRequest` directly (no separate
+`WeatherService`), the same "panel drives its own fetch" pattern
+`AudioPanel`/`NetworkPanel` already establish for their respective
+quickshell modules.
 
 ## Adding a backend
 

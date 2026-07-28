@@ -11,21 +11,24 @@ consuming config needs near-zero glue.
 ## Status
 
 Pre-alpha. M1 (walking skeleton), M2 (compositor layer), M3 (matugen theme
-engine), M4 (unified menu), and M5 (notifications + OSD) are done: a
-brutalist bar showing live workspaces and the active window, backed by a
-formal `CompositorBackend` contract with working niri and Hyprland
-implementations; wallpaper-driven colors that recolor every bar token live
-and sync niri's window borders (see Theming below); a ruled-ledger menu
-that's app launcher, system/power menu, and a `select`/`input` dmenu
-replacement in one fuzzy-searchable IPC-summonable surface (see Menu below);
-and a mako-replacement notification stack (freedesktop server, ledger toasts,
-summonable history center, strict DND bypass) plus a jitter-free
-bottom-center OSD for volume/brightness/media (see Notifications and OSD
-below). CI (qmllint + headless qml-tests) and nested-compositor smoke loops
-are the verification tools for every change. Everything past that —
-lock/screensaver, greeter, panels, clipboard history — is unbuilt; see
-`docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
-design.
+engine), M4 (unified menu), M5 (notifications + OSD), and M6 (clipboard +
+panels) are done: a brutalist three-region bar (workspaces/active window,
+clock, indicator widgets) backed by a formal `CompositorBackend` contract
+with working niri and Hyprland implementations; wallpaper-driven colors that
+recolor every bar token live and sync niri's window borders (see Theming
+below); a ruled-ledger menu that's app launcher, system/power menu, and a
+`select`/`input` dmenu replacement in one fuzzy-searchable IPC-summonable
+surface (see Menu below); a mako-replacement notification stack (freedesktop
+server, ledger toasts, summonable history center, strict DND bypass) plus a
+jitter-free bottom-center OSD for volume/brightness/media (see Notifications
+and OSD below); and six per-widget popout panels (audio, calendar, network,
+bluetooth, power, weather) sharing one popout component and one `panel` IPC
+target, plus a capped clipboard history surfaced through the menu (see
+Panels, Clipboard, and Calendar below). CI (qmllint + headless qml-tests) and
+nested-compositor smoke loops are the verification tools for every change.
+Everything past that — lock/screensaver, greeter, now-playing/media — is
+unbuilt; see `docs/superpowers/specs/2026-07-27-formalshell-design.md` for
+the full design.
 
 ## Screenshots
 
@@ -66,6 +69,32 @@ card after a manual `qs ipc call osd volume`, showing the fixed three-column
 layout (icon | label | value) and the flat accent fill bar. The same run also
 verifies the real auto-show trigger (`wpctl set-volume @DEFAULT_AUDIO_SINK@
 30%` firing `AudioService.changed`) and the brightness variant.
+
+![Panels on niri](docs/screenshots/panels-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --panel audio --wallpaper`:
+`panel open audio` over IPC opens the audio popout (no bar-cell click, so it
+falls back to sitting under the bar's right region — see Panel.qml), showing
+the OUTPUT header, a `Virtual Sink 30%` row, a `MUTE` toggle cell, and the
+flat accent-fill slider with no round thumb, over the same matugen-recolored
+wallpaper as the other panels' screenshots.
+
+![Calendar on niri](docs/screenshots/calendar-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --panel calendar --wallpaper`:
+the month grid (weekday meta row, today inverted with an event dot under
+it), a `TODAY` section listing the fixture `.ics` event by summary, and the
+year-progress bar as a full-width flat accent fill with its percentage as
+mono text.
+
+![Clipboard on niri](docs/screenshots/clipboard-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --clipboard --wallpaper`:
+three `wl-copy` fixture strings captured newest-first, then the second entry
+re-copied through the exact self-targeting IPC call the menu's clipboard row
+uses, moving it back to the front — the menu summoned at the `clipboard`
+route shows the reordered rows as real ledger cells (`MENU / CLIPBOARD`
+breadcrumb).
 
 The Hyprland backend is implemented and its `debug` IPC dump has been
 verified against a live nested Hyprland session (workspaces, focused window,
@@ -306,6 +335,136 @@ binds {
 }
 ```
 
+## Panels
+
+Six per-widget popouts share one component, `shell/Components/Panel.qml` — a
+ledger-table popout (header `MetaLabel` row, rows sharing hairline rules,
+`WlrLayershell` top layer, keyboard `OnDemand`, closes on Escape and on
+click-outside) anchored under the bar cell that opened it, or falling back to
+the bar's right region when opened over IPC with no cell to anchor under
+(Wayland gives clients no cross-window global coordinates for a real anchor).
+Each panel binds a first-party quickshell service directly — no intervening
+service wrapper, the same pattern `AudioPanel` establishes for the rest:
+
+| Panel        | Backing                                    | Bar cell            |
+| ------------ | ------------------------------------------- | -------------------- |
+| `audio`      | `Quickshell.Services.Pipewire`              | `AudioWidget.qml`    |
+| `calendar`   | `Calendar/progress.js` + local `.ics` events | `Clock.qml`          |
+| `network`    | `Quickshell.Networking`                     | `NetworkWidget.qml`  |
+| `bluetooth`  | `Quickshell.Bluetooth`                      | `BluetoothWidget.qml`|
+| `power`      | `Quickshell.Services.UPower`                | `Battery.qml`        |
+| `weather`    | `LocationService` + open-meteo              | `WeatherWidget.qml`  |
+
+Every bar cell shows the Omarchy-style panel-open accent dot while its panel
+is open. `AudioPanel` lists Pipewire output nodes then input nodes as
+full-width sliders (flat accent fill, no round thumb) with a `MUTE` toggle
+cell per row. `NetworkPanel` groups connections under `WIRED`/`WI-FI`
+headers, the active connection inverted, Wi-Fi signal strength drawn as a
+discrete 5-segment block-character bar (the flat-fill slider idiom is
+reserved for continuous values like volume). `BluetoothPanel` shows paired
+devices with connect/disconnect as a row action, or a single dim `NO
+ADAPTER` cell when `Bluetooth.defaultAdapter` is null — the test VM's honest
+state, not a fabricated device. `PowerPanel` pairs a status row (an honest
+`AC POWER` cell rather than a lying `0%` when `UPower.displayDevice.isLaptopBattery`
+is false) with a keyboard-navigable power-profile picker (Up/Down to move,
+Enter to apply) under power-profiles-daemon, plus a breathing-opacity
+charging pulse while genuinely charging; `Battery.qml`'s bar cell goes
+further and drops out of the bar entirely on the same condition, rather than
+showing a stub `0%`. `WeatherPanel` shows current conditions as a header row
+and a forecast ledger (one row per open-meteo daily period, glyph + weekday
++ high/low mono temps pinned right), falling back to an honest `NO LOCATION`
+or `UNAVAILABLE` cell (with openmeteo.js's specific failure code) rather
+than a stale or invented forecast.
+
+**IPC** (`target: "panel"`, a documented spec addendum — see
+`docs/superpowers/plans/2026-07-28-m6-clipboard-and-panels.md`'s header note
+— since per-widget popouts otherwise have no summon path for compositor
+keybinds and no way to be verified headlessly):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
+qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
+qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather"
+```
+
+An unknown panel name returns `error: unknown panel '<name>'` rather than a
+silent no-op. Bind a panel to a key in niri, same pattern as the menu:
+
+```kdl
+binds {
+    Mod+A { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "panel" "toggle" "audio"; }
+}
+```
+
+## Clipboard
+
+`ClipboardService` captures via a long-running `wl-paste --type text --watch`
+`Process` (verified against the wl-clipboard man page): every clipboard
+change forks a `sh -c` one-liner that forwards the selection over stdout,
+NUL-delimited (clipboard text can itself contain newlines). A capture is
+skipped entirely — no NUL emitted — when `wl-paste` sets
+`CLIPBOARD_STATE=sensitive`, the signal it derives itself from an
+`x-kde-passwordManagerHint` mime; that's the cheap password-manager filter,
+nothing more elaborate.
+
+History is a pure reducer (`shell/Clipboard/history.js`, `.pragma library`,
+TDD'd first in `tests/tst_clipboard_history.qml`): capped at 300 entries
+(oldest dropped), de-duplicated by content — re-copying an entry already in
+history moves it to the front (keeping its original id) rather than
+inserting a duplicate — and persisted to
+`$XDG_STATE_HOME/formalshell/clipboard.json` via the same `FileView` +
+`JsonAdapter` pattern `Core/State.qml` uses for `state.json`.
+
+A `clipboard` menu provider node lists history entries as menu rows, newest
+first; `formalshell menu summon clipboard` (or `qs ipc call menu summon
+clipboard`) opens straight to them, and selecting a row re-copies it through
+the same `clipboard copy <id>` IPC verb below — the menu row is just that
+call, not a separate code path.
+
+**IPC** (`target: "clipboard"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call clipboard list     # JSON array, newest first
+qs ipc --any-display -p <store-path>/share/formalshell call clipboard copy <id>
+qs ipc --any-display -p <store-path>/share/formalshell call clipboard remove <id>
+qs ipc --any-display -p <store-path>/share/formalshell call clipboard clear
+```
+
+## Calendar
+
+`CalendarPanel`'s month grid carries a year-progress bar below it — a
+full-width flat accent-fill cell (`Calendar/progress.js#yearFraction()`,
+pure and TDD'd, leap-year correct via `Date.UTC` boundaries) with its
+percentage as mono text, mirroring `AudioPanel`'s slider idiom.
+
+**Life-progress easter egg.** Double-clicking the progress bar prompts,
+through the menu's own existing `input` mode (no new dialog surface), first
+for a birth year then an expected lifespan; both persist to
+`$XDG_STATE_HOME/formalshell/state.json` via `Core.State.setCalendarLifeProgress()`,
+the same alias + writeAdapter pattern `wallpaper`/`mode`/`dnd` already use.
+`~/.config/formalshell/settings.json`'s `calendar.birthYear` /
+`calendar.lifeExpectancy` keys declaratively override those two persisted
+state values when present (settings wins, state is the fallback — Config's
+usual read-only-settings rule). Once both values resolve, the bar defaults
+to showing `LIFE` (% of life lived) instead of `YEAR`; a further
+double-click toggles back.
+
+**Events.** An EDS/GNOME-Online-Accounts D-Bus feasibility spike
+(`docs/spikes/2026-07-28-eds-calendar-events.md`) concluded **not feasible**
+in pure QML: Evolution Data Server reaps the calendar backend the moment a
+one-shot `gdbus`/`busctl` connection closes, and EDS's real client API needs
+`libecal`'s persistent connection handling, which `CLAUDE.md` forbids (no
+compiled companion binary). The implemented path instead is
+`CalendarEventsService` reading local `.ics` files (a khal/vdir-style
+directory) via `shell/Calendar/ics.js` (pure RFC 5545 VEVENT parsing, no
+RRULE expansion — a documented v1 limitation). `calendar.icsDir` in
+`settings.json` points at the directory; unset means zero events, the same
+honest-empty-state contract every other M6 panel follows. When set, days
+carrying an event get a small accent dot in the grid, and a `TODAY` ledger
+section below lists today's events by summary (or a single dim `NO EVENTS`
+row).
+
 ## Dev loop
 
 ```bash
@@ -319,6 +478,8 @@ just smoke               # nested niri + screenshot — the visual verification 
 ./dev/smoke-niri.sh --notify    # same, plus fires notify-send (normal + critical) and screenshots the toasts
 ./dev/smoke-niri.sh --center    # combine with --notify: also summons the history center over IPC
 ./dev/smoke-niri.sh --osd       # same, plus drives the osd IPC target (volume/brightness) and wpctl for the auto-show leg
+./dev/smoke-niri.sh --panel audio    # same, plus opens the named panel over the panel IPC target and leaves it open through the screenshot
+./dev/smoke-niri.sh --clipboard      # same, plus wl-copies fixture strings, proves dedup-to-front via clipboard IPC, then summons the menu's clipboard route
 ./dev/smoke-hyprland.sh  # nested Hyprland equivalent (see Screenshots above)
 ```
 
@@ -339,6 +500,7 @@ just vm-lint                 # nix flake check -L, inside the VM
 just vm-smoke                # dev/smoke-niri.sh, unchanged, against a headless
                               # sway parent compositor — screenshot pulled to ./artifacts/
 just vm-smoke --wallpaper --menu --notify --center --osd   # same flags dev/smoke-niri.sh takes
+just vm-smoke --panel calendar                              # --panel <name>/--clipboard work the same way
 just vm-down
 ```
 

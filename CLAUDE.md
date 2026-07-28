@@ -59,6 +59,24 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   device, the corresponding leg still renders the card honestly (0%, empty
   fill) rather than faking a value — that's proof the surface works, not
   proof hardware exists.
+- `dev/smoke-niri.sh --panel <name>` — same, plus drives the real `panel`
+  IPC route: `qs ipc call panel open <name>` opens the named popout (no
+  bar-cell click happened, so `Panel.qml`'s `anchorX` stays unset and the
+  frame falls back to sitting under the bar's right region), left open
+  through the run's normal screenshot. `name` is one of
+  `audio`/`calendar`/`network`/`bluetooth`/`power`/`weather` — the panels
+  registered in `PanelIpc.qml`'s registry. `--panel calendar` additionally
+  proves real events render: the isolated `HOME` carries a one-event `.ics`
+  fixture dated today, pointed at by `settings.json`'s `calendar.icsDir`.
+- `dev/smoke-niri.sh --clipboard` — same, plus `wl-copy`s three fixture
+  strings, dumps `clipboard list` twice (proving capture, newest-first
+  order, and that re-copying an existing entry moves it to the front rather
+  than duplicating it), then activates a second entry via the exact
+  self-targeting `qs ipc --any-display -p <shellDir> call clipboard copy
+  <id>` invocation `Menu/providers.js`'s `clipboardProvider` builds and
+  reads the system clipboard back to confirm it landed, before summoning
+  the menu's `clipboard` route so the screenshot shows the provider's rows
+  rendered as real menu cells.
 - `dev/smoke-hyprland.sh` — the same loop for the second backend (nested
   Hyprland, `hyprctl`/exec-once instead of niri's `spawn-at-startup`). Nested
   Hyprland is flakier than nested niri in a sandboxed dev environment; if it
@@ -144,6 +162,23 @@ behavior on hosts where a real owner exists.
   ruled-ledger grid: shared hairline rules, cells not cards, inversion for
   selection, accent as full-bleed cells, uppercase meta labels, radius 0).
   Read it before building or restyling any surface.
+- **`panel` IPC target is a spec addendum, not a conflict.** The design
+  spec's §IPC target list (`docs/superpowers/specs/2026-07-27-formalshell-design.md`)
+  predates per-widget popouts and doesn't name `panel`. The M6 plan added it
+  (`panel.open(name)`, `close()`, `toggle(name)`, `state()`) because
+  per-widget popouts otherwise have no summon path for compositor keybinds
+  and no way to be verified headlessly in the smoke rig — treat it as part
+  of the IPC contract going forward, alongside `menu`/`osd`/`notifications`/
+  `clipboard`/etc. Unknown panel names return an error string, never a
+  silent no-op.
+- **Honest unavailable states, never faked data**, as a standing expectation
+  for every VM smoke run: a panel/widget with nothing to show from its
+  backend renders a single dim cell (`NO ADAPTER`, `NO DEVICES`,
+  `NO LOCATION`, an absent battery bar cell, …) rather than a stubbed value
+  or an invented device. Enabling a real service in `nix/testvm.nix` so a
+  panel has a genuine backend to talk to is the sanctioned way to make a
+  screenshot show more — inventing fake `/sys` entries or synthetic devices
+  is not.
 - Pure QML/JS. No compiled companion binary. No Node/npm/bun anywhere.
 - Compositor window/workspace ids are **opaque strings** end to end. Never
   parse, compare numerically, or assume stability. The one exception is the
