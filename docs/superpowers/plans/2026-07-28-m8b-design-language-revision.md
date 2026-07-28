@@ -71,6 +71,23 @@ Read from `basecamp/omarchy@quattro` by the orchestrating session:
 
 ## Plan-wide constraints
 
+- **THIS IS A VISUAL REVISION ONLY — owner's explicit scope pin:** *"what I see
+  in the screenshots now is good feature wise, it just doesn't look that great.
+  I want to keep things like matugen support. The features and functionality
+  look perfect."*
+  Therefore, in every task below:
+  - **No feature may be removed, narrowed, or "simplified" for aesthetics.**
+    Every panel, IPC verb, keybind, provider, service and state machine that
+    works today must still work identically afterwards.
+  - **Matugen theming is load-bearing and must keep working** — the
+    `ThemeEngine` wallpaper→matugen→token pipeline, the `theme status` IPC, and
+    the Flexoki fallback all survive the token rework. `just vm-smoke --wallpaper`
+    is a regression gate on every task that touches tokens or surfaces.
+  - **Regression gate on every task:** the smoke modes relevant to the surfaces
+    you touched must still pass, and `just test` must stay green. A retrofit
+    that breaks a working feature is a failed task, not a trade-off.
+  - If the new design language appears to require dropping or changing a
+    behaviour, that is a conflict to REPORT, not to resolve unilaterally.
 - `CLAUDE.md` hard rules still bind: radius 0, no blur (lock backdrop the one
   exception), no shadows, monospace via the fontconfig alias — **never a
   hardcoded family**, Nerd Font glyphs only, opaque compositor ids, shell never
