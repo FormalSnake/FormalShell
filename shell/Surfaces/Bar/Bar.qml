@@ -4,19 +4,20 @@ import QtQuick
 import qs.Core
 import qs.Surfaces.Bar.widgets
 
-// The bar (DESIGN.md §Bar, spec §1, M6 Task 1): three ledger regions — left
-// (workspaces, active window), center (reserved for the clock/now-playing
-// widgets later M6/M7 tasks add), right (indicator/widget cells, starting
-// with audio). Region boundaries are rules, never whitespace gaps — DESIGN's
-// rule #2, "rules are the ONLY separation mechanism" — so the left|center
-// and center|right boundaries are always drawn, even while center is still
-// empty. Workspaces/ActiveWindow predate the Cell system (M1-M3) and stay
-// as-is per CLAUDE.md's "do not restyle outside a plan that schedules it";
-// only the region scaffolding and the new widgets are Cell-based.
+// The bar (DESIGN.md §Bar, spec §1, M6 Tasks 1+3): three ledger regions —
+// left (workspaces, active window), center (clock, now-playing joins it in
+// M7), right (indicator/widget cells, starting with audio). Region
+// boundaries are rules, never whitespace gaps — DESIGN's rule #2, "rules are
+// the ONLY separation mechanism" — so the left|center and center|right
+// boundaries are always drawn. Workspaces/ActiveWindow predate the Cell
+// system (M1-M3) and stay as-is per CLAUDE.md's "do not restyle outside a
+// plan that schedules it"; only the region scaffolding and the new widgets
+// are Cell-based.
 PanelWindow {
     id: bar
     required property var modelData
     property var audioPanel: null
+    property var calendarPanel: null
     screen: modelData
     anchors { top: true; left: true; right: true }
     implicitHeight: 32
@@ -60,7 +61,11 @@ PanelWindow {
         id: centerRegion
         anchors.centerIn: parent
         spacing: 0
-        // Reserved for the clock/now-playing widgets M6/M7 add later.
+        // Now-playing joins the clock here in M7.
+
+        Clock {
+            panel: bar.calendarPanel
+        }
     }
 
     Rectangle {

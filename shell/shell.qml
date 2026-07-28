@@ -23,7 +23,7 @@ ShellRoot {
         model: Quickshell.screens
 
         delegate: Component {
-            Bar { audioPanel: audioPanelInstance }
+            Bar { audioPanel: audioPanelInstance; calendarPanel: calendarPanelInstance }
         }
     }
 
@@ -51,8 +51,9 @@ ShellRoot {
     Osd { id: osd }
 
     // Same reasoning again: one instance per panel kind, opened on the
-    // focused screen at summon time. Only audio exists as of M6 Task 1.
+    // focused screen at summon time.
     AudioPanel { id: audioPanelInstance }
+    CalendarPanel { id: calendarPanelInstance }
 
     DebugIpc { menu: menu }
     ThemeIpc {}
@@ -60,6 +61,6 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance }) }
     ClipboardIpc {}
 }
