@@ -59,7 +59,11 @@
 
       homeModules = { formalshell = ./nix/hm-module.nix; default = ./nix/hm-module.nix; };
 
-      nixosModules = { formalshell = ./nix/nixos-module.nix; default = ./nix/nixos-module.nix; };
+      nixosModules = {
+        formalshell = ./nix/nixos-module.nix;
+        formalshell-greeter = ./nix/nixos-greeter-module.nix;
+        default = ./nix/nixos-module.nix;
+      };
 
       nixosConfigurations = {
         testvm = import ./nix/testvm.nix { inherit self nixpkgs quickshell; };
