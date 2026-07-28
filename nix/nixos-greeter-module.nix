@@ -46,17 +46,28 @@ let
     export XDG_RUNTIME_DIR=${lib.escapeShellArg cfg.runtimeDir}
     export HOME=${lib.escapeShellArg cfg.stateDir}
     export XDG_CONFIG_HOME=${settingsDir}
-    export WAYLAND_DISPLAY=wayland-1
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList
       (name: value: "export ${name}=${lib.escapeShellArg value}")
       cfg.extraEnvironment)}
 
+    # WAYLAND_DISPLAY must stay unset going into this exec: wlr_backend_autocreate
+    # checks getenv("WAYLAND_DISPLAY")/WAYLAND_SOCKET *before* trying DRM
+    # (wlroots backend/backend.c) and, on a real seat with no WLR_BACKENDS
+    # override, treats its mere presence as "we're nested inside another
+    # Wayland session" — it then fails to connect to a socket nothing has
+    # created yet and errors out instead of falling through to DRM
+    # (confirmed by reproducing that exact failure directly). The compositor
+    # picks its own socket name (wl_display_add_socket_auto), so discover
+    # whichever one actually got created rather than assuming a fixed name.
     ${lib.getExe cfg.compositorPackage} --config ${compositorConfigFile} &
     compositor_pid=$!
+    wayland_socket=""
     for _ in $(seq 1 100); do
-      [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && break
+      wayland_socket=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -print -quit 2>/dev/null)
+      [ -n "$wayland_socket" ] && break
       sleep 0.1
     done
+    export WAYLAND_DISPLAY=$(basename "$wayland_socket")
 
     ${lib.getExe cfg.package}
     ${cfg.postGreeterCommand}

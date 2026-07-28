@@ -818,13 +818,17 @@ services.greetd  (nixosModules.formalshell-greeter)
     |
     v
 sessionScript  (nix/nixos-greeter-module.nix)
-  exports XDG_RUNTIME_DIR/HOME/XDG_CONFIG_HOME/WAYLAND_DISPLAY/extraEnvironment
+  exports XDG_RUNTIME_DIR/HOME/XDG_CONFIG_HOME/extraEnvironment
     (greetd's worker.rs resets the session environment to PAM's own envlist
      — nothing this module's systemd units export reaches the script for
      free, confirmed by reading greetd's own Rust source, not the nixpkgs
      module)
-  backgrounds compositorPackage (default pkgs.sway), waits for its Wayland
-    socket, THEN runs formalshell-greeter in the FOREGROUND — greetd-ipc(7):
+  backgrounds compositorPackage (default pkgs.sway) with WAYLAND_DISPLAY
+    deliberately left unset (a real seat's wlr_backend_autocreate treats its
+    mere presence as "nested inside another Wayland session" and never
+    falls through to DRM), discovers whichever socket the compositor
+    actually created, exports WAYLAND_DISPLAY for that, THEN runs
+    formalshell-greeter in the FOREGROUND — greetd-ipc(7):
     "the session will start after the greeter process terminates", which is
     what lets the script know the exact moment that happens, for
     postGreeterCommand and verification alike (never an async compositor

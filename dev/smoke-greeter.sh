@@ -29,7 +29,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 runtime_dir=/run/formalshell-greeter
-wayland_display=wayland-1
 session_log=/tmp/formalshell-greeter-session.log
 post_auth_src=/tmp/formalshell-greeter-post-auth.png
 
@@ -41,7 +40,6 @@ post_auth_png="$out_dir/greeter-post-auth.png"
 session_log_out="$out_dir/greeter-session.log"
 journal_out="$out_dir/greetd-journal.txt"
 
-greeter_env=(sudo env "XDG_RUNTIME_DIR=$runtime_dir" "WAYLAND_DISPLAY=$wayland_display")
 # wtype connects to the compositor fresh on every invocation; the virtual
 # keyboard's keymap upload needs one round trip to land before the first
 # key event is safe to send, or that first character is silently dropped
@@ -54,15 +52,21 @@ wtype_settle_ms=300
 sudo rm -f "$post_auth_src" "$session_log"
 sudo systemctl restart greetd
 
+# The session script no longer pins a fixed socket name (see
+# nix/nixos-greeter-module.nix's header comment on WAYLAND_DISPLAY) — the
+# compositor picks its own, so discover it the same way that script does.
+wayland_display=""
 for _ in $(seq 1 60); do
-  sudo test -S "$runtime_dir/$wayland_display" && break
+  wayland_display=$(sudo find "$runtime_dir" -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -printf '%f' -quit 2>/dev/null)
+  [ -n "$wayland_display" ] && break
   sleep 2
 done
-if ! sudo test -S "$runtime_dir/$wayland_display"; then
-  echo "SMOKE_FAIL: greeter compositor socket never appeared at $runtime_dir/$wayland_display" >&2
+if [ -z "$wayland_display" ]; then
+  echo "SMOKE_FAIL: greeter compositor socket never appeared under $runtime_dir" >&2
   sudo cat "$session_log" >&2 || true
   exit 1
 fi
+greeter_env=(sudo env "XDG_RUNTIME_DIR=$runtime_dir" "WAYLAND_DISPLAY=$wayland_display")
 
 # formalshell-greeter needs a moment after connecting to map its PanelWindow
 # surfaces and pull the first Greetd.state — matches the fixed post-connect
