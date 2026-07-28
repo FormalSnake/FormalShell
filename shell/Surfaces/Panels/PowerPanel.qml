@@ -85,7 +85,7 @@ Panel {
 
             Text {
                 id: statusText
-                text: root._percent + "%  " + UPowerDeviceState.toString(root._device ? root._device.state : UPowerDeviceState.Unknown)
+                text: root._percent + "%  " + UPowerDeviceState.toString(root._device ? root._device.state : UPowerDeviceState.Unknown).toUpperCase()
                 color: statusCell.foreground
                 font.family: Theme.font.family
                 font.pixelSize: Theme.font.body

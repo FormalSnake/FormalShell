@@ -1,6 +1,8 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell.Wayland
 import qs.Core
+import qs.Core as Core
 import qs.Components
 
 // Per-output lock surface, instantiated automatically by WlSessionLock (see
@@ -9,30 +11,33 @@ import qs.Components
 // in this shell. DESIGN.md's translation: "oversized clock (display slot),
 // single bordered input cell."
 //
-// Blur: removed (was DESIGN.md's one exception in the whole shell — see
-// docs/DESIGN.md and the spec for the now-stale carve-out language). A
-// ScreencopyView + MultiEffect blurred-backdrop capture was built and
-// verified to render, but it kills the lock screen outright: the moment ANY
-// ScreencopyView is used, quickshell's WlBufferManager unconditionally
-// negotiates v4+ zwp_linux_dmabuf_v1 feedback with no version guard
-// (src/wayland/buffer/dmabuf.cpp), and WlSessionLock::realizeLockTarget()
-// constructs this surface (and fires captureFrame()) BEFORE calling
-// manager->lock() (src/wayland/session_lock.cpp) — so the protocol
+// Blur: DESIGN.md's one exception in the whole shell, and it stays one — a
+// ScreencopyView + MultiEffect blurred-backdrop capture was tried first and
+// crashes the lock screen outright (the moment ANY ScreencopyView exists,
+// quickshell's WlBufferManager unconditionally negotiates v4+
+// zwp_linux_dmabuf_v1 feedback with no version guard —
+// src/wayland/buffer/dmabuf.cpp — and WlSessionLock::realizeLockTarget()
+// constructs this surface, and fires captureFrame(), BEFORE calling
+// manager->lock() — src/wayland/session_lock.cpp — so the protocol
 // violation kills the whole Wayland connection, and thus the whole shell
-// process, before the lock has actually engaged. That is a fail-OPEN crash
-// on a security-critical surface: niri logs no "locking session" line at
-// all, `lock isLocked` reports "No running instances", and the screen is
-// never locked. Reproduced identically whether niri's dmabuf feedback
-// negotiates v3 (nested winit backend, no DRM render node) — the fallback
-// niri itself logs is "failed building default dmabuf feedback... error
-// getting EGL device render node ... EGL_EXT_device_drm", a software-
-// rendering property, not a nested-specific one, so a real host without a
-// DRM render node is expected to hit the exact same crash. There is no
-// QML-level guard available (the dmabuf negotiation is unconditional C++
-// fired the instant a ScreencopyView exists, not deferred to
-// captureFrame()), so the only fix that keeps lock() from crashing the
-// shell is not using ScreencopyView at all. The backdrop is the plain solid
-// Rectangle below.
+// process, before the lock has actually engaged: a fail-OPEN crash on a
+// security-critical surface). That failure is ScreencopyView-specific, not
+// a MultiEffect/blur one — MultiEffect is pure client-side QtQuick, no
+// Wayland protocol involved — so the backdrop below instead blurs a plain
+// Image of `Core.State.wallpaper` (the same file Background.qml already
+// shows on the desktop layer). Never reintroduce ScreencopyView here or
+// anywhere lock-adjacent.
+//
+// `Core.State` (qualified), not the bare `State` this file's other
+// unqualified `import qs.Core` would suggest: QtQuick's own built-in `State`
+// element (property-state-machine, exported by `import QtQuick`) shadows
+// the unqualified singleton name, so a bare `State.wallpaper` silently reads
+// `undefined` instead of erroring — reproduced via a Component.onCompleted
+// console.warn that printed exactly `wallpaper=[undefined]`. Every other
+// file that reads this singleton (`Background.qml`, `ThemeEngine.qml`)
+// already imports `qs.Core as Core` for this exact reason; this file adds
+// that same aliased import alongside its existing bare one rather than
+// re-qualifying its many existing `Theme.*`/`MetaLabel` references.
 WlSessionLockSurface {
     id: surfaceRoot
 
@@ -74,6 +79,29 @@ WlSessionLockSurface {
     Rectangle {
         anchors.fill: parent
         color: Theme.color.background
+    }
+
+    // Blurred wallpaper backdrop (spec §8, DESIGN.md rule 8's one exception):
+    // wallpaperImage stays hidden (visible: false) and only ever feeds
+    // MultiEffect below as its source — the solid Rectangle above is what
+    // shows through when Core.State.wallpaper is unset.
+    Image {
+        id: wallpaperImage
+        anchors.fill: parent
+        visible: false
+        source: Core.State.wallpaper !== "" ? "file://" + Core.State.wallpaper : ""
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: false
+    }
+
+    MultiEffect {
+        anchors.fill: parent
+        source: wallpaperImage
+        visible: Core.State.wallpaper !== "" && !surfaceRoot.blanked
+        blurEnabled: true
+        blur: 1.0
+        blurMax: 64
     }
 
     // Mouse-move activity detector for `activity()` (see its declaration

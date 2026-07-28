@@ -20,9 +20,11 @@ Panel {
 
     panelTitle: "NETWORK"
 
+    // strength is a 0..1 fraction (quickshell src/network/wifi.hpp:22), not
+    // 0..100 — see CLAUDE.md's percentage/fraction rule.
     function _signalBar(strength) {
         var segments = 5;
-        var filled = Math.round(Math.max(0, Math.min(100, strength)) / 100 * segments);
+        var filled = Math.round(Math.max(0, Math.min(1, strength)) * segments);
         var bar = "";
         for (var i = 0; i < segments; i++)
             bar += (i < filled) ? "█" : "░";
@@ -95,7 +97,7 @@ Panel {
 
                 Text {
                     visible: typeof netCell.modelData.network.signalStrength === "number"
-                    text: root._signalBar(netCell.modelData.network.signalStrength) + "  " + Math.round(netCell.modelData.network.signalStrength) + "%"
+                    text: root._signalBar(netCell.modelData.network.signalStrength) + "  " + Math.round(netCell.modelData.network.signalStrength * 100) + "%"
                     color: netCell.foreground
                     font.family: Theme.font.family
                     font.pixelSize: Theme.font.caption

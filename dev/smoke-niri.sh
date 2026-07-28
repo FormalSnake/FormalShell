@@ -691,7 +691,11 @@ if $clipboard_mode; then
     echo "SMOKE_FAIL: clipboard copy IPC call did not return ok — got: $(cat "$clip_copy_path")" >&2; exit 1
   fi
   if [ -s "$clip_paste_path" ]; then
-    cat "$clip_paste_path"
+    # wl-paste --no-newline (see clipboard_drive_script above) means this
+    # file has no trailing newline of its own — without the explicit `echo`
+    # here, the run's final SMOKE_OK line lands appended to it instead of
+    # starting its own line (reproduced: "...smoke twoSMOKE_OK /tmp/...").
+    cat "$clip_paste_path"; echo
   else
     echo "SMOKE_FAIL: no post-copy clipboard readback produced" >&2; exit 1
   fi

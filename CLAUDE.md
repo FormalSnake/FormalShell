@@ -197,6 +197,11 @@ behavior on hosts where a real owner exists.
 - ⚠️ Nerd Font glyphs are raw multi-byte codepoints; whole-file rewrites can
   corrupt them (Omarchy's `AGENTS.md` documents this). Use targeted `Edit`
   operations on files containing glyphs; never rewrite such files wholesale.
+- ⚠️ Quickshell percentage/fraction-shaped properties are 0..1, not 0..100
+  (`UPowerDevice.percentage`, `WifiNetwork.signalStrength` — both confirmed
+  from C++ source: `src/network/wifi.hpp:22`, `src/network/nm/network.cpp:260`).
+  This has already caused two shipped bugs. Verify any such property against
+  its C++ source before rendering it.
 - Commits: conventional style, lowercase imperative subject
   (`feat(compositor): …`), no Co-Authored-By lines, no commit descriptions.
 - Every task ends with its verification commands actually run and their

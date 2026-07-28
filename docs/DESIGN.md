@@ -38,14 +38,9 @@ rules** — not floating cards, not pill buttons, not padded islands.
 7. **Density.** MEK is information-dense: small paddings (`Theme.spacing.sm`
    inside cells, `md` max), no hero whitespace. A bar cell is exactly
    content + sm padding + rule.
-8. **Flat forever.** No shadows, no blur — no exceptions. (The lock screen
-   was designed to carry the one blurred-backdrop exception, but a
-   `ScreencopyView`-based capture crashes the whole shell against quickshell
-   0.3.0's dmabuf negotiation the instant lock() is called — see
-   `shell/Surfaces/Lock/LockSurface.qml`'s header comment — so the backdrop
-   is the plain solid fill like everywhere else.) No gradients in fills
-   (border gradients from the token system remain allowed but default off in
-   this language — rules are solid).
+8. **Flat forever.** No shadows, no blur (lock-screen backdrop stays the only
+   exception), no gradients in fills (border gradients from the token system
+   remain allowed but default off in this language — rules are solid).
 9. **Motion.** State changes are instant or near-instant color transitions
    (existing 120–200ms); the only "alive" idiom is the breathing opacity pulse
    for in-progress states. Nothing slides, bounces, or zooms.
