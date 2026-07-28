@@ -129,8 +129,20 @@ ShellRoot {
             root._awaitingResponse = false;
         }
 
+        // greetd (0.10.3) unconditionally issues a cancel_session right
+        // after every auth_error (connection.cpp's setActive(false) in the
+        // auth_error branch, called before this signal even fires); by then
+        // the session worker is already reaped, so greetd's reply to that
+        // cancel_session is itself an error ("unable to send message:
+        // Connection refused") which quickshell forwards here as a second,
+        // unrelated signal. authError is already showing the real PAM
+        // failure from onAuthFailure by the time this arrives — never let
+        // this cleanup artifact clobber it. An error() with nothing already
+        // showing (e.g. launch() itself failing to start the session) still
+        // displays normally.
         function onError(message) {
-            root.authError = message !== "" ? message : "GREETD ERROR";
+            if (root.authError === "")
+                root.authError = message !== "" ? message : "GREETD ERROR";
             root._awaitingResponse = false;
         }
 

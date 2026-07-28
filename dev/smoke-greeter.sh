@@ -36,6 +36,7 @@ post_auth_src=/tmp/formalshell-greeter-post-auth.png
 out_dir="artifacts/greeter"
 mkdir -p "$out_dir"
 pre_auth_png="$out_dir/greeter-pre-auth.png"
+wrong_pw_png="$out_dir/greeter-wrong-pw.png"
 post_auth_png="$out_dir/greeter-post-auth.png"
 session_log_out="$out_dir/greeter-session.log"
 journal_out="$out_dir/greetd-journal.txt"
@@ -76,6 +77,30 @@ sleep 3
 # dev/smoke-niri.sh; 3s margin before typing the password avoids racing the
 # prompt switching from "USER" to the password step.
 sleep 3
+
+# Wrong-password leg first (regression guard for the onError/onAuthFailure
+# race documented in greeter/greeter.qml: greetd unconditionally follows
+# every auth_error with a cancel_session it can no longer deliver, and the
+# resulting "Connection refused" error must never clobber the real PAM
+# failure text already showing). 3s covers the same PAM round trip plus the
+# cancel_session cleanup that follows it before the input cell settles.
+"${greeter_env[@]}" wtype -s "$wtype_settle_ms" "wrong-password"
+"${greeter_env[@]}" wtype -s "$wtype_settle_ms" -k Return
+sleep 3
+"${greeter_env[@]}" grim "$wrong_pw_png"
+sudo cp "$session_log" "$session_log_out" 2>/dev/null || true
+sudo chmod 644 "$session_log_out" 2>/dev/null || true
+if ! grep -q '"error_type":"auth_error"' "$session_log_out"; then
+  echo "SMOKE_FAIL: wrong-password leg never produced a real auth_error — got:" >&2
+  cat "$session_log_out" >&2
+  exit 1
+fi
+
+# greetd resets to Inactive after auth_error; re-submit the username to
+# start a fresh conversation for the real login below.
+"${greeter_env[@]}" wtype -s "$wtype_settle_ms" "test"
+"${greeter_env[@]}" wtype -s "$wtype_settle_ms" -k Return
+sleep 3
 "${greeter_env[@]}" wtype -s "$wtype_settle_ms" "formalshell-test"
 "${greeter_env[@]}" wtype -s "$wtype_settle_ms" -k Return
 
@@ -107,5 +132,6 @@ if ! grep -q "Quitting." "$session_log_out"; then
 fi
 
 echo "SMOKE_GREETER_PRE $pre_auth_png"
+echo "SMOKE_GREETER_WRONGPW $wrong_pw_png"
 echo "SMOKE_GREETER_POST $post_auth_png"
 echo "SMOKE_GREETER_OK"
