@@ -42,9 +42,16 @@ Singleton {
         root._sinkAudio.muted = !root._sinkAudio.muted;
     }
 
+    // PwNodeAudioIface's Q_PROPERTY for the averaged `volume` is declared
+    // `NOTIFY volumesChanged` (plural — the signal backing the `volumes`
+    // vector, reused for the average) — there is no `volumeChanged` signal
+    // to connect to. A singular `onVolumeChanged` handler here silently
+    // never fires, so a pure volume change (no mute toggle) never emitted
+    // `changed()`, and neither the OSD nor anything else keyed off it ever
+    // auto-showed for an external volume change (e.g. wpctl, hardware keys).
     Connections {
         target: root._sinkAudio
-        function onVolumeChanged() { root.changed(); }
+        function onVolumesChanged() { root.changed(); }
         function onMutedChanged() { root.changed(); }
     }
 }

@@ -41,8 +41,7 @@ Panel {
 
                     Text {
                         width: parent.width - muteCell.width - parent.spacing
-                        text: (nodeCell.modelData.description || nodeCell.modelData.name)
-                            + "  " + Math.round(nodeCell.modelData.audio.volume * 100) + "%"
+                        text: nodeCell.modelData.description || nodeCell.modelData.name
                         color: nodeCell.foreground
                         font.family: Theme.font.family
                         font.pixelSize: Theme.fontSize.body
@@ -66,6 +65,18 @@ Panel {
                             onClicked: nodeCell.modelData.audio.muted = !nodeCell.modelData.audio.muted
                         }
                     }
+                }
+
+                // Volume percentage on its own line — mirrors NetworkPanel's
+                // signal-strength caption below the name row, never sharing
+                // a Text with the elidable device name (a long real ALSA
+                // description would otherwise elide the percentage away
+                // before the name itself was even fully cut).
+                Text {
+                    text: Math.round(nodeCell.modelData.audio.volume * 100) + "%"
+                    color: nodeCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.caption
                 }
 
                 // Flat accent fill, no thumb, no radius — DESIGN.md's

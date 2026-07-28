@@ -39,7 +39,7 @@ Panel {
 
             Text {
                 width: parent.width - powerCell.width - parent.spacing
-                text: root._adapter ? root._adapter.name + "  " + BluetoothAdapterState.toString(root._adapter.state) : ""
+                text: root._adapter ? root._adapter.name + "  " + BluetoothAdapterState.toString(root._adapter.state).toUpperCase() : ""
                 color: adapterCell.foreground
                 font.family: Theme.font.family
                 font.pixelSize: Theme.fontSize.body
