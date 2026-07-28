@@ -3,6 +3,11 @@
 // theme.json's six required color keys, plus the hex format matugen
 // renders them in, and the static Flexoki values Theme.qml falls back to
 // when theme.json is absent or fails validation.
+//
+// These roles are also the color tokens DESIGN.md §1's state/border token
+// system (Theme.qml's `stateStyle`/`borderSpec`, `tokens.js`) resolves
+// against — a state names a role (`foreground`, `accent`, `urgent`,
+// `background`) or a raw hex, never a new color key of its own.
 
 var COLOR_KEYS = ["background", "backgroundAlt", "foreground", "foregroundDim", "accent", "urgent", "rule", "onAccent"];
 var HEX_RE = /^#[0-9a-fA-F]{6}$/;

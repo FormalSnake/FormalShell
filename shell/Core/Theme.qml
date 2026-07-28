@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 import "../Theme/palette.js" as Palette
+import "../Theme/tokens.js" as Tokens
 
 Singleton {
     id: root
@@ -11,6 +12,24 @@ Singleton {
 
     readonly property int borderWidth: 2
     readonly property int radius: 0
+
+    // --- DESIGN.md §1 scale roots + state/border tokens -----------------
+    // Additive to the legacy `font`/`spacing`/`control()`/`inverted()` below:
+    // nothing here renames or reuses an existing key, so every surface still
+    // consuming the legacy API keeps rendering identically until its own
+    // retrofit task (M8b plan, Tasks 3-7) switches it over.
+
+    // fontBaseSize is the rem root (default 13, the shell's existing body
+    // size, so fontScale is 1.0 out of the box). Retheming this one number
+    // rescales every font token in `fontSize` proportionally.
+    property real fontBaseSize: 13
+    readonly property real fontScale: Tokens.fontScale(fontBaseSize)
+    readonly property var fontSize: Tokens.fontTokens(fontBaseSize)
+
+    // spacingScale tracks fontScale by default (a larger base font gets
+    // roomier spacing automatically) but can be pinned independently.
+    property real spacingScale: fontScale
+    readonly property var space: Tokens.spacingTokens(spacingScale)
 
     // Live bar height, reported by Bar.qml's own content-derived
     // _cellHeight (a fixed literal here would drift the moment any bar cell
@@ -82,8 +101,11 @@ Singleton {
 
     // { bg: <foreground>, fg: <background> } — the cursor-row/accent-cell
     // inversion pair per DESIGN.md's "selection = inversion" rule.
-    function inverted() {
-        return { bg: color.foreground, fg: color.background };
+    // `useAccent` (default false, preserving every existing call site's
+    // behavior) swaps in the accent/onAccent pair for an urgent/accent-
+    // carrying row instead of the plain foreground/background pair.
+    function inverted(useAccent) {
+        return Tokens.invertedPair(color, !!useAccent);
     }
 
     function control(state) {
@@ -93,5 +115,55 @@ Singleton {
         case "selected": return { fill: color.accent,     fillAlpha: 0.18, border: color.accent,     borderWidth: borderWidth, borderAlpha: 0.9 }
         default:         return { fill: "transparent",    fillAlpha: 0.0,  border: "transparent",    borderWidth: 0,           borderAlpha: 0.0 }
         }
+    }
+
+    // --- DESIGN.md §1.1 four-state model, resolved against a color token -
+
+    function _resolveColorToken(token) {
+        if (typeof token === "string" && token.length > 0 && token[0] === "#")
+            return token;
+        var key = token || "foreground";
+        return color[key] !== undefined ? color[key] : color.foreground;
+    }
+
+    // Raw alphas/width for a named state (`normal` / `hover-cursor` /
+    // `selected` / `focus` / `pressed`), color-independent.
+    function stateAppearance(state) {
+        return Tokens.stateAppearance(state);
+    }
+
+    // Which named state applies given a control's current flags — see
+    // `Tokens.resolveState` for the paint-priority rule.
+    function resolveState(flags) {
+        return Tokens.resolveState(flags);
+    }
+
+    // A named state resolved against a color token (a palette role or raw
+    // hex), in the same { fill, fillAlpha, border, borderWidth, borderAlpha }
+    // shape `control()` returns, for a drop-in swap once a surface retrofits.
+    function stateStyle(state, colorToken) {
+        var col = _resolveColorToken(colorToken);
+        var appearance = Tokens.stateAppearance(state);
+        return {
+            fill: col, fillAlpha: appearance.fillAlpha,
+            border: col, borderWidth: appearance.borderWidth, borderAlpha: appearance.borderAlpha
+        };
+    }
+
+    // --- DESIGN.md §1.2 border specs --------------------------------------
+
+    // `widths` may be a partial per-side override ({ top: 0 }, say, so a
+    // menu row can drop its shared top edge); unset sides fall back to the
+    // state/control's own uniform width.
+    function borderSpec(colorToken, widths, defaultWidth, gradient) {
+        return Tokens.borderSpec(_resolveColorToken(colorToken), widths, defaultWidth === undefined ? borderWidth : defaultWidth, gradient);
+    }
+
+    function uniformBorderSpec(colorToken, width) {
+        return Tokens.uniformBorderSpec(_resolveColorToken(colorToken), width === undefined ? borderWidth : width);
+    }
+
+    function isUniformBorder(spec) {
+        return Tokens.isUniformBorder(spec);
     }
 }
