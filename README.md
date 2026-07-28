@@ -11,22 +11,25 @@ consuming config needs near-zero glue.
 ## Status
 
 Pre-alpha. M1 (walking skeleton), M2 (compositor layer), M3 (matugen theme
-engine), and M4 (unified menu) are done: a brutalist bar showing live
-workspaces and the active window, backed by a formal `CompositorBackend`
-contract with working niri and Hyprland implementations; wallpaper-driven
-colors that recolor every bar token live and sync niri's window borders (see
-Theming below); and a ruled-ledger menu that's app launcher, system/power
-menu, and a `select`/`input` dmenu replacement in one fuzzy-searchable
-IPC-summonable surface (see Menu below). CI (qmllint + headless qml-tests)
-and a nested-niri smoke loop are the verification tools for every change.
-Everything past that — notifications, OSD, lock/screensaver, greeter,
-panels, clipboard history — is unbuilt; see
+engine), M4 (unified menu), and M5 (notifications + OSD) are done: a
+brutalist bar showing live workspaces and the active window, backed by a
+formal `CompositorBackend` contract with working niri and Hyprland
+implementations; wallpaper-driven colors that recolor every bar token live
+and sync niri's window borders (see Theming below); a ruled-ledger menu
+that's app launcher, system/power menu, and a `select`/`input` dmenu
+replacement in one fuzzy-searchable IPC-summonable surface (see Menu below);
+and a mako-replacement notification stack (freedesktop server, ledger toasts,
+summonable history center, strict DND bypass) plus a jitter-free
+bottom-center OSD for volume/brightness/media (see Notifications and OSD
+below). CI (qmllint + headless qml-tests) and nested-compositor smoke loops
+are the verification tools for every change. Everything past that —
+lock/screensaver, greeter, panels, clipboard history — is unbuilt; see
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
 design.
 
 ## Screenshots
 
-Both screenshots below come from `dev/smoke-niri.sh`: it builds the package,
+Every screenshot below comes from `dev/smoke-niri.sh`: it builds the package,
 launches it inside an isolated **nested** niri session (not the host
 desktop), screenshots that nested session, and tears it down. This is the
 standard way UI changes get verified in this repo — see `CLAUDE.md`.
@@ -45,6 +48,23 @@ is summoned over IPC, switched into `select` mode, and screenshotted over the
 same matugen-recolored wallpaper — the ledger contract (shared hairline
 rules, inverted cursor row, uppercase `SELECT / PICK` breadcrumb) is visible
 end to end.
+
+![Notifications on niri](docs/screenshots/notifications-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --notify --center`: two
+`notify-send` toasts (one critical, rendered as a full-bleed accent cell)
+plus a summoned history center showing the `DND` toggle cell and a
+`PENDING / n` section. The center and the sticky critical toast are both
+top-right anchored and currently overlap when both are open at once — a
+known layout gap, not yet fixed (see Notifications below).
+
+![OSD on niri](docs/screenshots/osd-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --osd`: the bottom-center OSD
+card after a manual `qs ipc call osd volume`, showing the fixed three-column
+layout (icon | label | value) and the flat accent fill bar. The same run also
+verifies the real auto-show trigger (`wpctl set-volume @DEFAULT_AUDIO_SINK@
+30%` firing `AudioService.changed`) and the brightness variant.
 
 The Hyprland backend is implemented and its `debug` IPC dump has been
 verified against a live nested Hyprland session (workspaces, focused window,
@@ -204,6 +224,83 @@ which shreds a bare JSON array into extra positional arguments before it ever
 reaches the handler. A leading space defeats that check while `JSON.parse`
 still tolerates the whitespace.
 
+## Notifications
+
+A mako-replacement stack: a freedesktop `NotificationServer`, a pure-JS
+three-tier reducer (`popups` → `pending` → `past`), ledger toasts, and a
+summonable history center — see `docs/DESIGN.md` and
+`docs/superpowers/specs/2026-07-27-formalshell-design.md` §6.
+
+**Three tiers.** A notification lands in `popups` (a top-right toast, capped
+at 4 — the oldest overflows to `pending`) unless DND is on, in which case it
+goes straight to `pending`. A popup that times out (6s default, sticky for
+`urgency: critical`) moves to `pending`, unseen. Opening the history center
+marks everything in `pending` seen and moves it to `past`, which self-prunes
+after 15 minutes.
+
+**DND bypass is deliberately narrow** (Omarchy's rule, not a general
+"urgent" exception): only `urgency: critical` notifications sent by the
+literal `notify-send` CLI bypass DND. A chat app or any other sender marking
+its own notifications critical does **not** bypass — the check is on the
+sender's app name (`notification.appName === "notify-send"`), never inferred
+from urgency alone.
+
+**IPC** (`target: "notifications"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call notifications showHistory     # toggle the center
+qs ipc --any-display -p <store-path>/share/formalshell call notifications toggleDnd       # flip DND, returns "on"/"off"
+qs ipc --any-display -p <store-path>/share/formalshell call notifications dndState        # "on" | "off"
+qs ipc --any-display -p <store-path>/share/formalshell call notifications markAllSeen     # drain pending -> past
+qs ipc --any-display -p <store-path>/share/formalshell call notifications dismissAll      # clear popups
+qs ipc --any-display -p <store-path>/share/formalshell call notifications clearPending    # drop pending outright
+qs ipc --any-display -p <store-path>/share/formalshell call notifications clear           # dismissAll + clearPending
+qs ipc --any-display -p <store-path>/share/formalshell call notifications invokeLast      # fire the newest popup/pending entry's default action
+```
+
+Bind the center to a key in niri, same pattern as the menu:
+
+```kdl
+binds {
+    Mod+N { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "notifications" "showHistory"; }
+}
+```
+
+The menu also has a `System > Notifications` row wired to the same
+`showHistory` route (`shell/Menu/default-menu.jsonc`'s `system.notifications`
+node).
+
+## OSD
+
+One bottom-centered, jitter-free card (icon | label | value, three fixed
+columns) for volume, brightness, and media — `shell/Surfaces/Osd/Osd.qml`.
+Column widths are constants measured once off a calibration glyph/label set,
+never off the live value, so a percentage ticking or a track title swapping
+in never reflows the card.
+
+**Triggers.** Volume/mute auto-shows on `AudioService.changed` — any change
+to the default sink, ours or external (`wpctl`, `pavucontrol`, hardware
+keys). Brightness and media have no such signal to hook (`BrightnessService`
+has no polling loop; there is no media-player service yet) and only ever
+show via IPC (`target: "osd"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call osd volume       # manual show, current AudioService state
+qs ipc --any-display -p <store-path>/share/formalshell call osd brightness   # refreshes BrightnessService, then shows
+qs ipc --any-display -p <store-path>/share/formalshell call osd media "Artist - Track"
+qs ipc --any-display -p <store-path>/share/formalshell call osd close
+qs ipc --any-display -p <store-path>/share/formalshell call osd state        # {"visible":…,"kind":…,"mediaText":…}
+```
+
+A brightness keybind runs `brightnessctl` itself, then pokes the OSD to pick
+up the new value — `BrightnessService` only re-reads on demand:
+
+```kdl
+binds {
+    XF86MonBrightnessUp { spawn "sh" "-c" "brightnessctl set 5%+ && qs ipc --any-display -p <store-path>/share/formalshell call osd brightness"; }
+}
+```
+
 ## Dev loop
 
 ```bash
@@ -214,6 +311,9 @@ just lint                # nix flake check -L (qml-tests + qmllint)
 just smoke               # nested niri + screenshot — the visual verification loop
 ./dev/smoke-niri.sh --wallpaper # same, plus sets a test wallpaper over IPC first
 ./dev/smoke-niri.sh --menu      # same, plus drives the menu IPC (summon/select/close) in-session
+./dev/smoke-niri.sh --notify    # same, plus fires notify-send (normal + critical) and screenshots the toasts
+./dev/smoke-niri.sh --center    # combine with --notify: also summons the history center over IPC
+./dev/smoke-niri.sh --osd       # same, plus drives the osd IPC target (volume/brightness) and wpctl for the auto-show leg
 ./dev/smoke-hyprland.sh  # nested Hyprland equivalent (see Screenshots above)
 ```
 
@@ -233,7 +333,7 @@ just vm-test                 # qmltestrunner, inside the VM
 just vm-lint                 # nix flake check -L, inside the VM
 just vm-smoke                # dev/smoke-niri.sh, unchanged, against a headless
                               # sway parent compositor — screenshot pulled to ./artifacts/
-just vm-smoke --wallpaper --menu --notify --center   # same flags dev/smoke-niri.sh takes
+just vm-smoke --wallpaper --menu --notify --center --osd   # same flags dev/smoke-niri.sh takes
 just vm-down
 ```
 

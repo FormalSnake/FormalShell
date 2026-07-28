@@ -16,10 +16,12 @@ including the niri IPC client, which talks to niri's Unix sockets directly
 via `Quickshell.Io.Socket`.
 
 `shell/shell.qml` is the entry point (`//@ pragma ShellId formalshell`). It
-instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar` and
-one `Background` per connected output, a single non-per-screen `Menu`
-instance (it opens on the focused screen at summon time rather than living
-on every output), and the `Ipc` handlers (debug/theme/wallpaper/menu).
+instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar`, one
+`Background`, and one `Toasts` popup stack per connected output; a single
+non-per-screen `Menu`, `Center` (notification history), and `Osd` instance
+each (they open/show on the focused screen at summon/trigger time rather
+than living on every output); and the `Ipc` handlers
+(debug/theme/wallpaper/menu/notifications/osd).
 
 ## Tree layout
 
@@ -58,11 +60,21 @@ shell/
     search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
     providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()
     default-menu.jsonc           shipped default tree (apps, system/power, theme)
+  Services/
+    AudioService.qml            singleton — Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
+    BrightnessService.qml       singleton — brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
+    qmldir
+  Notifications/
+    model.js                    pure JS, .pragma library — three-tier reducer (popups/pending/past), DND bypass rule
+    NotificationService.qml     singleton — owns NotificationServer, drives model.js, live-Notification side map
+    qmldir
   Ipc/
-    DebugIpc.qml               IpcHandler target "debug", function dump(): string, query(q): string
-    ThemeIpc.qml               IpcHandler target "theme", retheme()/mode()/status()
-    WallpaperIpc.qml           IpcHandler target "wallpaper", set()/get()
+    DebugIpc.qml                IpcHandler target "debug", function dump(): string, query(q): string
+    ThemeIpc.qml                IpcHandler target "theme", retheme()/mode()/status()
+    WallpaperIpc.qml            IpcHandler target "wallpaper", set()/get()
     MenuIpc.qml                 IpcHandler target "menu", toggle()/summon()/close()/refresh()/ping()/select()/input()
+    NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/invokeLast()
+    OsdIpc.qml                  IpcHandler target "osd", volume()/brightness()/media()/close()/state()
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region RowLayout
@@ -74,14 +86,21 @@ shell/
     Menu/
       Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
+    Notifications/
+      Toasts.qml                 per-screen PanelWindow, Overlay layer; top-right popup column off NotificationService.popups
+      Center.qml                  single-instance PanelWindow, Top layer; right-anchored PENDING/EARLIER sections + DND cell
+      NotificationCard.qml        shared Cell: meta row (app name/relative time) + summary/body, critical = accent fill
+    Osd/
+      Osd.qml                     single-instance PanelWindow, Overlay layer, bottom-center; icon|label|value, no keyboard focus
 tests/
   tst_niri_reducer.qml         qmltestrunner tests for reducer.js
   tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
   tst_palette.qml              qmltestrunner tests for Theme/palette.js
   tst_menu_model.qml            qmltestrunner tests for Menu/model.js
   tst_menu_search.qml           qmltestrunner tests for Menu/search.js
+  tst_notifications_model.qml   qmltestrunner tests for Notifications/model.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu) loop
+  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd) loop, dbus-run-session isolated
   smoke-hyprland.sh             same, nested Hyprland
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`
@@ -181,8 +200,9 @@ event stream or JSON parsing to test in isolation.
 
 `shell/Ipc/DebugIpc.qml` registers `IpcHandler { target: "debug" }` with
 `function dump(): string` returning
-`JSON.stringify({ compositor, available, workspaces, windows, focusedWindowId, focusedWorkspaceId, configLoaded })`
-read straight off `CompositorService`/`Core.Config`. This is the textual
+`JSON.stringify({ compositor, available, workspaces, windows, focusedWindowId, focusedWorkspaceId, configLoaded, audio: {volume, muted, available}, brightness: {available, percent} })`
+read straight off `CompositorService`/`Core.Config`/`AudioService`/
+`BrightnessService`. This is the textual
 verification hook used by both smoke scripts (`qs ipc --any-display -p <path>
 call debug dump`) and by hand during backend development — it's the fastest
 way to confirm a backend is wired correctly without reading a screenshot.
@@ -276,6 +296,93 @@ DESIGN.md's "cells not cards, one hairline between neighbors" rule hold
 structurally rather than by convention: every row on every M4+ surface goes
 through `Cell`, so a `Rectangle`-with-border appearing outside `Components/`
 is drift, not a new pattern.
+
+## Notification data flow
+
+```
+Quickshell.Services.Notifications.NotificationServer  (NotificationService.qml)
+  onNotification: notification => { notification.tracked = true; ... }
+    |  server.cpp mutates the SAME Notification object in place on a
+    |  replaces_id update rather than emitting a new `notification` — the
+    |  handler above runs exactly once per id; per-property *Changed signals
+    |  (appName/summary/body/urgency/actions/image) resync the model entry
+    |  on every later replace instead
+    v
+Notifications/model.js  (.pragma library, pure — state in, state out)
+  add(state, notif, now, opts)
+    |  dnd && !bypassesDnd(notif) -> straight to pending
+    |  else -> popups (capped at 4, overflow pushes oldest to pending;
+    |          expiresAt = 0 (sticky) for urgency:critical, else now+6000)
+    v
+  { popups, pending, past, dnd }        1s Timer -> expire()   (popup timeout -> pending)
+                                         60s Timer -> prunePast() (past entries >15min -> dropped)
+        |                                       |
+        v                                       v
+Surfaces/Notifications/Toasts.qml       Surfaces/Notifications/Center.qml
+  per-screen, Overlay layer, top-right    single instance, Top layer, right-anchored
+  reads .popups                           reads .pending then .past (PENDING/EARLIER sections)
+  dismiss -> dismissPopup() (seen, ->past) dismiss -> dismissOne() (dropped outright)
+                                           open() -> markAllSeen() on close
+```
+
+`bypassesDnd(notif)` is Omarchy's narrow rule, encoded as one pure function
+with tests on both sides (`tests/tst_notifications_model.qml`):
+`notif.urgency === 2 && notif.senderIsNotifySend === true`, where
+`senderIsNotifySend` is set by `NotificationService` from the sender's literal
+app name (`notification.appName === "notify-send"`), never inferred from
+urgency alone — a chat app marking its own messages critical does not bypass.
+
+`NotificationService` keeps live `Notification` objects OUT of the reducer
+state (which is plain JS data, safe to keep around after the server destroys
+the notification) in a `_live` side map keyed by id, so `dismissPopup()`/
+`invokeAction()` can still reach the real object while it's alive; a
+`_selfClosing` flag distinguishes a close WE triggered (already applied to
+the model) from a sender-initiated `CloseNotification` or action-implicit
+close (never applied, so `closed` has to call `Model.dismissOne` itself).
+
+## OSD trigger graph
+
+```
+AudioService.changed()  (any volume/mute change on the default sink —
+  |                       ours, wpctl, pavucontrol, hardware keys)
+  v
+Osd.qml: Connections { onChanged: showVolume() }
+  |
+  |  IpcHandler target "osd" (OsdIpc.qml) — every other trigger, no
+  |  automatic signal exists for these:
+  +-- volume()      -> osd.showVolume()                     (manual re-show)
+  +-- brightness()  -> BrightnessService.refresh(); osd.showBrightness()
+  +-- media(text)   -> osd.showMedia(text)
+  +-- close()       -> osd.close()
+  v
+Osd.qml: kind = "volume"|"brightness"|"media", hideTimer restarts (1.6s)
+  -> visible = kind !== ""
+  -> icon|label|value Cells re-render off AudioService/BrightnessService
+     properties directly (no local copy — a still-open card tracks live
+     changes, e.g. a second wpctl call while the card is showing)
+```
+
+Column widths (`_iconWidth`/`_labelWidth`/`_valueWidth`) are computed once
+off a hidden calibration `Item` (every glyph/label the card can ever show,
+rendered at the live font) rather than off whatever value happens to be
+showing — this is the no-jitter contract: volume ticking 3% → 97% or a long
+media title swapping in never reflows the card.
+
+`BrightnessService` has no polling loop by design (`brightnessctl -m`
+queried once at startup, re-read straight from each `set()`/`step()` reply),
+so a hardware brightness key is expected to call `brightnessctl` itself and
+then poke the OSD to catch up: `brightnessctl set 5%+ && qs ipc call osd
+brightness`. On the mac VM rig, where the guest has a pipewire virtual sink
+but no backlight device, `AudioService.available` is honestly `true` and
+`BrightnessService.available` is honestly `false` — the brightness leg of
+`dev/smoke-niri.sh --osd` still proves the surface renders that kind
+correctly (`BRIGHTNESS` label, `0%`, empty fill), not that hardware exists.
+One VM-specific gotcha: the guest's null-audio-sink volume persists across
+nested niri sessions (pipewire itself isn't restarted between runs), so a
+`wpctl set-volume … 30%` that re-sets an already-30% sink is a no-op —
+`AudioService.changed` only fires on an actual value change, so a repeat
+`--osd` run's auto-show leg can legitimately capture nothing new. This isn't
+a bug in the trigger; it's a property of testing against durable state.
 
 ## Adding a backend
 

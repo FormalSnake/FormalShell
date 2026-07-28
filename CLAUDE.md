@@ -37,6 +37,25 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `menu-selection.txt` is read back to confirm the `{cancelled:true}` write.
   Combine with `--wallpaper` to verify the menu over matugen-recolored
   colors (`docs/screenshots/menu-niri.png` is captured this way).
+- `dev/smoke-niri.sh --notify` — same, plus fires `notify-send -u normal`
+  then `-u critical` in-session and screenshots the resulting toasts (normal
+  card + a full-bleed accent cell for the critical one).
+- `dev/smoke-niri.sh --center` — same as `--notify` (combine the two flags),
+  plus fires one more `notify-send`, waits for it to auto-expire into
+  `pending`, then summons the notification center over the `notifications`
+  IPC target and screenshots it (DND cell, `PENDING / n` header, per-row
+  cells). The sticky critical popup from `--notify` stays visible in its own
+  Overlay-layer stack above the center's Top layer — both top-right anchored,
+  neither yields; a known, accepted overlap (2026-07-28), not a bug to chase.
+- `dev/smoke-niri.sh --osd` — drives the bottom-center OSD three ways: a
+  manual `qs ipc call osd volume` (screenshotted separately as
+  `osd-manual.png`), a real `wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` (the
+  `AudioService.changed` auto-show trigger, screenshotted as this run's
+  `SMOKE_OK` artifact), then `qs ipc call osd brightness` (screenshotted as
+  `osd-brightness.png`). On a host/VM with no default sink or no backlight
+  device, the corresponding leg still renders the card honestly (0%, empty
+  fill) rather than faking a value — that's proof the surface works, not
+  proof hardware exists.
 - `dev/smoke-hyprland.sh` — the same loop for the second backend (nested
   Hyprland, `hyprctl`/exec-once instead of niri's `spawn-at-startup`). Nested
   Hyprland is flakier than nested niri in a sandboxed dev environment; if it
@@ -106,6 +125,18 @@ behavior on hosts where a real owner exists.
   the env). If you must run `qs` ad hoc, `unset NIRI_SOCKET` first or export
   the nested session's socket explicitly. Observed failure mode: host niri
   config reloads firing during isolated testing (2026-07-27).
+- **D-Bus isolation**: the shell's `NotificationService` acquires
+  `org.freedesktop.Notifications` on the session bus via
+  `Quickshell.Services.Notifications.NotificationServer`. The owner's live
+  session bus is owned by DMS on the Linux hosts — NEVER run the shell's
+  notification stack against the host bus, acquiring that name would steal it
+  out from under the real desktop. `dev/smoke-niri.sh` and
+  `dev/smoke-hyprland.sh` wrap the whole nested compositor invocation in
+  `dbus-run-session --`, giving every nested run (and `notify-send` fired
+  inside it) a private bus; both scripts assert `busctl --user status
+  org.freedesktop.Notifications`'s owner PID on the **host** bus is unchanged
+  before and after every run (`|| true`-tolerant of a legitimate "no owner"
+  answer, e.g. on the mac VM rig, which has no desktop bus owner at all).
 - **Design language**: every UI surface follows `docs/DESIGN.md` (mek.gallery-derived
   ruled-ledger grid: shared hairline rules, cells not cards, inversion for
   selection, accent as full-bleed cells, uppercase meta labels, radius 0).
