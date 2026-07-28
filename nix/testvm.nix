@@ -187,6 +187,14 @@ nixpkgs.lib.nixosSystem {
         services.power-profiles-daemon.enable = true;
         services.upower.enable = true;
 
+        # M6 Task 8: LocationService's PositionSource wants a genuine geoclue2
+        # D-Bus backend to talk to (not a fake fix) — this VM's virtio NIC has
+        # no Wi-Fi radio to associate with, so geoclue never actually produces
+        # a position and the panel's honest "NO LOCATION" state is what the
+        # smoke screenshot shows; the manual settings.json lat/lon override is
+        # the actually-exercised path.
+        services.geoclue2.enable = true;
+
         fonts = {
           packages = [ pkgs.nerd-fonts.jetbrains-mono ];
           fontconfig.enable = true;

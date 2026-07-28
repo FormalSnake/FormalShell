@@ -254,8 +254,14 @@ DTSTART;VALUE=DATE:$today_ics
 END:VEVENT
 END:VCALENDAR
 EOF
+# M6 Task 8: the VM/nested session has no Wi-Fi radio, so geoclue never
+# gets a fix — location.latitude/longitude here exercises the documented
+# settings.json override fallback (the actually-verifiable path) so
+# --panel weather's screenshot proves a real open-meteo fetch/forecast
+# render, not just the "NO LOCATION" honest-empty state. Berlin, the
+# open-meteo docs' own example coordinates.
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}}
 EOF
 
 if $wallpaper_mode; then
