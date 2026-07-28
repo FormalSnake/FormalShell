@@ -7,7 +7,8 @@ import QtQuick
 // config surface. Per CLAUDE.md's hard rule the shell never writes this file;
 // State.qml (runtime-mutable, $XDG_STATE_HOME) is the writable counterpart.
 // v1 keys: menu.customPowerButtons: [{ label, icon, command, confirm? }],
-// bar.position (reserved), theme.fontDisplay (reserved).
+// bar.position (reserved), theme.fontDisplay (reserved), media.appleMusicArt
+// (bool, default false — AppleMusicArtService's opt-in, M7 Task 2).
 Singleton {
     id: root
 

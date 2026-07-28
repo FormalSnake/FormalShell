@@ -34,6 +34,18 @@ Panel {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
         }
+
+        // Apple Music animated cover (M7 Task 2, opt-in): layered over the
+        // static art above, which stays the permanent fallback for every
+        // failure path — disabled, no match, no animated art, download
+        // failure, or a missing QtMultimedia module. Active only while the
+        // panel is open and the track actually playing, per the spec.
+        Loader {
+            width: 96
+            height: 96
+            active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
+            source: "AnimatedAlbumArt.qml"
+        }
     }
 
     Cell {

@@ -152,6 +152,12 @@ nixpkgs.lib.nixosSystem {
           # binary asset.
           (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
           pkgs.ffmpeg-headless
+          # M7 Task 2: AppleMusicArtService's own curl calls reach the VM's
+          # real DNS/network unwrapped, via nix/package.nix's PATH prefix on
+          # the formalshell binary itself — this entry is only so `curl` is
+          # also on an interactive ssh session's PATH for ad hoc
+          # verification of the iTunes/amp-api chain from the VM directly.
+          pkgs.curl
         ];
 
         # No hardware sink exists in a headless VM, so AudioService.available

@@ -1,3 +1,4 @@
+singleton AppleMusicArtService AppleMusicArtService.qml
 singleton AudioService AudioService.qml
 singleton BrightnessService BrightnessService.qml
 singleton CalendarEventsService CalendarEventsService.qml
