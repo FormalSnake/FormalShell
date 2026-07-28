@@ -26,6 +26,7 @@ nixpkgs.lib.nixosSystem {
     ({ pkgs, ... }:
       let
         quickshellPkg = quickshell.packages.aarch64-linux.default;
+        greeterPkg = self.packages.aarch64-linux.formalshell-greeter;
 
         # Only job: get WAYLAND_DISPLAY into the systemd --user environment,
         # the exact lookup dev/smoke-niri.sh falls back to
@@ -37,6 +38,76 @@ nixpkgs.lib.nixosSystem {
         # assume an interactive seat we don't have here.
         swayHeadlessConfig = pkgs.writeText "sway-headless-testhost.conf" ''
           exec "systemctl --user import-environment WAYLAND_DISPLAY DISPLAY; systemctl --user set-environment WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+        '';
+
+        # M8 Task 2: greetd's own default_session compositor. No `exec` line
+        # at all (unlike swayHeadlessConfig above) — greeterSessionScript
+        # below runs formalshell-greeter itself in the foreground so it
+        # knows the exact moment the greeter quits and can screenshot the
+        # torn-down surface before killing sway, which an async sway `exec`
+        # can't give us.
+        swayGreeterConfig = pkgs.writeText "sway-greeter-testhost.conf" ''
+          # intentionally empty — greeterSessionScript below drives everything
+        '';
+
+        # greetd's session/worker.rs execs default_session.command through
+        # `/bin/sh -c` with an environment reset to PAM's own envlist (only
+        # XDG_SEAT/XDG_SESSION_CLASS/USER/LOGNAME/HOME/SHELL/TERM plus
+        # GREETD_SOCK — confirmed by reading greetd's own worker.rs, not
+        # nixpkgs' module), so nothing this VM's systemd units export
+        # (WLR_BACKENDS and friends) reaches this script for free — it has
+        # to set them up itself, same as swayHeadlessConfig's own unit does.
+        # HOME in that PAM envlist is the `greeter` user's real passwd entry
+        # (/var/empty, unwritable) — overridden here to a tmpfiles-owned
+        # scratch dir so Qt has somewhere to put its cache. Absolute paths
+        # everywhere below rather than bare names: PATH isn't part of that
+        # reset envlist either.
+        greeterRuntimeDir = "/run/formalshell-greeter";
+        greeterHome = "/var/lib/formalshell-greeter";
+        greeterSessionScript = pkgs.writeShellScript "formalshell-greeter-session" ''
+          # Append, not truncate: greetd falls back to this same
+          # default_session almost immediately after a successful login's
+          # own session command exits (observed ~1s later in this VM, since
+          # the authenticated session has no seat/backend to run "niri"
+          # against and exits right back out) — a truncating `exec >` would
+          # very likely race dev/smoke-greeter.sh's own read of this file
+          # and wipe the very "Authentication complete."/"Quitting." lines
+          # it's checking for. dev/smoke-greeter.sh rm -f's this path itself
+          # before every run, so append-mode still starts each smoke run
+          # from an empty file.
+          exec >>/tmp/formalshell-greeter-session.log 2>&1
+          set -x
+          export XDG_RUNTIME_DIR="${greeterRuntimeDir}"
+          export HOME="${greeterHome}"
+          export WAYLAND_DISPLAY=wayland-1
+          export WLR_BACKENDS=headless
+          export WLR_RENDERER=pixman
+          export WLR_LIBINPUT_NO_DEVICES=1
+          # Surfaces Greetd's own qCDebug trail (Connected/Sending
+          # request/Received response/Authentication complete/Quitting) in
+          # this log — dev/smoke-greeter.sh's evidence for the auth
+          # exchange, since greetd(1) itself barely logs beyond errors
+          # (confirmed by reading greetd/src/context.rs).
+          export QT_LOGGING_RULES="quickshell.service.greetd.debug=true"
+
+          "${pkgs.sway}/bin/sway" --config "${swayGreeterConfig}" &
+          sway_pid=$!
+          for _ in $(seq 1 100); do
+            [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && break
+            sleep 0.1
+          done
+
+          # Blocks until Greetd.launch(...,true) (see greeter/greeter.qml's
+          # onReadyToLaunch) quits this process — greetd starts the
+          # authenticated session only once this whole default_session
+          # command has terminated (greetd-ipc(7)'s "start_session" docs),
+          # so the grim call below runs against the torn-down-greeter,
+          # still-live compositor before sway itself is killed.
+          "${greeterPkg}/bin/formalshell-greeter"
+          "${pkgs.grim}/bin/grim" /tmp/formalshell-greeter-post-auth.png
+
+          kill "$sway_pid" 2>/dev/null || true
+          wait "$sway_pid" 2>/dev/null || true
         '';
       in
       {
@@ -98,6 +169,24 @@ nixpkgs.lib.nixosSystem {
         # declaration (Task 7 documents it — the home-manager module alone
         # cannot create a PAM service).
         security.pam.services.formalshell-lock = { };
+
+        # M8 Task 2: a real greetd instance, hand-declared here the same way
+        # formalshell-lock's PAM service is above — Task 3/4's NixOS modules
+        # are where a real deployment gets this instead. terminal.vt/switch
+        # are left at the upstream module's defaults (vt=1, switch=true):
+        # greetd only calls VT_ACTIVATE when the current VT differs from the
+        # target one (greetd/src/session/worker.rs), and tty1 is already the
+        # kernel's default foreground VT on this serial-console VM, so the
+        # ioctl is a no-op in practice rather than something that needs a
+        # real framebuffer console behind it.
+        services.greetd = {
+          enable = true;
+          settings.default_session.command = "${greeterSessionScript}";
+        };
+        systemd.tmpfiles.rules = [
+          "d ${greeterRuntimeDir} 0700 greeter greeter -"
+          "d ${greeterHome} 0700 greeter greeter -"
+        ];
 
         # Headless wlroots parent compositor — the Wayland "host session"
         # dev/smoke-*.sh nests its own niri/Hyprland inside, same role
