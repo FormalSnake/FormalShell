@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Core as Core
 import qs.Compositor
 import qs.Components
+import qs.Services
 import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
 import "../../Menu/providers.js" as Providers
@@ -126,7 +127,8 @@ PanelWindow {
     }
 
     readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, root._userObj), {
-        apps: function () { return Providers.appsProvider(DesktopEntries.applications.values); }
+        apps: function () { return Providers.appsProvider(DesktopEntries.applications.values); },
+        clipboard: function () { return Providers.clipboardProvider(ClipboardService.items); }
     })
     readonly property var _nodes: root._tree.nodes
 

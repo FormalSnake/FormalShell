@@ -11,6 +11,7 @@
 // shell's own process rather than as a detached command.
 {
     "apps": { "provider": "apps", "icon": "󰀻" },
+    "clipboard": { "provider": "clipboard", "icon": "󰅍" },
 
     "system": { "label": "System", "icon": "󰒓" },
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },

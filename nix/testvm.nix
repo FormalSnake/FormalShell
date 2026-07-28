@@ -132,6 +132,7 @@ nixpkgs.lib.nixosSystem {
           pkgs.imagemagick
           pkgs.libnotify
           pkgs.brightnessctl
+          pkgs.wl-clipboard
           pkgs.wireplumber
           pkgs.git
           pkgs.just

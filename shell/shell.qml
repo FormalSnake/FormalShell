@@ -61,4 +61,5 @@ ShellRoot {
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
     PanelIpc { registry: ({ audio: audioPanelInstance }) }
+    ClipboardIpc {}
 }

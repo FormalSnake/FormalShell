@@ -38,6 +38,13 @@
 # the bar's right region — see Panel.qml's own header comment), left open
 # through the run's normal screenshot so it shows in smoke.png/SMOKE_OK; it
 # has no auto-close, so no timing race with the rest of the run's triggers.
+# With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
+# (clip-list-1.json — proves capture + newest-first order), re-copies the
+# newest one (dedup proof: the reducer must move it to front, not insert a
+# duplicate), dumps `clipboard list` again (clip-list-2.json — item count
+# must stay 3), then `menu summon clipboard` so the run's screenshot shows
+# the provider's rows rendered as real menu cells, left open through
+# smoke.png/SMOKE_OK same as --panel.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -69,6 +76,7 @@ center_mode=false
 osd_mode=false
 panel_mode=false
 panel_name=""
+clipboard_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -78,7 +86,8 @@ while [ $# -gt 0 ]; do
     --center) center_mode=true; shift ;;
     --osd) osd_mode=true; shift ;;
     --panel) panel_mode=true; panel_name="$2"; shift 2 ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>]" >&2; exit 1 ;;
+    --clipboard) clipboard_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard]" >&2; exit 1 ;;
   esac
 done
 
@@ -110,6 +119,14 @@ if $osd_mode; then
     wpctl_bin=$(command -v wpctl)
   else
     wpctl_bin=$(nix build 'nixpkgs#wireplumber^out' --no-link --print-out-paths)/bin/wpctl
+  fi
+fi
+
+if $clipboard_mode; then
+  if command -v wl-copy >/dev/null 2>&1; then
+    wl_copy_bin=$(command -v wl-copy)
+  else
+    wl_copy_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-copy
   fi
 fi
 
@@ -181,6 +198,8 @@ query_path="$shot_dir/query.json"
 selection_path="$shot_dir/selection.txt"
 osd_manual_path="$shot_dir/osd-manual.png"
 osd_brightness_path="$shot_dir/osd-brightness.png"
+clip_list1_path="$shot_dir/clip-list-1.json"
+clip_list2_path="$shot_dir/clip-list-2.json"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -242,6 +261,31 @@ cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 
 EOF
 fi
 
+# --clipboard's whole sequence lives in one script (internal sleeps, one
+# spawn-at-startup line) rather than --menu's per-step files: nothing here
+# needs to interleave with a niri-side sleep the way menu-select's KDL
+# quoting constraint did.
+if $clipboard_mode; then
+  clipboard_drive_script="$shot_dir/clipboard-drive.sh"
+  cat > "$clipboard_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+"$wl_copy_bin" "clipboard smoke one"
+sleep 1
+"$wl_copy_bin" "clipboard smoke two"
+sleep 1
+"$wl_copy_bin" "clipboard smoke three"
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list1_path" 2>&1
+sleep 1
+"$wl_copy_bin" "clipboard smoke three"
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list2_path" 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+EOF
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -293,6 +337,9 @@ fi
   if $panel_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
   fi
+  if $clipboard_mode; then
+    echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -314,6 +361,10 @@ fi
     screenshot_delay=15
   elif $osd_mode; then
     screenshot_delay=10
+  elif $clipboard_mode; then
+    # clipboard-drive.sh's last step (menu summon) lands at its own sleep 8;
+    # 3s buffer for the menu to render before the shot.
+    screenshot_delay=11
   fi
   echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
@@ -358,6 +409,27 @@ if $menu_mode; then
     cat "$selection_path"
   else
     echo "SMOKE_FAIL: menu close in select mode did not write {cancelled:true}" >&2; exit 1
+  fi
+fi
+
+if $clipboard_mode; then
+  if [ -s "$clip_list1_path" ]; then
+    cat "$clip_list1_path"
+  else
+    echo "SMOKE_FAIL: no clipboard list (pre-recopy) produced" >&2; exit 1
+  fi
+  if [ -s "$clip_list2_path" ]; then
+    cat "$clip_list2_path"
+  else
+    echo "SMOKE_FAIL: no clipboard list (post-recopy) produced" >&2; exit 1
+  fi
+  # Item count must stay 3 across the re-copy — a 4th entry would mean the
+  # dedup-to-front path inserted a duplicate instead of moving the existing
+  # "clipboard smoke three" entry.
+  count1=$(grep -o '"id":' "$clip_list1_path" | wc -l | tr -d ' ')
+  count2=$(grep -o '"id":' "$clip_list2_path" | wc -l | tr -d ' ')
+  if [ "$count1" != "3" ] || [ "$count2" != "3" ]; then
+    echo "SMOKE_FAIL: clipboard list item count drifted (before=$count1 after-recopy=$count2, want 3/3)" >&2; exit 1
   fi
 fi
 

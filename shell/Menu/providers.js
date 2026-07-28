@@ -50,6 +50,45 @@ function applyProviders(tree, providerFns) {
     return tree;
 }
 
+// Clipboard history rows, newest first (ClipboardService.items' own order).
+// Unlike appsProvider these are plain "action" nodes — Menu.qml's existing
+// `_activateRow`/`_runAction` spawn-command path already re-copies the entry
+// via `qs ipc call clipboard copy <id>` with zero Menu.qml changes, so no
+// bespoke node kind (and no `_entry`-style back-reference) is needed here.
+function clipboardProvider(items) {
+    return (items || []).map(function (entry) {
+        return {
+            id: "clipboard." + entry.id,
+            parentId: null,
+            label: previewLabel(entry.text),
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "action",
+            action: "qs ipc call clipboard copy " + entry.id,
+            childIds: []
+        };
+    });
+}
+
+// First non-blank line only, capped at maxLen chars — clipboard captures can
+// be multi-line/arbitrarily long, and MenuRow's label is a single Text with
+// no wrapping, so anything longer needs pre-truncating here rather than
+// spilling into the ledger row below it.
+function previewLabel(text, maxLen) {
+    maxLen = maxLen || 60;
+    var lines = text.split("\n");
+    var firstLine = "";
+    for (var i = 0; i < lines.length; i++) {
+        var trimmed = lines[i].trim();
+        if (trimmed !== "") { firstLine = trimmed; break; }
+    }
+    if (firstLine === "") firstLine = text.trim();
+    var truncated = firstLine.length > maxLen;
+    var out = truncated ? firstLine.slice(0, maxLen) : firstLine;
+    return (truncated || lines.length > 1) ? out + "…" : out;
+}
+
 // Expands Config's `menu.customPowerButtons` (the spec's "first-class, not
 // a workaround" case — e.g. an owner's Windows-reboot bootloader shortcut)
 // into JSONC-shaped entry fragments keyed by dotted id, meant to be merged
