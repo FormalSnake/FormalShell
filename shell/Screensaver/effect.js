@@ -1,82 +1,232 @@
 .pragma library
 
-// Pure matrix-rain state stepping (DESIGN.md's "themed terminal-text-effect
-// animation", spec §10, M7 Task 5): every function is a deterministic
-// function of (column, row, frame) — no Date.now(), no randomness — so
+// Pure banner-effect state stepping (DESIGN.md's screensaver exception,
+// M8b Task 7): every function below is a deterministic function of
+// (column, row, frame, banner) — no Date.now(), no Math.random() — so
 // Screensaver.qml stays a thin per-frame render layer over this and the
-// whole animation is genuinely testable frame by frame.
+// whole animation is genuinely testable frame by frame. The banner itself
+// (branding/screensaver.txt by default) is the entire subject: nothing is
+// ever drawn outside its own width/height grid, in any effect.
 
-// Plain ASCII so it renders identically in any monospace font, regardless
-// of the font's own glyph coverage — no dependency on Nerd Font codepoints
-// for a purely decorative effect.
-var CHARSET = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*<>/\\|+-=";
+// Plain ASCII so scramble/noise glyphs render identically in any monospace
+// font, regardless of the font's own glyph coverage.
+var NOISE_CHARSET = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*<>/\\|+=";
 
-// How many rows a glyph stays lit behind a column's head before decaying to
-// fully off — the visible "trail" length.
-var TRAIL_LENGTH = 12;
+var EFFECT_NAMES = ["decrypt", "rain", "expand", "slide", "scatter"];
 
-// Deterministic per-column fall speed (rows per frame): a small spread so
-// columns drift out of phase with each other instead of marching in
-// lockstep down the screen.
-function columnSpeed(column) {
-    return 1 + (column % 5);
-}
+// ---- banner parsing ------------------------------------------------------
 
-// Deterministic per-column start offset so every column's head begins at a
-// different point in its cycle rather than all starting in sync.
-function columnOffset(column) {
-    return (column * 13) % 97;
-}
-
-// The row a column's head (its brightest glyph) occupies at a given frame.
-// Cycles modulo (rowCount + TRAIL_LENGTH) and is shifted down by
-// TRAIL_LENGTH so the head's trail fully drains off the top of the screen
-// before that same head reappears at the top — the returned value goes
-// negative during that drain, which is fine: brightnessAt() below simply
-// reads it as "no visible row is that far behind yet".
-function headRow(column, frame, rowCount) {
-    var cycle = rowCount + TRAIL_LENGTH;
-    var pos = (columnOffset(column) + frame * columnSpeed(column)) % cycle;
-    return pos - TRAIL_LENGTH;
-}
-
-// Deterministic glyph selection: a function of column, row AND frame (not
-// row alone) so a glyph visibly changes as the trail passes over it,
-// instead of the same static character just scrolling past.
-function glyphAt(column, row, frame) {
-    var index = Math.abs((column * 31 + row * 7 + frame * 3) % CHARSET.length);
-    return CHARSET.charAt(index);
-}
-
-// Brightness (0..1) of the glyph at `row` in `column` at `frame`: 1 at the
-// head itself, decaying linearly over the TRAIL_LENGTH rows behind it, and
-// 0 (resting — nothing drawn) everywhere else, whether that's still ahead
-// of the head or already further behind than the trail reaches.
-function brightnessAt(column, row, frame, rowCount) {
-    var head = headRow(column, frame, rowCount);
-    var behind = head - row;
-    if (behind < 0 || behind > TRAIL_LENGTH) return 0;
-    return 1 - behind / TRAIL_LENGTH;
-}
-
-// One column's full per-frame state: glyph + brightness for every row.
-function columnState(column, frame, rowCount) {
+// Splits raw banner text into an equal-width grid of rows: trims one
+// trailing newline and space-pads every row to the widest row's length, so
+// every effect can address (col, row) without its own bounds-checking.
+function parseBanner(text) {
+    var raw = (text || "").replace(/\n$/, "").split("\n");
+    var width = 0;
+    for (var i = 0; i < raw.length; i++)
+        width = Math.max(width, raw[i].length);
     var rows = [];
-    for (var row = 0; row < rowCount; row++) {
-        rows.push({
-            char: glyphAt(column, row, frame),
-            brightness: brightnessAt(column, row, frame, rowCount)
-        });
+    for (var r = 0; r < raw.length; r++) {
+        var row = raw[r];
+        while (row.length < width) row += " ";
+        rows.push(row);
+    }
+    if (rows.length === 0) rows.push("");
+    return { width: width, height: rows.length, rows: rows };
+}
+
+function targetChar(banner, col, row) {
+    if (row < 0 || row >= banner.height || col < 0 || col >= banner.width)
+        return " ";
+    return banner.rows[row].charAt(col);
+}
+
+// Deterministic per-cell pseudo-random integer in [0, mod) — every effect's
+// apparent "randomness" (stagger timing, arrival order) is really just this
+// hash, so a whole activation is a pure function of frame: reproducible by
+// tests, and identical in shape on every real activation too (only the
+// chosen effect name varies run to run, never the math within it).
+function hash(col, row, salt, mod) {
+    var h = Math.abs((col * 374761393 + row * 668265263 + salt * 2246822519) % 1000003);
+    return h % mod;
+}
+
+// ---- decrypt: static noise resolving to the banner, no direction --------
+// Every non-space cell flickers through the noise charset until its own
+// (hashed, scattered) reveal frame, then holds its target character
+// forever. No motion, no directionality — a "hacker terminal" resolve.
+
+var DECRYPT_SPAN = 40; // every cell's revealAt is < this, so it bounds convergence
+
+function decryptCell(col, row, frame, banner) {
+    var target = targetChar(banner, col, row);
+    if (target === " ") return { char: " ", opacity: 0 };
+    var revealAt = hash(col, row, 11, DECRYPT_SPAN);
+    if (frame >= revealAt) return { char: target, opacity: 1 };
+    var noiseIndex = Math.abs((col * 13 + row * 29 + frame * 5) % NOISE_CHARSET.length);
+    return { char: NOISE_CHARSET.charAt(noiseIndex), opacity: 0.85 };
+}
+
+// ---- rain: falling trail that locks each cell once it passes over -------
+// The restructured matrix rain (M7's original effect): a per-column head
+// falls monotonically (no wrap — unlike a decorative loop, this one must
+// actually finish) leaving a short fading trail; once the head passes a
+// row for the first time that cell locks to its target character for good.
+
+var RAIN_TRAIL = 3;
+
+// Frames-per-row (not rows-per-frame): the banner is only a handful of
+// rows tall, so a head moving a whole row every frame would settle almost
+// instantly — these keep a column's fall visible for a couple of seconds
+// instead of one.
+function rainColumnPeriod(col) { return 6 + (col % 5); }
+function rainColumnStartDelay(col) { return (col * 13) % 24; }
+
+function rainCell(col, row, frame, banner) {
+    var target = targetChar(banner, col, row);
+    if (target === " ") return { char: " ", opacity: 0 };
+    var elapsed = frame - rainColumnStartDelay(col);
+    if (elapsed < 0) return { char: " ", opacity: 0 };
+    var head = elapsed / rainColumnPeriod(col);
+    if (head >= row) return { char: target, opacity: 1 };
+    var behind = row - head;
+    if (behind <= RAIN_TRAIL) {
+        var noiseIndex = Math.abs((col * 3 + row * 5 + frame * 7) % NOISE_CHARSET.length);
+        return { char: NOISE_CHARSET.charAt(noiseIndex), opacity: 1 - behind / (RAIN_TRAIL + 1) };
+    }
+    return { char: " ", opacity: 0 };
+}
+
+function rainConvergenceFrame(banner) {
+    var worst = 0;
+    for (var col = 0; col < banner.width; col++) {
+        var needed = rainColumnStartDelay(col) + rainColumnPeriod(col) * (banner.height - 1);
+        worst = Math.max(worst, needed);
+    }
+    return Math.ceil(worst) + RAIN_TRAIL + 2;
+}
+
+// ---- expand: reveal opens outward from the centre -----------------------
+// No noise stage at all: a cell is either not-yet-open (blank) or open
+// (its target character) — the open region is a diamond growing outward
+// from the banner's centre, doubling row-distance to compensate for
+// glyphs being visually taller than they are wide.
+
+var EXPAND_SPEED = 2;
+
+function _expandDistance(col, row, banner) {
+    var cx = (banner.width - 1) / 2;
+    var cy = (banner.height - 1) / 2;
+    return Math.max(Math.abs(col - cx), Math.abs(row - cy) * 2);
+}
+
+function expandCell(col, row, frame, banner) {
+    var target = targetChar(banner, col, row);
+    if (target === " ") return { char: " ", opacity: 0 };
+    var revealAt = Math.ceil(_expandDistance(col, row, banner)) * EXPAND_SPEED;
+    if (frame >= revealAt) return { char: target, opacity: 1 };
+    return { char: " ", opacity: 0 };
+}
+
+function expandConvergenceFrame(banner) {
+    var maxDist = 0;
+    for (var row = 0; row < banner.height; row++)
+        for (var col = 0; col < banner.width; col++)
+            maxDist = Math.max(maxDist, _expandDistance(col, row, banner));
+    return Math.ceil(maxDist) * EXPAND_SPEED + 1;
+}
+
+// ---- slide: rows wipe in from alternating edges --------------------------
+// Each row is its own curtain: even rows sweep open left-to-right, odd rows
+// right-to-left, each column revealing in turn as the sweep passes it.
+// Rows are themselves staggered so the whole banner assembles in a visible
+// zigzag rather than all rows finishing at once.
+
+var SLIDE_ROW_STAGGER = 6;
+var SLIDE_STEP = 1;
+
+function slideCell(col, row, frame, banner) {
+    var target = targetChar(banner, col, row);
+    if (target === " ") return { char: " ", opacity: 0 };
+    var fromLeft = (row % 2) === 0;
+    var sweepPos = fromLeft ? col : (banner.width - 1 - col);
+    var revealAt = row * SLIDE_ROW_STAGGER + sweepPos * SLIDE_STEP;
+    if (frame >= revealAt) return { char: target, opacity: 1 };
+    return { char: " ", opacity: 0 };
+}
+
+function slideConvergenceFrame(banner) {
+    return (banner.height - 1) * SLIDE_ROW_STAGGER + (banner.width - 1) * SLIDE_STEP + 1;
+}
+
+// ---- scatter: individual glyphs pop in at scattered moments --------------
+// Unlike decrypt's dense, constantly-changing noise, scatter's canvas is
+// mostly blank: each cell independently and abruptly "lands" at its own
+// hashed arrival frame, fading in over a short final approach rather than
+// flickering through unrelated glyphs first — a sparse, unordered
+// materialize instead of a scramble-and-resolve.
+
+var SCATTER_SPAN = 50;
+var SCATTER_APPROACH = 4;
+
+function scatterCell(col, row, frame, banner) {
+    var target = targetChar(banner, col, row);
+    if (target === " ") return { char: " ", opacity: 0 };
+    var arriveAt = hash(col, row, 29, SCATTER_SPAN);
+    if (frame >= arriveAt) return { char: target, opacity: 1 };
+    var untilArrival = arriveAt - frame;
+    if (untilArrival <= SCATTER_APPROACH)
+        return { char: target, opacity: 0.2 + 0.2 * (SCATTER_APPROACH - untilArrival) };
+    return { char: " ", opacity: 0 };
+}
+
+// ---- registry -------------------------------------------------------------
+
+var _CELL_FNS = {
+    decrypt: decryptCell,
+    rain: rainCell,
+    expand: expandCell,
+    slide: slideCell,
+    scatter: scatterCell
+};
+
+function isKnownEffect(name) {
+    return EFFECT_NAMES.indexOf(name) >= 0;
+}
+
+// "random" or any unrecognised name deterministically falls back to a
+// pick keyed on `seed` (the caller supplies a fresh seed per activation —
+// see Screensaver.qml — so a long idle session still cycles variants).
+function resolveEffectName(requested, seed) {
+    if (isKnownEffect(requested)) return requested;
+    return EFFECT_NAMES[Math.abs(seed) % EFFECT_NAMES.length];
+}
+
+// The number of frames after which `name` is guaranteed fully converged
+// (every non-space cell showing its target character) for the given
+// banner — used by tests, and available to callers that want to know when
+// an activation has "settled".
+function convergenceFrame(name, banner) {
+    switch (name) {
+    case "decrypt": return DECRYPT_SPAN;
+    case "rain": return rainConvergenceFrame(banner);
+    case "expand": return expandConvergenceFrame(banner);
+    case "slide": return slideConvergenceFrame(banner);
+    case "scatter": return SCATTER_SPAN;
+    default: return convergenceFrame(resolveEffectName(name, 0), banner);
+    }
+}
+
+// The full per-frame grid for `name`: banner.height arrays of banner.width
+// { char, opacity } cells — Screensaver.qml's Canvas renders this directly
+// at a fixed on-screen offset, no further per-effect logic on its side.
+function frameState(name, frame, banner) {
+    var fn = _CELL_FNS[name] || _CELL_FNS[resolveEffectName(name, 0)];
+    var rows = [];
+    for (var row = 0; row < banner.height; row++) {
+        var cols = [];
+        for (var col = 0; col < banner.width; col++)
+            cols.push(fn(col, row, frame, banner));
+        rows.push(cols);
     }
     return rows;
-}
-
-// The full grid for one frame: columnCount arrays of rowCount cells each —
-// Screensaver.qml's Canvas renders this directly, no further math on its
-// side.
-function frameState(columnCount, rowCount, frame) {
-    var columns = [];
-    for (var c = 0; c < columnCount; c++)
-        columns.push(columnState(c, frame, rowCount));
-    return columns;
 }

@@ -415,7 +415,25 @@ EOF
 # afford to wait out.
 screensaver_settings=""
 if $screensaver_mode; then
-  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true}'
+  # SCREENSAVER_EFFECT (optional, additive, unset by every caller except a
+  # per-effect verification run — M8b Task 7) pins screensaver.effect for
+  # this run's screensaver-manual.png instead of leaving it at the default
+  # "random", so each of the five effects can be screenshotted on its own.
+  ss_effect_json=""
+  if [ -n "${SCREENSAVER_EFFECT:-}" ]; then
+    ss_effect_json=', "effect": "'"$SCREENSAVER_EFFECT"'"'
+  fi
+  # SCREENSAVER_ASCII_TEXT (optional, additive, same rationale as
+  # SCREENSAVER_EFFECT above): writes a custom banner file and points
+  # screensaver.asciiPath at it, proving the bundled art is really
+  # swappable rather than hardcoded.
+  ss_ascii_json=""
+  if [ -n "${SCREENSAVER_ASCII_TEXT:-}" ]; then
+    ss_ascii_path="$iso_home/.config/formalshell/custom-screensaver.txt"
+    printf '%s\n' "$SCREENSAVER_ASCII_TEXT" > "$ss_ascii_path"
+    ss_ascii_json=', "asciiPath": "'"$ss_ascii_path"'"'
+  fi
+  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true'"$ss_effect_json$ss_ascii_json"'}'
 fi
 # picker_mode (M7 Task 6): picker.directory points at a fixture directory of
 # a handful of generated solid-color PNGs (below), so --picker's grid

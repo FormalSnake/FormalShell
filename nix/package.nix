@@ -8,6 +8,10 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     mkdir -p $out/share/formalshell $out/bin
     cp -r . $out/share/formalshell/
+    # Bundled default screensaver banner (M8b Task 7) — a sibling of shell/
+    # in the repo, so Quickshell.shellPath("branding/...") still resolves it
+    # once installed here alongside the copied shell tree.
+    cp -r ${../branding} $out/share/formalshell/branding
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl ]} \

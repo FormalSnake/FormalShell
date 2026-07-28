@@ -18,7 +18,12 @@ import QtQuick
 // (bool, default true — Screensaver.qml's live guard against auto-activating
 // while MediaService.isPlaying), screensaver.lockAfterSeconds (number,
 // default 0 — Screensaver.qml's optional chain into Lock once already
-// showing; 0 disables the chain, M7 Task 5). picker.directory (string,
+// showing; 0 disables the chain, M7 Task 5). screensaver.asciiPath (string,
+// default "" — a path to a user-supplied ASCII banner text file; "" means
+// the bundled branding/screensaver.txt), screensaver.effect (string,
+// default "random" — one of effect.js's EFFECT_NAMES, or "random" to pick a
+// fresh one every activation; an unknown name also falls back to random,
+// M8b Task 7). picker.directory (string,
 // default "" — ImagePicker's configured wallpaper directory, scanned by its
 // summon()/wallpaper mode; select()'s generic-image-selector mode takes an
 // arbitrary directory as an IPC argument instead, M7 Task 6).
