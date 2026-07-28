@@ -5,8 +5,8 @@ import qs.Core
 import qs.Surfaces.Bar.widgets
 
 // The bar (DESIGN.md §Bar, spec §1, M6 Tasks 1+3): three ledger regions —
-// left (workspaces, active window), center (clock, now-playing joins it in
-// M7), right (indicator/widget cells: battery, audio, network, bluetooth,
+// left (workspaces, active window), center (clock, now-playing), right
+// (indicator/widget cells: battery, audio, network, bluetooth, weather —
 // per the spec's own bar-widget ordering). Region
 // boundaries are rules, never whitespace gaps — DESIGN's rule #2, "rules are
 // the ONLY separation mechanism" — so the left|center and center|right
@@ -23,6 +23,7 @@ PanelWindow {
     property var bluetoothPanel: null
     property var powerPanel: null
     property var weatherPanel: null
+    property var mediaPanel: null
     screen: modelData
     anchors { top: true; left: true; right: true }
     // Height tracks the tallest cell actually present instead of a fixed
@@ -33,7 +34,7 @@ PanelWindow {
     // rule floating above the bar's own (DESIGN.md rule #1, "no double
     // rules"). Every Cell-based widget below binds its own `height` back to
     // this value so its bottom rule always lands exactly on the bar's.
-    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, batteryCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight, weatherCell.implicitHeight)
+    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, nowPlayingCell.implicitHeight, batteryCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight, weatherCell.implicitHeight)
     implicitHeight: bar._cellHeight
     color: Theme.color.background
 
@@ -84,11 +85,16 @@ PanelWindow {
         id: centerRegion
         anchors.centerIn: parent
         spacing: 0
-        // Now-playing joins the clock here in M7.
 
         Clock {
             id: clockCell
             panel: bar.calendarPanel
+            height: bar._cellHeight
+        }
+
+        NowPlaying {
+            id: nowPlayingCell
+            panel: bar.mediaPanel
             height: bar._cellHeight
         }
     }

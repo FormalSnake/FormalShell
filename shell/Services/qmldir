@@ -3,3 +3,4 @@ singleton BrightnessService BrightnessService.qml
 singleton CalendarEventsService CalendarEventsService.qml
 singleton ClipboardService ClipboardService.qml
 singleton LocationService LocationService.qml
+singleton MediaService MediaService.qml

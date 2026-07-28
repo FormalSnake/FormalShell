@@ -139,6 +139,19 @@ nixpkgs.lib.nixosSystem {
           pkgs.iproute2
           pkgs.jq
           pkgs.bash
+          # M7 Task 1: MediaService needs a real MPRIS player registered on
+          # the (isolated, per-run) D-Bus session bus to exercise the
+          # now-playing bar cell/panel headlessly — mpv's own mpris.lua
+          # script is the standard way to get that without a compiled
+          # helper. mpvScripts.mpris is baked into the wrapper's
+          # --script= flags via mpv's own `scripts` override argument (see
+          # nixpkgs' pkgs/by-name/mp/mpv/package.nix), so plain `mpv` on
+          # PATH already announces itself over MPRIS. ffmpeg-headless
+          # generates the smoke script's silent fixture track at run time
+          # (dev/smoke-niri.sh --media) rather than shipping a committed
+          # binary asset.
+          (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
+          pkgs.ffmpeg-headless
         ];
 
         # No hardware sink exists in a headless VM, so AudioService.available

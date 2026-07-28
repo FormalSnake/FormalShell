@@ -43,6 +43,15 @@
 # calendar-events fixture setup below) pointed at by settings.json's
 # calendar.icsDir, so the day grid shows an accent dot on today's cell and
 # the TODAY section lists it by summary.
+# With --media, generates a short silent fixture track (ffmpeg lavfi
+# anullsrc, tagged with a title/artist via -metadata) and plays it with mpv
+# --script=<mpvScripts.mpris path> into the default (pipewire null-sink)
+# audio device in-session, so MediaService picks up a real MPRIS player —
+# `panel open media` then shows the screenshot with the panel open (album
+# art cell, meta row, transport cells, progress fill), and `media status` is
+# dumped to media-status.json so its title/artist can be cross-checked
+# against the fixture's own tags. mpv is killed by PID right after the
+# screenshot, before niri quits, so no player process outlives the run.
 # With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
@@ -89,6 +98,7 @@ osd_mode=false
 panel_mode=false
 panel_name=""
 clipboard_mode=false
+media_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -99,7 +109,8 @@ while [ $# -gt 0 ]; do
     --osd) osd_mode=true; shift ;;
     --panel) panel_mode=true; panel_name="$2"; shift 2 ;;
     --clipboard) clipboard_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard]" >&2; exit 1 ;;
+    --media) media_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media]" >&2; exit 1 ;;
   esac
 done
 
@@ -144,6 +155,31 @@ if $clipboard_mode; then
     wl_paste_bin=$(command -v wl-paste)
   else
     wl_paste_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-paste
+  fi
+fi
+
+if $media_mode; then
+  # The VM's mpv is pre-wrapped with mpvScripts.mpris baked into its
+  # --script= flags (nix/testvm.nix's `mpv.override { scripts = ... }`), so
+  # plain `mpv` on PATH there already announces itself over MPRIS. A host
+  # without that package wired in gets the exact same wrapped derivation
+  # built from this repo's own pinned nixpkgs input, not the flake registry
+  # (`.override` isn't expressible as a flake installable attribute path).
+  if command -v mpv >/dev/null 2>&1; then
+    mpv_bin=$(command -v mpv)
+  else
+    mpv_bin=$(nix build --no-link --print-out-paths --impure --expr '
+      let
+        flake = builtins.getFlake (toString ./.);
+        pkgs = flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+      in
+        pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; }
+    ')/bin/mpv
+  fi
+  if command -v ffmpeg >/dev/null 2>&1; then
+    ffmpeg_bin=$(command -v ffmpeg)
+  else
+    ffmpeg_bin=$(nix build 'nixpkgs#ffmpeg-headless^out' --no-link --print-out-paths)/bin/ffmpeg
   fi
 fi
 
@@ -219,6 +255,8 @@ clip_list1_path="$shot_dir/clip-list-1.json"
 clip_list2_path="$shot_dir/clip-list-2.json"
 clip_copy_path="$shot_dir/clip-copy.txt"
 clip_paste_path="$shot_dir/clip-paste.txt"
+media_status_path="$shot_dir/media-status.json"
+media_pid_path="$shot_dir/mpv.pid"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -267,6 +305,45 @@ EOF
 if $wallpaper_mode; then
   wp_path="$shot_dir/wp.png"
   $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
+fi
+
+# A short silent fixture track (M7 Task 1) rather than a committed binary
+# asset — regenerated on every run so it never goes stale. The title/artist
+# tags are what MediaService/MediaPanel must display verbatim, and what the
+# post-run `media status` cross-check below compares against.
+if $media_mode; then
+  media_track_path="$shot_dir/smoke-track.flac"
+  media_track_title="FormalShell Smoke Track"
+  media_track_artist="FormalShell Test Artist"
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
+    -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
+    -c:a flac -y "$media_track_path"
+
+  # Script files (same rationale as menu_mode's below: real files sidestep
+  # quoting hell through both this generator and niri's KDL string parser).
+  # mpv's PID is written before the exec — exec replaces the shell's own
+  # process image without forking, so $$ recorded here is exactly mpv's
+  # eventual PID, letting the kill script target it precisely. A plain
+  # `pkill -f <fixture path>` was tried first and self-matched: its own
+  # invoking `sh -c "... pkill -f '<path>' ..."` argv contains that same
+  # path substring, so pkill killed its own parent shell before the
+  # trailing `niri msg action quit` ever ran, and the run only ended when
+  # the outer `timeout 30` fired.
+  media_play_script="$shot_dir/media-play.sh"
+  cat > "$media_play_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+echo \$\$ > "$media_pid_path"
+exec "$mpv_bin" --no-video --really-quiet "$media_track_path"
+EOF
+
+  media_kill_script="$shot_dir/media-kill.sh"
+  cat > "$media_kill_script" <<EOF
+#!/usr/bin/env bash
+if [ -f "$media_pid_path" ]; then
+  kill "\$(cat "$media_pid_path")" 2>/dev/null || true
+fi
+EOF
 fi
 
 # --menu's IPC steps are written as standalone helper scripts (rather than
@@ -390,6 +467,11 @@ fi
   if $clipboard_mode; then
     echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
   fi
+  if $media_mode; then
+    echo "spawn-at-startup \"bash\" \"$media_play_script\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open media\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call media status > $media_status_path 2>&1\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -417,7 +499,14 @@ fi
     # for the menu to render before the shot.
     screenshot_delay=13
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # media_mode's mpv is killed by PID (media-kill.sh, written above) right
+  # after the screenshot, before quit — it has no auto-close of its own and
+  # would otherwise outlive the run.
+  media_kill=""
+  if $media_mode; then
+    media_kill="bash '$media_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 HOME="$iso_home" \
@@ -501,6 +590,23 @@ if $clipboard_mode; then
   fi
   if ! grep -q "clipboard smoke two" "$clip_paste_path"; then
     echo "SMOKE_FAIL: system clipboard did not flip to the re-copied entry — got: $(cat "$clip_paste_path")" >&2; exit 1
+  fi
+fi
+
+if $media_mode; then
+  if [ -s "$media_status_path" ]; then
+    cat "$media_status_path"
+  else
+    echo "SMOKE_FAIL: no media status produced" >&2; exit 1
+  fi
+  if ! grep -q '"available":true' "$media_status_path"; then
+    echo "SMOKE_FAIL: media status reports no player available — got: $(cat "$media_status_path")" >&2; exit 1
+  fi
+  if ! grep -q "\"title\":\"$media_track_title\"" "$media_status_path"; then
+    echo "SMOKE_FAIL: media status title does not match the fixture track's tag ($media_track_title) — got: $(cat "$media_status_path")" >&2; exit 1
+  fi
+  if ! grep -q "\"artist\":\"$media_track_artist\"" "$media_status_path"; then
+    echo "SMOKE_FAIL: media status artist does not match the fixture track's tag ($media_track_artist) — got: $(cat "$media_status_path")" >&2; exit 1
   fi
 fi
 

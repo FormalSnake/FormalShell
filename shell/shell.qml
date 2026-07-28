@@ -30,6 +30,7 @@ ShellRoot {
                 bluetoothPanel: bluetoothPanelInstance
                 powerPanel: powerPanelInstance
                 weatherPanel: weatherPanelInstance
+                mediaPanel: mediaPanelInstance
             }
         }
     }
@@ -65,6 +66,7 @@ ShellRoot {
     BluetoothPanel { id: bluetoothPanelInstance }
     PowerPanel { id: powerPanelInstance }
     WeatherPanel { id: weatherPanelInstance }
+    MediaPanel { id: mediaPanelInstance }
 
     DebugIpc { menu: menu }
     ThemeIpc {}
@@ -72,6 +74,7 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance }) }
     ClipboardIpc {}
+    MediaIpc {}
 }
