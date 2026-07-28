@@ -103,6 +103,23 @@
 # `menu summon clipboard` so the run's screenshot shows the provider's rows
 # rendered as real menu cells, left open through smoke.png/SMOKE_OK same as
 # --panel.
+# With --picker, generates a handful of fixture PNGs (imagemagick, one solid
+# color each) into a directory pointed at by settings.json's picker.directory,
+# then drives the `picker` IPC target: `summon` opens the wallpaper-mode grid
+# (screenshotted as picker-grid.png — cursor cell inverted on the first
+# image, proving the surface itself), `choose` picks a non-first fixture by
+# path — the same action Enter/click on a cell would take, exposed over IPC
+# rather than relying on unproven real keyboard/pointer delivery into an
+# OnDemand-focus layer surface, the same "verify the action, not the input
+# method" idiom every other mode already uses (media/wallpaper/lock) — which
+# sets the wallpaper exactly like `wallpaper set` (picker-theme-status.json,
+# same `theme status` proof `--wallpaper` uses, confirms ThemeEngine actually
+# retheme'd). Then `select` reopens the grid over the same directory in the
+# generic image-selector mode with a caller token, `choose` picks a different
+# fixture, and `close`'s already-happened write to
+# picker-selection.txt is read back (picker-selection.txt) to prove the
+# request/answer handshake — MenuIpc's select()/input() pattern, reused
+# rather than reinvented.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -138,6 +155,7 @@ clipboard_mode=false
 media_mode=false
 lock_mode=false
 screensaver_mode=false
+picker_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -151,7 +169,8 @@ while [ $# -gt 0 ]; do
     --media) media_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
     --screensaver) screensaver_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver]" >&2; exit 1 ;;
+    --picker) picker_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--picker]" >&2; exit 1 ;;
   esac
 done
 
@@ -170,7 +189,7 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode; then
+if $wallpaper_mode || $picker_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -335,6 +354,9 @@ ss_auto_status_path="$shot_dir/screensaver-auto-status.json"
 ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
 ss_manual_path="$shot_dir/screensaver-manual.png"
 ss_final_status_path="$shot_dir/screensaver-final-status.json"
+picker_grid_path="$shot_dir/picker-grid.png"
+picker_theme_status_path="$shot_dir/picker-theme-status.json"
+picker_selection_path="$shot_dir/picker-selection.txt"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -395,9 +417,25 @@ screensaver_settings=""
 if $screensaver_mode; then
   screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true}'
 fi
+# picker_mode (M7 Task 6): picker.directory points at a fixture directory of
+# a handful of generated solid-color PNGs (below), so --picker's grid
+# screenshot shows real images and its `choose` calls pick real files rather
+# than paths that merely happen to parse.
+picker_settings=""
+picker_dir="$iso_home/.local/share/formalshell/pictures"
+if $picker_mode; then
+  mkdir -p "$picker_dir"
+  picker_settings=', "picker": {"directory": "'"$picker_dir"'"}'
+fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings}
 EOF
+
+if $picker_mode; then
+  for name_color in "img-0:#c0392b" "img-1:#27ae60" "img-2:#2980b9" "img-3:#f1c40f" "img-4:#8e44ad"; do
+    $convert_bin -size 64x64 "xc:${name_color#*:}" "$picker_dir/${name_color%:*}.png"
+  done
+fi
 
 if $wallpaper_mode; then
   wp_path="$shot_dir/wp.png"
@@ -595,6 +633,34 @@ sleep 1
 EOF
 fi
 
+# --picker: summon opens the wallpaper-mode grid (cursor defaults to index 0,
+# so the screenshot needs no keypress at all to show the cursor cell
+# inverted); choose picks a non-first fixture by path, over IPC — the same
+# _choose() function Enter/click on a cell would call — proving both that a
+# real selection sets the wallpaper (picker-theme-status.json, same
+# `theme status` proof --wallpaper already uses) and, via a second
+# select()/choose() round trip over an explicit token, that the generic
+# image-selector's answer channel actually resolves.
+if $picker_mode; then
+  picker_drive_script="$shot_dir/picker-drive.sh"
+  cat > "$picker_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call picker summon > /dev/null 2>&1
+sleep 2
+niri msg action screenshot-screen --path "$picker_grid_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
+sleep 1
+cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
+EOF
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -661,6 +727,9 @@ fi
     echo "spawn-at-startup \"bash\" \"$ss_play_script\""
     echo "spawn-at-startup \"bash\" \"$ss_drive_script\""
   fi
+  if $picker_mode; then
+    echo "spawn-at-startup \"bash\" \"$picker_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -700,6 +769,12 @@ fi
     # taken 4s after that, showing the ordinary session with the screensaver
     # already dismissed for good.
     screenshot_delay=20
+  elif $picker_mode; then
+    # picker-drive.sh's own final step (the selection-file readback) lands
+    # around its internal sleep sum (~10s in); this run's generic
+    # smoke.png/SMOKE_OK is taken 4s after that, showing the ordinary session
+    # with the picker already closed again.
+    screenshot_delay=14
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -912,6 +987,37 @@ if $screensaver_mode; then
     :
   else
     echo "SMOKE_FAIL: screensaver did not report active:false after the final stop — got: $(cat "$ss_final_status_path" 2>/dev/null)" >&2; exit 1
+  fi
+fi
+
+if $picker_mode; then
+  if [ -f "$picker_grid_path" ]; then
+    echo "SMOKE_PICKER_GRID $picker_grid_path"
+  else
+    echo "SMOKE_FAIL: no picker-grid screenshot produced" >&2; exit 1
+  fi
+  # Wallpaper-mode proof: choosing a fixture over IPC must have run
+  # Core.State.setWallpaper() -> ThemeEngine.retheme(), the same `theme
+  # status` check --wallpaper already relies on.
+  if [ -s "$picker_theme_status_path" ]; then
+    cat "$picker_theme_status_path"
+  else
+    echo "SMOKE_FAIL: no picker theme-status produced" >&2; exit 1
+  fi
+  if ! grep -q "\"wallpaper\":\"$picker_dir/img-3.png\"" "$picker_theme_status_path"; then
+    echo "SMOKE_FAIL: theme status did not report the picker-chosen wallpaper — got: $(cat "$picker_theme_status_path")" >&2; exit 1
+  fi
+  # Generic image-selector proof: the second choose(), made against a
+  # select()-mode request, must resolve that request's token with the
+  # chosen path — the same request/answer handshake MenuIpc's select()
+  # verifies via menu-selection.txt.
+  if [ -s "$picker_selection_path" ]; then
+    cat "$picker_selection_path"
+  else
+    echo "SMOKE_FAIL: no picker-selection.txt produced" >&2; exit 1
+  fi
+  if ! grep -q '"token":"tok-picker"' "$picker_selection_path" || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
+    echo "SMOKE_FAIL: picker-selection.txt did not resolve tok-picker with the chosen path — got: $(cat "$picker_selection_path")" >&2; exit 1
   fi
 fi
 

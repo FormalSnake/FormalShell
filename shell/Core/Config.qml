@@ -18,7 +18,10 @@ import QtQuick
 // (bool, default true — Screensaver.qml's live guard against auto-activating
 // while MediaService.isPlaying), screensaver.lockAfterSeconds (number,
 // default 0 — Screensaver.qml's optional chain into Lock once already
-// showing; 0 disables the chain, M7 Task 5).
+// showing; 0 disables the chain, M7 Task 5). picker.directory (string,
+// default "" — ImagePicker's configured wallpaper directory, scanned by its
+// summon()/wallpaper mode; select()'s generic-image-selector mode takes an
+// arbitrary directory as an IPC argument instead, M7 Task 6).
 Singleton {
     id: root
 

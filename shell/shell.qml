@@ -10,6 +10,7 @@ import qs.Surfaces.Osd
 import qs.Surfaces.Panels
 import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
+import qs.Surfaces.Picker
 import qs.Ipc
 
 ShellRoot {
@@ -79,6 +80,7 @@ ShellRoot {
     PowerPanel { id: powerPanelInstance }
     WeatherPanel { id: weatherPanelInstance }
     MediaPanel { id: mediaPanelInstance }
+    ImagePicker { id: imagePickerInstance }
 
     DebugIpc { menu: menu }
     ThemeIpc {}
@@ -91,4 +93,5 @@ ShellRoot {
     MediaIpc {}
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
+    PickerIpc { picker: imagePickerInstance }
 }
