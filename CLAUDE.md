@@ -44,9 +44,12 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   plus fires one more `notify-send`, waits for it to auto-expire into
   `pending`, then summons the notification center over the `notifications`
   IPC target and screenshots it (DND cell, `PENDING / n` header, per-row
-  cells). The sticky critical popup from `--notify` stays visible in its own
-  Overlay-layer stack above the center's Top layer — both top-right anchored,
-  neither yields; a known, accepted overlap (2026-07-28), not a bug to chase.
+  cells). The sticky critical popup from `--notify` is still live in
+  `NotificationService.popups`, but Toasts.qml suppresses its own
+  Overlay-layer stack for as long as the center is open (both surfaces are
+  top-right anchored, so left un-suppressed the popup would sit on top of
+  the center's own corner) — the screenshot shows the center alone, and the
+  popup reappears once the center closes.
 - `dev/smoke-niri.sh --osd` — drives the bottom-center OSD three ways: a
   manual `qs ipc call osd volume` (screenshotted separately as
   `osd-manual.png`), a real `wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` (the
