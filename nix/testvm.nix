@@ -23,6 +23,7 @@ nixpkgs.lib.nixosSystem {
     # wires it into documentation.nixos.extraModules) — nix-builder-vm.nix
     # imports it explicitly for the same reason.
     (nixpkgs + "/nixos/modules/virtualisation/qemu-vm.nix")
+    self.nixosModules.formalshell
     ({ pkgs, ... }:
       let
         quickshellPkg = quickshell.packages.aarch64-linux.default;
@@ -159,16 +160,14 @@ nixpkgs.lib.nixosSystem {
         };
         security.sudo.wheelNeedsPassword = false;
         services.getty.autologinUser = "test";
-        # M7 Task 3: Lock.qml's PamContext authenticates against this
-        # service by name rather than reusing "login" (console-specific
-        # checks — pam_securetty and friends — that a lock screen has no
-        # business inheriting). Bare `{ }` picks up the pam module's own
-        # sane defaults (unixAuth = true), same idiom nixpkgs' own
-        # hyprlock/dms-greeter modules use for their lock/greeter PAM
-        # services. A real deployment needs the same system-side
-        # declaration (Task 7 documents it — the home-manager module alone
-        # cannot create a PAM service).
-        security.pam.services.formalshell-lock = { };
+        # M8 Task 3: nixosModules.formalshell declares the
+        # "formalshell-lock" PAM service Lock.qml's PamContext authenticates
+        # against (console-specific checks like pam_securetty that a lock
+        # screen has no business inheriting are why it's a dedicated service
+        # rather than reusing "login"), plus geoclue2/NetworkManager/
+        # bluez/UPower/power-profiles-daemon/pipewire below — see
+        # nix/nixos-module.nix for the per-service rationale.
+        services.formalshell.enable = true;
 
         # M8 Task 2: a real greetd instance, hand-declared here the same way
         # formalshell-lock's PAM service is above — Task 3/4's NixOS modules
@@ -287,8 +286,9 @@ nixpkgs.lib.nixosSystem {
         # node with no backing hardware — wireplumber then picks it as the
         # default sink since it's the only one, and AudioService's
         # Pipewire.defaultAudioSink binds it exactly as it would a real card.
+        # (enable itself now comes from services.formalshell.pipewire — M8
+        # Task 3 — this block only adds the virtual sink the enable pulls in.)
         services.pipewire = {
-          enable = true;
           pulse.enable = true;
           extraConfig.pipewire."10-virtual-sink" = {
             "context.objects" = [
@@ -309,29 +309,28 @@ nixpkgs.lib.nixosSystem {
         hardware.graphics.enable = true;
         security.polkit.enable = true;
 
-        # M6 Task 6: the network panel needs a real NetworkManager-managed
-        # device to enumerate (the virtio NIC gives a genuine wired
-        # connection); the bluetooth panel needs bluez running even though
-        # QEMU's aarch64 "virt" machine has no adapter at all — its honest
-        # "NO ADAPTER" state is the expected, passing screenshot.
-        networking.networkmanager.enable = true;
-        hardware.bluetooth.enable = true;
+        # M6 Task 6 (enable now via services.formalshell.networkmanager/
+        # bluetooth — M8 Task 3): the network panel needs a real
+        # NetworkManager-managed device to enumerate (the virtio NIC gives a
+        # genuine wired connection); the bluetooth panel needs bluez running
+        # even though QEMU's aarch64 "virt" machine has no adapter at all —
+        # its honest "NO ADAPTER" state is the expected, passing screenshot.
 
-        # M6 Task 7: the power panel needs a real power-profiles-daemon to
-        # drive its profile picker; upower backs UPower.displayDevice, which
-        # QEMU's aarch64 "virt" machine reports as AC-only (no battery at
-        # all) — the panel's honest "AC POWER" state is the expected,
-        # passing screenshot, same as bluetooth's "NO ADAPTER".
-        services.power-profiles-daemon.enable = true;
-        services.upower.enable = true;
+        # M6 Task 7 (enable now via services.formalshell.powerProfiles/
+        # upower — M8 Task 3): the power panel needs a real
+        # power-profiles-daemon to drive its profile picker; upower backs
+        # UPower.displayDevice, which QEMU's aarch64 "virt" machine reports
+        # as AC-only (no battery at all) — the panel's honest "AC POWER"
+        # state is the expected, passing screenshot, same as bluetooth's
+        # "NO ADAPTER".
 
-        # M6 Task 8: LocationService's PositionSource wants a genuine geoclue2
-        # D-Bus backend to talk to (not a fake fix) — this VM's virtio NIC has
-        # no Wi-Fi radio to associate with, so geoclue never actually produces
-        # a position and the panel's honest "NO LOCATION" state is what the
-        # smoke screenshot shows; the manual settings.json lat/lon override is
-        # the actually-exercised path.
-        services.geoclue2.enable = true;
+        # M6 Task 8 (enable now via services.formalshell.geoclue — M8 Task
+        # 3): LocationService's PositionSource wants a genuine geoclue2
+        # D-Bus backend to talk to (not a fake fix) — this VM's virtio NIC
+        # has no Wi-Fi radio to associate with, so geoclue never actually
+        # produces a position and the panel's honest "NO LOCATION" state is
+        # what the smoke screenshot shows; the manual settings.json lat/lon
+        # override is the actually-exercised path.
 
         fonts = {
           packages = [ pkgs.nerd-fonts.jetbrains-mono ];
