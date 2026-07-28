@@ -93,8 +93,8 @@ Panel {
                 SequentialAnimation on opacity {
                     running: root._charging
                     loops: Animation.Infinite
-                    NumberAnimation { to: 0.4; duration: 900; easing.type: Easing.InOutQuad }
-                    NumberAnimation { to: 1.0; duration: 900; easing.type: Easing.InOutQuad }
+                    NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                    NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
                 }
             }
 

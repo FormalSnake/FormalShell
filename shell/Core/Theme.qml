@@ -49,6 +49,20 @@ Singleton {
 
     readonly property var spacing: ({ scale: 1.0, xs: 2, sm: 4, md: 8, lg: 16 })
 
+    // --- DESIGN.md §4 motion posture ---------------------------------------
+    // State changes are instant or near-instant (no animated call site exists
+    // for one today — nothing to tokenize until a surface actually needs the
+    // 120-420ms eased transition DESIGN.md allows). The "breathing" opacity
+    // pulse is the one documented alive idiom (charging, an active call);
+    // PowerPanel.qml's charging pulse is its only call site today. The
+    // screensaver's continuous frame effect (Screensaver.qml) is the other
+    // named carve-out and isn't a QML Animation at all, so it has no token
+    // here. Nothing moves geometry anywhere in the shell.
+    readonly property var motion: ({
+        pulseDuration: 900,
+        pulseEasing: Easing.InOutQuad
+    })
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
