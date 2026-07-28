@@ -53,6 +53,7 @@
         }))
         (forAllSystems (system: pkgs: rec {
           formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; };
+          formalshell-greeter = pkgs.callPackage ./nix/greeter-package.nix { quickshell = qsFor system; };
           default = formalshell;
         }));
 
@@ -71,7 +72,7 @@
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
         } ''
           cd ${./.}
-          qmllint -I ${qsFor system}/lib/qt-6/qml -I ${pkgs.qt6.qtdeclarative}/lib/qt-6/qml --bare $(find shell -name '*.qml') 2>&1 | tee $out.log
+          qmllint -I ${qsFor system}/lib/qt-6/qml -I ${pkgs.qt6.qtdeclarative}/lib/qt-6/qml --bare $(find shell greeter -name '*.qml') 2>&1 | tee $out.log
           touch $out
         '';
       }));

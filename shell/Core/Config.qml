@@ -22,6 +22,11 @@ import QtQuick
 // default "" — ImagePicker's configured wallpaper directory, scanned by its
 // summon()/wallpaper mode; select()'s generic-image-selector mode takes an
 // arbitrary directory as an IPC argument instead, M7 Task 6).
+// greeter.sessionCommand (array of strings, default ["niri"] — greeter.qml's
+// Greetd.launch() argv once a login succeeds; the `greeter` system user has
+// no real settings.json of its own, so this is really just this key's
+// documented fallback today — a real deployment's session choice belongs in
+// nixosModules.formalshell-greeter, M8 Task 4).
 Singleton {
     id: root
 
