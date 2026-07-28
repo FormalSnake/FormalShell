@@ -178,14 +178,16 @@ PanelWindow {
     }
     readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
     // Content gets a `popupPadding` gutter (DESIGN.md's omarchy card chrome:
-    // "internal padding") only on the top/left, where nothing else closes
-    // the ring — right/bottom stay flush to the frame's own edge, so the
-    // last row's own shared-rule border (Cell's bottom+right contract,
-    // unchanged) is what closes those two sides, same as it always has.
-    // Padding every side would leave the frame's explicit border and each
-    // row's own inset border drawn 14px apart — a doubled ring.
-    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth - Core.Theme.space.popupPadding
-    readonly property real _chrome: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+    // "internal padding") on all four sides now — the frame draws its own
+    // explicit ring on all four (below). Rows still draw their own
+    // bottom+right per Cell's shared-rule contract (needed for the divider
+    // between adjacent rows), which would otherwise double the frame's
+    // right/bottom rule `popupPadding` apart — the two eraser rectangles
+    // below paint over just that trailing hairline with the frame's own
+    // background color, leaving the frame's rule as the single visible line
+    // on every edge (same technique as Panel.qml's `_contentWidth`).
+    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.popupPadding * 2
+    readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.popupPadding * 2
     readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height))
 
     readonly property string _stateDir: {
@@ -525,13 +527,12 @@ PanelWindow {
     }
 
     // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
-    // bordered rectangle") — explicit on top/left, where the popupPadding
-    // gutter below means nothing else would close those two sides. Right and
-    // bottom get no explicit rule here: the search field and result rows
-    // (Cell's shared-rule contract, unchanged) sit flush against those two
-    // edges, so the last row's own bottom+right rule closes the ring by
-    // itself, same as it always has — an explicit rule there too would just
-    // double up 14px inside it.
+    // bordered rectangle") — explicit on all four sides, with the
+    // popupPadding gutter below insetting content uniformly. The search
+    // field and result rows still close their own bottom+right per Cell's
+    // shared-rule contract (needed for the divider between adjacent rows);
+    // the eraser rectangles further down paint over just the trailing
+    // hairline that would otherwise double these two rules.
     Rectangle {
         id: topRule
         anchors.top: parent.top
@@ -546,6 +547,22 @@ PanelWindow {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         width: Core.Theme.borderWidth
+        color: Core.Theme.color.rule
+    }
+
+    Rectangle {
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        width: Core.Theme.borderWidth
+        color: Core.Theme.color.rule
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: Core.Theme.borderWidth
         color: Core.Theme.color.rule
     }
 
@@ -642,5 +659,28 @@ PanelWindow {
             onActivate: root._activateRow(index)
             onHoverIn: root._setCursor(index)
         }
+    }
+
+    // Erases the trailing hairline searchCell and every row draw along
+    // their own right edge (Cell's shared-rule contract) — without this,
+    // that continuous line and the frame's own right rule above would read
+    // as two parallel borders `popupPadding` apart.
+    Rectangle {
+        anchors.top: searchCell.top
+        anchors.right: rowsView.right
+        anchors.bottom: rowsView.bottom
+        width: Core.Theme.borderWidth
+        color: Core.Theme.color.background
+    }
+
+    // Same erasure for the bottom: the last row's own bottom rule sits
+    // flush with rowsView's own bottom edge whenever the rows fit without
+    // scrolling, which would otherwise double the frame's own bottom rule.
+    Rectangle {
+        anchors.left: rowsView.left
+        anchors.right: rowsView.right
+        anchors.bottom: rowsView.bottom
+        height: Core.Theme.borderWidth
+        color: Core.Theme.color.background
     }
 }

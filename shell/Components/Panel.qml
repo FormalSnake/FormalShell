@@ -58,17 +58,19 @@ PanelWindow {
     }
 
     // Content gets a `panelPadding` gutter (DESIGN.md §Panels "card internal
-    // padding") only on the top/left, where nothing else closes the ring —
-    // right/bottom stay flush to the frame's own edge exactly like before,
-    // so the last row's own shared-rule border (Cell's bottom+right
-    // contract, unchanged) is what closes those two sides, same as it always
-    // has. Padding both sides of every edge would leave the frame's explicit
-    // border and each row's own inset border drawn 18px apart — a doubled
-    // ring — since nothing needs a right/bottom rule two places at once.
-    readonly property real _contentWidth: root.panelWidth - Theme.borderWidth - Theme.space.panelPadding
+    // padding") on all four sides now — the frame draws its own explicit
+    // ring on all four (below), so content's rows sit deliberately inset
+    // everywhere instead of the old top/left-only gutter. Rows still draw
+    // their own bottom+right per Cell's shared-rule contract (needed for the
+    // divider between adjacent rows), which would otherwise double the
+    // frame's new right/bottom rule 18px apart — the two `_edgeEraser`
+    // rectangles below paint over just that trailing hairline with the
+    // frame's own background color, leaving the frame's rule as the single
+    // visible line on every edge.
+    readonly property real _contentWidth: root.panelWidth - Theme.borderWidth * 2 - Theme.space.panelPadding * 2
 
     readonly property real _maxContentHeight: root._screen ? root._screen.height * 0.6 : 400
-    readonly property real _frameHeight: Theme.borderWidth + Theme.space.panelPadding
+    readonly property real _frameHeight: Theme.borderWidth * 2 + Theme.space.panelPadding * 2
         + titleCell.height + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
 
     function open(x) {
@@ -152,10 +154,21 @@ PanelWindow {
                 color: Theme.color.rule
             }
 
-            // No explicit right/bottom rule here — the last content row's
-            // own bottom+right rule (Cell's shared-rule contract) is flush
-            // against these two edges and closes the ring by itself, same as
-            // topRule/the left rule above do for their two sides.
+            Rectangle {
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                width: Theme.borderWidth
+                color: Theme.color.rule
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: Theme.borderWidth
+                color: Theme.color.rule
+            }
 
             Cell {
                 id: titleCell
@@ -169,11 +182,14 @@ PanelWindow {
             }
 
             Flickable {
+                id: contentFlickable
                 anchors.top: titleCell.bottom
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.borderWidth + Theme.space.panelPadding
                 anchors.right: parent.right
+                anchors.rightMargin: Theme.borderWidth + Theme.space.panelPadding
                 anchors.bottom: parent.bottom
+                anchors.bottomMargin: Theme.borderWidth + Theme.space.panelPadding
                 clip: true
                 contentWidth: width
                 contentHeight: contentColumn.implicitHeight
@@ -182,6 +198,32 @@ PanelWindow {
                     id: contentColumn
                     width: parent.width
                 }
+            }
+
+            // Erases the trailing hairline every row (and titleCell itself)
+            // draws along its own right edge (Cell's shared-rule contract) —
+            // without this, that continuous line and the frame's own right
+            // rule above would read as two parallel borders `panelPadding`
+            // apart, the exact doubling b044c8e fixed for the old flush
+            // layout.
+            Rectangle {
+                anchors.top: titleCell.top
+                anchors.right: contentFlickable.right
+                anchors.bottom: contentFlickable.bottom
+                width: Theme.borderWidth
+                color: Theme.color.background
+            }
+
+            // Same erasure for the bottom: the last row's own bottom rule
+            // sits flush with contentFlickable's own bottom edge whenever
+            // content fits without scrolling, which would otherwise double
+            // the frame's own bottom rule above.
+            Rectangle {
+                anchors.left: contentFlickable.left
+                anchors.right: contentFlickable.right
+                anchors.bottom: contentFlickable.bottom
+                height: Theme.borderWidth
+                color: Theme.color.background
             }
         }
     }

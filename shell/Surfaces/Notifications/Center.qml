@@ -129,7 +129,7 @@ PanelWindow {
                     text: "DND"
                     color: dndCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                     font.capitalization: Font.AllUppercase
                     font.letterSpacing: 1
                 }

@@ -98,25 +98,25 @@ PanelWindow {
             id: _mIconVolume
             text: "󰕾"
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.title
+            font.pixelSize: Theme.fontSize.title
         }
         Text {
             id: _mIconMuted
             text: "󰝟"
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.title
+            font.pixelSize: Theme.fontSize.title
         }
         Text {
             id: _mIconBrightness
             text: "󰃟"
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.title
+            font.pixelSize: Theme.fontSize.title
         }
         Text {
             id: _mIconMedia
             text: "󰝚"
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.title
+            font.pixelSize: Theme.fontSize.title
         }
         MetaLabel { id: _mLabelVolume; text: "VOLUME" }
         MetaLabel { id: _mLabelBrightness; text: "BRIGHTNESS" }
@@ -125,7 +125,7 @@ PanelWindow {
             id: _mValuePercent
             text: "100%"
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
     }
 
@@ -142,7 +142,7 @@ PanelWindow {
     readonly property int _valueWidth: _mValuePercent.implicitWidth
 
     // Every cell measures to its own content's natural height (icon at
-    // Theme.font.title vs. the value column's stacked percent+bar), so the
+    // Theme.fontSize.title vs. the value column's stacked percent+bar), so the
     // shared row height is the tallest of the three regardless of which
     // kind is currently showing — keeps the card's height fixed too.
     readonly property int _rowHeight: Math.max(iconCell.implicitHeight, labelCell.implicitHeight, valueCell.implicitHeight)
@@ -201,7 +201,7 @@ PanelWindow {
                         : (AudioService.muted ? "󰝟" : "󰕾")
                     color: iconCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.title
+                    font.pixelSize: Theme.fontSize.title
                 }
             }
 
@@ -248,7 +248,7 @@ PanelWindow {
                         text: valueCell._percent + "%"
                         color: valueCell.foreground
                         font.family: Theme.font.family
-                        font.pixelSize: Theme.font.body
+                        font.pixelSize: Theme.fontSize.body
                     }
 
                     // Flat accent fill, no thumb, no radius — DESIGN.md's

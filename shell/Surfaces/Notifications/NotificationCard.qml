@@ -78,7 +78,7 @@ Cell {
                         text: root.entry.summary
                         color: root.foreground
                         font.family: Theme.font.family
-                        font.pixelSize: Theme.font.body
+                        font.pixelSize: Theme.fontSize.body
                         font.bold: true
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
@@ -91,7 +91,7 @@ Cell {
                         text: root.entry.body
                         color: root.foreground
                         font.family: Theme.font.family
-                        font.pixelSize: Theme.font.bodySmall
+                        font.pixelSize: Theme.fontSize.bodySmall
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
                         maximumLineCount: 2
@@ -122,7 +122,7 @@ Cell {
                     // foreground apply.
                     color: dismissCell.selected ? dismissCell.foreground : root.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                 }
 
                 MouseArea {
@@ -163,7 +163,7 @@ Cell {
                         // Same reasoning as the dismiss cell above.
                         color: actionCell.selected ? actionCell.foreground : root.foreground
                         font.family: Theme.font.family
-                        font.pixelSize: Theme.font.bodySmall
+                        font.pixelSize: Theme.fontSize.bodySmall
                     }
 
                     MouseArea {

@@ -192,7 +192,7 @@ Item {
                     visible: false
                     text: "M"
                     font.family: Core.Theme.font.family
-                    font.pixelSize: Core.Theme.font.body * 2.4
+                    font.pixelSize: Core.Theme.fontSize.body * 2.4
                 }
 
                 readonly property int _cellWidth: Math.max(1, Math.ceil(metric.implicitWidth))
