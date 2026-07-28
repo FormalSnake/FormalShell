@@ -233,10 +233,13 @@ behavior on hosts where a real owner exists.
   org.freedesktop.Notifications`'s owner PID on the **host** bus is unchanged
   before and after every run (`|| true`-tolerant of a legitimate "no owner"
   answer, e.g. on the mac VM rig, which has no desktop bus owner at all).
-- **Design language**: every UI surface follows `docs/DESIGN.md` (mek.gallery-derived
-  ruled-ledger grid: shared hairline rules, cells not cards, inversion for
-  selection, accent as full-bleed cells, uppercase meta labels, radius 0).
-  Read it before building or restyling any surface.
+- **Design language**: every UI surface follows `docs/DESIGN.md` — Omarchy
+  quattro close reference (four-state control tokens, border specs, rem/
+  spacing scale roots, bordered floating cards), mek.gallery as an ASCII-OS
+  accent on tabular content (ruled rows, uppercase meta labels, fg/bg
+  inversion for selection, accent as full-bleed cells), radius 0, monospace,
+  DMS for feature ideas only. Read it before building or restyling any
+  surface.
 - **`panel` IPC target is a spec addendum, not a conflict.** The design
   spec's §IPC target list (`docs/superpowers/specs/2026-07-27-formalshell-design.md`)
   predates per-widget popouts and doesn't name `panel`. The M6 plan added it
