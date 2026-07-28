@@ -42,8 +42,6 @@ PanelWindow {
     // dispatch below.
     signal keyPressed(var event)
 
-    readonly property int _barHeight: 32
-
     readonly property var _screen: {
         var name = CompositorService.focusedOutputName;
         var screens = Quickshell.screens;
@@ -63,6 +61,9 @@ PanelWindow {
     readonly property real _frameHeight: Theme.borderWidth + titleCell.height + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
 
     function open(x) {
+        if (PanelRegistry.current && PanelRegistry.current !== root)
+            PanelRegistry.current.close();
+        PanelRegistry.current = root;
         root.anchorX = x !== undefined ? x : -1;
         root.isOpen = true;
         Qt.callLater(function () { backdrop.forceActiveFocus(); });
@@ -70,6 +71,8 @@ PanelWindow {
 
     function close() {
         root.isOpen = false;
+        if (PanelRegistry.current === root)
+            PanelRegistry.current = null;
     }
 
     function toggle(x) {
@@ -99,7 +102,7 @@ PanelWindow {
         Item {
             id: frame
             x: root._frameX
-            y: root._barHeight
+            y: Theme.barHeight
             width: root.panelWidth
             height: root._frameHeight
 

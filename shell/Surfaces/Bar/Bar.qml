@@ -37,6 +37,15 @@ PanelWindow {
     implicitHeight: bar._cellHeight
     color: Theme.color.background
 
+    // Panel.qml anchors every popout's top edge under the bar — it has no
+    // other way to know this bar's actual (content-derived) height, since
+    // Wayland gives clients no cross-window geometry.
+    Binding {
+        target: Theme
+        property: "barHeight"
+        value: bar._cellHeight
+    }
+
     // Bottom edge: one rule against the desktop.
     Rectangle {
         anchors.left: parent.left

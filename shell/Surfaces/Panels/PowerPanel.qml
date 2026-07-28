@@ -22,7 +22,7 @@ Panel {
     readonly property var _device: UPower.displayDevice
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
-    readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage) : 0
+    readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
 
     // Fixed order matching the PowerProfile enum, so `_profiles[i] === i` —
     // PowerProfilesQml exposes no enumerable "available profiles" list, only

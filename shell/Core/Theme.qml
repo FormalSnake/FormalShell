@@ -12,6 +12,13 @@ Singleton {
     readonly property int borderWidth: 2
     readonly property int radius: 0
 
+    // Live bar height, reported by Bar.qml's own content-derived
+    // _cellHeight (a fixed literal here would drift the moment any bar cell
+    // grows taller than the rest, per Bar.qml's own header comment). The 32
+    // default only covers the brief window before the first Bar instance
+    // binds it.
+    property real barHeight: 32
+
     readonly property var font: ({
         family: "monospace",
         display: "monospace",

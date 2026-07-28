@@ -27,7 +27,7 @@ Cell {
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     readonly property var _device: UPower.displayDevice
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
-    readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage) : 0
+    readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
     readonly property string _glyph: {
         var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
         switch (bucket) {
