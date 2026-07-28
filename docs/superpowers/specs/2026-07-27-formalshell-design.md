@@ -172,6 +172,25 @@ binds all UI surfaces from M4 on; M9 retrofits M1–M3 surfaces. Animation postu
 (120–420ms eased color/state transitions, Omarchy's "breathing" opacity pulse
 for active-process states); no showy choreography.
 
+**Visual-language addendum (M8b, 2026-07-28): DESIGN.md's own revision
+governs, this is not a conflict.** The paragraph above already delegates the
+visual language to `docs/DESIGN.md` ("Codified as... in... docs/DESIGN.md...
+That doc binds all UI surfaces from M4 on") — so when the owner's M8b scope
+pin re-aimed the whole system at Omarchy quattro (mek.gallery downgraded to
+an ASCII-OS accent, monospace throughout, DMS for features not looks),
+`docs/DESIGN.md` was the sanctioned place to make that call, and its
+2026-07-28 revision is the current visual authority: Omarchy quattro is the
+base reference for every surface's structural chrome; mek.gallery's
+ruled-grid/inversion/uppercase-meta idiom is an accent applied only to
+tabular surfaces (menu, panel lists, picker grid, notification center);
+floating chrome (menu, panels, notifications, OSD) is an omarchy-style card,
+not a fused edge-to-edge grid; and the scale roots (`fontBaseSize`,
+`spacingScale`) replace the fixed pixel values implied above. Read
+`docs/DESIGN.md` for the live rules; the paragraph above records when the
+mek.gallery reference entered the spec, not the current rendering contract.
+No feature, IPC target, provider, or state machine changes — the delegation
+covers rendering only, exactly as it always did.
+
 **niri border sync is built in**: the shell renders the `layout {}` KDL
 fragment and calls `niri msg action load-config-file` itself (replacing the
 `niri-border` matugen template + post_hook glue in `dms.nix`).

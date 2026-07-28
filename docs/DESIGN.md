@@ -239,7 +239,7 @@ floats with a margin or fuses to the screen edge.
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),
   search field as the top row, breadcrumb as an uppercase meta row (§2.3).
-- **Panels** (audio/network/bluetooth/power/calendar/media) — each is one
+- **Panels** (audio/network/bluetooth/power/calendar/weather/media) — each is one
   omarchy-style card anchored under its bar cell (`panelGap` margin,
   bordered, radius 0, `panelPadding` internal padding). Inside: an uppercase
   `PanelSectionHeader`-equivalent caption introduces each group ("OUTPUT

@@ -132,7 +132,7 @@ described "classic ASCII style OS" character and at DMS only for feature ideas.
    ornament, terminal-grid feel — with rules an implementer can check, not
    adjectives. Where it conflicts with omarchy's look, say which wins.
 4. Keeps a **Concrete translations** section covering every surface the shell
-   now has: bar, menu, six panels, notifications, OSD, lock, greeter,
+   now has: bar, menu, seven panels, notifications, OSD, lock, greeter,
    screensaver, picker.
 5. Is honest about what changes from the current document, in a short
    "what this supersedes" note, so the M1–M3 retrofit has a checklist.
@@ -187,7 +187,8 @@ before shot → commit `feat(bar): retrofit bar and workspace cells to the revis
 `shell/Surfaces/Panels/*.qml`.
 
 **Steps:** screenshot before → implement → `just vm-smoke --menu`, and
-`--panel` for audio, network, calendar and power → Read every PNG → commit
+`--panel` for audio, network, bluetooth, power, calendar and weather → Read
+every PNG → commit
 `feat(panels): retrofit menu and panels to the revised language`; push.
 
 ---
