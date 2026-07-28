@@ -77,6 +77,52 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   reads the system clipboard back to confirm it landed, before summoning
   the menu's `clipboard` route so the screenshot shows the provider's rows
   rendered as real menu cells.
+- `dev/smoke-niri.sh --media` — plays a real MPRIS player in-session (`mpv`
+  with its own `mpris.lua` script, a generated silent fixture track tagged
+  with a title/artist, into the pipewire null sink), opens the media panel
+  over the `panel` IPC route, and screenshots it (album art cell, `NOW
+  PLAYING / mpv` meta row, transport cells, flat progress fill). `media
+  status` is dumped and cross-checked against the fixture track's own tags
+  before mpv is killed by PID.
+- `dev/smoke-niri.sh --lock` — drives the whole lock round trip over real
+  PAM. First, before the nested session even starts, runs
+  `result/bin/formalshell-lock-before-sleep` with **no shell instance
+  running at all** and records its exit code (must be `0` — the
+  `lock-before-sleep` exit-0-always contract, spec §8). Then in-session:
+  `lock lock` over IPC (screenshotted as `lock-locked.png` — oversized
+  clock, blurred wallpaper backdrop if `--wallpaper` is combined in, one
+  bordered input cell), `lock isLocked` confirms `true`, `wtype` (a real
+  virtual-keyboard-unstable-v1 client — `LockIpc.qml` deliberately has no
+  "type this password" shortcut) types a wrong password and Return
+  (screenshotted as `lock-error.png` — inverted input cell, uppercase
+  `WRONG PASSWORD` meta row), then retypes the VM's real throwaway test
+  password (`nix/testvm.nix`'s `users.users.test.password`) and Return
+  (screenshotted as `lock-unlocked.png`), with `lock isLocked`/`lock status`
+  proving the round trip flipped back to unlocked.
+- `dev/smoke-niri.sh --screensaver` — shortens `screensaver.timeoutSeconds`
+  to 3s via the isolated settings.json fixture (a real `IdleMonitor`, not a
+  fake clock) and plays the same fixture track `--media` uses so
+  `MediaService.isPlaying` is genuinely true. Proves the live media guard
+  (`screensaver status` reports `active:false` even though `isIdle` already
+  reads `true`), then kills mpv and waits past the timeout to prove the
+  screensaver auto-activates purely from the guard clearing — no
+  `screensaver start` call involved — screenshotted (`screensaver-auto.png`,
+  full-screen matrix-rain in the mono font/theme accent). `screensaver
+  stop` dismisses it, then a final explicit `start`/screenshot
+  (`screensaver-manual.png`)/`stop` proves the manual IPC path
+  independently of the idle timer.
+- `dev/smoke-niri.sh --picker` — generates a handful of solid-color fixture
+  PNGs (imagemagick) into a directory pointed at by settings.json's
+  `picker.directory`, then drives the `picker` IPC target: `summon` opens
+  the wallpaper-mode grid (screenshotted as `picker-grid.png` — cursor cell
+  inverted, ledger rules shared between cells), `choose` picks a non-first
+  fixture — the same action Enter/click on a cell take, exposed over IPC
+  rather than depending on unproven real keyboard/pointer delivery into an
+  `OnDemand`-focus layer surface — and `theme status` confirms it actually
+  became the wallpaper. Then `select` reopens the grid over the same
+  directory in the generic image-selector mode with a caller token,
+  `choose` picks a different fixture, and `picker-selection.txt` is read
+  back to confirm `{token, value}` landed.
 - `dev/smoke-hyprland.sh` — the same loop for the second backend (nested
   Hyprland, `hyprctl`/exec-once instead of niri's `spawn-at-startup`). Nested
   Hyprland is flakier than nested niri in a sandboxed dev environment; if it
@@ -146,6 +192,15 @@ behavior on hosts where a real owner exists.
   the env). If you must run `qs` ad hoc, `unset NIRI_SOCKET` first or export
   the nested session's socket explicitly. Observed failure mode: host niri
   config reloads firing during isolated testing (2026-07-27).
+- **Lock-screen safety**: never run a lock surface (`Lock.qml`'s
+  `WlSessionLock`) against anything but a nested test session. All lock
+  testing happens inside the nested niri/Hyprland session `dev/smoke-*.sh`
+  boots and tears down; a lock bug there is harmless (the whole nested
+  compositor gets killed regardless), but the same bug against a real host
+  session would leave it genuinely locked. This is the same nested-only
+  contract the general host-session-safety rule above already establishes,
+  called out separately here because a stuck lock is a much worse failure
+  mode than a stuck bar.
 - **D-Bus isolation**: the shell's `NotificationService` acquires
   `org.freedesktop.Notifications` on the session bus via
   `Quickshell.Services.Notifications.NotificationServer`. The owner's live
@@ -190,7 +245,13 @@ behavior on hosts where a real owner exists.
   `$XDG_STATE_HOME/formalshell/state.json`.
 - Brutalist defaults, non-negotiable: corner radius `0`, no blur, no
   shadows, border width `2`, font = fontconfig `monospace` alias (never a
-  hardcoded family name), icons = Nerd Font glyphs (no SVG icon sets).
+  hardcoded family name), icons = Nerd Font glyphs (no SVG icon sets). The
+  lock screen's blurred wallpaper backdrop (`LockSurface.qml`'s client-side
+  `MultiEffect`, DESIGN.md's one named exception) is the **only** blur
+  anywhere in the shell — never add blur to any other surface, and never
+  reintroduce a `ScreencopyView`-based capture for it (see `LockSurface.qml`'s
+  header comment: it crashes the whole shell outright, a fail-open on a
+  security-critical surface).
 - License MIT. Every file substantially ported from DankMaterialShell keeps
   a `// Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC)`
   header line.

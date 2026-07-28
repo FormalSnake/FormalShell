@@ -19,9 +19,15 @@ via `Quickshell.Io.Socket`.
 instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar`, one
 `Background`, and one `Toasts` popup stack per connected output; a single
 non-per-screen `Menu`, `Center` (notification history), `Osd`, and one
-instance each of the six `Panels/*.qml` popouts (they open/show on the
-focused screen at summon/trigger time rather than living on every output);
-and the `Ipc` handlers (debug/theme/wallpaper/menu/notifications/osd/panel/clipboard).
+instance each of the seven `Panels/*.qml` popouts including `MediaPanel`
+(they open/show on the focused screen at summon/trigger time rather than
+living on every output); one `Lock` (its `WlSessionLock` manages its own
+per-output surfaces internally — no `Variants` loop needed here) and one
+`Screensaver` (which *does* need its own `Variants` over
+`Quickshell.screens`, since a plain overlay layer has no such auto-multi-
+output primitive); one `ImagePicker`; and the `Ipc` handlers
+(debug/theme/wallpaper/menu/notifications/osd/panel/clipboard/media/lock/
+screensaver/picker).
 
 ## Tree layout
 
@@ -70,12 +76,19 @@ shell/
     ics.js                       pure JS, .pragma library — RFC 5545 VEVENT reader (unfold, DTSTART parse, no RRULE expansion)
   Weather/
     openmeteo.js                 pure JS, .pragma library — buildUrl()/parseResponse() with typed failure shapes
+  Media/
+    applemusic.js                 pure JS, .pragma library — URL construction, response parsing, cache-key/prune-decision logic
+  Screensaver/
+    effect.js                     pure JS, .pragma library — frameState(): matrix-rain column/glyph/decay stepping off a frame counter
   Services/
     AudioService.qml            singleton — Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
     BrightnessService.qml       singleton — brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
     ClipboardService.qml        singleton — wl-paste --watch capture, drives Clipboard/history.js, writes clipboard.json
     LocationService.qml         singleton — QtPositioning PositionSource (geoclue2), settings.json lat/lon override
     CalendarEventsService.qml   singleton — reads Calendar/ics.js over a khal/vdir-style directory (calendar.icsDir)
+    MediaService.qml             singleton — Quickshell.Services.Mpris active-player pick, transport verbs, honest available:false
+    AppleMusicArtService.qml     singleton — opt-in (media.appleMusicArt), curl-driven iTunes Search + amp-api editorialVideo, cached MP4s
+    IdleService.qml               singleton — one shared IdleMonitor (respectInhibitors:true), screensaver.timeoutSeconds
     qmldir
   Notifications/
     model.js                    pure JS, .pragma library — three-tier reducer (popups/pending/past), DND bypass rule
@@ -90,6 +103,10 @@ shell/
     OsdIpc.qml                  IpcHandler target "osd", volume()/brightness()/media()/close()/state()
     PanelIpc.qml                 IpcHandler target "panel", open(name)/close()/toggle(name)/state() — registry maps name -> Panel instance
     ClipboardIpc.qml             IpcHandler target "clipboard", list()/copy(id)/remove(id)/clear()
+    MediaIpc.qml                  IpcHandler target "media", playPause()/next()/previous()/status()
+    LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status() — no unlock(), see its own header comment
+    ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
+    PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/close()/status()
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region Row (left/center/right), height tracks the tallest cell present
@@ -102,6 +119,7 @@ shell/
         NetworkWidget.qml         connection-state glyph, panel-open accent dot
         BluetoothWidget.qml       adapter-state glyph, panel-open accent dot
         WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
+        NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
     Menu/
@@ -114,12 +132,21 @@ shell/
       BluetoothPanel.qml         adapter state + paired devices, or a dim "NO ADAPTER" cell
       PowerPanel.qml              AC/battery row + keyboard-navigable power-profile picker (Up/Down/Enter)
       WeatherPanel.qml            current-conditions header + FORECAST ledger off LocationService + open-meteo
+      MediaPanel.qml               album art + NOW PLAYING meta row + flat progress cell + hover-invert transport cells
+      AnimatedAlbumArt.qml         opt-in muted looping video, active only while open and MediaService.isPlaying
     Notifications/
       Toasts.qml                 per-screen PanelWindow, Overlay layer; top-right popup column off NotificationService.popups
       Center.qml                  single-instance PanelWindow, Top layer; right-anchored PENDING/EARLIER sections + DND cell
       NotificationCard.qml        shared Cell: meta row (app name/relative time) + summary/body, critical = accent fill
     Osd/
       Osd.qml                     single-instance PanelWindow, Overlay layer, bottom-center; icon|label|value, no keyboard focus
+    Lock/
+      Lock.qml                    WlSessionLock wrapper + both PamContexts (password, parallel fingerprint) + idle-blank/resume-guard state
+      LockSurface.qml              per-output Component WlSessionLock instantiates itself; blurred-wallpaper backdrop, oversized clock, one input cell
+    Screensaver/
+      Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay, Canvas-drawn matrix rain
+    Picker/
+      ImagePicker.qml               ledger image grid (Panel.qml subtype); wallpaper mode + generic select() mode over the same grid
 tests/
   tst_niri_reducer.qml         qmltestrunner tests for reducer.js
   tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
@@ -131,12 +158,16 @@ tests/
   tst_calendar_progress.qml     qmltestrunner tests for Calendar/progress.js
   tst_calendar_ics.qml          qmltestrunner tests for Calendar/ics.js
   tst_openmeteo.qml             qmltestrunner tests for Weather/openmeteo.js
+  tst_applemusic.qml            qmltestrunner tests for Media/applemusic.js
+  tst_screensaver_effect.qml    qmltestrunner tests for Screensaver/effect.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard) loop, dbus-run-session isolated
+  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard)(+media)(+lock)(+screensaver)(+picker) loop, dbus-run-session isolated
   smoke-hyprland.sh             same, nested Hyprland
 nix/
-  package.nix                   stdenvNoCC derivation wrapping `qs -p`
-  hm-module.nix                 home-manager module (programs.formalshell)
+  package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
+                                 the exit-0-always wrapper around `qs ipc call lock lock`
+  hm-module.nix                 home-manager module (programs.formalshell); wires formalshell-lock-before-sleep
+                                 to a systemd --user oneshot bound to sleep.target (programs.formalshell.systemd.lockBeforeSleep)
 ```
 
 Every widget under `Surfaces/` reads only `Theme` and `CompositorService` —
@@ -513,6 +544,245 @@ Surfaces/Panels/WeatherPanel.qml
 `WeatherService`), the same "panel drives its own fetch" pattern
 `AudioPanel`/`NetworkPanel` already establish for their respective
 quickshell modules.
+
+## MPRIS → panel chain
+
+```
+Quickshell.Services.Mpris.players.values
+  |
+  v
+Services/MediaService.qml
+  activePlayer = first isPlaying:true player, else players[0], else null
+  available / title / artist / album / artUrl / identity / isPlaying /
+  canGoNext / canGoPrevious / canSeek / position / length
+    |  (position doesn't emit positionChanged on ordinary playback ticks —
+    |   quickshell's own doc'd workaround: a 1s Timer re-emits it while
+    |   isPlaying so any binding that reads position advances at all)
+    |
+    +-- Surfaces/Bar/widgets/NowPlaying.qml
+    |     visible: MediaService.available (hidden entirely otherwise —
+    |     not a "nothing playing" lie); click toggles MediaPanel
+    |
+    +-- Surfaces/Panels/MediaPanel.qml
+    |     album art cell (static Image off artUrl) + NOW PLAYING / <app>
+    |     meta row + title/artist + flat accent-fill progress cell
+    |     (draggable to seek when canSeek) + hover-inverted transport cells
+    |     |
+    |     v
+    |   Loader { source: "AnimatedAlbumArt.qml" }
+    |     active only when isOpen && isPlaying && AppleMusicArtService's
+    |     animatedArtUrl !== "" — the static Image above is the permanent
+    |     fallback under every other condition
+    |
+    +-- Ipc/MediaIpc.qml (target "media"): playPause()/next()/previous()/status()
+          calls MediaService directly — MediaPanel's own transport cells
+          also call MediaService directly, this exists for compositor
+          keybinds and headless smoke verification, same division of
+          labour WallpaperIpc/ThemeIpc have over their own singletons
+
+Services/AppleMusicArtService.qml   (opt-in: media.appleMusicArt, off by default)
+  onCacheKeyChanged (artist+album) -> _schedule()
+    |  disabled or no artist/album -> animatedArtUrl = "" (no network at all)
+    |  cache hit (including a cached miss) -> animatedArtUrl set/cleared, no network
+    |  cache miss -> 1.5s debounce -> _lookup()
+    v
+  _lookup(): disk cache file test -> _search(): Media/applemusic.js#searchUrl()
+    -> curl iTunes Search -> parseSearchResult()
+    -> (first time) _fetchToken(): scrape web-player page -> asset bundle -> JWT
+    -> _fetchEditorialVideo(): amp-api editorialVideo (undocumented, curl
+       Authorization: Bearer <token>) -> parseEditorialVideo()
+    -> _fetchMaster()/_fetchVariant(): m3u8 playlists -> pickVariant()/extractMp4Url()
+    -> _download(): curl to a per-lookup temp file -> atomic mv into
+       ~/.cache/formalshell/applemusic-art/<cacheKey>.mp4
+    |  every step's failure (parse error, http error, missing token, no
+    |  match) falls back to _store(key, "") — a cached MISS, so a track
+    |  without animated art is never re-fetched every play — never an
+    |  uncaught error
+    v
+  animatedArtUrl (file:// or "") -> MediaPanel's AnimatedAlbumArt.qml Loader
+```
+
+`Media/applemusic.js` (pure, `.pragma library`, TDD'd first —
+`tests/tst_applemusic.qml`) owns every URL-building, response-parsing, and
+cache-key/prune-decision function; `AppleMusicArtService.qml` is pure
+side-effect orchestration around it, one fresh `Process` per `curl`/`find`/
+`mv` call (never a shared/reused instance, so overlapping lookups for
+different tracks never clobber each other's stdout) gated by a `_serial`
+counter bumped on every reschedule so a slow in-flight lookup for a track
+the user has since skipped past can never overwrite a newer result.
+
+## Lock screen / PAM flow
+
+```
+Ipc/LockIpc.qml (target "lock") lock()
+  |  reads lockScreen.locked straight back after calling lock() — catches
+  |  WlSessionLock::realizeLockTarget()'s silent fail-open paths (no
+  |  ext-session-lock-v1 support, no surface, no WlSessionLockSurface) that
+  |  would otherwise report "ok" while the session stayed unlocked
+  v
+Surfaces/Lock/Lock.qml  (one Item wrapping WlSessionLock + both PamContexts;
+                          see its own header comment for why a bare
+                          PamContext can't be a WlSessionLock's direct child)
+  lock(): sessionLock.locked = true; idleMonitor.enabled = true (imperative,
+          not bound to `locked` — WlSessionLock only emits lockStateChanged()
+          on its *unlock* path, verified against session_lock.cpp)
+    |
+    v
+  WlSessionLock instantiates one LockSurface per output on its own
+    (no manual Variants loop, unlike every other multi-output surface here)
+    |
+    v
+  Surfaces/Lock/LockSurface.qml
+    blurred backdrop: Image { source: Core.State.wallpaper } (hidden) feeding
+      a MultiEffect { blurEnabled: true } — DESIGN.md's ONE blur exception
+      in the whole shell (a ScreencopyView-based capture crashes the shell
+      outright instead, see the file's header comment — never reintroduce it)
+    oversized clock (Theme.font.display) + date + one bordered Cell {
+      selected: authError !== "" } wrapping a password TextInput
+    onAccepted -> Lock.qml#submitPassword(password)
+    onPositionChanged/Keys.onPressed -> Lock.qml#wake() (clears a resume-guard trip)
+
+  PamContext { config: "formalshell-lock" }         PamContext { config: lock.fingerprintPamService }
+    password conversation, the sole unlock path        parallel conversation, only started when a
+    onCompleted(Success) -> _unlock()                  reader is enrolled (empty string = never starts,
+    onCompleted(else) -> authError =                   the only "enrolled" this shell can express —
+      _resultError(result)  (WRONG PASSWORD /           no Fprintd binding); shares no state with the
+      PAM ERROR / ACCOUNT LOCKED)                       password PamContext, so a pending scan never
+                                                          blocks or disables the password field
+
+  blanked: sessionLock.locked && (idleMonitor.isIdle || _resumeGuardActive)
+    idleMonitor: dedicated IdleMonitor, respectInhibitors:false (a locked
+      screen should blank regardless of an app-held inhibitor), timeout =
+      lock.blankAfterSeconds (default 30)
+    _resumeGuardActive: a 1s tickTimer compares Date.now() gaps — a jump
+      much larger than one interval means the wall clock moved further than
+      monotonic time would explain (suspend, or a stepped clock) — set true
+      on that gap, cleared by real activity or idleMonitor.isIdle going false
+```
+
+A real deployment needs `security.pam.services.formalshell-lock = { };`
+declared system-side (`nix/testvm.nix`'s own copy is the reference) — the
+home-manager module alone cannot create a PAM service, only NixOS/system
+config can. The `lock-before-sleep` contract (spec §8) is a separate,
+narrower path: `nix/package.nix`'s `formalshell-lock-before-sleep` wraps
+`qs ipc call lock lock` in `|| true; exit 0`, and `nix/hm-module.nix` binds
+it to a `systemd --user` oneshot on `sleep.target` — so a lock failure can
+never block suspend, verified directly by running the wrapper with no shell
+instance up at all and reading `$?`.
+
+## Idle → screensaver trigger graph
+
+```
+Services/IdleService.qml  (singleton, always-on, session-wide)
+  one shared IdleMonitor, respectInhibitors:true (an app-held idle-inhibit
+    or the compositor's own input-idle folding already keeps the whole
+    session non-idle — no polling of our own needed)
+  timeout = screensaver.timeoutSeconds (default 300) — armed exactly ONCE,
+    after Core.Config.loaded first resolves, never re-bound live: a live
+    binding recreates IdleMonitor's underlying ext_idle_notification_v1
+    object a moment after startup (settings.json loads asynchronously) and
+    that recreation was reproduced silently and permanently breaking
+    isIdle propagation to QML for the rest of the process's life — a stale
+    settings edit needing a shell restart is the accepted trade for idle
+    detection actually working
+    |
+    v
+  isIdle                                    (this is a DIFFERENT IdleMonitor
+    |                                         instance from Lock.qml's own —
+    |                                         that one is on-demand and
+    |                                         respectInhibitors:false on
+    |                                         purpose; see its header comment)
+    v
+Surfaces/Screensaver/Screensaver.qml  (one controller Item)
+  _autoWant = IdleService.isIdle && !_suppressed
+              && (!guardMediaPlayback || !MediaService.isPlaying)
+    |  live, not edge-triggered: a track starting/ending mid-idle-stretch
+    |  flips this immediately either way (spec §10's guard is a standing
+    |  condition, not a one-time check)
+  active = _forced || _autoWant
+    |
+    +-- Ipc/ScreensaverIpc.qml (target "screensaver"): start() sets _forced
+    |     true; stop() sets _forced false AND _suppressed true (held until
+    |     IdleService.isIdle next drops to false — i.e. real activity —
+    |     so one dismissal doesn't get instantly re-triggered by the same
+    |     idle stretch, but the NEXT idle cycle still fires normally)
+    |
+    v
+  Variants over Quickshell.screens -> one PanelWindow per output
+    (WlrLayer.Overlay, keyboardFocus OnDemand while visible)
+    |  Canvas, repainted every 90ms off Screensaver/effect.js#frameState()
+    |    (pure: columns/rows/frame-counter in, {char, brightness} grid out —
+    |     TDD'd first, tests/tst_screensaver_effect.qml)
+    |  drawn in Theme.font.family + Theme.color.accent — no spawned terminal
+    |    windows, a themed matrix-rain effect on a plain Canvas
+    |  any real key or pointer movement -> stop() (a MouseArea baseline
+    |    swallows the single spurious positionChanged Qt fires the instant
+    |    the surface becomes visible under an already-stationary cursor —
+    |    reproduced directly: without it, an auto-triggered screensaver
+    |    dismissed itself instantly and never re-triggered for the rest of
+    |    the session)
+    v
+  onActiveChanged: active && lockAfterSeconds > 0 -> lockChainTimer (optional
+    chain into Lock.qml#lock() after continuing to show that much longer;
+    0, the default, disables the chain outright)
+```
+
+## Picker answer-channel handshake
+
+```
+Ipc/PickerIpc.qml (target "picker")
+  summon()              -> picker.openWallpaper()
+  select(dir, token)    -> picker.openSelect(dir, token)
+  choose(path)           -> picker.choose(path)   (same action Enter/click use)
+  close()                -> picker.close()
+  status()               -> JSON.stringify(picker.status())
+    |
+    v
+Surfaces/Picker/ImagePicker.qml  (a Panel.qml subtype — reuses the shared
+                                   ledger popout, no bar cell of its own,
+                                   anchorX:-1 falls back to the bar's right
+                                   region same as every other IPC-only panel)
+  openWallpaper(): _mode = "wallpaper"; _directory = picker.directory setting
+  openSelect(dir, token): _mode = "select"; _directory = dir (or the
+    setting, if dir is empty); _selectToken = token
+    |
+    v
+  _scan(): `find <_directory> -maxdepth 1 -type f \( -iname *.png -o ... \)`
+    over a Process (Quickshell has no directory-listing QML type, same
+    technique CalendarEventsService already uses) -> _images[]
+    |
+    v
+  Grid of Cell delegates, one per image, `selected: index === _cursor`;
+  Left/Right/Up/Down move _cursor in 2D through Panel's shared keyPressed
+  hook, Enter/click both call choose(path)
+    |
+    v
+  choose(path):
+    mode "wallpaper" -> Core.State.setWallpaper(path)   (the exact call
+                         WallpaperIpc's set() makes — ThemeEngine's retheme
+                         pipeline runs through the one trigger path, never
+                         duplicated here)
+    mode "select"    -> _writeSelectionFile({ token, value: path })
+    root.close()
+    |
+    v (mode "select" only, and only if a request was actually pending)
+  $XDG_STATE_HOME/formalshell/picker-selection.txt
+    written via a Process (never FileView.setText(), which silently skips
+    both the write and its saved() signal when the new text is
+    byte-identical to what's already on disk)
+    |
+    +-- onIsOpenChanged: closing without ever choosing (Escape,
+          click-outside, or PanelRegistry preempting this panel for
+          another one) still resolves the caller's poll loop, writing
+          { token, cancelled: true } instead
+```
+
+This is the exact request/answer handshake `Menu/MenuIpc.qml`'s
+`select()`/`input()` already established (see `Menu.qml`'s header comment
+for the full rationale: an `IpcHandler` call is synchronous request/
+response, so the UI's eventual answer can't ride back on the call that
+opened it) — reused rather than reinvented, correlated the same way by a
+caller-supplied token.
 
 ## Adding a backend
 

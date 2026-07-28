@@ -11,24 +11,28 @@ consuming config needs near-zero glue.
 ## Status
 
 Pre-alpha. M1 (walking skeleton), M2 (compositor layer), M3 (matugen theme
-engine), M4 (unified menu), M5 (notifications + OSD), and M6 (clipboard +
-panels) are done: a brutalist three-region bar (workspaces/active window,
-clock, indicator widgets) backed by a formal `CompositorBackend` contract
-with working niri and Hyprland implementations; wallpaper-driven colors that
-recolor every bar token live and sync niri's window borders (see Theming
-below); a ruled-ledger menu that's app launcher, system/power menu, and a
+engine), M4 (unified menu), M5 (notifications + OSD), M6 (clipboard +
+panels), and M7 (now playing, lock, screensaver, picker) are done: a
+brutalist three-region bar (workspaces/active window, clock, indicator
+widgets) backed by a formal `CompositorBackend` contract with working niri
+and Hyprland implementations; wallpaper-driven colors that recolor every bar
+token live and sync niri's window borders (see Theming below); a
+ruled-ledger menu that's app launcher, system/power menu, and a
 `select`/`input` dmenu replacement in one fuzzy-searchable IPC-summonable
 surface (see Menu below); a mako-replacement notification stack (freedesktop
 server, ledger toasts, summonable history center, strict DND bypass) plus a
 jitter-free bottom-center OSD for volume/brightness/media (see Notifications
-and OSD below); and six per-widget popout panels (audio, calendar, network,
-bluetooth, power, weather) sharing one popout component and one `panel` IPC
-target, plus a capped clipboard history surfaced through the menu (see
-Panels, Clipboard, and Calendar below). CI (qmllint + headless qml-tests) and
+and OSD below); seven per-widget popout panels (audio, calendar, network,
+bluetooth, power, weather, media) sharing one popout component and one
+`panel` IPC target, plus a capped clipboard history surfaced through the menu
+(see Panels, Clipboard, and Calendar below); and a real `WlSessionLock` +
+PAM lock screen, an idle-driven terminal-effect screensaver, and a
+ledger-grid image/wallpaper picker (see Now playing, Lock screen,
+Screensaver, and Picker below). CI (qmllint + headless qml-tests) and
 nested-compositor smoke loops are the verification tools for every change.
-Everything past that — lock/screensaver, greeter, now-playing/media — is
-unbuilt; see `docs/superpowers/specs/2026-07-27-formalshell-design.md` for
-the full design.
+The greeter (M8) is the last surface left unbuilt; see
+`docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
+design.
 
 ## Screenshots
 
@@ -95,6 +99,50 @@ re-copied through the exact self-targeting IPC call the menu's clipboard row
 uses, moving it back to the front — the menu summoned at the `clipboard`
 route shows the reordered rows as real ledger cells (`MENU / CLIPBOARD`
 breadcrumb).
+
+![Now playing on niri](docs/screenshots/media-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --media`: a real MPRIS player
+(`mpv` with its own `mpris.lua` script, playing a generated silent fixture
+track into the pipewire null sink) drives the bar cell (note glyph + elided
+title + panel-open accent dot) and the opened media panel — `NOW PLAYING /
+mpv` meta row, title/artist, a flat accent-fill progress cell, and the three
+transport cells — with `media status` cross-checked against the fixture
+track's own tags.
+
+![Lock screen on niri](docs/screenshots/lock-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --wallpaper --lock`: the
+locked `WlSessionLock` surface over a matugen-recolored wallpaper, showing
+DESIGN.md's one blur exception (the blurred backdrop) plus the oversized
+`Theme.font.display` clock and the single bordered password input cell.
+The same run also drives a full round trip — a wrong password inverts the
+input cell with an uppercase `WRONG PASSWORD` meta row, then the VM's real
+throwaway test password unlocks back to the normal session — and proves
+`formalshell-lock-before-sleep` exits 0 even with no shell instance running
+at all (the `lock-before-sleep` exit-0-always contract, spec §8).
+
+![Screensaver on niri](docs/screenshots/screensaver-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --screensaver`: the
+full-screen matrix-rain terminal effect (`Screensaver/effect.js`, drawn on a
+`Canvas` in the shell's own mono font and `Theme.color.accent`) shown via a
+manual `screensaver start` IPC call. The same run also proves the live media
+guard: with the fixture MPRIS track still playing, `screensaver status`
+reports `active:false` despite `isIdle:true`; only once the track is killed
+does the screensaver auto-activate purely from the real compositor idle
+timer, no `start` call involved.
+
+![Picker on niri](docs/screenshots/picker-niri.png)
+
+The screenshot above is from `dev/smoke-niri.sh --picker`: five generated
+solid-color fixture images scanned from `picker.directory` into a ledger
+grid (`WALLPAPER` meta header, cursor cell inverted). The same run proves
+both picker contracts over IPC — `choose`-ing one fixture sets it as the
+wallpaper exactly like `wallpaper set` (confirmed via `theme status`), and a
+separate `select` call with a caller token returns a different fixture's
+path through the same request/answer file `MenuIpc`'s `select`/`input`
+already establish.
 
 The Hyprland backend is implemented and its `debug` IPC dump has been
 verified against a live nested Hyprland session (workspaces, focused window,
@@ -354,6 +402,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `bluetooth`  | `Quickshell.Bluetooth`                      | `BluetoothWidget.qml`|
 | `power`      | `Quickshell.Services.UPower`                | `Battery.qml`        |
 | `weather`    | `LocationService` + open-meteo              | `WeatherWidget.qml`  |
+| `media`      | `Quickshell.Services.Mpris`                 | `NowPlaying.qml`     |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` lists Pipewire output nodes then input nodes as
@@ -465,6 +514,172 @@ carrying an event get a small accent dot in the grid, and a `TODAY` ledger
 section below lists today's events by summary (or a single dim `NO EVENTS`
 row).
 
+## Now playing
+
+`MediaService` (`shell/Services/MediaService.qml`) wraps
+`Quickshell.Services.Mpris`: it picks an actually-playing player over the
+rest when several are registered, otherwise the first registered one,
+otherwise `available: false` — the same honest-nothing-to-show contract
+every other M6/M7 service follows, never a stubbed "not playing" state.
+`NowPlaying.qml`'s bar cell (note glyph + elided title + panel-open accent
+dot) is hidden entirely with no player present; `MediaPanel.qml` shows the
+album art, a `NOW PLAYING / <app>` meta row, title/artist, a flat
+accent-fill progress cell (draggable to seek when the player supports it),
+and transport cells that invert on hover rather than the usual alpha-hover
+(DESIGN's "selection = inversion" rule applied to primary controls, not
+passive rows).
+
+**Apple Music animated album art** (`AppleMusicArtService.qml`,
+`shell/Media/applemusic.js`) is **opt-in** — `media.appleMusicArt` in
+`settings.json`, off by default — and resolves via iTunes Search plus
+amp-api's `editorialVideo` field, an **undocumented API**: every failure
+path (no match, a scraped web-player token expiring, a plain network
+failure) falls back to the static art above rather than erroring, and the
+setting off makes `_schedule()` bail before any network call at all. A hit
+downloads an MP4 to `~/.cache/formalshell/applemusic-art/` (per-lookup temp
+file + atomic rename), a miss is cached too (`{}`-shaped cache keyed by
+`artist/album`, so a track without animated art is never re-fetched every
+play), and a 30-day prune runs once at startup. The muted, looping video
+(`AnimatedAlbumArt.qml`, layered over the static art) plays only while the
+panel is open and the track is actually playing.
+
+**IPC** (`target: "media"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call media playPause
+qs ipc --any-display -p <store-path>/share/formalshell call media next
+qs ipc --any-display -p <store-path>/share/formalshell call media previous
+qs ipc --any-display -p <store-path>/share/formalshell call media status     # {"available":…,"identity":…,"title":…,"artist":…,"album":…,"isPlaying":…,"position":…,"length":…}
+```
+
+## Lock screen
+
+`shell/Surfaces/Lock/Lock.qml` wraps a `WlSessionLock`; `LockSurface.qml` is
+the `Component` it instantiates once per output on its own — unlike every
+other multi-output surface here, there's no manual `Variants` loop to write.
+Authentication is `Quickshell.Services.Pam`'s `PamContext` directly, no
+external binary, against a dedicated `formalshell-lock` PAM service (not
+`login`, whose console-specific checks a lock screen has no business
+inheriting). **A real deployment must declare
+`security.pam.services.formalshell-lock = { };`** (or whatever name is
+chosen) **system-side** — the home-manager module alone cannot create a PAM
+service, only nixos/system config can (`nix/testvm.nix`'s own declaration is
+the reference).
+
+DESIGN.md's **one exception in the whole shell**: the blurred
+current-wallpaper backdrop (`LockSurface.qml`'s `Image` + `MultiEffect`,
+client-side QtQuick blur — a `ScreencopyView`-based capture was tried first
+and crashes the whole shell outright, see the file's header comment for why
+it's never coming back). Everything else on the lock surface stays flat:
+an oversized clock in `Theme.font.display`, the date, and one bordered
+password input cell. Failed auth inverts that cell and shows an uppercase
+error meta row (`WRONG PASSWORD` / `PAM ERROR` / `ACCOUNT LOCKED`,
+distinguished by `PamResult`) — no shake, no bounce.
+
+**Hardening** on top of that base: idle blanking after
+`lock.blankAfterSeconds` (default 30) once locked, driven by a dedicated
+`IdleMonitor` with `respectInhibitors: false` (a locked screen should blank
+regardless of an app-held inhibitor); a **wall-clock resume guard** compares
+`Date.now()` across a 1s ticker rather than trusting a monotonic timer, so a
+suspend/resume gap blanks the surface immediately on wake instead of leaving
+it unlocked-but-blanked or trusting a stale idle countdown; and fingerprint
+as a **parallel** PAM flow when `lock.fingerprintPamService` names one
+(empty by default — no reader exists in the test VM, so the honest,
+verified state is no prompt appears and the password field is unaffected) —
+a separate `PamContext` with its own conversation, so a pending scan never
+blocks or disables the password field, and either can succeed.
+
+The `lock-before-sleep` contract (spec §8): `nix/package.nix` ships
+`formalshell-lock-before-sleep`, a wrapper around `qs ipc call lock lock`
+that always `exit 0` regardless of the call's own result — verified by
+running it with no shell instance up at all and reading `$?`. The
+home-manager module's `programs.formalshell.systemd.lockBeforeSleep` (on by
+default) wires it to a `systemd --user` oneshot bound to `sleep.target`.
+
+**IPC** (`target: "lock"`, no `unlock()` verb by design — see
+`LockIpc.qml`'s header comment: a headless "type this password" shortcut
+would bypass the exact `TextInput`/PAM wiring a real unlock exercises, so
+`dev/smoke-niri.sh --lock` authenticates with real synthetic keystrokes
+(`wtype`) instead):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call lock lock
+qs ipc --any-display -p <store-path>/share/formalshell call lock isLocked   # "true" | "false"
+qs ipc --any-display -p <store-path>/share/formalshell call lock status     # {"locked":…,"secure":…,"authError":…,"blanked":…}
+```
+
+## Screensaver
+
+`IdleService.qml` wraps one shared `IdleMonitor` (`respectInhibitors: true`,
+so an app-held idle-inhibit or the compositor's own "input-idle" folding
+already keeps the whole session non-idle with no polling of our own) behind
+`screensaver.timeoutSeconds` (default 300). `Screensaver.qml` is one
+controller `Item` — deciding *when* to show, off `IdleService.isIdle` crossed
+live with a media-playback guard — plus a per-monitor `Variants` overlay
+(`WlrLayer.Overlay`, `OnDemand` keyboard focus), the same "one controller,
+many surfaces" split `Lock.qml` uses. The animation itself
+(`shell/Screensaver/effect.js`, TDD'd first) is a themed matrix-rain
+terminal effect drawn on a `Canvas` in the shell's own mono font and
+`Theme.color.accent` — no spawned terminal windows — as a pure function of a
+frame counter, so column state/glyph selection/brightness decay are all
+directly testable.
+
+It never activates while `screensaver.guardMediaPlayback` (default true)
+holds and `MediaService.isPlaying` is true — a live condition, not a
+one-time check, so a track starting or ending mid-idle-stretch flips it
+immediately either way. Any real input (key or pointer movement) dismisses
+it; `screensaver.lockAfterSeconds` (default 0, disabled) optionally chains
+into the lock screen after continuing to show for that much longer.
+
+**IPC** (`target: "screensaver"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver start
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver stop
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver status  # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…}
+```
+
+## Picker
+
+`shell/Surfaces/Picker/ImagePicker.qml` is a ledger grid of image cells
+(`Components/Cell.qml`, sharing hairline rules — a grid first, Omarchy's
+skewed carousel is explicitly a later flourish), keyboard-navigable in 2D
+(arrows move the cursor cell, which `Cell`'s own inversion marks; Enter
+confirms), scanned via a `find`-backed `Process` from a configured directory
+(Quickshell has no directory-listing QML type, same technique
+`CalendarEventsService` already uses) — an empty/unset directory renders an
+honest `NO IMAGES` cell rather than nothing.
+
+It doubles as two things over the same grid:
+
+- **Wallpaper mode** (`summon()`, scans `picker.directory` from
+  `settings.json`): choosing an image calls `Core.State.setWallpaper()`
+  directly — the exact call `wallpaper set` makes, so `ThemeEngine`'s
+  retheme pipeline runs through the one trigger path, never duplicated.
+- **Generic image-selector mode** (`select(directory, token)`, spec §11):
+  scans an arbitrary caller-supplied directory; the chosen path (or a
+  cancel on close/Escape/click-outside) lands in
+  `$XDG_STATE_HOME/formalshell/picker-selection.txt` as `{token, value}` /
+  `{token, cancelled: true}` JSON — the same request/answer handshake
+  `MenuIpc`'s `select()`/`input()` already established, reused rather than
+  reinvented.
+
+**IPC** (`target: "picker"` — a documented spec addendum, same rationale as
+`panel`: the spec's own §IPC list predates this surface and doesn't name it,
+but per-widget-style popouts otherwise have no summon path for compositor
+keybinds or headless verification):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call picker summon                       # open in wallpaper mode
+qs ipc --any-display -p <store-path>/share/formalshell call picker select /path/to/dir tok1      # open in select mode, correlated by token
+qs ipc --any-display -p <store-path>/share/formalshell call picker choose /path/to/dir/img.png   # same action Enter/click on a cell takes
+qs ipc --any-display -p <store-path>/share/formalshell call picker close
+qs ipc --any-display -p <store-path>/share/formalshell call picker status   # {"open":…,"mode":…,"directory":…,"count":…,"cursor":…}
+
+# poll/read a select() answer, same convention as menu-selection.txt:
+cat $XDG_STATE_HOME/formalshell/picker-selection.txt
+```
+
 ## Dev loop
 
 ```bash
@@ -480,6 +695,10 @@ just smoke               # nested niri + screenshot — the visual verification 
 ./dev/smoke-niri.sh --osd       # same, plus drives the osd IPC target (volume/brightness) and wpctl for the auto-show leg
 ./dev/smoke-niri.sh --panel audio    # same, plus opens the named panel over the panel IPC target and leaves it open through the screenshot
 ./dev/smoke-niri.sh --clipboard      # same, plus wl-copies fixture strings, proves dedup-to-front via clipboard IPC, then summons the menu's clipboard route
+./dev/smoke-niri.sh --media          # same, plus plays a real MPRIS fixture track (mpv+mpris.lua) and opens the media panel
+./dev/smoke-niri.sh --lock           # same, plus locks/wrong-password/unlocks over real PAM+wtype keystrokes, proving the exit-0-always lock-before-sleep wrapper too
+./dev/smoke-niri.sh --screensaver    # same, plus proves the media guard and the real idle-timeout auto-activation, then the manual start/stop IPC path
+./dev/smoke-niri.sh --picker         # same, plus scans generated fixture images and proves both the wallpaper-mode and select-mode IPC round trips
 ./dev/smoke-hyprland.sh  # nested Hyprland equivalent (see Screenshots above)
 ```
 
@@ -501,6 +720,8 @@ just vm-smoke                # dev/smoke-niri.sh, unchanged, against a headless
                               # sway parent compositor — screenshot pulled to ./artifacts/
 just vm-smoke --wallpaper --menu --notify --center --osd   # same flags dev/smoke-niri.sh takes
 just vm-smoke --panel calendar                              # --panel <name>/--clipboard work the same way
+just vm-smoke --media --screensaver --picker                 # M7 surfaces, all headlessly driven over IPC
+just vm-smoke --wallpaper --lock                             # run --lock on its own; combine flags freely otherwise
 just vm-down
 ```
 
