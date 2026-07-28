@@ -275,8 +275,29 @@ two effects. → prove `screensaver.asciiPath` swaps the art → commit
 **Files:** modify `README.md`, `docs/ARCHITECTURE.md`, `CLAUDE.md`; refresh
 **every** `docs/screenshots/*.png`.
 
-Every published screenshot predates the retrofit and is now misleading.
-Recapture all of them, Read each before publishing, and update captions.
+Every published screenshot predates the retrofit and is now misleading — the
+owner has explicitly asked for all of them to be remade. Recapture each from
+the VM rig, **Read it before publishing**, and update its caption. The full
+list as of this plan (11 files, every one referenced by README.md), with the
+smoke invocation that produces it:
+
+| screenshot | produced by |
+| --- | --- |
+| `bar-niri.png` | `just vm-smoke` |
+| `menu-niri.png` | `just vm-smoke --menu` |
+| `panels-niri.png` | `just vm-smoke --panel audio` |
+| `calendar-niri.png` | `just vm-smoke --panel calendar` |
+| `clipboard-niri.png` | `just vm-smoke --clipboard` |
+| `notifications-niri.png` | `just vm-smoke --notify --center` |
+| `osd-niri.png` | `just vm-smoke --osd` |
+| `media-niri.png` | `just vm-smoke --media` |
+| `lock-niri.png` | `just vm-smoke --lock` |
+| `screensaver-niri.png` | `just vm-smoke --screensaver` |
+| `picker-niri.png` | `just vm-smoke --picker` |
+
+Plus `greeter-niri.png` (`just vm-greeter`) if M8 added it. If a surface gained
+a screenshot after this plan was written, recapture that too — the rule is
+**no published screenshot predates the retrofit**, not "these eleven".
 README gains the screensaver effect list, how to pin or randomise, and how to
 replace the banner art.
 
