@@ -196,6 +196,14 @@ ShellRoot {
                     label: root._promptLabel
                     errorState: root.authError !== ""
                     checking: Greetd.state !== GreetdState.Inactive && !root._awaitingResponse
+                    // Unlike the lock screen's static "PASSWORD", greeter's
+                    // label carries the live greetd/PAM prompt message (or
+                    // "AUTHENTICATING") for as long as a conversation is in
+                    // flight — including the `_awaitingResponse` step
+                    // AuthPrompt's own default (errorState || checking)
+                    // would otherwise hide it during, which is exactly when
+                    // the real prompt text needs to be on screen.
+                    showLabel: root.authError !== "" || Greetd.state !== GreetdState.Inactive
                     masked: root._awaitingResponse && !root._promptEcho
                     inputEnabled: root._inputEnabled
                     unavailableText: Greetd.available ? "" : "GREETD SOCKET UNAVAILABLE"

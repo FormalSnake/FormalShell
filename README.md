@@ -777,10 +777,12 @@ falls back to random and logs a warning, never a hard error):
 **Replacing the banner.** `screensaver.asciiPath` points at any UTF-8 text
 file to use instead of the bundled logo — empty (the default) keeps
 `branding/screensaver.txt`, and a custom file that fails to load falls back
-to the bundled one rather than showing nothing:
+to the bundled one rather than showing nothing. The path must be absolute:
+neither `Config.qml` nor quickshell's `FileView` expands a leading `~`, so a
+tilde path silently fails to load and falls back to the bundled banner.
 
 ```jsonc
-{ "screensaver": { "asciiPath": "~/.config/formalshell/my-banner.txt" } }
+{ "screensaver": { "asciiPath": "/home/youruser/.config/formalshell/my-banner.txt" } }
 ```
 
 It never activates while `screensaver.guardMediaPlayback` (default true)

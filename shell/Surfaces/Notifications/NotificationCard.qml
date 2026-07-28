@@ -113,7 +113,14 @@ Cell {
 
                 Text {
                     text: "✕"
-                    color: dismissCell.foreground
+                    // Not dismissCell.foreground: an unhovered nested Cell is
+                    // transparent, so its actual painted background is
+                    // whatever root drew (urgent fill, or the invertOnHover
+                    // swap) — root.foreground already tracks that. Only once
+                    // this cell is itself hovered does it paint its own
+                    // inverted background, so only then does its own
+                    // foreground apply.
+                    color: dismissCell.selected ? dismissCell.foreground : root.foreground
                     font.family: Theme.font.family
                     font.pixelSize: Theme.font.body
                 }
@@ -153,7 +160,8 @@ Cell {
 
                     Text {
                         text: actionCell.modelData.label
-                        color: actionCell.foreground
+                        // Same reasoning as the dismiss cell above.
+                        color: actionCell.selected ? actionCell.foreground : root.foreground
                         font.family: Theme.font.family
                         font.pixelSize: Theme.font.bodySmall
                     }

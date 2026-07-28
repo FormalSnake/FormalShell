@@ -30,6 +30,12 @@ Item {
     property string label: "PASSWORD"
     property bool errorState: false
     property bool checking: false
+    // Whether `label` is worth rendering above the field at all. Defaults to
+    // the lock screen's own rule (idle relies on the placeholder alone, see
+    // below) — the greeter overrides this, since unlike the lock screen its
+    // `label` carries the live greetd/PAM prompt message, not a static
+    // "PASSWORD" that would just duplicate the placeholder.
+    property bool showLabel: root.errorState || root.checking
     // false = plain visible text (greeter's username step); true = `●`
     // masking with shrink-to-fit letter-spacing (every password entry).
     property bool masked: true
@@ -151,7 +157,7 @@ Item {
                 // was about. Idle state relies on the placeholder alone.
                 MetaLabel {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    visible: root.errorState || root.checking
+                    visible: root.showLabel
                     text: root._displayLabel
                     color: root.errorState ? Theme.color.urgent : Theme.color.foregroundDim
                     font.italic: root.errorState
