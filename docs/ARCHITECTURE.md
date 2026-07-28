@@ -74,9 +74,15 @@ shell/
     Cell.qml                    the shared ledger cell — selected/accent/hovered, bottom+right hairline
                                  rules only (shared-rule contract, see below), default-property content
     MetaLabel.qml                uppercase/letterspaced/dim caption Text for meta rows
-    Panel.qml                    the shared per-widget popout: ledger frame anchored under its opening
-                                  bar cell (anchorX real, -1 falls back to the bar's right region),
+    Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,
+                                  opaque fill, Theme.space.panelGap below the bar) anchored under its
+                                  opening bar cell (anchorX real, -1 falls back to the bar's right region),
                                   WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside
+    AuthPrompt.qml                the lock/greeter shared centre plate (M8b Task 6): one bordered card
+                                  holding clock + date + a dividing rule + a single 3px-outlined
+                                  password/username field (shrink-to-fit dot masking, CHECKING state,
+                                  fingerprint glyph); LockSurface.qml and greeter/greeter.qml both
+                                  instantiate it unchanged
     qmldir
   Menu/
     model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
@@ -93,7 +99,7 @@ shell/
   Media/
     applemusic.js                 pure JS, .pragma library — URL construction, response parsing, cache-key/prune-decision logic
   Screensaver/
-    effect.js                     pure JS, .pragma library — frameState(): matrix-rain column/glyph/decay stepping off a frame counter
+    effect.js                     pure JS, .pragma library — frameState(): five converging effects (decrypt/rain/expand/slide/scatter) over a loaded ASCII banner, stepped off a frame counter
   Services/
     AudioService.qml            singleton — Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
     BrightnessService.qml       singleton — brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
@@ -379,11 +385,15 @@ Model.visibleChildren(nodes, id, condResults)   Search.rank(nodes, query, condRe
 bottom and right hairline rule (`Theme.color.rule`, `Theme.borderWidth`
 thick) — the container arranging a grid of cells (`Menu.qml`'s `ListView`,
 future bar/panel grids) is responsible for the outer top/left rule, so
-adjacent cells never double up a shared border. This is what makes
-DESIGN.md's "cells not cards, one hairline between neighbors" rule hold
-structurally rather than by convention: every row on every M4+ surface goes
-through `Cell`, so a `Rectangle`-with-border appearing outside `Components/`
-is drift, not a new pattern.
+adjacent cells never double up a shared border. Post-M8b (DESIGN.md §1),
+surfaces themselves are omarchy-style cards (their own full border, opaque
+fill, floating with a gap below the bar) rather than edge-to-edge grids, but
+the *rows inside a card* still share this same hairline contract — every row
+on every M4+ surface goes through `Cell`, so a `Rectangle`-with-border
+appearing outside `Components/` is drift, not a new pattern. `Cell`'s
+`standalone` prop (M8b Task 3) is the bar-widget variant: borderless idle,
+gaining a hover-cursor fill+border only on mouseover, for cells that live
+directly on the bar rather than inside a card.
 
 ## Notification data flow
 
@@ -662,8 +672,10 @@ Surfaces/Lock/Lock.qml  (one Item wrapping WlSessionLock + both PamContexts;
       a MultiEffect { blurEnabled: true } — DESIGN.md's ONE blur exception
       in the whole shell (a ScreencopyView-based capture crashes the shell
       outright instead, see the file's header comment — never reintroduce it)
-    oversized clock (Theme.font.display) + date + one bordered Cell {
-      selected: authError !== "" } wrapping a password TextInput
+    Components/AuthPrompt.qml instance: one bordered plate holding an
+      oversized clock, the date, a dividing rule, and a single 3px-outlined
+      field (masked: true) whose border swaps to Theme.color.urgent on
+      errorState (M8b Task 6 — replaces the old three-loose-items Column)
     onAccepted -> Lock.qml#submitPassword(password)
     onPositionChanged/Keys.onPressed -> Lock.qml#wake() (clears a resume-guard trip)
 
@@ -735,11 +747,15 @@ Surfaces/Screensaver/Screensaver.qml  (one controller Item)
     v
   Variants over Quickshell.screens -> one PanelWindow per output
     (WlrLayer.Overlay, keyboardFocus OnDemand while visible)
-    |  Canvas, repainted every 90ms off Screensaver/effect.js#frameState()
-    |    (pure: columns/rows/frame-counter in, {char, brightness} grid out —
-    |     TDD'd first, tests/tst_screensaver_effect.qml)
+    |  a FileView loads branding/screensaver.txt (or screensaver.asciiPath,
+    |    falling back to the bundled banner on failure) into a banner grid
+    |  Canvas, repainted every 90ms off Screensaver/effect.js#frameState(name,
+    |    frame, banner) — resolveEffectName() picks one of five effects
+    |    (decrypt/rain/expand/slide/scatter) off screensaver.effect, "random"
+    |    (default) reseeded fresh per activation; pure: frame counter + banner
+    |    in, {char, opacity} grid out — TDD'd first, tests/tst_screensaver_effect.qml
     |  drawn in Theme.font.family + Theme.color.accent — no spawned terminal
-    |    windows, a themed matrix-rain effect on a plain Canvas
+    |    windows, a themed banner-convergence effect on a plain Canvas
     |  any real key or pointer movement -> stop() (a MouseArea baseline
     |    swallows the single spurious positionChanged Qt fires the instant
     |    the surface becomes visible under an already-stationary cursor —

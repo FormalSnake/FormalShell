@@ -89,13 +89,14 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `result/bin/formalshell-lock-before-sleep` with **no shell instance
   running at all** and records its exit code (must be `0` — the
   `lock-before-sleep` exit-0-always contract, spec §8). Then in-session:
-  `lock lock` over IPC (screenshotted as `lock-locked.png` — oversized
-  clock, blurred wallpaper backdrop if `--wallpaper` is combined in, one
-  bordered input cell), `lock isLocked` confirms `true`, `wtype` (a real
-  virtual-keyboard-unstable-v1 client — `LockIpc.qml` deliberately has no
-  "type this password" shortcut) types a wrong password and Return
-  (screenshotted as `lock-error.png` — inverted input cell, uppercase
-  `WRONG PASSWORD` meta row), then retypes the VM's real throwaway test
+  `lock lock` over IPC (screenshotted as `lock-locked.png` — the shared
+  `AuthPrompt` plate: oversized clock, blurred wallpaper backdrop if
+  `--wallpaper` is combined in, one 3px-outlined field), `lock isLocked`
+  confirms `true`, `wtype` (a real virtual-keyboard-unstable-v1 client —
+  `LockIpc.qml` deliberately has no "type this password" shortcut) types a
+  wrong password and Return (screenshotted as `lock-error.png` — the field's
+  border swaps to `urgent`, italic uppercase `WRONG PASSWORD` message), then
+  retypes the VM's real throwaway test
   password (`nix/testvm.nix`'s `users.users.test.password`) and Return
   (screenshotted as `lock-unlocked.png`), with `lock isLocked`/`lock status`
   proving the round trip flipped back to unlocked.
@@ -107,7 +108,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   reads `true`), then kills mpv and waits past the timeout to prove the
   screensaver auto-activates purely from the guard clearing — no
   `screensaver start` call involved — screenshotted (`screensaver-auto.png`,
-  full-screen matrix-rain in the mono font/theme accent). `screensaver
+  the block-character `FORMALSHELL` banner converging via one of five
+  effects — decrypt/rain/expand/slide/scatter — in the mono font/theme
+  accent; `SCREENSAVER_EFFECT`/`SCREENSAVER_ASCII_TEXT` env vars pin an
+  effect or banner for a single run). `screensaver
   stop` dismisses it, then a final explicit `start`/screenshot
   (`screensaver-manual.png`)/`stop` proves the manual IPC path
   independently of the idle timer.

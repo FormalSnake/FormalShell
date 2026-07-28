@@ -18,10 +18,11 @@ brutalist three-region bar (workspaces/active window, clock, indicator
 widgets) backed by a formal `CompositorBackend` contract with working niri
 and Hyprland implementations; wallpaper-driven colors that recolor every bar
 token live and sync niri's window borders (see Theming below); a
-ruled-ledger menu that's app launcher, system/power menu, and a
-`select`/`input` dmenu replacement in one fuzzy-searchable IPC-summonable
-surface (see Menu below); a mako-replacement notification stack (freedesktop
-server, ledger toasts, summonable history center, strict DND bypass) plus a
+omarchy-card menu (ruled-ledger rows inside) that's app launcher, system/power
+menu, and a `select`/`input` dmenu replacement in one fuzzy-searchable
+IPC-summonable surface (see Menu below); a mako-replacement notification
+stack (freedesktop server, independent card toasts, summonable history
+center, strict DND bypass) plus a
 jitter-free bottom-center OSD for volume/brightness/media (see Notifications
 and OSD below); seven per-widget popout panels (audio, calendar, network,
 bluetooth, power, weather, media) sharing one popout component and one
@@ -46,45 +47,53 @@ standard way UI changes get verified in this repo — see `CLAUDE.md`.
 
 ![Bar on niri](docs/screenshots/bar-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --wallpaper`: a solid-color
-test wallpaper is set over IPC before the shot, so the background layer and
-the bar's colors are both matugen-derived rather than the static Flexoki
-fallback.
+The screenshot above is from `dev/smoke-niri.sh --wallpaper` (M8b revision):
+a solid-color test wallpaper is set over IPC before the shot, so the
+background layer and the bar's colors are both matugen-derived rather than
+the static Flexoki fallback. The bar itself is now Omarchy-style — idle
+widgets are borderless, gaining a hairline+fill only on hover/cursor, and the
+focused workspace (`1`) is a full-bleed accent cell rather than a bordered
+one.
 
 ![Menu on niri](docs/screenshots/menu-niri.png)
 
 The screenshot above is from `dev/smoke-niri.sh --menu --wallpaper`: the menu
 is summoned over IPC, switched into `select` mode, and screenshotted over the
-same matugen-recolored wallpaper — the ledger contract (shared hairline
-rules, inverted cursor row, uppercase `SELECT / PICK` breadcrumb) is visible
-end to end.
+same matugen-recolored wallpaper. Post-retrofit the menu renders as a
+floating omarchy-style card (its own full border, opaque fill) rather than
+an edge-to-edge ledger — the uppercase `SELECT / PICK` breadcrumb and
+inverted cursor row are unchanged inside it.
 
 ![Notifications on niri](docs/screenshots/notifications-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --notify --center`: two
-`notify-send` toasts (one critical, rendered as a full-bleed accent cell)
-plus a summoned history center showing the `DND` toggle cell and a
-`PENDING / n` section. The center and the toast stack are both top-right
-anchored, so `Toasts.qml` suppresses itself for as long as the center is
-open — the sticky critical popup is still live underneath and reappears the
-moment the center closes (see Notifications below).
+The screenshot above is from `dev/smoke-niri.sh --notify --center`: a
+summoned history center showing the `DND` toggle cell and a `PENDING / 2`
+section, each notification now its own independent omarchy-style card (full
+border, opaque fill, separated by a real gap) rather than fused ledger rows.
+The center and the toast stack are both top-right anchored, so `Toasts.qml`
+suppresses itself for as long as the center is open — a still-sticky
+critical popup underneath would reappear the moment the center closes (see
+Notifications below).
 
 ![OSD on niri](docs/screenshots/osd-niri.png)
 
 The screenshot above is from `dev/smoke-niri.sh --osd`: the bottom-center OSD
-card after a manual `qs ipc call osd volume`, showing the fixed three-column
-layout (icon | label | value) and the flat accent fill bar. The same run also
-verifies the real auto-show trigger (`wpctl set-volume @DEFAULT_AUDIO_SINK@
-30%` firing `AudioService.changed`) and the brightness variant.
+card after a manual `qs ipc call osd volume`, showing its own opaque card
+border, the fixed three-column layout (icon | label | value), and the flat
+accent fill bar. The same run also verifies the real auto-show trigger
+(`wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` firing `AudioService.changed`)
+and the brightness variant.
 
 ![Panels on niri](docs/screenshots/panels-niri.png)
 
 The screenshot above is from `dev/smoke-niri.sh --panel audio --wallpaper`:
 `panel open audio` over IPC opens the audio popout (no bar-cell click, so it
-falls back to sitting under the bar's right region — see Panel.qml), showing
-the OUTPUT header, a `Virtual Sink 30%` row, a `MUTE` toggle cell, and the
-flat accent-fill slider with no round thumb, over the same matugen-recolored
-wallpaper as the other panels' screenshots.
+falls back to sitting under the bar's right region — see Panel.qml), now a
+floating omarchy-style card sitting `Theme.space.panelGap` below the bar
+rather than flush against it, showing the OUTPUT header, a `Virtual Sink
+30%` row, a `MUTE` toggle cell, and the flat accent-fill slider with no round
+thumb, over the same matugen-recolored wallpaper as the other panels'
+screenshots.
 
 ![Calendar on niri](docs/screenshots/calendar-niri.png)
 
@@ -92,7 +101,7 @@ The screenshot above is from `dev/smoke-niri.sh --panel calendar --wallpaper`:
 the month grid (weekday meta row, today inverted with an event dot under
 it), a `TODAY` section listing the fixture `.ics` event by summary, and the
 year-progress bar as a full-width flat accent fill with its percentage as
-mono text.
+mono text, all inside the panel's own omarchy-style card frame.
 
 ![Clipboard on niri](docs/screenshots/clipboard-niri.png)
 
@@ -100,8 +109,8 @@ The screenshot above is from `dev/smoke-niri.sh --clipboard --wallpaper`:
 three `wl-copy` fixture strings captured newest-first, then the second entry
 re-copied through the exact self-targeting IPC call the menu's clipboard row
 uses, moving it back to the front — the menu summoned at the `clipboard`
-route shows the reordered rows as real ledger cells (`MENU / CLIPBOARD`
-breadcrumb).
+route shows the reordered rows as real cells inside the menu's card
+(`MENU / CLIPBOARD` breadcrumb).
 
 ![Now playing on niri](docs/screenshots/media-niri.png)
 
@@ -117,35 +126,40 @@ track's own tags.
 
 The screenshot above is from `dev/smoke-niri.sh --wallpaper --lock`: the
 locked `WlSessionLock` surface over a matugen-recolored wallpaper, showing
-DESIGN.md's one blur exception (the blurred backdrop) plus the oversized
-`Theme.font.display` clock and the single bordered password input cell.
-The same run also drives a full round trip — a wrong password inverts the
-input cell with an uppercase `WRONG PASSWORD` meta row, then the VM's real
-throwaway test password unlocks back to the normal session — and proves
-`formalshell-lock-before-sleep` exits 0 even with no shell instance running
-at all (the `lock-before-sleep` exit-0-always contract, spec §8).
+DESIGN.md's one blur exception (the blurred backdrop) behind the shared
+`Components/AuthPrompt.qml` plate — one bordered card holding the oversized
+clock, the uppercase date, a dividing rule, and the single 3px-outlined
+`ENTER PASSWORD` field (M8b Task 6, replacing the old three loose
+independently-floating items). The same run also drives a full round trip —
+a wrong password inverts the field's border and shows an italic uppercase
+`WRONG PASSWORD` message, then the VM's real throwaway test password unlocks
+back to the normal session — and proves `formalshell-lock-before-sleep`
+exits 0 even with no shell instance running at all (the
+`lock-before-sleep` exit-0-always contract, spec §8).
 
 ![Screensaver on niri](docs/screenshots/screensaver-niri.png)
 
 The screenshot above is from `dev/smoke-niri.sh --screensaver`: the
-full-screen matrix-rain terminal effect (`Screensaver/effect.js`, drawn on a
-`Canvas` in the shell's own mono font and `Theme.color.accent`) shown via a
-manual `screensaver start` IPC call. The same run also proves the live media
-guard: with the fixture MPRIS track still playing, `screensaver status`
-reports `active:false` despite `isIdle:true`; only once the track is killed
-does the screensaver auto-activate purely from the real compositor idle
-timer, no `start` call involved.
+full-screen `FORMALSHELL` block-character banner (`branding/screensaver.txt`,
+user-replaceable) shown converged, drawn on a `Canvas` in the shell's own
+mono font and `Theme.color.accent` (`Screensaver/effect.js`). This shot
+proves the auto-activation path specifically: with the fixture MPRIS track
+still playing, `screensaver status` reports `active:false` despite
+`isIdle:true` (the live media guard holding); only once the track is killed
+does the screensaver activate purely from the real compositor idle timer, no
+`start` call involved. See Screensaver below for the full effect list and how
+to pin one or swap the banner.
 
 ![Picker on niri](docs/screenshots/picker-niri.png)
 
 The screenshot above is from `dev/smoke-niri.sh --picker`: five generated
-solid-color fixture images scanned from `picker.directory` into a ledger
-grid (`WALLPAPER` meta header, cursor cell inverted). The same run proves
-both picker contracts over IPC — `choose`-ing one fixture sets it as the
-wallpaper exactly like `wallpaper set` (confirmed via `theme status`), and a
-separate `select` call with a caller token returns a different fixture's
-path through the same request/answer file `MenuIpc`'s `select`/`input`
-already establish.
+solid-color fixture images scanned from `picker.directory` into a grid
+inside the picker's own card frame (`WALLPAPER` meta header, cursor cell
+highlighted with its own border). The same run proves both picker contracts
+over IPC — `choose`-ing one fixture sets it as the wallpaper exactly like
+`wallpaper set` (confirmed via `theme status`), and a separate `select` call
+with a caller token returns a different fixture's path through the same
+request/answer file `MenuIpc`'s `select`/`input` already establish.
 
 ![Greeter on greetd](docs/screenshots/greeter-niri.png)
 
@@ -155,11 +169,11 @@ sibling script rather than a `dev/smoke-niri.sh` flag: greetd's
 compositor composed per run, so this drives the *already-running*
 `formalshell-greeter` session with real `wtype` keystrokes across the
 `test` -> `greeter` system-account boundary instead. It shows the lock
-screen's visual twin at rest — oversized `Theme.font.display` clock, date
-subline, one bordered input cell with its `USER` meta label — mid a real
-`create_session`/`auth_message` greetd conversation. The same run also
-proves a wrong password inverts the cell with the genuine PAM failure text
-(`PAM_AUTHENTICATE: AUTH_ERR`, never a fabricated message) and that the
+screen's exact visual twin at rest — the same `AuthPrompt` plate, its
+`masked: false` mode swapping the field's placeholder to `ENTER USERNAME` —
+mid a real `create_session`/`auth_message` greetd conversation. The same run
+also proves a wrong password inverts the field with the genuine PAM failure
+text (`PAM_AUTHENTICATE: AUTH_ERR`, never a fabricated message) and that the
 correct password reaches `Greetd.launch()` (`Authentication complete.` /
 `Quitting.` in the session log).
 
@@ -411,8 +425,9 @@ still tolerates the whitespace.
 ## Notifications
 
 A mako-replacement stack: a freedesktop `NotificationServer`, a pure-JS
-three-tier reducer (`popups` → `pending` → `past`), ledger toasts, and a
-summonable history center — see `docs/DESIGN.md` and
+three-tier reducer (`popups` → `pending` → `past`), independent card toasts
+(M8b Task 5: each its own bordered, opaque-filled card rather than fused
+ledger rows), and a summonable history center — see `docs/DESIGN.md` and
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` §6.
 
 **Three tiers.** A notification lands in `popups` (a top-right toast, capped
@@ -674,13 +689,20 @@ the reference).
 
 DESIGN.md's **one exception in the whole shell**: the blurred
 current-wallpaper backdrop (`LockSurface.qml`'s `Image` + `MultiEffect`,
-client-side QtQuick blur — a `ScreencopyView`-based capture was tried first
-and crashes the whole shell outright, see the file's header comment for why
-it's never coming back). Everything else on the lock surface stays flat:
-an oversized clock in `Theme.font.display`, the date, and one bordered
-password input cell. Failed auth inverts that cell and shows an uppercase
-error meta row (`WRONG PASSWORD` / `PAM ERROR` / `ACCOUNT LOCKED`,
-distinguished by `PamResult`) — no shake, no bounce.
+client-side QtQuick blur, tuned to Omarchy's own blur/contrast values — a
+`ScreencopyView`-based capture was tried first and crashes the whole shell
+outright, see the file's header comment for why it's never coming back).
+Everything else on the lock surface stays flat, drawn by the shared
+`Components/AuthPrompt.qml` plate (M8b Task 6) both `LockSurface.qml` and
+`greeter/greeter.qml` instantiate unchanged: one bordered card holding an
+oversized clock, the uppercase date, a dividing rule, and a single
+3px-outlined field with centred placeholder text and shrink-to-fit `●`
+masking so a long password never clips silently. Failed auth swaps the
+field's border to `Theme.color.urgent` and shows an italic uppercase error
+message (`WRONG PASSWORD` / `PAM ERROR` / `ACCOUNT LOCKED`, distinguished by
+`PamResult`) — no shake, no bounce. A fingerprint glyph pins inside the
+field's right edge when `lock.fingerprintPamService` names a reader, with
+symmetric horizontal reserve so the centred dots stay centred either way.
 
 **Hardening** on top of that base: idle blanking after
 `lock.blankAfterSeconds` (default 30) once locked, driven by a dedicated
@@ -723,12 +745,43 @@ already keeps the whole session non-idle with no polling of our own) behind
 controller `Item` — deciding *when* to show, off `IdleService.isIdle` crossed
 live with a media-playback guard — plus a per-monitor `Variants` overlay
 (`WlrLayer.Overlay`, `OnDemand` keyboard focus), the same "one controller,
-many surfaces" split `Lock.qml` uses. The animation itself
-(`shell/Screensaver/effect.js`, TDD'd first) is a themed matrix-rain
-terminal effect drawn on a `Canvas` in the shell's own mono font and
-`Theme.color.accent` — no spawned terminal windows — as a pure function of a
-frame counter, so column state/glyph selection/brightness decay are all
-directly testable.
+many surfaces" split `Lock.qml` uses. The visual (Omarchy reference:
+`bin/omarchy-screensaver`'s `tte`-driven banner, reimplemented rather than
+shelling out) loads an ASCII banner — the bundled block-character
+`FORMALSHELL` logo at `branding/screensaver.txt`, or a user-supplied file —
+and animates it converging into place on a `Canvas`, drawn in the shell's own
+mono font and `Theme.color.accent`, no spawned terminal windows.
+`shell/Screensaver/effect.js` (TDD'd first, pure functions of a frame
+counter — column/cell state, convergence, everything directly testable) owns
+five distinct convergence effects:
+
+| Effect | Look |
+| --- | --- |
+| `decrypt` | every cell scrambles through random glyphs before settling on its target character |
+| `rain` | the original matrix-rain: columns of falling glyphs with a brightness-decay trail |
+| `expand` | each line grows outward from its own center |
+| `slide` | each line slides in from alternating edges |
+| `scatter` | every cell starts at a random offset and converges inward |
+
+**Picking an effect.** `screensaver.effect` in `settings.json` is `"random"`
+by default — a fresh effect is picked every time the screensaver activates,
+seeded off the activation itself so a long idle session still cycles
+variants — or pin it to any one of the five names above (an unknown name
+falls back to random and logs a warning, never a hard error):
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "screensaver": { "effect": "decrypt" } }
+```
+
+**Replacing the banner.** `screensaver.asciiPath` points at any UTF-8 text
+file to use instead of the bundled logo — empty (the default) keeps
+`branding/screensaver.txt`, and a custom file that fails to load falls back
+to the bundled one rather than showing nothing:
+
+```jsonc
+{ "screensaver": { "asciiPath": "~/.config/formalshell/my-banner.txt" } }
+```
 
 It never activates while `screensaver.guardMediaPlayback` (default true)
 holds and `MediaService.isPlaying` is true — a live condition, not a
@@ -744,6 +797,11 @@ qs ipc --any-display -p <store-path>/share/formalshell call screensaver start
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver stop
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver status  # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…}
 ```
+
+`dev/smoke-niri.sh --screensaver` additionally accepts `SCREENSAVER_EFFECT`
+and `SCREENSAVER_ASCII_TEXT` environment variables (unset by default) to pin
+an effect or a custom banner for a single verification run — see the
+script's own header comment.
 
 ## Picker
 
