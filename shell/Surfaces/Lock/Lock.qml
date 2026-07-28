@@ -299,6 +299,7 @@ Item {
                 authError: root.authError
                 authenticating: root.authenticating
                 blanked: root.blanked
+                fingerprintEnrolled: root._fingerprintService !== ""
                 onSubmit: password => root.submitPassword(password)
                 onActivity: root.wake()
             }

@@ -8,9 +8,9 @@ import qs.Components
 
 // greetd entry point (DESIGN.md's Lock/greeter translation, spec §9): a
 // separate -p target from shell.qml, sharing Core/Theme/Components so it
-// renders as the lock screen's visual twin — read
-// shell/Surfaces/Lock/LockSurface.qml first, its clock/date/input-cell
-// column is mirrored here almost verbatim.
+// renders as the lock screen's visual twin — both instantiate the exact
+// same `qs.Components.AuthPrompt` (M8b Task 6), not a hand-mirrored copy of
+// LockSurface.qml's own column.
 //
 // No WlSessionLock: unlike the lock screen (which secures an
 // already-running session against the same machine's other windows),
@@ -175,7 +175,7 @@ ShellRoot {
 
                 onVisibleChanged: {
                     if (surface.visible)
-                        Qt.callLater(function () { userInput.forceActiveFocus(); });
+                        Qt.callLater(function () { authPrompt.forceInputFocus(); });
                 }
 
                 Rectangle {
@@ -183,72 +183,23 @@ ShellRoot {
                     color: Core.Theme.color.background
                 }
 
-                Column {
-                    id: greeterColumn
+                // The greeter's twin of LockSurface.qml's own AuthPrompt use
+                // (M8b Task 6): identical component, identical composed
+                // clock/date/field block — no clock-less/field-only
+                // divergence from the lock screen. `unavailableText` covers
+                // the one state the lock screen never has (no greetd socket
+                // to talk to at all).
+                AuthPrompt {
+                    id: authPrompt
                     anchors.centerIn: parent
-                    spacing: Core.Theme.spacing.lg
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: Qt.formatTime(surface._now, "hh:mm")
-                        color: Core.Theme.color.foreground
-                        font.family: Core.Theme.font.display
-                        font.pixelSize: 120
-                    }
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: Qt.formatDate(surface._now, "dddd, MMMM d")
-                        color: Core.Theme.color.foregroundDim
-                        font.family: Core.Theme.font.family
-                        font.pixelSize: Core.Theme.font.title
-                    }
-
-                    Cell {
-                        id: inputCell
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: 320
-                        selected: root.authError !== "" || !Greetd.available
-
-                        Column {
-                            width: parent.width
-                            spacing: Core.Theme.spacing.xs
-                            visible: Greetd.available
-
-                            MetaLabel {
-                                text: root._promptLabel
-                            }
-
-                            TextInput {
-                                id: userInput
-                                width: parent.width
-                                color: inputCell.foreground
-                                font.family: Core.Theme.font.family
-                                font.pixelSize: Core.Theme.font.body
-                                echoMode: root._awaitingResponse && !root._promptEcho ? TextInput.Password : TextInput.Normal
-                                enabled: root._inputEnabled
-                                focus: true
-                                selectByMouse: true
-                                cursorVisible: true
-
-                                onAccepted: {
-                                    root.submit(userInput.text);
-                                    userInput.text = "";
-                                }
-                            }
-                        }
-
-                        // Honest unavailable state (plan-wide constraint):
-                        // no GREETD_SOCK means there is no session to start
-                        // at all, so this replaces the interactive column
-                        // rather than leaving a field that would silently
-                        // no-op on every keystroke.
-                        MetaLabel {
-                            width: parent.width
-                            visible: !Greetd.available
-                            text: "GREETD SOCKET UNAVAILABLE"
-                        }
-                    }
+                    now: surface._now
+                    label: root._promptLabel
+                    errorState: root.authError !== ""
+                    checking: Greetd.state !== GreetdState.Inactive && !root._awaitingResponse
+                    masked: root._awaitingResponse && !root._promptEcho
+                    inputEnabled: root._inputEnabled
+                    unavailableText: Greetd.available ? "" : "GREETD SOCKET UNAVAILABLE"
+                    onAccepted: value => root.submit(value)
                 }
 
                 Timer {

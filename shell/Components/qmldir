@@ -1,3 +1,4 @@
+AuthPrompt AuthPrompt.qml
 Cell Cell.qml
 MetaLabel MetaLabel.qml
 Panel Panel.qml

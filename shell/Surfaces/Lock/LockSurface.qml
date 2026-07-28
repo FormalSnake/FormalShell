@@ -8,8 +8,9 @@ import qs.Components
 // Per-output lock surface, instantiated automatically by WlSessionLock (see
 // Lock.qml's `surface: Component { LockSurface { ... } }`) once for every
 // screen — no manual Variants loop, unlike every other multi-output surface
-// in this shell. DESIGN.md's translation: "oversized clock (display slot),
-// single bordered input cell."
+// in this shell. The composed clock/date/field block itself lives in
+// `qs.Components`' `AuthPrompt` (M8b Task 6) — greeter.qml instantiates the
+// exact same component as its own twin.
 //
 // Blur: DESIGN.md's one exception in the whole shell, and it stays one — a
 // ScreencopyView + MultiEffect blurred-backdrop capture was tried first and
@@ -43,6 +44,7 @@ WlSessionLockSurface {
 
     property string authError: ""
     property bool authenticating: false
+    property bool fingerprintEnrolled: false
     // Idle-blanked (M7 Task 4, forwarded from Lock.qml's `blanked`): hides
     // the clock/backdrop/input entirely, leaving the plain background
     // Rectangle below — a real blank, not a dimmed clock, since the whole
@@ -73,7 +75,7 @@ WlSessionLockSurface {
 
     onVisibleChanged: {
         if (surfaceRoot.visible)
-            Qt.callLater(function () { passwordInput.forceActiveFocus(); });
+            Qt.callLater(function () { authPrompt.forceInputFocus(); });
     }
 
     Rectangle {
@@ -100,8 +102,13 @@ WlSessionLockSurface {
         source: wallpaperImage
         visible: Core.State.wallpaper !== "" && !surfaceRoot.blanked
         blurEnabled: true
+        // Omarchy's own LockView backdrop parameters (Task 6 bullet 4): the
+        // slight negative contrast is what keeps the plate's text reading
+        // crisply against a bright wallpaper instead of just a soft blur.
         blur: 1.0
-        blurMax: 64
+        blurMax: 128
+        blurMultiplier: 1.25
+        contrast: -0.08
     }
 
     // Mouse-move activity detector for `activity()` (see its declaration
@@ -115,66 +122,17 @@ WlSessionLockSurface {
         onPositionChanged: surfaceRoot.activity()
     }
 
-    Column {
-        id: lockColumn
+    AuthPrompt {
+        id: authPrompt
         anchors.centerIn: parent
-        spacing: Theme.spacing.lg
         visible: !surfaceRoot.blanked
-
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.formatTime(surfaceRoot._now, "hh:mm")
-            color: Theme.color.foreground
-            font.family: Theme.font.display
-            font.pixelSize: 120
-        }
-
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.formatDate(surfaceRoot._now, "dddd, MMMM d")
-            color: Theme.color.foregroundDim
-            font.family: Theme.font.family
-            font.pixelSize: Theme.font.title
-        }
-
-        Cell {
-            id: inputCell
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: 320
-            selected: surfaceRoot.authError !== ""
-
-            Column {
-                id: pwColumn
-                width: parent.width
-                spacing: Theme.spacing.xs
-
-                MetaLabel {
-                    text: surfaceRoot.authError !== "" ? surfaceRoot.authError : "PASSWORD"
-                }
-
-                TextInput {
-                    id: passwordInput
-                    width: pwColumn.width
-                    color: inputCell.foreground
-                    font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
-                    echoMode: TextInput.Password
-                    focus: true
-                    selectByMouse: true
-                    cursorVisible: true
-
-                    // Not accepted: this only reports activity alongside
-                    // TextInput's own normal key handling, never instead of
-                    // it.
-                    Keys.onPressed: surfaceRoot.activity()
-
-                    onAccepted: {
-                        surfaceRoot.submit(passwordInput.text);
-                        passwordInput.text = "";
-                    }
-                }
-            }
-        }
+        now: surfaceRoot._now
+        label: surfaceRoot.authError !== "" ? surfaceRoot.authError : "PASSWORD"
+        errorState: surfaceRoot.authError !== ""
+        checking: surfaceRoot.authenticating
+        fingerprintEnrolled: surfaceRoot.fingerprintEnrolled
+        onAccepted: password => surfaceRoot.submit(password)
+        onActivity: surfaceRoot.activity()
     }
 
     Timer {
