@@ -190,7 +190,10 @@ retry once the environment allows it.
 FormalShell installs as a whole system, not just a user shell: one
 home-manager module for the shell itself, and two NixOS modules for the
 system-side pieces home-manager cannot provide (a PAM service, geoclue2 +
-its agent, greetd). Add the flake input first:
+its agent, greetd). See `docs/SWITCHOVER.md` for the current readiness
+report (a per-surface hardware-vs-VM-vs-unverified parity table and known
+gaps) before switching a real machine over — this section is the mechanics,
+that document is the honesty check. Add the flake input first:
 
 ```nix
 {
@@ -294,6 +297,14 @@ normal login never touches them — see `nix/nixos-greeter-module.nix`.
     };
   };
 }
+```
+
+Wired into a NixOS host config as above (home-manager as a NixOS module,
+not standalone), the one command that activates everything — the PAM
+service, greetd, and the shell itself — is:
+
+```sh
+sudo nixos-rebuild switch --flake .#mymachine
 ```
 
 ## Theming
