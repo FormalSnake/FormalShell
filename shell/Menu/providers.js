@@ -55,7 +55,16 @@ function applyProviders(tree, providerFns) {
 // `_activateRow`/`_runAction` spawn-command path already re-copies the entry
 // via `qs ipc call clipboard copy <id>` with zero Menu.qml changes, so no
 // bespoke node kind (and no `_entry`-style back-reference) is needed here.
-function clipboardProvider(items) {
+//
+// `selfPath` is the running shell's own config root (`Quickshell.shellDir`,
+// e.g. `<store-path>/share/formalshell`) — without `--any-display -p
+// <selfPath>` on the call, `qs ipc`'s instance lookup falls back to the
+// default XDG quickshell config dir (command.cpp's locateConfigFile()/
+// selectInstance()), which formalshell doesn't register under, so the copy
+// would silently hit "No running instances" instead of this shell. Every
+// other documented IPC call (README) passes the same two flags for the same
+// reason.
+function clipboardProvider(items, selfPath) {
     return (items || []).map(function (entry) {
         return {
             id: "clipboard." + entry.id,
@@ -65,7 +74,7 @@ function clipboardProvider(items) {
             title: "",
             aliases: [],
             kind: "action",
-            action: "qs ipc call clipboard copy " + entry.id,
+            action: "qs ipc --any-display -p " + selfPath + " call clipboard copy " + entry.id,
             childIds: []
         };
     });

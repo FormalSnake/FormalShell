@@ -135,7 +135,7 @@ PanelWindow {
 
     readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, root._userObj), {
         apps: function () { return Providers.appsProvider(DesktopEntries.applications.values); },
-        clipboard: function () { return Providers.clipboardProvider(ClipboardService.items); }
+        clipboard: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir); }
     })
     readonly property var _nodes: root._tree.nodes
 

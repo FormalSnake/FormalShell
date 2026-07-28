@@ -47,9 +47,16 @@
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
 # duplicate), dumps `clipboard list` again (clip-list-2.json — item count
-# must stay 3), then `menu summon clipboard` so the run's screenshot shows
-# the provider's rows rendered as real menu cells, left open through
-# smoke.png/SMOKE_OK same as --panel.
+# must stay 3), then activates the SECOND entry via the exact self-targeting
+# `qs ipc --any-display -p <shellDir> call clipboard copy <id>` invocation
+# Menu/providers.js's clipboardProvider builds (clip-copy.txt — must read
+# "ok", not "No running instances"; a wrong `-p` target fails silently there)
+# and reads the system clipboard back (clip-paste.txt — must have flipped to
+# the re-copied entry's text), proving the menu row's copy action actually
+# reaches the running shell end to end, not just that the rows render. Then
+# `menu summon clipboard` so the run's screenshot shows the provider's rows
+# rendered as real menu cells, left open through smoke.png/SMOKE_OK same as
+# --panel.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -133,6 +140,11 @@ if $clipboard_mode; then
   else
     wl_copy_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-copy
   fi
+  if command -v wl-paste >/dev/null 2>&1; then
+    wl_paste_bin=$(command -v wl-paste)
+  else
+    wl_paste_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-paste
+  fi
 fi
 
 if $notify_mode || $center_mode; then
@@ -205,6 +217,8 @@ osd_manual_path="$shot_dir/osd-manual.png"
 osd_brightness_path="$shot_dir/osd-brightness.png"
 clip_list1_path="$shot_dir/clip-list-1.json"
 clip_list2_path="$shot_dir/clip-list-2.json"
+clip_copy_path="$shot_dir/clip-copy.txt"
+clip_paste_path="$shot_dir/clip-paste.txt"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -307,6 +321,11 @@ sleep 1
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list2_path" 2>&1
 sleep 1
+copy_id=\$(grep -o '"id":"[^"]*"' "$clip_list2_path" | sed -n '2p' | cut -d'"' -f4)
+"$qs_bin" ipc --any-display -p "$shell_path" call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
+sleep 1
+"$wl_paste_bin" --no-newline > "$clip_paste_path" 2>&1
+sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
 EOF
 fi
@@ -387,9 +406,10 @@ fi
   elif $osd_mode; then
     screenshot_delay=10
   elif $clipboard_mode; then
-    # clipboard-drive.sh's last step (menu summon) lands at its own sleep 8;
-    # 3s buffer for the menu to render before the shot.
-    screenshot_delay=11
+    # clipboard-drive.sh's last step (menu summon) lands at its own sleep 10
+    # (two dumps, a copy-and-paste round trip, then the summon); 3s buffer
+    # for the menu to render before the shot.
+    screenshot_delay=13
   fi
   echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
@@ -455,6 +475,26 @@ if $clipboard_mode; then
   count2=$(grep -o '"id":' "$clip_list2_path" | wc -l | tr -d ' ')
   if [ "$count1" != "3" ] || [ "$count2" != "3" ]; then
     echo "SMOKE_FAIL: clipboard list item count drifted (before=$count1 after-recopy=$count2, want 3/3)" >&2; exit 1
+  fi
+  # The actual menu-copy-action round trip: the self-targeting `clipboard
+  # copy <id>` call must find the running instance ("ok", not "No running
+  # instances") and its side effect (wl-copy) must land on the real system
+  # clipboard.
+  if [ -s "$clip_copy_path" ]; then
+    cat "$clip_copy_path"
+  else
+    echo "SMOKE_FAIL: no clipboard copy result produced" >&2; exit 1
+  fi
+  if ! grep -q "^ok$" "$clip_copy_path"; then
+    echo "SMOKE_FAIL: clipboard copy IPC call did not return ok — got: $(cat "$clip_copy_path")" >&2; exit 1
+  fi
+  if [ -s "$clip_paste_path" ]; then
+    cat "$clip_paste_path"
+  else
+    echo "SMOKE_FAIL: no post-copy clipboard readback produced" >&2; exit 1
+  fi
+  if ! grep -q "clipboard smoke two" "$clip_paste_path"; then
+    echo "SMOKE_FAIL: system clipboard did not flip to the re-copied entry — got: $(cat "$clip_paste_path")" >&2; exit 1
   fi
 fi
 

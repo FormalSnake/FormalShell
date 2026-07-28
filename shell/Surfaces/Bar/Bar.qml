@@ -20,7 +20,16 @@ PanelWindow {
     property var calendarPanel: null
     screen: modelData
     anchors { top: true; left: true; right: true }
-    implicitHeight: 32
+    // Height tracks the tallest cell actually present instead of a fixed
+    // literal — a Cell's implicitHeight is content-derived (Clock's two-line
+    // TIME label needs more than a one-line widget does), and a fixed bar
+    // height shorter than that clips the cell and strands its bottom rule
+    // outside the bar, while a cell shorter than the bar leaves its bottom
+    // rule floating above the bar's own (DESIGN.md rule #1, "no double
+    // rules"). Every Cell-based widget below binds its own `height` back to
+    // this value so its bottom rule always lands exactly on the bar's.
+    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, audioCell.implicitHeight)
+    implicitHeight: bar._cellHeight
     color: Theme.color.background
 
     // Bottom edge: one rule against the desktop.
@@ -64,7 +73,9 @@ PanelWindow {
         // Now-playing joins the clock here in M7.
 
         Clock {
+            id: clockCell
             panel: bar.calendarPanel
+            height: bar._cellHeight
         }
     }
 
@@ -85,7 +96,9 @@ PanelWindow {
         spacing: 0
 
         AudioWidget {
+            id: audioCell
             panel: bar.audioPanel
+            height: bar._cellHeight
         }
     }
 }

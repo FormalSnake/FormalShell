@@ -93,6 +93,16 @@ PanelWindow {
             width: root.panelWidth
             height: root._frameHeight
 
+            // The window itself is transparent (it needs the click-outside
+            // backdrop to span the whole screen), so the frame paints its
+            // own surface — otherwise every cell in it stays see-through,
+            // since Cell.qml's background only opaques on
+            // selected/accent/hovered. Center.qml fills for the same reason.
+            Rectangle {
+                anchors.fill: parent
+                color: Theme.color.background
+            }
+
             // Swallows clicks anywhere inside the frame (including padding
             // between rows) before they ever reach the backdrop above —
             // ordinary nested-MouseArea priority, no manual event plumbing.
