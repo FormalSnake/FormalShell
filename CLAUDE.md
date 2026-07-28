@@ -123,6 +123,21 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   directory in the generic image-selector mode with a caller token,
   `choose` picks a different fixture, and `picker-selection.txt` is read
   back to confirm `{token, value}` landed.
+- `dev/smoke-greeter.sh` (`just vm-greeter`) — a sibling of the other smoke
+  scripts, not a flag on `smoke-niri.sh`: greetd's `default_session`
+  (`nixosModules.formalshell-greeter`) is a persistent system service, not a
+  fresh nested compositor composed per run, so this drives the
+  **already-running** `formalshell-greeter` session instead of spawning one.
+  Restarts greetd for idempotency, waits for the greeter's own Wayland
+  socket (`/run/formalshell-greeter`), screenshots pre-auth, then types a
+  wrong password and the VM's real throwaway `test` password via `wtype`
+  across the `test` -> `greeter` system-account boundary (`sudo env
+  XDG_RUNTIME_DIR=... WAYLAND_DISPLAY=... grim`/`wtype` — root bypasses the
+  greeter runtime dir's 0700 mode the same way it bypasses any other user's
+  files). Fails loudly unless the session log shows a real
+  `pam_authenticate: AUTH_ERR` on the wrong attempt and `Authentication
+  complete.` / `Quitting.` on the real one; pulls both screenshots plus the
+  session log and `journalctl -u greetd` into `artifacts/greeter/`.
 - `dev/smoke-hyprland.sh` — the same loop for the second backend (nested
   Hyprland, `hyprctl`/exec-once instead of niri's `spawn-at-startup`). Nested
   Hyprland is flakier than nested niri in a sandboxed dev environment; if it
@@ -170,7 +185,12 @@ the session env exported), `smoke [flags…]` (sync, run `dev/smoke-niri.sh`
 inside, then `scp` the `SMOKE_OK` screenshot plus any dump/status/query JSON
 back to `./artifacts/` on the mac), `shell` (interactive ssh). `justfile`
 wraps this as `vm-up`/`vm-down`/`vm-build`/`vm-test`/`vm-lint`/`vm-smoke
-*FLAGS` — the mac-side equivalents of `build`/`test`/`lint`/`smoke` above.
+*FLAGS`/`vm-greeter` — the mac-side equivalents of
+`build`/`test`/`lint`/`smoke`/`dev/smoke-greeter.sh` above (`vm-greeter`
+syncs, runs `dev/smoke-greeter.sh` inside, then pulls `artifacts/greeter/`
+back with a plain `scp` — greetd's `default_session` is a standing system
+service already up in the VM, not a fresh nested compositor `vm-smoke`
+spins up itself, so it needs no flag of its own).
 Screenshots and JSON always land on the **mac** filesystem under
 `./artifacts/` (gitignored) — Read-verify them there exactly as you would
 `result/`'s output on a Linux host.

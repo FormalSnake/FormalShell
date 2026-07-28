@@ -12,7 +12,8 @@ consuming config needs near-zero glue.
 
 Pre-alpha. M1 (walking skeleton), M2 (compositor layer), M3 (matugen theme
 engine), M4 (unified menu), M5 (notifications + OSD), M6 (clipboard +
-panels), and M7 (now playing, lock, screensaver, picker) are done: a
+panels), M7 (now playing, lock, screensaver, picker), and M8 (greeter +
+NixOS modules) are done: a
 brutalist three-region bar (workspaces/active window, clock, indicator
 widgets) backed by a formal `CompositorBackend` contract with working niri
 and Hyprland implementations; wallpaper-driven colors that recolor every bar
@@ -28,9 +29,11 @@ bluetooth, power, weather, media) sharing one popout component and one
 (see Panels, Clipboard, and Calendar below); and a real `WlSessionLock` +
 PAM lock screen, an idle-driven terminal-effect screensaver, and a
 ledger-grid image/wallpaper picker (see Now playing, Lock screen,
-Screensaver, and Picker below). CI (qmllint + headless qml-tests) and
-nested-compositor smoke loops are the verification tools for every change.
-The greeter (M8) is the last surface left unbuilt; see
+Screensaver, and Picker below); and a greetd greeter rendering as the lock
+screen's visual twin, real authentication over `Quickshell.Services.Greetd`,
+plus the two NixOS modules a full system install needs (see Install below).
+CI (qmllint + headless qml-tests) and nested-compositor smoke loops are the
+verification tools for every change. See
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
 design.
 
@@ -144,6 +147,22 @@ separate `select` call with a caller token returns a different fixture's
 path through the same request/answer file `MenuIpc`'s `select`/`input`
 already establish.
 
+![Greeter on greetd](docs/screenshots/greeter-niri.png)
+
+The screenshot above is from `dev/smoke-greeter.sh` (`just vm-greeter`), a
+sibling script rather than a `dev/smoke-niri.sh` flag: greetd's
+`default_session` is a persistent system service, not a fresh nested
+compositor composed per run, so this drives the *already-running*
+`formalshell-greeter` session with real `wtype` keystrokes across the
+`test` -> `greeter` system-account boundary instead. It shows the lock
+screen's visual twin at rest — oversized `Theme.font.display` clock, date
+subline, one bordered input cell with its `USER` meta label — mid a real
+`create_session`/`auth_message` greetd conversation. The same run also
+proves a wrong password inverts the cell with the genuine PAM failure text
+(`PAM_AUTHENTICATE: AUTH_ERR`, never a fabricated message) and that the
+correct password reaches `Greetd.launch()` (`Authentication complete.` /
+`Quitting.` in the session log).
+
 The Hyprland backend is implemented and its `debug` IPC dump has been
 verified against a live nested Hyprland session (workspaces, focused window,
 `compositor: "hyprland"` all correct), but nested Hyprland does not reliably
@@ -154,13 +173,65 @@ retry once the environment allows it.
 
 ## Install
 
-Add the flake input and pull in the home-manager module:
+FormalShell installs as a whole system, not just a user shell: one
+home-manager module for the shell itself, and two NixOS modules for the
+system-side pieces home-manager cannot provide (a PAM service, geoclue2 +
+its agent, greetd). Add the flake input first:
 
 ```nix
 {
   inputs.formalshell.url = "github:FormalSnake/FormalShell";
 }
 ```
+
+### `nixosModules.formalshell` — system-side prerequisites
+
+`services.formalshell.enable = true;` turns on everything M6/M7 need from
+the system side that home-manager has no access to. Each backend is its own
+sub-option, defaulted on via `lib.mkDefault` so a config that already manages
+one of these its own way can still override it without a definition conflict
+— see `nix/nixos-module.nix` for the full rationale behind each entry:
+
+| Sub-option | Backs | Default |
+| --- | --- | --- |
+| `pam.enable` | `security.pam.services.formalshell-lock` — the exact service name `Lock.qml`'s `PamContext` authenticates against | `true` |
+| `geoclue.enable` | `services.geoclue2` + its demo agent — `LocationService`'s default position source | `true` |
+| `networkmanager.enable` | `networking.networkmanager` — `NetworkPanel`'s only backend | `true` |
+| `bluetooth.enable` | `hardware.bluetooth` — `BluetoothPanel`'s backend | `true` |
+| `upower.enable` | `services.upower` — the battery bar cell and `PowerPanel` | `true` |
+| `powerProfiles.enable` | `services.power-profiles-daemon` — `PowerPanel`'s profile picker | `true` |
+| `pipewire.enable` | `services.pipewire` — the audio bar cell, audio panel, and volume OSD | `true` |
+
+**Without this module (or an equivalent hand-written
+`security.pam.services.formalshell-lock = { };`), the lock screen cannot
+authenticate at all** — `PamContext` has nothing to talk to. **Without
+`geoclue.enable`'s agent, geoclue never answers** `LocationService`'s
+position requests either.
+
+### `nixosModules.formalshell-greeter` — greetd wiring
+
+`services.formalshell-greeter` wires `services.greetd` to run
+`packages.<system>.formalshell-greeter` as the `default_session`, under a
+wlroots compositor (`compositorPackage`, default `pkgs.sway`):
+
+```nix
+{
+  services.formalshell-greeter = {
+    enable = true;
+    package = inputs.formalshell.packages.${pkgs.system}.formalshell-greeter;
+    sessionCommand = [ "niri" ]; # argv a successful login launches
+  };
+}
+```
+
+`sessionCommand` is the one option a real deployment usually needs to set —
+it's written into a static `settings.json` for the `greeter` system account
+(whose own passwd `HOME` is unwritable, hence the module's own separate
+`runtimeDir`/`stateDir`). `extraEnvironment`, `sessionLogFile`, and
+`postGreeterCommand` exist for a nonstandard seat or verification tooling; a
+normal login never touches them — see `nix/nixos-greeter-module.nix`.
+
+### `homeModules.formalshell` — the shell itself
 
 ```nix
 {
@@ -175,6 +246,41 @@ Add the flake input and pull in the home-manager module:
 `programs.formalshell.settings` (JSON) is written once to
 `~/.config/formalshell/settings.json` and only ever read by the shell — see
 `nix/hm-module.nix`.
+
+### Minimal working `flake.nix`
+
+```nix
+{
+  inputs.formalshell.url = "github:FormalSnake/FormalShell";
+
+  outputs = { self, nixpkgs, home-manager, formalshell, ... }: {
+    nixosConfigurations.mymachine = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        formalshell.nixosModules.formalshell
+        formalshell.nixosModules.formalshell-greeter
+        {
+          services.formalshell.enable = true;
+          services.formalshell-greeter = {
+            enable = true;
+            package = formalshell.packages.x86_64-linux.formalshell-greeter;
+          };
+        }
+        home-manager.nixosModules.home-manager
+        {
+          home-manager.users.me = {
+            imports = [ formalshell.homeModules.default ];
+            programs.formalshell = {
+              enable = true;
+              package = formalshell.packages.x86_64-linux.default;
+            };
+          };
+        }
+      ];
+    };
+  };
+}
+```
 
 ## Theming
 

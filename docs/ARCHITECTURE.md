@@ -15,6 +15,20 @@ companion binary and nothing runs under Node/npm/bun: all logic is QML/JS,
 including the niri IPC client, which talks to niri's Unix sockets directly
 via `Quickshell.Io.Socket`.
 
+A second, separate entry point (`greeter/greeter.qml`, wrapped as the
+`formalshell-greeter` binary — `nix/greeter-package.nix`) runs before any
+user session exists, launched by greetd as its `default_session` instead of
+by a user's systemd. `nix/greeter-package.nix` copies `shell/` verbatim and
+layers `greeter.qml` on top of it, so `import qs.Core`/`qs.Components`
+resolve to the one real `Core`/`Components` tree, never a second copy — but
+it is a genuinely different process: `Quickshell.Services.Greetd` instead of
+compositor sockets or `Quickshell.Services.Pam`, no `WlSessionLock` (greetd
+already isolates the greeter into its own disposable compositor with no
+other client ever attached, so there's nothing for a lock primitive to
+exclude), and no `Core.State` reference at all (the `greeter` system
+account's `$HOME` has no real `state.json` to read, and must not get one
+written to it — see the file's own header comment).
+
 `shell/shell.qml` is the entry point (`//@ pragma ShellId formalshell`). It
 instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar`, one
 `Background`, and one `Toasts` popup stack per connected output; a single
@@ -147,6 +161,9 @@ shell/
       Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay, Canvas-drawn matrix rain
     Picker/
       ImagePicker.qml               ledger image grid (Panel.qml subtype); wallpaper mode + generic select() mode over the same grid
+greeter/
+  greeter.qml                  greetd entry point (Quickshell.Services.Greetd); no WlSessionLock,
+                               no Core.State reference — see the file's own header comment
 tests/
   tst_niri_reducer.qml         qmltestrunner tests for reducer.js
   tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
@@ -166,8 +183,16 @@ dev/
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
                                  the exit-0-always wrapper around `qs ipc call lock lock`
+  greeter-package.nix            stdenvNoCC derivation wrapping `qs -p` at greeter/greeter.qml; copies
+                                 shell/ verbatim and layers greeter.qml on top, no lock-before-sleep companion
   hm-module.nix                 home-manager module (programs.formalshell); wires formalshell-lock-before-sleep
                                  to a systemd --user oneshot bound to sleep.target (programs.formalshell.systemd.lockBeforeSleep)
+  nixos-module.nix               nixosModules.formalshell — security.pam.services.formalshell-lock,
+                                 services.geoclue2 (+ agent), NetworkManager/bluez/upower/
+                                 power-profiles-daemon/pipewire, each an mkDefault-guarded sub-option
+  nixos-greeter-module.nix       nixosModules.formalshell-greeter — services.greetd wired to the
+                                 formalshell-greeter package under a wlroots compositor, generalizing
+                                 the hand-rolled rig M8 Task 2 built directly in nix/testvm.nix
 ```
 
 Every widget under `Surfaces/` reads only `Theme` and `CompositorService` —
@@ -783,6 +808,71 @@ for the full rationale: an `IpcHandler` call is synchronous request/
 response, so the UI's eventual answer can't ride back on the call that
 opened it) — reused rather than reinvented, correlated the same way by a
 caller-supplied token.
+
+## Greeter / greetd flow
+
+```
+services.greetd  (nixosModules.formalshell-greeter)
+  default_session.command = <sessionScript>   (a module-generated wrapper,
+                                                not formalshell-greeter itself)
+    |
+    v
+sessionScript  (nix/nixos-greeter-module.nix)
+  exports XDG_RUNTIME_DIR/HOME/XDG_CONFIG_HOME/WAYLAND_DISPLAY/extraEnvironment
+    (greetd's worker.rs resets the session environment to PAM's own envlist
+     — nothing this module's systemd units export reaches the script for
+     free, confirmed by reading greetd's own Rust source, not the nixpkgs
+     module)
+  backgrounds compositorPackage (default pkgs.sway), waits for its Wayland
+    socket, THEN runs formalshell-greeter in the FOREGROUND — greetd-ipc(7):
+    "the session will start after the greeter process terminates", which is
+    what lets the script know the exact moment that happens, for
+    postGreeterCommand and verification alike (never an async compositor
+    `exec` line racing that signal)
+    |
+    v
+greeter/greeter.qml  (Quickshell.Services.Greetd; no WlSessionLock — greetd
+                       already isolates this process into its own disposable
+                       compositor with no other client ever attached, so
+                       there's nothing for a lock primitive to exclude here)
+  Connections { target: Greetd }
+    onAuthMessage(message, error, responseRequired, echoResponse)
+      -> _promptMessage/_promptEcho/_awaitingResponse drive the one input
+         cell's meta label and TextInput.echoMode
+    onAuthFailure(message) -> authError = message (inverts the input cell,
+      shows greetd's own PAM string verbatim — e.g. "pam_authenticate:
+      AUTH_ERR" — no second mapping table like Lock.qml's PamResult, since
+      greetd hands back plain text, not an enum)
+    onError(message) -> authError = message, UNLESS authError is already
+      set: greetd (0.10.3) unconditionally follows every auth_error with a
+      cancel_session it can no longer deliver, and the resulting "unable to
+      send message: Connection refused" must never clobber the real
+      onAuthFailure text already showing (a confirmed, fixed defect, 0757fc2)
+    onReadyToLaunch() -> Greetd.launch(sessionCommand, [], true)
+      ("Performing animations and such should be done *before* calling
+       launch" — Greetd::launch's own doc; nothing here to animate)
+    |
+    v (successful auth)
+greetd starts sessionCommand as the real user's session (from
+  greeter.sessionCommand in settings.json when run loose, or the static
+  settings.json nixos-greeter-module.nix writes for the `greeter` account
+  when deployed via the module); formalshell-greeter exits,
+  sessionScript's postGreeterCommand runs (a verification hook a normal
+  login ignores), the module's compositor is torn down
+```
+
+`Quickshell.Services.Greetd` exposes no session/user enumeration at all
+(confirmed against greetd's own `connection.cpp` —
+`create_session`/`cancel_session`/`post_auth_message_response`/
+`start_session` is the entire wire protocol), so unlike the lock screen
+there is deliberately no picker here: typing a username into the one input
+cell is the same free-text conversation step the password prompt already
+is, just started by this process instead of a display manager.
+`dev/smoke-greeter.sh` (`just vm-greeter`) drives the whole chain above with
+real `wtype` keystrokes across the `test` -> `greeter` system-account
+boundary rather than an IPC shortcut, the same "verify the action, not the
+input method" reasoning `LockIpc.qml`'s missing `unlock()` already
+establishes.
 
 ## Adding a backend
 
