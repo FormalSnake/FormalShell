@@ -52,6 +52,20 @@
 # dumped to media-status.json so its title/artist can be cross-checked
 # against the fixture's own tags. mpv is killed by PID right after the
 # screenshot, before niri quits, so no player process outlives the run.
+# With --lock, drives the `lock` IPC target end to end: `lock lock` locks the
+# nested session (screenshotted as lock-locked.png — oversized clock, blurred
+# backdrop, single input cell), `qs ipc call lock isLocked` is dumped to
+# lock-islocked-1.txt to prove it flipped true, then `wtype` (a real
+# virtual-keyboard-unstable-v1 client — LockIpc.qml deliberately has no
+# "type this password" shortcut, see its own header comment) types a WRONG
+# password into the real password TextInput and presses Return, screenshotted
+# as lock-error.png (proves the failed-auth inversion + uppercase error meta
+# row), then wtype retypes the VM's real throwaway test password (nix/
+# testvm.nix's users.users.test.password) and Return, screenshotted as
+# lock-unlocked.png, with a second `lock isLocked` (lock-islocked-2.txt) and
+# `lock status` (lock-status.json) proving the round trip completed and the
+# state flipped back to false. This run's generic smoke.png/SMOKE_OK is taken
+# after the round trip, so it shows the normal unlocked session.
 # With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
@@ -99,6 +113,7 @@ panel_mode=false
 panel_name=""
 clipboard_mode=false
 media_mode=false
+lock_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -110,7 +125,8 @@ while [ $# -gt 0 ]; do
     --panel) panel_mode=true; panel_name="$2"; shift 2 ;;
     --clipboard) clipboard_mode=true; shift ;;
     --media) media_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media]" >&2; exit 1 ;;
+    --lock) lock_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock]" >&2; exit 1 ;;
   esac
 done
 
@@ -180,6 +196,26 @@ if $media_mode; then
     ffmpeg_bin=$(command -v ffmpeg)
   else
     ffmpeg_bin=$(nix build 'nixpkgs#ffmpeg-headless^out' --no-link --print-out-paths)/bin/ffmpeg
+  fi
+fi
+
+if $lock_mode; then
+  if command -v wtype >/dev/null 2>&1; then
+    wtype_bin=$(command -v wtype)
+  else
+    wtype_bin=$(nix build 'nixpkgs#wtype^out' --no-link --print-out-paths)/bin/wtype
+  fi
+  # niri's own `screenshot-screen` msg action is deliberately refused while
+  # the session is locked (niri-wm/niri discussion #2384: "to prevent people
+  # from spamming your disk with images even when the session is locked") —
+  # confirmed by reproducing it: the action silently no-ops, no error, no
+  # file. grim talks the underlying wlr-screencopy protocol directly as an
+  # ordinary Wayland client, which niri does NOT gate behind the lock, and
+  # is what actually proves the three lock-state screenshots below.
+  if command -v grim >/dev/null 2>&1; then
+    grim_bin=$(command -v grim)
+  else
+    grim_bin=$(nix build 'nixpkgs#grim^out' --no-link --print-out-paths)/bin/grim
   fi
 fi
 
@@ -257,6 +293,12 @@ clip_copy_path="$shot_dir/clip-copy.txt"
 clip_paste_path="$shot_dir/clip-paste.txt"
 media_status_path="$shot_dir/media-status.json"
 media_pid_path="$shot_dir/mpv.pid"
+lock_locked_path="$shot_dir/lock-locked.png"
+lock_error_path="$shot_dir/lock-error.png"
+lock_unlocked_path="$shot_dir/lock-unlocked.png"
+lock_islocked1_path="$shot_dir/lock-islocked-1.txt"
+lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
+lock_status_path="$shot_dir/lock-status.json"
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -413,6 +455,42 @@ sleep 1
 EOF
 fi
 
+# --lock's whole sequence lives in one script, same rationale as
+# clipboard_drive_script: everything here is strictly ordered (lock, prove
+# it over IPC, screenshot, type a wrong password, screenshot the error
+# state, type the real one, screenshot unlocked, prove the flip back over
+# IPC) with nothing needing to interleave with a niri-side sleep the way
+# menu-select's KDL quoting constraint did.
+if $lock_mode; then
+  lock_drive_script="$shot_dir/lock-drive.sh"
+  cat > "$lock_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call lock lock > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call lock isLocked > "$lock_islocked1_path" 2>&1
+sleep 3
+"$grim_bin" "$lock_locked_path"
+sleep 2
+"$wtype_bin" "wrong-password"
+"$wtype_bin" -k Return
+# The PAM round trip for a wrong password (subprocess fork/exec through the
+# full auth stack) measured ~2.5-3s on this VM, longer than a first glance
+# suggests — a 2s buffer here intermittently caught the screenshot before
+# authError updated. 5s leaves real margin.
+sleep 5
+"$grim_bin" "$lock_error_path"
+sleep 2
+"$wtype_bin" "formalshell-test"
+"$wtype_bin" -k Return
+sleep 3
+"$grim_bin" "$lock_unlocked_path"
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call lock isLocked > "$lock_islocked2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call lock status > "$lock_status_path" 2>&1
+EOF
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -472,6 +550,9 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open media\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call media status > $media_status_path 2>&1\""
   fi
+  if $lock_mode; then
+    echo "spawn-at-startup \"bash\" \"$lock_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -498,6 +579,13 @@ fi
     # (two dumps, a copy-and-paste round trip, then the summon); 3s buffer
     # for the menu to render before the shot.
     screenshot_delay=13
+  elif $lock_mode; then
+    # lock-drive.sh's own final step (the second isLocked/status dump) lands
+    # around its internal sleep sum (~20s in, the wrong-password PAM round
+    # trip's 5s buffer included); this run's generic smoke.png/SMOKE_OK is
+    # taken 2s after that, so it shows the ordinary unlocked session, not
+    # mid-round-trip.
+    screenshot_delay=22
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -607,6 +695,42 @@ if $media_mode; then
   fi
   if ! grep -q "\"artist\":\"$media_track_artist\"" "$media_status_path"; then
     echo "SMOKE_FAIL: media status artist does not match the fixture track's tag ($media_track_artist) — got: $(cat "$media_status_path")" >&2; exit 1
+  fi
+fi
+
+if $lock_mode; then
+  if [ -s "$lock_islocked1_path" ] && grep -q "^true$" "$lock_islocked1_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: lock isLocked did not report true right after lock() — got: $(cat "$lock_islocked1_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -f "$lock_locked_path" ]; then
+    echo "SMOKE_LOCK_LOCKED $lock_locked_path"
+  else
+    echo "SMOKE_FAIL: no lock-locked screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$lock_error_path" ]; then
+    echo "SMOKE_LOCK_ERROR $lock_error_path"
+  else
+    echo "SMOKE_FAIL: no lock-error screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$lock_unlocked_path" ]; then
+    echo "SMOKE_LOCK_UNLOCKED $lock_unlocked_path"
+  else
+    echo "SMOKE_FAIL: no lock-unlocked screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$lock_islocked2_path" ] && grep -q "^false$" "$lock_islocked2_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: lock isLocked did not flip back to false after the real password — got: $(cat "$lock_islocked2_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -s "$lock_status_path" ]; then
+    cat "$lock_status_path"
+  else
+    echo "SMOKE_FAIL: no lock status produced" >&2; exit 1
+  fi
+  if ! grep -q '"locked":false' "$lock_status_path"; then
+    echo "SMOKE_FAIL: lock status did not report locked:false after unlock — got: $(cat "$lock_status_path")" >&2; exit 1
   fi
 fi
 

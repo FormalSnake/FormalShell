@@ -8,6 +8,7 @@ import qs.Surfaces.Menu
 import qs.Surfaces.Notifications
 import qs.Surfaces.Osd
 import qs.Surfaces.Panels
+import qs.Surfaces.Lock
 import qs.Ipc
 
 ShellRoot {
@@ -58,6 +59,10 @@ ShellRoot {
     // trigger time.
     Osd { id: osd }
 
+    // WlSessionLock manages its own per-screen surfaces internally (see
+    // Lock.qml's header comment) — one instance here covers every output.
+    Lock { id: lock }
+
     // Same reasoning again: one instance per panel kind, opened on the
     // focused screen at summon time.
     AudioPanel { id: audioPanelInstance }
@@ -77,4 +82,5 @@ ShellRoot {
     PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance }) }
     ClipboardIpc {}
     MediaIpc {}
+    LockIpc { lockScreen: lock }
 }

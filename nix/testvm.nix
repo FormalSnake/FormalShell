@@ -79,9 +79,25 @@ nixpkgs.lib.nixosSystem {
           # in; ssh command sessions don't count as a login for this
           # purpose the way the getty autologin does.
           linger = true;
+          # M7 Task 3: PamContext needs a real password to authenticate
+          # against for --lock's round trip — the account otherwise has none
+          # (locked). Plaintext `password` is a throwaway, world-readable-
+          # in-the-store credential NixOS itself warns is test-only; this VM
+          # never carries anything else worth protecting.
+          password = "formalshell-test";
         };
         security.sudo.wheelNeedsPassword = false;
         services.getty.autologinUser = "test";
+        # M7 Task 3: Lock.qml's PamContext authenticates against this
+        # service by name rather than reusing "login" (console-specific
+        # checks — pam_securetty and friends — that a lock screen has no
+        # business inheriting). Bare `{ }` picks up the pam module's own
+        # sane defaults (unixAuth = true), same idiom nixpkgs' own
+        # hyprlock/dms-greeter modules use for their lock/greeter PAM
+        # services. A real deployment needs the same system-side
+        # declaration (Task 7 documents it — the home-manager module alone
+        # cannot create a PAM service).
+        security.pam.services.formalshell-lock = { };
 
         # Headless wlroots parent compositor — the Wayland "host session"
         # dev/smoke-*.sh nests its own niri/Hyprland inside, same role
@@ -152,6 +168,20 @@ nixpkgs.lib.nixosSystem {
           # binary asset.
           (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
           pkgs.ffmpeg-headless
+          # M7 Task 3: --lock's round-trip proof types the real test
+          # password into the real password TextInput via a genuine
+          # virtual-keyboard-unstable-v1 client rather than a headless IPC
+          # shortcut (see LockIpc.qml's header comment for why one doesn't
+          # exist) — wtype is the standard tool for that on wlroots-family
+          # compositors, which niri implements support for.
+          pkgs.wtype
+          # M7 Task 3: niri's own `screenshot-screen` msg action is
+          # deliberately refused while the session lock is engaged
+          # (niri-wm/niri discussion #2384) — grim talks wlr-screencopy
+          # directly as an ordinary client, which niri does not gate, so
+          # it's what --lock actually screenshots the locked/unlocked
+          # surfaces with.
+          pkgs.grim
           # M7 Task 2: AppleMusicArtService's own curl calls reach the VM's
           # real DNS/network unwrapped, via nix/package.nix's PATH prefix on
           # the formalshell binary itself — this entry is only so `curl` is
