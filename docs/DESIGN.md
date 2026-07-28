@@ -43,7 +43,10 @@ rules** — not floating cards, not pill buttons, not padded islands.
    remain allowed but default off in this language — rules are solid).
 9. **Motion.** State changes are instant or near-instant color transitions
    (existing 120–200ms); the only "alive" idiom is the breathing opacity pulse
-   for in-progress states. Nothing slides, bounces, or zooms.
+   for in-progress states. Nothing slides, bounces, or zooms **on a ledger
+   surface** — the screensaver's terminal-text-effect exception (see Concrete
+   translations below) is the one continuously-animating surface the shell
+   ships, and it is deliberately not a ledger surface at all.
 
 ## Concrete translations
 
@@ -61,6 +64,20 @@ rules** — not floating cards, not pill buttons, not padded islands.
   meta row; critical = accent-filled cell.
 - **OSD**: one three-cell row (icon | label | value), fixed widths per M-plan.
 - **Lock/greeter**: oversized clock (display slot), single bordered input cell.
+- **Screensaver** (the terminal-text-effect exception): a full-screen,
+  per-monitor overlay that exists only while the session is idle and
+  unattended — no cells, no rules, no meta rows, nothing selectable, nothing
+  that reads as ledger content (spec §10). It renders a continuously
+  animating TTE-style rain/decrypt/matrix effect in the shell's mono font
+  and palette. Rule 9 bans motion happening ON ledger content; this surface
+  has no ledger content to violate — its entire content IS the motion, and
+  it is dismissed instantly (no fade) the moment real input arrives. Same
+  shape of carve-out as rule 8's lock-backdrop blur: one named, load-bearing
+  exception, not a crack in the flat/still doctrine.
+- **Picker**: a grid of image cells sharing hairline rules, one cell per
+  scanned file, keyboard-navigable with rule 4's inversion marking the
+  current cell — grid first, Omarchy's skewed carousel is explicitly a
+  later flourish (spec §11).
 
 ## Token additions this implies (for the next theme-touching plan)
 
