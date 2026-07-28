@@ -32,16 +32,27 @@ Cell {
             font.family: Theme.font.family
             font.pixelSize: Theme.fontSize.body
         }
-    }
 
-    Rectangle {
-        visible: root._panelOpen
-        width: 4
-        height: 4
-        radius: Theme.radius
-        color: Theme.color.accent
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
+        // Reserves the panel-open accent dot's own row in the layout
+        // (DESIGN.md §3 Bar's "accent dot on the inner edge") instead of
+        // free-floating it against the cell's outer bottom edge: Clock is
+        // the two-line cell that sets Bar._cellHeight, so a dot anchored
+        // straight to the cell's bottom has nowhere to go but into the
+        // "hh:mm" text sitting right above it.
+        Item {
+            width: dot.width
+            height: dot.height
+
+            Rectangle {
+                id: dot
+                visible: root._panelOpen
+                width: 4
+                height: 4
+                radius: Theme.radius
+                color: Theme.color.accent
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+        }
     }
 
     Timer {

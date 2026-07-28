@@ -177,13 +177,15 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
     readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
-    // Content sits inset from the card's own border by `popupPadding`
-    // (DESIGN.md's omarchy card chrome: "internal padding") — the search
-    // field and result rows still fuse against each other with zero gap
-    // (Cell's shared-rule contract, unchanged), only the outer edge of that
-    // block gets a gutter from the frame's border.
-    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.popupPadding * 2
-    readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.popupPadding * 2
+    // Content gets a `popupPadding` gutter (DESIGN.md's omarchy card chrome:
+    // "internal padding") only on the top/left, where nothing else closes
+    // the ring — right/bottom stay flush to the frame's own edge, so the
+    // last row's own shared-rule border (Cell's bottom+right contract,
+    // unchanged) is what closes those two sides, same as it always has.
+    // Padding every side would leave the frame's explicit border and each
+    // row's own inset border drawn 14px apart — a doubled ring.
+    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth - Core.Theme.space.popupPadding
+    readonly property real _chrome: Core.Theme.borderWidth + Core.Theme.space.popupPadding
     readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height))
 
     readonly property string _stateDir: {
@@ -523,11 +525,13 @@ PanelWindow {
     }
 
     // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
-    // bordered rectangle"), all four sides at the window's true edges.
-    // Content sits inset from it by `popupPadding` below — Cell.qml's
-    // shared-rule contract still closes the ledger's own rows against each
-    // other, so the "search field + rows" block reads as one continuous
-    // ruled table floating inside this frame.
+    // bordered rectangle") — explicit on top/left, where the popupPadding
+    // gutter below means nothing else would close those two sides. Right and
+    // bottom get no explicit rule here: the search field and result rows
+    // (Cell's shared-rule contract, unchanged) sit flush against those two
+    // edges, so the last row's own bottom+right rule closes the ring by
+    // itself, same as it always has — an explicit rule there too would just
+    // double up 14px inside it.
     Rectangle {
         id: topRule
         anchors.top: parent.top
@@ -542,22 +546,6 @@ PanelWindow {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         width: Core.Theme.borderWidth
-        color: Core.Theme.color.rule
-    }
-
-    Rectangle {
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        width: Core.Theme.borderWidth
-        color: Core.Theme.color.rule
-    }
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Core.Theme.borderWidth
         color: Core.Theme.color.rule
     }
 
