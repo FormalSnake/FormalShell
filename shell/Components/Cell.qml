@@ -8,6 +8,13 @@ import qs.Core
 // Shared-rule contract: a cell draws only its bottom and right rule: the
 // container arranging a grid of cells is responsible for the outer top/left
 // rule, so adjacent cells never double up their shared border.
+//
+// `standalone` (DESIGN.md §3 Bar retrofit) swaps that contract for
+// omarchy's own module chrome: borderless at rest, a hover-cursor fill and
+// border that only appear on mouseover, no persistent rule at all — the
+// bar's discrete widget cells opt into this. Every fused-ledger consumer
+// (menu rows, panel device lists, notification center, the lock field)
+// keeps the shared-rule default until its own scheduled retrofit task.
 Item {
     id: root
 
@@ -16,10 +23,13 @@ Item {
     property bool selected: false
     property bool accent: false
     property bool hovered: false
+    property bool standalone: false
 
     readonly property color foreground: accent
         ? Theme.color.onAccent
         : (selected ? Theme.inverted().fg : Theme.color.foreground)
+
+    readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
     implicitWidth: content.implicitWidth + Theme.spacing.md * 2 + Theme.borderWidth
     implicitHeight: content.implicitHeight + Theme.spacing.sm * 2 + Theme.borderWidth
@@ -32,8 +42,10 @@ Item {
             : root.selected
                 ? Theme.inverted().bg
                 : root.hovered
-                    ? Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, Theme.control("hover").fillAlpha)
+                    ? Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
                     : "transparent"
+        border.width: root.standalone && root.hovered && !root.selected && !root.accent ? root._hoverAppearance.borderWidth : 0
+        border.color: Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.borderAlpha)
     }
 
     Item {
@@ -55,6 +67,7 @@ Item {
     }
 
     Rectangle {
+        visible: !root.standalone
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -63,6 +76,7 @@ Item {
     }
 
     Rectangle {
+        visible: !root.standalone
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right

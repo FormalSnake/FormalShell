@@ -1,10 +1,15 @@
 import QtQuick
 import qs.Core
+import qs.Components
 import qs.Compositor
 
-// One cell per workspace on this bar's output. Falls back to every
-// workspace when none match `outputName` (e.g. the compositor's output
-// name disagrees with Quickshell's screen name).
+// One cell per workspace on this bar's output (DESIGN.md §3 Bar retrofit):
+// a standalone Cell per workspace — borderless at rest, hover-cursor chrome
+// on mouseover, the same discrete-module vocabulary every other bar widget
+// uses. The focused workspace is a full-bleed accent fill (DESIGN.md §2.4)
+// rather than a tinted border. Falls back to every workspace when none
+// match `outputName` (e.g. the compositor's output name disagrees with
+// Quickshell's screen name).
 Item {
     id: root
 
@@ -26,29 +31,21 @@ Item {
         Repeater {
             model: root.visibleWorkspaces
 
-            Rectangle {
+            Cell {
                 id: cell
                 required property var modelData
                 readonly property var ws: modelData
-                readonly property string state: ws.isFocused ? "selected" : (hoverArea.containsMouse ? "hover" : "normal")
-                readonly property var style: Theme.control(state)
-                property color fillColor: style.fill
-                property color borderColor: style.border
 
-                radius: Theme.radius
-                color: Qt.rgba(fillColor.r, fillColor.g, fillColor.b, style.fillAlpha)
-                border.width: style.borderWidth
-                border.color: Qt.rgba(borderColor.r, borderColor.g, borderColor.b, style.borderAlpha)
-                implicitWidth: label.implicitWidth + Theme.spacing.md * 2
-                implicitHeight: label.implicitHeight + Theme.spacing.sm * 2
+                standalone: true
+                accent: ws.isFocused
+                hovered: hoverArea.containsMouse
 
                 Text {
-                    id: label
                     anchors.centerIn: parent
                     text: ws.name !== "" ? ws.name : String(ws.idx)
-                    color: Theme.color.foreground
+                    color: cell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                 }
 
                 MouseArea {

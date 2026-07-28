@@ -40,7 +40,7 @@ Item {
             text: root.appId
             color: Theme.color.foregroundDim
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
 
         Text {
@@ -48,7 +48,7 @@ Item {
             text: root.title
             color: Theme.color.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
             elide: Text.ElideRight
             width: Math.min(implicitWidth, Math.max(0, root.maxWidth - (appIdText.visible ? appIdText.width + row.spacing : 0)))
         }

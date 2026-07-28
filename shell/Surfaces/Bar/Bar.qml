@@ -4,16 +4,17 @@ import QtQuick
 import qs.Core
 import qs.Surfaces.Bar.widgets
 
-// The bar (DESIGN.md §Bar, spec §1, M6 Tasks 1+3): three ledger regions —
-// left (workspaces, active window), center (clock, now-playing), right
-// (indicator/widget cells: battery, audio, network, bluetooth, weather —
-// per the spec's own bar-widget ordering). Region
-// boundaries are rules, never whitespace gaps — DESIGN's rule #2, "rules are
-// the ONLY separation mechanism" — so the left|center and center|right
-// boundaries are always drawn. Workspaces/ActiveWindow predate the Cell
-// system (M1-M3) and stay as-is per CLAUDE.md's "do not restyle outside a
-// plan that schedules it"; only the region scaffolding and the new widgets
-// are Cell-based.
+// The bar (DESIGN.md §3 Bar, spec §1, M6 Tasks 1+3, M8b Task 3 retrofit):
+// three regions — left (workspaces, active window), center (clock,
+// now-playing), right (indicator/widget cells: battery, audio, network,
+// bluetooth, weather — per the spec's own bar-widget ordering). Every
+// widget cell is a `standalone` Cell (DESIGN.md §3): borderless at rest,
+// hover-cursor fill+border only on mouseover, separated from its neighbor
+// by a small gap plus its own padding — omarchy's discrete-module bar, not
+// the M1-M3 fused ledger strip this surface used to be. The region-boundary
+// rules (left|center, center|right, the bar's own bottom edge) stay: they
+// mark a structural region boundary the spec already committed to, not the
+// per-widget rule-sharing this task retired.
 PanelWindow {
     id: bar
     required property var modelData
@@ -84,7 +85,7 @@ PanelWindow {
     Row {
         id: centerRegion
         anchors.centerIn: parent
-        spacing: 0
+        spacing: Theme.space.sm
 
         Clock {
             id: clockCell
@@ -113,7 +114,7 @@ PanelWindow {
         anchors.right: parent.right
         anchors.rightMargin: Theme.spacing.md
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 0
+        spacing: Theme.space.sm
 
         Battery {
             id: batteryCell

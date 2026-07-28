@@ -25,6 +25,7 @@ Cell {
     })
     readonly property string _glyph: root._wiredConnected ? "󰈀" : (root._wifiConnected ? "󰖩" : "󰖪")
 
+    standalone: true
     hovered: hoverArea.containsMouse
 
     Text {
@@ -32,7 +33,7 @@ Cell {
         text: root._glyph
         color: root.foreground
         font.family: Theme.font.family
-        font.pixelSize: Theme.font.body
+        font.pixelSize: Theme.fontSize.body
     }
 
     Rectangle {
@@ -41,8 +42,8 @@ Cell {
         height: 4
         radius: Theme.radius
         color: Theme.color.accent
-        anchors.top: parent.top
-        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
     }
 
     MouseArea {

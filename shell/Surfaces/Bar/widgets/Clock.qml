@@ -2,10 +2,10 @@ import QtQuick
 import qs.Core
 import qs.Components
 
-// Bar cell for the wall clock (DESIGN.md §Bar's own "clock cell with TIME
-// meta label" translation, spec §1, M6 Task 3): a TIME meta row over the
-// hh:mm text, click toggles the calendar panel anchored under this cell —
-// same panel-open accent dot idiom as AudioWidget.qml.
+// Bar cell for the wall clock (DESIGN.md §3 Bar: a standalone discrete
+// module with a TIME meta row over the hh:mm text), click toggles the
+// calendar panel anchored under this cell — same panel-open accent dot
+// idiom as AudioWidget.qml.
 Cell {
     id: root
 
@@ -15,6 +15,7 @@ Cell {
 
     property date _now: new Date()
 
+    standalone: true
     hovered: hoverArea.containsMouse
 
     Column {
@@ -29,7 +30,7 @@ Cell {
             text: Qt.formatTime(root._now, "hh:mm")
             color: root.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
     }
 
@@ -39,8 +40,8 @@ Cell {
         height: 4
         radius: Theme.radius
         color: Theme.color.accent
-        anchors.top: parent.top
-        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
     }
 
     Timer {

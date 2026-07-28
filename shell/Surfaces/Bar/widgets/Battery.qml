@@ -46,6 +46,7 @@ Cell {
     }
 
     visible: root._hasBattery
+    standalone: true
     hovered: hoverArea.containsMouse
 
     Row {
@@ -56,7 +57,7 @@ Cell {
             text: root._glyph
             color: root.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
 
         MetaLabel {
@@ -71,8 +72,8 @@ Cell {
         height: 4
         radius: Theme.radius
         color: Theme.color.accent
-        anchors.top: parent.top
-        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
     }
 
     MouseArea {

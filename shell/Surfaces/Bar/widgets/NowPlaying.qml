@@ -19,6 +19,7 @@ Cell {
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
 
     visible: MediaService.available
+    standalone: true
     hovered: hoverArea.containsMouse
 
     Row {
@@ -29,14 +30,14 @@ Cell {
             text: "󰎇"
             color: root.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
 
         Text {
             text: MediaService.title !== "" ? MediaService.title : MediaService.identity
             color: root.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
             elide: Text.ElideRight
             width: Math.min(implicitWidth, root.maxWidth)
         }
@@ -48,8 +49,8 @@ Cell {
         height: 4
         radius: Theme.radius
         color: Theme.color.accent
-        anchors.top: parent.top
-        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
     }
 
     MouseArea {

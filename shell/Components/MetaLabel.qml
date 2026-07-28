@@ -9,7 +9,7 @@ Text {
 
     color: Theme.color.foregroundDim
     font.family: Theme.font.family
-    font.pixelSize: Theme.font.caption
+    font.pixelSize: Theme.fontSize.caption
     font.capitalization: Font.AllUppercase
     font.letterSpacing: 1
 }
