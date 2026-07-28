@@ -1,3 +1,4 @@
 singleton AudioService AudioService.qml
 singleton BrightnessService BrightnessService.qml
+singleton CalendarEventsService CalendarEventsService.qml
 singleton ClipboardService ClipboardService.qml

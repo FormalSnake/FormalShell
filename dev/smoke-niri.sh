@@ -38,6 +38,11 @@
 # the bar's right region — see Panel.qml's own header comment), left open
 # through the run's normal screenshot so it shows in smoke.png/SMOKE_OK; it
 # has no auto-close, so no timing race with the rest of the run's triggers.
+# `--panel calendar` additionally proves real events render: the isolated
+# HOME always carries a one-event .ics fixture dated today (see the
+# calendar-events fixture setup below) pointed at by settings.json's
+# calendar.icsDir, so the day grid shows an accent dot on today's cell and
+# the TODAY section lists it by summary.
 # With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
@@ -217,6 +222,26 @@ Type=Application
 Name=Formal Test App
 Exec=true
 Icon=utilities-terminal
+EOF
+
+# Calendar events fixture (M6 Task 5): a khal/vdir-style directory of one
+# .ics file with a single VEVENT dated today (computed at run time so the
+# fixture never goes stale), so --panel calendar's screenshot proves a real
+# event renders — the accent dot on today's day cell and the row in the
+# TODAY ledger section — not just that the grid itself draws.
+mkdir -p "$iso_home/.config/formalshell" "$iso_home/.local/share/formalshell/calendar"
+today_ics=$(date -u +%Y%m%d)
+cat > "$iso_home/.local/share/formalshell/calendar/smoke-fixture.ics" <<EOF
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:smoke-fixture-1
+SUMMARY:SMOKE FIXTURE EVENT
+DTSTART;VALUE=DATE:$today_ics
+END:VEVENT
+END:VCALENDAR
+EOF
+cat > "$iso_home/.config/formalshell/settings.json" <<EOF
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}}
 EOF
 
 if $wallpaper_mode; then

@@ -10,6 +10,7 @@ import QtQuick
 // in this file goes through the Core. prefix, not just the new ones.
 import qs.Core as Core
 import qs.Components
+import qs.Services
 import "../../Calendar/progress.js" as Progress
 
 // Month grid + year-progress popout (DESIGN.md §Panels' clock/calendar
@@ -29,7 +30,13 @@ import "../../Calendar/progress.js" as Progress
 // values when present (Progress.resolveOverride: settings wins, state is
 // the fallback). Once both resolve to a valid pair the bar defaults to
 // showing % of life lived instead of % of year elapsed; a further
-// double-click toggles back to year progress.
+// double-click toggles back to year progress. Events (M6 Task 5): a small
+// accent dot under any in-month day that has one, sourced from
+// CalendarEventsService's local .ics reader (docs/spikes/2026-07-28-eds-
+// calendar-events.md records why EDS/GOA over D-Bus lost to that fallback);
+// a TODAY ledger section below the grid lists today's events by summary, or
+// a single dim "NO EVENTS" row when there are none — the honest-empty-state
+// every other panel backend already follows in the test VM.
 Panel {
     id: root
 
@@ -196,14 +203,62 @@ Panel {
                 required property var modelData
                 width: dayGrid.width / 7
                 selected: dayCell.modelData.isToday
+                // Only in-month cells resolve against root._year/_month —
+                // the leading/trailing padding days belong to the adjacent
+                // month and are dimmed rather than queried.
+                readonly property bool hasEvents: dayCell.modelData.inMonth
+                    && CalendarEventsService.onDate(new Date(root._year, root._month, dayCell.modelData.day)).length > 0
 
-                Text {
+                Column {
                     anchors.centerIn: parent
-                    text: dayCell.modelData.day
-                    color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundDim
-                    font.family: Core.Theme.font.family
-                    font.pixelSize: Core.Theme.font.body
+                    spacing: 2
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: dayCell.modelData.day
+                        color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundDim
+                        font.family: Core.Theme.font.family
+                        font.pixelSize: Core.Theme.font.body
+                    }
+
+                    // Reserved space always present so a day without events
+                    // doesn't sit shorter than its row neighbours — flat
+                    // accent dot, no glow, per DESIGN.md.
+                    Rectangle {
+                        width: 4
+                        height: 4
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        color: dayCell.selected ? dayCell.foreground : Core.Theme.color.accent
+                        opacity: dayCell.hasEvents ? 1 : 0
+                    }
                 }
+            }
+        }
+    }
+
+    readonly property var _todaysEvents: CalendarEventsService.onDate(root._today)
+
+    Cell {
+        width: parent.width
+
+        MetaLabel {
+            text: "TODAY"
+        }
+    }
+
+    Repeater {
+        model: root._todaysEvents.length > 0 ? root._todaysEvents : [null]
+
+        delegate: Cell {
+            id: eventCell
+            required property var modelData
+            width: parent.width
+
+            Text {
+                text: eventCell.modelData ? eventCell.modelData.summary : "NO EVENTS"
+                color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.foregroundDim
+                font.family: Core.Theme.font.family
+                font.pixelSize: Core.Theme.font.body
             }
         }
     }
