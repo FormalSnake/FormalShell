@@ -30,6 +30,17 @@ IpcHandler {
             return "error: lock not ready";
         try {
             lockScreen.lock();
+            // WlSessionLock::realizeLockTarget() can silently give up and
+            // unlock again (no compositor ext-session-lock-v1 support, no
+            // surface component, or the surface never producing a
+            // WlSessionLockSurface) without throwing — reading `locked`
+            // straight back catches all three fail-open paths instead of
+            // reporting "ok" while the session stays unlocked. Safe despite
+            // WlSessionLock's own lockStateChanged() not firing on the lock
+            // path (see Lock.qml's lock() comment): this is a fresh
+            // imperative read, not a stale binding.
+            if (!lockScreen.locked)
+                return "error: lock failed to acquire session lock";
             return "ok";
         } catch (e) {
             console.warn("LockIpc: lock() failed:", e.message);

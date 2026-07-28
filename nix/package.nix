@@ -15,6 +15,18 @@ stdenvNoCC.mkDerivation {
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \
       --prefix QT_PLUGIN_PATH : ${qt6.qtmultimedia}/lib/qt-6/plugins
+
+    # lock-before-sleep contract (spec §8): whatever a systemd unit calls
+    # before suspend must keep an exit-0-always behaviour so a lock failure
+    # can never block suspend. `qs ipc call` itself exits nonzero (255) when
+    # no shell instance is running at all — this wrapper is the actual
+    # command such a unit invokes, and it never propagates that.
+    cat > $out/bin/formalshell-lock-before-sleep <<SCRIPT
+#!/usr/bin/env bash
+${lib.getExe' quickshell "qs"} ipc --any-display -p $out/share/formalshell call lock lock >/dev/null 2>&1 || true
+exit 0
+SCRIPT
+    chmod +x $out/bin/formalshell-lock-before-sleep
     runHook postInstall
   '';
   meta = { mainProgram = "formalshell"; license = lib.licenses.mit; platforms = lib.platforms.linux; };

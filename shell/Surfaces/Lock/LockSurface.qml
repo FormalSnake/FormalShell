@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell.Wayland
 import qs.Core
 import qs.Components
@@ -10,18 +9,30 @@ import qs.Components
 // in this shell. DESIGN.md's translation: "oversized clock (display slot),
 // single bordered input cell."
 //
-// Blur: DESIGN.md's one exception in the whole shell. The API ground truth
-// named BackgroundEffect.blurRegion for this, but it's QML_ATTACHED to a
-// ProxyWindowBase (PanelWindow and friends) only — verified against
-// background_effect/qml.cpp's qmlAttachedProperties(), which qobject_casts
-// to ProxyWindowBase/WindowInterface and returns null otherwise.
-// WlSessionLockSurface wraps its own raw QQuickWindow (session_lock.hpp) and
-// is neither, so it cannot carry that attached property. MultiEffect
-// (QtQuick.Effects, bundled in qtdeclarative since Qt 6.5 — no extra nix
-// wiring beyond what quickshell already links against) blurs the
-// ScreencopyView capture client-side instead: slower under the VM's
-// llvmpipe software rasterizer, but it's the mechanism this surface type
-// actually has.
+// Blur: removed (was DESIGN.md's one exception in the whole shell — see
+// docs/DESIGN.md and the spec for the now-stale carve-out language). A
+// ScreencopyView + MultiEffect blurred-backdrop capture was built and
+// verified to render, but it kills the lock screen outright: the moment ANY
+// ScreencopyView is used, quickshell's WlBufferManager unconditionally
+// negotiates v4+ zwp_linux_dmabuf_v1 feedback with no version guard
+// (src/wayland/buffer/dmabuf.cpp), and WlSessionLock::realizeLockTarget()
+// constructs this surface (and fires captureFrame()) BEFORE calling
+// manager->lock() (src/wayland/session_lock.cpp) — so the protocol
+// violation kills the whole Wayland connection, and thus the whole shell
+// process, before the lock has actually engaged. That is a fail-OPEN crash
+// on a security-critical surface: niri logs no "locking session" line at
+// all, `lock isLocked` reports "No running instances", and the screen is
+// never locked. Reproduced identically whether niri's dmabuf feedback
+// negotiates v3 (nested winit backend, no DRM render node) — the fallback
+// niri itself logs is "failed building default dmabuf feedback... error
+// getting EGL device render node ... EGL_EXT_device_drm", a software-
+// rendering property, not a nested-specific one, so a real host without a
+// DRM render node is expected to hit the exact same crash. There is no
+// QML-level guard available (the dmabuf negotiation is unconditional C++
+// fired the instant a ScreencopyView exists, not deferred to
+// captureFrame()), so the only fix that keeps lock() from crashing the
+// shell is not using ScreencopyView at all. The backdrop is the plain solid
+// Rectangle below.
 WlSessionLockSurface {
     id: surfaceRoot
 
@@ -74,58 +85,6 @@ WlSessionLockSurface {
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
         onPositionChanged: surfaceRoot.activity()
-    }
-
-    // Single-shot capture of whatever's on screen right before the lock
-    // commits (WlSessionLock preloads surfaces before calling
-    // manager->lock(), per session_lock.cpp) — a frozen backdrop, not a live
-    // feed; a lock screen has no reason to keep re-capturing while shown.
-    // captureSource only becomes valid once WlSessionLock assigns this
-    // surface's screen (after Component construction, per
-    // updateSurfaces()'s call order), so the frame is requested reactively
-    // rather than from Component.onCompleted.
-    //
-    // Known environment gap, not a FormalShell bug: niri's winit (nested)
-    // backend does not implement zwp_linux_dmabuf_v1 at all (niri-wm/niri
-    // issue #2944) — the compositor advertises v3 while quickshell's own
-    // WlBufferManager unconditionally negotiates v4+ dmabuf feedback the
-    // moment ANY ScreencopyView is used, with no version guard, which the
-    // server rejects as a protocol violation and kills the whole Wayland
-    // connection (fatal, unrecoverable, un-catchable from QML — verified via
-    // the exact wire error: "invalid version for zwp_linux_dmabuf_v1#N.
-    // get_default_feedback (3, need at least 4)"). This only reproduces
-    // nested (dev/smoke-niri.sh's own niri-in-niri test harness); real niri
-    // on its TTY/DRM backend needs full dmabuf support for its own hardware
-    // rendering and is not expected to hit this. `just vm-smoke --lock`
-    // therefore cannot exercise the blurred backdrop specifically until
-    // niri's winit backend gains the protocol or a real host is available;
-    // every other part of this surface (clock, input cell, PAM round trip,
-    // failed-auth inversion) is independently verified with this block
-    // temporarily removed — see the M7 Task 3 verification notes. M7 Task 4
-    // re-verified this same limitation still holds (the whole surface
-    // crashes the instant `lock()` is called on this nested winit backend,
-    // reproduced identically after adding idle blanking/fingerprint/error
-    // states) and again verified every other part of this surface —
-    // blanking, the wall-clock resume guard, the three-way uppercase error
-    // split, the PAM round trip — with this block temporarily removed, then
-    // restored the real code below and reconfirmed the exact same crash for
-    // the record before committing.
-    ScreencopyView {
-        id: capture
-        anchors.fill: parent
-        captureSource: surfaceRoot.screen
-        live: false
-        visible: false
-        onCaptureSourceChanged: if (capture.captureSource) capture.captureFrame()
-    }
-
-    MultiEffect {
-        anchors.fill: capture
-        source: capture
-        visible: capture.hasContent && !surfaceRoot.blanked
-        blurEnabled: true
-        blur: 1.0
-        blurMax: 64
     }
 
     Column {

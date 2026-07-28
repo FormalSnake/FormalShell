@@ -157,8 +157,12 @@ pinning becomes a shell feature, not an external `inotifywait` systemd unit.
   `spacing.scale` multiplier — bump one number, the whole shell rescales;
   individual tokens can still be pinned.
 
-**Brutalist defaults**: corner radius 0, no blur (single exception: the lock
-screen's frozen wallpaper backdrop), no shadows, 2px borders, monospace
+**Brutalist defaults**: corner radius 0, no blur — no exceptions (the lock
+screen's frozen-wallpaper backdrop was designed as the one exception, but a
+`ScreencopyView` capture crashes the whole shell against quickshell 0.3.0's
+dmabuf negotiation the instant `lock()` runs, so its backdrop is a plain
+solid fill instead; see `shell/Surfaces/Lock/LockSurface.qml`), no
+shadows, 2px borders, monospace
 everywhere via the fontconfig `monospace` alias (system mono font change
 reflows the entire shell, no restart), Nerd Font glyphs as the icon language
 (no SVG icon set).
@@ -258,7 +262,8 @@ Any future settings UI writes exclusively to a mechanism that composes with
 7. **OSD** — volume/brightness/media; single bottom-centered card with
    fixed-width icon/value columns so nothing jitters between states.
 8. **Lock screen** — `WlSessionLock` + `PamContext` directly (no external
-   binary). Blurred current wallpaper backdrop, idle blanking with the
+   binary). Solid-fill backdrop (a blurred wallpaper capture was designed
+   but crashes quickshell 0.3.0, see docs/DESIGN.md), idle blanking with the
    wall-clock resume guard, fingerprint as a parallel PAM flow when
    enrolled. IPC target `lock`: `lock`, `isLocked`, `status` — the
    `lock-before-sleep` unit changes one command and keeps its exit-0-always

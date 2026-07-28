@@ -52,20 +52,25 @@
 # dumped to media-status.json so its title/artist can be cross-checked
 # against the fixture's own tags. mpv is killed by PID right after the
 # screenshot, before niri quits, so no player process outlives the run.
-# With --lock, drives the `lock` IPC target end to end: `lock lock` locks the
-# nested session (screenshotted as lock-locked.png — oversized clock, blurred
-# backdrop, single input cell), `qs ipc call lock isLocked` is dumped to
-# lock-islocked-1.txt to prove it flipped true, then `wtype` (a real
-# virtual-keyboard-unstable-v1 client — LockIpc.qml deliberately has no
-# "type this password" shortcut, see its own header comment) types a WRONG
-# password into the real password TextInput and presses Return, screenshotted
-# as lock-error.png (proves the failed-auth inversion + uppercase error meta
-# row), then wtype retypes the VM's real throwaway test password (nix/
-# testvm.nix's users.users.test.password) and Return, screenshotted as
-# lock-unlocked.png, with a second `lock isLocked` (lock-islocked-2.txt) and
-# `lock status` (lock-status.json) proving the round trip completed and the
-# state flipped back to false. This run's generic smoke.png/SMOKE_OK is taken
-# after the round trip, so it shows the normal unlocked session.
+# With --lock: first, before the nested session even starts, runs
+# `result/bin/formalshell-lock-before-sleep` with no shell instance running
+# at all and records its exit code (lock-before-sleep-rc.txt must be "0" —
+# the lock-before-sleep exit-0-always contract, spec §8). Then drives the
+# `lock` IPC target end to end in-session: `lock lock`'s own exit code is
+# recorded too (lock-call-rc.txt) locking the nested session (screenshotted
+# as lock-locked.png — oversized clock, single input cell), `qs ipc call
+# lock isLocked` is dumped to lock-islocked-1.txt to prove it flipped true,
+# then `wtype` (a real virtual-keyboard-unstable-v1 client — LockIpc.qml
+# deliberately has no "type this password" shortcut, see its own header
+# comment) types a WRONG password into the real password TextInput and
+# presses Return, screenshotted as lock-error.png (proves the failed-auth
+# inversion + uppercase error meta row), then wtype retypes the VM's real
+# throwaway test password (nix/testvm.nix's users.users.test.password) and
+# Return, screenshotted as lock-unlocked.png, with a second `lock isLocked`
+# (lock-islocked-2.txt) and `lock status` (lock-status.json) proving the
+# round trip completed and the state flipped back to false. This run's
+# generic smoke.png/SMOKE_OK is taken after the round trip, so it shows the
+# normal unlocked session.
 # With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
@@ -299,6 +304,19 @@ lock_unlocked_path="$shot_dir/lock-unlocked.png"
 lock_islocked1_path="$shot_dir/lock-islocked-1.txt"
 lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
 lock_status_path="$shot_dir/lock-status.json"
+lock_call_rc_path="$shot_dir/lock-call-rc.txt"
+lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
+
+# lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
+# session below ever starts a shell instance — the exact "no running
+# instance" scenario a real lock-before-sleep systemd unit must survive
+# (bare `qs ipc call lock lock` exits 255 here; the wrapper must not).
+if $lock_mode; then
+  lock_before_sleep_rc=0
+  "$PWD/result/bin/formalshell-lock-before-sleep" || lock_before_sleep_rc=$?
+  echo "$lock_before_sleep_rc" > "$lock_before_sleep_rc_path"
+fi
+
 cfg=$(mktemp -d)/config.kdl
 
 # Isolated HOME for the nested niri process and everything it spawns — see
@@ -467,6 +485,7 @@ if $lock_mode; then
 #!/usr/bin/env bash
 sleep 3
 "$qs_bin" ipc --any-display -p "$shell_path" call lock lock > /dev/null 2>&1
+echo \$? > "$lock_call_rc_path"
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call lock isLocked > "$lock_islocked1_path" 2>&1
 sleep 3
@@ -699,6 +718,16 @@ if $media_mode; then
 fi
 
 if $lock_mode; then
+  if [ -s "$lock_before_sleep_rc_path" ] && grep -q "^0$" "$lock_before_sleep_rc_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: formalshell-lock-before-sleep did not exit 0 with no shell instance running — got: $(cat "$lock_before_sleep_rc_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -s "$lock_call_rc_path" ] && grep -q "^0$" "$lock_call_rc_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: lock lock IPC call exited non-zero — got: $(cat "$lock_call_rc_path" 2>/dev/null)" >&2; exit 1
+  fi
   if [ -s "$lock_islocked1_path" ] && grep -q "^true$" "$lock_islocked1_path"; then
     :
   else

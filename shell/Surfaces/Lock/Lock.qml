@@ -175,7 +175,18 @@ Item {
         root._pendingPassword = password;
         root.authError = "";
         root.authenticating = true;
-        pam.start();
+        // start() returns whether the conversation actually started
+        // (PamContext::startConversation() logs qCritical and bails without
+        // ever emitting completed/onError when `config` names a PAM service
+        // /etc/pam.d/<config> doesn't have, e.g. formalshell-lock never
+        // declared) — without this check that failure is a permanent silent
+        // no-op: authenticating latches true forever, no error ever shows,
+        // and the typed password sits in _pendingPassword indefinitely.
+        if (!pam.start()) {
+            root.authenticating = false;
+            root._pendingPassword = "";
+            root.authError = "PAM ERROR";
+        }
     }
 
     PamContext {
