@@ -9,6 +9,11 @@ import QtQuick
 // v1 keys: menu.customPowerButtons: [{ label, icon, command, confirm? }],
 // bar.position (reserved), theme.fontDisplay (reserved), media.appleMusicArt
 // (bool, default false — AppleMusicArtService's opt-in, M7 Task 2).
+// lock.blankAfterSeconds (number, default 30 — Lock.qml's idle-blank
+// timeout, seconds, fed straight to IdleMonitor.timeout), lock.
+// fingerprintPamService (string, default "" — the PAM service name for
+// Lock.qml's parallel fingerprint flow; empty means no reader enrolled, so
+// it never starts, M7 Task 4).
 Singleton {
     id: root
 

@@ -15,11 +15,26 @@ IpcHandler {
     // `lock` too — QML can't have a property and a method share one name.
     property var lockScreen: null
 
+    // The command a `lock-before-sleep` systemd unit calls before suspend
+    // (spec §8) must keep an exit-0-always contract so a lock failure can
+    // never block suspend — `qs ipc call` itself already only exits nonzero
+    // when the target/function lookup fails or the call never completes at
+    // the wire level (never on the QML function's own return value), but
+    // the try/catch is defense in depth: WlSessionLock's own docs warn a
+    // dying lock still leaves the screen forcibly locked, so this must
+    // never let an unexpected exception surface as an uncaught error
+    // instead of the ordinary "error: ..." string every other IPC failure
+    // path here already returns.
     function lock(): string {
         if (!lockScreen)
             return "error: lock not ready";
-        lockScreen.lock();
-        return "ok";
+        try {
+            lockScreen.lock();
+            return "ok";
+        } catch (e) {
+            console.warn("LockIpc: lock() failed:", e.message);
+            return "error: " + e.message;
+        }
     }
 
     function isLocked(): string {
@@ -34,7 +49,8 @@ IpcHandler {
         return JSON.stringify({
             locked: lockScreen.locked,
             secure: lockScreen.secure,
-            authError: lockScreen.authError
+            authError: lockScreen.authError,
+            blanked: lockScreen.blanked
         });
     }
 }
