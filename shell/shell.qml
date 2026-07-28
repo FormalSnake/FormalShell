@@ -7,6 +7,7 @@ import qs.Surfaces.Bar
 import qs.Surfaces.Menu
 import qs.Surfaces.Notifications
 import qs.Surfaces.Osd
+import qs.Surfaces.Panels
 import qs.Ipc
 
 ShellRoot {
@@ -22,7 +23,7 @@ ShellRoot {
         model: Quickshell.screens
 
         delegate: Component {
-            Bar {}
+            Bar { audioPanel: audioPanelInstance }
         }
     }
 
@@ -49,10 +50,15 @@ ShellRoot {
     // trigger time.
     Osd { id: osd }
 
+    // Same reasoning again: one instance per panel kind, opened on the
+    // focused screen at summon time. Only audio exists as of M6 Task 1.
+    AudioPanel { id: audioPanelInstance }
+
     DebugIpc { menu: menu }
     ThemeIpc {}
     WallpaperIpc {}
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
+    PanelIpc { registry: ({ audio: audioPanelInstance }) }
 }

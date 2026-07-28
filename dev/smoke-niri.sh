@@ -32,6 +32,12 @@
 # Each trigger is followed 1s later by its own screenshot — comfortably
 # inside the OSD's 1.6s auto-hide window — with enough gap between triggers
 # that the previous popup has long since auto-hidden before the next fires.
+# With --panel <name>, drives the `panel` IPC target's real route: `qs ipc
+# call panel open <name>` opens the named popout (no bar-cell click, so
+# Panel.qml's anchorX stays unset and the frame falls back to sitting under
+# the bar's right region — see Panel.qml's own header comment), left open
+# through the run's normal screenshot so it shows in smoke.png/SMOKE_OK; it
+# has no auto-close, so no timing race with the rest of the run's triggers.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -61,6 +67,8 @@ menu_mode=false
 notify_mode=false
 center_mode=false
 osd_mode=false
+panel_mode=false
+panel_name=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -69,7 +77,8 @@ while [ $# -gt 0 ]; do
     --notify) notify_mode=true; shift ;;
     --center) center_mode=true; shift ;;
     --osd) osd_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd]" >&2; exit 1 ;;
+    --panel) panel_mode=true; panel_name="$2"; shift 2 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>]" >&2; exit 1 ;;
   esac
 done
 
@@ -280,6 +289,9 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 9 && '$wpctl_bin' set-volume @DEFAULT_AUDIO_SINK@ 30%\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call osd brightness\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && niri msg action screenshot-screen --path $osd_brightness_path\""
+  fi
+  if $panel_mode; then
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
   fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
