@@ -1,5 +1,14 @@
 import QtQuick
-import qs.Core
+// Aliased, not a bare `import qs.Core`: QtQuick already exports a type
+// named State (for property-binding states), and an unqualified import
+// loses that name collision — State.wallpaper (here, calendarBirthYear)
+// reads back undefined at runtime instead of hitting the qs.Core singleton
+// (verified with a throwaway probe script, same failure ThemeEngine.qml's
+// own header comment documents). Core.State/Core.Config/Core.Theme
+// disambiguate it; importing qs.Core a second time unqualified alongside
+// this one breaks qmllint's module resolution entirely, so every reference
+// in this file goes through the Core. prefix, not just the new ones.
+import qs.Core as Core
 import qs.Components
 import "../../Calendar/progress.js" as Progress
 
@@ -11,14 +20,26 @@ import "../../Calendar/progress.js" as Progress
 // accent-fill cell with its percentage as mono text, mirroring AudioPanel's
 // slider idiom. Modeled on Omarchy quattro's calendar widget (read only,
 // not copied — CLAUDE.md's read-reference rule for that repo). The
-// life-progress easter egg (double-click, birth year / life expectancy
-// prompt via the menu's input mode) is M6 Task 4; this task only wires the
-// always-available year fraction.
+// life-progress easter egg (M6 Task 4): double-clicking the year-progress
+// bar prompts, through the menu's existing "input" mode, first for birth
+// year then life expectancy; both persist to state.json via
+// State.setCalendarLifeProgress(), mirroring wallpaper/mode/dnd's own alias
+// + writeAdapter pattern. settings.json's calendar.birthYear/
+// calendar.lifeExpectancy declaratively override the persisted state
+// values when present (Progress.resolveOverride: settings wins, state is
+// the fallback). Once both resolve to a valid pair the bar defaults to
+// showing % of life lived instead of % of year elapsed; a further
+// double-click toggles back to year progress.
 Panel {
     id: root
 
     panelTitle: "CALENDAR"
     panelWidth: 280
+
+    // Set from shell.qml, the single Menu instance, needed to drive the
+    // life-progress easter egg's two-step birth-year/life-expectancy prompt
+    // through the menu's own input mode (M6 Task 4).
+    property var menu: null
 
     readonly property var _monthNames: [
         "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
@@ -42,6 +63,75 @@ Panel {
     readonly property int _year: root._today.getFullYear()
     readonly property int _month: root._today.getMonth()
     readonly property real _yearFraction: Progress.yearFraction(root._today)
+
+    // Settings overrides the persisted state value per key (Config's own
+    // "settings never written by the shell, always wins when present" rule)
+    // — Config.get's own fallback param already resolves this, but going
+    // through Progress.resolveOverride keeps the precedence itself pure and
+    // unit-tested rather than folded silently into a QML binding.
+    readonly property var _birthYear: Progress.resolveOverride(Core.Config.get("calendar.birthYear", undefined), Core.State.calendarBirthYear)
+    readonly property var _lifeExpectancy: Progress.resolveOverride(Core.Config.get("calendar.lifeExpectancy", undefined), Core.State.calendarLifeExpectancy)
+    readonly property var _lifeFraction: Progress.lifeFraction(root._today, root._birthYear, root._lifeExpectancy)
+    readonly property bool _lifeValuesSet: root._lifeFraction !== null
+
+    // Defaults to the life view the moment a valid pair exists (a live
+    // binding until the user's own double-click below reassigns it, which
+    // QML then treats as a plain stored value — see the toggle handler).
+    property bool _showLifeProgress: root._lifeValuesSet
+
+    readonly property real _displayFraction: root._showLifeProgress ? root._lifeFraction : root._yearFraction
+    readonly property string _displayLabel: root._showLifeProgress ? "LIFE" : "YEAR"
+
+    // "birthYear" | "lifeExpectancy" | "" — which half of the two-step
+    // prompt is currently outstanding, correlated against the token on each
+    // menu.selectionResolved.
+    property string _pendingStep: ""
+    property int _pendingBirthYear: 0
+
+    function _beginLifeEasterEgg() {
+        if (!root.menu)
+            return;
+        root._pendingStep = "birthYear";
+        root.menu.openInput("Birth year", "calendar-birth-year");
+    }
+
+    function _onProgressDoubleClicked() {
+        if (root._lifeValuesSet)
+            root._showLifeProgress = !root._showLifeProgress;
+        else
+            root._beginLifeEasterEgg();
+    }
+
+    // menu.openInput() must never be called synchronously from inside this
+    // handler: it's itself invoked from within Menu's own _writeSelection(),
+    // ahead of the mode/close bookkeeping that call's caller still has left
+    // to run, so an immediate re-open would get clobbered the instant that
+    // outer call unwinds. Qt.callLater defers it to the next event-loop
+    // turn, after Menu has finished settling back to "menu" mode.
+    Connections {
+        target: root.menu
+
+        function onSelectionResolved(token, value, cancelled) {
+            if (token === "calendar-birth-year" && root._pendingStep === "birthYear") {
+                if (cancelled) {
+                    root._pendingStep = "";
+                    return;
+                }
+                root._pendingBirthYear = parseInt(value, 10);
+                root._pendingStep = "lifeExpectancy";
+                Qt.callLater(function () {
+                    root.menu.openInput("Life expectancy (years)", "calendar-life-expectancy");
+                });
+            } else if (token === "calendar-life-expectancy" && root._pendingStep === "lifeExpectancy") {
+                root._pendingStep = "";
+                if (cancelled)
+                    return;
+                var lifeExpectancy = parseInt(value, 10);
+                if (Progress.lifeFraction(root._today, root._pendingBirthYear, lifeExpectancy) !== null)
+                    Core.State.setCalendarLifeProgress(root._pendingBirthYear, lifeExpectancy);
+            }
+        }
+    }
 
     function _daysInMonth(year, month) {
         return new Date(year, month + 1, 0).getDate();
@@ -110,9 +200,9 @@ Panel {
                 Text {
                     anchors.centerIn: parent
                     text: dayCell.modelData.day
-                    color: dayCell.modelData.inMonth ? dayCell.foreground : Theme.color.foregroundDim
-                    font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundDim
+                    font.family: Core.Theme.font.family
+                    font.pixelSize: Core.Theme.font.body
                 }
             }
         }
@@ -124,30 +214,37 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Core.Theme.spacing.xs
 
             MetaLabel {
-                text: "YEAR"
+                text: root._displayLabel
             }
 
             Text {
-                text: Progress.formatPercent(root._yearFraction)
+                text: Progress.formatPercent(root._displayFraction)
                 color: yearCell.foreground
-                font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.family: Core.Theme.font.family
+                font.pixelSize: Core.Theme.font.body
             }
 
             // Flat accent fill, no thumb, no radius — same idiom as
-            // AudioPanel's volume slider, read-only here.
+            // AudioPanel's volume slider. Double-click is the life-progress
+            // easter egg: prompts for birth year/life expectancy the first
+            // time, toggles year<->life once a valid pair exists.
             Rectangle {
                 width: parent.width
                 height: 6
-                color: Theme.color.rule
+                color: Core.Theme.color.rule
 
                 Rectangle {
-                    width: parent.width * root._yearFraction
+                    width: parent.width * root._displayFraction
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Core.Theme.color.accent
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onDoubleClicked: root._onProgressDoubleClicked()
                 }
             }
         }

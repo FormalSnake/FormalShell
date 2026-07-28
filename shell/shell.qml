@@ -53,7 +53,7 @@ ShellRoot {
     // Same reasoning again: one instance per panel kind, opened on the
     // focused screen at summon time.
     AudioPanel { id: audioPanelInstance }
-    CalendarPanel { id: calendarPanelInstance }
+    CalendarPanel { id: calendarPanelInstance; menu: menu }
 
     DebugIpc { menu: menu }
     ThemeIpc {}

@@ -44,6 +44,13 @@ PanelWindow {
     property var _selectOptions: []
     property string _selectToken: ""
 
+    // Fires whenever a select()/input() request resolves (submitted value or
+    // cancelled) — the same event external callers poll menu-selection.txt
+    // for (see MenuIpc.qml's header comment), exposed as a signal so
+    // in-process callers (the Calendar panel's life-progress easter egg,
+    // M6 Task 4) don't need a FileView of their own.
+    signal selectionResolved(string token, var value, bool cancelled)
+
     property string _defaultMenuText: ""
     property string _userMenuText: ""
 
@@ -218,6 +225,7 @@ PanelWindow {
 
     function _writeSelection(payload) {
         root._writeSelectionFile(JSON.stringify(payload));
+        root.selectionResolved(payload.token, payload.value !== undefined ? payload.value : null, !!payload.cancelled);
     }
 
     // Leaving select/input mode without the caller ever getting an answer

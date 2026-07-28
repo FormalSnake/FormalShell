@@ -96,4 +96,26 @@ TestCase {
     function test_format_percent_one() {
         compare(Progress.formatPercent(1), "100%");
     }
+
+    // resolveOverride
+
+    function test_resolve_override_prefers_settings_when_present() {
+        compare(Progress.resolveOverride(1990, 1985), 1990);
+    }
+
+    function test_resolve_override_settings_zero_counts_as_present() {
+        compare(Progress.resolveOverride(0, 1985), 0);
+    }
+
+    function test_resolve_override_falls_back_to_state_when_settings_undefined() {
+        compare(Progress.resolveOverride(undefined, 1985), 1985);
+    }
+
+    function test_resolve_override_falls_back_to_state_when_settings_null() {
+        compare(Progress.resolveOverride(null, 1985), 1985);
+    }
+
+    function test_resolve_override_undefined_when_both_absent() {
+        compare(Progress.resolveOverride(undefined, undefined), undefined);
+    }
 }

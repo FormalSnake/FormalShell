@@ -13,6 +13,8 @@ Singleton {
     property alias wallpaper: adapter.wallpaper
     property alias mode: adapter.mode
     property alias dnd: adapter.dnd
+    property alias calendarBirthYear: adapter.calendarBirthYear
+    property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -30,6 +32,16 @@ Singleton {
 
     function setDnd(on) {
         adapter.dnd = on;
+        stateFile.writeAdapter();
+    }
+
+    // Both keys land in one write — the life-progress easter egg (Calendar
+    // panel, M6 Task 4) always collects birth year then life expectancy as a
+    // single flow, and a half-set pair (birth year alone) has no valid
+    // lifeFraction() to render anyway.
+    function setCalendarLifeProgress(birthYear, lifeExpectancy) {
+        adapter.calendarBirthYear = birthYear;
+        adapter.calendarLifeExpectancy = lifeExpectancy;
         stateFile.writeAdapter();
     }
 
@@ -54,6 +66,8 @@ Singleton {
             property string wallpaper: ""
             property string mode: "dark"
             property bool dnd: false
+            property int calendarBirthYear: 0
+            property int calendarLifeExpectancy: 0
         }
     }
 }

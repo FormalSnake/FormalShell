@@ -40,3 +40,12 @@ function lifeFraction(now, birthYear, lifeExpectancy) {
 function formatPercent(fraction) {
     return Math.round(fraction * 100) + "%";
 }
+
+// Settings (`calendar.birthYear`/`calendar.lifeExpectancy`) declaratively
+// override the runtime state value when present; state.json's own value
+// (written by the life-progress easter egg) is the fallback when settings
+// is silent — never the other way around, matching Config's read-only-
+// settings-wins convention elsewhere in the shell.
+function resolveOverride(settingsValue, stateValue) {
+    return (settingsValue === undefined || settingsValue === null) ? stateValue : settingsValue;
+}
