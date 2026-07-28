@@ -171,6 +171,14 @@ nixpkgs.lib.nixosSystem {
         hardware.graphics.enable = true;
         security.polkit.enable = true;
 
+        # M6 Task 6: the network panel needs a real NetworkManager-managed
+        # device to enumerate (the virtio NIC gives a genuine wired
+        # connection); the bluetooth panel needs bluez running even though
+        # QEMU's aarch64 "virt" machine has no adapter at all — its honest
+        # "NO ADAPTER" state is the expected, passing screenshot.
+        networking.networkmanager.enable = true;
+        hardware.bluetooth.enable = true;
+
         fonts = {
           packages = [ pkgs.nerd-fonts.jetbrains-mono ];
           fontconfig.enable = true;

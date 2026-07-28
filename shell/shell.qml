@@ -23,7 +23,12 @@ ShellRoot {
         model: Quickshell.screens
 
         delegate: Component {
-            Bar { audioPanel: audioPanelInstance; calendarPanel: calendarPanelInstance }
+            Bar {
+                audioPanel: audioPanelInstance
+                calendarPanel: calendarPanelInstance
+                networkPanel: networkPanelInstance
+                bluetoothPanel: bluetoothPanelInstance
+            }
         }
     }
 
@@ -54,6 +59,8 @@ ShellRoot {
     // focused screen at summon time.
     AudioPanel { id: audioPanelInstance }
     CalendarPanel { id: calendarPanelInstance; menu: menu }
+    NetworkPanel { id: networkPanelInstance }
+    BluetoothPanel { id: bluetoothPanelInstance }
 
     DebugIpc { menu: menu }
     ThemeIpc {}
@@ -61,6 +68,6 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance }) }
     ClipboardIpc {}
 }

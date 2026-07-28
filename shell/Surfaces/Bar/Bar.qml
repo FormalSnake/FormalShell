@@ -18,6 +18,8 @@ PanelWindow {
     required property var modelData
     property var audioPanel: null
     property var calendarPanel: null
+    property var networkPanel: null
+    property var bluetoothPanel: null
     screen: modelData
     anchors { top: true; left: true; right: true }
     // Height tracks the tallest cell actually present instead of a fixed
@@ -28,7 +30,7 @@ PanelWindow {
     // rule floating above the bar's own (DESIGN.md rule #1, "no double
     // rules"). Every Cell-based widget below binds its own `height` back to
     // this value so its bottom rule always lands exactly on the bar's.
-    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, audioCell.implicitHeight)
+    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight)
     implicitHeight: bar._cellHeight
     color: Theme.color.background
 
@@ -98,6 +100,18 @@ PanelWindow {
         AudioWidget {
             id: audioCell
             panel: bar.audioPanel
+            height: bar._cellHeight
+        }
+
+        NetworkWidget {
+            id: networkCell
+            panel: bar.networkPanel
+            height: bar._cellHeight
+        }
+
+        BluetoothWidget {
+            id: bluetoothCell
+            panel: bar.bluetoothPanel
             height: bar._cellHeight
         }
     }
