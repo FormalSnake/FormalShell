@@ -106,6 +106,19 @@ Hyprland backend has never run on either Linux host — it exists only as
   VM-only or unverified has, at most, only ever been rendered under
   software `llvmpipe` (the VM's nested-compositor GPU path) — a genuine
   hardware GPU rendering path has not touched those surfaces yet.
+- **No SNI tray, no indicators slot, no settings-driven bar layout, and no
+  custom `command`/`qml` bar-widget modules.** Spec §Surfaces-1
+  (`docs/superpowers/specs/2026-07-27-formalshell-design.md`) puts all four
+  in v1 scope — none of the spec's non-goals (plugin system, settings GUI,
+  dock, polkit agent, screenshot/recording tooling, sway/river backends)
+  cover them. None exist in `shell/`: `Bar.qml`'s widget list is hardcoded
+  (workspaces, active window, clock, now-playing, battery, audio, network,
+  bluetooth, weather); `rg -il 'systemtray|statusnotifier' shell/` matches
+  nothing under `shell/`; `git log -S SystemTray -- shell/` is empty (never
+  built); `Config.qml` documents `bar.position` as reserved with no
+  widget-layout or custom-module keys implemented anywhere. This is the
+  largest concrete feature gap against DMS this report knows of, and §4
+  below was wrong to claim there wasn't one.
 
 ## 3. The exact install path
 
@@ -141,26 +154,38 @@ only VM evidence — switchover is itself the first real test of both).
 
 ## 4. What "parity with DMS" would still require
 
-There's no feature checklist gap against DMS today — the spec's non-goals
-section already draws that line deliberately (no plugin system, no settings
-GUI, no dock, no polkit agent, no screenshot/recording tooling, no sway/river
-backends — DMS has some of these, FormalShell scopes them out of v1 on
-purpose, not by oversight). A defined bar for the g815 switchover instead
+**Correction:** an earlier version of this section claimed there was no
+feature checklist gap against DMS today, citing the spec's non-goals list
+(no plugin system, no settings GUI, no dock, no polkit agent, no
+screenshot/recording tooling, no sway/river backends). That claim was false.
+The non-goals list is real, but it doesn't cover everything the spec puts
+in v1 scope: §Surfaces-1 requires an SNI tray, an indicators slot (DND,
+idle-inhibit, recording…), and settings-driven bar layout with custom
+`command`/`qml` widget modules, and none of the three exist —
+`Bar.qml`'s widget list is hardcoded, `Config.qml` marks `bar.position`
+reserved with no widget-layout or custom-module keys implemented, and there
+is no tray code anywhere in `shell/` (`rg -il
+'systemtray|statusnotifier' shell/` matches nothing; `git log -S SystemTray
+-- shell/` is empty). See §2 above. A defined bar for the g815 switchover
 means:
 
-1. **Every row in the parity table above reading VM-only or unverified
+1. **The tray, indicators slot, and settings-driven bar layout/custom
+   modules get built**, per §Surfaces-1 — this is unbuilt v1 scope, not a
+   non-goal, and it is the largest concrete feature gap against DMS this
+   report knows of.
+2. **Every row in the parity table above reading VM-only or unverified
    moves to hardware-verified** on at least one real host: the greeter, the
    lock screen's real-PAM paths, the weather panel, and the Hyprland
    backend in whatever form it's expected to be used.
-2. **The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
+3. **The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
    get a real re-sweep** on hardware with a long device name and a real
    Bluetooth adapter, closing the loop the e1504g sweep couldn't.
-3. **A daily-drive trial on e1504g itself**, per the spec's own build-order
+4. **A daily-drive trial on e1504g itself**, per the spec's own build-order
    gate (`docs/superpowers/specs/2026-07-27-formalshell-design.md`: "e1504g
    daily-drive trial → switchover gate for the g815") — this report is the
    readiness assessment for switching e1504g over, not a substitute for
    actually living on it day to day before g815 follows.
-4. **No new real-hardware defect class for one full sweep cycle** — the
+5. **No new real-hardware defect class for one full sweep cycle** — the
    fact that four defects have been found across two sweeps so far, all in
    previously-unexercised populated-state paths, means the bar for
    "parity" includes running out of that specific well, not just clearing
