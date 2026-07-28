@@ -71,6 +71,24 @@
 # round trip completed and the state flipped back to false. This run's
 # generic smoke.png/SMOKE_OK is taken after the round trip, so it shows the
 # normal unlocked session.
+# With --screensaver, shortens screensaver.timeoutSeconds to 3s via the
+# isolated settings.json fixture (real IdleMonitor, not a fake clock) and
+# plays the same silent fixture track --media uses so MediaService.isPlaying
+# is genuinely true. Since nothing in this whole nested session ever
+# generates real Wayland input (qs/niri IPC calls travel their own sockets,
+# not the input protocol), the compositor's own idle timer elapses
+# naturally and stays elapsed for the rest of the run: first with mpv still
+# playing, `screensaver status` is dumped (screensaver-guard-status.json)
+# to prove the live media guard holds `active:false` even though `isIdle`
+# already reads true; mpv is then killed and, after another wait past the
+# timeout, the screensaver auto-activates purely from the guard clearing —
+# no `screensaver start` call at all — screenshotted
+# (screensaver-auto.png) and status-dumped again
+# (screensaver-auto-status.json, `active:true`). `screensaver stop` then
+# dismisses it (screensaver-dismiss-status.json proves `active:false`
+# again), and a final explicit `screensaver start`/screenshot
+# (screensaver-manual.png) / `stop` proves the manual IPC path
+# independently of the idle timer.
 # With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
@@ -119,6 +137,7 @@ panel_name=""
 clipboard_mode=false
 media_mode=false
 lock_mode=false
+screensaver_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -131,7 +150,8 @@ while [ $# -gt 0 ]; do
     --clipboard) clipboard_mode=true; shift ;;
     --media) media_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock]" >&2; exit 1 ;;
+    --screensaver) screensaver_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver]" >&2; exit 1 ;;
   esac
 done
 
@@ -179,13 +199,15 @@ if $clipboard_mode; then
   fi
 fi
 
-if $media_mode; then
+if $media_mode || $screensaver_mode; then
   # The VM's mpv is pre-wrapped with mpvScripts.mpris baked into its
   # --script= flags (nix/testvm.nix's `mpv.override { scripts = ... }`), so
   # plain `mpv` on PATH there already announces itself over MPRIS. A host
   # without that package wired in gets the exact same wrapped derivation
   # built from this repo's own pinned nixpkgs input, not the flake registry
   # (`.override` isn't expressible as a flake installable attribute path).
+  # screensaver_mode reuses this same fixture track/player to give
+  # MediaService.isPlaying a real value to guard against.
   if command -v mpv >/dev/null 2>&1; then
     mpv_bin=$(command -v mpv)
   else
@@ -306,6 +328,13 @@ lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
 lock_status_path="$shot_dir/lock-status.json"
 lock_call_rc_path="$shot_dir/lock-call-rc.txt"
 lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
+ss_pid_path="$shot_dir/ss-mpv.pid"
+ss_guard_status_path="$shot_dir/screensaver-guard-status.json"
+ss_auto_path="$shot_dir/screensaver-auto.png"
+ss_auto_status_path="$shot_dir/screensaver-auto-status.json"
+ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
+ss_manual_path="$shot_dir/screensaver-manual.png"
+ss_final_status_path="$shot_dir/screensaver-final-status.json"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -358,8 +387,16 @@ EOF
 # --panel weather's screenshot proves a real open-meteo fetch/forecast
 # render, not just the "NO LOCATION" honest-empty state. Berlin, the
 # open-meteo docs' own example coordinates.
+# screensaver_mode shortens the real IdleMonitor timeout to 3s (M7 Task 5)
+# rather than faking a clock, so the guard/auto-trigger proof below exercises
+# the genuine ext-idle-notify-v1 signal, just on a schedule this run can
+# afford to wait out.
+screensaver_settings=""
+if $screensaver_mode; then
+  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true}'
+fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings}
 EOF
 
 if $wallpaper_mode; then
@@ -370,15 +407,19 @@ fi
 # A short silent fixture track (M7 Task 1) rather than a committed binary
 # asset — regenerated on every run so it never goes stale. The title/artist
 # tags are what MediaService/MediaPanel must display verbatim, and what the
-# post-run `media status` cross-check below compares against.
-if $media_mode; then
+# post-run `media status` cross-check below compares against. screensaver_mode
+# reuses this same track (via its own ss-media-play.sh below) purely to give
+# MediaService.isPlaying a real value — it never checks the tags.
+if $media_mode || $screensaver_mode; then
   media_track_path="$shot_dir/smoke-track.flac"
   media_track_title="FormalShell Smoke Track"
   media_track_artist="FormalShell Test Artist"
   "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
     -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
     -c:a flac -y "$media_track_path"
+fi
 
+if $media_mode; then
   # Script files (same rationale as menu_mode's below: real files sidestep
   # quoting hell through both this generator and niri's KDL string parser).
   # mpv's PID is written before the exec — exec replaces the shell's own
@@ -510,6 +551,50 @@ sleep 1
 EOF
 fi
 
+# --screensaver: mpv starts almost immediately (sleep 1, same fixture track
+# --media uses) so MediaService.isPlaying is genuinely true well before
+# settings.json's shortened 3s timeout can elapse — nothing else in this
+# nested session ever generates real Wayland input, so the compositor's own
+# idle timer, once it fires, stays fired for the rest of the run.
+if $screensaver_mode; then
+  ss_play_script="$shot_dir/ss-media-play.sh"
+  cat > "$ss_play_script" <<EOF
+#!/usr/bin/env bash
+sleep 1
+echo \$\$ > "$ss_pid_path"
+exec "$mpv_bin" --no-video --really-quiet "$media_track_path"
+EOF
+
+  # Ordered the same way as clipboard/lock's own single drive scripts: the
+  # guard-holds proof runs first (mpv still playing), then mpv is killed and
+  # the auto-trigger proof runs (no `screensaver start` call at all — see
+  # the header comment), then the explicit manual IPC start/stop proof runs
+  # last, since it deliberately suppresses the auto-trigger for the rest of
+  # the run (Screensaver.qml's own `_suppressed` comment) and nothing after
+  # it depends on auto-triggering again.
+  ss_drive_script="$shot_dir/ss-drive.sh"
+  cat > "$ss_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 8
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_guard_status_path" 2>&1
+if [ -f "$ss_pid_path" ]; then
+  kill "\$(cat "$ss_pid_path")" 2>/dev/null || true
+fi
+sleep 5
+niri msg action screenshot-screen --path "$ss_auto_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_dismiss_status_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver start > /dev/null 2>&1
+sleep 1
+niri msg action screenshot-screen --path "$ss_manual_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
+EOF
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -572,6 +657,10 @@ fi
   if $lock_mode; then
     echo "spawn-at-startup \"bash\" \"$lock_drive_script\""
   fi
+  if $screensaver_mode; then
+    echo "spawn-at-startup \"bash\" \"$ss_play_script\""
+    echo "spawn-at-startup \"bash\" \"$ss_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -605,10 +694,18 @@ fi
     # taken 2s after that, so it shows the ordinary unlocked session, not
     # mid-round-trip.
     screenshot_delay=22
+  elif $screensaver_mode; then
+    # ss-drive.sh's own final step (the last status dump) lands around its
+    # internal sleep sum (~16s in); this run's generic smoke.png/SMOKE_OK is
+    # taken 4s after that, showing the ordinary session with the screensaver
+    # already dismissed for good.
+    screenshot_delay=20
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
-  # would otherwise outlive the run.
+  # would otherwise outlive the run. screensaver_mode's own mpv is already
+  # killed mid-sequence by ss-drive.sh itself (see its own comment), so it
+  # needs no second kill here.
   media_kill=""
   if $media_mode; then
     media_kill="bash '$media_kill_script'; "
@@ -764,6 +861,57 @@ if $lock_mode; then
   fi
   if ! grep -q '"locked":false' "$lock_status_path"; then
     echo "SMOKE_FAIL: lock status did not report locked:false after unlock — got: $(cat "$lock_status_path")" >&2; exit 1
+  fi
+fi
+
+if $screensaver_mode; then
+  # Guard-holds proof: mpv still playing, the 3s idle timeout has long
+  # since elapsed with no real input anywhere in this session — isIdle
+  # must be true, but the live media guard must keep active false anyway.
+  if [ -s "$ss_guard_status_path" ]; then
+    cat "$ss_guard_status_path"
+  else
+    echo "SMOKE_FAIL: no screensaver guard-status produced" >&2; exit 1
+  fi
+  if ! grep -q '"isIdle":true' "$ss_guard_status_path"; then
+    echo "SMOKE_FAIL: screensaver status did not report isIdle:true while mpv was still playing — got: $(cat "$ss_guard_status_path")" >&2; exit 1
+  fi
+  if ! grep -q '"active":false' "$ss_guard_status_path"; then
+    echo "SMOKE_FAIL: screensaver activated despite the media guard while mpv was still playing — got: $(cat "$ss_guard_status_path")" >&2; exit 1
+  fi
+  if ! grep -q '"mediaPlaying":true' "$ss_guard_status_path"; then
+    echo "SMOKE_FAIL: screensaver status did not report mediaPlaying:true while mpv was still playing — got: $(cat "$ss_guard_status_path")" >&2; exit 1
+  fi
+  # Auto-trigger proof: mpv killed, no `screensaver start` call at all — the
+  # guard clearing alone must flip active to true.
+  if [ -f "$ss_auto_path" ]; then
+    echo "SMOKE_SCREENSAVER_AUTO $ss_auto_path"
+  else
+    echo "SMOKE_FAIL: no screensaver-auto screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$ss_auto_status_path" ]; then
+    cat "$ss_auto_status_path"
+  else
+    echo "SMOKE_FAIL: no screensaver auto-status produced" >&2; exit 1
+  fi
+  if ! grep -q '"active":true' "$ss_auto_status_path"; then
+    echo "SMOKE_FAIL: screensaver did not auto-activate once the media guard cleared — got: $(cat "$ss_auto_status_path")" >&2; exit 1
+  fi
+  if [ -s "$ss_dismiss_status_path" ] && grep -q '"active":false' "$ss_dismiss_status_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: screensaver stop IPC call did not flip active back to false — got: $(cat "$ss_dismiss_status_path" 2>/dev/null)" >&2; exit 1
+  fi
+  # Manual IPC start/stop proof, independent of the idle timer.
+  if [ -f "$ss_manual_path" ]; then
+    echo "SMOKE_SCREENSAVER_MANUAL $ss_manual_path"
+  else
+    echo "SMOKE_FAIL: no screensaver-manual screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$ss_final_status_path" ] && grep -q '"active":false' "$ss_final_status_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: screensaver did not report active:false after the final stop — got: $(cat "$ss_final_status_path" 2>/dev/null)" >&2; exit 1
   fi
 fi
 

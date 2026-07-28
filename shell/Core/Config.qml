@@ -13,11 +13,28 @@ import QtQuick
 // timeout, seconds, fed straight to IdleMonitor.timeout), lock.
 // fingerprintPamService (string, default "" — the PAM service name for
 // Lock.qml's parallel fingerprint flow; empty means no reader enrolled, so
-// it never starts, M7 Task 4).
+// it never starts, M7 Task 4). screensaver.timeoutSeconds (number, default
+// 300 — IdleService's IdleMonitor.timeout), screensaver.guardMediaPlayback
+// (bool, default true — Screensaver.qml's live guard against auto-activating
+// while MediaService.isPlaying), screensaver.lockAfterSeconds (number,
+// default 0 — Screensaver.qml's optional chain into Lock once already
+// showing; 0 disables the chain, M7 Task 5).
 Singleton {
     id: root
 
     property var settings: ({})
+
+    // Flips true exactly once, the first time settings.json has actually
+    // been resolved one way or another (parsed, or confirmed absent) —
+    // never back to false, even across a later reload. IdleService reads
+    // this to apply screensaver.timeoutSeconds as a one-shot value rather
+    // than a live binding (see its own header comment for the very real
+    // reason: re-triggering IdleMonitor's underlying notification a second
+    // time shortly after startup — exactly what a live binding here would
+    // do, given settings.json loads asynchronously — has been observed to
+    // silently and permanently break IdleMonitor.isIdle for the rest of the
+    // process's life).
+    property bool loaded: false
 
     readonly property string _configDir: {
         const xdgConfig = Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config");
@@ -43,6 +60,7 @@ Singleton {
         onLoaded: root._applySettings()
         onLoadFailed: error => {
             root.settings = {};
+            root.loaded = true;
             if (error === FileViewError.FileNotFound)
                 rewatchTimer.restart();
         }
@@ -55,6 +73,7 @@ Singleton {
             console.warn("Config: failed to parse settings.json:", e.message);
             // Keep the last good value rather than falling back to {}.
         }
+        root.loaded = true;
     }
 
     // Dotted-path lookup: Config.get("menu.customPowerButtons", [])

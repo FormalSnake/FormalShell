@@ -9,6 +9,7 @@ import qs.Surfaces.Notifications
 import qs.Surfaces.Osd
 import qs.Surfaces.Panels
 import qs.Surfaces.Lock
+import qs.Surfaces.Screensaver
 import qs.Ipc
 
 ShellRoot {
@@ -63,6 +64,12 @@ ShellRoot {
     // Lock.qml's header comment) — one instance here covers every output.
     Lock { id: lock }
 
+    // Same "one controller, many surfaces" reasoning as Lock, minus the
+    // WlSessionLock auto-management (see Screensaver.qml's own header
+    // comment) — one instance here, its internal Variants loop covers every
+    // output.
+    Screensaver { id: screensaver; lockScreen: lock }
+
     // Same reasoning again: one instance per panel kind, opened on the
     // focused screen at summon time.
     AudioPanel { id: audioPanelInstance }
@@ -83,4 +90,5 @@ ShellRoot {
     ClipboardIpc {}
     MediaIpc {}
     LockIpc { lockScreen: lock }
+    ScreensaverIpc { screensaver: screensaver }
 }
