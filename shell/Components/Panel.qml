@@ -33,6 +33,15 @@ PanelWindow {
     property real anchorX: -1
     default property alias content: contentColumn.data
 
+    // Forwarded from backdrop's own Keys.onPressed (M6 Task 7): the ONE
+    // shared keyboard-nav hook every popout's content can listen to —
+    // PowerPanel's profile picker is the first consumer. backdrop already
+    // owns focus (forceActiveFocus() below), so a picker Item never gets
+    // real focus of its own; Escape keeps working unchanged, since this
+    // fires ahead of (and never accepts) the specific Keys.onEscapePressed
+    // dispatch below.
+    signal keyPressed(var event)
+
     readonly property int _barHeight: 32
 
     readonly property var _screen: {
@@ -84,6 +93,7 @@ PanelWindow {
         anchors.fill: parent
         focus: true
         Keys.onEscapePressed: root.close()
+        Keys.onPressed: event => root.keyPressed(event)
         onClicked: root.close()
 
         Item {

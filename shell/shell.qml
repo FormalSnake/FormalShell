@@ -28,6 +28,7 @@ ShellRoot {
                 calendarPanel: calendarPanelInstance
                 networkPanel: networkPanelInstance
                 bluetoothPanel: bluetoothPanelInstance
+                powerPanel: powerPanelInstance
             }
         }
     }
@@ -61,6 +62,7 @@ ShellRoot {
     CalendarPanel { id: calendarPanelInstance; menu: menu }
     NetworkPanel { id: networkPanelInstance }
     BluetoothPanel { id: bluetoothPanelInstance }
+    PowerPanel { id: powerPanelInstance }
 
     DebugIpc { menu: menu }
     ThemeIpc {}
@@ -68,6 +70,6 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance }) }
     ClipboardIpc {}
 }

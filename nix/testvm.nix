@@ -179,6 +179,14 @@ nixpkgs.lib.nixosSystem {
         networking.networkmanager.enable = true;
         hardware.bluetooth.enable = true;
 
+        # M6 Task 7: the power panel needs a real power-profiles-daemon to
+        # drive its profile picker; upower backs UPower.displayDevice, which
+        # QEMU's aarch64 "virt" machine reports as AC-only (no battery at
+        # all) — the panel's honest "AC POWER" state is the expected,
+        # passing screenshot, same as bluetooth's "NO ADAPTER".
+        services.power-profiles-daemon.enable = true;
+        services.upower.enable = true;
+
         fonts = {
           packages = [ pkgs.nerd-fonts.jetbrains-mono ];
           fontconfig.enable = true;

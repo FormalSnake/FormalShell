@@ -6,7 +6,8 @@ import qs.Surfaces.Bar.widgets
 
 // The bar (DESIGN.md §Bar, spec §1, M6 Tasks 1+3): three ledger regions —
 // left (workspaces, active window), center (clock, now-playing joins it in
-// M7), right (indicator/widget cells, starting with audio). Region
+// M7), right (indicator/widget cells: battery, audio, network, bluetooth,
+// per the spec's own bar-widget ordering). Region
 // boundaries are rules, never whitespace gaps — DESIGN's rule #2, "rules are
 // the ONLY separation mechanism" — so the left|center and center|right
 // boundaries are always drawn. Workspaces/ActiveWindow predate the Cell
@@ -20,6 +21,7 @@ PanelWindow {
     property var calendarPanel: null
     property var networkPanel: null
     property var bluetoothPanel: null
+    property var powerPanel: null
     screen: modelData
     anchors { top: true; left: true; right: true }
     // Height tracks the tallest cell actually present instead of a fixed
@@ -30,7 +32,7 @@ PanelWindow {
     // rule floating above the bar's own (DESIGN.md rule #1, "no double
     // rules"). Every Cell-based widget below binds its own `height` back to
     // this value so its bottom rule always lands exactly on the bar's.
-    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight)
+    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, batteryCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight)
     implicitHeight: bar._cellHeight
     color: Theme.color.background
 
@@ -96,6 +98,12 @@ PanelWindow {
         anchors.rightMargin: Theme.spacing.md
         anchors.verticalCenter: parent.verticalCenter
         spacing: 0
+
+        Battery {
+            id: batteryCell
+            panel: bar.powerPanel
+            height: bar._cellHeight
+        }
 
         AudioWidget {
             id: audioCell
