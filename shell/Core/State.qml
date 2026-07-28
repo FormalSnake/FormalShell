@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-// Runtime-mutable session state (wallpaper, mode) — the shell owns and
+// Runtime-mutable session state (wallpaper, mode, dnd) — the shell owns and
 // rewrites this file; settings.json stays read-only. Quickshell.statePath()
 // resolves under quickshell/by-shell/<shellId>/, not the spec-mandated
 // $XDG_STATE_HOME/formalshell/, so the path is built by hand instead.
@@ -12,6 +12,7 @@ Singleton {
 
     property alias wallpaper: adapter.wallpaper
     property alias mode: adapter.mode
+    property alias dnd: adapter.dnd
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -25,6 +26,11 @@ Singleton {
 
     function toggleMode() {
         root.setMode(root.mode === "dark" ? "light" : "dark");
+    }
+
+    function setDnd(on) {
+        adapter.dnd = on;
+        stateFile.writeAdapter();
     }
 
     readonly property string _stateDir: {
@@ -47,6 +53,7 @@ Singleton {
             id: adapter
             property string wallpaper: ""
             property string mode: "dark"
+            property bool dnd: false
         }
     }
 }

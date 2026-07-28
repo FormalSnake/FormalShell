@@ -54,9 +54,10 @@ end to end.
 The screenshot above is from `dev/smoke-niri.sh --notify --center`: two
 `notify-send` toasts (one critical, rendered as a full-bleed accent cell)
 plus a summoned history center showing the `DND` toggle cell and a
-`PENDING / n` section. The center and the sticky critical toast are both
-top-right anchored and currently overlap when both are open at once — a
-known layout gap, not yet fixed (see Notifications below).
+`PENDING / n` section. The center and the toast stack are both top-right
+anchored, so `Toasts.qml` suppresses itself for as long as the center is
+open — the sticky critical popup is still live underneath and reappears the
+moment the center closes (see Notifications below).
 
 ![OSD on niri](docs/screenshots/osd-niri.png)
 
@@ -244,6 +245,10 @@ literal `notify-send` CLI bypass DND. A chat app or any other sender marking
 its own notifications critical does **not** bypass — the check is on the
 sender's app name (`notification.appName === "notify-send"`), never inferred
 from urgency alone.
+
+**DND persists** in `state.json` (`Core.State.dnd`), same as wallpaper/mode
+— it survives shell restarts and `keepOnReload` generation switches instead
+of silently resetting to off.
 
 **IPC** (`target: "notifications"`):
 

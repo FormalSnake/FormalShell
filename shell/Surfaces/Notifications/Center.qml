@@ -13,9 +13,10 @@ import qs.Notifications
 // differs (dismissOne here drops outright, dismissPopup there archives to
 // past — see NotificationService's own doc comment on the distinction). DND
 // is the top cell, an accent-filled block per DESIGN's "active toggle cell"
-// rule. A still-sticky critical popup keeps showing in Toasts.qml's own
-// overlay layer above this one — the center never lists live popups, only
-// what has left that tier.
+// rule. The center never lists live popups, only what has left that tier —
+// Toasts.qml suppresses its own overlay stack for as long as this surface
+// is open, so a sticky critical popup can't sit on top of it (see Toasts's
+// own header comment).
 PanelWindow {
     id: root
 

@@ -30,7 +30,10 @@ ShellRoot {
         model: Quickshell.screens
 
         delegate: Component {
-            Toasts {}
+            // center: notificationsCenter suppresses this screen's toast
+            // stack while the history center is open — see Toasts.qml's own
+            // header comment for why the two surfaces can't coexist.
+            Toasts { center: notificationsCenter }
         }
     }
 

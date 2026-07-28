@@ -3,6 +3,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.Notifications
 import qs.Compositor
+// `qs.Core as Core`, not a bare import: QtQuick already exports a type named
+// State (for property-binding states) — see ThemeEngine.qml's own note on
+// this same collision. Core.State disambiguates it.
+import qs.Core as Core
 import "model.js" as Model
 
 // Owns the freedesktop NotificationServer and drives model.js's pure
@@ -11,6 +15,13 @@ import "model.js" as Model
 // server destroys the notification — in a side map keyed by id instead, so
 // dismiss()/expire()/action-invoke can still reach the real object while it
 // lives.
+//
+// DND persistence: Core.State.dnd (state.json) is the source of truth, same
+// pattern as wallpaper/mode — setDnd() below only ever writes there, and the
+// Connections block mirrors it into the reducer's own state.dnd (needed by
+// model.js's add() bypass check) whenever it changes, including the async
+// FileView load completing after this singleton's _state has already
+// initialized with the compile-time default.
 Singleton {
     id: root
 
@@ -211,7 +222,12 @@ Singleton {
     }
 
     function setDnd(on) {
-        root._state = Model.setDnd(root._state, on);
+        Core.State.setDnd(on);
+    }
+
+    Connections {
+        target: Core.State
+        function onDndChanged() { root._state = Model.setDnd(root._state, Core.State.dnd); }
     }
 
     // Fires the most recent popup-or-pending entry's default action if it

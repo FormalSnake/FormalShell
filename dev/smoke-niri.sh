@@ -18,8 +18,9 @@
 # non-critical popups to auto-expire into the `pending` tier before summoning
 # the notification center over the `notifications` IPC target and
 # screenshotting it — combine with --notify so there's a critical notify-send
-# still sitting sticky in the popup layer, visible over the center's own
-# corner (Toasts.qml sits on the Overlay layer, above the center's Top layer).
+# still sitting sticky in the popup layer: Toasts.qml suppresses that whole
+# stack for as long as the center is open, so the screenshot shows the
+# center alone, not the two surfaces overlapping.
 # With --osd, drives the bottom-center OSD three ways: `qs ipc call osd
 # volume` (manual trigger, screenshotted as osd-manual.png — its path is
 # printed on its own line since it isn't the run's canonical SMOKE_OK
