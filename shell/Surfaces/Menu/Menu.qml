@@ -177,7 +177,14 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
     readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
-    readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - Core.Theme.borderWidth - searchCell.height))
+    // Content sits inset from the card's own border by `popupPadding`
+    // (DESIGN.md's omarchy card chrome: "internal padding") — the search
+    // field and result rows still fuse against each other with zero gap
+    // (Cell's shared-rule contract, unchanged), only the outer edge of that
+    // block gets a gutter from the frame's border.
+    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.popupPadding * 2
+    readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.popupPadding * 2
+    readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height))
 
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
@@ -502,7 +509,7 @@ PanelWindow {
     visible: root.isOpen
     color: Core.Theme.color.background
     implicitWidth: 560
-    implicitHeight: Core.Theme.borderWidth + searchCell.height + root._rowsAreaHeight
+    implicitHeight: root._chrome + searchCell.height + root._rowsAreaHeight
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -515,9 +522,12 @@ PanelWindow {
         top: root._screen ? Math.round((root._screen.height - root.implicitHeight) / 2) : 0
     }
 
-    // Outer top/left rule — Cell.qml's shared-rule contract makes every cell
-    // draw its own bottom+right rule, so the container only needs to close
-    // off the top and left of the whole grid.
+    // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
+    // bordered rectangle"), all four sides at the window's true edges.
+    // Content sits inset from it by `popupPadding` below — Cell.qml's
+    // shared-rule contract still closes the ledger's own rows against each
+    // other, so the "search field + rows" block reads as one continuous
+    // ruled table floating inside this frame.
     Rectangle {
         id: topRule
         anchors.top: parent.top
@@ -535,12 +545,29 @@ PanelWindow {
         color: Core.Theme.color.rule
     }
 
+    Rectangle {
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        width: Core.Theme.borderWidth
+        color: Core.Theme.color.rule
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: Core.Theme.borderWidth
+        color: Core.Theme.color.rule
+    }
+
     Cell {
         id: searchCell
         anchors.top: topRule.bottom
+        anchors.topMargin: Core.Theme.space.popupPadding
         anchors.left: parent.left
-        anchors.leftMargin: Core.Theme.borderWidth
-        width: root.implicitWidth - Core.Theme.borderWidth
+        anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+        width: root._contentWidth
         height: searchColumn.implicitHeight + Core.Theme.spacing.sm * 2 + Core.Theme.borderWidth
 
         Column {
@@ -557,7 +584,7 @@ PanelWindow {
                 width: searchColumn.width
                 color: Core.Theme.color.foreground
                 font.family: Core.Theme.font.family
-                font.pixelSize: Core.Theme.font.body
+                font.pixelSize: Core.Theme.fontSize.body
                 focus: true
                 selectByMouse: true
                 cursorVisible: true
@@ -612,8 +639,8 @@ PanelWindow {
         id: rowsView
         anchors.top: searchCell.bottom
         anchors.left: parent.left
-        anchors.leftMargin: Core.Theme.borderWidth
-        width: root.implicitWidth - Core.Theme.borderWidth
+        anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+        width: root._contentWidth
         height: root._rowsAreaHeight
         clip: true
         model: root._displayRows

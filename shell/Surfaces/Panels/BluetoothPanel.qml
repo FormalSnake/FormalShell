@@ -42,7 +42,7 @@ Panel {
                 text: root._adapter ? root._adapter.name + "  " + BluetoothAdapterState.toString(root._adapter.state) : ""
                 color: adapterCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
                 elide: Text.ElideRight
             }
 
@@ -101,7 +101,7 @@ Panel {
                     text: deviceCell.modelData.name || deviceCell.modelData.deviceName
                     color: deviceCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
 

@@ -218,7 +218,7 @@ Panel {
                         text: dayCell.modelData.day
                         color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundDim
                         font.family: Core.Theme.font.family
-                        font.pixelSize: Core.Theme.font.body
+                        font.pixelSize: Core.Theme.fontSize.body
                     }
 
                     // Reserved space always present so a day without events
@@ -258,7 +258,7 @@ Panel {
                 text: eventCell.modelData ? eventCell.modelData.summary : "NO EVENTS"
                 color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.foregroundDim
                 font.family: Core.Theme.font.family
-                font.pixelSize: Core.Theme.font.body
+                font.pixelSize: Core.Theme.fontSize.body
             }
         }
     }
@@ -279,7 +279,7 @@ Panel {
                 text: Progress.formatPercent(root._displayFraction)
                 color: yearCell.foreground
                 font.family: Core.Theme.font.family
-                font.pixelSize: Core.Theme.font.body
+                font.pixelSize: Core.Theme.fontSize.body
             }
 
             // Flat accent fill, no thumb, no radius — same idiom as

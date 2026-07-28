@@ -117,7 +117,7 @@ Panel {
                 text: root._error.toUpperCase()
                 color: Theme.color.foregroundDim
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.caption
+                font.pixelSize: Theme.fontSize.caption
             }
         }
     }
@@ -147,14 +147,14 @@ Panel {
                     text: root._result ? root._glyphFor(root._result.current.code) : ""
                     color: currentCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                 }
 
                 Text {
                     text: root._result ? Math.round(root._result.current.temperature) + "°" : ""
                     color: currentCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                 }
             }
         }
@@ -184,7 +184,7 @@ Panel {
                     text: root._glyphFor(dayCell.modelData.code)
                     color: dayCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                 }
 
                 Text {
@@ -192,7 +192,7 @@ Panel {
                     text: Openmeteo.weekdayLabel(dayCell.modelData.date)
                     color: dayCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
 
@@ -201,7 +201,7 @@ Panel {
                     text: Math.round(dayCell.modelData.high) + "° / " + Math.round(dayCell.modelData.low) + "°"
                     color: dayCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.body
+                    font.pixelSize: Theme.fontSize.body
                 }
             }
         }

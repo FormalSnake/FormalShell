@@ -45,7 +45,7 @@ Panel {
                             + "  " + Math.round(nodeCell.modelData.audio.volume * 100) + "%"
                         color: nodeCell.foreground
                         font.family: Theme.font.family
-                        font.pixelSize: Theme.font.body
+                        font.pixelSize: Theme.fontSize.body
                         elide: Text.ElideRight
                     }
 

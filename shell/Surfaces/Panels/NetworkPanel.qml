@@ -67,7 +67,7 @@ Panel {
                         text: netCell.modelData.network.name || "(unnamed)"
                         color: netCell.foreground
                         font.family: Theme.font.family
-                        font.pixelSize: Theme.font.body
+                        font.pixelSize: Theme.fontSize.body
                         elide: Text.ElideRight
                     }
 
@@ -100,7 +100,7 @@ Panel {
                     text: root._signalBar(netCell.modelData.network.signalStrength) + "  " + Math.round(netCell.modelData.network.signalStrength * 100) + "%"
                     color: netCell.foreground
                     font.family: Theme.font.family
-                    font.pixelSize: Theme.font.caption
+                    font.pixelSize: Theme.fontSize.caption
                 }
             }
         }

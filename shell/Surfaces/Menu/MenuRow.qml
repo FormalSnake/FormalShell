@@ -40,7 +40,7 @@ Cell {
             text: root.node.icon
             color: root.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
 
         Text {
@@ -48,7 +48,7 @@ Cell {
             text: root.confirming ? ("CONFIRM " + root.node.label + "?") : root.node.label
             color: root.foreground
             font.family: Theme.font.family
-            font.pixelSize: Theme.font.body
+            font.pixelSize: Theme.fontSize.body
         }
     }
 
@@ -60,7 +60,7 @@ Cell {
         text: root.checkedState ? "✓" : "▸"
         color: root.foreground
         font.family: Theme.font.family
-        font.pixelSize: Theme.font.body
+        font.pixelSize: Theme.fontSize.body
     }
 
     MouseArea {

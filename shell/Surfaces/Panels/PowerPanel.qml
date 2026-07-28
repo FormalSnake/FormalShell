@@ -88,7 +88,7 @@ Panel {
                 text: root._percent + "%  " + UPowerDeviceState.toString(root._device ? root._device.state : UPowerDeviceState.Unknown).toUpperCase()
                 color: statusCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
 
                 SequentialAnimation on opacity {
                     running: root._charging
@@ -143,7 +143,7 @@ Panel {
                 text: PowerProfile.toString(profileCell.modelData).toUpperCase()
                 color: profileCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
             }
 
             MouseArea {

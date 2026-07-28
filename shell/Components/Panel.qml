@@ -53,12 +53,20 @@ PanelWindow {
 
     readonly property real _frameX: {
         if (!root._screen) return 0;
-        var x = root.anchorX >= 0 ? root.anchorX : (root._screen.width - root.panelWidth - Theme.spacing.md);
+        var x = root.anchorX >= 0 ? root.anchorX : (root._screen.width - root.panelWidth - Theme.space.panelGap);
         return Math.max(0, Math.min(x, root._screen.width - root.panelWidth));
     }
 
+    // Content sits inset from the card's own border by `panelPadding` on
+    // every side (DESIGN.md §Panels "card internal padding") — the header
+    // and rows still fuse against each other with zero gap (Cell's shared-
+    // rule contract, unchanged), only the outer edge of that block gets a
+    // gutter from the frame's border.
+    readonly property real _contentWidth: root.panelWidth - Theme.borderWidth * 2 - Theme.space.panelPadding * 2
+
     readonly property real _maxContentHeight: root._screen ? root._screen.height * 0.6 : 400
-    readonly property real _frameHeight: Theme.borderWidth + titleCell.height + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
+    readonly property real _frameHeight: Theme.borderWidth * 2 + Theme.space.panelPadding * 2
+        + titleCell.height + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
 
     function open(x) {
         if (PanelRegistry.current && PanelRegistry.current !== root)
@@ -102,7 +110,7 @@ PanelWindow {
         Item {
             id: frame
             x: root._frameX
-            y: Theme.barHeight
+            y: Theme.barHeight + Theme.space.panelGap
             width: root.panelWidth
             height: root._frameHeight
 
@@ -141,12 +149,34 @@ PanelWindow {
                 color: Theme.color.rule
             }
 
+            // Right and bottom close the card's own border ring (DESIGN.md's
+            // omarchy card chrome): now that content sits inset by
+            // `panelPadding` instead of touching the frame edge, the last
+            // row's own shared-rule border no longer reaches the edge to
+            // close it implicitly.
+            Rectangle {
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                width: Theme.borderWidth
+                color: Theme.color.rule
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: Theme.borderWidth
+                color: Theme.color.rule
+            }
+
             Cell {
                 id: titleCell
                 anchors.top: topRule.bottom
+                anchors.topMargin: Theme.space.panelPadding
                 anchors.left: parent.left
-                anchors.leftMargin: Theme.borderWidth
-                width: frame.width - Theme.borderWidth
+                anchors.leftMargin: Theme.borderWidth + Theme.space.panelPadding
+                width: root._contentWidth
 
                 MetaLabel { text: root.panelTitle }
             }
@@ -154,9 +184,11 @@ PanelWindow {
             Flickable {
                 anchors.top: titleCell.bottom
                 anchors.left: parent.left
-                anchors.leftMargin: Theme.borderWidth
+                anchors.leftMargin: Theme.borderWidth + Theme.space.panelPadding
                 anchors.right: parent.right
+                anchors.rightMargin: Theme.borderWidth + Theme.space.panelPadding
                 anchors.bottom: parent.bottom
+                anchors.bottomMargin: Theme.space.panelPadding
                 clip: true
                 contentWidth: width
                 contentHeight: contentColumn.implicitHeight

@@ -66,7 +66,7 @@ Panel {
                 text: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
                 color: infoCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.subtitle
+                font.pixelSize: Theme.fontSize.subtitle
                 elide: Text.ElideRight
             }
 
@@ -76,7 +76,7 @@ Panel {
                 text: MediaService.artist
                 color: Theme.color.foregroundDim
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
                 elide: Text.ElideRight
             }
         }
@@ -132,7 +132,7 @@ Panel {
                 text: "󰒮"
                 color: prevCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
             }
 
             MouseArea {
@@ -154,7 +154,7 @@ Panel {
                 text: MediaService.isPlaying ? "󰏤" : "󰐊"
                 color: playPauseCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
             }
 
             MouseArea {
@@ -178,7 +178,7 @@ Panel {
                 text: "󰒭"
                 color: nextCell.foreground
                 font.family: Theme.font.family
-                font.pixelSize: Theme.font.body
+                font.pixelSize: Theme.fontSize.body
             }
 
             MouseArea {
