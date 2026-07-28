@@ -2,24 +2,47 @@ import QtQuick
 import qs.Core
 import qs.Components
 
-// One toast (DESIGN.md "stacked cells sharing rules"): meta row (app name /
-// relative time) + summary + elided body, a dismiss cell, and — only when
-// the notification carries them — a bottom row of action cells. Critical
-// urgency (2) fills the whole card as an accent cell per DESIGN's "critical
-// = accent-filled cell". Purely presentational: Toasts.qml owns fetching the
-// entry from NotificationService and wiring the signals below to its verbs.
+// One notification row (DESIGN.md §Notifications, M8b Task 5): meta row (app
+// name / relative time) + summary + elided body, a dismiss cell, and — only
+// when the notification carries them — a bottom row of action cells.
+// Critical urgency (2) fills the whole card as an urgent cell per DESIGN's
+// §2.4 "critical severity is a full-bleed urgent fill" — never priority
+// downgraded to the generic `accent` full-bleed, since the two are distinct
+// matugen-driven palette roles. Purely presentational: Toasts.qml/Center.qml
+// own fetching the entry from NotificationService and wiring the signals
+// below to its verbs.
+//
+// `invertOnHover` (default false, keeping Toasts.qml's standalone popup
+// cards as plain hover-tint) lets Center.qml opt a row into the ASCII-OS
+// table's "highlighted row inverts" rule (§2.2) instead — the two surfaces
+// share this component but not this one state, per DESIGN's own split
+// between "each toast is its own card" and "the center is a table".
 Cell {
     id: root
 
     required property var entry
     property double now: Date.now()
+    property bool invertOnHover: false
 
-    accent: root.entry.urgency === 2
+    urgent: root.entry.urgency === 2
+    hovered: cardHover.containsMouse
+    selected: root.invertOnHover && cardHover.containsMouse
     width: 360
 
     signal dismiss
     signal bodyClicked
     signal actionInvoked(string key)
+
+    // Declared first (behind everything painted after it) so it never
+    // intercepts a click meant for textArea's or a Cell button's own
+    // MouseArea below — Qt.NoButton means it only ever tracks hover, never
+    // grabs a press.
+    MouseArea {
+        id: cardHover
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
+    }
 
     readonly property string _relTime: {
         var minutes = Math.max(0, Math.floor((root.now - root.entry.arrivedAt) / 60000));

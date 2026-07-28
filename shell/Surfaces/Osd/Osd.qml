@@ -7,8 +7,9 @@ import qs.Components
 import qs.Services
 
 // Bottom-centered volume/brightness/media OSD (DESIGN.md §OSD, spec §7, M5
-// Task 6): a single three-cell row (icon | label | value) sharing rules, no
-// keyboard focus, auto-hides `_hideDelay` after the last trigger. Column
+// Task 6, M8b Task 5 card chrome): a single three-cell row (icon | label |
+// value) sharing rules, no keyboard focus, auto-hides `_hideDelay` after the
+// last trigger. Column
 // widths are fixed constants measured once off the glyph/label sets below —
 // never off the live value — so volume ticking 3% -> 97%, or a long media
 // title swapping in, never reflows the card (plan-wide no-jitter contract).
@@ -81,7 +82,7 @@ PanelWindow {
     // surface horizontally under wlr-layer-shell's arrange rules — the same
     // technique swayosd uses for its own bottom-center card.
     anchors.bottom: true
-    margins.bottom: Theme.spacing.lg
+    margins.bottom: Theme.space.panelGap
 
     implicitWidth: frame.implicitWidth
     implicitHeight: frame.implicitHeight
@@ -152,6 +153,15 @@ PanelWindow {
         implicitHeight: row.implicitHeight + Theme.borderWidth
         width: implicitWidth
         height: implicitHeight
+
+        // Opaque card backing (DESIGN.md's omarchy card chrome — "a single
+        // bordered rectangle", M8b Task 5): without it the card was only
+        // ever as opaque as whatever color happened to sit behind the
+        // matugen-picked background, i.e. see-through over a real wallpaper.
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.color.background
+        }
 
         // Outer top/left rule — Cell.qml's shared-rule contract makes every
         // cell draw its own bottom+right rule, so the frame only needs to

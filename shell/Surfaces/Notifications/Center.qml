@@ -6,17 +6,25 @@ import qs.Compositor
 import qs.Components
 import qs.Notifications
 
-// The notification history center (DESIGN.md §Notifications, M5 Task 5):
-// summonable, right-anchored, full height below the bar. Two ledger
-// sections — PENDING (unseen) then EARLIER (seen, rolling 15min TTL) — share
-// NotificationCard with Toasts.qml's popup stack; only the dismiss wiring
-// differs (dismissOne here drops outright, dismissPopup there archives to
-// past — see NotificationService's own doc comment on the distinction). DND
-// is the top cell, an accent-filled block per DESIGN's "active toggle cell"
-// rule. The center never lists live popups, only what has left that tier —
-// Toasts.qml suppresses its own overlay stack for as long as this surface
-// is open, so a sticky critical popup can't sit on top of it (see Toasts's
-// own header comment).
+// The notification history center (DESIGN.md §Notifications, M5 Task 5,
+// M8b Task 5): summonable, right-anchored, full height below the bar — the
+// ASCII-OS table surface (DESIGN.md §2), unlike Toasts.qml's individually
+// carded popups: rows share rules, and both the DND toggle and every
+// notification row invert fg/bg on hover (§2.2's "a highlighted
+// notification-center row swaps foreground/background") via `selected`,
+// not the plain hover-tint the shared NotificationCard otherwise defaults
+// to (`invertOnHover: true` below opts these rows into it). Two ledger
+// sections — PENDING (unseen) then EARLIER (seen, rolling 15min TTL) —
+// share NotificationCard with Toasts.qml's popup stack; only the dismiss
+// wiring differs (dismissOne here drops outright, dismissPopup there
+// archives to past — see NotificationService's own doc comment on the
+// distinction). DND is the top cell, an accent-filled block per DESIGN's
+// "active toggle cell" rule when armed (Cell's own paint priority keeps
+// that fill on top of the hover-inversion below); unarmed, hovering it
+// inverts like any other row. The center never lists live popups, only what has left
+// that tier — Toasts.qml suppresses its own overlay stack for as long as
+// this surface is open, so a sticky critical popup can't sit on top of it
+// (see Toasts's own header comment).
 PanelWindow {
     id: root
 
@@ -115,7 +123,7 @@ PanelWindow {
                 id: dndCell
                 width: parent.width
                 accent: NotificationService.dnd
-                hovered: dndHover.containsMouse
+                selected: dndHover.containsMouse
 
                 Text {
                     text: "DND"
@@ -163,6 +171,7 @@ PanelWindow {
                     entry: pendingCard.modelData
                     now: root._now
                     width: parent.width
+                    invertOnHover: true
 
                     onDismiss: NotificationService.dismissOne(pendingCard.modelData.id)
                     onBodyClicked: {
@@ -194,6 +203,7 @@ PanelWindow {
                     entry: pastCard.modelData
                     now: root._now
                     width: parent.width
+                    invertOnHover: true
 
                     onDismiss: NotificationService.dismissOne(pastCard.modelData.id)
                     onBodyClicked: {

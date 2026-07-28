@@ -9,6 +9,10 @@ import qs.Core
 // container arranging a grid of cells is responsible for the outer top/left
 // rule, so adjacent cells never double up their shared border.
 //
+// `urgent` (DESIGN.md §2.4, M8b Task 5) is `accent`'s sibling for the other
+// full-bleed case — a critical notification — filling with `Theme.color.urgent`
+// (a distinct palette role from `accent`, both matugen-driven) instead.
+//
 // `standalone` (DESIGN.md §3 Bar retrofit) swaps that contract for
 // omarchy's own module chrome: borderless at rest, a hover-cursor fill and
 // border that only appear on mouseover, no persistent rule at all — the
@@ -22,10 +26,11 @@ Item {
 
     property bool selected: false
     property bool accent: false
+    property bool urgent: false
     property bool hovered: false
     property bool standalone: false
 
-    readonly property color foreground: accent
+    readonly property color foreground: (accent || urgent)
         ? Theme.color.onAccent
         : (selected ? Theme.inverted().fg : Theme.color.foreground)
 
@@ -37,14 +42,16 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
-        color: root.accent
-            ? Theme.color.accent
-            : root.selected
-                ? Theme.inverted().bg
-                : root.hovered
-                    ? Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
-                    : "transparent"
-        border.width: root.standalone && root.hovered && !root.selected && !root.accent ? root._hoverAppearance.borderWidth : 0
+        color: root.urgent
+            ? Theme.color.urgent
+            : root.accent
+                ? Theme.color.accent
+                : root.selected
+                    ? Theme.inverted().bg
+                    : root.hovered
+                        ? Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
+                        : "transparent"
+        border.width: root.standalone && root.hovered && !root.selected && !root.accent && !root.urgent ? root._hoverAppearance.borderWidth : 0
         border.color: Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.borderAlpha)
     }
 

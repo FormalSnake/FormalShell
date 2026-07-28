@@ -4,14 +4,17 @@ import Quickshell.Wayland
 import qs.Core
 import qs.Notifications
 
-// The popup toast stack (DESIGN.md §Notifications / spec §6): top-right,
-// below the bar, one column of NotificationCard cells sharing rules like
-// every other ledger surface (Cell.qml's shared-rule contract — the frame
-// below draws the outer top/left rule, the Column runs zero-spacing).
-// Passive overlay — no keyboard focus, click-through everywhere but the
-// cards themselves (PanelWindow already only occupies the frame's own
-// bounds, so nothing extra is needed there). One instance per screen, wired
-// in shell.qml the same way as Bar/Background.
+// The popup toast stack (DESIGN.md §Notifications, M8b Task 5): top-right,
+// below the bar, a Column of independent omarchy-style cards — "each popup
+// toast is its own small omarchy card... stacked toasts keep omarchy's
+// card-to-card gap, not fused adjacency" — so every card below gets its own
+// full border (a small per-card frame drawing the top/left rule, NotificationCard's
+// own Cell contract closing the bottom/right) with `Theme.space.panelGap`
+// of daylight between cards, replacing the old single shared-frame/
+// zero-spacing ledger stack. Passive overlay — no keyboard focus,
+// click-through everywhere but the cards themselves (PanelWindow already
+// only occupies the frame's own bounds, so nothing extra is needed there).
+// One instance per screen, wired in shell.qml the same way as Bar/Background.
 //
 // Suppressed entirely while the history center is open: both are top-right
 // anchored and a sticky critical popup (expiresAt = 0, never times out —
@@ -53,64 +56,73 @@ PanelWindow {
 
     anchors { top: true; right: true }
     margins {
-        top: root._barHeight + Theme.spacing.md
-        right: Theme.spacing.md
+        top: root._barHeight + Theme.space.panelGap
+        right: Theme.space.panelGap
     }
 
-    implicitWidth: frame.implicitWidth
-    implicitHeight: frame.implicitHeight
+    implicitWidth: column.implicitWidth
+    implicitHeight: column.implicitHeight
 
-    Item {
-        id: frame
-        implicitWidth: column.implicitWidth + Theme.borderWidth
-        implicitHeight: column.implicitHeight + Theme.borderWidth
-        width: implicitWidth
-        height: implicitHeight
+    Column {
+        id: column
+        anchors.top: parent.top
+        anchors.left: parent.left
+        spacing: Theme.space.panelGap
 
-        // Outer top/left rule — Cell.qml's shared-rule contract makes every
-        // cell draw its own bottom+right rule, so the frame only needs to
-        // close off the top and left of the whole stack.
-        Rectangle {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: Theme.borderWidth
-            color: Theme.color.rule
-        }
-        Rectangle {
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            width: Theme.borderWidth
-            color: Theme.color.rule
-        }
+        Repeater {
+            model: root._entries
 
-        Column {
-            id: column
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.topMargin: Theme.borderWidth
-            anchors.leftMargin: Theme.borderWidth
-            spacing: 0
+            delegate: Item {
+                id: cardFrame
+                required property var modelData
 
-            Repeater {
-                model: root._entries
+                implicitWidth: card.width + Theme.borderWidth
+                implicitHeight: card.height + Theme.borderWidth
+                width: implicitWidth
+                height: implicitHeight
 
-                delegate: NotificationCard {
+                // Opaque card backing plus its own top/left rule — unlike
+                // the old shared frame, every toast now closes its own ring
+                // (NotificationCard's Cell contract draws the bottom/right
+                // half), so it reads as a genuine floating card even where
+                // the desktop behind it isn't a flat color.
+                Rectangle {
+                    anchors.fill: parent
+                    color: Theme.color.background
+                }
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: Theme.borderWidth
+                    color: Theme.color.rule
+                }
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    width: Theme.borderWidth
+                    color: Theme.color.rule
+                }
+
+                NotificationCard {
                     id: card
-                    required property var modelData
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.topMargin: Theme.borderWidth
+                    anchors.leftMargin: Theme.borderWidth
 
-                    entry: card.modelData
+                    entry: cardFrame.modelData
                     now: root._now
 
-                    onDismiss: NotificationService.dismissPopup(card.modelData.id)
+                    onDismiss: NotificationService.dismissPopup(cardFrame.modelData.id)
                     onBodyClicked: {
-                        if (card.modelData.actions.some(a => a.key === "default"))
-                            NotificationService.invokeAction(card.modelData.id, "default");
+                        if (cardFrame.modelData.actions.some(a => a.key === "default"))
+                            NotificationService.invokeAction(cardFrame.modelData.id, "default");
                         else
-                            NotificationService.focusSender(card.modelData.id);
+                            NotificationService.focusSender(cardFrame.modelData.id);
                     }
-                    onActionInvoked: key => NotificationService.invokeAction(card.modelData.id, key)
+                    onActionInvoked: key => NotificationService.invokeAction(cardFrame.modelData.id, key)
                 }
             }
         }
