@@ -93,6 +93,21 @@
 # again), and a final explicit `screensaver start`/screenshot
 # (screensaver-manual.png) / `stop` proves the manual IPC path
 # independently of the idle timer.
+# With --screensaver-gif, records all five effects in effect.js as GIFs
+# rather than screenshotting one: for each effect in turn, its own isolated
+# settings.json fixture pins screensaver.effect to that name, a fresh nested
+# niri session boots, `screensaver start` shows it, `screensaver frameInfo`
+# reads back the real convergence frame (ScreensaverIpc's M11 Task 1 verb —
+# never guessed, since the VM's llvmpipe rendering makes wall-clock capture
+# uneven), then `screensaver frame <n>` pins and screenshots every frame from
+# 0 through convergence plus a short hold before `screensaver stop` and quit.
+# Runs entirely separately from every other mode's shared single-session
+# timeline below (it needs five independent sessions, not one), assembling
+# each effect's captured frames into docs/media/screensaver-<effect>.gif with
+# imagemagick (scaled to 640px wide, palette-capped, layers-optimized) before
+# moving to the next effect. This run's SMOKE_OK points at the last captured
+# frame of the final effect (a real converged banner), and each effect's own
+# GIF path/byte size is printed on its own SMOKE_SCREENSAVER_GIF_<EFFECT> line.
 # With --clipboard, `wl-copy`s three fixture strings, dumps `clipboard list`
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
@@ -198,6 +213,7 @@ clipboard_mode=false
 media_mode=false
 lock_mode=false
 screensaver_mode=false
+screensaver_gif_mode=false
 picker_mode=false
 tray_mode=false
 bar_layout_mode=false
@@ -214,10 +230,11 @@ while [ $# -gt 0 ]; do
     --media) media_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
     --screensaver) screensaver_mode=true; shift ;;
+    --screensaver-gif) screensaver_gif_mode=true; shift ;;
     --picker) picker_mode=true; shift ;;
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--picker] [--tray] [--bar-layout]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout]" >&2; exit 1 ;;
   esac
 done
 
@@ -236,7 +253,7 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode || $picker_mode; then
+if $wallpaper_mode || $picker_mode || $screensaver_gif_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -298,6 +315,9 @@ if $lock_mode; then
   else
     wtype_bin=$(nix build 'nixpkgs#wtype^out' --no-link --print-out-paths)/bin/wtype
   fi
+fi
+
+if $lock_mode || $screensaver_gif_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -305,6 +325,11 @@ if $lock_mode; then
   # file. grim talks the underlying wlr-screencopy protocol directly as an
   # ordinary Wayland client, which niri does NOT gate behind the lock, and
   # is what actually proves the three lock-state screenshots below.
+  # screensaver_gif_mode reuses grim for the opposite reason: `screenshot-
+  # screen` triggers niri's own "Screenshot captured" toast every single
+  # call, which stacks up across a frame-stepping run's dozens of captures
+  # and visibly covers part of the banner (reproduced on the mac VM rig,
+  # 2026-07-29) — grim's screencopy-protocol path never does that.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -391,6 +416,101 @@ host_notifications_owner() {
   busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^PID=//p' || true
 }
 host_notifications_owner_before=$(host_notifications_owner)
+
+# --screensaver-gif: five independent nested-niri sessions (one per effect),
+# entirely separate from every other mode's shared single-session timeline
+# below. Frame-stepping (ScreensaverIpc's `frame(n)`/`frameInfo()`, M11 Task
+# 1) means each frame's capture only needs to wait for one repaint, not a
+# wall-clock-timed slot in a fixed schedule — the reason a naive burst
+# screenshot of the live animation would look choppy on this VM's llvmpipe
+# rendering in the first place.
+if $screensaver_gif_mode; then
+  ss_gif_hold=8   # extra frames held on the finished banner after convergence
+  ss_gif_home=$(mktemp -d)
+  media_dir="$PWD/docs/media"
+  mkdir -p "$media_dir" "$ss_gif_home/.config/formalshell"
+
+  for effect in decrypt rain expand slide scatter; do
+    frames_dir=$(mktemp -d)
+    cat > "$ss_gif_home/.config/formalshell/settings.json" <<EOF
+{"screensaver": {"effect": "$effect"}}
+EOF
+
+    ss_gif_cfg=$(mktemp -d)/config.kdl
+    ss_gif_convergence_path="$frames_dir/frame-info.json"
+    ss_gif_drive_script="$frames_dir/drive.sh"
+    cat > "$ss_gif_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver start > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_gif_convergence_path" 2>&1
+convergence=\$(grep -o '"convergenceFrame":[0-9]*' "$ss_gif_convergence_path" | cut -d: -f2)
+last=\$((convergence + $ss_gif_hold))
+for ((i = 0; i <= last; i++)); do
+  "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frame "\$i" > /dev/null 2>&1
+  sleep 0.15
+  printf -v padded "%04d" "\$i"
+  "$grim_bin" "$frames_dir/frame-\$padded.png"
+done
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
+niri msg action quit --skip-confirmation
+EOF
+
+    {
+      echo 'hotkey-overlay {'
+      echo '    skip-at-startup'
+      echo '}'
+      echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
+      echo "spawn-at-startup \"bash\" \"$ss_gif_drive_script\""
+    } > "$ss_gif_cfg"
+
+    HOME="$ss_gif_home" \
+    XDG_CONFIG_HOME="$ss_gif_home/.config" \
+    XDG_STATE_HOME="$ss_gif_home/.local/state" \
+    XDG_DATA_HOME="$ss_gif_home/.local/share" \
+    XDG_DATA_DIRS="$ss_gif_home/.local/share" \
+    XDG_CACHE_HOME="$ss_gif_home/.cache" \
+    WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout 200 $niri_bin --config "$ss_gif_cfg" || true
+
+    if [ ! -s "$ss_gif_convergence_path" ] || ! grep -q "\"effect\":\"$effect\"" "$ss_gif_convergence_path"; then
+      echo "SMOKE_FAIL: screensaver frameInfo did not report effect '$effect' — got: $(cat "$ss_gif_convergence_path" 2>/dev/null)" >&2
+      exit 1
+    fi
+
+    shopt -s nullglob
+    frame_files=("$frames_dir"/frame-*.png)
+    shopt -u nullglob
+    frame_count=${#frame_files[@]}
+    if [ "$frame_count" -lt 2 ]; then
+      echo "SMOKE_FAIL: $effect captured only $frame_count frame(s) — expected the full convergence run" >&2
+      exit 1
+    fi
+
+    out_gif="$media_dir/screensaver-$effect.gif"
+    # -delay 9 (90ms/frame) matches the real Timer interval exactly, since
+    # every frame is captured (no stride) — layers-optimize plus a capped
+    # palette is what keeps a mostly-static-background animation small.
+    "$convert_bin" -delay 9 -loop 0 "$frames_dir"/frame-*.png -resize 640x -coalesce -layers Optimize -colors 96 "$out_gif"
+    if [ ! -s "$out_gif" ]; then
+      echo "SMOKE_FAIL: imagemagick did not produce $out_gif for effect $effect" >&2
+      exit 1
+    fi
+    gif_size=$(wc -c < "$out_gif" | tr -d ' ')
+    echo "SMOKE_SCREENSAVER_GIF_${effect^^} $out_gif ($gif_size bytes, $frame_count frames)"
+
+    ss_gif_last_frame="${frame_files[$((frame_count - 1))]}"
+  done
+
+  host_notifications_owner_after=$(host_notifications_owner)
+  if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then
+    echo "SMOKE_FAIL: host org.freedesktop.Notifications owner PID changed ($host_notifications_owner_before -> $host_notifications_owner_after) — nested NotificationServer touched the host bus" >&2
+    exit 1
+  fi
+
+  echo "SMOKE_OK $ss_gif_last_frame"
+  exit 0
+fi
 
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"

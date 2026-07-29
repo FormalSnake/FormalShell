@@ -80,6 +80,26 @@ Item {
     property bool _loggedUnknownEffect: false
     readonly property string _effectiveEffect: Effect.resolveEffectName(root._requestedEffect, root._activationSeed)
 
+    // ---- deterministic frame stepping (ScreensaverIpc's `frame(n)`, M11
+    // Task 1) — a verification affordance only, never how the screensaver
+    // normally animates: -1 (the default) means "not pinned", so every
+    // surface below free-runs its own Timer-driven counter exactly as
+    // before. Released the instant `active` goes false (see onActiveChanged
+    // below) so a recorder can never leave a stale pin behind for the next
+    // real activation. --------------------------------------------------
+
+    property int _pinnedFrame: -1
+
+    readonly property string effectName: root._effectiveEffect
+
+    function convergenceFrame() {
+        return Effect.convergenceFrame(root._effectiveEffect, root._banner);
+    }
+
+    function pinFrame(n) {
+        root._pinnedFrame = n;
+    }
+
     // Live, not edge-triggered: recomputes continuously off IdleService and
     // MediaService, so a track starting or ending mid-idle-stretch flips
     // this immediately either way — spec §10's "never activates while ...
@@ -120,6 +140,11 @@ Item {
                 console.warn("Screensaver: unknown screensaver.effect '" + root._requestedEffect + "', falling back to random");
                 root._loggedUnknownEffect = true;
             }
+        } else {
+            // Any deactivation path (explicit stop(), the media guard
+            // clearing, real input) releases a stale frame pin so the next
+            // activation always free-runs normally.
+            root._pinnedFrame = -1;
         }
         if (root.active && root.lockAfterSeconds > 0)
             lockChainTimer.restart();
@@ -167,7 +192,7 @@ Item {
                         // ran the animation past its convergence frame
                         // would just show the static finished banner on
                         // the very next activation instead of animating.
-                        surface._frame = 0;
+                        surface._autoFrame = 0;
                         Qt.callLater(function () { dismissArea.forceActiveFocus(); });
                         // Becoming visible/mapped underneath an already-
                         // stationary cursor fires MouseArea's own first
@@ -200,14 +225,20 @@ Item {
                 readonly property int _columns: surface.visible ? Math.max(1, Math.floor(width / surface._cellWidth)) : 0
                 readonly property int _rows: surface.visible ? Math.max(1, Math.floor(height / surface._cellHeight)) : 0
 
-                property int _frame: 0
+                // Free-running counter for the ordinary, non-pinned path —
+                // untouched by frame stepping. _renderFrame is what
+                // everything below actually paints: root's pin (when set)
+                // wins outright, otherwise it's this counter.
+                property int _autoFrame: 0
+                readonly property int _renderFrame: root._pinnedFrame >= 0 ? root._pinnedFrame : surface._autoFrame
+                on_RenderFrameChanged: canvas.requestPaint()
 
                 Timer {
                     interval: 90
-                    running: surface.visible
+                    running: surface.visible && root._pinnedFrame < 0
                     repeat: true
                     onTriggered: {
-                        surface._frame += 1;
+                        surface._autoFrame += 1;
                         canvas.requestPaint();
                     }
                 }
@@ -228,7 +259,7 @@ Item {
                         ctx.textBaseline = "top";
                         var offsetCol = Math.floor((surface._columns - banner.width) / 2);
                         var offsetRow = Math.floor((surface._rows - banner.height) / 2);
-                        var grid = Effect.frameState(root._effectiveEffect, surface._frame, banner);
+                        var grid = Effect.frameState(root._effectiveEffect, surface._renderFrame, banner);
                         for (var r = 0; r < grid.length; r++) {
                             var rowCells = grid[r];
                             for (var c = 0; c < rowCells.length; c++) {
