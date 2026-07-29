@@ -197,12 +197,34 @@ PanelWindow {
             id: entryLoader
             required property var modelData
             height: bar._cellHeight
+            // A hidden widget (Battery with no laptop battery, NowPlaying
+            // with no player, Tray with no items, Indicators with nothing
+            // active) sets `visible: false` on itself expecting Row to drop
+            // its slot entirely — but Row only inspects its *direct*
+            // children's `visible`, and every entry here loads behind this
+            // Loader, whose own `visible` defaults true regardless of its
+            // item's. A live `visible: entryLoader.item.visible` expression
+            // binding here feeds back into the very `implicitWidth`/
+            // `implicitHeight`/`_cellHeight` cycle the comment above
+            // already flags as fragile (confirmed by reproducing it — a
+            // sustained "Binding loop detected" storm that leaves the
+            // entire bar unrendered, not just the one hidden widget), so
+            // this mirrors the item's visible imperatively instead: one
+            // assignment per real visibleChanged emission, never a tracked
+            // dependency of the Loader's own binding graph.
             sourceComponent: entryLoader.modelData.kind === "builtin"
                 ? bar._builtinComponents[entryLoader.modelData.name]
                 : (entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent)
             onLoaded: {
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
+                entryLoader.visible = entryLoader.item.visible;
+            }
+            Connections {
+                target: entryLoader.item
+                function onVisibleChanged() {
+                    entryLoader.visible = entryLoader.item.visible;
+                }
             }
         }
     }
