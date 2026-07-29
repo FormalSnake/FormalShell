@@ -9,10 +9,16 @@ readiness assessment, not a go/no-go decision — the decision is the owner's.
 **Both Linux hosts were offline at the time this report was first written.**
 e1504g was powered off after its sweep completed; g815 was unavailable.
 **Update, 2026-07-29:** g815 came back online and was re-swept at HEAD
-`52e2db0` — 18 of `dev/smoke-niri.sh`'s modes, all PASS, confirming the
-`ca56dfc` padding fix holds on real hardware and closing two of the three
-previously fix-unconfirmed gaps (audio panel, Bluetooth panel) plus the
-OSD auto-show reactivity fix. Details:
+`52e2db0` — 17 of `dev/smoke-niri.sh`'s 18 modes PASS outright; the 18th,
+`--lock`, PASSes on render (locked/error/unlocked screens, symmetric insets,
+the `lock`/`isLocked` IPC round trip) but reports `SMOKE_FAIL: lock isLocked
+did not flip back to false` on its real-PAM leg, because g815 has no
+`formalshell-lock` PAM service — the exact environment block this report
+already documents in the parity table below and in §2's known gaps, not a
+code defect. The sweep otherwise confirms the `ca56dfc` padding fix holds on
+real hardware and closes two of the three previously fix-unconfirmed gaps
+(audio panel, Bluetooth panel) plus the OSD auto-show reactivity fix.
+Details:
 `docs/superpowers/plans/2026-07-29-g815-head-resweep.md`, screenshots in
 `artifacts/g815-head/` (gitignored; the 12 published `docs/screenshots/*.png`
 were recaptured from this sweep the same day). The table below cites this
