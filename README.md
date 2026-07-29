@@ -30,8 +30,9 @@ machine, showing genuinely populated hardware (real battery, Wi-Fi,
 Bluetooth, audio, backlight) rather than the VM's empty state. The greeter
 shot and the three M10 bar shots (tray, indicators, custom modules) are
 VM-sourced — no greetd module on g815 yet, and g815 hasn't been re-swept
-since M10 landed. Details on what each shot proves are in `docs/USAGE.md`
-and git history.
+since M10 landed. Details on what each shot proves are in `CLAUDE.md`'s
+verification loop section (the `dev/smoke-niri.sh` flag each was captured
+with) and git history.
 
 | | | |
 | :---: | :---: | :---: |
