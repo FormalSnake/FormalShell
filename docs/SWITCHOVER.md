@@ -6,42 +6,51 @@ retrofit, motion sweep, the e1504g real-hardware sweep, and its fixes) and
 `docs/superpowers/plans/2026-07-28-m9-polish-and-switchover.md`: an honest
 readiness assessment, not a go/no-go decision — the decision is the owner's.
 
-**Both Linux hosts are now offline.** e1504g was powered off after its
-sweep completed; g815 is unavailable. Nothing below could be re-verified on
-real hardware during this task; where a fix landed after the last real
-hardware could see it, that is stated plainly rather than implied fixed.
+**Both Linux hosts were offline at the time this report was first written.**
+e1504g was powered off after its sweep completed; g815 was unavailable.
+**Update, 2026-07-29:** g815 came back online and was re-swept at HEAD
+`52e2db0` — 18 of `dev/smoke-niri.sh`'s modes, all PASS, confirming the
+`ca56dfc` padding fix holds on real hardware and closing two of the three
+previously fix-unconfirmed gaps (audio panel, Bluetooth panel) plus the
+OSD auto-show reactivity fix. Details:
+`docs/superpowers/plans/2026-07-29-g815-head-resweep.md`, screenshots in
+`artifacts/g815-head/` (gitignored; the 12 published `docs/screenshots/*.png`
+were recaptured from this sweep the same day). The table below cites this
+sweep alongside the original e1504g evidence wherever it applies.
 
 ## 1. Parity table
 
 Evidence sources: the e1504g sweep at commit `1300b02`
 (`docs/superpowers/plans/2026-07-28-m9-e1504g-trial.md`, screenshots in
-`artifacts/e1504g/`), an older g815 sweep at commit `707f8e3`
+`artifacts/e1504g/`), the g815 HEAD sweep at commit `52e2db0`
+(`docs/superpowers/plans/2026-07-29-g815-head-resweep.md`, screenshots in
+`artifacts/g815-head/`), an older g815 sweep at commit `707f8e3`
 (`artifacts/g815/`, **M6-era — predates M7, M8, and M8b entirely**, so it
-speaks only to pre-visual-retrofit rendering and is cited only where the
-e1504g sweep didn't cover the same ground), and the mac VM rig (`just
-vm-smoke`, this task's own runs, all at HEAD `4aad1d6`). All real-hardware
-evidence is niri-backend only — neither sweep ever ran `dev/smoke-hyprland.sh`
-on real hardware.
+speaks only to pre-visual-retrofit rendering and is cited only where neither
+newer sweep covered the same ground), and the mac VM rig (`just vm-smoke`,
+this task's own runs, all at HEAD `4aad1d6`). All real-hardware evidence is
+niri-backend only — no sweep has ever run `dev/smoke-hyprland.sh` on real
+hardware.
 
 | Surface | Status | Evidence |
 | --- | --- | --- |
-| Bar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/plain.png` — real BAT/Wi-Fi/Bluetooth cells the VM cannot produce |
-| Menu | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/menu.png` |
-| Panel: audio | Hardware-verified, with a caveat | e1504g @ 1300b02 found the percentage-lost-behind-elision defect (`artifacts/e1504g/panel-audio.png`); fixed at `4aad1d6`. The fix itself is **VM-only re-verified** (this task, `artifacts/smoke-20260728-230744.png`) — e1504g went offline before a re-sweep could confirm it against a real long device name |
-| Panel: network | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-network.png` — real SSID, correct 79% signal (the 0..1-scaling bug stayed fixed) |
-| Panel: bluetooth | Hardware-verified, fix unconfirmed visually | e1504g @ 1300b02 found the adapter-state title-case defect (`artifacts/e1504g/panel-bluetooth.png`); fixed at `4aad1d6` (grep-confirmed: the only remaining `.toString(` call under `shell/Surfaces/Panels/` without `.toUpperCase()`). Cannot be re-screenshotted anywhere: the VM has no Bluetooth adapter at all (`artifacts/smoke-20260728-230805.png` shows the honest `NO ADAPTER` state), and e1504g is offline |
-| Panel: power | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-power.png` — `FULLY CHARGED` uppercase, real `power-profiles-daemon` values |
-| Panel: calendar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-calendar.png` — real month grid, local-.ics fixture event |
-| Panel: weather | **Unverified** | Never included in either real-hardware sweep (neither e1504g's 18-mode run nor the older g815 run drove `--panel weather`); only ad hoc dev-loop crops exist in `artifacts/` (`weather-crop*.png`), not a hardware or a repeatable VM smoke run |
-| Notifications | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/notify.png`, `notify-center.png` |
-| OSD | Hardware-verified, with a defect found+fixed | e1504g @ 1300b02 found the auto-show reactivity defect (`osd-volume.png` never updated on an external `wpctl set-volume`); manual volume/brightness legs passed (`osd-manual.png`, `osd-brightness.png`). Fixed at `4aad1d6` (wrong signal name, `onVolumeChanged` vs `onVolumesChanged`). Fix is **VM-only re-verified** (this task, `artifacts/smoke-20260728-230920.png`, real bar+OSD flip to 30% off a real `wpctl` call) — not re-confirmed against a real PipeWire graph |
-| Clipboard | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/clipboard.png` |
-| Now playing (media) | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/media.png` + `panel-media.png` — real MPRIS via mpv into the hardware sink |
-| Lock screen | Partially hardware-verified | e1504g @ 1300b02 proved render, the `lock`/`isLocked` IPC round trip, and fail-closed behavior (`lock-locked.png`, `lock-error.png`, `lock-unlocked.png`) — but **environment-blocked** on the actual PAM success/failure paths, since e1504g had no `formalshell-lock` PAM service (that's exactly what switchover installs). Those two paths remain **VM-only verified** (`docs/screenshots/lock-niri.png`, the VM has `nixosModules.formalshell`'s PAM service) |
-| Screensaver | Hardware-verified | e1504g @ 1300b02, `screensaver-auto.png`, `screensaver-manual.png` — real `IdleMonitor` + live-media guard |
-| Picker | Hardware-verified | e1504g @ 1300b02, `picker-grid.png`, `picker-select.png` — real matugen recolor on choose |
-| Greeter | **VM-only** | Never run against real greetd on either host (neither has switched to `nixosModules.formalshell-greeter`). Verified via `just vm-greeter` / `dev/smoke-greeter.sh`: real PAM auth round trip in the VM, `artifacts/greeter/greeter-pre-auth.png`, `greeter-wrong-pw.png`, `greeter-post-auth.png` |
-| Theming (matugen) | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/wallpaper.png` — real matugen run recoloring bar/workspace accents from a wallpaper on real hardware |
+| Bar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/plain.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/plain.png` (`docs/screenshots/bar-niri.png`) — real BAT/Wi-Fi/Bluetooth cells the VM cannot produce, and confirms the `ca56dfc` padding fix (symmetric insets, no left/top-only gutter) on real hardware |
+| Menu | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/menu.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/menu.png` (`docs/screenshots/menu-niri.png`) |
+| Panel: audio | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the percentage-lost-behind-elision defect (`artifacts/e1504g/panel-audio.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against real long device names (`GB206 High Definition Audio Controll.`, `800 Series Chipset Family Audio Cont.`) at plausible non-1% percentages — `artifacts/g815-head/panel-audio.png` (`docs/screenshots/panels-niri.png`) |
+| Panel: network | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-network.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-network.png` — real SSID `kaiiserni` at 62% (the 0..1-scaling bug stayed fixed on a second real host) |
+| Panel: bluetooth | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the adapter-state title-case defect (`artifacts/e1504g/panel-bluetooth.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against a real adapter and three real paired devices (`MX Master 3S M`, `CMF Headphone Pro`, `AirPods Pro`), status correctly uppercase `ENABLED` — `artifacts/g815-head/panel-bluetooth.png` |
+| Panel: power | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-power.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-power.png` — real battery 79%, uppercase `PENDING CHARGE`, correct active-profile highlight |
+| Panel: calendar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-calendar.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-calendar.png` (`docs/screenshots/calendar-niri.png`) — real month grid, local-.ics fixture event |
+| Panel: weather | **Unverified** | Never included in any real-hardware sweep (neither e1504g's 18-mode run, the older g815 run, nor the 2026-07-29 g815 HEAD resweep drove `--panel weather`); only ad hoc dev-loop crops exist in `artifacts/` (`weather-crop*.png`), not a hardware or a repeatable VM smoke run |
+| Notifications | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/notify.png`, `notify-center.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/notify.png`, `notify-center.png` (`docs/screenshots/notifications-niri.png`) |
+| OSD | Hardware-verified, fix now confirmed on real PipeWire | e1504g @ 1300b02 found the auto-show reactivity defect (`osd-volume.png` never updated on an external `wpctl set-volume`); manual volume/brightness legs passed (`osd-manual.png`, `osd-brightness.png`). Fixed at `4aad1d6` (wrong signal name, `onVolumeChanged` vs `onVolumesChanged`). **Closed:** the g815 HEAD sweep @ 52e2db0 fired a real `wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` against a real PipeWire graph and the OSD auto-showed correctly — `artifacts/g815-head/osd-auto.png` (`docs/screenshots/osd-niri.png`), brightness leg cross-checked against the real `nvidia_wmi_ec_backlight` (100/100) |
+| Clipboard | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/clipboard.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/clipboard.png` (`docs/screenshots/clipboard-niri.png`) |
+| Now playing (media) | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/media.png` + `panel-media.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/media.png` (`docs/screenshots/media-niri.png`), `panel-media.png` (honest `NO PLAYER` empty state when no MPRIS player is running) — real MPRIS via mpv into the hardware sink |
+| Lock screen | Partially hardware-verified | e1504g @ 1300b02 and the g815 HEAD sweep @ 52e2db0 (`artifacts/g815-head/lock-locked.png` = `docs/screenshots/lock-niri.png`, `lock-error.png`, `lock-unlocked.png`) both prove render, the `lock`/`isLocked` IPC round trip, and fail-closed behavior — but **environment-blocked** on the actual PAM success/failure paths on both real hosts, since neither had a `formalshell-lock` PAM service (that's exactly what switchover installs). Those two paths remain **VM-only verified** (the mac VM rig has `nixosModules.formalshell`'s PAM service) |
+| Screensaver | Hardware-verified | e1504g @ 1300b02, `screensaver-auto.png`, `screensaver-manual.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/screensaver-auto.png` (`docs/screenshots/screensaver-niri.png`) — real `IdleMonitor` + live-media guard, confirmed on a second host |
+| Picker | Hardware-verified | e1504g @ 1300b02, `picker-grid.png`, `picker-select.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/picker-grid.png` (`docs/screenshots/picker-niri.png`), `picker-selection.png` — real matugen recolor on choose |
+| Greeter | **VM-only** | Never run against real greetd on either Linux host (neither has switched to `nixosModules.formalshell-greeter`), and this is intentionally out of scope for `dev/smoke-niri.sh`-style hardware sweeps. Verified via `just vm-greeter` / `dev/smoke-greeter.sh` on the mac VM rig, re-run 2026-07-29 at the same HEAD: real PAM auth round trip, `artifacts/greeter/greeter-pre-auth.png` (`docs/screenshots/greeter-niri.png`), `greeter-wrong-pw.png`, `greeter-post-auth.png` |
+| Theming (matugen) | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/wallpaper.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/wallpaper.png` — real matugen run recoloring bar/workspace accents from a wallpaper, confirmed on a second real host |
 
 Everything marked hardware-verified above is the **niri** backend only. The
 Hyprland backend has never run on either Linux host — it exists only as
@@ -85,27 +94,33 @@ Hyprland backend has never run on either Linux host — it exists only as
   literal text as an entry point, like `Clock.qml`'s `TIME`) is by design,
   but the panel's actual open-meteo forecast rendering has no sweep evidence
   behind it at all.
-- **Two of the three real-hardware defects found (audio panel, Bluetooth
-  panel) are fixed by code and grep-confirmed but not visually
-  re-confirmed** — one because the VM has no long enough device name to
-  retrigger the original elision bug's exact failure mode, the other
-  because the VM has no Bluetooth adapter to render a state string on at
-  all. Real hardware is what will actually prove these.
-- **The core finding, stated plainly: four real-hardware defects have now
-  been found by hardware sweeps that the VM structurally could not surface**
+- **Resolved 2026-07-29:** the audio-panel and Bluetooth-panel fixes were
+  visually unconfirmed as of this report's original writing (VM couldn't
+  reproduce a long device name or a Bluetooth adapter at all). The g815 HEAD
+  resweep closed both — real long device names and three real paired
+  Bluetooth devices, both rendering correctly (`artifacts/g815-head/panel-audio.png`,
+  `panel-bluetooth.png`; see parity table). No defect class from the original
+  five is still visually unconfirmed.
+- **The core finding, stated plainly: five real-hardware defects were found
+  by hardware sweeps that the VM structurally could not surface**
   (Wi-Fi 0..1-as-0..100 scaling, UPower title-case, the OSD auto-show signal
-  bug, the audio-panel elision bug — the Bluetooth title-case bug is a fifth
-  in the same class). All were found in populated-state paths (real device
-  names, real signal values, real audio graphs) that the VM's minimal
-  single-node fixtures never exercise. This is evidence, not speculation,
-  that more of the same class of bug likely remains in code paths the VM
-  cannot populate — most plausibly anywhere else a real string or numeric
-  reading from hardware gets formatted for display.
+  bug, the audio-panel elision bug, the Bluetooth title-case bug). All were
+  found in populated-state paths (real device names, real signal values,
+  real audio graphs) that the VM's minimal single-node fixtures never
+  exercise, and all five are now fixed and visually reconfirmed on real
+  hardware. This remains evidence that more of the same class of bug could
+  turn up in code paths the VM cannot populate — most plausibly anywhere
+  else a real string or numeric reading from hardware gets formatted for
+  display — but the 2026-07-29 g815 HEAD resweep (18 modes, both halves A
+  and B) found zero new defects of any kind, including zero padding/gutter
+  asymmetry anywhere, so this specific well has now run dry for one full
+  sweep cycle.
 - **Everything else in the parity table that reads "hardware-verified"**
-  was rendered under real Mesa/Intel graphics on e1504g; everything marked
-  VM-only or unverified has, at most, only ever been rendered under
-  software `llvmpipe` (the VM's nested-compositor GPU path) — a genuine
-  hardware GPU rendering path has not touched those surfaces yet.
+  was rendered under real Mesa/Intel graphics on e1504g or on g815's real
+  GPU (2026-07-29 resweep); everything marked VM-only or unverified has, at
+  most, only ever been rendered under software `llvmpipe` (the VM's
+  nested-compositor GPU path) — a genuine hardware GPU rendering path has
+  not touched those surfaces yet.
 - **No SNI tray, no indicators slot, no settings-driven bar layout, and no
   custom `command`/`qml` bar-widget modules.** Spec §Surfaces-1
   (`docs/superpowers/specs/2026-07-27-formalshell-design.md`) puts all four
@@ -177,9 +192,10 @@ means:
    moves to hardware-verified** on at least one real host: the greeter, the
    lock screen's real-PAM paths, the weather panel, and the Hyprland
    backend in whatever form it's expected to be used.
-3. **The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
-   get a real re-sweep** on hardware with a long device name and a real
-   Bluetooth adapter, closing the loop the e1504g sweep couldn't.
+3. ~~The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
+   get a real re-sweep~~ — **done 2026-07-29**: the g815 HEAD resweep hit a
+   real long device name and a real Bluetooth adapter, closing the loop the
+   e1504g sweep couldn't (see parity table).
 4. **A daily-drive trial on e1504g itself**, per the spec's own build-order
    gate (`docs/superpowers/specs/2026-07-27-formalshell-design.md`: "e1504g
    daily-drive trial → switchover gate for the g815") — this report is the

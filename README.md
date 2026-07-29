@@ -40,73 +40,80 @@ design.
 
 ## Screenshots
 
-Every screenshot below comes from `dev/smoke-niri.sh`: it builds the package,
-launches it inside an isolated **nested** niri session (not the host
-desktop), screenshots that nested session, and tears it down. This is the
-standard way UI changes get verified in this repo — see `CLAUDE.md`.
+Recaptured 2026-07-29 from **g815**, the owner's real niri machine, at HEAD
+`52e2db0` — a real battery, real `wlp129s0f0` Wi-Fi, a real Bluetooth
+controller with paired devices, real audio sinks, and a real
+`nvidia_wmi_ec_backlight`, so most shots below show genuinely populated
+hardware state rather than the VM's empty ones. Every shot except the
+greeter comes from `dev/smoke-niri.sh`: it builds the package, launches it
+inside an isolated **nested** niri session (not g815's own live desktop),
+screenshots that nested session, and tears it down — safe to run against a
+live host by design (own `dbus-run-session`, isolated `HOME`/`XDG_*`,
+asserts the host notification bus owner is unchanged before and after). This
+is the standard way UI changes get verified in this repo — see `CLAUDE.md`.
 
 ![Bar on niri](docs/screenshots/bar-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --wallpaper` (M8b revision):
-a solid-color test wallpaper is set over IPC before the shot, so the
-background layer and the bar's colors are both matugen-derived rather than
-the static Flexoki fallback. The bar itself is now Omarchy-style — idle
-widgets are borderless, gaining a hairline+fill only on hover/cursor, and the
-focused workspace (`1`) is a full-bleed accent cell rather than a bordered
-one.
+The screenshot above is from `dev/smoke-niri.sh` (plain) on g815: the
+Omarchy-style bar — idle widgets borderless, gaining a hairline+fill only on
+hover/cursor, focused workspace (`1`) a full-bleed accent cell — showing real
+hardware readouts: `BAT / 79%`, `100%` volume, Wi-Fi and Bluetooth glyphs,
+`WEATHER` label. Confirms the ca56dfc padding fix (symmetric insets on every
+card, no left/top-only gutter) on real hardware, not just the mac VM.
 
 ![Menu on niri](docs/screenshots/menu-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --menu --wallpaper`: the menu
-is summoned over IPC, switched into `select` mode, and screenshotted over the
-same matugen-recolored wallpaper. Post-retrofit the menu renders as a
-floating omarchy-style card (its own full border, opaque fill) rather than
-an edge-to-edge ledger — the uppercase `SELECT / PICK` breadcrumb and
-inverted cursor row are unchanged inside it.
+The screenshot above is from `dev/smoke-niri.sh --menu` on g815: the menu
+summoned over IPC and switched into `select` mode. Floating omarchy-style
+card (full border, opaque fill), uppercase `SELECT / PICK` breadcrumb,
+inverted cursor row, box horizontally centered with symmetric left/right
+edges.
 
 ![Notifications on niri](docs/screenshots/notifications-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --notify --center`: a
+The screenshot above is from `dev/smoke-niri.sh --notify --center` on g815: a
 summoned history center showing the `DND` toggle cell and a `PENDING / 2`
-section, each notification now its own independent omarchy-style card (full
-border, opaque fill, separated by a real gap) rather than fused ledger rows.
-The center and the toast stack are both top-right anchored, so `Toasts.qml`
-suppresses itself for as long as the center is open — a still-sticky
-critical popup underneath would reappear the moment the center closes (see
-Notifications below).
+section, each notification its own independent omarchy-style card (full
+border, opaque fill, separated by a real gap). The center and the toast
+stack are both top-right anchored, so `Toasts.qml` suppresses itself for as
+long as the center is open — a still-sticky critical popup underneath would
+reappear the moment the center closes (see Notifications below). Host
+`org.freedesktop.Notifications` owner (DMS) confirmed unchanged before and
+after.
 
 ![OSD on niri](docs/screenshots/osd-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --osd`: the bottom-center OSD
-card after a manual `qs ipc call osd volume`, showing its own opaque card
-border, the fixed three-column layout (icon | label | value), and the flat
-accent fill bar. The same run also verifies the real auto-show trigger
-(`wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` firing `AudioService.changed`)
-and the brightness variant.
+The screenshot above is from `dev/smoke-niri.sh --osd` on g815, the run's
+canonical auto-show leg: a real `wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%`
+fired `AudioService.changed`, and the bottom-center OSD auto-showed `VOLUME
+30%` with a proportionally-shorter fill bar and the bar cell also reading
+30% — the real-PipeWire reactivity path, not just IPC. (Also visible: niri's
+own "Screenshot captured" toast, routed through the nested session's private
+D-Bus.) The same run separately verifies a manual `qs ipc call osd volume`
+and the brightness variant against the real `nvidia_wmi_ec_backlight`.
 
 ![Panels on niri](docs/screenshots/panels-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --panel audio --wallpaper`:
-`panel open audio` over IPC opens the audio popout (no bar-cell click, so it
-falls back to sitting under the bar's right region — see Panel.qml), now a
-floating omarchy-style card sitting `Theme.space.panelGap` below the bar
-rather than flush against it, showing the OUTPUT header, a `Virtual Sink
-30%` row, a `MUTE` toggle cell, and the flat accent-fill slider with no round
-thumb, over the same matugen-recolored wallpaper as the other panels'
-screenshots.
+The screenshot above is from `dev/smoke-niri.sh --panel audio` on g815:
+`panel open audio` over IPC opens the audio popout showing real multi-device
+hardware — three output sinks (`Easy Effects Sink` 100%, `GB206 High
+Definition Audio Controll.` 100%, `800 Series Chipset Family Audio Cont.`
+42%) and two inputs (`Razer Seiren V3 Mini Mono` 100%, `800 Series Chipset
+Family Audio Cont.` 55%), each its own fill bar and `MUTE` cell. Plausible
+non-1% percentages throughout — no repeat of the historical 0..1 scaling bug.
 
 ![Calendar on niri](docs/screenshots/calendar-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --panel calendar --wallpaper`:
-the month grid (weekday meta row, today inverted with an event dot under
-it), a `TODAY` section listing the fixture `.ics` event by summary, and the
-year-progress bar as a full-width flat accent fill with its percentage as
-mono text, all inside the panel's own omarchy-style card frame.
+The screenshot above is from `dev/smoke-niri.sh --panel calendar` on g815:
+the `JULY 2026` month grid with today (29) correctly highlighted and its
+event-dot marker, a `TODAY` section reading the isolated `.ics` fixture
+(`SMOKE FIXTURE EVENT`), and the year-progress bar at 57%, all inside the
+panel's own omarchy-style card frame.
 
 ![Clipboard on niri](docs/screenshots/clipboard-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --clipboard --wallpaper`:
-three `wl-copy` fixture strings captured newest-first, then the second entry
+The screenshot above is from `dev/smoke-niri.sh --clipboard` on g815: three
+`wl-copy` fixture strings captured newest-first, then the second entry
 re-copied through the exact self-targeting IPC call the menu's clipboard row
 uses, moving it back to the front — the menu summoned at the `clipboard`
 route shows the reordered rows as real cells inside the menu's card
@@ -114,57 +121,59 @@ route shows the reordered rows as real cells inside the menu's card
 
 ![Now playing on niri](docs/screenshots/media-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --media`: a real MPRIS player
-(`mpv` with its own `mpris.lua` script, playing a generated silent fixture
-track into the pipewire null sink) drives the bar cell (note glyph + elided
-title + panel-open accent dot) and the opened media panel — `NOW PLAYING /
-mpv` meta row, title/artist, a flat accent-fill progress cell, and the three
-transport cells — with `media status` cross-checked against the fixture
-track's own tags.
+The screenshot above is from `dev/smoke-niri.sh --media` on g815: a real
+MPRIS player (`mpv` with its own `mpris.lua` script, playing a generated
+silent fixture track into the pipewire null sink) drives the bar cell (note
+glyph + elided title + panel-open accent dot) and the opened media panel —
+`NOW PLAYING / MPV` meta row, title/artist, a flat accent-fill progress
+cell, and the three transport cells — with `media status` cross-checked
+against the fixture track's own tags.
 
 ![Lock screen on niri](docs/screenshots/lock-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --wallpaper --lock`: the
-locked `WlSessionLock` surface over a matugen-recolored wallpaper, showing
-DESIGN.md's one blur exception (the blurred backdrop) behind the shared
-`Components/AuthPrompt.qml` plate — one bordered card holding the oversized
-clock, the uppercase date, a dividing rule, and the single 3px-outlined
-`ENTER PASSWORD` field (M8b Task 6, replacing the old three loose
-independently-floating items). The same run also drives a full round trip —
-a wrong password inverts the field's border and shows an italic uppercase
-`WRONG PASSWORD` message, then the VM's real throwaway test password unlocks
-back to the normal session — and proves `formalshell-lock-before-sleep`
-exits 0 even with no shell instance running at all (the
-`lock-before-sleep` exit-0-always contract, spec §8).
+The screenshot above is from `dev/smoke-niri.sh --lock` on g815: the locked
+`WlSessionLock` surface (no `--wallpaper` this run, so no blurred backdrop),
+the shared `Components/AuthPrompt.qml` plate — one bordered card holding the
+oversized clock, the uppercase date, a dividing rule, and the single
+3px-outlined `ENTER PASSWORD` field. `lock-before-sleep` confirmed exit 0
+with no shell instance running at all (the exit-0-always contract, spec
+§8). g815 has no `formalshell-lock` PAM service installed (installing one is
+switchover's job, intentionally out of scope for this repo's own smoke
+loop), so the PAM unlock round trip itself is not exercised on this host —
+render only. The lock's real PAM round trip (wrong password inverting the
+field, correct password unlocking) was last verified on the mac VM rig,
+which does carry the PAM service.
 
 ![Screensaver on niri](docs/screenshots/screensaver-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --screensaver`: the
+The screenshot above is from `dev/smoke-niri.sh --screensaver` on g815: the
 full-screen `FORMALSHELL` block-character banner (`branding/screensaver.txt`,
 user-replaceable) shown converged, drawn on a `Canvas` in the shell's own
 mono font and `Theme.color.accent` (`Screensaver/effect.js`). This shot
-proves the auto-activation path specifically: with the fixture MPRIS track
-still playing, `screensaver status` reports `active:false` despite
-`isIdle:true` (the live media guard holding); only once the track is killed
-does the screensaver activate purely from the real compositor idle timer, no
-`start` call involved. See Screensaver below for the full effect list and how
-to pin one or swap the banner.
+proves the auto-activation path specifically: with a real fixture MPRIS
+track still playing, `screensaver status` reported `active:false` despite
+`isIdle:true` (the live media guard holding); only once the track was killed
+did the screensaver activate purely from the real compositor idle timer, no
+`start` call involved. See Screensaver below for the full effect list and
+how to pin one or swap the banner.
 
 ![Picker on niri](docs/screenshots/picker-niri.png)
 
-The screenshot above is from `dev/smoke-niri.sh --picker`: five generated
-solid-color fixture images scanned from `picker.directory` into a grid
-inside the picker's own card frame (`WALLPAPER` meta header, cursor cell
-highlighted with its own border). The same run proves both picker contracts
-over IPC — `choose`-ing one fixture sets it as the wallpaper exactly like
-`wallpaper set` (confirmed via `theme status`), and a separate `select` call
-with a caller token returns a different fixture's path through the same
-request/answer file `MenuIpc`'s `select`/`input` already establish.
+The screenshot above is from `dev/smoke-niri.sh --picker` on g815: five
+generated solid-color fixture images scanned from `picker.directory` into a
+grid inside the picker's own card frame (`WALLPAPER` meta header, cursor
+cell highlighted with its own border). The same run proves both picker
+contracts over IPC — `choose`-ing one fixture sets it as the wallpaper
+exactly like `wallpaper set` (confirmed via `theme status`), and a separate
+`select` call with a caller token returns a different fixture's path through
+the same request/answer file `MenuIpc`'s `select`/`input` already establish.
 
 ![Greeter on greetd](docs/screenshots/greeter-niri.png)
 
-The screenshot above is from `dev/smoke-greeter.sh` (`just vm-greeter`), a
-sibling script rather than a `dev/smoke-niri.sh` flag: greetd's
+The screenshot above is VM-sourced (there is no greetd module on g815, and
+switchover — the thing that would install one — is intentionally out of
+scope here): `dev/smoke-greeter.sh` (`just vm-greeter`) on the mac's nested
+NixOS VM, a sibling script rather than a `dev/smoke-niri.sh` flag. greetd's
 `default_session` is a persistent system service, not a fresh nested
 compositor composed per run, so this drives the *already-running*
 `formalshell-greeter` session with real `wtype` keystrokes across the
