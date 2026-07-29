@@ -17,8 +17,13 @@ Cell {
     property real maxWidth: 220
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
+    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // that file's own header comment for why crossing the Loader boundary
+    // through the built-in `visible` property specifically breaks its own
+    // future reactivity.
+    readonly property bool shown: MediaService.available
 
-    visible: MediaService.available
+    visible: root.shown
     standalone: true
     hovered: hoverArea.containsMouse
 

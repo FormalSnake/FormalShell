@@ -34,9 +34,14 @@ Row {
     readonly property var _shown: (root._overflowing && !TrayService.drawerExpanded)
         ? root._items.slice(0, root._pinnedCount)
         : root._items
+    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // that file's own header comment for why crossing the Loader boundary
+    // through the built-in `visible` property specifically breaks its own
+    // future reactivity.
+    readonly property bool shown: root._items.length > 0
 
     spacing: Theme.space.sm
-    visible: root._items.length > 0
+    visible: root.shown
 
     // Shared by every item cell below — right-clicking one just repoints
     // this at that cell and its menu handle rather than each delegate
@@ -52,7 +57,6 @@ Row {
             id: itemCell
             required property var modelData
 
-            height: root.height
             standalone: true
             hovered: itemHover.containsMouse
 
@@ -86,7 +90,6 @@ Row {
     Cell {
         id: overflowCell
         visible: root._overflowing
-        height: root.height
         standalone: true
         hovered: overflowHover.containsMouse
 

@@ -45,7 +45,13 @@ Cell {
         }
     }
 
-    visible: root._hasBattery
+    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // that file's own header comment for why crossing the Loader boundary
+    // through the built-in `visible` property specifically breaks its own
+    // future reactivity.
+    readonly property bool shown: root._hasBattery
+
+    visible: root.shown
     standalone: true
     hovered: hoverArea.containsMouse
 

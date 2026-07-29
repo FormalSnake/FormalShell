@@ -24,14 +24,18 @@ Row {
 
     readonly property bool _dnd: NotificationService.dnd
     readonly property bool _idleInhibited: IdleService.inhibited
+    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // that file's own header comment for why crossing the Loader boundary
+    // through the built-in `visible` property specifically breaks its own
+    // future reactivity.
+    readonly property bool shown: root._dnd || root._idleInhibited
 
     spacing: Theme.space.sm
-    visible: root._dnd || root._idleInhibited
+    visible: root.shown
 
     Cell {
         id: dndCell
         visible: root._dnd
-        height: root.height
         standalone: true
 
         Text {
@@ -46,7 +50,6 @@ Row {
     Cell {
         id: idleInhibitCell
         visible: root._idleInhibited
-        height: root.height
         standalone: true
 
         Text {

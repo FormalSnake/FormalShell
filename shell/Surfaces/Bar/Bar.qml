@@ -203,28 +203,28 @@ PanelWindow {
             // its slot entirely — but Row only inspects its *direct*
             // children's `visible`, and every entry here loads behind this
             // Loader, whose own `visible` defaults true regardless of its
-            // item's. A live `visible: entryLoader.item.visible` expression
-            // binding here feeds back into the very `implicitWidth`/
-            // `implicitHeight`/`_cellHeight` cycle the comment above
-            // already flags as fragile (confirmed by reproducing it — a
-            // sustained "Binding loop detected" storm that leaves the
-            // entire bar unrendered, not just the one hidden widget), so
-            // this mirrors the item's visible imperatively instead: one
-            // assignment per real visibleChanged emission, never a tracked
-            // dependency of the Loader's own binding graph.
+            // item's. Binding straight to `entryLoader.item.visible` looks
+            // right and even renders right once, but permanently kills that
+            // *same* item's own `visible` binding from ever updating again
+            // (confirmed by reproducing it in isolation — reading a
+            // Loader-hosted item's built-in `visible` from an external
+            // binding, declarative or imperative, silently detaches the
+            // item's own visible binding the moment it's read this way; a
+            // property under any other name doesn't have this problem).
+            // Each conditionally-hidden widget therefore exposes its
+            // condition a second time under `shown` (Tray/Indicators/
+            // Battery/NowPlaying) instead of `visible` itself; a widget with
+            // no such property is always shown, so `true` is the safe
+            // fallback rather than ever reading `.visible` here.
             sourceComponent: entryLoader.modelData.kind === "builtin"
                 ? bar._builtinComponents[entryLoader.modelData.name]
                 : (entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent)
+            visible: entryLoader.item
+                ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
+                : false
             onLoaded: {
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
-                entryLoader.visible = entryLoader.item.visible;
-            }
-            Connections {
-                target: entryLoader.item
-                function onVisibleChanged() {
-                    entryLoader.visible = entryLoader.item.visible;
-                }
             }
         }
     }
