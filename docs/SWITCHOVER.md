@@ -24,6 +24,28 @@ Details:
 were recaptured from this sweep the same day). The table below cites this
 sweep alongside the original e1504g evidence wherever it applies.
 
+**Update, 2026-07-29 (M10):** the SNI tray, indicators slot, and
+settings-driven bar layout with custom `command`/`qml` modules — §2's
+largest concrete feature gap against DMS — are built, per
+`docs/superpowers/plans/2026-07-29-m10-bar-completeness-and-readme.md`.
+All three are VM-only verified so far (mac VM rig, `dev/smoke-niri.sh
+--tray`/`--notify`/`--bar-layout`); g815 has not been re-swept since. Task
+5 of that plan, capturing screenshots of the new surfaces, found a real
+regression the prior M10 tasks' own verification had missed: the imperative
+"mirror the loaded widget's `visible` onto its Loader" mechanism Bar.qml's
+settings-driven rewrite introduced (to drop a hidden widget's slot instead
+of leaving it dead) silently detached that *same* widget's own `visible`
+binding from ever updating again the instant anything outside its Loader
+read it — so the tray, the indicators, and even the pre-existing (M6/M7)
+now-playing cell never actually appeared once their condition turned true
+after the bar had already rendered, despite every `qs ipc` status query
+reporting the correct underlying state throughout. Fixed at `bd20ef6`: each
+affected widget now exposes a `shown` property computed the same way its
+`visible` binding already was, and Bar.qml reads `.shown` (falling back to
+`true` for every widget that has none, since those never hide) instead of
+ever reading `.visible` across the Loader boundary. See §2 and the parity
+table below for the closed gap and its verification evidence.
+
 ## 1. Parity table
 
 Evidence sources: the e1504g sweep at commit `1300b02`
@@ -41,6 +63,9 @@ hardware.
 | Surface | Status | Evidence |
 | --- | --- | --- |
 | Bar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/plain.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/plain.png` (`docs/screenshots/bar-niri.png`) — real BAT/Wi-Fi/Bluetooth cells the VM cannot produce, and confirms the `ca56dfc` padding fix (symmetric insets, no left/top-only gutter) on real hardware |
+| Bar: SNI tray | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --tray`, `docs/screenshots/tray-niri.png` — six real `dev/sni-stub.py` StatusNotifierItems collapse to three pinned cells plus a "+3" overflow drawer, which expands to "−3" over the same `tray expand` IPC call the overflow cell's own click takes; not yet re-swept on a real host |
+| Bar: indicators slot | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --notify`, `docs/screenshots/indicators-niri.png` — the DND bell-off glyph appears after `notifications setDnd true` over IPC; idle-inhibit shares the same widget and reactivity fix but has no dedicated smoke screenshot yet; not yet re-swept on a real host |
+| Bar: settings-driven layout + custom modules | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --bar-layout`, `docs/screenshots/bar-layout-niri.png` — a reordered left region led by six `bar.modules` entries: one happy-path `command` module (`CMD 42`), four exercising each of `CommandModule.qml`'s failure paths (all render the honest `MODULE ERROR` cell), and one `qml` module (`QML OK`); every other smoke mode's own screenshot, carrying no `bar` config, keeps proving the no-config fallback renders today's exact default arrangement; not yet re-swept on a real host |
 | Menu | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/menu.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/menu.png` (`docs/screenshots/menu-niri.png`) |
 | Panel: audio | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the percentage-lost-behind-elision defect (`artifacts/e1504g/panel-audio.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against real long device names (`GB206 High Definition Audio Controll.`, `800 Series Chipset Family Audio Cont.`) at plausible non-1% percentages — `artifacts/g815-head/panel-audio.png` (`docs/screenshots/panels-niri.png`) |
 | Panel: network | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-network.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-network.png` — real SSID `kaiiserni` at 62% (the 0..1-scaling bug stayed fixed on a second real host) |
@@ -127,19 +152,15 @@ Hyprland backend has never run on either Linux host — it exists only as
   most, only ever been rendered under software `llvmpipe` (the VM's
   nested-compositor GPU path) — a genuine hardware GPU rendering path has
   not touched those surfaces yet.
-- **No SNI tray, no indicators slot, no settings-driven bar layout, and no
-  custom `command`/`qml` bar-widget modules.** Spec §Surfaces-1
-  (`docs/superpowers/specs/2026-07-27-formalshell-design.md`) puts all four
-  in v1 scope — none of the spec's non-goals (plugin system, settings GUI,
-  dock, polkit agent, screenshot/recording tooling, sway/river backends)
-  cover them. None exist in `shell/`: `Bar.qml`'s widget list is hardcoded
-  (workspaces, active window, clock, now-playing, battery, audio, network,
-  bluetooth, weather); `rg -il 'systemtray|statusnotifier' shell/` matches
-  nothing under `shell/`; `git log -S SystemTray -- shell/` is empty (never
-  built); `Config.qml` documents `bar.position` as reserved with no
-  widget-layout or custom-module keys implemented anywhere. This is the
-  largest concrete feature gap against DMS this report knows of, and §4
-  below was wrong to claim there wasn't one.
+- **Resolved 2026-07-29 (M10):** this report's largest concrete feature gap
+  against DMS — no SNI tray, no indicators slot, no settings-driven bar
+  layout, and no custom `command`/`qml` bar-widget modules, all four in
+  spec §Surfaces-1's v1 scope — is closed. `Bar.qml` now resolves
+  left/center/right from `bar.layout`/`bar.modules` in `settings.json`
+  (`shell/Bar/layout.js`), `Quickshell.Services.SystemTray` backs a grouped
+  overflow drawer (`Tray.qml`), and DND/idle-inhibit surface as glyphs
+  (`Indicators.qml`) — see the parity table's three new Bar rows. All three
+  are VM-only verified so far, not yet re-swept on a real host.
 
 ## 3. The exact install path
 
@@ -187,17 +208,19 @@ idle-inhibit, recording…), and settings-driven bar layout with custom
 reserved with no widget-layout or custom-module keys implemented, and there
 is no tray code anywhere in `shell/` (`rg -il
 'systemtray|statusnotifier' shell/` matches nothing; `git log -S SystemTray
--- shell/` is empty). See §2 above. A defined bar for the g815 switchover
-means:
+-- shell/` is empty). **This in turn is now itself historical — M10 closed
+it 2026-07-29, see §2's resolved bullet and item 1 below.** A defined bar
+for the g815 switchover means:
 
-1. **The tray, indicators slot, and settings-driven bar layout/custom
-   modules get built**, per §Surfaces-1 — this is unbuilt v1 scope, not a
-   non-goal, and it is the largest concrete feature gap against DMS this
-   report knows of.
+1. ~~The tray, indicators slot, and settings-driven bar layout/custom
+   modules get built~~ — **done 2026-07-29 (M10)**: all three exist and are
+   VM-verified (see §2 and the parity table's three new Bar rows); they
+   join item 2 below for the still-outstanding real-hardware sweep.
 2. **Every row in the parity table above reading VM-only or unverified
    moves to hardware-verified** on at least one real host: the greeter, the
-   lock screen's real-PAM paths, the weather panel, and the Hyprland
-   backend in whatever form it's expected to be used.
+   lock screen's real-PAM paths, the weather panel, the Hyprland backend in
+   whatever form it's expected to be used, and now the tray, indicators
+   slot, and settings-driven bar layout M10 just added.
 3. ~~The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
    get a real re-sweep~~ — **done 2026-07-29**: the g815 HEAD resweep hit a
    real long device name and a real Bluetooth adapter, closing the loop the

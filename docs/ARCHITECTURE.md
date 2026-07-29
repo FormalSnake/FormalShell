@@ -41,7 +41,7 @@ per-output surfaces internally — no `Variants` loop needed here) and one
 `Quickshell.screens`, since a plain overlay layer has no such auto-multi-
 output primitive); one `ImagePicker`; and the `Ipc` handlers
 (debug/theme/wallpaper/menu/notifications/osd/panel/clipboard/media/lock/
-screensaver/picker).
+screensaver/picker/tray).
 
 ## Tree layout
 
@@ -127,19 +127,27 @@ shell/
     LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status() — no unlock(), see its own header comment
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
     PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/close()/status()
+    TrayIpc.qml                   IpcHandler target "tray", status()/expand()/collapse() — spec addendum, same rationale as "panel"
+  Bar/
+    layout.js                     pure JS, .pragma library — resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings
+    commandOutput.js               pure JS, .pragma library — resolve(exitCode, stdout)/errorState() for CommandModule.qml's Waybar-JSON parsing
   Surfaces/
     Bar/
-      Bar.qml                  PanelWindow; three-region Row (left/center/right), height tracks the tallest cell present
+      Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
       widgets/
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
         Clock.qml                center region: TIME meta label + live clock, opens the calendar panel
         AudioWidget.qml          volume glyph + %, panel-open accent dot
-        Battery.qml               BAT / NN% meta idiom, hidden entirely when isLaptopBattery is false
+        Battery.qml               BAT / NN% meta idiom, hidden entirely when isLaptopBattery is false (exposes `shown`)
         NetworkWidget.qml         connection-state glyph, panel-open accent dot
         BluetoothWidget.qml       adapter-state glyph, panel-open accent dot
         WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
-        NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player
+        NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player (exposes `shown`)
+        Tray.qml                   SNI tray over Quickshell.Services.SystemTray, grouped overflow drawer (exposes `shown`)
+        Indicators.qml              DND / idle-inhibit glyphs, hidden entirely when neither holds (exposes `shown`)
+        CommandModule.qml           bar.modules "command" entry: polled Waybar-JSON cell, honest MODULE ERROR on failure
+        QmlModule.qml                bar.modules "qml" entry: Loader-hosted user file, load-time isolation only
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
     Menu/
@@ -183,9 +191,11 @@ tests/
   tst_openmeteo.qml             qmltestrunner tests for Weather/openmeteo.js
   tst_applemusic.qml            qmltestrunner tests for Media/applemusic.js
   tst_screensaver_effect.qml    qmltestrunner tests for Screensaver/effect.js
+  tst_bar_layout.qml             qmltestrunner tests for Bar/layout.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard)(+media)(+lock)(+screensaver)(+picker) loop, dbus-run-session isolated
+  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard)(+media)(+lock)(+screensaver)(+picker)(+tray)(+bar-layout) loop, dbus-run-session isolated
   smoke-hyprland.sh             same, nested Hyprland
+  sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items — registers for real on the session bus, never faked
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
                                  the exit-0-always wrapper around `qs ipc call lock lock`
@@ -517,6 +527,95 @@ own `open()`/`toggle()`, `close()` closes whichever panel is currently open
 (scans the registry for `isOpen`), `state()` returns that same panel's name
 or `""`. An unknown name returns `"error: unknown panel '<name>'"` from both
 `open()` and `toggle()` — never a silent no-op.
+
+## Bar layout resolution + tray/custom-module lifecycle
+
+M10 replaced `Bar.qml`'s fixed widget declarations with a settings-driven
+`Repeater`/`Loader` dispatch per region:
+
+```
+settings.json bar.layout/bar.modules          Bar.qml
+  -> Config.get("bar", null)                    -> Layout.resolve(bar) (shell/Bar/layout.js, pure)
+                                                    -> { regions: {left, center, right}, warnings }
+                                                       each entry: {kind:"builtin", name} or
+                                                       {kind:"module", id, module} (a "custom:<id>"
+                                                       bar.layout name resolved against bar.modules)
+                                                    -> unknown widget / dangling module ref dropped,
+                                                       one console.warn per drop, never fatal
+  -> Repeater { model: regions.<region> }        -> regionDelegate Loader per entry
+       sourceComponent: builtin -> bar._builtinComponents[name] (pre-wired with this
+                                    bar's own screen/panel context, e.g. AudioWidget's
+                                    `panel: bar.audioPanel`)
+                         module  -> CommandModule.qml ("command") or QmlModule.qml ("qml"),
+                                    handed `module` (the bar.modules entry) once loaded
+```
+
+An absent `bar.layout` region falls back to `layout.js`'s own
+`DEFAULT_LAYOUT` for that region alone — today's exact arrangement — so a
+user with no `bar` config sees no change; a present-but-empty region
+(`[]`) stays empty rather than falling back.
+
+**Each conditionally-hidden widget's own `visible` never crosses the
+Loader boundary directly** — this is the one real gotcha in the whole
+mechanism, found the hard way (M10 Task 5, `bd20ef6`): a `Loader`'s own
+`visible` needs to mirror its loaded item's `visible` so `Row` drops a
+hidden widget's slot entirely (`Row` only inspects *direct* children, and
+every entry here loads behind a `Loader`, whose own `visible` defaults
+`true` regardless of its item's) — but reading a Loader-hosted item's
+built-in `visible` property from *any* binding or signal handler outside
+that Loader, declarative or imperative, silently detaches the item's own
+`visible` binding from ever updating again afterward (confirmed by
+reproducing it in an isolated standalone repro — a property under any
+other name doesn't have this problem). So `Tray.qml`, `Indicators.qml`,
+`Battery.qml`, and `NowPlaying.qml` each expose a second property,
+`shown`, computed the same way their own `visible` already is; `Bar.qml`'s
+`regionDelegate` binds its `Loader`'s `visible` to
+`entryLoader.item.shown` (falling back to `true` for every widget that
+doesn't define one, since those never hide, so reading their `.visible` —
+which then never needs to update — is harmless). A widget that starts
+hidden and later needs to show up reactively (a real tray item
+registering, DND flipping on, an MPRIS player appearing) **must** follow
+this `shown`-property pattern, not a bare `visible:` binding read from
+Bar.qml.
+
+`_regionHeight()`/`_cellHeight` (the bar's own content-derived height) read
+each delegate's *loaded item*, never the `Loader` itself, for the same
+kind of reason: a `Loader` with no explicit size mirrors its item's actual
+size, so reading `Loader.implicitHeight` directly would close a cycle back
+through the very property computing it.
+
+**Tray** (`Tray.qml`, `TrayService.qml`, `shell/Ipc/TrayIpc.qml`):
+referencing `Quickshell.Services.SystemTray` makes quickshell host and
+watch `org.kde.StatusNotifierWatcher`, so every real StatusNotifierItem
+registered on the session bus appears in `.items` with no extra wiring.
+Past `_visibleLimit` (4) items collapse into one more cell (`+N`) that
+expands the row to reveal them all — the spec's "grouped drawer" — expand
+state lives in the shared `TrayService` singleton (not per-`Tray.qml`
+instance) so `qs ipc call tray expand/collapse` has one thing to act on
+regardless of which screen's bar owns the click. `dev/sni-stub.py` is the
+VM's real StatusNotifierItem producer (PyGObject, registers on the session
+bus for real — never faked inside the shell).
+
+**Indicators** (`Indicators.qml`): DND straight off `NotificationService.dnd`
+and idle-inhibit off `IdleService.inhibited` — no second DND state
+machine. Recording has no glyph: nothing in this shell or a reachable
+service reports screen recording (no screencast portal, no compositor IPC
+surfaces it) as of 2026-07-29 — not wired rather than invented.
+
+**Custom modules** (`CommandModule.qml`, `QmlModule.qml`,
+`shell/Bar/commandOutput.js`): a `"command"` module polls
+`module.command` on a `Timer` (`module.interval`, default 5000ms), parses
+stdout as Waybar-JSON-compatible `{text, tooltip, class}`
+(`commandOutput.js`, pure), and renders the same honest `MODULE ERROR` cell
+for a non-zero exit, malformed JSON, a run that outlives `module.timeout`
+(SIGTERM'd), or a binary that fails to start at all (quickshell's `Process`
+only emits `runningChanged` for that case, never `exited` — tracked via a
+`_sawExit` flag so it isn't mistaken for a normal completion). A `"qml"`
+module loads `module.source` into a `Loader` — isolating only *load-time*
+failures (bad syntax, an unresolvable import) as `Loader.status ===
+Loader.Error`; a file that parses fine has the exact same engine access as
+any built-in widget (`qs.Core`, `qs.Services`, `Process`, …) — this is not
+a runtime sandbox.
 
 ## Clipboard data flow
 

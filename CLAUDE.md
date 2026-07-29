@@ -127,6 +127,34 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   directory in the generic image-selector mode with a caller token,
   `choose` picks a different fixture, and `picker-selection.txt` is read
   back to confirm `{token, value}` landed.
+- `dev/smoke-niri.sh --tray` — launches six real `dev/sni-stub.py`
+  StatusNotifierItem producers (a minimal PyGObject SNI client, registers
+  for real on the isolated session bus, never faked inside the shell),
+  dumps `tray status` (proves the real item count and `expanded:false`)
+  before screenshotting the collapsed drawer (`tray-collapsed.png` — past
+  `Tray.qml`'s 4-item visible limit, 3 pinned cells plus a "+3" overflow
+  cell), then calls `tray expand` (the rig's stand-in for the overflow
+  cell's own click — no synthetic pointer exists here) and dumps `tray
+  status` again to confirm `expanded:true` with the same item count; the
+  run's own `smoke.png`/`SMOKE_OK`, taken after the expand call, shows every
+  item as its own cell with the drawer already open. The stub processes are
+  killed by PID right before niri quits.
+- `dev/smoke-niri.sh --bar-layout` — points `settings.json`'s `bar.layout`
+  at a left region led by six `bar.modules` entries (swapped ahead of the
+  reordered builtins — `activeWindow` before `workspaces`, away from
+  today's default): one `command` module printing known Waybar-JSON
+  (happy path), four more each exercising one of `CommandModule.qml`'s
+  failure paths (non-zero exit, malformed JSON, a run that outlives its
+  configured timeout, a binary that doesn't exist at all), and a `qml`
+  module (a fixture file that itself imports `qs.Core` and reads `Theme`,
+  proving a loaded user component shares the shell's own engine). No drive
+  script needed — `Bar/layout.js` resolves this from `settings.json` at
+  startup like any other `Config`-driven surface — so the run's own
+  `smoke.png` already shows all of it; `bar-layout.png` is the same shot
+  under a name that doesn't depend on remembering which run produced
+  `smoke.png`. Every other mode still omits the `bar` key entirely, so
+  their own screenshots keep proving the no-config fallback renders today's
+  exact default arrangement.
 - `dev/smoke-greeter.sh` (`just vm-greeter`) — a sibling of the other smoke
   scripts, not a flag on `smoke-niri.sh`: greetd's `default_session`
   (`nixosModules.formalshell-greeter`) is a persistent system service, not a

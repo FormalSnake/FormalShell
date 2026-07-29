@@ -7,6 +7,7 @@ overview, screenshots, features, and install instructions live in
 [`README.md`](../README.md); the dev/verification loop lives in
 [`CLAUDE.md`](../CLAUDE.md).
 
+- [Bar](#bar)
 - [Theming](#theming)
 - [Menu](#menu)
 - [Notifications](#notifications)
@@ -18,6 +19,69 @@ overview, screenshots, features, and install instructions live in
 - [Lock screen](#lock-screen)
 - [Screensaver](#screensaver)
 - [Picker](#picker)
+
+## Bar
+
+Three regions — `left`/`center`/`right` — each independently reorderable
+from `settings.json`, with no config needed to get today's default
+arrangement:
+
+```jsonc
+{
+  "bar": {
+    "layout": {
+      "left": ["workspaces", "activeWindow"],
+      "center": ["clock", "nowPlaying"],
+      "right": ["battery", "audio", "network", "bluetooth", "weather", "tray", "indicators", "custom:cpu"]
+    },
+    "modules": [
+      { "id": "cpu", "type": "command", "command": ["my-cpu-script"], "interval": 5000, "timeout": 5000 }
+    ]
+  }
+}
+```
+
+Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
+`battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `indicators`.
+An absent region falls back to its own default arrangement above (an
+absent `bar` key entirely is the same as an absent region for all three);
+a present-but-empty region (`[]`) stays empty. An unknown widget name, or
+a `"custom:<id>"` entry with no matching `bar.modules[].id`, is dropped
+with a console warning — never a crash.
+
+`bar.modules[]` entries are referenced from `bar.layout` by
+`"custom:<id>"` and come in two `type`s:
+
+- **`command`** — runs `command` (an argv array) on an interval
+  (`interval`, ms, default 5000) and parses stdout as
+  Waybar-JSON-compatible `{"text": "…", "tooltip": "…", "class": "…"}`;
+  only `text` renders today. `class: "warning"` renders an accent-filled
+  cell, `"critical"`/`"urgent"` renders the urgent fill, anything else
+  renders plain. A non-zero exit, a timeout (`timeout`, ms, default 5000),
+  malformed JSON, or a command that fails to start at all all render the
+  same honest `MODULE ERROR` cell rather than a stale value.
+- **`qml`** — loads a `source` file (an absolute path) into a `Loader`.
+  This isolates only *load-time* failures (bad syntax, an unresolvable
+  import) as the same `MODULE ERROR` cell — a file that parses fine has
+  the exact same engine access as any built-in widget (`qs.Core`,
+  `qs.Services`, `Process`, …). It is not a runtime sandbox.
+
+**Tray** — every real `org.kde.StatusNotifierItem` registered on the
+session bus (`Quickshell.Services.SystemTray`) renders as its own cell:
+left click activates it, middle click secondary-activates it, right click
+opens its `DBusMenu` if it has one. Past 4 visible items the rest collapse
+into one more cell (`+N`) that expands the row to reveal them all.
+
+**Indicators** — DND and idle-inhibit each render as their own glyph, only
+while the condition holds; the whole slot disappears when neither does.
+Recording has no glyph yet — nothing in this shell or a reachable service
+reports screen recording as of 2026-07-29.
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}
+qs ipc --any-display -p <store-path>/share/formalshell call tray expand    # same action as clicking the "+N" cell
+qs ipc --any-display -p <store-path>/share/formalshell call tray collapse
+```
 
 ## Theming
 

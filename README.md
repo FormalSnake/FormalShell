@@ -22,14 +22,16 @@ design.
 
 ## Screenshots
 
-Every shot below except the greeter comes from `dev/smoke-niri.sh`: it
-builds the package, launches it inside an isolated **nested** niri session,
-screenshots that session, and tears it down — safe to run against a live
-host by design. Recaptured 2026-07-29 from **g815**, the owner's real niri
+Every shot below comes from `dev/smoke-niri.sh`: it builds the package,
+launches it inside an isolated **nested** niri session, screenshots that
+session, and tears it down — safe to run against a live host by design.
+Most were recaptured 2026-07-29 from **g815**, the owner's real niri
 machine, showing genuinely populated hardware (real battery, Wi-Fi,
 Bluetooth, audio, backlight) rather than the VM's empty state. The greeter
-shot is VM-sourced (`dev/smoke-greeter.sh`, no greetd module on g815 yet).
-Details on what each shot proves are in `docs/USAGE.md` and git history.
+shot and the three M10 bar shots (tray, indicators, custom modules) are
+VM-sourced — no greetd module on g815 yet, and g815 hasn't been re-swept
+since M10 landed. Details on what each shot proves are in `docs/USAGE.md`
+and git history.
 
 | | | |
 | :---: | :---: | :---: |
@@ -37,6 +39,7 @@ Details on what each shot proves are in `docs/USAGE.md` and git history.
 | <img src="docs/screenshots/osd-niri.png" width="260"><br>**OSD** — g815 | <img src="docs/screenshots/panels-niri.png" width="260"><br>**Panels** — g815 | <img src="docs/screenshots/calendar-niri.png" width="260"><br>**Calendar** — g815 |
 | <img src="docs/screenshots/clipboard-niri.png" width="260"><br>**Clipboard** — g815 | <img src="docs/screenshots/media-niri.png" width="260"><br>**Now playing** — g815 | <img src="docs/screenshots/lock-niri.png" width="260"><br>**Lock screen** — g815 |
 | <img src="docs/screenshots/screensaver-niri.png" width="260"><br>**Screensaver** — g815 | <img src="docs/screenshots/picker-niri.png" width="260"><br>**Picker** — g815 | <img src="docs/screenshots/greeter-niri.png" width="260"><br>**Greeter** — mac VM |
+| <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Indicators** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
 
 The Hyprland backend is implemented and verified against a live nested
 session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
