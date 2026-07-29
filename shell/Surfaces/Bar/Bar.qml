@@ -235,6 +235,12 @@ PanelWindow {
         anchors.leftMargin: Theme.spacing.md
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spacing.md
+        clip: true
+        // A settings-driven left region can outgrow the gap before the
+        // center region (custom command/qml modules have no fixed count) —
+        // capped to whatever space actually remains left of centerRegion.x
+        // so overflow clips here instead of drawing over the clock.
+        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - 2 * Theme.spacing.md - Theme.borderWidth))
 
         Repeater {
             id: leftRepeater
@@ -279,6 +285,11 @@ PanelWindow {
         anchors.rightMargin: Theme.spacing.md
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.sm
+        clip: true
+        // Mirror of leftRegion's cap: never draws left past centerRegion's
+        // right edge, regardless of how many built-ins plus custom modules
+        // settings.json's bar.layout.right names.
+        width: Math.min(implicitWidth, Math.max(0, bar.width - 2 * Theme.spacing.md - Theme.borderWidth - centerRegion.x - centerRegion.width))
 
         Repeater {
             id: rightRepeater
