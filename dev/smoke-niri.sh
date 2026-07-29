@@ -139,6 +139,21 @@
 # request/answer handshake — MenuIpc's select()/input() pattern, reused
 # rather than reinvented.
 #
+# With --bar-layout, points settings.json's bar.layout at a reordered left
+# region (activeWindow before workspaces — swapped from today's default,
+# M10 Task 3) and a right region led by two bar.modules entries: a
+# "command" module (a fixture script printing known Waybar-JSON
+# `{text, tooltip, class}`, polled every 2s) and a "qml" module (a fixture
+# file that itself `import qs.Core`s and reads Theme, proving a loaded user
+# component really does share the shell's own engine) ahead of the usual
+# battery/audio/network/bluetooth/weather/tray/indicators. No drive script
+# needed — layout.js resolves this from settings.json at startup same as
+# any other Config-driven surface — so the run's own generic smoke.png
+# already shows all three; bar-layout.png is the same shot under a name
+# that doesn't depend on remembering which run produced smoke.png. Every
+# other mode still omits the `bar` key entirely, so their own screenshots
+# keep proving the no-config fallback renders today's exact arrangement.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -175,6 +190,7 @@ lock_mode=false
 screensaver_mode=false
 picker_mode=false
 tray_mode=false
+bar_layout_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -190,7 +206,8 @@ while [ $# -gt 0 ]; do
     --screensaver) screensaver_mode=true; shift ;;
     --picker) picker_mode=true; shift ;;
     --tray) tray_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--picker] [--tray]" >&2; exit 1 ;;
+    --bar-layout) bar_layout_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--picker] [--tray] [--bar-layout]" >&2; exit 1 ;;
   esac
 done
 
@@ -402,6 +419,7 @@ tray_status1_path="$shot_dir/tray-status-1.json"
 tray_status2_path="$shot_dir/tray-status-2.json"
 tray_collapsed_path="$shot_dir/tray-collapsed.png"
 tray_pids_path="$shot_dir/tray-pids.txt"
+bar_layout_path="$shot_dir/bar-layout.png"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -490,9 +508,43 @@ if $picker_mode; then
   mkdir -p "$picker_dir"
   picker_settings=', "picker": {"directory": "'"$picker_dir"'"}'
 fi
+# bar_layout_mode (M10 Task 3): reorders the left region and points two
+# bar.modules entries — a "command" module and a "qml" module (both written
+# to disk below, after settings.json itself) — at the front of the right
+# region, ahead of every built-in widget. Every other mode leaves the `bar`
+# key out entirely, which is itself the no-config-fallback proof.
+bar_settings=""
+bar_cmd_fixture_path="$shot_dir/bar-cmd-fixture.sh"
+bar_qml_fixture_path="$shot_dir/bar-qml-fixture.qml"
+if $bar_layout_mode; then
+  bar_settings=', "bar": {"layout": {"left": ["activeWindow", "workspaces"], "right": ["custom:cmdfixture", "custom:qmlfixture", "battery", "audio", "network", "bluetooth", "weather", "tray", "indicators"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
+fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings}
 EOF
+
+if $bar_layout_mode; then
+  cat > "$bar_cmd_fixture_path" <<'EOF'
+#!/usr/bin/env bash
+printf '{"text": "CMD 42", "tooltip": "smoke fixture tooltip", "class": "warning"}'
+EOF
+  chmod +x "$bar_cmd_fixture_path"
+  # Deliberately `import qs.Core` and read Theme — proof that a loaded user
+  # component really does share the shell's own engine (QmlModule.qml's own
+  # header comment: Loader isolates load-time failures only, not a runtime
+  # sandbox), not just a static string.
+  cat > "$bar_qml_fixture_path" <<'EOF'
+import QtQuick
+import qs.Core
+
+Text {
+    text: "QML OK"
+    color: Theme.color.foreground
+    font.family: Theme.font.family
+    font.pixelSize: Theme.fontSize.body
+}
+EOF
+fi
 
 if $picker_mode; then
   for name_color in "img-0:#c0392b" "img-1:#27ae60" "img-2:#2980b9" "img-3:#f1c40f" "img-4:#8e44ad"; do
@@ -841,6 +893,11 @@ fi
   if $tray_mode; then
     echo "spawn-at-startup \"bash\" \"$tray_drive_script\""
   fi
+  if $bar_layout_mode; then
+    # 5s: shell startup plus room for the command module's first poll
+    # (fires immediately once Config.settings resolves, well under 2s).
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && niri msg action screenshot-screen --path $bar_layout_path\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -1174,6 +1231,14 @@ if $tray_mode; then
   tray_count2=$(grep -o '"id":' "$tray_status2_path" | wc -l | tr -d ' ')
   if [ "$tray_count2" != "$tray_count1" ]; then
     echo "SMOKE_FAIL: tray item count changed across expand ($tray_count1 -> $tray_count2)" >&2; exit 1
+  fi
+fi
+
+if $bar_layout_mode; then
+  if [ -f "$bar_layout_path" ]; then
+    echo "SMOKE_BAR_LAYOUT $bar_layout_path"
+  else
+    echo "SMOKE_FAIL: no bar-layout screenshot produced" >&2; exit 1
   fi
 fi
 

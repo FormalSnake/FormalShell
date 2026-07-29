@@ -32,6 +32,15 @@ import QtQuick
 // no real settings.json of its own, so this is really just this key's
 // documented fallback today — a real deployment's session choice belongs in
 // nixosModules.formalshell-greeter, M8 Task 4).
+// bar.layout ({left, center, right}: arrays of widget names, each region
+// optional — an absent region falls back to today's default arrangement,
+// resolved by shell/Bar/layout.js, M10 Task 3) and bar.modules (array of
+// {id, type: "command"|"qml", ...}, referenced from bar.layout via a
+// "custom:<id>" entry — "command" runs `command` on an `interval` (ms,
+// default 5000) and parses Waybar-JSON-compatible stdout
+// (CommandModule.qml); "qml" loads a `source` file into a Loader
+// (QmlModule.qml)). An unknown widget name or a dangling module reference
+// is dropped with a console warning, never a crash.
 Singleton {
     id: root
 
