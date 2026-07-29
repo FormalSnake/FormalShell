@@ -13,7 +13,11 @@
 # (harmless, useful for manual debugging) but this script no longer relies
 # on it now that the real IPC route is wired.
 # With --notify, fires `notify-send -u normal` then `-u critical` in-session
-# and screenshots the resulting toasts.
+# and screenshots the resulting toasts. Then flips DND on over the existing
+# `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
+# notify-sends already landed, so this can't retroactively suppress them)
+# and screenshots the bar again (indicator-dnd.png) to prove Indicators.qml's
+# bell-off glyph appears (M10 Task 2).
 # With --center, fires one more `notify-send -u normal` and waits for
 # non-critical popups to auto-expire into the `pending` tier before summoning
 # the notification center over the `notifications` IPC target and
@@ -366,6 +370,8 @@ dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 query_path="$shot_dir/query.json"
 selection_path="$shot_dir/selection.txt"
+dnd_status_path="$shot_dir/dnd-status.txt"
+dnd_indicator_path="$shot_dir/indicator-dnd.png"
 osd_manual_path="$shot_dir/osd-manual.png"
 osd_brightness_path="$shot_dir/osd-brightness.png"
 clip_list1_path="$shot_dir/clip-list-1.json"
@@ -776,6 +782,14 @@ fi
   if $notify_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -u normal 'Test' 'Hello'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$notify_send_bin' -u critical 'Crit' 'Now'\""
+    # Bar indicators slot (M10 Task 2): both notify-sends above have already
+    # fired by sleep 6, so flipping DND on here can't suppress them (dnd
+    # bypass is per-notification-on-arrival, not retroactive) — dndState is
+    # dumped right after the toggle to prove it actually flipped, then the
+    # bar is screenshotted a second later to show Indicators.qml's bell-off
+    # glyph appear.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications setDnd true > $dnd_status_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $dnd_indicator_path\""
   fi
   if $center_mode; then
     # A second normal notify-send, offset from notify_mode's own so the
@@ -1165,6 +1179,19 @@ fi
 
 if $notify_mode; then
   echo "host org.freedesktop.Notifications owner PID unchanged: $host_notifications_owner_after"
+  if [ -s "$dnd_status_path" ]; then
+    cat "$dnd_status_path"
+  else
+    echo "SMOKE_FAIL: no dnd status produced" >&2; exit 1
+  fi
+  if ! grep -q "^on$" "$dnd_status_path"; then
+    echo "SMOKE_FAIL: notifications setDnd true did not report on — got: $(cat "$dnd_status_path")" >&2; exit 1
+  fi
+  if [ -f "$dnd_indicator_path" ]; then
+    echo "SMOKE_INDICATOR_DND $dnd_indicator_path"
+  else
+    echo "SMOKE_FAIL: no indicator-dnd screenshot produced" >&2; exit 1
+  fi
 fi
 
 if $osd_mode; then

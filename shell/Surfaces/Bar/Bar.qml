@@ -35,7 +35,7 @@ PanelWindow {
     // rule floating above the bar's own (DESIGN.md rule #1, "no double
     // rules"). Every Cell-based widget below binds its own `height` back to
     // this value so its bottom rule always lands exactly on the bar's.
-    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, nowPlayingCell.implicitHeight, batteryCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight, weatherCell.implicitHeight, trayRow.implicitHeight)
+    readonly property real _cellHeight: Math.max(leftRegion.implicitHeight, clockCell.implicitHeight, nowPlayingCell.implicitHeight, batteryCell.implicitHeight, audioCell.implicitHeight, networkCell.implicitHeight, bluetoothCell.implicitHeight, weatherCell.implicitHeight, trayRow.implicitHeight, indicatorsRow.implicitHeight)
     implicitHeight: bar._cellHeight
     color: Theme.color.background
 
@@ -148,6 +148,11 @@ PanelWindow {
 
         Tray {
             id: trayRow
+            height: bar._cellHeight
+        }
+
+        Indicators {
+            id: indicatorsRow
             height: bar._cellHeight
         }
     }
