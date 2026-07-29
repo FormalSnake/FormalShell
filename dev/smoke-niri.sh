@@ -103,6 +103,20 @@
 # `menu summon clipboard` so the run's screenshot shows the provider's rows
 # rendered as real menu cells, left open through smoke.png/SMOKE_OK same as
 # --panel.
+# With --tray, launches six dev/sni-stub.py processes (a minimal Python/GLib
+# StatusNotifierItem producer — see its own header comment) that each
+# register a real item on the isolated session bus, giving
+# Quickshell.Services.SystemTray genuine items to track. Tray.qml's visible
+# limit is 4, so 6 items means 3 pinned cells plus one "+3" overflow cell —
+# `tray status` is dumped (tray-status-1.json, proves the real item count
+# and expanded:false) before a screenshot (tray-collapsed.png) shows the
+# collapsed state, then `tray expand` (the smoke rig's stand-in for the
+# overflow cell's own click — no synthetic pointer exists here) is called
+# and `tray status` dumped again (tray-status-2.json, proves expanded:true
+# with the same item count); this run's generic smoke.png/SMOKE_OK is taken
+# after the expand call, so it shows every item as its own cell, drawer
+# open. The stub processes are killed by PID (tray-pids.txt, same pattern as
+# --media's mpv) right before niri quits.
 # With --picker, generates a handful of fixture PNGs (imagemagick, one solid
 # color each) into a directory pointed at by settings.json's picker.directory,
 # then drives the `picker` IPC target: `summon` opens the wallpaper-mode grid
@@ -156,6 +170,7 @@ media_mode=false
 lock_mode=false
 screensaver_mode=false
 picker_mode=false
+tray_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -170,7 +185,8 @@ while [ $# -gt 0 ]; do
     --lock) lock_mode=true; shift ;;
     --screensaver) screensaver_mode=true; shift ;;
     --picker) picker_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--picker]" >&2; exit 1 ;;
+    --tray) tray_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--picker] [--tray]" >&2; exit 1 ;;
   esac
 done
 
@@ -265,6 +281,24 @@ if $lock_mode; then
   fi
 fi
 
+if $tray_mode; then
+  # nix/testvm.nix stages this exact wrapped derivation into
+  # environment.systemPackages (M10 Task 1), so `command -v python3` already
+  # resolves to a PyGObject-capable interpreter on the VM; the fallback
+  # below is for a host that hasn't wired that in.
+  if python3 -c 'import gi' >/dev/null 2>&1; then
+    python3_bin=$(command -v python3)
+  else
+    python3_bin=$(nix build --no-link --print-out-paths --impure --expr '
+      let
+        flake = builtins.getFlake (toString ./.);
+        pkgs = flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+      in
+        pkgs.python3.withPackages (ps: [ ps.pygobject3 ])
+    ')/bin/python3
+  fi
+fi
+
 if $notify_mode || $center_mode; then
   # Resolved to a real absolute path (not a "nix run ..." prefix): it's
   # embedded inside a generated `sh -c` string below, same requirement as
@@ -276,6 +310,7 @@ if $notify_mode || $center_mode; then
   fi
 fi
 shell_path=$(readlink -f result/share/formalshell)
+sni_stub_path="$PWD/dev/sni-stub.py"
 
 # The nested instance is a Wayland client of the host compositor, so it needs
 # the host's WAYLAND_DISPLAY. This shell may not have it exported (e.g. a
@@ -357,6 +392,10 @@ ss_final_status_path="$shot_dir/screensaver-final-status.json"
 picker_grid_path="$shot_dir/picker-grid.png"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
 picker_selection_path="$shot_dir/picker-selection.txt"
+tray_status1_path="$shot_dir/tray-status-1.json"
+tray_status2_path="$shot_dir/tray-status-2.json"
+tray_collapsed_path="$shot_dir/tray-collapsed.png"
+tray_pids_path="$shot_dir/tray-pids.txt"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -679,6 +718,43 @@ cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selecti
 EOF
 fi
 
+# --tray: launches six real SNI producers in the background (PIDs recorded
+# for the kill step below), then proves the collapsed state (status dump +
+# screenshot) before driving the same expand() the overflow cell's own click
+# calls and proving the expanded state (status dump); this run's generic
+# smoke.png/SMOKE_OK, taken later, shows the drawer already expanded.
+if $tray_mode; then
+  tray_drive_script="$shot_dir/tray-drive.sh"
+  cat > "$tray_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 1
+"$python3_bin" "$sni_stub_path" --id tray-fixture-1 --title "Tray Fixture 1" --color c0392b & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-2 --title "Tray Fixture 2" --color 27ae60 & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-3 --title "Tray Fixture 3" --color 2980b9 & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-4 --title "Tray Fixture 4" --color f1c40f & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-6 --title "Tray Fixture 6" --color 16a085 & echo \$! >> "$tray_pids_path"
+sleep 6
+"$qs_bin" ipc --any-display -p "$shell_path" call tray status > "$tray_status1_path" 2>&1
+sleep 1
+niri msg action screenshot-screen --path "$tray_collapsed_path"
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call tray expand > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call tray status > "$tray_status2_path" 2>&1
+EOF
+
+  tray_kill_script="$shot_dir/tray-kill.sh"
+  cat > "$tray_kill_script" <<EOF
+#!/usr/bin/env bash
+if [ -f "$tray_pids_path" ]; then
+  while read -r pid; do
+    kill "\$pid" 2>/dev/null || true
+  done < "$tray_pids_path"
+fi
+EOF
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -748,6 +824,9 @@ fi
   if $picker_mode; then
     echo "spawn-at-startup \"bash\" \"$picker_drive_script\""
   fi
+  if $tray_mode; then
+    echo "spawn-at-startup \"bash\" \"$tray_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read) fires 1s after
   # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
   # the other modes' 1s so it has time to land first. osd_mode's brightness
@@ -793,6 +872,12 @@ fi
     # smoke.png/SMOKE_OK is taken 4s after that, showing the ordinary session
     # with the picker already closed again.
     screenshot_delay=14
+  elif $tray_mode; then
+    # tray-drive.sh's own final step (the post-expand status dump) lands
+    # around its internal sleep sum (~10s in); this run's generic
+    # smoke.png/SMOKE_OK is taken 3s after that, showing every registered
+    # item as its own cell with the drawer already expanded.
+    screenshot_delay=13
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -803,7 +888,14 @@ fi
   if $media_mode; then
     media_kill="bash '$media_kill_script'; "
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # tray_mode's stub processes have no auto-close of their own either (they
+  # sit in GLib.MainLoop().run() forever) — killed by PID right after the
+  # screenshot, same reasoning as media_kill above.
+  tray_kill=""
+  if $tray_mode; then
+    tray_kill="bash '$tray_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 HOME="$iso_home" \
@@ -1036,6 +1128,38 @@ if $picker_mode; then
   fi
   if ! grep -q '"token":"tok-picker"' "$picker_selection_path" || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
     echo "SMOKE_FAIL: picker-selection.txt did not resolve tok-picker with the chosen path — got: $(cat "$picker_selection_path")" >&2; exit 1
+  fi
+fi
+
+if $tray_mode; then
+  if [ -s "$tray_status1_path" ]; then
+    cat "$tray_status1_path"
+  else
+    echo "SMOKE_FAIL: no tray status (pre-expand) produced" >&2; exit 1
+  fi
+  tray_count1=$(grep -o '"id":' "$tray_status1_path" | wc -l | tr -d ' ')
+  if [ "$tray_count1" != "6" ]; then
+    echo "SMOKE_FAIL: tray status did not report all 6 fixture items before expand (got $tray_count1) — stub registration likely failed" >&2; exit 1
+  fi
+  if ! grep -q '"expanded":false' "$tray_status1_path"; then
+    echo "SMOKE_FAIL: tray status did not report expanded:false before the expand call — got: $(cat "$tray_status1_path")" >&2; exit 1
+  fi
+  if [ -f "$tray_collapsed_path" ]; then
+    echo "SMOKE_TRAY_COLLAPSED $tray_collapsed_path"
+  else
+    echo "SMOKE_FAIL: no tray-collapsed screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$tray_status2_path" ]; then
+    cat "$tray_status2_path"
+  else
+    echo "SMOKE_FAIL: no tray status (post-expand) produced" >&2; exit 1
+  fi
+  if ! grep -q '"expanded":true' "$tray_status2_path"; then
+    echo "SMOKE_FAIL: tray expand IPC call did not flip expanded to true — got: $(cat "$tray_status2_path")" >&2; exit 1
+  fi
+  tray_count2=$(grep -o '"id":' "$tray_status2_path" | wc -l | tr -d ' ')
+  if [ "$tray_count2" != "$tray_count1" ]; then
+    echo "SMOKE_FAIL: tray item count changed across expand ($tray_count1 -> $tray_count2)" >&2; exit 1
   fi
 fi
 

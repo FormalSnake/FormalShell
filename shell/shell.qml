@@ -91,6 +91,7 @@ ShellRoot {
     PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance }) }
     ClipboardIpc {}
     MediaIpc {}
+    TrayIpc {}
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
     PickerIpc { picker: imagePickerInstance }

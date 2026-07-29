@@ -233,6 +233,14 @@ nixpkgs.lib.nixosSystem {
           # also on an interactive ssh session's PATH for ad hoc
           # verification of the iTunes/amp-api chain from the VM directly.
           pkgs.curl
+          # M10 Task 1: dev/sni-stub.py registers real StatusNotifierItems on
+          # the session bus so the tray widget/grouped drawer has genuine
+          # items to render — PyGObject is the "Python/GLib" producer the
+          # plan sanctions, since nixpkgs ships nothing else that registers
+          # a bare SNI item without dragging in a whole desktop applet
+          # (nm-applet/blueman-applet) this headless VM has no backing
+          # device for anyway.
+          (pkgs.python3.withPackages (ps: [ ps.pygobject3 ]))
         ];
 
         # No hardware sink exists in a headless VM, so AudioService.available
