@@ -139,20 +139,30 @@
 # request/answer handshake — MenuIpc's select()/input() pattern, reused
 # rather than reinvented.
 #
-# With --bar-layout, points settings.json's bar.layout at a reordered left
-# region (activeWindow before workspaces — swapped from today's default,
-# M10 Task 3) and a right region led by two bar.modules entries: a
-# "command" module (a fixture script printing known Waybar-JSON
-# `{text, tooltip, class}`, polled every 2s) and a "qml" module (a fixture
-# file that itself `import qs.Core`s and reads Theme, proving a loaded user
-# component really does share the shell's own engine) ahead of the usual
-# battery/audio/network/bluetooth/weather/tray/indicators. No drive script
-# needed — layout.js resolves this from settings.json at startup same as
-# any other Config-driven surface — so the run's own generic smoke.png
-# already shows all three; bar-layout.png is the same shot under a name
+# With --bar-layout, points settings.json's bar.layout at a left region led
+# by six bar.modules entries, then the reordered builtins (activeWindow
+# before workspaces — swapped from today's default, M10 Task 3): a
+# "command" module printing known Waybar-JSON `{text, tooltip, class}`
+# (happy path), four more "command" modules that each exercise one of
+# CommandModule.qml's failure paths — non-zero exit, output that isn't
+# valid JSON, a command that outlives its configured `timeout`, and a
+# command binary that doesn't exist at all (quickshell's Process only
+# emits runningChanged for that case, never `exited` — the bug this task
+# fixed) — so the screenshot shows all four rendering the same honest
+# "MODULE ERROR" cell rather than staying blank, and a "qml" module (a
+# fixture file that itself `import qs.Core`s and reads Theme, proving a
+# loaded user component really does share the shell's own engine). Left
+# rather than right: it's the nearly-empty region (two builtins, both
+# narrow), so six more wide cells still fit ahead of the centered clock
+# instead of growing the right region's Row wide enough to overlap it. No
+# drive script needed — layout.js resolves this from settings.json at
+# startup same as any other Config-driven surface — so the run's own
+# generic smoke.png already shows all of them; bar-layout.png is the same
+# shot under a name
 # that doesn't depend on remembering which run produced smoke.png. Every
-# other mode still omits the `bar` key entirely, so their own screenshots
-# keep proving the no-config fallback renders today's exact arrangement.
+# other mode
+# still omits the `bar` key entirely, so their own screenshots keep proving
+# the no-config fallback renders today's exact arrangement.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -508,16 +518,19 @@ if $picker_mode; then
   mkdir -p "$picker_dir"
   picker_settings=', "picker": {"directory": "'"$picker_dir"'"}'
 fi
-# bar_layout_mode (M10 Task 3): reorders the left region and points two
-# bar.modules entries — a "command" module and a "qml" module (both written
-# to disk below, after settings.json itself) — at the front of the right
-# region, ahead of every built-in widget. Every other mode leaves the `bar`
-# key out entirely, which is itself the no-config-fallback proof.
+# bar_layout_mode (M10 Task 3): points five bar.modules entries (written to
+# disk below, after settings.json itself) at the front of the left region,
+# ahead of the reordered activeWindow/workspaces builtins. Every other mode
+# leaves the `bar` key out entirely, which is itself the no-config-fallback
+# proof.
 bar_settings=""
 bar_cmd_fixture_path="$shot_dir/bar-cmd-fixture.sh"
+bar_cmd_fail_path="$shot_dir/bar-cmd-fail.sh"
+bar_cmd_badjson_path="$shot_dir/bar-cmd-badjson.sh"
+bar_cmd_timeout_path="$shot_dir/bar-cmd-timeout.sh"
 bar_qml_fixture_path="$shot_dir/bar-qml-fixture.qml"
 if $bar_layout_mode; then
-  bar_settings=', "bar": {"layout": {"left": ["activeWindow", "workspaces"], "right": ["custom:cmdfixture", "custom:qmlfixture", "battery", "audio", "network", "bluetooth", "weather", "tray", "indicators"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
+  bar_settings=', "bar": {"layout": {"left": ["custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
 fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
 {"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings}
@@ -529,6 +542,31 @@ if $bar_layout_mode; then
 printf '{"text": "CMD 42", "tooltip": "smoke fixture tooltip", "class": "warning"}'
 EOF
   chmod +x "$bar_cmd_fixture_path"
+  # Four failure-path fixtures (CommandModule.qml, M10 review brief): a
+  # non-zero exit despite well-formed stdout, well-formed exit but
+  # unparsable stdout, a command that outlives its module's own `timeout`
+  # (set to 1s above, well inside the 5s wait before this run's screenshot),
+  # and a command path that doesn't exist at all — no script written for
+  # that last one, `cmdmissing`'s own settings.json command entry above
+  # points straight at a path under $shot_dir that's never created. Each
+  # must render "MODULE ERROR" rather than staying blank.
+  cat > "$bar_cmd_fail_path" <<'EOF'
+#!/usr/bin/env bash
+printf '{"text": "should not render"}'
+exit 1
+EOF
+  chmod +x "$bar_cmd_fail_path"
+  cat > "$bar_cmd_badjson_path" <<'EOF'
+#!/usr/bin/env bash
+printf 'not json'
+EOF
+  chmod +x "$bar_cmd_badjson_path"
+  cat > "$bar_cmd_timeout_path" <<'EOF'
+#!/usr/bin/env bash
+sleep 5
+printf '{"text": "too late"}'
+EOF
+  chmod +x "$bar_cmd_timeout_path"
   # Deliberately `import qs.Core` and read Theme — proof that a loaded user
   # component really does share the shell's own engine (QmlModule.qml's own
   # header comment: Loader isolates load-time failures only, not a runtime
