@@ -144,7 +144,7 @@ Item {
             // Any deactivation path (explicit stop(), the media guard
             // clearing, real input) releases a stale frame pin so the next
             // activation always free-runs normally.
-            root._pinnedFrame = -1;
+            root._pinnedFrame = Effect.nextPinnedFrame(root.active, root._pinnedFrame);
         }
         if (root.active && root.lockAfterSeconds > 0)
             lockChainTimer.restart();
@@ -230,12 +230,12 @@ Item {
                 // everything below actually paints: root's pin (when set)
                 // wins outright, otherwise it's this counter.
                 property int _autoFrame: 0
-                readonly property int _renderFrame: root._pinnedFrame >= 0 ? root._pinnedFrame : surface._autoFrame
+                readonly property int _renderFrame: Effect.resolveRenderFrame(root._pinnedFrame, surface._autoFrame)
                 on_RenderFrameChanged: canvas.requestPaint()
 
                 Timer {
                     interval: 90
-                    running: surface.visible && root._pinnedFrame < 0
+                    running: Effect.autoTimerShouldRun(surface.visible, root._pinnedFrame)
                     repeat: true
                     onTriggered: {
                         surface._autoFrame += 1;

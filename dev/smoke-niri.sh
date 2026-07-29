@@ -430,13 +430,21 @@ if $screensaver_gif_mode; then
   media_dir="$PWD/docs/media"
   mkdir -p "$media_dir" "$ss_gif_home/.config/formalshell"
 
-  for effect in decrypt rain expand slide scatter; do
-    frames_dir=$(mktemp -d)
+  ss_gif_effects=(decrypt rain expand slide scatter)
+  for ss_gif_i in "${!ss_gif_effects[@]}"; do
+    effect="${ss_gif_effects[$ss_gif_i]}"
+    # One tmp dir per effect (frames + config + drive script together,
+    # mirroring every other mode's single shot_dir) — rm -rf'd once its GIF
+    # is built, except the last effect's, which cmd_smoke still needs to
+    # scp its SMOKE_OK frame back after this script exits.
+    effect_dir=$(mktemp -d)
+    frames_dir="$effect_dir/frames"
+    mkdir -p "$frames_dir"
     cat > "$ss_gif_home/.config/formalshell/settings.json" <<EOF
 {"screensaver": {"effect": "$effect"}}
 EOF
 
-    ss_gif_cfg=$(mktemp -d)/config.kdl
+    ss_gif_cfg="$effect_dir/config.kdl"
     ss_gif_convergence_path="$frames_dir/frame-info.json"
     ss_gif_drive_script="$frames_dir/drive.sh"
     cat > "$ss_gif_drive_script" <<EOF
@@ -477,13 +485,20 @@ EOF
       echo "SMOKE_FAIL: screensaver frameInfo did not report effect '$effect' — got: $(cat "$ss_gif_convergence_path" 2>/dev/null)" >&2
       exit 1
     fi
+    convergence=$(grep -o '"convergenceFrame":[0-9]*' "$ss_gif_convergence_path" | cut -d: -f2)
+    expected_frames=$((convergence + ss_gif_hold + 1))
 
     shopt -s nullglob
     frame_files=("$frames_dir"/frame-*.png)
     shopt -u nullglob
     frame_count=${#frame_files[@]}
-    if [ "$frame_count" -lt 2 ]; then
-      echo "SMOKE_FAIL: $effect captured only $frame_count frame(s) — expected the full convergence run" >&2
+    # Exact match, not just "enough frames": a session killed mid-capture
+    # (the drive script's own `timeout 200`, or slide's 92-frame run at
+    # 0.15s/frame plus one qs ipc spawn each) would otherwise still produce
+    # a plausible-looking but truncated GIF that never reaches the banner,
+    # and this would exit 0 regardless.
+    if [ "$frame_count" -ne "$expected_frames" ]; then
+      echo "SMOKE_FAIL: $effect captured $frame_count frame(s), expected the full convergence run of $expected_frames (convergence $convergence + hold $ss_gif_hold + 1) — session likely killed mid-capture" >&2
       exit 1
     fi
 
@@ -500,6 +515,12 @@ EOF
     echo "SMOKE_SCREENSAVER_GIF_${effect^^} $out_gif ($gif_size bytes, $frame_count frames)"
 
     ss_gif_last_frame="${frame_files[$((frame_count - 1))]}"
+    # Every effect but the last is done with its raw frames the moment its
+    # GIF exists; the last effect's dir survives so cmd_smoke can still scp
+    # its SMOKE_OK frame back after this script has already exited.
+    if [ "$ss_gif_i" -lt "$((${#ss_gif_effects[@]} - 1))" ]; then
+      rm -rf "$effect_dir"
+    fi
   done
 
   host_notifications_owner_after=$(host_notifications_owner)

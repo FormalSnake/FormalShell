@@ -225,7 +225,11 @@ has the full design rationale):
 `~/formalshell` inside the VM), `run <cmd…>` (ssh with cwd at the repo and
 the session env exported), `smoke [flags…]` (sync, run `dev/smoke-niri.sh`
 inside, then `scp` the `SMOKE_OK` screenshot plus any dump/status/query JSON
-back to `./artifacts/` on the mac), `shell` (interactive ssh). `justfile`
+back to `./artifacts/` on the mac; `--screensaver-gif` additionally rsyncs
+the VM's `docs/media/screensaver-*.gif` straight into the real repo's
+`docs/media/` on the mac, since those are committed output, not scratch
+artifacts — otherwise the next `sync`'s `rsync --delete` would just wipe the
+VM's copies before anyone could commit them), `shell` (interactive ssh). `justfile`
 wraps this as `vm-up`/`vm-down`/`vm-build`/`vm-test`/`vm-lint`/`vm-smoke
 *FLAGS`/`vm-greeter` — the mac-side equivalents of
 `build`/`test`/`lint`/`smoke`/`dev/smoke-greeter.sh` above (`vm-greeter`

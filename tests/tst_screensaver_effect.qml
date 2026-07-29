@@ -245,4 +245,31 @@ TestCase {
         for (var key in arrivals) distinctFrames[arrivals[key]] = true;
         verify(Object.keys(distinctFrames).length > 1);
     }
+
+    // frame-pin resolution: the contract behind ScreensaverIpc's `frame(n)`
+    // (M11 Task 1) — which frame renders, whether the free-run Timer ticks,
+    // and that a pin never survives deactivation.
+
+    function test_resolve_render_frame_prefers_the_pin_when_set() {
+        compare(Effect.resolveRenderFrame(7, 3), 7);
+        compare(Effect.resolveRenderFrame(0, 3), 0);
+    }
+
+    function test_resolve_render_frame_falls_back_to_auto_when_unpinned() {
+        compare(Effect.resolveRenderFrame(-1, 3), 3);
+    }
+
+    function test_auto_timer_runs_only_while_visible_and_unpinned() {
+        verify(Effect.autoTimerShouldRun(true, -1));
+        verify(!Effect.autoTimerShouldRun(true, 0));
+        verify(!Effect.autoTimerShouldRun(false, -1));
+    }
+
+    function test_pin_is_released_on_deactivate() {
+        compare(Effect.nextPinnedFrame(false, 12), -1);
+    }
+
+    function test_pin_survives_while_still_active() {
+        compare(Effect.nextPinnedFrame(true, 12), 12);
+    }
 }

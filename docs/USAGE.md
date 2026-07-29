@@ -546,9 +546,9 @@ five distinct convergence effects:
 | --- | --- |
 | `decrypt` | every cell scrambles through random glyphs before settling on its target character |
 | `rain` | the original matrix-rain: columns of falling glyphs with a brightness-decay trail |
-| `expand` | each line grows outward from its own center |
+| `expand` | one diamond opens outward from the banner's centre, not per-line |
 | `slide` | each line slides in from alternating edges |
-| `scatter` | every cell starts at a random offset and converges inward |
+| `scatter` | every cell pops in at its own hashed frame with a brief fade-in — nothing moves |
 
 **Picking an effect.** `screensaver.effect` in `settings.json` is `"random"`
 by default — a fresh effect is picked every time the screensaver activates,

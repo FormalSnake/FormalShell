@@ -230,3 +230,28 @@ function frameState(name, frame, banner) {
     }
     return rows;
 }
+
+// ---- frame-pin resolution (ScreensaverIpc's `frame(n)`, M11 Task 1) ------
+// Pure decision logic behind Screensaver.qml's deterministic frame pin: which
+// counter actually renders, whether the free-running per-surface Timer
+// should tick, and what the pin resolves to across an active/inactive
+// transition. Kept here rather than inline in QML so the contract — a stale
+// pin never survives deactivation — is directly testable instead of only
+// exercised by a manual smoke run.
+
+// -1 means "not pinned" — the free-running counter renders.
+function resolveRenderFrame(pinnedFrame, autoFrame) {
+    return pinnedFrame >= 0 ? pinnedFrame : autoFrame;
+}
+
+// The free-run Timer only ticks while nothing is pinned.
+function autoTimerShouldRun(visible, pinnedFrame) {
+    return visible && pinnedFrame < 0;
+}
+
+// Any deactivation releases a stale pin so the very next activation always
+// free-runs from frame 0 rather than replaying whatever a previous headless
+// recorder left it parked on.
+function nextPinnedFrame(active, pinnedFrame) {
+    return active ? pinnedFrame : -1;
+}

@@ -196,6 +196,22 @@ cmd_smoke() {
     printf '%s\n' "$rest" > "$local_json"
     echo "pulled dump/status output: $local_json"
   fi
+
+  # --screensaver-gif writes its committed output straight into the synced
+  # repo's docs/media/ inside the VM, not artifacts/ — pull those back into
+  # the real repo so the command actually reproduces the tracked GIFs
+  # instead of requiring a manual scp. The next cmd_sync's `rsync --delete`
+  # would otherwise be a no-op here (the pulled files now exist on the mac
+  # side too), so this can't regress into deleting what it just pulled.
+  case " $* " in
+    *" --screensaver-gif "*)
+      mkdir -p "$repo_root/docs/media"
+      rsync -az -e "ssh ${ssh_opts[*]}" \
+        --include 'screensaver-*.gif' --exclude '*' \
+        test@localhost:formalshell/docs/media/ "$repo_root/docs/media/"
+      echo "pulled screensaver gifs: $repo_root/docs/media/screensaver-*.gif"
+      ;;
+  esac
 }
 
 cmd_shell() {
