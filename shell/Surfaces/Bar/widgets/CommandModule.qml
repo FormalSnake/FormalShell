@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Io
 import qs.Core
 import qs.Components
+import "../../../Bar/commandOutput.js" as CommandOutput
 
 // Bar cell for a `bar.modules[]` entry with type "command" (DESIGN.md
 // §Bar, spec §Surfaces-1, M10 Task 3): runs `module.command` on an
@@ -25,6 +26,10 @@ Cell {
     property string _text: ""
     property string _tooltip: ""
     property string _class: ""
+    // Set true the moment `proc.exited` fires for the in-flight run, so
+    // `proc.onRunningChanged` below can tell a normal completion (exited
+    // always fires first) apart from a process that never started at all.
+    property bool _sawExit: false
 
     standalone: true
     accent: root._class === "warning"
@@ -42,32 +47,20 @@ Cell {
             return;
         if (proc.running)
             return;
+        root._sawExit = false;
         proc.command = root.module.command;
         proc.running = true;
         timeoutTimer.restart();
     }
 
-    function _setError() {
-        root._class = "";
-        root._tooltip = "";
-        root._text = "MODULE ERROR";
+    function _applyState(state) {
+        root._text = state.text;
+        root._tooltip = state.tooltip;
+        root._class = state["class"];
     }
 
-    function _applyOutput(raw) {
-        var parsed;
-        try {
-            parsed = JSON.parse(raw);
-        } catch (e) {
-            root._setError();
-            return;
-        }
-        if (!parsed || typeof parsed.text !== "string") {
-            root._setError();
-            return;
-        }
-        root._text = parsed.text;
-        root._tooltip = typeof parsed.tooltip === "string" ? parsed.tooltip : "";
-        root._class = typeof parsed["class"] === "string" ? parsed["class"] : "";
+    function _setError() {
+        root._applyState(CommandOutput.errorState());
     }
 
     onModuleChanged: root._run()
@@ -103,12 +96,21 @@ Cell {
             id: stdoutCollector
         }
         onExited: exitCode => {
+            root._sawExit = true;
             timeoutTimer.stop();
-            if (exitCode !== 0) {
+            root._applyState(CommandOutput.resolve(exitCode, stdoutCollector.text));
+        }
+        // quickshell's Process never emits `exited` when the command fails
+        // to start (a missing/typo'd binary — process.cpp's
+        // onErrorOccurred only emits runningChanged for FailedToStart), so
+        // without this a bad command path left this cell blank forever
+        // instead of erroring. `_sawExit` distinguishes that case from a
+        // normal completion, where `exited` already fired first.
+        onRunningChanged: {
+            if (!proc.running && !root._sawExit) {
+                timeoutTimer.stop();
                 root._setError();
-                return;
             }
-            root._applyOutput(stdoutCollector.text);
         }
     }
 
