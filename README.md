@@ -47,6 +47,13 @@ session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
 screenshot in the dev sandbox, so no `bar-hyprland.png` is published until
 that's fixed.
 
+The screensaver's five convergence effects, frame-stepped and captured as
+GIFs (`dev/smoke-niri.sh --screensaver-gif`, `CLAUDE.md`):
+
+| | | | | |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="docs/media/screensaver-decrypt.gif" width="140"><br>**decrypt** | <img src="docs/media/screensaver-rain.gif" width="140"><br>**rain** | <img src="docs/media/screensaver-expand.gif" width="140"><br>**expand** | <img src="docs/media/screensaver-slide.gif" width="140"><br>**slide** | <img src="docs/media/screensaver-scatter.gif" width="140"><br>**scatter** |
+
 ## Features
 
 Full per-surface reference (config keys, IPC targets, keybind examples) is

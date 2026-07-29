@@ -115,6 +115,16 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   stop` dismisses it, then a final explicit `start`/screenshot
   (`screensaver-manual.png`)/`stop` proves the manual IPC path
   independently of the idle timer.
+- `dev/smoke-niri.sh --screensaver-gif` — records all five effects in
+  `effect.js` as GIFs, one independent nested-niri session per effect: pins
+  `screensaver.effect` via the settings fixture, starts the screensaver,
+  reads real convergence off `screensaver frameInfo`, then steps
+  `screensaver frame(n)` from 0 to convergence plus an 8-frame hold,
+  `grim`-screenshotting each frame (frame-stepped, not wall-clock-timed, so
+  the VM's llvmpipe rendering can't produce uneven spacing) before
+  assembling `docs/media/screensaver-<effect>.gif` with imagemagick
+  (resized to 640px wide, palette capped, `-layers Optimize`). Confirms
+  `frameInfo` reports the pinned effect name before accepting the run.
 - `dev/smoke-niri.sh --picker` — generates a handful of solid-color fixture
   PNGs (imagemagick) into a directory pointed at by settings.json's
   `picker.directory`, then drives the `picker` IPC target: `summon` opens
