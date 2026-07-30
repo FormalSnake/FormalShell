@@ -81,6 +81,30 @@ PanelWindow {
         onLoadFailed: error => console.warn("Menu: failed to load default-menu.jsonc:", error)
     }
 
+    // Vendored emoji dataset (M12 Task 6) — ships inside the package like
+    // default-menu.jsonc, parsed with Model.parseJsonc because
+    // dev/gen-emoji.sh writes a provenance header comment JSON.parse would
+    // reject. Load failure degrades to an empty list (the emoji route and
+    // ":e" trigger simply return no rows), one console.warn.
+    property string _emojiText: ""
+
+    FileView {
+        id: emojiFile
+        path: Quickshell.shellPath("Menu/emoji.json")
+        onLoaded: root._emojiText = emojiFile.text()
+        onLoadFailed: error => console.warn("Menu: failed to load emoji.json:", error)
+    }
+
+    readonly property var _emojiList: {
+        if (!root._emojiText) return [];
+        try {
+            return Model.parseJsonc(root._emojiText);
+        } catch (e) {
+            console.warn("Menu: failed to parse emoji.json:", e.message);
+            return [];
+        }
+    }
+
     // ~/.config/formalshell/menu.jsonc — the per-key user overlay (plan-wide
     // constraint: user wins, `"hidden": true` drops a default node). Same
     // bounded-retry-until-watch-attaches pattern as Config.qml's
@@ -150,6 +174,16 @@ PanelWindow {
         if (root._mode === "input")
             return [];
         var q = searchInput.text;
+        // The emoji route searches the vendored dataset exclusively (an
+        // empty query browses its head, Providers.emojiSearch), and the
+        // ":e " trigger narrows to the same rows from any level (M12
+        // Task 6). Neither ever falls through to whole-tree ranking: 3,944
+        // emoji in the tree would drown every root search.
+        var emojiQuery = Providers.emojiTriggerQuery(q);
+        if (root.currentNodeId === "emoji")
+            return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q);
+        if (emojiQuery !== null)
+            return Providers.emojiRows(root._emojiList, emojiQuery);
         if (q.length === 0)
             return Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
         // A query that parses as an expression leads with the CALC result row
@@ -359,6 +393,15 @@ PanelWindow {
     // the apps provider + fuzzy filtering where keyboard injection isn't
     // available (nested test sessions).
     function query(q) {
+        // Same ":e" narrowing as _displayRows, so the smoke rig's `debug
+        // query ':e thumbs'` proves the trigger and the vendored dataset
+        // without keyboard input; icon carries the emoji char itself.
+        var emojiQuery = Providers.emojiTriggerQuery(q);
+        if (emojiQuery !== null) {
+            return Providers.emojiRows(root._emojiList, emojiQuery).map(function (n) {
+                return { id: n.id, label: n.label, icon: n.icon, kind: n.kind };
+            });
+        }
         root._evalConditions();
         var rows = Search.rank(root._nodes, q, root._condResults).map(function (n) {
             return { id: n.id, label: n.label, kind: n.kind };

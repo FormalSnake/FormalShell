@@ -555,6 +555,7 @@ dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 query_path="$shot_dir/query.json"
 calc_query_path="$shot_dir/calc-query.json"
+emoji_query_path="$shot_dir/emoji-query.json"
 selection_path="$shot_dir/selection.txt"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
@@ -1046,6 +1047,7 @@ fi
     echo "spawn-at-startup \"bash\" \"$menu_open_script\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
     echo "spawn-at-startup \"bash\" \"$menu_select_script\""
     echo "spawn-at-startup \"bash\" \"$menu_finish_script\""
   fi
@@ -1244,6 +1246,14 @@ if $menu_mode; then
     cat "$calc_query_path"
   else
     echo "SMOKE_FAIL: menu query '2+2*3' did not rank a '= 8' calc row" >&2; exit 1
+  fi
+  # Emoji provider (M12 Task 6): the ":e thumbs" trigger must answer with
+  # the thumbs-up row from the vendored dataset (the char rides the icon
+  # field, raw UTF-8 through JSON.stringify).
+  if [ -s "$emoji_query_path" ] && grep -qF '👍' "$emoji_query_path" && grep -qF '"THUMBS UP"' "$emoji_query_path"; then
+    cat "$emoji_query_path"
+  else
+    echo "SMOKE_FAIL: menu query ':e thumbs' did not return the thumbs-up emoji row" >&2; exit 1
   fi
 fi
 

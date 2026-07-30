@@ -26,7 +26,9 @@
         QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
       } ''
         cp -r ${./.}/shell shell; cp -r ${./.}/tests tests
-        QT_QPA_PLATFORM=offscreen qmltestrunner -input tests
+        # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads
+        # shell/Menu/emoji.json, outside the test's own directory subtree.
+        QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -input tests
         touch $out
       '';
     in

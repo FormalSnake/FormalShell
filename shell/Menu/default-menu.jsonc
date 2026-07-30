@@ -16,6 +16,11 @@
     // route (`menu summon calc`) whose level Menu.qml special-cases to show
     // only the live CALC result row for the typed expression (calc.js).
     "calc": { "label": "Calculator", "provider": "calc", "icon": "󰃬" },
+    // "emoji" registers no provider fn either: a summonable route
+    // (`menu summon emoji`) whose level Menu.qml points at the vendored
+    // emoji dataset (emoji.json) instead of the tree; ":e <query>" reaches
+    // the same rows from anywhere.
+    "emoji": { "label": "Emoji", "provider": "emoji", "icon": "" },
 
     "system": { "label": "System", "icon": "󰒓" },
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
