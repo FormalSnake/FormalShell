@@ -159,6 +159,90 @@ function emojiRows(list, query) {
     });
 }
 
+var NIX_MAX_RESULTS = 30;
+
+// ":nix" root trigger (M12 Task 7): returns the package query after it, ""
+// for the bare ":nix", or null when `text` is not the trigger at all. Same
+// contract as emojiTriggerQuery above.
+function nixTriggerQuery(text) {
+    var t = String(text || "");
+    if (t === ":nix") return "";
+    if (t.indexOf(":nix ") === 0) return t.slice(5);
+    return null;
+}
+
+// `nix search nixpkgs <q> --json` stdout -> [{attr, version, description}].
+// Keys arrive as `legacyPackages.<system>.<attrpath>`; the first two dotted
+// components are the flake/system prefix `nix run nixpkgs#<attr>` must not
+// see, the remainder (itself possibly dotted: python312Packages.requests)
+// is the attr. Object key order survives JSON.parse for string keys, so
+// nix's own output order is kept. Unparsable stdout returns [] — the same
+// honest nothing an empty result set gets.
+function parseNixSearch(text) {
+    var obj;
+    try {
+        obj = JSON.parse(text);
+    } catch (e) {
+        return [];
+    }
+    if (obj === null || typeof obj !== "object") return [];
+    var out = [];
+    Object.keys(obj).forEach(function (key) {
+        var attr = key.split(".").slice(2).join(".");
+        if (attr === "") return;
+        var entry = obj[key] || {};
+        out.push({
+            attr: attr,
+            version: String(entry.version || ""),
+            description: String(entry.description || "")
+        });
+    });
+    return out;
+}
+
+// Search-result rows are plain "action" nodes: Enter spawns the package in
+// a throwaway terminal through the existing activation path and closes.
+// `read` holds the window open after the program exits so its output is
+// actually readable. The attr is interpolated into a single-quoted sh
+// string, so anything outside the safe attr charset is skipped outright
+// rather than escaped — nixpkgs attrs are [A-Za-z0-9._+-] in practice.
+function nixRows(results) {
+    var out = [];
+    (results || []).forEach(function (r) {
+        if (out.length >= NIX_MAX_RESULTS) return;
+        if (!/^[A-Za-z0-9._+-]+$/.test(r.attr)) return;
+        out.push({
+            id: "nix." + r.attr,
+            parentId: null,
+            label: r.version !== "" ? r.attr + " " + r.version : r.attr,
+            icon: "",
+            title: "",
+            desc: r.description !== "" ? previewLabel(r.description) : "",
+            aliases: [],
+            kind: "action",
+            action: "ghostty -e sh -c 'nix run nixpkgs#" + r.attr + "; read'",
+            childIds: []
+        });
+    });
+    return out;
+}
+
+// The honest single dim row for a host with no `nix` on PATH (kind "note":
+// not activatable, MenuRow renders the label via foregroundDim).
+function nixUnavailableRow() {
+    return {
+        id: "nix.unavailable",
+        parentId: null,
+        label: "NO NIX",
+        icon: "",
+        title: "",
+        aliases: [],
+        kind: "note",
+        dim: true,
+        childIds: []
+    };
+}
+
 // Expands Config's `menu.customPowerButtons` (the spec's "first-class, not
 // a workaround" case — e.g. an owner's Windows-reboot bootloader shortcut)
 // into JSONC-shaped entry fragments keyed by dotted id, meant to be merged

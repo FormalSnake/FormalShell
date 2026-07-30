@@ -47,7 +47,21 @@ Cell {
         Text {
             id: label
             text: root.confirming ? ("CONFIRM " + root.node.label + "?") : root.node.label
-            color: root.foreground
+            // `dim: true` marks a non-activatable honest-empty row (the nix
+            // provider's NO NIX) — foregroundDim reads on both the normal
+            // and the inverted cursor fill.
+            color: root.node.dim === true ? Theme.color.foregroundDim : root.foreground
+            font.family: Theme.font.family
+            font.pixelSize: Theme.fontSize.body
+        }
+
+        // Dimmed trailing description (nix search rows) — pre-truncated by
+        // the provider, same contract as clipboardProvider's previewLabel,
+        // so no elision is needed here.
+        Text {
+            visible: (root.node.desc || "") !== ""
+            text: root.node.desc || ""
+            color: Theme.color.foregroundDim
             font.family: Theme.font.family
             font.pixelSize: Theme.fontSize.body
         }

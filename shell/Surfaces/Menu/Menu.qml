@@ -105,6 +105,77 @@ PanelWindow {
         }
     }
 
+    // Nix package runner state (M12 Task 7). `nix search` is seconds-slow
+    // and network-bound, so unlike calc/emoji the rows can't be computed in
+    // the _displayRows binding: keystrokes arm a 500ms debounce
+    // (_requestNixSearch, called from onTextChanged/query(), never from a
+    // binding), one Process runs at a time, and a result is only cached
+    // when it still answers the latest requested query — anything else is
+    // dropped and the search re-runs (_startNixSearch from onExited).
+    // `nix` missing from PATH (the sh wrapper's `command -v` guard, exit
+    // 127) latches _nixAvailable false: every nix surface then renders the
+    // single dim NO NIX row and no further processes spawn.
+    property string _nixQuery: ""       // the query _nixResults answers
+    property var _nixResults: []
+    property string _nixWantQuery: ""   // latest requested query
+    property bool _nixAvailable: true
+
+    function _requestNixSearch(q) {
+        q = String(q || "").trim();
+        if (q === "" || !root._nixAvailable || q === root._nixQuery) return;
+        root._nixWantQuery = q;
+        nixDebounce.restart();
+    }
+
+    function _startNixSearch() {
+        if (nixSearchProc.running || root._nixWantQuery === "" || !root._nixAvailable) return;
+        nixSearchProc._query = root._nixWantQuery;
+        nixSearchProc.command = ["sh", "-c", 'command -v nix >/dev/null 2>&1 || exit 127; exec nix search nixpkgs "$1" --json', "sh", root._nixWantQuery];
+        nixSearchProc.running = true;
+    }
+
+    // The rows a nix surface (route level or ":nix" trigger) shows for `q`
+    // right now: the honest NO NIX row, the cached results when they answer
+    // this exact query, or nothing while a search is still pending — stale
+    // rows for a previous query never linger.
+    function _nixRowsFor(q) {
+        if (!root._nixAvailable) return [Providers.nixUnavailableRow()];
+        q = String(q || "").trim();
+        if (q === "" || q !== root._nixQuery) return [];
+        return Providers.nixRows(root._nixResults);
+    }
+
+    Timer {
+        id: nixDebounce
+        interval: 500
+        onTriggered: root._startNixSearch()
+    }
+
+    Process {
+        id: nixSearchProc
+
+        property string _query: ""
+
+        stdout: StdioCollector {
+            id: nixSearchCollector
+        }
+        onExited: exitCode => {
+            if (exitCode === 127) {
+                root._nixAvailable = false;
+                console.warn("Menu: nix not found on PATH, nix runner disabled");
+                return;
+            }
+            if (_query !== root._nixWantQuery) {
+                root._startNixSearch();
+                return;
+            }
+            root._nixQuery = _query;
+            // Non-zero exit is nix's own "no results" (and any real search
+            // failure): an empty list is the honest render for both.
+            root._nixResults = exitCode === 0 ? Providers.parseNixSearch(nixSearchCollector.text) : [];
+        }
+    }
+
     // ~/.config/formalshell/menu.jsonc — the per-key user overlay (plan-wide
     // constraint: user wins, `"hidden": true` drops a default node). Same
     // bounded-retry-until-watch-attaches pattern as Config.qml's
@@ -184,6 +255,12 @@ PanelWindow {
             return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q);
         if (emojiQuery !== null)
             return Providers.emojiRows(root._emojiList, emojiQuery);
+        // The nix route/":nix" trigger works the same way, except the rows
+        // come from the debounced-Process cache (see the state block above)
+        // rather than a pure function over local data.
+        var nixQuery = Providers.nixTriggerQuery(q);
+        if (root.currentNodeId === "nix" || nixQuery !== null)
+            return root._nixRowsFor(nixQuery !== null ? nixQuery : q);
         if (q.length === 0)
             return Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
         // A query that parses as an expression leads with the CALC result row
@@ -400,6 +477,16 @@ PanelWindow {
         if (emojiQuery !== null) {
             return Providers.emojiRows(root._emojiList, emojiQuery).map(function (n) {
                 return { id: n.id, label: n.label, icon: n.icon, kind: n.kind };
+            });
+        }
+        // ":nix" narrows the same way, but the search is async: the first
+        // call arms the debounce and typically returns [] — the smoke rig
+        // calls twice, reading the cached rows on the second pass.
+        var nixQuery = Providers.nixTriggerQuery(q);
+        if (nixQuery !== null) {
+            root._requestNixSearch(nixQuery);
+            return root._nixRowsFor(nixQuery).map(function (n) {
+                return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
             });
         }
         root._evalConditions();
@@ -655,6 +742,15 @@ PanelWindow {
                 onTextChanged: {
                     root._cursorIndex = 0;
                     root._confirmPendingId = "";
+                    // Arm the debounced nix search from the event, never
+                    // from the _displayRows binding (side effect).
+                    if (root._mode === "menu") {
+                        var nixQuery = Providers.nixTriggerQuery(searchInput.text);
+                        if (nixQuery === null && root.currentNodeId === "nix")
+                            nixQuery = searchInput.text;
+                        if (nixQuery !== null)
+                            root._requestNixSearch(nixQuery);
+                    }
                 }
 
                 Keys.onPressed: event => {

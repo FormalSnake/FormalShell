@@ -556,6 +556,8 @@ status_path="$shot_dir/status.json"
 query_path="$shot_dir/query.json"
 calc_query_path="$shot_dir/calc-query.json"
 emoji_query_path="$shot_dir/emoji-query.json"
+nix_query_arm_path="$shot_dir/nix-query-arm.json"
+nix_query_path="$shot_dir/nix-query.json"
 selection_path="$shot_dir/selection.txt"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
@@ -834,6 +836,25 @@ sleep 9
 "$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 EOF
+
+  # PATH-shimmed nix fixture (M12 Task 7, same hermetic-producer idea as
+  # dev/sni-stub.py): a canned `nix search nixpkgs <q> --json` answer so the
+  # menu's nix runner plumbing (debounce -> Process -> parse -> rows) is
+  # verified without the network or a real host nix. The shim dir is
+  # prepended to PATH for the shell spawn alone (below), so nothing else in
+  # the run — including this script's own `nix build` — ever sees it. Real
+  # `nix search` behaviour is host-trial territory.
+  nix_shim_dir="$shot_dir/nix-shim"
+  mkdir -p "$nix_shim_dir"
+  cat > "$nix_shim_dir/nix" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = "search" ]; then
+  printf '%s\n' '{"legacyPackages.x86_64-linux.hello":{"description":"A program that produces a familiar, friendly greeting","pname":"hello","version":"2.12.1"},"legacyPackages.x86_64-linux.hello-wayland":{"description":"Hello world Wayland client","pname":"hello-wayland","version":"unstable-2023-03-16"}}'
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "$nix_shim_dir/nix"
 fi
 
 # --clipboard's whole sequence lives in one script (internal sleeps, one
@@ -1035,7 +1056,17 @@ fi
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
   echo '}'
-  echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
+  if $menu_mode; then
+    # The nix shim must sit ahead of any real nix on the SHELL's own PATH
+    # (Menu.qml's search Process inherits it) — scoped to this one spawn so
+    # a host whose $niri_bin is itself a `nix run ...` prefix, and every
+    # drive script below, keep resolving the real nix. $PATH is expanded
+    # here at generation time: it's exactly what the nested session would
+    # inherit anyway.
+    echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$nix_shim_dir:$PATH' exec '$PWD/result/bin/formalshell'\""
+  else
+    echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
+  fi
   if $dump_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > $dump_path 2>&1\""
   fi
@@ -1048,6 +1079,11 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
+    # Two-pass on purpose (M12 Task 7): the first ':nix hello' arms the
+    # 500ms debounced search against the PATH-shimmed nix; the second, 2s
+    # later, must return the canned rows from the cache.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':nix hello' > $nix_query_arm_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':nix hello' > $nix_query_path 2>&1\""
     echo "spawn-at-startup \"bash\" \"$menu_select_script\""
     echo "spawn-at-startup \"bash\" \"$menu_finish_script\""
   fi
@@ -1254,6 +1290,18 @@ if $menu_mode; then
     cat "$emoji_query_path"
   else
     echo "SMOKE_FAIL: menu query ':e thumbs' did not return the thumbs-up emoji row" >&2; exit 1
+  fi
+  # Nix runner provider (M12 Task 7): the second ':nix hello' pass must
+  # return the shim's canned rows — the "hello 2.12.1" label proves the
+  # legacyPackages.<system>. prefix was stripped, the description proves
+  # the dimmed desc field rides along.
+  if [ -s "$nix_query_path" ] && grep -qF '"hello 2.12.1"' "$nix_query_path" && grep -qF 'friendly greeting' "$nix_query_path"; then
+    cat "$nix_query_path"
+  else
+    echo "SMOKE_FAIL: menu query ':nix hello' did not return the canned nix attr row" >&2
+    [ -f "$nix_query_arm_path" ] && cat "$nix_query_arm_path" >&2
+    [ -f "$nix_query_path" ] && cat "$nix_query_path" >&2
+    exit 1
   fi
 fi
 

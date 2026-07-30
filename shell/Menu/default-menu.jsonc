@@ -21,6 +21,11 @@
     // emoji dataset (emoji.json) instead of the tree; ":e <query>" reaches
     // the same rows from anywhere.
     "emoji": { "label": "Emoji", "provider": "emoji", "icon": "" },
+    // "nix" registers no provider fn either: a summonable route
+    // (`menu summon nix`) whose level Menu.qml fills from the debounced
+    // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
+    // from anywhere. No nix on PATH renders a single dim NO NIX row.
+    "nix": { "label": "Nix Run", "provider": "nix", "icon": "" },
 
     "system": { "label": "System", "icon": "󰒓" },
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
