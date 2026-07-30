@@ -12,9 +12,10 @@ modules so a consuming config needs almost no glue.
 
 ![FormalShell bar on niri](docs/screenshots/bar-niri.png)
 
-**Status:** pre-alpha. M1 through M12 (walking skeleton through the greeter
+**Status:** pre-alpha. M1 through M13 (walking skeleton through the greeter
 and NixOS modules, bar completeness, screensaver effect gifs, DMS parity
-gaps + EDS/GOA calendar events) are complete, behind CI (qmllint + headless
+gaps + EDS/GOA calendar events, and the first e1504g daily-drive trial's
+feedback fixes) are complete, behind CI (qmllint + headless
 qml-tests) and nested-compositor smoke loops for every change. See
 `docs/SWITCHOVER.md` for the current hardware-vs-VM verification parity
 table before switching a real machine over, and
@@ -29,10 +30,11 @@ session, and tears it down — safe to run against a live host by design.
 Most were recaptured 2026-07-29 from **g815**, the owner's real niri
 machine, showing genuinely populated hardware (real battery, Wi-Fi,
 Bluetooth, audio, backlight) rather than the VM's empty state. The greeter
-shot, the M10 bar shots (tray, indicators, custom modules), and the two
-M12 recaptures (calendar with its EDS fixture event, custom modules with
-the github cell) are VM-sourced — no greetd module on g815 yet, and g815
-hasn't been re-swept since M10 landed. Details on what each shot proves are
+shot, the M10 bar shots (tray, indicators, custom modules), and the three
+M13 recaptures (tray with vertically centered cells, custom modules with
+the github cell and the idx-sorted workspace region, calendar with a
+selected day's inverted cell) are VM-sourced — no greetd module on g815
+yet, and g815 hasn't been re-swept since M10 landed. Details on what each shot proves are
 in `CLAUDE.md`'s verification loop section (the `dev/smoke-niri.sh` flag
 each was captured with) and git history.
 
@@ -61,26 +63,30 @@ GIFs (`dev/smoke-niri.sh --screensaver-gif`, `CLAUDE.md`):
 Full per-surface reference (config keys, IPC targets, keybind examples) is
 in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 
-- **Bar** — three regions (left/center/right): workspaces, active window, an
-  SNI tray with a grouped overflow drawer, DND/idle-inhibit indicators,
-  clock, battery, audio, network/Bluetooth, weather, now playing, an opt-in
-  GitHub PR/issue counter — fully reorderable from `settings.json`, plus
-  custom `command` and `qml` widget modules.
+- **Bar** — three regions (left/center/right): workspaces (idx-sorted,
+  empty ones hidden), active window, an SNI tray with a grouped overflow
+  drawer and click-through to item activation and DBus menus,
+  DND/idle-inhibit indicators, clock, battery, audio, network/Bluetooth,
+  weather, now playing, an opt-in GitHub PR/issue counter — fully
+  reorderable from `settings.json`, plus custom `command` and `qml` widget
+  modules.
 - **Menu** — one fuzzy-searchable, keyboard-driven surface doubling as app
   launcher, system/power menu, and a `select`/`input` dmenu replacement —
-  with an inline calculator row, an emoji picker (`:e`), and a nixpkgs
-  package runner (`:nix`) built in as routes.
+  with an inline calculator row, an emoji picker (`:e`) that copies AND
+  auto-types the pick, a nixpkgs package runner (`:nix`), and a wallpaper
+  entry opening the picker grid built in as routes.
 - **Notifications** — a mako-replacement stack: freedesktop server,
   independent card toasts, a summonable history center, a narrow DND bypass.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
   media.
-- **Panels** — seven per-widget popouts (audio, calendar, network,
-  bluetooth, power, weather, media) sharing one component and one IPC
-  target.
+- **Panels** — eight per-widget popouts (audio, calendar, network,
+  bluetooth, power, weather, media, github) sharing one component and one
+  IPC target.
 - **Clipboard** — capped, deduplicated history surfaced through the menu.
-- **Calendar** — month grid with a year/life-progress bar and events from
-  local `.ics` files and EDS/GNOME Online Accounts (via the
-  `formalshell-eds` companion CLI), with bounded RRULE expansion.
+- **Calendar** — month grid with clickable day selection, a year/life-
+  progress bar, and events from local `.ics` files and EDS/GNOME Online
+  Accounts (via the `formalshell-eds` companion CLI), with bounded RRULE
+  expansion.
 - **Now playing** — an MPRIS-backed bar cell and panel, with optional Apple
   Music animated album art.
 - **Lock screen** — a real `WlSessionLock` + PAM, with the design's one
@@ -89,8 +95,12 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   convergence effects.
 - **Picker** — a ledger-grid wallpaper/image selector, also usable as a
   generic image-select IPC surface.
-- **Screenshots** — a `screenshot full`/`region` IPC target wrapping
-  grim/slurp: file, clipboard, and a notification in one call.
+- **Screenshots** — a `screenshot full`/`region`/`cancel` IPC target
+  wrapping grim/slurp: file, clipboard, and a notification in one call,
+  with a themed selection overlay and a stuck-selection watchdog.
+- **Motion** — fast, subtle, interruptible transitions (90-140ms, opacity
+  plus a small translate, one ease-out curve), off entirely with
+  `motion.enabled: false`.
 - **Greeter** — a greetd session rendering as the lock screen's visual twin,
   with real PAM authentication.
 - **Theming** — wallpaper-driven matugen colors recolor every bar token and

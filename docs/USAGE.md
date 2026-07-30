@@ -68,11 +68,20 @@ with a console warning — never a crash.
   the exact same engine access as any built-in widget (`qs.Core`,
   `qs.Services`, `Process`, …). It is not a runtime sandbox.
 
+**Workspaces** — one cell per *visible* workspace, sorted by the backend's
+own per-output ordinal (`idx`; ids stay opaque strings, never parsed). A
+workspace renders only if it holds at least one window or is
+active/focused, so nine persistent named niri workspaces with two windows
+open show two or three cells, not nine (`shell/Bar/workspaces.js`).
+
 **Tray** — every real `org.kde.StatusNotifierItem` registered on the
 session bus (`Quickshell.Services.SystemTray`) renders as its own cell:
 left click activates it, middle click secondary-activates it, right click
-opens its `DBusMenu` if it has one. Past 4 visible items the rest collapse
-into one more cell (`+N`) that expands the row to reveal them all.
+opens its `DBusMenu` if it has one. Items whose SNI `ItemIsMenu` flag says
+activation-is-menu get the menu on left click too. The menu renders as a
+native-styled popup (quickshell's platform-menu path owns that widget
+outright), not a shell-themed surface. Past 4 visible items the rest
+collapse into one more cell (`+N`) that expands the row to reveal them all.
 
 **Indicators** — DND and idle-inhibit each render as their own glyph, only
 while the condition holds; the whole slot disappears when neither does.
@@ -82,8 +91,9 @@ reports screen recording as of 2026-07-29.
 **GitHub** — opt-in via `bar.layout` (add `"github"` to a region); polls one
 `gh api graphql` call every `github.intervalMs` (ms, default 300000) for the
 count of open PRs you authored and open issues assigned to you, rendered as
-a glyph + `N/M` meta cell. Click opens `github.com/notifications` via
-`xdg-open`. Honest states: `gh` missing from PATH hides the cell entirely;
+a glyph + `N/M` meta cell. Click toggles the GitHub panel anchored under
+the cell (see [Panels](#panels)) rather than jumping to the website. Honest
+states: `gh` missing from PATH hides the cell entirely;
 `gh` present but unauthenticated (its documented exit code 4) renders a dim
 `NO AUTH` cell; any other failure or unparsable output renders a dim `NO GH`
 cell — never stale or invented counts. The cell also stays hidden until the
@@ -93,6 +103,7 @@ first poll answers at all.
 qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}
 qs ipc --any-display -p <store-path>/share/formalshell call tray expand    # same action as clicking the "+N" cell
 qs ipc --any-display -p <store-path>/share/formalshell call tray collapse
+qs ipc --any-display -p <store-path>/share/formalshell call tray activate <id>   # same action as left-clicking the item's cell
 ```
 
 ## Theming
@@ -137,6 +148,21 @@ Wallpaper and theme are driven over the same IPC surface as everything else:
 qs ipc --any-display -p <store-path>/share/formalshell call wallpaper set /path/to/image.jpg
 qs ipc --any-display -p <store-path>/share/formalshell call theme mode toggle    # dark <-> light
 qs ipc --any-display -p <store-path>/share/formalshell call theme status         # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
+```
+
+**Motion.** Transitions across the shell run off `Theme.motion` tokens
+(`docs/DESIGN.md` §4): 100ms for hover fills, 130ms for surface
+enter/exit, one ease-out curve, opacity plus a 6px translate only — no
+scale, no bounce, end states pixel-identical to the unanimated shell.
+Full-bleed accent/selection swaps (the ledger inversion, the focused
+workspace's fill) are states, not transitions, and stay instant.
+`motion.enabled: false` in `settings.json` zeroes every duration — the
+shell's reduced-motion switch, since Wayland has no
+`prefers-reduced-motion` to inherit:
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "motion": { "enabled": false } }
 ```
 
 ## Menu
@@ -186,6 +212,15 @@ default entry (and its whole subtree) without needing to redeclare it:
 Each button becomes `system.custom.<i>` in the tree; `confirm: true` requires
 a second Enter on the row before the command runs (`CONFIRM <label>?`).
 
+**Wallpaper.** The root `WALLPAPER` node opens the [Picker](#picker) grid
+over `picker.directory`: its activation spawns the same self-targeting
+`qs ipc call picker summon` invocation the clipboard rows use, so the
+picker opens only after the menu surface has closed and never fights its
+keyboard-exclusive focus. The node is injected at tree-build time
+(`providers.js`'s `wallpaperEntry()` — static jsonc can't know the running
+shell's own path), but overrides address it by its `"wallpaper"` id like
+any declared node, including `"hidden": true`.
+
 **Calculator.** A root-menu query that parses as an arithmetic expression
 (`+ - * / % ^`, parentheses, unary minus, decimals — a real
 recursive-descent parser in `shell/Menu/calc.js`, never `eval`) leads the
@@ -199,7 +234,13 @@ Unicode dataset (`shell/Menu/emoji.json` — fully-qualified `emoji-test.txt`
 entries, Emoji 17.0; regenerate with `dev/gen-emoji.sh`, never edit by
 hand). Rows render the char plus its uppercase name; Enter copies the char
 via `wl-copy` and closes, and the clipboard history captures it like any
-other copy. From anywhere, the root trigger `:e <query>` narrows to the
+other copy. On top of the copy, the char is auto-typed into whatever window
+focus returns to: the menu surface closes first, then after a 150ms settle
+`wtype <char>` runs (the package wrapper bundles `wtype`, suffixed on PATH
+so an environment `wtype` can shadow it). `wtype` missing or the
+compositor lacking the virtual-keyboard protocol degrades to the copy that
+already happened — one console warning, no error surface. From anywhere,
+the root trigger `:e <query>` narrows to the
 same rows (`:e thumbs` → 👍); a bare `:e` browses the head of the list.
 
 **Nix package runner.** `menu summon nix` (or the `:nix <query>` root
@@ -211,11 +252,17 @@ a throwaway terminal (`ghostty -e sh -c 'nix run nixpkgs#<attr>; read'` —
 single dim `NO NIX` row instead.
 
 **IPC.** Every route is summonable for direct compositor keybinds:
-`toggle(route)` (open if closed/close if open), `summon(route)` (always
-open), `close()`, `refresh()` (force a re-read of default+user jsonc —
+`toggle()` (deliberately no-argument — root summon if closed, close if
+open; the verb to bind a bare menu key to, after a compositor keybind
+passing no route to a route-taking toggle was rejected by IPC arity
+checking before the handler ever ran), `summon(route)` (always open),
+`close()`, `refresh()` (force a re-read of default+user jsonc —
 `settings.json` is already watched live, this is a manual fallback for an
-editor save an fs watcher missed), `ping()`. `route` is a node id
-(`"system"`) or alias, or `""` for root. Bind it directly in niri:
+editor save an fs watcher missed), `status()` (`{isOpen, level}`, for
+headless assertion), `ping()`. `route` is a node id
+(`"system"`) or alias, or `""` for root. An absent optional
+`~/.config/formalshell/menu.jsonc` logs at most one line per path change,
+never a warning per internal retry. Bind it directly in niri:
 
 ```kdl
 binds {
@@ -329,7 +376,7 @@ binds {
 
 ## Panels
 
-Seven per-widget popouts share one component, `shell/Components/Panel.qml` — a
+Eight per-widget popouts share one component, `shell/Components/Panel.qml` — a
 ledger-table popout (header `MetaLabel` row, rows sharing hairline rules,
 `WlrLayershell` top layer, keyboard `OnDemand`, closes on Escape and on
 click-outside) anchored under the bar cell that opened it, or falling back to
@@ -347,6 +394,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `power`      | `Quickshell.Services.UPower`                | `Battery.qml`        |
 | `weather`    | `LocationService` + open-meteo              | `WeatherWidget.qml`  |
 | `media`      | `Quickshell.Services.Mpris`                 | `NowPlaying.qml`     |
+| `github`     | one `gh api graphql` poll (shared with the bar cell) | `GithubWidget.qml` |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` lists Pipewire output nodes then input nodes as
@@ -367,7 +415,16 @@ showing a stub `0%`. `WeatherPanel` shows current conditions as a header row
 and a forecast ledger (one row per open-meteo daily period, glyph + weekday
 + high/low mono temps pinned right), falling back to an honest `NO LOCATION`
 or `UNAVAILABLE` cell (with openmeteo.js's specific failure code) rather
-than a stale or invented forecast.
+than a stale or invented forecast. `GithubPanel` lists open PRs you
+authored and open issues assigned to you as two ledger sections
+(`PULL REQUESTS / n`, `ISSUES / n` — the first 15 of each), every row a
+title plus dimmed repo slug; clicking a row opens its URL via `xdg-open`
+and closes the panel. The `gh api graphql` poll lives in the panel, not
+the widget, so `panel open github` renders honestly even when `bar.layout`
+never names the github widget (the widget stays the opt-in switch for
+*background* polling; opening the panel always re-polls). Its honest
+states mirror the bar cell's: dim `NO GH` / `NO AUTH` cells, `LOADING`
+before the first answer, a dim `NONE` row under an empty section.
 
 **IPC** (`target: "panel"`, a documented spec addendum — see
 `docs/superpowers/plans/2026-07-28-m6-clipboard-and-panels.md`'s header note
@@ -378,7 +435,7 @@ keybinds and no way to be verified headlessly):
 qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a
@@ -491,9 +548,25 @@ outside that subset (`BYSETPOS`, `BYMONTHDAY`, ordinal `BYDAY` like `1MO`,
 honest under-expansion, never a guessed instance (`shell/Calendar/ics.js`'s
 header documents the full boundary).
 
-Days carrying an event get a small accent dot in the grid, and a `TODAY`
-ledger section below lists today's events by summary (or a single dim
-`NO EVENTS` row).
+Days carrying an event get a small accent dot in the grid, and a dated
+ledger section below lists the selected day's events by summary (or a
+single dim `NO EVENTS` row).
+
+**Day selection.** Every day cell is clickable (hover-cursor chrome):
+clicking selects that day, the events ledger lists that day's events, and
+its meta header reads `TODAY` for today or the uppercase date (`JUL 31`)
+otherwise. The selected cell inverts (the ledger selection state); today's
+cell keeps its accent marker — both visible at once when they differ.
+Clicking an adjacent-month padding day selects it and aligns the view to
+its month. Month navigation (`<`/`>`) resets selection to today rather
+than clamping the day-of-month, and opening the panel resets both the view
+month and the selection to today. The same action is scriptable
+(`target: "calendar"`, additive next to `panel open calendar`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call calendar select 2026-07-31   # strict YYYY-MM-DD, invalid dates rejected
+qs ipc --any-display -p <store-path>/share/formalshell call calendar status              # {"open":…,"selected":…,"today":…,"view":…}
+```
 
 ## Now playing
 
@@ -718,18 +791,30 @@ capture) AND on the clipboard as `image/png` via `wl-copy`, and a
 `SCREENSHOT SAVED` notification with the path fires through the shell's own
 notification stack — visible feedback with no bar surface involved.
 
+`region`'s slurp overlay is styled so pressing the bind visibly changes
+the screen immediately: a dim theme-background wash, the selection border
+in the theme accent at `Theme.borderWidth`, a transparent selection
+rectangle, and a live dimension readout — colors resolved at call time, so
+they track the current matugen palette. Pressing Escape (or
+right-clicking) inside slurp is a cancel, not an error: no toast, no
+`lastError`. A watchdog auto-cancels an unanswered region selection after
+`screenshot.timeoutSeconds` (default 90) with a `SCREENSHOT CANCELLED`
+notification, and the `cancel` verb does the same on demand — no more
+invisible slurp sitting stuck for an hour.
+
 The IPC reply is the destination path the capture is writing toward, not a
 completion signal: `qs ipc call` replies synchronously while `slurp` blocks
-on user interaction indefinitely. A runtime failure (slurp cancelled, grim
-error) fires a `SCREENSHOT FAILED` notification and lands in `status()`'s
-`lastError` — loud and queryable, never a silent no-op.
+on user interaction indefinitely. A runtime failure (grim error, slurp
+failing to start) fires a `SCREENSHOT FAILED` notification and lands in
+`status()`'s `lastError` — loud and queryable, never a silent no-op.
 
 **IPC** (`target: "screenshot"`):
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call screenshot full     # replies with the destination path
 qs ipc --any-display -p <store-path>/share/formalshell call screenshot region   # slurp rectangle, then same pipeline
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot status   # {"capturing":…,"lastPath":…,"lastError":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot cancel   # kill an in-flight capture, clear state
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot status   # {"capturing":…,"lastPath":…,"lastError":…,"lastCancelled":…}
 ```
 
 Bind both in niri, same pattern as every other target:
