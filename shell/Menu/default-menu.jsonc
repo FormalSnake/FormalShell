@@ -44,6 +44,11 @@
     },
 
     "theme": { "label": "Theme", "icon": "󰏘" },
-    "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" },
-    "theme.wallpaper": { "when": "false" }
+    "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" }
+
+    // The root "wallpaper" node (opens the image picker grid) is injected at
+    // tree-build time by Menu.qml via providers.js's wallpaperEntry(): its
+    // action targets the running shell's own path, which static jsonc can't
+    // know. Override or hide it from menu.jsonc by its "wallpaper" id like
+    // any declared node.
 }

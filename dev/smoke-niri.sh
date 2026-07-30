@@ -612,6 +612,8 @@ calc_query_path="$shot_dir/calc-query.json"
 emoji_query_path="$shot_dir/emoji-query.json"
 nix_query_arm_path="$shot_dir/nix-query-arm.json"
 nix_query_path="$shot_dir/nix-query.json"
+wall_query_path="$shot_dir/wall-query.json"
+toggle_path="$shot_dir/menu-toggle.txt"
 selection_path="$shot_dir/selection.txt"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
@@ -911,12 +913,23 @@ sleep 6
 "$qs_bin" ipc --any-display -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
 
+  # The trailing no-arg `menu toggle` round trip (M13 Task 5: the win+space
+  # keybind regression was summon's mandatory-route arity) runs after the
+  # close, from the same closed state a keybind would hit: toggle-open,
+  # status (isOpen true at root), toggle-close, status (isOpen false) — all
+  # four replies land in one file the assertions below check in order.
   menu_finish_script="$shot_dir/menu-finish.sh"
   cat > "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
 sleep 9
 "$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
+{
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu toggle
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu status
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu toggle
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu status
+} > "$toggle_path" 2>&1
 EOF
 
   # PATH-shimmed nix fixture (M12 Task 7, same hermetic-producer idea as
@@ -1206,6 +1219,7 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'wall' > $wall_query_path 2>&1\""
     # Two-pass on purpose (M12 Task 7): the first ':nix hello' arms the
     # 500ms debounced search against the PATH-shimmed nix; the second, 2s
     # later, must return the canned rows from the cache.
@@ -1421,6 +1435,30 @@ if $menu_mode; then
     cat "$emoji_query_path"
   else
     echo "SMOKE_FAIL: menu query ':e thumbs' did not return the thumbs-up emoji row" >&2; exit 1
+  fi
+  # Wallpaper root node (M13 Task 5): ranking "wall" must surface the
+  # injected wallpaper action row (providers.wallpaperEntry, merged at
+  # tree-build time).
+  if [ -s "$wall_query_path" ] && grep -qF '"id":"wallpaper"' "$wall_query_path" && grep -qF '"label":"Wallpaper"' "$wall_query_path"; then
+    cat "$wall_query_path"
+  else
+    echo "SMOKE_FAIL: menu query 'wall' did not return the wallpaper row" >&2
+    [ -f "$wall_query_path" ] && cat "$wall_query_path" >&2
+    exit 1
+  fi
+  # No-arg toggle (M13 Task 5): the four stacked replies must read
+  # ok / isOpen:true at root / ok / isOpen:false — order-sensitive, so the
+  # greps check line pairs, not mere presence.
+  if [ -s "$toggle_path" ] \
+    && [ "$(sed -n '1p' "$toggle_path")" = "ok" ] \
+    && sed -n '2p' "$toggle_path" | grep -qF '"isOpen":true' \
+    && [ "$(sed -n '3p' "$toggle_path")" = "ok" ] \
+    && sed -n '4p' "$toggle_path" | grep -qF '"isOpen":false'; then
+    cat "$toggle_path"
+  else
+    echo "SMOKE_FAIL: no-arg menu toggle round trip did not flip isOpen true -> false" >&2
+    [ -f "$toggle_path" ] && cat "$toggle_path" >&2
+    exit 1
   fi
   # Nix runner provider (M12 Task 7): the second ':nix hello' pass must
   # return the shim's canned rows — the "hello 2.12.1" label proves the

@@ -180,7 +180,16 @@ PanelWindow {
     // constraint: user wins, `"hidden": true` drops a default node). Same
     // bounded-retry-until-watch-attaches pattern as Config.qml's
     // settings.json: the file (and its parent dir) may not exist yet at
-    // first launch, so a bare watchChanges: true would never attach.
+    // first launch, so a bare watchChanges: true would never attach. Unlike
+    // settings.json this file is OPTIONAL and usually absent, so the retry
+    // is actually bounded here (once the parent dir exists the directory
+    // watch catches the file appearing; `menu refresh` stays the manual
+    // fallback), FileView's own per-read warning is off, and the absence is
+    // logged once instead of once per retry (the e1504g trial logged the
+    // identical warning six times over, M13 Task 5).
+    property int _userMenuRetries: 0
+    property bool _userMenuMissingLogged: false
+
     Timer {
         id: userMenuRewatchTimer
         interval: 300
@@ -189,17 +198,28 @@ PanelWindow {
 
     FileView {
         id: userMenuFile
+        printErrors: false
         path: root._configDir + "/menu.jsonc"
         watchChanges: true
         onFileChanged: reload()
         onLoaded: {
+            root._userMenuRetries = 0;
+            root._userMenuMissingLogged = false;
             root._userMenuText = userMenuFile.text();
             root._evalConditions();
         }
         onLoadFailed: error => {
             root._userMenuText = "";
-            if (error === FileViewError.FileNotFound)
-                userMenuRewatchTimer.restart();
+            if (error === FileViewError.FileNotFound) {
+                if (!root._userMenuMissingLogged) {
+                    root._userMenuMissingLogged = true;
+                    console.info("Menu: no user overlay at", userMenuFile.path, "(optional, defaults apply)");
+                }
+                if (root._userMenuRetries < 20) {
+                    root._userMenuRetries++;
+                    userMenuRewatchTimer.restart();
+                }
+            }
         }
     }
 
@@ -213,8 +233,10 @@ PanelWindow {
             return {};
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
+        var wallpaper = Providers.wallpaperEntry(Quickshell.shellDir);
         var merged = {};
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
+        Object.keys(wallpaper).forEach(function (k) { merged[k] = wallpaper[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
     }

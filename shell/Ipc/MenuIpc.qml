@@ -1,6 +1,6 @@
 import Quickshell.Io
 
-// `qs ipc call menu toggle|summon|close|refresh|ping|select|input` — the
+// `qs ipc call menu toggle|summon|close|refresh|ping|status|select|input` — the
 // menu's summon routes for direct compositor keybinds, plus the select/input
 // dmenu-replacement modes. select/input can't return their result directly
 // (IPC calls are synchronous request/response, the UI answer isn't): the
@@ -15,13 +15,19 @@ IpcHandler {
     // property for why: one instance, no singleton of its own).
     property var menu: null
 
-    function toggle(route: string): string {
+    // Deliberately no-argument (root summon if closed, close if open): the
+    // win+space regression (M13) was a compositor keybind calling the old
+    // toggle(route) with no argument at all, which IPC arity checking
+    // rejects before the handler ever runs. A bare `qs ipc call menu
+    // toggle` can't hit that trap; summon(route) below stays the
+    // route-addressed path.
+    function toggle(): string {
         if (!menu)
             return "error: menu not ready";
         if (menu.isOpen)
             menu.close();
         else
-            menu.open(route);
+            menu.open(null);
         return "ok";
     }
 
@@ -48,6 +54,15 @@ IpcHandler {
 
     function ping(): string {
         return "pong";
+    }
+
+    // Debug/verification hook (the smoke rig asserts the toggle round trip
+    // through it): open/closed plus the current level's node id, null at
+    // root. Same status() idiom as the lock/screenshot/tray targets.
+    function status(): string {
+        if (!menu)
+            return "error: menu not ready";
+        return JSON.stringify({ isOpen: menu.isOpen, level: menu.currentNodeId });
     }
 
     function select(prompt: string, optionsJson: string, token: string): string {

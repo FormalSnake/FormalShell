@@ -261,3 +261,21 @@ function customPowerButtonEntries(buttons) {
     });
     return out;
 }
+
+// Root "wallpaper" node (M13 Task 5), merged into the default tree object
+// before Model.buildTree() exactly like customPowerButtonEntries above —
+// it can't live in default-menu.jsonc because the action needs the running
+// shell's own path (clipboardProvider's selfPath rationale). Activation
+// spawns the self-targeting `qs ipc call picker summon` rather than opening
+// the picker in-process: the spawned call lands after the menu surface has
+// already closed, so the picker never fights the menu's keyboard-exclusive
+// focus.
+function wallpaperEntry(selfPath) {
+    return {
+        "wallpaper": {
+            label: "Wallpaper",
+            icon: "\u{F0E09}", // nf-md-wallpaper
+            action: "qs ipc --any-display -p " + selfPath + " call picker summon"
+        }
+    };
+}
