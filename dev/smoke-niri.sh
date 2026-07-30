@@ -16,7 +16,12 @@
 # `menu summon emoji` + `menu activate 0` wl-copies GRINNING FACE and, once
 # the surface has closed, spawns wtype with the same char — asserted via a
 # wl-paste readback plus an argv-logging wtype shim on the shell's PATH
-# (real typing into a refocused window is host-trial territory).
+# (real typing into a refocused window is host-trial territory). A trailing
+# apps leg (M13b Task 1) then summons the apps route over two fixture
+# .desktop entries — one with an icon honestly installed into the isolated
+# hicolor tree, one whose icon has no theme here — screenshots the rows
+# (menu-apps.png: display-name labels, one real icon image, no raw icon
+# name as text) and asserts both labels + iconSource states via debug query.
 # With --notify, fires `notify-send -u normal` then `-u critical` in-session
 # and screenshots the resulting toasts. Then flips DND on over the existing
 # `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
@@ -313,7 +318,7 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode || $picker_mode || $screensaver_gif_mode; then
+if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -402,7 +407,7 @@ if $lock_mode; then
   fi
 fi
 
-if $lock_mode || $screensaver_gif_mode; then
+if $lock_mode || $screensaver_gif_mode || $menu_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -415,6 +420,8 @@ if $lock_mode || $screensaver_gif_mode; then
   # call, which stacks up across a frame-stepping run's dozens of captures
   # and visibly covers part of the banner (reproduced on the mac VM rig,
   # 2026-07-29) — grim's screencopy-protocol path never does that.
+  # menu_mode's trailing apps-route capture (M13b Task 1) picks grim for
+  # the same no-toast reason: the shot exists to read two menu rows.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -627,6 +634,8 @@ emoji_query_path="$shot_dir/emoji-query.json"
 nix_query_arm_path="$shot_dir/nix-query-arm.json"
 nix_query_path="$shot_dir/nix-query.json"
 wall_query_path="$shot_dir/wall-query.json"
+apps_query_path="$shot_dir/apps-query.json"
+menu_apps_png="$shot_dir/menu-apps.png"
 toggle_path="$shot_dir/menu-toggle.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
@@ -709,6 +718,36 @@ Name=Formal Test App
 Exec=true
 Icon=utilities-terminal
 EOF
+
+# M13b Task 1: a second fixture app whose icon actually resolves. The PNG
+# is honestly installed into the isolated data dir's hicolor tree (with the
+# minimal index.theme QIconLoader requires to enumerate directories at all —
+# without it QIcon::fromTheme finds nothing, verified against the pinned
+# quickshell rev), so the menu's app rows render one themed icon image and
+# one honest icon-less row ("Formal Test App" above: utilities-terminal has
+# no theme here, check-resolution answers "", never a missing-texture box).
+if $menu_mode; then
+  cat > "$iso_home/.local/share/applications/formalshell-smoke-iconic.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Iconic Test App
+Exec=true
+Icon=formalshell-smoke
+EOF
+  mkdir -p "$iso_home/.local/share/icons/hicolor/48x48/apps"
+  $convert_bin -size 48x48 xc:'#CE5D97' "$iso_home/.local/share/icons/hicolor/48x48/apps/formalshell-smoke.png"
+  cat > "$iso_home/.local/share/icons/hicolor/index.theme" <<'EOF'
+[Icon Theme]
+Name=Hicolor
+Comment=Fallback icon theme
+Directories=48x48/apps
+
+[48x48/apps]
+Size=48
+Context=Applications
+Type=Threshold
+EOF
+fi
 
 # Calendar events fixture (M6 Task 5): a khal/vdir-style directory of one
 # .ics file with a single VEVENT dated today (computed at run time so the
@@ -972,6 +1011,22 @@ EOF
 } > "$emoji_drive_path" 2>&1
 sleep 2
 "$wl_paste_bin" --no-newline > "$emoji_paste_path" 2>&1 || true
+EOF
+
+  # Apps rows (M13b Task 1), appended after the emoji leg so it runs from a
+  # closed menu: summon the apps route, give llvmpipe 2s to paint the two
+  # fixture rows, grim the surface (the run's proof an app row renders a
+  # real themed icon image, not the raw icon name as text), then rank "test
+  # app" over the live tree — the query's iconSource field asserts the
+  # themed lookup resolved (and honestly didn't, for the icon-less fixture)
+  # without needing the screenshot. tail_gap below is stretched to cover
+  # this trailing leg before niri quits.
+  cat >> "$menu_finish_script" <<EOF
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon apps > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$menu_apps_png" 2>/dev/null || true
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query "test app" > "$apps_query_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
 EOF
 
   # PATH-shimmed nix fixture (M12 Task 7, same hermetic-producer idea as
@@ -1382,7 +1437,10 @@ fi
   # the same kind of buffer past its own sleep-10 screenshot.
   tail_gap=1
   if $menu_mode; then
-    tail_gap=6
+    # 12, not the pre-M13b 6: the finish script's trailing apps leg (summon,
+    # 2s paint, grim, query, close) lands ~4-6s after the emoji wl-paste on
+    # the VM's llvmpipe timing.
+    tail_gap=12
   elif $osd_mode; then
     tail_gap=5
   fi
@@ -1519,6 +1577,24 @@ if $menu_mode; then
     [ -f "$wall_query_path" ] && cat "$wall_query_path" >&2
     exit 1
   fi
+  # Apps rows (M13b Task 1): both fixture apps must rank with their real
+  # display-name labels (never the .desktop id), the iconic one's
+  # iconSource must be the resolved image URL, and the icon-less one's
+  # must be the honest "" (check-resolution, no missing-texture box).
+  if [ -s "$apps_query_path" ] \
+    && grep -qF '"label":"Iconic Test App","kind":"app","iconSource":"image://icon/formalshell-smoke"' "$apps_query_path" \
+    && grep -qF '"label":"Formal Test App","kind":"app","iconSource":""' "$apps_query_path"; then
+    cat "$apps_query_path"
+  else
+    echo "SMOKE_FAIL: apps query did not return display-name rows with a resolved icon" >&2
+    [ -f "$apps_query_path" ] && cat "$apps_query_path" >&2
+    exit 1
+  fi
+  if [ ! -s "$menu_apps_png" ]; then
+    echo "SMOKE_FAIL: no apps-route screenshot produced at $menu_apps_png" >&2
+    exit 1
+  fi
+  echo "menu apps screenshot: $menu_apps_png"
   # No-arg toggle (M13 Task 5): the four stacked replies must read
   # ok / isOpen:true at root / ok / isOpen:false — order-sensitive, so the
   # greps check line pairs, not mere presence.

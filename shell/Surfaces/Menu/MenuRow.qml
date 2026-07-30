@@ -36,6 +36,21 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spacing.sm
 
+        // Image variant of the icon slot (app rows): a themed desktop icon
+        // at the glyph cell's size, radius 0, no border — DESIGN.md's one
+        // sanctioned image-icon exception. `iconSource` is already
+        // check-resolved by the provider, so a failed lookup is "" and the
+        // slot simply doesn't render (never a missing-texture box).
+        Image {
+            visible: (root.node.iconSource || "") !== ""
+            source: root.node.iconSource || ""
+            width: label.implicitHeight
+            height: label.implicitHeight
+            sourceSize.width: label.implicitHeight
+            sourceSize.height: label.implicitHeight
+            fillMode: Image.PreserveAspectFit
+        }
+
         Text {
             visible: root.node.icon !== ""
             text: root.node.icon

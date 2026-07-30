@@ -14,13 +14,26 @@
 // desktop-entry index, already excludes Hidden/NoDisplay). Each app node
 // keeps a reference to its DesktopEntry (`_entry`) so Menu.qml's activation
 // can call `_entry.execute()` directly instead of spawning a shell command.
-function appsProvider(entries) {
+//
+// `entry.icon` is an icon-theme NAME ("firefox", "mpv"), not a glyph — it
+// must never land in the node's `icon` slot, which MenuRow renders as
+// literal text (the M13b "apps list shows app IDs" symptom: rows led with
+// the raw icon name, which conventionally equals the app id). Instead
+// `resolveIcon` (Menu.qml passes Quickshell.iconPath with check=true, tests
+// pass a stub) maps the name to an image URL for MenuRow's image slot, or
+// "" when the theme has no such icon — the row then simply has no leading
+// cell, never a missing-texture box. `entry.name` can't be empty for listed
+// applications (quickshell drops invalid entries in onScanCompleted), but
+// the id fallback keeps the row honest if that ever changes.
+function appsProvider(entries, resolveIcon) {
     return (entries || []).map(function (entry) {
+        var iconName = entry.icon || "";
         return {
             id: "apps." + entry.id,
             parentId: null,
-            label: entry.name,
-            icon: entry.icon || "",
+            label: entry.name || entry.id,
+            icon: "",
+            iconSource: (iconName !== "" && resolveIcon) ? resolveIcon(iconName) : "",
             title: entry.genericName || "",
             aliases: [],
             kind: "app",

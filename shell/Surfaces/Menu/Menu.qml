@@ -252,7 +252,13 @@ PanelWindow {
     }
 
     readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, root._userObj), {
-        apps: function () { return Providers.appsProvider(DesktopEntries.applications.values); },
+        // check=true so a name the icon theme can't resolve yields "" (the
+        // glyph-slot fallback) instead of the provider's missing-texture box.
+        apps: function () {
+            return Providers.appsProvider(DesktopEntries.applications.values, function (name) {
+                return Quickshell.iconPath(name, true);
+            });
+        },
         clipboard: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir); }
     })
     readonly property var _nodes: root._tree.nodes
@@ -567,8 +573,10 @@ PanelWindow {
             });
         }
         root._evalConditions();
+        // iconSource rides along so the smoke rig can assert an app row's
+        // themed icon resolved (or honestly didn't) without a screenshot.
         var rows = Search.rank(root._nodes, q, root._condResults).map(function (n) {
-            return { id: n.id, label: n.label, kind: n.kind };
+            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "" };
         });
         // Same CALC prepend as _displayRows' ranked branch, so the smoke
         // rig's `debug query "2+2*3"` proves the row without keyboard input.
