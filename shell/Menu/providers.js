@@ -188,21 +188,23 @@ function nixTriggerQuery(text) {
     return null;
 }
 
-// `nix search nixpkgs <q> --json` stdout -> [{attr, version, description}].
-// Keys arrive as `legacyPackages.<system>.<attrpath>`; the first two dotted
-// components are the flake/system prefix `nix run nixpkgs#<attr>` must not
-// see, the remainder (itself possibly dotted: python312Packages.requests)
-// is the attr. Object key order survives JSON.parse for string keys, so
-// nix's own output order is kept. Unparsable stdout returns [] — the same
-// honest nothing an empty result set gets.
+// `nix search nixpkgs <q> --json` stdout -> [{attr, version, description}],
+// or null when the text isn't a JSON object at all — nixSearchOutcome below
+// needs unparseable stdout (SEARCH FAILED) kept distinct from nix's clean
+// zero-hit `{}` answer (NO RESULTS). Keys arrive as
+// `legacyPackages.<system>.<attrpath>`; the first two dotted components are
+// the flake/system prefix `nix run nixpkgs#<attr>` must not see, the
+// remainder (itself possibly dotted: python312Packages.requests) is the
+// attr. Object key order survives JSON.parse for string keys, so nix's own
+// output order is kept.
 function parseNixSearch(text) {
     var obj;
     try {
         obj = JSON.parse(text);
     } catch (e) {
-        return [];
+        return null;
     }
-    if (obj === null || typeof obj !== "object") return [];
+    if (obj === null || typeof obj !== "object") return null;
     var out = [];
     Object.keys(obj).forEach(function (key) {
         var attr = key.split(".").slice(2).join(".");
@@ -217,12 +219,29 @@ function parseNixSearch(text) {
     return out;
 }
 
+// One finished search Process -> one honest end state (M13b Task 4): 127
+// is the sh wrapper's missing-binary sentinel (NO NIX); any other non-zero
+// exit or unparseable stdout is SEARCH FAILED; a clean exit splits on
+// whether the parsed set has entries (results) or is nix's `{}` zero-hit
+// answer (NO RESULTS). Failure states never carry partial results.
+function nixSearchOutcome(exitCode, text) {
+    if (exitCode === 127) return { state: "unavailable", results: [] };
+    if (exitCode !== 0) return { state: "failed", results: [] };
+    var results = parseNixSearch(text);
+    if (results === null) return { state: "failed", results: [] };
+    if (results.length === 0) return { state: "empty", results: [] };
+    return { state: "results", results: results };
+}
+
 // Search-result rows are plain "action" nodes: Enter spawns the package in
 // a throwaway terminal through the existing activation path and closes.
 // `read` holds the window open after the program exits so its output is
 // actually readable. The attr is interpolated into a single-quoted sh
 // string, so anything outside the safe attr charset is skipped outright
 // rather than escaped — nixpkgs attrs are [A-Za-z0-9._+-] in practice.
+// `notifySummary`/`notifyBody` mark the row for Menu.qml's activation
+// toast: the spawned terminal can be seconds from mapping, so Enter fires
+// a shell-local NIX RUN notification the moment it lands.
 function nixRows(results) {
     var out = [];
     (results || []).forEach(function (r) {
@@ -238,19 +257,23 @@ function nixRows(results) {
             aliases: [],
             kind: "action",
             action: "ghostty -e sh -c 'nix run nixpkgs#" + r.attr + "; read'",
+            notifySummary: "NIX RUN",
+            notifyBody: r.attr,
             childIds: []
         });
     });
     return out;
 }
 
-// The honest single dim row for a host with no `nix` on PATH (kind "note":
-// not activatable, MenuRow renders the label via foregroundDim).
-function nixUnavailableRow() {
+// The honest single dim rows for everything that isn't a result list (kind
+// "note": not activatable, MenuRow renders the label via foregroundDim):
+// no `nix` on PATH, a search still in flight, a clean zero-hit answer, and
+// a failed run.
+function _nixNoteRow(id, label) {
     return {
-        id: "nix.unavailable",
+        id: id,
         parentId: null,
-        label: "NO NIX",
+        label: label,
         icon: "",
         title: "",
         aliases: [],
@@ -259,6 +282,11 @@ function nixUnavailableRow() {
         childIds: []
     };
 }
+
+function nixUnavailableRow() { return _nixNoteRow("nix.unavailable", "NO NIX"); }
+function nixSearchingRow() { return _nixNoteRow("nix.searching", "SEARCHING"); }
+function nixNoResultsRow() { return _nixNoteRow("nix.noresults", "NO RESULTS"); }
+function nixFailedRow() { return _nixNoteRow("nix.failed", "SEARCH FAILED"); }
 
 // Expands Config's `menu.customPowerButtons` (the spec's "first-class, not
 // a workaround" case — e.g. an owner's Windows-reboot bootloader shortcut)

@@ -31,6 +31,13 @@
 # hicolor tree, one whose icon has no theme here — screenshots the rows
 # (menu-apps.png: display-name labels, one real icon image, no raw icon
 # name as text) and asserts both labels + iconSource states via debug query.
+# The nix runner (M13b Task 4) is driven twice over: a serial states script
+# walks every end state through a query-dispatching PATH-shimmed nix —
+# SEARCHING while the shim blocks on a gate flag file, the canned rows once
+# released, SEARCH FAILED on a nonzero exit, NO RESULTS on a clean `{}` —
+# then the finish script's last leg summons the menu with the ':nix hello'
+# prefill route, activates row 0, and screenshots the resulting NIX RUN
+# toast (nix-toast.png) with a `notifications status` popup-count assert.
 # With --notify, fires `notify-send -u normal` then `-u critical` in-session
 # and screenshots the resulting toasts. Then flips DND on over the existing
 # `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
@@ -652,8 +659,16 @@ theme_toggle_status2_path="$shot_dir/theme-toggle-status-2.json"
 query_path="$shot_dir/query.json"
 calc_query_path="$shot_dir/calc-query.json"
 emoji_query_path="$shot_dir/emoji-query.json"
-nix_query_arm_path="$shot_dir/nix-query-arm.json"
-nix_query_path="$shot_dir/nix-query.json"
+nix_searching_arm_path="$shot_dir/nix-searching-arm.json"
+nix_searching_path="$shot_dir/nix-searching.json"
+nix_released_path="$shot_dir/nix-released.json"
+nix_failed_path="$shot_dir/nix-failed.json"
+nix_empty_path="$shot_dir/nix-empty.json"
+nix_gate_path="$shot_dir/nix-gate.flag"
+nix_states_done_path="$shot_dir/nix-states-done.flag"
+nix_run_drive_path="$shot_dir/nix-run-drive.txt"
+nix_toast_png="$shot_dir/nix-toast.png"
+nix_toast_status_path="$shot_dir/nix-toast-status.json"
 wall_query_path="$shot_dir/wall-query.json"
 apps_query_path="$shot_dir/apps-query.json"
 menu_apps_png="$shot_dir/menu-apps.png"
@@ -973,7 +988,7 @@ if $media_mode; then
   # invoking `sh -c "... pkill -f '<path>' ..."` argv contains that same
   # path substring, so pkill killed its own parent shell before the
   # trailing `niri msg action quit` ever ran, and the run only ended when
-  # the outer `timeout 30` fired.
+  # the outer `timeout 40` fired.
   media_play_script="$shot_dir/media-play.sh"
   cat > "$media_play_script" <<EOF
 #!/usr/bin/env bash
@@ -1073,24 +1088,86 @@ sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
 EOF
 
-  # PATH-shimmed nix fixture (M12 Task 7, same hermetic-producer idea as
-  # dev/sni-stub.py): a canned `nix search nixpkgs <q> --json` answer so the
-  # menu's nix runner plumbing (debounce -> Process -> parse -> rows) is
-  # verified without the network or a real host nix. The shim dir is
-  # prepended to PATH for the shell spawn alone (below), so nothing else in
-  # the run — including this script's own `nix build` — ever sees it. Real
-  # `nix search` behaviour is host-trial territory.
+  # Launch feedback (M13b Task 4), the trailing leg: summon with the
+  # ':nix hello' prefill (open()'s ":"-led route — the keybind path, no
+  # keyboard delivery needed), wait out the debounce + shim round trip,
+  # activate row 0. Activation fires NotificationService.notify("NIX RUN",
+  # "hello") alongside the terminal spawn (ghostty isn't in the VM, so that
+  # sh dies silently — exactly the slow/absent-terminal case the toast
+  # exists for), so the grim 1s later shows the toast card over the bare
+  # session and the status dump shows a live popup. Gated on the states
+  # script's done flag (written below): its serial want-query sequence must
+  # fully land before this summon re-arms the search with hello.
+  cat >> "$menu_finish_script" <<EOF
+until [ -f "$nix_states_done_path" ]; do sleep 0.5; done
+{
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu summon ':nix hello'
+  sleep 2
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0
+} > "$nix_run_drive_path" 2>&1
+sleep 1
+"$grim_bin" "$nix_toast_png" 2>/dev/null || true
+"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$nix_toast_status_path" 2>&1
+EOF
+
+  # PATH-shimmed nix fixture (M12 Task 7; M13b Task 4 made it dispatch on
+  # the query — same hermetic-producer idea as dev/sni-stub.py) so each of
+  # the runner's end states is drivable through the real debounce ->
+  # Process -> outcome path: `slowblock` blocks until the gate flag file
+  # exists (the SEARCHING assertion window), `failplease` exits 1 (SEARCH
+  # FAILED), `emptyplease` prints nix's clean zero-hit `{}` (NO RESULTS),
+  # anything else answers the canned two-row set. The shim dir is prepended
+  # to PATH for the shell spawn alone (below), so nothing else in the run —
+  # including this script's own `nix build` — ever sees it. Real `nix
+  # search` behaviour and its tens-of-seconds cold-cache timing are
+  # host-trial territory.
   nix_shim_dir="$shot_dir/nix-shim"
   mkdir -p "$nix_shim_dir"
-  cat > "$nix_shim_dir/nix" <<'EOF'
+  cat > "$nix_shim_dir/nix" <<EOF
 #!/usr/bin/env bash
-if [ "${1:-}" = "search" ]; then
-  printf '%s\n' '{"legacyPackages.x86_64-linux.hello":{"description":"A program that produces a familiar, friendly greeting","pname":"hello","version":"2.12.1"},"legacyPackages.x86_64-linux.hello-wayland":{"description":"Hello world Wayland client","pname":"hello-wayland","version":"unstable-2023-03-16"}}'
-  exit 0
+canned='{"legacyPackages.x86_64-linux.hello":{"description":"A program that produces a familiar, friendly greeting","pname":"hello","version":"2.12.1"},"legacyPackages.x86_64-linux.hello-wayland":{"description":"Hello world Wayland client","pname":"hello-wayland","version":"unstable-2023-03-16"}}'
+if [ "\${1:-}" = "search" ]; then
+  case "\${3:-}" in
+    slowblock)
+      until [ -f "$nix_gate_path" ]; do sleep 0.2; done
+      printf '%s\n' "\$canned"; exit 0 ;;
+    failplease)
+      echo 'error: unable to download' >&2; exit 1 ;;
+    emptyplease)
+      printf '%s\n' '{}'; exit 0 ;;
+    *)
+      printf '%s\n' "\$canned"; exit 0 ;;
+  esac
 fi
 exit 1
 EOF
   chmod +x "$nix_shim_dir/nix"
+
+  # M13b Task 4: drives each end state through the real path via `debug
+  # query` (which arms the search exactly like typing). Strictly serial in
+  # one script — a want-query flip mid-flight would starve whichever query
+  # a parallel one-liner asserted — and safe to run alongside the
+  # menu-open/select drives, since `debug query` never touches the open
+  # surface. The done flag at the end releases the finish script's toast
+  # leg above, whose summon re-arms the search with its own query.
+  nix_states_script="$shot_dir/nix-states.sh"
+  cat > "$nix_states_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_arm_path" 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_path" 2>&1
+touch "$nix_gate_path"
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix slowblock' > "$nix_released_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix failplease' > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix failplease' > "$nix_failed_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix emptyplease' > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix emptyplease' > "$nix_empty_path" 2>&1
+touch "$nix_states_done_path"
+EOF
 
   # PATH-shimmed wtype (M13 Task 6, same hermetic-producer idea as the nix
   # shim above): logs its argv instead of typing, proving Menu.qml's
@@ -1394,11 +1471,12 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'wall' > $wall_query_path 2>&1\""
-    # Two-pass on purpose (M12 Task 7): the first ':nix hello' arms the
-    # 500ms debounced search against the PATH-shimmed nix; the second, 2s
-    # later, must return the canned rows from the cache.
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':nix hello' > $nix_query_arm_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':nix hello' > $nix_query_path 2>&1\""
+    # The nix end-state drive (M13b Task 4) replaced M12's plain two-pass
+    # ':nix hello' one-liners: the gated slowblock release covers the same
+    # debounce -> shim -> parse -> rows proof, plus SEARCHING while blocked
+    # and the failed/zero-hit outcomes. Serial in its own script — see its
+    # generation comment.
+    echo "spawn-at-startup \"bash\" \"$nix_states_script\""
     echo "spawn-at-startup \"bash\" \"$menu_select_script\""
     echo "spawn-at-startup \"bash\" \"$menu_finish_script\""
   fi
@@ -1488,17 +1566,18 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && niri msg action screenshot-screen --path $bar_layout_path\""
   fi
   # menu_mode's finish script (menu close + selection read + toggle round
-  # trip + the emoji instant-paste drive with its own internal 2s settle
-  # wait) fires 1s after the screenshot at sleep 9 and runs ~4s — give it a
-  # 6s buffer before quit instead of the other modes' 1s so it has time to
-  # land first. osd_mode's brightness leg (sleep 13/14, see above) needs
-  # the same kind of buffer past its own sleep-10 screenshot.
+  # trip + emoji instant-paste + apps + nix toast legs) fires 1s after the
+  # screenshot at sleep 9 and needs a much longer buffer before quit than
+  # the other modes' 1s — see the branch comment below. osd_mode's
+  # brightness leg (sleep 13/14, see above) needs the same kind of buffer
+  # past its own sleep-10 screenshot.
   tail_gap=1
   if $menu_mode; then
-    # 12, not the pre-M13b 6: the finish script's trailing apps leg (summon,
-    # 2s paint, grim, query, close) lands ~4-6s after the emoji wl-paste on
-    # the VM's llvmpipe timing.
-    tail_gap=12
+    # 18, not the pre-Task-4 12: after the apps leg the finish script now
+    # waits for the nix states script's done flag (~13-17s in) and runs the
+    # toast leg (summon + 2s debounce wait + activate + grim + status,
+    # ~5s), landing ~23-26s in on the VM's llvmpipe timing.
+    tail_gap=18
   elif $osd_mode; then
     tail_gap=5
   elif $center_mode; then
@@ -1585,7 +1664,7 @@ XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
 XDG_DATA_DIRS="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
-WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout 30 $niri_bin --config "$cfg" || true
+WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout 40 $niri_bin --config "$cfg" || true
 
 host_notifications_owner_after=$(host_notifications_owner)
 if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then
@@ -1708,18 +1787,64 @@ if $menu_mode; then
     [ -f "$toggle_path" ] && cat "$toggle_path" >&2
     exit 1
   fi
-  # Nix runner provider (M12 Task 7): the second ':nix hello' pass must
-  # return the shim's canned rows — the "hello 2.12.1" label proves the
+  # Nix runner end states (M13b Task 4, gated shim): while the shim blocks
+  # on the gate flag the debounced search is genuinely in flight, so the
+  # query must answer the dim SEARCHING note row; after the release it must
+  # answer the canned rows ("hello 2.12.1" proves the
   # legacyPackages.<system>. prefix was stripped, the description proves
-  # the dimmed desc field rides along.
-  if [ -s "$nix_query_path" ] && grep -qF '"hello 2.12.1"' "$nix_query_path" && grep -qF 'friendly greeting' "$nix_query_path"; then
-    cat "$nix_query_path"
+  # the dimmed desc field rides along — M12's original two-pass proof); the
+  # failing and zero-hit queries must answer SEARCH FAILED / NO RESULTS.
+  if [ -s "$nix_searching_path" ] && grep -qF '"label":"SEARCHING"' "$nix_searching_path" && grep -qF '"kind":"note"' "$nix_searching_path"; then
+    cat "$nix_searching_path"
   else
-    echo "SMOKE_FAIL: menu query ':nix hello' did not return the canned nix attr row" >&2
-    [ -f "$nix_query_arm_path" ] && cat "$nix_query_arm_path" >&2
-    [ -f "$nix_query_path" ] && cat "$nix_query_path" >&2
+    echo "SMOKE_FAIL: gated nix search did not report SEARCHING while blocked" >&2
+    [ -f "$nix_searching_arm_path" ] && cat "$nix_searching_arm_path" >&2
+    [ -f "$nix_searching_path" ] && cat "$nix_searching_path" >&2
     exit 1
   fi
+  if [ -s "$nix_released_path" ] && grep -qF '"hello 2.12.1"' "$nix_released_path" && grep -qF 'friendly greeting' "$nix_released_path"; then
+    cat "$nix_released_path"
+  else
+    echo "SMOKE_FAIL: released nix search did not return the canned attr rows" >&2
+    [ -f "$nix_released_path" ] && cat "$nix_released_path" >&2
+    exit 1
+  fi
+  if [ -s "$nix_failed_path" ] && grep -qF '"label":"SEARCH FAILED"' "$nix_failed_path"; then
+    cat "$nix_failed_path"
+  else
+    echo "SMOKE_FAIL: failing nix search did not report SEARCH FAILED" >&2
+    [ -f "$nix_failed_path" ] && cat "$nix_failed_path" >&2
+    exit 1
+  fi
+  if [ -s "$nix_empty_path" ] && grep -qF '"label":"NO RESULTS"' "$nix_empty_path"; then
+    cat "$nix_empty_path"
+  else
+    echo "SMOKE_FAIL: zero-hit nix search did not report NO RESULTS" >&2
+    [ -f "$nix_empty_path" ] && cat "$nix_empty_path" >&2
+    exit 1
+  fi
+  # Launch feedback: the ':nix hello' prefill summon and the row activation
+  # must both answer ok, the NIX RUN toast must be a live popup in the
+  # status dump, and nix-toast.png is the visual proof (Read on the mac).
+  if [ -s "$nix_run_drive_path" ] && [ "$(grep -c '^ok$' "$nix_run_drive_path")" = "2" ]; then
+    cat "$nix_run_drive_path"
+  else
+    echo "SMOKE_FAIL: nix prefill summon/activate did not both answer ok" >&2
+    [ -f "$nix_run_drive_path" ] && cat "$nix_run_drive_path" >&2
+    exit 1
+  fi
+  if [ -s "$nix_toast_status_path" ] && grep -qE '"popups":[1-9]' "$nix_toast_status_path"; then
+    cat "$nix_toast_status_path"
+  else
+    echo "SMOKE_FAIL: no live popup after nix row activation (NIX RUN toast missing)" >&2
+    [ -f "$nix_toast_status_path" ] && cat "$nix_toast_status_path" >&2
+    exit 1
+  fi
+  if [ ! -s "$nix_toast_png" ]; then
+    echo "SMOKE_FAIL: no nix toast screenshot produced at $nix_toast_png" >&2
+    exit 1
+  fi
+  echo "nix toast screenshot: $nix_toast_png"
   # Emoji instant paste (M13 Task 6): summon + activate must both answer
   # ok, the row's copy action must land on the real session clipboard, and
   # the post-close settle must have spawned wtype with the same raw char

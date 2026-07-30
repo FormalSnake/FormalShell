@@ -2,9 +2,12 @@ import QtQuick
 import QtTest
 import "../shell/Menu/providers.js" as Providers
 
-// The nix runner's pure half (M12 Task 7): trigger parsing, `nix search
-// --json` stdout parsing, and row building. The debounce/Process wiring in
-// Menu.qml is verified by the --menu smoke leg against a PATH-shimmed nix.
+// The nix runner's pure half (M12 Task 7; M13b Task 4 added the end-state
+// machine): trigger parsing, `nix search --json` stdout parsing, the
+// exit-code -> outcome mapping, and row building. The debounce/Process
+// wiring in Menu.qml is verified by the --menu smoke leg against a
+// PATH-shimmed nix (including a gated shim for the in-flight SEARCHING
+// state).
 TestCase {
     name: "MenuNix"
 
@@ -43,11 +46,26 @@ TestCase {
         compare(results[1].version, "");
     }
 
-    function test_parse_garbage_is_empty() {
-        compare(Providers.parseNixSearch("not json").length, 0);
-        compare(Providers.parseNixSearch("").length, 0);
-        compare(Providers.parseNixSearch("null").length, 0);
+    function test_parse_garbage_is_null_empty_is_list() {
+        // Unparseable stdout answers null (SEARCH FAILED's input), distinct
+        // from nix's clean zero-hit `{}` (NO RESULTS).
+        verify(Providers.parseNixSearch("not json") === null);
+        verify(Providers.parseNixSearch("") === null);
+        verify(Providers.parseNixSearch("null") === null);
         compare(Providers.parseNixSearch("{}").length, 0);
+    }
+
+    function test_search_outcome_states() {
+        compare(Providers.nixSearchOutcome(127, "").state, "unavailable");
+        compare(Providers.nixSearchOutcome(1, canned).state, "failed");
+        compare(Providers.nixSearchOutcome(0, "not json").state, "failed");
+        compare(Providers.nixSearchOutcome(0, "{}").state, "empty");
+        var ok = Providers.nixSearchOutcome(0, canned);
+        compare(ok.state, "results");
+        compare(ok.results.length, 2);
+        compare(ok.results[0].attr, "hello");
+        // Failure states never leak partial results.
+        compare(Providers.nixSearchOutcome(1, canned).results.length, 0);
     }
 
     function test_rows_shape() {
@@ -57,8 +75,13 @@ TestCase {
         compare(rows[0].desc, "A program that produces a familiar, friendly greeting");
         compare(rows[0].kind, "action");
         compare(rows[0].action, "ghostty -e sh -c 'nix run nixpkgs#hello; read'");
+        // Launch acknowledgment fields (M13b Task 4): Menu.qml's activation
+        // fires notify(notifySummary, notifyBody) alongside the spawn.
+        compare(rows[0].notifySummary, "NIX RUN");
+        compare(rows[0].notifyBody, "hello");
         // No version: the label is the bare attr.
         compare(rows[1].label, "python312Packages.requests");
+        compare(rows[1].notifyBody, "python312Packages.requests");
     }
 
     function test_rows_skip_unsafe_attrs_and_cap() {
@@ -70,10 +93,19 @@ TestCase {
         compare(Providers.nixRows(many).length, 30);
     }
 
-    function test_unavailable_row() {
-        var row = Providers.nixUnavailableRow();
-        compare(row.label, "NO NIX");
-        compare(row.kind, "note");
-        compare(row.dim, true);
+    function test_note_rows() {
+        var cases = [
+            [Providers.nixUnavailableRow(), "nix.unavailable", "NO NIX"],
+            [Providers.nixSearchingRow(), "nix.searching", "SEARCHING"],
+            [Providers.nixNoResultsRow(), "nix.noresults", "NO RESULTS"],
+            [Providers.nixFailedRow(), "nix.failed", "SEARCH FAILED"]
+        ];
+        for (var i = 0; i < cases.length; i++) {
+            compare(cases[i][0].id, cases[i][1]);
+            compare(cases[i][0].label, cases[i][2]);
+            // kind "note" matches no _activateRow branch: not activatable.
+            compare(cases[i][0].kind, "note");
+            compare(cases[i][0].dim, true);
+        }
     }
 }

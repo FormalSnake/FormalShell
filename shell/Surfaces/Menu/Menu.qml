@@ -6,6 +6,7 @@ import qs.Core as Core
 import qs.Compositor
 import qs.Components
 import qs.Services
+import qs.Notifications
 import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
 import "../../Menu/providers.js" as Providers
@@ -105,18 +106,22 @@ PanelWindow {
         }
     }
 
-    // Nix package runner state (M12 Task 7). `nix search` is seconds-slow
-    // and network-bound, so unlike calc/emoji the rows can't be computed in
-    // the _displayRows binding: keystrokes arm a 500ms debounce
-    // (_requestNixSearch, called from onTextChanged/query(), never from a
-    // binding), one Process runs at a time, and a result is only cached
-    // when it still answers the latest requested query — anything else is
-    // dropped and the search re-runs (_startNixSearch from onExited).
-    // `nix` missing from PATH (the sh wrapper's `command -v` guard, exit
-    // 127) latches _nixAvailable false: every nix surface then renders the
-    // single dim NO NIX row and no further processes spawn.
+    // Nix package runner state (M12 Task 7; M13b Task 4 added the honest
+    // end states). `nix search` is seconds-slow and network-bound, so
+    // unlike calc/emoji the rows can't be computed in the _displayRows
+    // binding: keystrokes arm a 500ms debounce (_requestNixSearch, called
+    // from onTextChanged/query(), never from a binding), one Process runs
+    // at a time, and a result is only cached when it still answers the
+    // latest requested query — anything else is dropped and the search
+    // re-runs (_startNixSearch from onExited). Each cached answer carries
+    // its outcome (Providers.nixSearchOutcome) so _nixRowsFor renders NO
+    // RESULTS and SEARCH FAILED distinctly instead of one ambiguous
+    // nothing. `nix` missing from PATH (the sh wrapper's `command -v`
+    // guard, exit 127) latches _nixAvailable false: every nix surface then
+    // renders the single dim NO NIX row and no further processes spawn.
     property string _nixQuery: ""       // the query _nixResults answers
     property var _nixResults: []
+    property string _nixOutcome: "results"  // how _nixQuery ended: results|empty|failed
     property string _nixWantQuery: ""   // latest requested query
     property bool _nixAvailable: true
 
@@ -135,13 +140,18 @@ PanelWindow {
     }
 
     // The rows a nix surface (route level or ":nix" trigger) shows for `q`
-    // right now: the honest NO NIX row, the cached results when they answer
-    // this exact query, or nothing while a search is still pending — stale
-    // rows for a previous query never linger.
+    // right now: the honest NO NIX row, a dim SEARCHING note while the
+    // cached answer doesn't cover this exact query yet (the debounce +
+    // Process round trip runs tens of seconds on a cold real-host eval
+    // cache), or the cached end state — result rows, NO RESULTS, SEARCH
+    // FAILED. Stale rows for a previous query never linger.
     function _nixRowsFor(q) {
         if (!root._nixAvailable) return [Providers.nixUnavailableRow()];
         q = String(q || "").trim();
-        if (q === "" || q !== root._nixQuery) return [];
+        if (q === "") return [];
+        if (q !== root._nixQuery) return [Providers.nixSearchingRow()];
+        if (root._nixOutcome === "failed") return [Providers.nixFailedRow()];
+        if (root._nixOutcome === "empty") return [Providers.nixNoResultsRow()];
         return Providers.nixRows(root._nixResults);
     }
 
@@ -160,7 +170,8 @@ PanelWindow {
             id: nixSearchCollector
         }
         onExited: exitCode => {
-            if (exitCode === 127) {
+            var outcome = Providers.nixSearchOutcome(exitCode, nixSearchCollector.text);
+            if (outcome.state === "unavailable") {
                 root._nixAvailable = false;
                 console.warn("Menu: nix not found on PATH, nix runner disabled");
                 return;
@@ -170,9 +181,8 @@ PanelWindow {
                 return;
             }
             root._nixQuery = _query;
-            // Non-zero exit is nix's own "no results" (and any real search
-            // failure): an empty list is the honest render for both.
-            root._nixResults = exitCode === 0 ? Providers.parseNixSearch(nixSearchCollector.text) : [];
+            root._nixOutcome = outcome.state;
+            root._nixResults = outcome.results;
         }
     }
 
@@ -427,8 +437,15 @@ PanelWindow {
         // between opens — bluetooth power, mode toggle, device presence).
         root._condResults = {};
         root._checkedResults = {};
+        // A ":"-led route is a search prefill, not a node id: `menu summon
+        // ':nix hello'` opens root with the trigger query already typed
+        // (onTextChanged side effects included, so the debounced search
+        // arms), giving compositor keybinds — and the smoke rig's toast
+        // assertion — a direct path into the trigger surfaces without
+        // keyboard delivery. No node id or alias starts with ":".
+        var prefill = (route && route.indexOf(":") === 0) ? route : "";
         var target = null;
-        var resolved = route ? root._resolveRoute(route) : null;
+        var resolved = (route && prefill === "") ? root._resolveRoute(route) : null;
         var node = resolved ? root._nodes[resolved] : null;
         if (node) {
             if (node.kind === "submenu" || node.kind === "provider")
@@ -437,6 +454,8 @@ PanelWindow {
                 target = (node.target && root._nodes[node.target]) ? node.target : node.id;
         }
         root._enterLevel(target);
+        if (prefill !== "")
+            searchInput.text = prefill;
         root.isOpen = true;
         Qt.callLater(function () { searchInput.forceActiveFocus(); });
     }
@@ -563,8 +582,9 @@ PanelWindow {
             });
         }
         // ":nix" narrows the same way, but the search is async: the first
-        // call arms the debounce and typically returns [] — the smoke rig
-        // calls twice, reading the cached rows on the second pass.
+        // call arms the debounce and returns the SEARCHING note row — the
+        // smoke rig calls twice, reading the cached end state (result rows,
+        // NO RESULTS, SEARCH FAILED) on the second pass.
         var nixQuery = Providers.nixTriggerQuery(q);
         if (nixQuery !== null) {
             root._requestNixSearch(nixQuery);
@@ -639,6 +659,11 @@ PanelWindow {
                 return;
             }
             root._runAction(node.action);
+            // Launch acknowledgment (nix rows): the spawned terminal can be
+            // seconds from mapping, so rows carrying notifySummary get a
+            // shell-local toast the moment Enter lands.
+            if (node.notifySummary)
+                NotificationService.notify(node.notifySummary, node.notifyBody || "");
             if (node.typeText)
                 root._pendingTypeText = node.typeText;
             root.close();
