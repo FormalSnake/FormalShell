@@ -1,4 +1,8 @@
 //@ pragma ShellId formalshell
+// UseQApplication: QsMenuAnchor.open() (the tray's DBusMenu path in
+// Surfaces/Bar/widgets/Tray.qml) hard-fails with a qCritical unless
+// quickshell runs in QApplication mode — platform menus are QMenus.
+//@ pragma UseQApplication
 import Quickshell
 import QtQuick
 

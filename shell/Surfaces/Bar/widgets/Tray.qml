@@ -15,7 +15,14 @@ import qs.Services
 // renders as its own standalone Cell — left click Activate()s it, middle
 // click SecondaryActivate()s it, right click opens its DBusMenu via
 // QsMenuAnchor when item.hasMenu is true (Quickshell.DBusMenu's own doc:
-// "can be displayed with QsMenuAnchor or QsMenuOpener"). Past a small
+// "can be displayed with QsMenuAnchor or QsMenuOpener"). Items whose
+// onlyMenu flag is set (SNI ItemIsMenu: "activation will do nothing") get
+// the menu on left click too. QsMenuAnchor requires QApplication mode —
+// shell.qml carries `//@ pragma UseQApplication` for exactly this — and
+// renders a native-styled QMenu, not a shell-themed surface: quickshell's
+// platform-menu path (core/platformmenu.cpp) owns that widget outright, so
+// its styling is accepted as-is rather than half-rebuilding a menu
+// renderer. Past a small
 // visible count the rest collapse into one more Cell ("+N") that expands
 // this row to reveal them too, instead of an unbounded strip of icons — the
 // spec's "grouped drawer". Expand state lives in TrayService (shared, not
@@ -46,8 +53,21 @@ Row {
     // Shared by every item cell below — right-clicking one just repoints
     // this at that cell and its menu handle rather than each delegate
     // owning its own anchor, since only one context menu is ever open.
+    // Anchored to the cell's bottom-left expanding down-right, so the menu
+    // drops under the bar cell instead of covering it (PopupAnchor's
+    // default edges are Top|Left).
     QsMenuAnchor {
         id: contextMenu
+        anchor.edges: Edges.Bottom | Edges.Left
+        anchor.gravity: Edges.Bottom | Edges.Right
+    }
+
+    function openMenu(cell) {
+        if (contextMenu.visible)
+            contextMenu.close();
+        contextMenu.anchor.item = cell;
+        contextMenu.menu = cell.modelData.menu;
+        contextMenu.open();
     }
 
     Repeater {
@@ -57,6 +77,11 @@ Row {
             id: itemCell
             required property var modelData
 
+            // Bar.qml's region delegate stretches this Row to the bar's
+            // shared cell height; the Row top-aligns children, so without
+            // this the shorter icon cells sit visibly high (Row permits
+            // vertical anchors on children — it only manages x).
+            anchors.verticalCenter: parent.verticalCenter
             standalone: true
             hovered: itemHover.containsMouse
 
@@ -74,13 +99,14 @@ Row {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: mouse => {
                     if (mouse.button === Qt.LeftButton) {
-                        itemCell.modelData.activate();
+                        if (itemCell.modelData.onlyMenu && itemCell.modelData.hasMenu)
+                            root.openMenu(itemCell);
+                        else
+                            itemCell.modelData.activate();
                     } else if (mouse.button === Qt.MiddleButton) {
                         itemCell.modelData.secondaryActivate();
                     } else if (mouse.button === Qt.RightButton && itemCell.modelData.hasMenu) {
-                        contextMenu.anchor.item = itemCell;
-                        contextMenu.menu = itemCell.modelData.menu;
-                        contextMenu.open();
+                        root.openMenu(itemCell);
                     }
                 }
             }
@@ -89,6 +115,7 @@ Row {
 
     Cell {
         id: overflowCell
+        anchors.verticalCenter: parent.verticalCenter
         visible: root._overflowing
         standalone: true
         hovered: overflowHover.containsMouse

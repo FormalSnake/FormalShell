@@ -82,6 +82,11 @@ def main():
     parser.add_argument("--id", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--color", required=True, help="icon fill color, RRGGBB")
+    parser.add_argument(
+        "--activate-file",
+        help="append '<id>: <method>(x, y)' here on Activate/SecondaryActivate, "
+        "so the smoke rig can assert the shell's activate path reached this item",
+    )
     args = parser.parse_args()
 
     props = {
@@ -105,6 +110,9 @@ def main():
         if method_name in ("Activate", "SecondaryActivate", "ContextMenu"):
             x, y = parameters.unpack()
             print(f"{args.id}: {method_name}({x}, {y})", flush=True)
+            if args.activate_file and method_name in ("Activate", "SecondaryActivate"):
+                with open(args.activate_file, "a") as f:
+                    f.write(f"{args.id}: {method_name}({x}, {y})\n")
             invocation.return_value(None)
         elif method_name == "Scroll":
             delta, orientation = parameters.unpack()

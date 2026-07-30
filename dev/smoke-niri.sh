@@ -138,10 +138,15 @@
 # collapsed state, then `tray expand` (the smoke rig's stand-in for the
 # overflow cell's own click — no synthetic pointer exists here) is called
 # and `tray status` dumped again (tray-status-2.json, proves expanded:true
-# with the same item count); this run's generic smoke.png/SMOKE_OK is taken
-# after the expand call, so it shows every item as its own cell, drawer
-# open. The stub processes are killed by PID (tray-pids.txt, same pattern as
-# --media's mpv) right before niri quits.
+# with the same item count); then `tray activate tray-fixture-2` drives the
+# exact Activate() call Tray.qml's own left-click handler makes, and the
+# stub's --activate-file (tray-activate.txt) is asserted afterward, proving
+# the D-Bus Activate round trip reached the item. Opening an item's DBusMenu
+# stays host-trial territory (a platform QMenu with no pointer to dismiss it
+# would wedge a headless run — see TrayIpc.qml). This run's generic
+# smoke.png/SMOKE_OK is taken after the expand call, so it shows every item
+# as its own cell, drawer open. The stub processes are killed by PID
+# (tray-pids.txt, same pattern as --media's mpv) right before niri quits.
 # With --picker, generates a handful of fixture PNGs (imagemagick, one solid
 # color each) into a directory pointed at by settings.json's picker.directory,
 # then drives the `picker` IPC target: `summon` opens the wallpaper-mode grid
@@ -624,6 +629,8 @@ tray_status1_path="$shot_dir/tray-status-1.json"
 tray_status2_path="$shot_dir/tray-status-2.json"
 tray_collapsed_path="$shot_dir/tray-collapsed.png"
 tray_pids_path="$shot_dir/tray-pids.txt"
+tray_activate_path="$shot_dir/tray-activate.txt"
+tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
 bar_layout_path="$shot_dir/bar-layout.png"
 screenshot_reply_path="$shot_dir/screenshot-reply.txt"
 screenshot_status_path="$shot_dir/screenshot-status.json"
@@ -1094,19 +1101,21 @@ fi
 # --tray: launches six real SNI producers in the background (PIDs recorded
 # for the kill step below), then proves the collapsed state (status dump +
 # screenshot) before driving the same expand() the overflow cell's own click
-# calls and proving the expanded state (status dump); this run's generic
+# calls and proving the expanded state (status dump), then drives the same
+# activate() the item cells' own left click calls and lets the stub's
+# --activate-file prove the D-Bus round trip; this run's generic
 # smoke.png/SMOKE_OK, taken later, shows the drawer already expanded.
 if $tray_mode; then
   tray_drive_script="$shot_dir/tray-drive.sh"
   cat > "$tray_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 1
-"$python3_bin" "$sni_stub_path" --id tray-fixture-1 --title "Tray Fixture 1" --color c0392b & echo \$! >> "$tray_pids_path"
-"$python3_bin" "$sni_stub_path" --id tray-fixture-2 --title "Tray Fixture 2" --color 27ae60 & echo \$! >> "$tray_pids_path"
-"$python3_bin" "$sni_stub_path" --id tray-fixture-3 --title "Tray Fixture 3" --color 2980b9 & echo \$! >> "$tray_pids_path"
-"$python3_bin" "$sni_stub_path" --id tray-fixture-4 --title "Tray Fixture 4" --color f1c40f & echo \$! >> "$tray_pids_path"
-"$python3_bin" "$sni_stub_path" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad & echo \$! >> "$tray_pids_path"
-"$python3_bin" "$sni_stub_path" --id tray-fixture-6 --title "Tray Fixture 6" --color 16a085 & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-1 --title "Tray Fixture 1" --color c0392b --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-2 --title "Tray Fixture 2" --color 27ae60 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-3 --title "Tray Fixture 3" --color 2980b9 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-4 --title "Tray Fixture 4" --color f1c40f --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-6 --title "Tray Fixture 6" --color 16a085 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 sleep 6
 "$qs_bin" ipc --any-display -p "$shell_path" call tray status > "$tray_status1_path" 2>&1
 sleep 1
@@ -1115,6 +1124,8 @@ sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call tray expand > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call tray status > "$tray_status2_path" 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
 EOF
 
   tray_kill_script="$shot_dir/tray-kill.sh"
@@ -1290,9 +1301,9 @@ fi
     # with the picker already closed again.
     screenshot_delay=14
   elif $tray_mode; then
-    # tray-drive.sh's own final step (the post-expand status dump) lands
-    # around its internal sleep sum (~10s in); this run's generic
-    # smoke.png/SMOKE_OK is taken 3s after that, showing every registered
+    # tray-drive.sh's own final step (the activate call on fixture 2) lands
+    # around its internal sleep sum (~11s in); this run's generic
+    # smoke.png/SMOKE_OK is taken 2s after that, showing every registered
     # item as its own cell with the drawer already expanded.
     screenshot_delay=13
   elif $panel_mode && [ "$panel_name" = "calendar" ]; then
@@ -1623,6 +1634,25 @@ if $tray_mode; then
   tray_count2=$(grep -o '"id":' "$tray_status2_path" | wc -l | tr -d ' ')
   if [ "$tray_count2" != "$tray_count1" ]; then
     echo "SMOKE_FAIL: tray item count changed across expand ($tray_count1 -> $tray_count2)" >&2; exit 1
+  fi
+  if [ -s "$tray_activate_reply_path" ]; then
+    cat "$tray_activate_reply_path"
+  else
+    echo "SMOKE_FAIL: no tray activate IPC reply produced" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$tray_activate_reply_path"; then
+    echo "SMOKE_FAIL: tray activate IPC call did not return ok — got: $(cat "$tray_activate_reply_path")" >&2; exit 1
+  fi
+  if [ ! -s "$tray_activate_path" ]; then
+    echo "SMOKE_FAIL: no tray-activate.txt produced — the shell's activate() never reached the stub over D-Bus" >&2; exit 1
+  fi
+  cat "$tray_activate_path"
+  if ! grep -q '^tray-fixture-2: Activate(' "$tray_activate_path"; then
+    echo "SMOKE_FAIL: tray-activate.txt does not record Activate on tray-fixture-2 — got: $(cat "$tray_activate_path")" >&2; exit 1
+  fi
+  tray_activate_lines=$(wc -l < "$tray_activate_path" | tr -d ' ')
+  if [ "$tray_activate_lines" != "1" ]; then
+    echo "SMOKE_FAIL: expected exactly one activate record (got $tray_activate_lines) — activate hit more than the targeted item" >&2; exit 1
   fi
 fi
 
