@@ -33,7 +33,7 @@ arrangement:
     "layout": {
       "left": ["workspaces", "activeWindow"],
       "center": ["clock", "nowPlaying"],
-      "right": ["battery", "audio", "network", "bluetooth", "weather", "tray", "indicators", "custom:cpu"]
+      "right": ["battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators", "custom:cpu"]
     },
     "modules": [
       { "id": "cpu", "type": "command", "command": ["my-cpu-script"], "interval": 5000, "timeout": 5000 }
@@ -43,8 +43,11 @@ arrangement:
 ```
 
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
-`battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `indicators`,
-`github` (opt-in only — never part of the default arrangement).
+`battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
+`indicators`, `github` (opt-in only — never part of the default
+arrangement; `bell` by contrast IS part of the defaults since M13b, so a
+config predating it that spells out its own `right` region won't show the
+bell until it's added there).
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
@@ -83,10 +86,21 @@ native-styled popup (quickshell's platform-menu path owns that widget
 outright), not a shell-themed surface. Past 4 visible items the rest
 collapse into one more cell (`+N`) that expands the row to reveal them all.
 
-**Indicators** — DND and idle-inhibit each render as their own glyph, only
-while the condition holds; the whole slot disappears when neither does.
-Recording has no glyph yet — nothing in this shell or a reachable service
-reports screen recording as of 2026-07-29.
+**Bell** — an always-visible notification cell (M13b): bell glyph, swapping
+to bell-off while DND is on, plus a pending-count meta label whenever
+notifications are sitting unseen in the `pending` tier (see
+[Notifications](#notifications)). Left click toggles the notification
+center — the same surface `notifications showHistory` drives — with the
+panel-open accent dot while it's open; right click flips DND through the
+one existing DND state machine (`notifications toggleDnd`'s), never a
+second one.
+
+**Indicators** — transient session-state glyphs, only while the condition
+holds; the whole slot disappears otherwise. Today that means idle-inhibit
+alone: the DND bell-off glyph this slot carried since M10 moved to the
+always-visible bell cell above, which owns both DND display and its
+toggle. Recording has no glyph yet — nothing in this shell or a reachable
+service reports screen recording as of 2026-07-29.
 
 **GitHub** — opt-in via `bar.layout` (add `"github"` to a region); polls one
 `gh api graphql` call every `github.intervalMs` (ms, default 300000) for the
@@ -124,8 +138,12 @@ Colors are wallpaper-derived end to end, no restart required:
    `$XDG_STATE_HOME/formalshell/theme.json` and `niri-border.kdl`. `Theme`
    (the shell's color singleton) watches `theme.json` live, so every bar
    token recolors on the next paint. With no wallpaper set, `theme.json` is
-   written straight from the static Flexoki fallback instead, so the
-   pipeline is uniform from a fresh install.
+   written straight from the bundled Flexoki fallback instead — the variant
+   matching the current mode (M13b), so `theme mode toggle` visibly flips
+   the whole shell between Flexoki dark and light through the exact same
+   theme.json write a matugen run uses, and the pipeline is uniform from a
+   fresh install (whose seeded first-boot theme.json stays the dark
+   variant).
 4. A per-screen `Background` surface (background Wayland layer) shows the
    current wallpaper, or a flat `Theme.color.background` fill when none is
    set.
@@ -182,6 +200,15 @@ submenu. `when`/`checked` are shell condition strings, batched into one
 `Process` per condition on menu-open (never per keystroke) — `when: "false"`
 hides a node outright, a real command's exit code decides visibility live
 (e.g. `system.logout`'s `test -n "$NIRI_SOCKET"` guard).
+
+**App rows.** Each launchable app shows the entry's display name (falling
+back to its id only when the name is genuinely empty) and renders the
+entry's icon-theme icon as an image at the glyph cell's size — radius 0,
+no border, `docs/DESIGN.md`'s one sanctioned image-icon exception (M13b;
+before that the raw icon *name*, which conventionally equals the app id,
+rendered as literal text in the icon slot). An icon the current theme
+can't resolve means the row simply has no leading image — never a
+broken-image box.
 
 **User overrides.** `~/.config/formalshell/menu.jsonc` merges **per-key over**
 the default tree — user wins field-by-field, and `"hidden": true` removes a
@@ -246,10 +273,17 @@ same rows (`:e thumbs` → 👍); a bare `:e` browses the head of the list.
 **Nix package runner.** `menu summon nix` (or the `:nix <query>` root
 trigger) searches nixpkgs as you type: a debounced (500ms, one in-flight,
 stale results dropped) `nix search nixpkgs <query> --json`, rows showing
-attr name + version with a dimmed description. Enter spawns the package in
-a throwaway terminal (`ghostty -e sh -c 'nix run nixpkgs#<attr>; read'` —
-`read` holds the window open after it exits). No `nix` on PATH renders a
-single dim `NO NIX` row instead.
+attr name + version with a dimmed description. Every state renders
+honestly as a single dim, non-activatable note row (M13b — a real host's
+first `nix search` can spend tens of seconds warming evaluation caches,
+which used to look like nothing happening): `SEARCHING` while a run is in
+flight, `NO RESULTS` for a clean zero-hit answer, `SEARCH FAILED` for a
+non-zero exit or unparseable output, and `NO NIX` when the binary is
+missing from PATH entirely. Enter on a result spawns the package in a
+throwaway terminal (`ghostty -e sh -c 'nix run nixpkgs#<attr>; read'` —
+`read` holds the window open after it exits) and immediately fires a
+`NIX RUN <attr>` notification through the shell's own stack, so the launch
+is visible even while the terminal is still seconds from mapping.
 
 **IPC.** Every route is summonable for direct compositor keybinds:
 `toggle()` (deliberately no-argument — root summon if closed, close if
@@ -318,10 +352,16 @@ from urgency alone.
 — it survives shell restarts and `keepOnReload` generation switches instead
 of silently resetting to off.
 
+**The bar's bell cell** (see [Bar](#bar)) drives the same machinery with a
+pointer: left click toggles the center `showHistory` drives, right click
+flips the same DND flag `toggleDnd` does, and its pending-count meta label
+reads the same `pending` tier `status` reports.
+
 **IPC** (`target: "notifications"`):
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call notifications showHistory     # toggle the center
+qs ipc --any-display -p <store-path>/share/formalshell call notifications status          # {"dnd":…,"pending":…,"popups":…,"centerOpen":…}
 qs ipc --any-display -p <store-path>/share/formalshell call notifications toggleDnd       # flip DND, returns "on"/"off"
 qs ipc --any-display -p <store-path>/share/formalshell call notifications dndState        # "on" | "off"
 qs ipc --any-display -p <store-path>/share/formalshell call notifications markAllSeen     # drain pending -> past
@@ -707,6 +747,17 @@ falls back to random and logs a warning, never a hard error):
 { "screensaver": { "effect": "decrypt" } }
 ```
 
+**Continuous cycling** (M13b). After converging, the banner holds for
+`screensaver.holdSeconds` (default 6), then the surface rerolls and
+animates again, indefinitely, until real input dismisses it —
+`"random"` picks a fresh effect each cycle and never repeats the
+immediately previous one, a pinned name replays itself with a fresh
+activation seed so the run still looks different. The loop takes no idle
+inhibitor, so system suspend fires exactly as it would without it.
+`screensaver frameInfo` reports the resolved effect, its convergence
+frame, and a `cycles` counter (completed reroll count, 0 until the first
+one) so cycling is observable without screenshots.
+
 **Replacing the banner.** `screensaver.asciiPath` points at any UTF-8 text
 file to use instead of the bundled logo — empty (the default) keeps
 `branding/screensaver.txt`, and a custom file that fails to load falls back
@@ -731,6 +782,7 @@ into the lock screen after continuing to show for that much longer.
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver start
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver stop
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver status  # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver frameInfo  # {"effect":…,"convergenceFrame":…,"cycles":…}
 ```
 
 `dev/smoke-niri.sh --screensaver` additionally accepts `SCREENSAVER_EFFECT`

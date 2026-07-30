@@ -12,10 +12,10 @@ modules so a consuming config needs almost no glue.
 
 ![FormalShell bar on niri](docs/screenshots/bar-niri.png)
 
-**Status:** pre-alpha. M1 through M13 (walking skeleton through the greeter
+**Status:** pre-alpha. M1 through M13b (walking skeleton through the greeter
 and NixOS modules, bar completeness, screensaver effect gifs, DMS parity
-gaps + EDS/GOA calendar events, and the first e1504g daily-drive trial's
-feedback fixes) are complete, behind CI (qmllint + headless
+gaps + EDS/GOA calendar events, and two rounds of e1504g daily-drive trial
+feedback) are complete, behind CI (qmllint + headless
 qml-tests) and nested-compositor smoke loops for every change. See
 `docs/SWITCHOVER.md` for the current hardware-vs-VM verification parity
 table before switching a real machine over, and
@@ -29,14 +29,17 @@ launches it inside an isolated **nested** niri session, screenshots that
 session, and tears it down — safe to run against a live host by design.
 Most were recaptured 2026-07-29 from **g815**, the owner's real niri
 machine, showing genuinely populated hardware (real battery, Wi-Fi,
-Bluetooth, audio, backlight) rather than the VM's empty state. The greeter
-shot, the M10 bar shots (tray, indicators, custom modules), and the three
-M13 recaptures (tray with vertically centered cells, custom modules with
-the github cell and the idx-sorted workspace region, calendar with a
-selected day's inverted cell) are VM-sourced — no greetd module on g815
-yet, and g815 hasn't been re-swept since M10 landed. Details on what each shot proves are
-in `CLAUDE.md`'s verification loop section (the `dev/smoke-niri.sh` flag
-each was captured with) and git history.
+Bluetooth, audio, backlight) rather than the VM's empty state — those
+shots predate M13b, so their bars lack the notification bell cell. The
+greeter shot, the M10 bar shots (tray, custom modules), the three M13
+recaptures (tray with vertically centered cells, custom modules with the
+github cell and the idx-sorted workspace region, calendar with a selected
+day's inverted cell), and the four M13b shots (the bell cell in its DND
+state, launcher rows with a real icon image, and the no-wallpaper theme
+toggle pair) are VM-sourced — no greetd module on g815 yet, and g815
+hasn't been re-swept since M10 landed. Details on what each shot proves
+are in `CLAUDE.md`'s verification loop section (the `dev/smoke-niri.sh`
+flag each was captured with) and git history.
 
 | | | |
 | :---: | :---: | :---: |
@@ -44,7 +47,8 @@ each was captured with) and git history.
 | <img src="docs/screenshots/osd-niri.png" width="260"><br>**OSD** — g815 | <img src="docs/screenshots/panels-niri.png" width="260"><br>**Panels** — g815 | <img src="docs/screenshots/calendar-niri.png" width="260"><br>**Calendar** — mac VM |
 | <img src="docs/screenshots/clipboard-niri.png" width="260"><br>**Clipboard** — g815 | <img src="docs/screenshots/media-niri.png" width="260"><br>**Now playing** — g815 | <img src="docs/screenshots/lock-niri.png" width="260"><br>**Lock screen** — g815 |
 | <img src="docs/screenshots/screensaver-niri.png" width="260"><br>**Screensaver** — g815 | <img src="docs/screenshots/picker-niri.png" width="260"><br>**Picker** — g815 | <img src="docs/screenshots/greeter-niri.png" width="260"><br>**Greeter** — mac VM |
-| <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Indicators** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
+| <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Bell (DND) + toasts** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
+| <img src="docs/screenshots/menu-apps-niri.png" width="260"><br>**Launcher app icons** — mac VM | <img src="docs/screenshots/theme-dark-niri.png" width="260"><br>**Theme toggle: dark** — mac VM | <img src="docs/screenshots/theme-light-niri.png" width="260"><br>**Theme toggle: light** — mac VM |
 
 The Hyprland backend is implemented and verified against a live nested
 session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
@@ -65,16 +69,19 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 
 - **Bar** — three regions (left/center/right): workspaces (idx-sorted,
   empty ones hidden), active window, an SNI tray with a grouped overflow
-  drawer and click-through to item activation and DBus menus,
-  DND/idle-inhibit indicators, clock, battery, audio, network/Bluetooth,
-  weather, now playing, an opt-in GitHub PR/issue counter — fully
-  reorderable from `settings.json`, plus custom `command` and `qml` widget
-  modules.
+  drawer and click-through to item activation and DBus menus, a
+  notification bell (pending count, click opens the center, right click
+  flips DND), an idle-inhibit indicator, clock, battery, audio,
+  network/Bluetooth, weather, now playing, an opt-in GitHub PR/issue
+  counter — fully reorderable from `settings.json`, plus custom `command`
+  and `qml` widget modules.
 - **Menu** — one fuzzy-searchable, keyboard-driven surface doubling as app
-  launcher, system/power menu, and a `select`/`input` dmenu replacement —
-  with an inline calculator row, an emoji picker (`:e`) that copies AND
-  auto-types the pick, a nixpkgs package runner (`:nix`), and a wallpaper
-  entry opening the picker grid built in as routes.
+  launcher (rows carry each app's themed desktop icon), system/power menu,
+  and a `select`/`input` dmenu replacement — with an inline calculator row,
+  an emoji picker (`:e`) that copies AND auto-types the pick, a nixpkgs
+  package runner (`:nix`, with honest searching/failed/empty states and a
+  launch toast), and a wallpaper entry opening the picker grid built in as
+  routes.
 - **Notifications** — a mako-replacement stack: freedesktop server,
   independent card toasts, a summonable history center, a narrow DND bypass.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
@@ -92,7 +99,8 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 - **Lock screen** — a real `WlSessionLock` + PAM, with the design's one
   sanctioned blur exception.
 - **Screensaver** — an idle-driven terminal-effect banner with five
-  convergence effects.
+  convergence effects, rerolling to a fresh one indefinitely until real
+  input dismisses it.
 - **Picker** — a ledger-grid wallpaper/image selector, also usable as a
   generic image-select IPC surface.
 - **Screenshots** — a `screenshot full`/`region`/`cancel` IPC target
@@ -104,7 +112,9 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 - **Greeter** — a greetd session rendering as the lock screen's visual twin,
   with real PAM authentication.
 - **Theming** — wallpaper-driven matugen colors recolor every bar token and
-  niri's window borders live, no restart required.
+  niri's window borders live, no restart required; with no wallpaper set,
+  the dark/light toggle flips between bundled Flexoki palettes through the
+  same pipeline.
 - **Compositor-agnostic** — a formal `CompositorBackend` contract, with
   working niri and Hyprland implementations.
 
