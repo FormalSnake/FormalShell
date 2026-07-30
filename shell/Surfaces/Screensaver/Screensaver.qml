@@ -78,7 +78,32 @@ Item {
     readonly property string _requestedEffect: Core.Config.get("screensaver.effect", "random")
     property int _activationSeed: 0
     property bool _loggedUnknownEffect: false
-    readonly property string _effectiveEffect: Effect.resolveEffectName(root._requestedEffect, root._activationSeed)
+    property string _previousEffect: ""
+    readonly property string _effectiveEffect: Effect.rerollEffectName(root._requestedEffect, root._previousEffect, root._activationSeed)
+
+    // ---- continuous cycling (M13b Task 5): once an effect converges the
+    // surfaces hold the finished banner for holdSeconds, then _reroll()
+    // picks the next cycle ("random" never repeats the effect it just
+    // showed; a pinned effect replays with a fresh frame counter) and every
+    // surface restarts from frame 0, indefinitely until the screensaver
+    // stops. The loop is driven by the same per-surface auto timer that
+    // animates frames, so a `frame(n)` pin (which stops that timer) also
+    // suspends cycling — the M11 recorder keeps capturing one single,
+    // deterministic effect. No idle inhibitor is taken anywhere here, so
+    // system suspend fires exactly as it would over a static banner. ------
+
+    readonly property real holdSeconds: Core.Config.get("screensaver.holdSeconds", 6)
+    readonly property int frameIntervalMs: 90
+    property int cycles: 0
+    readonly property int _rerollAtFrame: root.convergenceFrame() + Effect.holdFrames(root.holdSeconds, root.frameIntervalMs)
+    signal cycleRestarted()
+
+    function _reroll() {
+        root._previousEffect = root._effectiveEffect;
+        root._activationSeed = Date.now();
+        root.cycles += 1;
+        root.cycleRestarted();
+    }
 
     // ---- deterministic frame stepping (ScreensaverIpc's `frame(n)`, M11
     // Task 1) — a verification affordance only, never how the screensaver
@@ -133,8 +158,12 @@ Item {
     onActiveChanged: {
         if (root.active) {
             // A fresh seed per activation is what makes "random" (the
-            // default) actually cycle across a long idle session instead
-            // of picking once at shell startup and sticking forever.
+            // default) actually vary across activations instead of picking
+            // once at shell startup and sticking forever. The previous-
+            // effect exclusion and cycle counter reset with it: each
+            // activation starts an unconstrained cycle 0.
+            root._previousEffect = "";
+            root.cycles = 0;
             root._activationSeed = Date.now();
             if (root._requestedEffect !== "random" && !Effect.isKnownEffect(root._requestedEffect) && !root._loggedUnknownEffect) {
                 console.warn("Screensaver: unknown screensaver.effect '" + root._requestedEffect + "', falling back to random");
@@ -234,12 +263,27 @@ Item {
                 on_RenderFrameChanged: canvas.requestPaint()
 
                 Timer {
-                    interval: 90
+                    interval: root.frameIntervalMs
                     running: Effect.autoTimerShouldRun(surface.visible, root._pinnedFrame)
                     repeat: true
                     onTriggered: {
                         surface._autoFrame += 1;
                         canvas.requestPaint();
+                        // >= rather than ===: a mid-cycle banner reload can
+                        // shrink the threshold below an already-past counter,
+                        // and the cycle must still advance rather than stall.
+                        // cycleRestarted resets every surface synchronously,
+                        // so a second surface's own tick can never double-fire
+                        // the same reroll.
+                        if (surface._autoFrame >= root._rerollAtFrame)
+                            root._reroll();
+                    }
+                }
+
+                Connections {
+                    target: root
+                    function onCycleRestarted() {
+                        surface._autoFrame = 0;
                     }
                 }
 

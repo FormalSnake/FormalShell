@@ -246,6 +246,54 @@ TestCase {
         verify(Object.keys(distinctFrames).length > 1);
     }
 
+    // continuous cycling (M13b Task 5): the reroll contract — a pinned
+    // effect replays itself on a fresh cycle, "random" never repeats the
+    // immediately previous effect — and the converged-banner hold length.
+
+    function test_reroll_replays_a_pinned_effect() {
+        for (var i = 0; i < Effect.EFFECT_NAMES.length; i++) {
+            var name = Effect.EFFECT_NAMES[i];
+            compare(Effect.rerollEffectName(name, name, 123), name);
+            compare(Effect.rerollEffectName(name, "", 456), name);
+        }
+    }
+
+    function test_reroll_random_never_repeats_the_previous_effect() {
+        for (var p = 0; p < Effect.EFFECT_NAMES.length; p++) {
+            var prev = Effect.EFFECT_NAMES[p];
+            for (var seed = 0; seed < 40; seed++) {
+                var next = Effect.rerollEffectName("random", prev, seed);
+                verify(Effect.isKnownEffect(next));
+                verify(next !== prev, "reroll repeated '" + prev + "' at seed " + seed);
+            }
+        }
+    }
+
+    function test_reroll_unknown_name_behaves_like_random() {
+        for (var seed = 0; seed < 40; seed++)
+            verify(Effect.rerollEffectName("not-a-real-effect", "rain", seed) !== "rain");
+    }
+
+    function test_reroll_with_no_previous_effect_reaches_every_effect() {
+        var seen = {};
+        for (var seed = 0; seed < 40; seed++)
+            seen[Effect.rerollEffectName("random", "", seed)] = true;
+        compare(Object.keys(seen).length, Effect.EFFECT_NAMES.length);
+    }
+
+    function test_reroll_is_deterministic_per_seed() {
+        compare(Effect.rerollEffectName("random", "rain", 17), Effect.rerollEffectName("random", "rain", 17));
+    }
+
+    function test_hold_frames_matches_seconds_at_the_tick_rate() {
+        compare(Effect.holdFrames(6, 90), 67);
+        compare(Effect.holdFrames(2, 90), 23);
+    }
+
+    function test_hold_frames_never_drops_below_one_frame() {
+        compare(Effect.holdFrames(0, 90), 1);
+    }
+
     // frame-pin resolution: the contract behind ScreensaverIpc's `frame(n)`
     // (M11 Task 1) — which frame renders, whether the free-run Timer ticks,
     // and that a pin never survives deactivation.

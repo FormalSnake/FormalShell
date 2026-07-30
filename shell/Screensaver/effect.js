@@ -231,6 +231,35 @@ function frameState(name, frame, banner) {
     return rows;
 }
 
+// ---- continuous cycling (M13b Task 5) ------------------------------------
+// After an effect converges the controller holds the finished banner for
+// screensaver.holdSeconds, then rerolls and animates again, indefinitely.
+// Both helpers are pure so the reroll contract — a pinned effect replays
+// itself, "random" never repeats the immediately previous effect — is unit
+// tested rather than only observed in a smoke run.
+
+// How many auto-timer ticks the converged banner holds before the reroll.
+// Never less than one full frame, so holdSeconds: 0 still yields a rendered
+// converged banner instead of an instant reroll mid-paint.
+function holdFrames(holdSeconds, tickMs) {
+    return Math.max(1, Math.ceil((holdSeconds * 1000) / tickMs));
+}
+
+// The next cycle's effect. A known (pinned) name replays itself — the fresh
+// activation seed only resets the frame counter. "random" (or any unknown
+// name, same fallback as resolveEffectName) picks from every effect except
+// the immediately previous one, so consecutive cycles never repeat while
+// more than one effect exists.
+function rerollEffectName(requested, previousEffect, seed) {
+    if (isKnownEffect(requested)) return requested;
+    var pool = [];
+    for (var i = 0; i < EFFECT_NAMES.length; i++) {
+        if (EFFECT_NAMES[i] !== previousEffect)
+            pool.push(EFFECT_NAMES[i]);
+    }
+    return pool[Math.abs(seed) % pool.length];
+}
+
 // ---- frame-pin resolution (ScreensaverIpc's `frame(n)`, M11 Task 1) ------
 // Pure decision logic behind Screensaver.qml's deterministic frame pin: which
 // counter actually renders, whether the free-running per-surface Timer

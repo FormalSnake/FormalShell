@@ -139,7 +139,16 @@
 # dismisses it (screensaver-dismiss-status.json proves `active:false`
 # again), and a final explicit `screensaver start`/screenshot
 # (screensaver-manual.png) / `stop` proves the manual IPC path
-# independently of the idle timer.
+# independently of the idle timer. That manual activation then proves
+# continuous cycling (M13b Task 5): the settings fixture shortens
+# screensaver.holdSeconds to 2s, `screensaver frameInfo` right after the
+# start records the cycles:0 baseline (screensaver-cycle-info-1.json), and
+# a read-only frameInfo poll — no IPC nudge, the reroll happens purely from
+# the effect converging and the hold elapsing — waits until cycles leaves 0
+# (screensaver-cycle-info-2.json), asserting afterwards that the counter
+# incremented and the reported effect changed (random never repeats the
+# immediately previous effect; with SCREENSAVER_EFFECT pinned the effect
+# must instead stay the same, the pinned-replay proof).
 # With --screensaver-gif, records all five effects in effect.js as GIFs
 # rather than screenshotting one: for each effect in turn, its own isolated
 # settings.json fixture pins screensaver.effect to that name, a fresh nested
@@ -546,7 +555,13 @@ if $screensaver_gif_mode; then
   media_dir="$PWD/docs/media"
   mkdir -p "$media_dir" "$ss_gif_home/.config/formalshell"
 
+  # SCREENSAVER_GIF_EFFECTS (optional, additive, space-separated): limits
+  # the run to a subset — a recorder-contract verification only needs one
+  # effect and must not regenerate every committed GIF to prove it.
   ss_gif_effects=(decrypt rain expand slide scatter)
+  if [ -n "${SCREENSAVER_GIF_EFFECTS:-}" ]; then
+    read -r -a ss_gif_effects <<< "$SCREENSAVER_GIF_EFFECTS"
+  fi
   for ss_gif_i in "${!ss_gif_effects[@]}"; do
     effect="${ss_gif_effects[$ss_gif_i]}"
     # One tmp dir per effect (frames + config + drive script together,
@@ -708,6 +723,8 @@ ss_auto_path="$shot_dir/screensaver-auto.png"
 ss_auto_status_path="$shot_dir/screensaver-auto-status.json"
 ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
 ss_manual_path="$shot_dir/screensaver-manual.png"
+ss_cycle_info1_path="$shot_dir/screensaver-cycle-info-1.json"
+ss_cycle_info2_path="$shot_dir/screensaver-cycle-info-2.json"
 ss_final_status_path="$shot_dir/screensaver-final-status.json"
 picker_grid_path="$shot_dir/picker-grid.png"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
@@ -834,7 +851,9 @@ if $screensaver_mode; then
     printf '%s\n' "$SCREENSAVER_ASCII_TEXT" > "$ss_ascii_path"
     ss_ascii_json=', "asciiPath": "'"$ss_ascii_path"'"'
   fi
-  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true'"$ss_effect_json$ss_ascii_json"'}'
+  # holdSeconds shortened the same way timeoutSeconds is: the cycle proof
+  # waits out a real convergence + hold, just on an affordable schedule.
+  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2'"$ss_effect_json$ss_ascii_json"'}'
 fi
 # picker_mode (M7 Task 6): picker.directory points at a fixture directory of
 # a handful of generated solid-color PNGs (below), so --picker's grid
@@ -1296,7 +1315,14 @@ EOF
   # the header comment), then the explicit manual IPC start/stop proof runs
   # last, since it deliberately suppresses the auto-trigger for the rest of
   # the run (Screensaver.qml's own `_suppressed` comment) and nothing after
-  # it depends on auto-triggering again.
+  # it depends on auto-triggering again. The cycle proof (M13b Task 5)
+  # rides that manual activation because its start time is deterministic:
+  # frameInfo lands well inside cycle 0 (the fastest effect converges 3.6s
+  # in, plus the 2s hold), then a read-only poll waits for the reroll. The
+  # 40s SECONDS deadline covers the worst first pick — slide at 161 frames
+  # is ~14.5s + 2s hold after a manual start ~15-17s into the script — and
+  # a poll that never sees cycles leave 0 just runs out and fails the
+  # post-run assertion honestly.
   ss_drive_script="$shot_dir/ss-drive.sh"
   cat > "$ss_drive_script" <<EOF
 #!/usr/bin/env bash
@@ -1314,6 +1340,12 @@ sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver start > /dev/null 2>&1
 sleep 1
 niri msg action screenshot-screen --path "$ss_manual_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
+while [ "\$SECONDS" -lt 40 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
+  grep -q '"cycles":0}' "$ss_cycle_info2_path" || break
+  sleep 1
+done
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
@@ -1614,11 +1646,12 @@ fi
     # mid-round-trip.
     screenshot_delay=22
   elif $screensaver_mode; then
-    # ss-drive.sh's own final step (the last status dump) lands around its
-    # internal sleep sum (~16s in); this run's generic smoke.png/SMOKE_OK is
-    # taken 4s after that, showing the ordinary session with the screensaver
-    # already dismissed for good.
-    screenshot_delay=20
+    # ss-drive.sh's cycle-proof poll can run until its 40s SECONDS deadline
+    # (worst first random pick, see the drive script's own comment), and the
+    # final status dump lands ~2s after the poll breaks; this run's generic
+    # smoke.png/SMOKE_OK is taken after that worst case, showing the
+    # ordinary session with the screensaver already dismissed for good.
+    screenshot_delay=44
   elif $picker_mode; then
     # picker-drive.sh's own final step (the selection-file readback) lands
     # around its internal sleep sum (~10s in); this run's generic
@@ -1658,13 +1691,21 @@ fi
   echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
+# The 40s default comfortably outlives every mode's screenshot-then-quit
+# schedule except screensaver_mode's, whose worst-case cycle-proof poll
+# pushes the smoke.png shot itself to 44s (see screenshot_delay above).
+session_timeout=40
+if $screensaver_mode; then
+  session_timeout=62
+fi
+
 HOME="$iso_home" \
 XDG_CONFIG_HOME="$iso_home/.config" \
 XDG_STATE_HOME="$iso_home/.local/state" \
 XDG_DATA_HOME="$iso_home/.local/share" \
 XDG_DATA_DIRS="$iso_home/.local/share" \
 XDG_CACHE_HOME="$iso_home/.cache" \
-WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout 40 $niri_bin --config "$cfg" || true
+WAYLAND_DISPLAY="$wayland_display" dbus-run-session -- timeout "$session_timeout" $niri_bin --config "$cfg" || true
 
 host_notifications_owner_after=$(host_notifications_owner)
 if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then
@@ -2063,6 +2104,35 @@ if $screensaver_mode; then
   else
     echo "SMOKE_FAIL: no screensaver-manual screenshot produced" >&2; exit 1
   fi
+  # Continuous cycling proof (M13b Task 5): the baseline frameInfo must be
+  # cycle 0 of the manual activation, and the drive's read-only poll must
+  # have seen the counter leave 0 with no IPC nudge — the reroll came purely
+  # from the effect converging and the 2s hold elapsing.
+  if [ -s "$ss_cycle_info1_path" ] && grep -q '"cycles":0}' "$ss_cycle_info1_path"; then
+    cat "$ss_cycle_info1_path"
+  else
+    echo "SMOKE_FAIL: screensaver frameInfo baseline was not cycles:0 right after the manual start — got: $(cat "$ss_cycle_info1_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -s "$ss_cycle_info2_path" ] && grep -q '"cycles":' "$ss_cycle_info2_path" && ! grep -q '"cycles":0}' "$ss_cycle_info2_path"; then
+    cat "$ss_cycle_info2_path"
+  else
+    echo "SMOKE_FAIL: screensaver cycles never left 0 within the drive's 40s deadline — got: $(cat "$ss_cycle_info2_path" 2>/dev/null)" >&2; exit 1
+  fi
+  ss_cycle_effect1=$(grep -o '"effect":"[a-z]*"' "$ss_cycle_info1_path")
+  ss_cycle_effect2=$(grep -o '"effect":"[a-z]*"' "$ss_cycle_info2_path")
+  if [ -n "${SCREENSAVER_EFFECT:-}" ]; then
+    # A pinned effect must replay itself across the reroll.
+    if [ "$ss_cycle_effect1" != "$ss_cycle_effect2" ]; then
+      echo "SMOKE_FAIL: pinned screensaver effect changed across the reroll ($ss_cycle_effect1 -> $ss_cycle_effect2)" >&2; exit 1
+    fi
+  else
+    # The default "random" must never repeat the immediately previous
+    # effect, so cycle 1's report has to differ from cycle 0's.
+    if [ "$ss_cycle_effect1" = "$ss_cycle_effect2" ]; then
+      echo "SMOKE_FAIL: random screensaver reroll repeated the previous effect ($ss_cycle_effect1)" >&2; exit 1
+    fi
+  fi
+  echo "SMOKE_SCREENSAVER_CYCLE $ss_cycle_effect1 -> $ss_cycle_effect2"
   if [ -s "$ss_final_status_path" ] && grep -q '"active":false' "$ss_final_status_path"; then
     :
   else

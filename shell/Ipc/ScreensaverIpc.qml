@@ -55,16 +55,22 @@ IpcHandler {
         return "ok";
     }
 
-    // The effect the current (or next) activation resolved to, and the
-    // frame at which it's guaranteed fully converged (Effect.convergenceFrame)
-    // — so a recorder knows how many frames to capture rather than guessing
-    // per-effect constants of its own.
+    // The effect the current (or next) activation resolved to, the frame at
+    // which it's guaranteed fully converged (Effect.convergenceFrame) — so a
+    // recorder knows how many frames to capture rather than guessing
+    // per-effect constants of its own — and the activation's completed
+    // cycle count (M13b Task 5): 0 until the first effect has converged,
+    // held, and rerolled, so the rig can observe continuous cycling from
+    // two read-only calls instead of screenshots. cycles is deliberately
+    // the last key: the smoke rig greps '"cycles":0}' as an exact
+    // zero-baseline match.
     function frameInfo(): string {
         if (!screensaver)
             return "error: screensaver not ready";
         return JSON.stringify({
             effect: screensaver.effectName,
-            convergenceFrame: screensaver.convergenceFrame()
+            convergenceFrame: screensaver.convergenceFrame(),
+            cycles: screensaver.cycles
         });
     }
 }

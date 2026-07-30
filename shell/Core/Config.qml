@@ -23,7 +23,11 @@ import QtQuick
 // the bundled branding/screensaver.txt), screensaver.effect (string,
 // default "random" — one of effect.js's EFFECT_NAMES, or "random" to pick a
 // fresh one every activation; an unknown name also falls back to random,
-// M8b Task 7). picker.directory (string,
+// M8b Task 7), screensaver.holdSeconds (number, default 6 — how long the
+// converged banner holds before the screensaver rerolls its effect and
+// animates again, indefinitely; "random" never repeats the immediately
+// previous effect, a pinned name replays itself, M13b Task 5).
+// picker.directory (string,
 // default "" — ImagePicker's configured wallpaper directory, scanned by its
 // summon()/wallpaper mode; select()'s generic-image-selector mode takes an
 // arbitrary directory as an IPC argument instead, M7 Task 6).
