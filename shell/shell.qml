@@ -38,6 +38,7 @@ ShellRoot {
                 powerPanel: powerPanelInstance
                 weatherPanel: weatherPanelInstance
                 mediaPanel: mediaPanelInstance
+                githubPanel: githubPanelInstance
             }
         }
     }
@@ -84,6 +85,7 @@ ShellRoot {
     PowerPanel { id: powerPanelInstance }
     WeatherPanel { id: weatherPanelInstance }
     MediaPanel { id: mediaPanelInstance }
+    GithubPanel { id: githubPanelInstance }
     ImagePicker { id: imagePickerInstance }
 
     DebugIpc { menu: menu }
@@ -92,7 +94,7 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance }) }
     ClipboardIpc {}
     MediaIpc {}
     TrayIpc {}

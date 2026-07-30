@@ -7,7 +7,8 @@ import Quickshell.Io
 // (no click happened), so they leave Panel.qml's anchorX unset and the
 // frame falls back to sitting under the bar's right region. `registry` maps
 // panel name -> its Panel instance, wired from shell.qml as each panel is
-// added — only "audio" exists as of this task.
+// added: audio, calendar, network, bluetooth, power, weather, media,
+// github.
 IpcHandler {
     target: "panel"
 

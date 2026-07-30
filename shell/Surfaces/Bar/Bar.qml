@@ -37,6 +37,7 @@ PanelWindow {
     property var powerPanel: null
     property var weatherPanel: null
     property var mediaPanel: null
+    property var githubPanel: null
     screen: modelData
     anchors { top: true; left: true; right: true }
 
@@ -159,6 +160,7 @@ PanelWindow {
     Component {
         id: githubComponent
         GithubWidget {
+            panel: bar.githubPanel
         }
     }
     Component {

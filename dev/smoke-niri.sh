@@ -42,6 +42,13 @@
 # the bar's right region — see Panel.qml's own header comment), left open
 # through the run's normal screenshot so it shows in smoke.png/SMOKE_OK; it
 # has no auto-close, so no timing race with the rest of the run's triggers.
+# `--panel github` runs against the same PATH-shimmed `gh` --bar-layout
+# uses (extended with canned PR/issue node rows, M13 Task 3), so the
+# panel's on-open poll renders both sections — "PULL REQUESTS / 3" and
+# "ISSUES / 2" with the canned titles and dimmed repo slugs — without
+# network or auth; the github widget itself stays out of the bar (the
+# default no-`bar`-key layout), which is exactly the no-widget IPC-open
+# path GithubPanel.qml's header describes.
 # `--panel calendar` additionally proves real events render from BOTH of
 # CalendarEventsService's backends (M12 Task 3): the isolated HOME always
 # carries a one-event .ics fixture dated today (see the calendar-events
@@ -267,6 +274,12 @@ while [ $# -gt 0 ]; do
     *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
   esac
 done
+
+# --panel github shares the gh shim (and its PATH splice) with --bar-layout.
+panel_github_mode=false
+if $panel_mode && [ "$panel_name" = "github" ]; then
+  panel_github_mode=true
+fi
 
 git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
 nix build .#formalshell
@@ -787,17 +800,21 @@ Text {
     font.pixelSize: Theme.fontSize.body
 }
 EOF
-  # PATH-shimmed gh fixture (M12 Task 8, same hermetic-producer idea as the
-  # nix shim above): a canned `gh api graphql` answer in the exact shape
-  # GithubWidget.qml's combined search query returns, so the screenshot
-  # proves the whole poll -> parse -> "3/2" cell path without network or
-  # auth. Real `gh` behaviour (auth, exit code 4) is host-trial territory.
+fi
+
+# PATH-shimmed gh fixture (M12 Task 8, same hermetic-producer idea as the
+# nix shim above): a canned `gh api graphql` answer in the exact shape
+# GithubPanel.qml's combined search query returns, so --bar-layout's
+# screenshot proves the whole poll -> parse -> "3/2" cell path and --panel
+# github's proves the two panel sections' canned rows, without network or
+# auth. Real `gh` behaviour (auth, exit code 4) is host-trial territory.
+if $bar_layout_mode || $panel_github_mode; then
   gh_shim_dir="$shot_dir/gh-shim"
   mkdir -p "$gh_shim_dir"
   cat > "$gh_shim_dir/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "${1:-}" = "api" ]; then
-  printf '%s\n' '{"data":{"prs":{"issueCount":3},"issues":{"issueCount":2}}}'
+  printf '%s\n' '{"data":{"prs":{"issueCount":3,"nodes":[{"title":"Sort workspaces by idx","url":"https://github.com/formalshell/formalshell/pull/101","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Tray dbusmenu support","url":"https://github.com/formalshell/formalshell/pull/102","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Panel motion tokens","url":"https://github.com/formalshell/formalshell/pull/103","repository":{"nameWithOwner":"formalshell/formalshell"}}]},"issues":{"issueCount":2,"nodes":[{"title":"Calendar day selection","url":"https://github.com/formalshell/formalshell/issues/201","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Emoji picker should paste","url":"https://github.com/formalshell/formalshell/issues/202","repository":{"nameWithOwner":"formalshell/formalshell"}}]}}}'
   exit 0
 fi
 exit 1
@@ -1153,7 +1170,7 @@ fi
   if $menu_mode; then
     shim_path_prefix="$nix_shim_dir:$shim_path_prefix"
   fi
-  if $bar_layout_mode; then
+  if $bar_layout_mode || $panel_github_mode; then
     shim_path_prefix="$gh_shim_dir:$shim_path_prefix"
   fi
   if [ -n "$shim_path_prefix" ]; then
