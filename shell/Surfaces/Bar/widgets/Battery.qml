@@ -60,6 +60,7 @@ Cell {
         spacing: Theme.spacing.xs
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: root._glyph
             color: root.foreground
             font.family: Theme.font.family
@@ -67,6 +68,7 @@ Cell {
         }
 
         MetaLabel {
+            anchors.verticalCenter: parent.verticalCenter
             text: "BAT / " + root._percent + "%"
             color: root.foreground
         }

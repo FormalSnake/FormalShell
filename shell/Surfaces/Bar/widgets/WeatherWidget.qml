@@ -26,6 +26,7 @@ Cell {
         spacing: Theme.spacing.xs
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: ""
             color: root.foreground
             font.family: Theme.font.family
@@ -33,6 +34,7 @@ Cell {
         }
 
         MetaLabel {
+            anchors.verticalCenter: parent.verticalCenter
             text: "WEATHER"
         }
     }

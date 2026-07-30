@@ -36,8 +36,13 @@ Item {
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
-    implicitWidth: content.implicitWidth + Theme.spacing.md * 2 + Theme.borderWidth
-    implicitHeight: content.implicitHeight + Theme.spacing.sm * 2 + Theme.borderWidth
+    // The borderWidth term reserves room for the bottom/right rules below —
+    // a standalone cell draws neither, so reserving it anyway leaves the
+    // content sitting visibly high-left of the cell's true center.
+    readonly property real _ruleReserve: standalone ? 0 : Theme.borderWidth
+
+    implicitWidth: content.implicitWidth + Theme.spacing.md * 2 + _ruleReserve
+    implicitHeight: content.implicitHeight + Theme.spacing.sm * 2 + _ruleReserve
 
     Rectangle {
         anchors.fill: parent
@@ -60,8 +65,8 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacing.md
         anchors.topMargin: Theme.spacing.sm
-        anchors.rightMargin: Theme.spacing.md + Theme.borderWidth
-        anchors.bottomMargin: Theme.spacing.sm + Theme.borderWidth
+        anchors.rightMargin: Theme.spacing.md + root._ruleReserve
+        anchors.bottomMargin: Theme.spacing.sm + root._ruleReserve
 
         // Item never derives implicit size from children — only positioners
         // and Text/Image do that automatically — so without this,

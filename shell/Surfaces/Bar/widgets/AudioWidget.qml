@@ -23,6 +23,7 @@ Cell {
         spacing: Theme.spacing.xs
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: AudioService.muted ? "󰝟" : "󰕾"
             color: root.foreground
             font.family: Theme.font.family
@@ -30,6 +31,7 @@ Cell {
         }
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: Math.round(AudioService.volume * 100) + "%"
             color: root.foreground
             font.family: Theme.font.family

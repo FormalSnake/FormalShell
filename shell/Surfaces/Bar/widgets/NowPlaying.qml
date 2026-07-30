@@ -32,6 +32,7 @@ Cell {
         spacing: Theme.spacing.xs
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: "󰎇"
             color: root.foreground
             font.family: Theme.font.family
@@ -39,6 +40,7 @@ Cell {
         }
 
         Text {
+            anchors.verticalCenter: parent.verticalCenter
             text: MediaService.title !== "" ? MediaService.title : MediaService.identity
             color: root.foreground
             font.family: Theme.font.family
