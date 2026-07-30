@@ -145,6 +145,153 @@ TestCase {
         compare(Ics.eventsOnDate(events, _local(2026, 2, 16)).length, 0);
     }
 
+    // RRULE expansion — parseEvents takes an optional [windowStart, windowEnd]
+    // (inclusive instants); recurring events expand to instances inside it,
+    // non-recurring events ignore it entirely.
+
+    function _rrIcs(dtstart, rrule, extra) {
+        return "BEGIN:VEVENT\nUID:r\nSUMMARY:Rec\nDTSTART:" + dtstart + "\n" + rrule + "\n" + (extra ? extra + "\n" : "") + "END:VEVENT";
+    }
+
+    function test_daily_rrule_expands_into_window_instances() {
+        var ics = "BEGIN:VEVENT\nUID:d\nSUMMARY:Standup\nDTSTART:20260301T090000\nDTEND:20260301T091500\nRRULE:FREQ=DAILY\nEND:VEVENT";
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 5, 23, 59));
+        compare(events.length, 5);
+        for (var i = 0; i < 5; i++) {
+            compare(events[i].start.getDate(), 1 + i);
+            compare(events[i].start.getHours(), 9);
+            compare(events[i].end.getMinutes(), 15);
+        }
+    }
+
+    function test_expanded_instances_get_distinct_uids_derived_from_the_master() {
+        var ics = "BEGIN:VEVENT\nUID:d\nSUMMARY:S\nDTSTART:20260301T090000\nRRULE:FREQ=DAILY;COUNT=2\nEND:VEVENT";
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 2);
+        verify(events[0].uid !== events[1].uid);
+        compare(events[0].uid.indexOf("d#"), 0);
+    }
+
+    function test_daily_interval_two_skips_alternate_days() {
+        var ics = _rrIcs("20260301T090000", "RRULE:FREQ=DAILY;INTERVAL=2");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 7, 23, 59));
+        compare(events.length, 4);
+        compare(events[0].start.getDate(), 1);
+        compare(events[1].start.getDate(), 3);
+        compare(events[2].start.getDate(), 5);
+        compare(events[3].start.getDate(), 7);
+    }
+
+    function test_weekly_rrule_expands_on_the_dtstart_weekday() {
+        // 2026-03-02 is a Monday.
+        var ics = _rrIcs("20260302T100000", "RRULE:FREQ=WEEKLY");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 5);
+        for (var i = 0; i < events.length; i++) {
+            compare(events[i].start.getDay(), 1);
+            compare(events[i].start.getDate(), 2 + 7 * i);
+        }
+    }
+
+    function test_monthly_rrule_keeps_the_day_of_month() {
+        var ics = _rrIcs("20260115T090000", "RRULE:FREQ=MONTHLY");
+        var events = Ics.parseEvents(ics, _local(2026, 0, 1), _local(2026, 3, 30, 23, 59));
+        compare(events.length, 4);
+        for (var i = 0; i < events.length; i++) {
+            compare(events[i].start.getDate(), 15);
+            compare(events[i].start.getMonth(), i);
+        }
+    }
+
+    function test_monthly_rrule_skips_months_without_the_day() {
+        // Jan 31 monthly: Feb and Apr have no 31st — skipped, not shifted.
+        var ics = _rrIcs("20260131T090000", "RRULE:FREQ=MONTHLY");
+        var events = Ics.parseEvents(ics, _local(2026, 0, 1), _local(2026, 3, 30, 23, 59));
+        compare(events.length, 2);
+        compare(events[0].start.getMonth(), 0);
+        compare(events[1].start.getMonth(), 2);
+        compare(events[1].start.getDate(), 31);
+    }
+
+    function test_yearly_rrule_expands_across_years() {
+        var ics = _rrIcs("20260704T120000", "RRULE:FREQ=YEARLY");
+        var events = Ics.parseEvents(ics, _local(2026, 0, 1), _local(2028, 11, 31, 23, 59));
+        compare(events.length, 3);
+        for (var i = 0; i < events.length; i++) {
+            compare(events[i].start.getFullYear(), 2026 + i);
+            compare(events[i].start.getMonth(), 6);
+            compare(events[i].start.getDate(), 4);
+        }
+    }
+
+    function test_count_bounds_the_expansion() {
+        var ics = _rrIcs("20260301T090000", "RRULE:FREQ=DAILY;COUNT=3");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 3);
+        compare(events[2].start.getDate(), 3);
+    }
+
+    function test_count_is_consumed_by_occurrences_before_the_window() {
+        var ics = _rrIcs("20260301T090000", "RRULE:FREQ=DAILY;COUNT=3");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 3), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 1);
+        compare(events[0].start.getDate(), 3);
+    }
+
+    function test_until_bounds_the_expansion_inclusively() {
+        var ics = _rrIcs("20260301T090000", "RRULE:FREQ=DAILY;UNTIL=20260303T090000");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 3);
+        compare(events[2].start.getDate(), 3);
+    }
+
+    function test_weekly_byday_expands_on_each_listed_weekday() {
+        // 2026-03-02 is a Monday; expect Mo/We instances: 2, 4, 9, 11.
+        var ics = _rrIcs("20260302T090000", "RRULE:FREQ=WEEKLY;BYDAY=MO,WE");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 12, 23, 59));
+        compare(events.length, 4);
+        compare(events[0].start.getDate(), 2);
+        compare(events[1].start.getDate(), 4);
+        compare(events[2].start.getDate(), 9);
+        compare(events[3].start.getDate(), 11);
+        for (var i = 0; i < events.length; i++)
+            verify(events[i].start.getDay() === 1 || events[i].start.getDay() === 3);
+    }
+
+    function test_unsupported_rrule_part_falls_back_to_the_single_anchor() {
+        var ics = _rrIcs("20260301T090000", "RRULE:FREQ=MONTHLY;BYSETPOS=1");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 11, 31, 23, 59));
+        compare(events.length, 1);
+        compare(events[0].uid, "r");
+        compare(events[0].start.getDate(), 1);
+    }
+
+    function test_exdate_removes_the_matching_instance() {
+        var ics = _rrIcs("20260301T090000", "RRULE:FREQ=DAILY;COUNT=3", "EXDATE:20260302T090000");
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 2);
+        compare(events[0].start.getDate(), 1);
+        compare(events[1].start.getDate(), 3);
+    }
+
+    function test_non_recurring_events_ignore_the_window() {
+        var ics = "BEGIN:VEVENT\nUID:far\nSUMMARY:S\nDTSTART:20270601T090000\nEND:VEVENT";
+        var events = Ics.parseEvents(ics, _local(2026, 2, 1), _local(2026, 2, 31, 23, 59));
+        compare(events.length, 1);
+    }
+
+    function _yyyymmdd(d) {
+        var mm = ("0" + (d.getMonth() + 1)).slice(-2);
+        var dd = ("0" + d.getDate()).slice(-2);
+        return "" + d.getFullYear() + mm + dd;
+    }
+
+    function test_default_window_covers_today() {
+        // The no-window call shape CalendarEventsService uses.
+        var ics = "BEGIN:VEVENT\nUID:t\nSUMMARY:S\nDTSTART:" + _yyyymmdd(new Date()) + "T090000\nRRULE:FREQ=DAILY;COUNT=2\nEND:VEVENT";
+        compare(Ics.parseEvents(ics).length, 2);
+    }
+
     // mergeEvents
 
     function _event(uid, summary) {
