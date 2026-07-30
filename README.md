@@ -12,11 +12,13 @@ modules so a consuming config needs almost no glue.
 
 ![FormalShell bar on niri](docs/screenshots/bar-niri.png)
 
-**Status:** pre-alpha. M1 through M9 (walking skeleton through the greeter +
-NixOS modules) are complete, behind CI (qmllint + headless qml-tests) and
-nested-compositor smoke loops for every change. See `docs/SWITCHOVER.md` for
-the current hardware-vs-VM verification parity table before switching a real
-machine over, and
+**Status:** pre-alpha. M1 through M11 (walking skeleton through the greeter
+and NixOS modules, bar completeness, screensaver effect gifs) are complete,
+behind CI (qmllint + headless qml-tests) and nested-compositor smoke loops
+for every change. M12 (DMS parity gaps + GOA/EDS calendar events,
+`docs/superpowers/plans/2026-07-30-m12-dms-parity-and-eds.md`) is in
+progress. See `docs/SWITCHOVER.md` for the current hardware-vs-VM
+verification parity table before switching a real machine over, and
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
 design.
 
