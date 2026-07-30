@@ -2,8 +2,8 @@
 
 Per-surface reference for FormalShell's IPC targets, config keys, and
 keybind examples — theming, menu, notifications, OSD, panels, clipboard,
-calendar, now playing, lock screen, screensaver, and picker. Product
-overview, screenshots, features, and install instructions live in
+calendar, now playing, lock screen, screensaver, picker, and screenshots.
+Product overview, screenshots, features, and install instructions live in
 [`README.md`](../README.md); the dev/verification loop lives in
 [`CLAUDE.md`](../CLAUDE.md).
 
@@ -19,6 +19,7 @@ overview, screenshots, features, and install instructions live in
 - [Lock screen](#lock-screen)
 - [Screensaver](#screensaver)
 - [Picker](#picker)
+- [Screenshots](#screenshots)
 
 ## Bar
 
@@ -42,7 +43,8 @@ arrangement:
 ```
 
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
-`battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `indicators`.
+`battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `indicators`,
+`github` (opt-in only — never part of the default arrangement).
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
@@ -76,6 +78,16 @@ into one more cell (`+N`) that expands the row to reveal them all.
 while the condition holds; the whole slot disappears when neither does.
 Recording has no glyph yet — nothing in this shell or a reachable service
 reports screen recording as of 2026-07-29.
+
+**GitHub** — opt-in via `bar.layout` (add `"github"` to a region); polls one
+`gh api graphql` call every `github.intervalMs` (ms, default 300000) for the
+count of open PRs you authored and open issues assigned to you, rendered as
+a glyph + `N/M` meta cell. Click opens `github.com/notifications` via
+`xdg-open`. Honest states: `gh` missing from PATH hides the cell entirely;
+`gh` present but unauthenticated (its documented exit code 4) renders a dim
+`NO AUTH` cell; any other failure or unparsable output renders a dim `NO GH`
+cell — never stale or invented counts. The cell also stays hidden until the
+first poll answers at all.
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}
@@ -173,6 +185,30 @@ default entry (and its whole subtree) without needing to redeclare it:
 
 Each button becomes `system.custom.<i>` in the tree; `confirm: true` requires
 a second Enter on the row before the command runs (`CONFIRM <label>?`).
+
+**Calculator.** A root-menu query that parses as an arithmetic expression
+(`+ - * / % ^`, parentheses, unary minus, decimals — a real
+recursive-descent parser in `shell/Menu/calc.js`, never `eval`) leads the
+ranked results with a `= <result>` row carrying a full-bleed accent `CALC`
+tag; Enter copies the result via `wl-copy` and closes. `menu summon calc`
+opens a dedicated surface showing only that live result row. Parse failures
+are silent — no row, never an error row.
+
+**Emoji.** `menu summon emoji` opens a fuzzy name search over a vendored
+Unicode dataset (`shell/Menu/emoji.json` — fully-qualified `emoji-test.txt`
+entries, Emoji 17.0; regenerate with `dev/gen-emoji.sh`, never edit by
+hand). Rows render the char plus its uppercase name; Enter copies the char
+via `wl-copy` and closes, and the clipboard history captures it like any
+other copy. From anywhere, the root trigger `:e <query>` narrows to the
+same rows (`:e thumbs` → 👍); a bare `:e` browses the head of the list.
+
+**Nix package runner.** `menu summon nix` (or the `:nix <query>` root
+trigger) searches nixpkgs as you type: a debounced (500ms, one in-flight,
+stale results dropped) `nix search nixpkgs <query> --json`, rows showing
+attr name + version with a dimmed description. Enter spawns the package in
+a throwaway terminal (`ghostty -e sh -c 'nix run nixpkgs#<attr>; read'` —
+`read` holds the window open after it exits). No `nix` on PATH renders a
+single dim `NO NIX` row instead.
 
 **IPC.** Every route is summonable for direct compositor keybinds:
 `toggle(route)` (open if closed/close if open), `summon(route)` (always
@@ -293,7 +329,7 @@ binds {
 
 ## Panels
 
-Six per-widget popouts share one component, `shell/Components/Panel.qml` — a
+Seven per-widget popouts share one component, `shell/Components/Panel.qml` — a
 ledger-table popout (header `MetaLabel` row, rows sharing hairline rules,
 `WlrLayershell` top layer, keyboard `OnDemand`, closes on Escape and on
 click-outside) anchored under the bar cell that opened it, or falling back to
@@ -407,20 +443,57 @@ usual read-only-settings rule). Once both values resolve, the bar defaults
 to showing `LIFE` (% of life lived) instead of `YEAR`; a further
 double-click toggles back.
 
-**Events.** An EDS/GNOME-Online-Accounts D-Bus feasibility spike
-(`docs/spikes/2026-07-28-eds-calendar-events.md`) concluded **not feasible**
-in pure QML: Evolution Data Server reaps the calendar backend the moment a
-one-shot `gdbus`/`busctl` connection closes, and EDS's real client API needs
-`libecal`'s persistent connection handling, which `CLAUDE.md` forbids (no
-compiled companion binary). The implemented path instead is
-`CalendarEventsService` reading local `.ics` files (a khal/vdir-style
-directory) via `shell/Calendar/ics.js` (pure RFC 5545 VEVENT parsing, no
-RRULE expansion — a documented v1 limitation). `calendar.icsDir` in
-`settings.json` points at the directory; unset means zero events, the same
-honest-empty-state contract every other M6 panel follows. When set, days
-carrying an event get a small accent dot in the grid, and a `TODAY` ledger
-section below lists today's events by summary (or a single dim `NO EVENTS`
-row).
+**Events.** `CalendarEventsService` merges two coexisting backends by UID:
+
+- **Local `.ics` files** — `calendar.icsDir` in `settings.json` points at a
+  khal/vdir-style directory; unset means no local files, the same
+  honest-empty-state contract every other panel follows.
+- **EDS / GNOME Online Accounts** — `calendar.eds` (bool, default `true`)
+  reads Evolution Data Server over D-Bus via the `formalshell-eds`
+  companion CLI (M12; the one compiled binary in the shell, an owner-
+  authorized exception to the pure-QML rule — see the spec's 2026-07-30
+  addendum). The original spike
+  (`docs/spikes/2026-07-28-eds-calendar-events.md`) proved EDS's whole
+  `OpenCalendar -> Open -> GetObjectList` handshake must run over **one
+  held bus connection** — EDS reaps the backend the moment the calling
+  connection closes, so no chain of `gdbus`/`busctl` one-shots can work.
+  The CLI does the whole handshake in one process over one sd-bus
+  connection and prints raw ICS, which feeds the exact same
+  `shell/Calendar/ics.js` parser the local files use. Any calendar EDS
+  knows about — including Google/Nextcloud/… calendars added through GNOME
+  Online Accounts (GNOME Settings → Online Accounts; on NixOS the host
+  needs the GOA/EDS system services enabled, e.g.
+  `services.gnome.evolution-data-server.enable` +
+  `services.gnome.gnome-online-accounts.enable`) — shows up with zero
+  shell config. Unreachable EDS (no bus, no EDS installed) degrades
+  silently to ics-only after the first failed run: one console.warn, no
+  error cell, no retry storm.
+
+The CLI's contract (`formalshell-eds --help`):
+
+```
+formalshell-eds sources                       # JSON [{uid, displayName, backend}]
+formalshell-eds events [--days N] [--source UID ...]
+                                              # raw ICS, yesterday..today+N (default 45)
+formalshell-eds seed <summary> <YYYY-MM-DD>   # test-rig helper, writes one real VEVENT
+```
+
+`events` exits 0 with empty output when there are simply no events, and
+exits 1 with a stderr line only when the bus or EDS is unreachable — it
+never invents data. Refresh cadence for both backends: `icsDir` change,
+every 5 minutes, and calendar-panel open.
+
+Recurring events (`RRULE`) expand into concrete instances within the query
+window: `FREQ=DAILY/WEEKLY/MONTHLY/YEARLY`, `INTERVAL`, `COUNT`, `UNTIL`,
+`BYDAY` on weekly rules, and `EXDATE` as simple date matches. Anything
+outside that subset (`BYSETPOS`, `BYMONTHDAY`, ordinal `BYDAY` like `1MO`,
+…) leaves the anchoring event as a single occurrence at its `DTSTART` —
+honest under-expansion, never a guessed instance (`shell/Calendar/ics.js`'s
+header documents the full boundary).
+
+Days carrying an event get a small accent dot in the grid, and a `TODAY`
+ledger section below lists today's events by summary (or a single dim
+`NO EVENTS` row).
 
 ## Now playing
 
@@ -631,4 +704,39 @@ qs ipc --any-display -p <store-path>/share/formalshell call picker status   # {"
 
 # poll/read a select() answer, same convention as menu-selection.txt:
 cat $XDG_STATE_HOME/formalshell/picker-selection.txt
+```
+
+## Screenshots
+
+`shell/Ipc/ScreenshotIpc.qml` (M12 — a spec-addendum surface, same pattern
+as `panel`/`picker`) wraps grim/slurp behind one IPC target: `full` grabs
+the whole output, `region` runs `slurp` first for an interactive rectangle.
+Either way the capture lands as
+`<screenshot.directory>/screenshot-<timestamp>.png` (`screenshot.directory`
+in `settings.json`, default `~/Pictures/Screenshots`, created on first
+capture) AND on the clipboard as `image/png` via `wl-copy`, and a
+`SCREENSHOT SAVED` notification with the path fires through the shell's own
+notification stack — visible feedback with no bar surface involved.
+
+The IPC reply is the destination path the capture is writing toward, not a
+completion signal: `qs ipc call` replies synchronously while `slurp` blocks
+on user interaction indefinitely. A runtime failure (slurp cancelled, grim
+error) fires a `SCREENSHOT FAILED` notification and lands in `status()`'s
+`lastError` — loud and queryable, never a silent no-op.
+
+**IPC** (`target: "screenshot"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot full     # replies with the destination path
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot region   # slurp rectangle, then same pipeline
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot status   # {"capturing":…,"lastPath":…,"lastError":…}
+```
+
+Bind both in niri, same pattern as every other target:
+
+```kdl
+binds {
+    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
+    Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "region"; }
+}
 ```

@@ -46,6 +46,20 @@ affected widget now exposes a `shown` property computed the same way its
 ever reading `.visible` across the Loader boundary. See §2 and the parity
 table below for the closed gap and its verification evidence.
 
+**Update, 2026-07-30 (M12):** the six DMS-parity gaps the owner ruled
+essential in the e1504g swap review are closed, per
+`docs/superpowers/plans/2026-07-30-m12-dms-parity-and-eds.md`: EDS/GNOME
+Online Accounts calendar events (via the `formalshell-eds` companion CLI —
+the one compiled binary in the shell, an owner-authorized spec amendment —
+plus RRULE expansion in `Calendar/ics.js`), menu calculator/emoji/
+nix-runner routes, an opt-in `github` bar widget, and a `screenshot` IPC
+target. All are VM-only verified (mac VM rig; both Linux hosts were offline
+for the whole milestone); the GOA OAuth path specifically — a real
+Google/Nextcloud account authenticated through GNOME Online Accounts
+feeding EDS — has never run anywhere, since the VM's evidence is EDS's
+local `system-calendar` only. See §2's resolved bullets and the seven new
+parity-table rows.
+
 ## 1. Parity table
 
 Evidence sources: the e1504g sweep at commit `1300b02`
@@ -65,13 +79,20 @@ hardware.
 | Bar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/plain.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/plain.png` (`docs/screenshots/bar-niri.png`) — real BAT/Wi-Fi/Bluetooth cells the VM cannot produce, and confirms the `ca56dfc` padding fix (symmetric insets, no left/top-only gutter) on real hardware |
 | Bar: SNI tray | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --tray`, `docs/screenshots/tray-niri.png` — six real `dev/sni-stub.py` StatusNotifierItems collapse to three pinned cells plus a "+3" overflow drawer, which expands to "−3" over the same `tray expand` IPC call the overflow cell's own click takes; not yet re-swept on a real host |
 | Bar: indicators slot | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --notify`, `docs/screenshots/indicators-niri.png` — the DND bell-off glyph appears after `notifications setDnd true` over IPC; idle-inhibit shares the same widget and reactivity fix but has no dedicated smoke screenshot yet; not yet re-swept on a real host |
-| Bar: settings-driven layout + custom modules | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --bar-layout`, `docs/screenshots/bar-layout-niri.png` — a reordered left region led by six `bar.modules` entries: one happy-path `command` module (`CMD 42`), four exercising each of `CommandModule.qml`'s failure paths (all render the honest `MODULE ERROR` cell), and one `qml` module (`QML OK`); every other smoke mode's own screenshot, carrying no `bar` config, keeps proving the no-config fallback renders today's exact default arrangement; not yet re-swept on a real host |
+| Bar: settings-driven layout + custom modules | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --bar-layout` — a reordered left region led by six `bar.modules` entries: one happy-path `command` module (`CMD 42`), four exercising each of `CommandModule.qml`'s failure paths (all render the honest `MODULE ERROR` cell), and one `qml` module (`QML OK`); every other smoke mode's own screenshot, carrying no `bar` config, keeps proving the no-config fallback renders today's exact default arrangement; not yet re-swept on a real host. `docs/screenshots/bar-layout-niri.png` was recaptured 2026-07-30 with the M12 `github` cell heading the region, which pushes the `qml` module past the visible clip at the VM's 1276px width — its rendering stays proven by the bd20ef6 capture and `tests/tst_bar_layout.qml` |
+| Bar: github widget | VM-only | mac VM rig @ 8dfbe55, `dev/smoke-niri.sh --bar-layout` with a PATH-shimmed `gh` returning canned counts — `docs/screenshots/bar-layout-niri.png` (recaptured 2026-07-30) shows the octicon + `3/2` cell leading the custom left region; every default-layout mode's screenshot keeps proving the widget is absent without opt-in. Real `gh` auth states (`NO AUTH`, live counts) are host-trial territory |
 | Menu | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/menu.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/menu.png` (`docs/screenshots/menu-niri.png`) |
 | Panel: audio | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the percentage-lost-behind-elision defect (`artifacts/e1504g/panel-audio.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against real long device names (`GB206 High Definition Audio Controll.`, `800 Series Chipset Family Audio Cont.`) at plausible non-1% percentages — `artifacts/g815-head/panel-audio.png` (`docs/screenshots/panels-niri.png`) |
 | Panel: network | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-network.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-network.png` — real SSID `kaiiserni` at 62% (the 0..1-scaling bug stayed fixed on a second real host) |
 | Panel: bluetooth | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the adapter-state title-case defect (`artifacts/e1504g/panel-bluetooth.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against a real adapter and three real paired devices (`MX Master 3S M`, `CMF Headphone Pro`, `AirPods Pro`), status correctly uppercase `ENABLED` — `artifacts/g815-head/panel-bluetooth.png` |
 | Panel: power | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-power.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-power.png` — real battery 79%, uppercase `PENDING CHARGE`, correct active-profile highlight |
-| Panel: calendar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-calendar.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-calendar.png` (`docs/screenshots/calendar-niri.png`) — real month grid, local-.ics fixture event |
+| Panel: calendar | Hardware-verified (ics path) | e1504g @ 1300b02, `artifacts/e1504g/panel-calendar.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-calendar.png` — real month grid, local-.ics fixture event. `docs/screenshots/calendar-niri.png` was recaptured 2026-07-30 from the mac VM to show the M12 EDS backend alongside it (both fixture events under `TODAY`) |
+| Calendar: EDS/GOA events | VM-only | mac VM rig @ 57efc97, `dev/smoke-niri.sh --panel calendar` — the rig seeds one real VEVENT over `formalshell-eds seed` into EDS's `system-calendar` on the run's private session bus, the service reads it back through `formalshell-eds events`, and the screenshot shows both the ics and the EDS fixture events under `TODAY` (`docs/screenshots/calendar-niri.png`, recaptured 2026-07-30). The GOA OAuth path (a real online account feeding EDS) has never run anywhere — the VM has no GOA account, so that leg is real-host-trial territory |
+| Calendar: RRULE expansion | VM-only | `tests/tst_calendar_ics.qml` @ aa3c61a — bounded expansion of FREQ=DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL/COUNT/UNTIL/weekly-BYDAY/EXDATE, unsupported rules falling back to a single occurrence. Pure-JS logic, so the headless tests are the whole evidence; there is nothing to screenshot |
+| Menu: calculator | VM-only | mac VM rig @ 61da420, `dev/smoke-niri.sh --menu` — `debug query "2+2*3"` returns the `= 8` CALC row as the first ranked result (the run's `calc-query.json` artifact); parser edge cases in `tests/tst_menu_calc.qml` |
+| Menu: emoji | VM-only | mac VM rig @ 913d9a3, `dev/smoke-niri.sh --menu` — `debug query ":e thumbs"` returns the 👍 THUMBS UP row from the vendored `emoji.json` (the run's `emoji-query.json` artifact); dataset load + search in `tests/tst_menu_emoji.qml` |
+| Menu: nix runner | VM-only | mac VM rig @ 76757d5, `dev/smoke-niri.sh --menu` — two-pass `debug query ":nix hello"` against the PATH-shimmed `nix` returns the canned `hello` attr row after the 500ms debounce (the run's `nix-query.json` artifact). Real `nix search`/`ghostty` spawn behaviour is host-trial territory |
+| Screenshot IPC | VM-only | mac VM rig @ fd56a5f, `dev/smoke-niri.sh --screenshot` — `screenshot full`'s replied path exists as a valid PNG and `wl-paste --list-types` offers `image/png` in-session; `region`'s slurp leg needs a human dragging a rectangle, so it has no headless evidence |
 | Panel: weather | **Unverified** | Never included in any real-hardware sweep (neither e1504g's 18-mode run, the older g815 run, nor the 2026-07-29 g815 HEAD resweep drove `--panel weather`); only ad hoc dev-loop crops exist in `artifacts/` (`weather-crop*.png`), not a hardware or a repeatable VM smoke run |
 | Notifications | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/notify.png`, `notify-center.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/notify.png`, `notify-center.png` (`docs/screenshots/notifications-niri.png`) |
 | OSD | Hardware-verified, fix now confirmed on real PipeWire | e1504g @ 1300b02 found the auto-show reactivity defect (`osd-volume.png` never updated on an external `wpctl set-volume`); manual volume/brightness legs passed (`osd-manual.png`, `osd-brightness.png`). Fixed at `4aad1d6` (wrong signal name, `onVolumeChanged` vs `onVolumesChanged`). **Closed:** the g815 HEAD sweep @ 52e2db0 fired a real `wpctl set-volume @DEFAULT_AUDIO_SINK@ 30%` against a real PipeWire graph and the OSD auto-showed correctly — `artifacts/g815-head/osd-auto.png` (`docs/screenshots/osd-niri.png`), brightness leg cross-checked against the real `nvidia_wmi_ec_backlight` (100/100) |
@@ -90,18 +111,25 @@ Hyprland backend has never run on either Linux host — it exists only as
 
 ## 2. Known gaps and rough edges
 
-- **Calendar events are local `.ics` only, not GNOME Online Accounts/EDS.**
-  `docs/spikes/2026-07-28-eds-calendar-events.md` spiked reading Evolution
-  Data Server's D-Bus calendar API directly and concluded it isn't feasible
-  without a compiled client (EDS ties its calendar-view D-Bus object to the
-  lifetime of the specific connection that opened it, which a stateless
-  `Process`-based `gdbus` call can't hold open) — recorded as a post-v1 item,
-  `evolution-data-server` removed from the VM again rather than left
-  half-working. `Calendar/ics.js` reads a khal/vdir-style directory instead.
-- **No RRULE expansion.** `Calendar/ics.js` (per `docs/ARCHITECTURE.md`)
-  reads single `VEVENT`s only — a recurring event's `RRULE` field is not
-  expanded into instances. A user with recurring calendar entries will see
-  the first occurrence only.
+- **Resolved 2026-07-30 (M12): calendar events now read EDS/GNOME Online
+  Accounts, not just local `.ics`.** The spike's blocker (EDS ties its
+  calendar objects to the lifetime of the one connection that opened them,
+  which no stateless `gdbus` chain can hold) is closed by the
+  `formalshell-eds` companion CLI — one process, one held sd-bus
+  connection, raw ICS on stdout into the same parser — under an explicit
+  owner override of the no-compiled-binary rule (spec addendum,
+  2026-07-30). VM-only verified: the smoke rig seeds and reads back a real
+  VEVENT through EDS's `system-calendar` (parity table). **The GOA OAuth
+  path — a real online account authenticated through GNOME Online Accounts
+  feeding EDS — has still never run anywhere** and is exactly what the
+  real-host trial must prove.
+- **Resolved 2026-07-30 (M12): RRULE expansion.** `Calendar/ics.js` now
+  expands recurring `VEVENT`s into instances within the query window
+  (FREQ=DAILY/WEEKLY/MONTHLY/YEARLY, INTERVAL, COUNT, UNTIL, weekly BYDAY,
+  simple EXDATE — `tests/tst_calendar_ics.qml`). Rules outside that subset
+  (BYSETPOS, BYMONTHDAY, ordinal BYDAY, …) still fall back to a single
+  occurrence at DTSTART, documented in the file header — honest
+  under-expansion, not a silent guess.
 - **Hyprland backend is flaky in the sandboxed dev loop** and has never run
   on real hardware at all (see the parity table note above). Both niri and
   Hyprland implement the same formal `CompositorBackend` contract, but only
@@ -219,8 +247,11 @@ for the g815 switchover means:
 2. **Every row in the parity table above reading VM-only or unverified
    moves to hardware-verified** on at least one real host: the greeter, the
    lock screen's real-PAM paths, the weather panel, the Hyprland backend in
-   whatever form it's expected to be used, and now the tray, indicators
-   slot, and settings-driven bar layout M10 just added.
+   whatever form it's expected to be used, the tray, indicators slot, and
+   settings-driven bar layout M10 added, and now M12's six rows — EDS/GOA
+   calendar events (including the never-run GOA OAuth leg), RRULE
+   expansion, the calculator/emoji/nix menu routes, the github widget, and
+   the screenshot target.
 3. ~~The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
    get a real re-sweep~~ — **done 2026-07-29**: the g815 HEAD resweep hit a
    real long device name and a real Bluetooth adapter, closing the loop the

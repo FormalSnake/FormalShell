@@ -12,13 +12,12 @@ modules so a consuming config needs almost no glue.
 
 ![FormalShell bar on niri](docs/screenshots/bar-niri.png)
 
-**Status:** pre-alpha. M1 through M11 (walking skeleton through the greeter
-and NixOS modules, bar completeness, screensaver effect gifs) are complete,
-behind CI (qmllint + headless qml-tests) and nested-compositor smoke loops
-for every change. M12 (DMS parity gaps + GOA/EDS calendar events,
-`docs/superpowers/plans/2026-07-30-m12-dms-parity-and-eds.md`) is in
-progress. See `docs/SWITCHOVER.md` for the current hardware-vs-VM
-verification parity table before switching a real machine over, and
+**Status:** pre-alpha. M1 through M12 (walking skeleton through the greeter
+and NixOS modules, bar completeness, screensaver effect gifs, DMS parity
+gaps + EDS/GOA calendar events) are complete, behind CI (qmllint + headless
+qml-tests) and nested-compositor smoke loops for every change. See
+`docs/SWITCHOVER.md` for the current hardware-vs-VM verification parity
+table before switching a real machine over, and
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
 design.
 
@@ -30,16 +29,17 @@ session, and tears it down — safe to run against a live host by design.
 Most were recaptured 2026-07-29 from **g815**, the owner's real niri
 machine, showing genuinely populated hardware (real battery, Wi-Fi,
 Bluetooth, audio, backlight) rather than the VM's empty state. The greeter
-shot and the three M10 bar shots (tray, indicators, custom modules) are
-VM-sourced — no greetd module on g815 yet, and g815 hasn't been re-swept
-since M10 landed. Details on what each shot proves are in `CLAUDE.md`'s
-verification loop section (the `dev/smoke-niri.sh` flag each was captured
-with) and git history.
+shot, the M10 bar shots (tray, indicators, custom modules), and the two
+M12 recaptures (calendar with its EDS fixture event, custom modules with
+the github cell) are VM-sourced — no greetd module on g815 yet, and g815
+hasn't been re-swept since M10 landed. Details on what each shot proves are
+in `CLAUDE.md`'s verification loop section (the `dev/smoke-niri.sh` flag
+each was captured with) and git history.
 
 | | | |
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/bar-niri.png" width="260"><br>**Bar** — g815 | <img src="docs/screenshots/menu-niri.png" width="260"><br>**Menu** — g815 | <img src="docs/screenshots/notifications-niri.png" width="260"><br>**Notifications** — g815 |
-| <img src="docs/screenshots/osd-niri.png" width="260"><br>**OSD** — g815 | <img src="docs/screenshots/panels-niri.png" width="260"><br>**Panels** — g815 | <img src="docs/screenshots/calendar-niri.png" width="260"><br>**Calendar** — g815 |
+| <img src="docs/screenshots/osd-niri.png" width="260"><br>**OSD** — g815 | <img src="docs/screenshots/panels-niri.png" width="260"><br>**Panels** — g815 | <img src="docs/screenshots/calendar-niri.png" width="260"><br>**Calendar** — mac VM |
 | <img src="docs/screenshots/clipboard-niri.png" width="260"><br>**Clipboard** — g815 | <img src="docs/screenshots/media-niri.png" width="260"><br>**Now playing** — g815 | <img src="docs/screenshots/lock-niri.png" width="260"><br>**Lock screen** — g815 |
 | <img src="docs/screenshots/screensaver-niri.png" width="260"><br>**Screensaver** — g815 | <img src="docs/screenshots/picker-niri.png" width="260"><br>**Picker** — g815 | <img src="docs/screenshots/greeter-niri.png" width="260"><br>**Greeter** — mac VM |
 | <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Indicators** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
@@ -63,11 +63,13 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 
 - **Bar** — three regions (left/center/right): workspaces, active window, an
   SNI tray with a grouped overflow drawer, DND/idle-inhibit indicators,
-  clock, battery, audio, network/Bluetooth, weather, now playing — fully
-  reorderable from `settings.json`, plus custom `command` and `qml` widget
-  modules.
+  clock, battery, audio, network/Bluetooth, weather, now playing, an opt-in
+  GitHub PR/issue counter — fully reorderable from `settings.json`, plus
+  custom `command` and `qml` widget modules.
 - **Menu** — one fuzzy-searchable, keyboard-driven surface doubling as app
-  launcher, system/power menu, and a `select`/`input` dmenu replacement.
+  launcher, system/power menu, and a `select`/`input` dmenu replacement —
+  with an inline calculator row, an emoji picker (`:e`), and a nixpkgs
+  package runner (`:nix`) built in as routes.
 - **Notifications** — a mako-replacement stack: freedesktop server,
   independent card toasts, a summonable history center, a narrow DND bypass.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
@@ -76,8 +78,9 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   bluetooth, power, weather, media) sharing one component and one IPC
   target.
 - **Clipboard** — capped, deduplicated history surfaced through the menu.
-- **Calendar** — month grid with a year/life-progress bar and local `.ics`
-  event support.
+- **Calendar** — month grid with a year/life-progress bar and events from
+  local `.ics` files and EDS/GNOME Online Accounts (via the
+  `formalshell-eds` companion CLI), with bounded RRULE expansion.
 - **Now playing** — an MPRIS-backed bar cell and panel, with optional Apple
   Music animated album art.
 - **Lock screen** — a real `WlSessionLock` + PAM, with the design's one
@@ -86,6 +89,8 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   convergence effects.
 - **Picker** — a ledger-grid wallpaper/image selector, also usable as a
   generic image-select IPC surface.
+- **Screenshots** — a `screenshot full`/`region` IPC target wrapping
+  grim/slurp: file, clipboard, and a notification in one call.
 - **Greeter** — a greetd session rendering as the lock screen's visual twin,
   with real PAM authentication.
 - **Theming** — wallpaper-driven matugen colors recolor every bar token and
