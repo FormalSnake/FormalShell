@@ -5,6 +5,15 @@
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
 # so the screenshot proves the background/bar actually recolored.
+# With --theme-toggle (M13b Task 3, don't combine with --wallpaper: the
+# assertions require wallpaper to stay ""), drives `theme mode toggle` twice
+# with NO wallpaper set: grim the dark session (theme-dark.png), toggle,
+# assert `theme status` reports mode:"light" with wallpaper still "", grim
+# again (theme-light.png — the mode-matched Flexoki fallback theme.json
+# recoloring every consumer live, no matugen involved), toggle back, assert
+# mode:"dark". The run's own smoke.png/SMOKE_OK then shows the session dark
+# again. grim, not niri's screenshot-screen, for the usual no-toast reason:
+# the two shots exist to compare background/bar colors.
 # With --menu, drives the real `menu` IPC target in-session: `summon` opens
 # it at root, `select` switches it into select mode (screenshot proves the
 # option list renders), then `close` cancels the pending select and the
@@ -264,6 +273,7 @@ cd "$(dirname "$0")/.."
 
 dump_mode=false
 wallpaper_mode=false
+theme_toggle_mode=false
 menu_mode=false
 notify_mode=false
 center_mode=false
@@ -283,6 +293,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
+    --theme-toggle) theme_toggle_mode=true; shift ;;
     --menu) menu_mode=true; shift ;;
     --notify) notify_mode=true; shift ;;
     --center) center_mode=true; shift ;;
@@ -297,7 +308,7 @@ while [ $# -gt 0 ]; do
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
   esac
 done
 
@@ -411,7 +422,7 @@ if $lock_mode; then
   fi
 fi
 
-if $lock_mode || $screensaver_gif_mode || $menu_mode; then
+if $lock_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -426,6 +437,8 @@ if $lock_mode || $screensaver_gif_mode || $menu_mode; then
   # 2026-07-29) — grim's screencopy-protocol path never does that.
   # menu_mode's trailing apps-route capture (M13b Task 1) picks grim for
   # the same no-toast reason: the shot exists to read two menu rows.
+  # theme_toggle_mode's dark/light pair (M13b Task 3) likewise: those two
+  # shots exist to compare background/bar colors.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -632,6 +645,10 @@ fi
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
+theme_dark_png="$shot_dir/theme-dark.png"
+theme_light_png="$shot_dir/theme-light.png"
+theme_toggle_status_path="$shot_dir/theme-toggle-status.json"
+theme_toggle_status2_path="$shot_dir/theme-toggle-status-2.json"
 query_path="$shot_dir/query.json"
 calc_query_path="$shot_dir/calc-query.json"
 emoji_query_path="$shot_dir/emoji-query.json"
@@ -909,6 +926,26 @@ fi
 if $wallpaper_mode; then
   wp_path="$shot_dir/wp.png"
   $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
+fi
+
+# --theme-toggle's drive: the dark shot waits out shell startup (same 4s the
+# other modes' first actions allow llvmpipe), each toggle then gets 2s for
+# ThemeEngine's fallback theme.json write plus Theme.qml's FileView reload
+# before the status dump and (first leg) the light shot.
+if $theme_toggle_mode; then
+  theme_toggle_drive_script="$shot_dir/theme-toggle-drive.sh"
+  cat > "$theme_toggle_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$grim_bin" "$theme_dark_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
+"$grim_bin" "$theme_light_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
+EOF
 fi
 
 # A short silent fixture track (M7 Task 1) rather than a committed binary
@@ -1348,6 +1385,9 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call wallpaper set '$wp_path'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call theme status > $status_path 2>&1\""
   fi
+  if $theme_toggle_mode; then
+    echo "spawn-at-startup \"bash\" \"$theme_toggle_drive_script\""
+  fi
   if $menu_mode; then
     echo "spawn-at-startup \"bash\" \"$menu_open_script\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
@@ -1474,6 +1514,12 @@ fi
   screenshot_delay=8
   if $center_mode; then
     screenshot_delay=15
+  elif $theme_toggle_mode; then
+    # theme-toggle-drive.sh's own final step (the back-to-dark status dump)
+    # lands around its internal sleep sum plus grim/qs spawn overhead on
+    # llvmpipe (~9-13s in); this run's generic smoke.png/SMOKE_OK is taken
+    # after that, showing the session dark again after the round trip.
+    screenshot_delay=14
   elif $osd_mode; then
     screenshot_delay=10
   elif $clipboard_mode; then
@@ -1561,6 +1607,37 @@ if $wallpaper_mode; then
   else
     echo "SMOKE_FAIL: no theme status produced" >&2; exit 1
   fi
+fi
+
+if $theme_toggle_mode; then
+  # First toggle: mode flipped to light with NO wallpaper involved — the
+  # mode-matched Flexoki fallback path, not matugen.
+  if [ -s "$theme_toggle_status_path" ] \
+    && grep -qF '"wallpaper":""' "$theme_toggle_status_path" \
+    && grep -qF '"mode":"light"' "$theme_toggle_status_path" \
+    && grep -qF '"themeJsonPresent":true' "$theme_toggle_status_path"; then
+    cat "$theme_toggle_status_path"
+  else
+    echo "SMOKE_FAIL: theme status after toggle did not report mode:light with no wallpaper" >&2
+    [ -f "$theme_toggle_status_path" ] && cat "$theme_toggle_status_path" >&2
+    exit 1
+  fi
+  # Second toggle: back to dark, still no wallpaper.
+  if [ -s "$theme_toggle_status2_path" ] \
+    && grep -qF '"wallpaper":""' "$theme_toggle_status2_path" \
+    && grep -qF '"mode":"dark"' "$theme_toggle_status2_path"; then
+    cat "$theme_toggle_status2_path"
+  else
+    echo "SMOKE_FAIL: theme status after the second toggle did not report mode:dark" >&2
+    [ -f "$theme_toggle_status2_path" ] && cat "$theme_toggle_status2_path" >&2
+    exit 1
+  fi
+  if [ ! -s "$theme_dark_png" ] || [ ! -s "$theme_light_png" ]; then
+    echo "SMOKE_FAIL: missing theme-toggle screenshot pair ($theme_dark_png / $theme_light_png)" >&2
+    exit 1
+  fi
+  echo "theme dark screenshot: $theme_dark_png"
+  echo "theme light screenshot: $theme_light_png"
 fi
 
 if $menu_mode; then

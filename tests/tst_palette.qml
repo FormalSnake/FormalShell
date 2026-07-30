@@ -43,6 +43,22 @@ TestCase {
         compare(f.rule, "#403E3C");
         compare(f.onAccent, "#FFFCF0");
     }
+    function test_fallback_no_arg_is_dark() {
+        // First-boot seed and Theme.qml's absent-file default both call
+        // fallback() bare — that must stay the dark variant.
+        compare(JSON.stringify(P.fallback()), JSON.stringify(P.fallback("dark")));
+    }
+    function test_fallback_light() {
+        var f = P.fallback("light");
+        var r = P.validate(f);
+        verify(r.ok);
+        compare(f.mode, "light");
+        compare(f.background, "#FFFCF0");
+        compare(f.foreground, "#100F0F");
+        compare(f.accent, "#205EA6");
+        compare(f.urgent, "#AF3029");
+        compare(f.rule, "#CECDC3");
+    }
     function test_merge_with_fallback_fills_missing_keys() {
         // An old theme.json written before rule/onAccent existed: the six
         // original keys must pass through untouched, the two new ones fall
@@ -56,13 +72,15 @@ TestCase {
         compare(m.onAccent, "#FFFCF0");
     }
     function test_merge_with_fallback_rejects_bad_hex_per_key() {
+        // mode:"light", so the bad rule falls back to the LIGHT variant's
+        // rule — the merge fill matches the theme's own mode.
         var t = { mode: "light", background: "#111111", backgroundAlt: "#1C1B1A",
                   foreground: "#CECDC3", foregroundDim: "#878580",
                   accent: "#4385BE", urgent: "#D14D41",
                   rule: "not-a-color", onAccent: "#000000" };
         var m = P.mergeWithFallback(t);
         compare(m.mode, "light");
-        compare(m.rule, "#403E3C");
+        compare(m.rule, "#CECDC3");
         compare(m.onAccent, "#000000");
     }
     function test_merge_with_fallback_null_is_full_fallback() {

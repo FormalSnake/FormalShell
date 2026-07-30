@@ -21,7 +21,21 @@ function validate(themeObj) {
     return { ok: missing.length === 0, missing: missing };
 }
 
-function fallback() {
+// One static Flexoki variant per mode (hex values from kepano/flexoki:
+// dark = base 950/800/500/200 on black with the 400 accents, light =
+// base 50/200/600 on paper with the 600 accents). No argument means the
+// dark variant — the seeded first-boot theme.json and Theme.qml's
+// absent-file default both depend on that.
+function fallback(mode) {
+    if (mode === "light") {
+        return {
+            mode: "light",
+            background: "#FFFCF0", backgroundAlt: "#F2F0E5",
+            foreground: "#100F0F", foregroundDim: "#6F6E69",
+            accent: "#205EA6", urgent: "#AF3029",
+            rule: "#CECDC3", onAccent: "#FFFCF0"
+        };
+    }
     return {
         mode: "dark",
         background: "#100F0F", backgroundAlt: "#1C1B1A",
@@ -34,9 +48,10 @@ function fallback() {
 // Per-key backward-tolerant merge: a theme.json written before a key existed
 // (or mid-write with one bad value) falls back to Flexoki for that key alone
 // — never the whole object, so a live matugen run stays themed everywhere
-// except the one stale/missing field.
+// except the one stale/missing field. The fill matches the theme's own mode
+// so a partial light theme.json never flashes dark tokens into a light UI.
 function mergeWithFallback(themeObj) {
-    var fb = fallback();
+    var fb = fallback(themeObj && themeObj.mode === "light" ? "light" : "dark");
     var merged = { mode: (themeObj && typeof themeObj.mode === "string") ? themeObj.mode : fb.mode };
     COLOR_KEYS.forEach(function (key) {
         var value = themeObj ? themeObj[key] : undefined;

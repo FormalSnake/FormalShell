@@ -23,9 +23,13 @@ import "palette.js" as Palette
 // matugen's own template output_paths land on <state-dir>/{theme.json,
 // niri-border.kdl}.tmp; on success those are renamed into place atomically
 // and the niri border fragment is reapplied. No wallpaper set → skip matugen
-// entirely and write palette.fallback() so theme.json always exists in the
-// same shape. theme.json's own FileView drives the "run once if absent"
-// startup behavior declaratively.
+// entirely and write palette.fallback(State.mode) — the Flexoki variant for
+// the current mode, so `theme mode toggle` recolors every consumer live
+// through the exact same theme.json write a matugen run uses (M13b Task 3;
+// before that the fallback was static dark and toggling without a wallpaper
+// visibly did nothing). theme.json's own FileView drives the "run once if
+// absent" startup behavior declaratively; State.mode defaults to dark, so
+// the seeded first-boot theme.json stays the dark variant.
 //
 // Every write (merged config, fallback theme.json) goes through a Process
 // (`printf '%s' "$content" > "$path"`, content passed as its own argv entry
@@ -112,7 +116,7 @@ Singleton {
 
     function _start() {
         if (Core.State.wallpaper === "") {
-            root._writeFile(root._themeJsonPath, JSON.stringify(Palette.fallback(), null, 2), exitCode => {
+            root._writeFile(root._themeJsonPath, JSON.stringify(Palette.fallback(Core.State.mode), null, 2), exitCode => {
                 if (exitCode !== 0)
                     console.warn("ThemeEngine: failed to write fallback theme.json, code", exitCode);
                 else
