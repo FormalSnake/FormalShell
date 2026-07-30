@@ -9,6 +9,7 @@ import qs.Services
 import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
 import "../../Menu/providers.js" as Providers
+import "../../Menu/calc.js" as Calc
 
 // The unified menu (DESIGN.md §Concrete translations/Menu): a single
 // keyboard-exclusive top-layer window, centered on the focused output. Top
@@ -149,9 +150,17 @@ PanelWindow {
         if (root._mode === "input")
             return [];
         var q = searchInput.text;
-        return q.length > 0
-            ? Search.rank(root._nodes, q, root._condResults)
-            : Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
+        if (q.length === 0)
+            return Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
+        // A query that parses as an expression leads with the CALC result row
+        // (M12 Task 5). At the dedicated calc level the result row is the
+        // whole surface — whole-tree matches would just be root search noise
+        // there. Parse failures are silent: calcRow is null, nothing renders.
+        var calcRow = Calc.resultNode(q);
+        if (root.currentNodeId === "calc")
+            return calcRow ? [calcRow] : [];
+        var ranked = Search.rank(root._nodes, q, root._condResults);
+        return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
     readonly property string breadcrumb: {
@@ -351,9 +360,15 @@ PanelWindow {
     // available (nested test sessions).
     function query(q) {
         root._evalConditions();
-        return Search.rank(root._nodes, q, root._condResults).map(function (n) {
+        var rows = Search.rank(root._nodes, q, root._condResults).map(function (n) {
             return { id: n.id, label: n.label, kind: n.kind };
         });
+        // Same CALC prepend as _displayRows' ranked branch, so the smoke
+        // rig's `debug query "2+2*3"` proves the row without keyboard input.
+        var calcRow = Calc.resultNode(q);
+        if (calcRow)
+            rows.unshift({ id: calcRow.id, label: calcRow.label, kind: calcRow.kind });
+        return rows;
     }
 
     function _resolveRoute(route) {

@@ -12,6 +12,10 @@
 {
     "apps": { "provider": "apps", "icon": "󰀻" },
     "clipboard": { "provider": "clipboard", "icon": "󰅍" },
+    // "calc" registers no provider fn — the node exists as a summonable
+    // route (`menu summon calc`) whose level Menu.qml special-cases to show
+    // only the live CALC result row for the typed expression (calc.js).
+    "calc": { "label": "Calculator", "provider": "calc", "icon": "󰃬" },
 
     "system": { "label": "System", "icon": "󰒓" },
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },

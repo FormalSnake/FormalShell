@@ -6,8 +6,9 @@ import qs.Components
 // label (or a "CONFIRM <label>?" swap while a confirm-gated action awaits its
 // second Enter), and a trailing indicator: "▸" for anything that descends
 // (submenu/link/provider), "✓" when the node's `checked` condition resolved
-// true. Menu.qml owns cursor/condition state; this row only paints it and
-// reports intent back via signals.
+// true, or a full-bleed accent tag when the node carries `meta` (the CALC
+// result row). Menu.qml owns cursor/condition state; this row only paints it
+// and reports intent back via signals.
 Cell {
     id: root
 
@@ -61,6 +62,25 @@ Cell {
         color: root.foreground
         font.family: Theme.font.family
         font.pixelSize: Theme.fontSize.body
+    }
+
+    // DESIGN.md §2.4: accent reads as a full-bleed fill with onAccent text,
+    // never a tinted label — independent of the row's own cursor inversion.
+    Rectangle {
+        visible: (root.node.meta || "") !== ""
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.spacing.md + Theme.borderWidth
+        anchors.verticalCenter: parent.verticalCenter
+        width: metaTag.implicitWidth + Theme.spacing.sm * 2
+        height: metaTag.implicitHeight + Theme.spacing.xs * 2
+        color: Theme.color.accent
+
+        MetaLabel {
+            id: metaTag
+            anchors.centerIn: parent
+            text: root.node.meta || ""
+            color: Theme.color.onAccent
+        }
     }
 
     MouseArea {
