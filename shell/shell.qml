@@ -95,6 +95,7 @@ ShellRoot {
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
     PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance }) }
+    CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     MediaIpc {}
     TrayIpc {}

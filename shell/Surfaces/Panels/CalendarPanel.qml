@@ -14,13 +14,26 @@ import qs.Services
 import "../../Calendar/progress.js" as Progress
 
 // Month grid + year-progress popout (DESIGN.md §Panels' clock/calendar
-// entry, spec §2, M6 Task 3): a MONTH/YEAR meta row, then the grid itself —
-// weekday header meta row followed by one ledger cell per day, today
-// selected (Cell's own inversion), days outside the current month dimmed to
+// entry, spec §2, M6 Task 3): a MONTH/YEAR meta row flanked by `<`/`>`
+// month-nav cells, then the grid itself — weekday header meta row followed
+// by one ledger cell per day, days outside the current month dimmed to
 // foregroundDim — and below it the year-progress bar as a full-width flat
 // accent-fill cell with its percentage as mono text, mirroring AudioPanel's
-// slider idiom. Modeled on Omarchy quattro's calendar widget (read only,
-// not copied — CLAUDE.md's read-reference rule for that repo). The
+// slider idiom. Day selection (M13 Task 4): every day cell is clickable
+// (hover-cursor state, DESIGN §1.1); the selected day carries Cell's fg/bg
+// inversion and drives the events ledger below the grid, whose meta header
+// reads TODAY for today or the short uppercase date (JUL 31) otherwise.
+// Today keeps a full-bleed accent fill (DESIGN §2.4, the focused-workspace
+// idiom) whenever it is not itself the selected day, so both states stay
+// visible at once when they differ. Month navigation RESETS selection to
+// today rather than clamping the day-of-month — a clamped selection would
+// silently show events for a day the user never picked. Clicking an
+// adjacent-month padding day selects it and aligns the view to its month
+// (as does `calendar select <iso-date>` over IPC — CalendarIpc, the smoke
+// rig's drive path), so a visible selection is always an in-month cell;
+// opening the panel resets both the view month and the selection to today.
+// Modeled on Omarchy quattro's calendar widget (read only, not copied —
+// CLAUDE.md's read-reference rule for that repo). The
 // life-progress easter egg (M6 Task 4): double-clicking the year-progress
 // bar prompts, through the menu's existing "input" mode, first for birth
 // year then life expectancy; both persist to state.json via
@@ -34,9 +47,10 @@ import "../../Calendar/progress.js" as Progress
 // accent dot under any in-month day that has one, sourced from
 // CalendarEventsService's local .ics reader (docs/spikes/2026-07-28-eds-
 // calendar-events.md records why EDS/GOA over D-Bus lost to that fallback);
-// a TODAY ledger section below the grid lists today's events by summary, or
-// a single dim "NO EVENTS" row when there are none — the honest-empty-state
-// every other panel backend already follows in the test VM.
+// the events ledger section below the grid lists the selected day's events
+// by summary, or a single dim "NO EVENTS" row when there are none — the
+// honest-empty-state every other panel backend already follows in the test
+// VM.
 Panel {
     id: root
 
@@ -52,6 +66,10 @@ Panel {
         "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
         "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
     ]
+    readonly property var _monthShort: [
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+    ]
     readonly property var _weekdayLabels: ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
 
     // "Today" is frozen at whatever it was when last computed — refreshed on
@@ -63,6 +81,9 @@ Panel {
     onIsOpenChanged: {
         if (root.isOpen) {
             root._today = new Date();
+            root._viewYear = root._today.getFullYear();
+            root._viewMonth = root._today.getMonth();
+            root._selected = root._today;
             CalendarEventsService.refresh();
         }
     }
@@ -74,9 +95,64 @@ Panel {
         onTriggered: root._today = new Date()
     }
 
-    readonly property int _year: root._today.getFullYear()
-    readonly property int _month: root._today.getMonth()
+    // The month the grid displays — decoupled from _today by the `<`/`>`
+    // nav cells, re-anchored to today on every open (see onIsOpenChanged).
+    property int _viewYear: new Date().getFullYear()
+    property int _viewMonth: new Date().getMonth()
+    // The day whose events the ledger below the grid lists. Defaults to
+    // today; reset to today on open and on month navigation (the documented
+    // reset-not-clamp choice, header comment above).
+    property date _selected: new Date()
     readonly property real _yearFraction: Progress.yearFraction(root._today)
+
+    function _isSameDate(a, b) {
+        return a.getFullYear() === b.getFullYear()
+            && a.getMonth() === b.getMonth()
+            && a.getDate() === b.getDate();
+    }
+
+    function _isoDate(d) {
+        var m = d.getMonth() + 1;
+        var day = d.getDate();
+        return d.getFullYear() + "-" + (m < 10 ? "0" + m : m) + "-" + (day < 10 ? "0" + day : day);
+    }
+
+    function _selectDate(d) {
+        root._selected = d;
+        root._viewYear = d.getFullYear();
+        root._viewMonth = d.getMonth();
+    }
+
+    function _stepMonth(delta) {
+        var m = root._viewMonth + delta;
+        root._viewYear += Math.floor(m / 12);
+        root._viewMonth = ((m % 12) + 12) % 12;
+        root._selected = root._today;
+    }
+
+    // IPC entry (CalendarIpc's `select` verb): strict YYYY-MM-DD only, with
+    // a component round-trip so 2026-02-31 is rejected rather than silently
+    // becoming March 3rd.
+    function selectIsoDate(iso) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+        if (!m)
+            return false;
+        var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        if (d.getFullYear() !== Number(m[1]) || d.getMonth() !== Number(m[2]) - 1 || d.getDate() !== Number(m[3]))
+            return false;
+        root._selectDate(d);
+        return true;
+    }
+
+    // IPC entry (CalendarIpc's `status` verb).
+    function selectionStatus() {
+        return {
+            open: root.isOpen,
+            selected: root._isoDate(root._selected),
+            today: root._isoDate(root._today),
+            view: root._monthNames[root._viewMonth] + " " + root._viewYear
+        };
+    }
 
     // Settings overrides the persisted state value per key (Config's own
     // "settings never written by the shell, always wins when present" rule)
@@ -152,33 +228,79 @@ Panel {
     }
 
     // Monday-first grid, padded with dimmed leading/trailing days from the
-    // adjacent months so every row has exactly 7 cells.
+    // adjacent months so every row has exactly 7 cells. Each cell carries
+    // its fully resolved year/month so a padding-day click can select the
+    // real adjacent-month date; today/selected are compared in the delegate
+    // (live bindings) rather than baked in here.
     readonly property var _cells: {
-        var year = root._year;
-        var month = root._month;
+        var year = root._viewYear;
+        var month = root._viewMonth;
         var firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
         var daysInMonth = root._daysInMonth(year, month);
         var prevMonth = month === 0 ? 11 : month - 1;
         var prevYear = month === 0 ? year - 1 : year;
+        var nextMonth = month === 11 ? 0 : month + 1;
+        var nextYear = month === 11 ? year + 1 : year;
         var prevMonthDays = root._daysInMonth(prevYear, prevMonth);
-        var today = root._today.getDate();
 
         var cells = [];
         for (var i = 0; i < firstWeekday; i++)
-            cells.push({ day: prevMonthDays - firstWeekday + 1 + i, inMonth: false, isToday: false });
+            cells.push({ year: prevYear, month: prevMonth, day: prevMonthDays - firstWeekday + 1 + i, inMonth: false });
         for (var d = 1; d <= daysInMonth; d++)
-            cells.push({ day: d, inMonth: true, isToday: d === today });
+            cells.push({ year: year, month: month, day: d, inMonth: true });
         var trailing = (7 - (cells.length % 7)) % 7;
         for (var t = 1; t <= trailing; t++)
-            cells.push({ day: t, inMonth: false, isToday: false });
+            cells.push({ year: nextYear, month: nextMonth, day: t, inMonth: false });
         return cells;
     }
 
-    Cell {
+    Row {
+        id: monthNav
         width: parent.width
 
-        MetaLabel {
-            text: root._monthNames[root._month] + " " + root._year
+        Cell {
+            width: monthNav.width / 7
+            hovered: prevMonthArea.containsMouse
+
+            MetaLabel {
+                anchors.centerIn: parent
+                text: "<"
+            }
+
+            MouseArea {
+                id: prevMonthArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root._stepMonth(-1)
+            }
+        }
+
+        Cell {
+            width: monthNav.width - monthNav.width / 7 * 2
+
+            MetaLabel {
+                anchors.centerIn: parent
+                text: root._monthNames[root._viewMonth] + " " + root._viewYear
+            }
+        }
+
+        Cell {
+            width: monthNav.width / 7
+            hovered: nextMonthArea.containsMouse
+
+            MetaLabel {
+                anchors.centerIn: parent
+                text: ">"
+            }
+
+            MouseArea {
+                id: nextMonthArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root._stepMonth(1)
+            }
         }
     }
 
@@ -209,12 +331,27 @@ Panel {
                 id: dayCell
                 required property var modelData
                 width: dayGrid.width / 7
-                selected: dayCell.modelData.isToday
-                // Only in-month cells resolve against root._year/_month —
-                // the leading/trailing padding days belong to the adjacent
-                // month and are dimmed rather than queried.
+                // Selection inversion and today's accent fill apply to
+                // in-month cells only — padding days stay purely dim even
+                // when they happen to be today/selected in their own month
+                // (both are transient: selecting a padding day immediately
+                // realigns the view, see the header comment).
+                readonly property bool isToday: dayCell.modelData.inMonth
+                    && dayCell.modelData.day === root._today.getDate()
+                    && dayCell.modelData.month === root._today.getMonth()
+                    && dayCell.modelData.year === root._today.getFullYear()
+                readonly property bool isSelected: dayCell.modelData.inMonth
+                    && dayCell.modelData.day === root._selected.getDate()
+                    && dayCell.modelData.month === root._selected.getMonth()
+                    && dayCell.modelData.year === root._selected.getFullYear()
+                selected: dayCell.isSelected
+                accent: dayCell.isToday && !dayCell.isSelected
+                hovered: dayArea.containsMouse
+                // Only in-month cells query events — the leading/trailing
+                // padding days belong to the adjacent month and are dimmed
+                // rather than dotted.
                 readonly property bool hasEvents: dayCell.modelData.inMonth
-                    && CalendarEventsService.onDate(new Date(root._year, root._month, dayCell.modelData.day)).length > 0
+                    && CalendarEventsService.onDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day)).length > 0
 
                 Column {
                     anchors.centerIn: parent
@@ -235,26 +372,37 @@ Panel {
                         width: 4
                         height: 4
                         anchors.horizontalCenter: parent.horizontalCenter
-                        color: dayCell.selected ? dayCell.foreground : Core.Theme.color.accent
+                        color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.accent
                         opacity: dayCell.hasEvents ? 1 : 0
                     }
+                }
+
+                MouseArea {
+                    id: dayArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root._selectDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day))
                 }
             }
         }
     }
 
-    readonly property var _todaysEvents: CalendarEventsService.onDate(root._today)
+    readonly property bool _selectedIsToday: root._isSameDate(root._selected, root._today)
+    readonly property var _selectedEvents: CalendarEventsService.onDate(root._selected)
 
     Cell {
         width: parent.width
 
         MetaLabel {
-            text: "TODAY"
+            text: root._selectedIsToday
+                ? "TODAY"
+                : root._monthShort[root._selected.getMonth()] + " " + root._selected.getDate()
         }
     }
 
     Repeater {
-        model: root._todaysEvents.length > 0 ? root._todaysEvents : [null]
+        model: root._selectedEvents.length > 0 ? root._selectedEvents : [null]
 
         delegate: Cell {
             id: eventCell

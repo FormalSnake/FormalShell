@@ -57,9 +57,13 @@
 # the run's private session bus (`formalshell-eds seed`, a genuine
 # CreateObjects write that D-Bus-activates evolution-data-server in the
 # isolated session — never a mock) before opening the panel, whose on-open
-# refresh then reads it back through `formalshell-eds events`. The
-# screenshot must show both summaries under TODAY; the seed's own
-# stdout/rc lands in eds-seed.txt and a failed seed fails the run.
+# refresh then reads it back through `formalshell-eds events`. The seed's
+# own stdout/rc lands in eds-seed.txt and a failed seed fails the run.
+# Day selection (M13 Task 4): a second EDS VEVENT dated tomorrow is seeded
+# too, then `calendar select <tomorrow>` runs after the open — the
+# screenshot must show tomorrow's cell inverted (today's cell accent-filled
+# next to it) and the events ledger listing EDS TOMORROW EVENT under the
+# dated meta header; `calendar status` must report tomorrow selected.
 # With --media, generates a short silent fixture track (ffmpeg lavfi
 # anullsrc, tagged with a title/artist via -metadata) and plays it with mpv
 # --script=<mpvScripts.mpris path> into the default (pipewire null-sink)
@@ -619,6 +623,9 @@ clip_copy_path="$shot_dir/clip-copy.txt"
 clip_paste_path="$shot_dir/clip-paste.txt"
 media_status_path="$shot_dir/media-status.json"
 eds_seed_path="$shot_dir/eds-seed.txt"
+eds_seed2_path="$shot_dir/eds-seed-2.txt"
+calendar_select_path="$shot_dir/calendar-select.txt"
+calendar_status_path="$shot_dir/calendar-status.json"
 media_pid_path="$shot_dir/mpv.pid"
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_error_path="$shot_dir/lock-error.png"
@@ -969,7 +976,11 @@ fi
 # HOME), then open the panel, whose on-open refresh reads the event back
 # through `formalshell-eds events`. Strictly ordered — seed, then open —
 # because the shell's own startup refresh has usually already run before
-# the seed lands.
+# the seed lands. M13 Task 4 adds a second seed dated tomorrow plus a
+# `calendar select` drive AFTER the open (open resets selection to today,
+# so the order matters): the run's screenshot then shows tomorrow's cell
+# inverted, today's cell accent-filled, and the events ledger listing the
+# tomorrow fixture under a dated meta header instead of TODAY.
 if $panel_mode && [ "$panel_name" = "calendar" ]; then
   eds_drive_script="$shot_dir/eds-drive.sh"
   cat > "$eds_drive_script" <<EOF
@@ -977,7 +988,12 @@ if $panel_mode && [ "$panel_name" = "calendar" ]; then
 sleep 3
 "$eds_bin" seed "EDS FIXTURE EVENT" "\$(date +%F)" > "$eds_seed_path" 2>&1
 echo "rc=\$?" >> "$eds_seed_path"
+"$eds_bin" seed "EDS TOMORROW EVENT" "\$(date -d tomorrow +%F)" > "$eds_seed2_path" 2>&1
+echo "rc=\$?" >> "$eds_seed2_path"
 "$qs_bin" ipc --any-display -p "$shell_path" call panel open calendar
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call calendar select "\$(date -d tomorrow +%F)" > "$calendar_select_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call calendar status > "$calendar_status_path" 2>&1
 EOF
 fi
 
@@ -1324,11 +1340,12 @@ fi
     # item as its own cell with the drawer already expanded.
     screenshot_delay=13
   elif $panel_mode && [ "$panel_name" = "calendar" ]; then
-    # eds-drive.sh opens the panel only after its seed write returns
-    # (~4-6s in when this run's private bus has to cold-activate EDS
-    # first); 12s leaves the on-open refresh's own `formalshell-eds events`
-    # run comfortable room before the shot.
-    screenshot_delay=12
+    # eds-drive.sh opens the panel only after its two seed writes return
+    # (~4-7s in when this run's private bus has to cold-activate EDS
+    # first), then selects tomorrow 2s after the open; 13s leaves the
+    # on-open refresh's own `formalshell-eds events` run and the select
+    # comfortable room before the shot.
+    screenshot_delay=13
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -1473,6 +1490,30 @@ if $panel_mode && [ "$panel_name" = "calendar" ]; then
   else
     echo "SMOKE_FAIL: formalshell-eds seed did not succeed" >&2
     [ -f "$eds_seed_path" ] && cat "$eds_seed_path" >&2
+    exit 1
+  fi
+  if [ -s "$eds_seed2_path" ] && grep -q '^rc=0$' "$eds_seed2_path"; then
+    cat "$eds_seed2_path"
+  else
+    echo "SMOKE_FAIL: formalshell-eds tomorrow seed did not succeed" >&2
+    [ -f "$eds_seed2_path" ] && cat "$eds_seed2_path" >&2
+    exit 1
+  fi
+  # Day selection (M13 Task 4): the select call must find the running
+  # instance and accept the date, and the panel's own status must report
+  # tomorrow as the selected day — the screenshot's inverted cell and dated
+  # events header are the render half of the same proof.
+  if [ -s "$calendar_select_path" ] && grep -q '^ok$' "$calendar_select_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: calendar select IPC call did not return ok — got: $(cat "$calendar_select_path" 2>/dev/null)" >&2
+    exit 1
+  fi
+  tomorrow_iso=$(date -d tomorrow +%F)
+  if [ -s "$calendar_status_path" ] && grep -q "\"selected\":\"$tomorrow_iso\"" "$calendar_status_path"; then
+    cat "$calendar_status_path"
+  else
+    echo "SMOKE_FAIL: calendar status does not report tomorrow ($tomorrow_iso) selected — got: $(cat "$calendar_status_path" 2>/dev/null)" >&2
     exit 1
   fi
 fi
