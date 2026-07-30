@@ -81,6 +81,21 @@ PanelWindow {
                 width: implicitWidth
                 height: implicitHeight
 
+                // Enter (DESIGN.md §4): each new toast fades in and slides
+                // from the right edge, one animated scalar. Removal stays
+                // instant — the Repeater destroys the delegate with its
+                // model row, and a dismissal should feel immediate anyway.
+                property real enter: 1
+                opacity: cardFrame.enter
+                transform: Translate { x: (1 - cardFrame.enter) * Theme.motion.slide }
+
+                NumberAnimation on enter {
+                    from: 0
+                    to: 1
+                    duration: Theme.motion.standard
+                    easing.type: Theme.motion.easing
+                }
+
                 // Opaque card backing plus its own top/left rule — unlike
                 // the old shared frame, every toast now closes its own ring
                 // (NotificationCard's Cell contract draws the bottom/right

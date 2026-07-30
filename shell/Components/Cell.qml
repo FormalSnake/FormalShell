@@ -44,6 +44,8 @@ Item {
     implicitWidth: content.implicitWidth + Theme.spacing.md * 2 + _ruleReserve
     implicitHeight: content.implicitHeight + Theme.spacing.sm * 2 + _ruleReserve
 
+    // Full-bleed state fills snap (DESIGN.md §4.3: accent/selection swaps
+    // are states, not transitions) — only the hover layer below fades.
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
@@ -53,11 +55,24 @@ Item {
                 ? Theme.color.accent
                 : root.selected
                     ? Theme.inverted().bg
-                    : root.hovered
-                        ? Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
-                        : "transparent"
-        border.width: root.standalone && root.hovered && !root.selected && !root.accent && !root.urgent ? root._hoverAppearance.borderWidth : 0
+                    : "transparent"
+    }
+
+    // Hover fill on its own layer so it can fade (DESIGN.md §4.1,
+    // Theme.motion.fast) without ever animating the state fills above.
+    // The standalone hover border rides the same opacity, so it fades in
+    // step with the fill instead of snapping.
+    Rectangle {
+        anchors.fill: parent
+        radius: Theme.radius
+        color: Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
+        border.width: root.standalone ? root._hoverAppearance.borderWidth : 0
         border.color: Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.borderAlpha)
+        opacity: root.hovered && !root.selected && !root.accent && !root.urgent ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        }
     }
 
     Item {

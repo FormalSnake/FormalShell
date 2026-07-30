@@ -254,6 +254,23 @@ Panel {
         return cells;
     }
 
+    // Month swap (DESIGN.md §4): the regenerated grid fades in on view
+    // change — a crossfade would need a second live grid instance for no
+    // visible gain. restart() makes rapid `<`/`>` stepping interruptible
+    // (each step re-fades from wherever the last one got to zero).
+    readonly property string _viewKey: root._viewYear + "-" + root._viewMonth
+    on_ViewKeyChanged: if (root.isOpen) monthSwapAnim.restart()
+
+    NumberAnimation {
+        id: monthSwapAnim
+        target: dayGrid
+        property: "opacity"
+        from: 0
+        to: 1
+        duration: Core.Theme.motion.standard
+        easing.type: Core.Theme.motion.easing
+    }
+
     Row {
         id: monthNav
         width: parent.width

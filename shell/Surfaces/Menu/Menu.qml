@@ -734,8 +734,15 @@ PanelWindow {
     }
 
     screen: root._screen
-    visible: root.isOpen
-    color: Core.Theme.color.background
+    // Held visible through the exit fade (DESIGN.md §4): close() drops
+    // isOpen, card's opacity Behavior runs to 0, then the window unmaps.
+    // Keyboard exclusivity releases on isOpen itself, so nothing types into
+    // a fading-out menu — and the emoji typeText settle timer still keys
+    // off the real visible flip below, exactly as before, just one exit
+    // fade later. The window is transparent so the fade covers the whole
+    // card; card paints its own background.
+    visible: root.isOpen || card.opacity > 0
+    color: "transparent"
     implicitWidth: 560
     implicitHeight: root._chrome + searchCell.height + root._rowsAreaHeight
 
@@ -750,170 +757,189 @@ PanelWindow {
         top: root._screen ? Math.round((root._screen.height - root.implicitHeight) / 2) : 0
     }
 
-    // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
-    // bordered rectangle") — explicit on all four sides, with the
-    // popupPadding gutter below insetting content uniformly. The search
-    // field and result rows still close their own bottom+right per Cell's
-    // shared-rule contract (needed for the divider between adjacent rows);
-    // the eraser rectangles further down paint over just the trailing
-    // hairline that would otherwise double these two rules.
-    Rectangle {
-        id: topRule
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Core.Theme.borderWidth
-        color: Core.Theme.color.rule
-    }
+    // Enter/exit (DESIGN.md §4): the whole card fades and slides down into
+    // its centered spot, one animated scalar so a resummon mid-exit
+    // reverses in place.
+    Item {
+        id: card
+        anchors.fill: parent
+        opacity: root.isOpen ? 1 : 0
+        transform: Translate { y: (card.opacity - 1) * Core.Theme.motion.slide }
 
-    Rectangle {
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        width: Core.Theme.borderWidth
-        color: Core.Theme.color.rule
-    }
+        Behavior on opacity {
+            NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
+        }
 
-    Rectangle {
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        width: Core.Theme.borderWidth
-        color: Core.Theme.color.rule
-    }
+        Rectangle {
+            anchors.fill: parent
+            color: Core.Theme.color.background
+        }
 
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Core.Theme.borderWidth
-        color: Core.Theme.color.rule
-    }
+        // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
+        // bordered rectangle") — explicit on all four sides, with the
+        // popupPadding gutter below insetting content uniformly. The search
+        // field and result rows still close their own bottom+right per Cell's
+        // shared-rule contract (needed for the divider between adjacent rows);
+        // the eraser rectangles further down paint over just the trailing
+        // hairline that would otherwise double these two rules.
+        Rectangle {
+            id: topRule
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: Core.Theme.borderWidth
+            color: Core.Theme.color.rule
+        }
 
-    Cell {
-        id: searchCell
-        anchors.top: topRule.bottom
-        anchors.topMargin: Core.Theme.space.popupPadding
-        anchors.left: parent.left
-        anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
-        width: root._contentWidth
-        height: searchColumn.implicitHeight + Core.Theme.spacing.sm * 2 + Core.Theme.borderWidth
+        Rectangle {
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            width: Core.Theme.borderWidth
+            color: Core.Theme.color.rule
+        }
 
-        Column {
-            id: searchColumn
-            width: parent.width
-            spacing: Core.Theme.spacing.xs
+        Rectangle {
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            width: Core.Theme.borderWidth
+            color: Core.Theme.color.rule
+        }
 
-            MetaLabel {
-                text: root.breadcrumb
-            }
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Core.Theme.borderWidth
+            color: Core.Theme.color.rule
+        }
 
-            TextInput {
-                id: searchInput
-                width: searchColumn.width
-                color: Core.Theme.color.foreground
-                font.family: Core.Theme.font.family
-                font.pixelSize: Core.Theme.fontSize.body
-                focus: true
-                selectByMouse: true
-                cursorVisible: true
+        Cell {
+            id: searchCell
+            anchors.top: topRule.bottom
+            anchors.topMargin: Core.Theme.space.popupPadding
+            anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            width: root._contentWidth
+            height: searchColumn.implicitHeight + Core.Theme.spacing.sm * 2 + Core.Theme.borderWidth
 
-                onTextChanged: {
-                    root._cursorIndex = 0;
-                    root._confirmPendingId = "";
-                    // Arm the debounced nix search from the event, never
-                    // from the _displayRows binding (side effect).
-                    if (root._mode === "menu") {
-                        var nixQuery = Providers.nixTriggerQuery(searchInput.text);
-                        if (nixQuery === null && root.currentNodeId === "nix")
-                            nixQuery = searchInput.text;
-                        if (nixQuery !== null)
-                            root._requestNixSearch(nixQuery);
-                    }
+            Column {
+                id: searchColumn
+                width: parent.width
+                spacing: Core.Theme.spacing.xs
+
+                MetaLabel {
+                    text: root.breadcrumb
                 }
 
-                Keys.onPressed: event => {
-                    switch (event.key) {
-                    case Qt.Key_Up:
-                        root._moveCursor(-1);
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Down:
-                        root._moveCursor(1);
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Return:
-                    case Qt.Key_Enter:
-                        if (root._mode === "input")
-                            root._submitInput();
-                        else
-                            root._activateRow(root._cursorIndex);
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Escape:
-                        // select/input have no tree level to pop out of —
-                        // Escape just cancels the request and closes (close()
-                        // writes the {cancelled:true} record via
-                        // _abandonPendingSelect()).
-                        if (root._mode !== "menu")
-                            root.close();
-                        else
-                            root._pop();
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Backspace:
-                        if (root._mode === "menu" && searchInput.text.length === 0) {
-                            root._pop();
-                            event.accepted = true;
+                TextInput {
+                    id: searchInput
+                    width: searchColumn.width
+                    color: Core.Theme.color.foreground
+                    font.family: Core.Theme.font.family
+                    font.pixelSize: Core.Theme.fontSize.body
+                    focus: true
+                    selectByMouse: true
+                    cursorVisible: true
+
+                    onTextChanged: {
+                        root._cursorIndex = 0;
+                        root._confirmPendingId = "";
+                        // Arm the debounced nix search from the event, never
+                        // from the _displayRows binding (side effect).
+                        if (root._mode === "menu") {
+                            var nixQuery = Providers.nixTriggerQuery(searchInput.text);
+                            if (nixQuery === null && root.currentNodeId === "nix")
+                                nixQuery = searchInput.text;
+                            if (nixQuery !== null)
+                                root._requestNixSearch(nixQuery);
                         }
-                        break;
+                    }
+
+                    Keys.onPressed: event => {
+                        switch (event.key) {
+                        case Qt.Key_Up:
+                            root._moveCursor(-1);
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Down:
+                            root._moveCursor(1);
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Return:
+                        case Qt.Key_Enter:
+                            if (root._mode === "input")
+                                root._submitInput();
+                            else
+                                root._activateRow(root._cursorIndex);
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Escape:
+                            // select/input have no tree level to pop out of —
+                            // Escape just cancels the request and closes (close()
+                            // writes the {cancelled:true} record via
+                            // _abandonPendingSelect()).
+                            if (root._mode !== "menu")
+                                root.close();
+                            else
+                                root._pop();
+                            event.accepted = true;
+                            break;
+                        case Qt.Key_Backspace:
+                            if (root._mode === "menu" && searchInput.text.length === 0) {
+                                root._pop();
+                                event.accepted = true;
+                            }
+                            break;
+                        }
                     }
                 }
             }
         }
-    }
 
-    ListView {
-        id: rowsView
-        anchors.top: searchCell.bottom
-        anchors.left: parent.left
-        anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
-        width: root._contentWidth
-        height: root._rowsAreaHeight
-        clip: true
-        model: root._displayRows
-        currentIndex: root._cursorIndex
+        ListView {
+            id: rowsView
+            anchors.top: searchCell.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            width: root._contentWidth
+            height: root._rowsAreaHeight
+            clip: true
+            model: root._displayRows
+            currentIndex: root._cursorIndex
 
-        delegate: MenuRow {
-            current: root._cursorIndex === index
-            checkedState: node.checked !== undefined && root._checkedResults[node.id] === true
-            confirming: root._confirmPendingId === node.id
+            delegate: MenuRow {
+                current: root._cursorIndex === index
+                checkedState: node.checked !== undefined && root._checkedResults[node.id] === true
+                confirming: root._confirmPendingId === node.id
 
-            onActivate: root._activateRow(index)
-            onHoverIn: root._setCursor(index)
+                onActivate: root._activateRow(index)
+                onHoverIn: root._setCursor(index)
+            }
         }
-    }
 
-    // Erases the trailing hairline searchCell and every row draw along
-    // their own right edge (Cell's shared-rule contract) — without this,
-    // that continuous line and the frame's own right rule above would read
-    // as two parallel borders `popupPadding` apart.
-    Rectangle {
-        anchors.top: searchCell.top
-        anchors.right: rowsView.right
-        anchors.bottom: rowsView.bottom
-        width: Core.Theme.borderWidth
-        color: Core.Theme.color.background
-    }
+        // Erases the trailing hairline searchCell and every row draw along
+        // their own right edge (Cell's shared-rule contract) — without this,
+        // that continuous line and the frame's own right rule above would read
+        // as two parallel borders `popupPadding` apart.
+        Rectangle {
+            anchors.top: searchCell.top
+            anchors.right: rowsView.right
+            anchors.bottom: rowsView.bottom
+            width: Core.Theme.borderWidth
+            color: Core.Theme.color.background
+        }
 
-    // Same erasure for the bottom: the last row's own bottom rule sits
-    // flush with rowsView's own bottom edge whenever the rows fit without
-    // scrolling, which would otherwise double the frame's own bottom rule.
-    Rectangle {
-        anchors.left: rowsView.left
-        anchors.right: rowsView.right
-        anchors.bottom: rowsView.bottom
-        height: Core.Theme.borderWidth
-        color: Core.Theme.color.background
+        // Same erasure for the bottom: the last row's own bottom rule sits
+        // flush with rowsView's own bottom edge whenever the rows fit without
+        // scrolling, which would otherwise double the frame's own bottom rule.
+        Rectangle {
+            anchors.left: rowsView.left
+            anchors.right: rowsView.right
+            anchors.bottom: rowsView.bottom
+            height: Core.Theme.borderWidth
+            color: Core.Theme.color.background
+        }
     }
 }

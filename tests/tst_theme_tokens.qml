@@ -63,6 +63,23 @@ TestCase {
         compare(s.panelPadding, 36);
     }
 
+    // §4 motion tokens
+
+    function test_motion_tokens_sit_inside_the_design_bands() {
+        var m = Tokens.motionTokens(true);
+        verify(m.fast >= 90 && m.fast <= 140);
+        verify(m.standard >= 90 && m.standard <= 140);
+        verify(m.fast <= m.standard);
+        verify(m.slide >= 4 && m.slide <= 8);
+    }
+
+    function test_motion_tokens_disabled_zeroes_durations_not_distance() {
+        var m = Tokens.motionTokens(false);
+        compare(m.fast, 0);
+        compare(m.standard, 0);
+        compare(m.slide, Tokens.motionTokens(true).slide);
+    }
+
     // 1.1 four interactive states
 
     function test_state_appearance_normal() {

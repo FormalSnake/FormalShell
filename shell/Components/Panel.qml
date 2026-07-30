@@ -94,7 +94,11 @@ PanelWindow {
     }
 
     screen: root._screen
-    visible: root.isOpen
+    // Held visible through the exit fade (DESIGN.md §4): close() drops
+    // isOpen, the frame's opacity Behavior runs to 0, and only then does
+    // the window unmap. Keyboard focus and the backdrop release on isOpen
+    // itself, so input never lands on a fading-out panel.
+    visible: root.isOpen || frame.opacity > 0
     color: "transparent"
 
     WlrLayershell.namespace: "formalshell:panel"
@@ -107,6 +111,7 @@ PanelWindow {
     MouseArea {
         id: backdrop
         anchors.fill: parent
+        enabled: root.isOpen
         focus: true
         Keys.onEscapePressed: root.close()
         Keys.onPressed: event => root.keyPressed(event)
@@ -118,6 +123,16 @@ PanelWindow {
             y: Theme.barHeight + Theme.space.panelGap
             width: root.panelWidth
             height: root._frameHeight
+
+            // Enter/exit (DESIGN.md §4): fade plus a slide down from under
+            // the bar, both driven by the one animated scalar so reopening
+            // mid-exit reverses from wherever the fade is.
+            opacity: root.isOpen ? 1 : 0
+            transform: Translate { y: (frame.opacity - 1) * Theme.motion.slide }
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+            }
 
             // The window itself is transparent (it needs the click-outside
             // backdrop to span the whole screen), so the frame paints its

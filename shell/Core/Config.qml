@@ -52,6 +52,9 @@ import QtQuick
 // screenshot.directory (string, default "" meaning $HOME/Pictures/
 // Screenshots: where ScreenshotIpc's grim captures land, created on first
 // capture, M12 Task 9).
+// motion.enabled (bool, default true — Theme's motion switch: false zeroes
+// every animation duration (Tokens.motionTokens) so all transitions become
+// instant state swaps, M13 Task 8).
 Singleton {
     id: root
 

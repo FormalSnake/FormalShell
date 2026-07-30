@@ -2,6 +2,9 @@ pragma Singleton
 import Quickshell
 import Quickshell.Io
 import QtQuick
+// Self-module import, for the Config sibling singleton (motion.enabled) —
+// same pattern as AppleMusicArtService's `import qs.Services`.
+import qs.Core
 import "../Theme/palette.js" as Palette
 import "../Theme/tokens.js" as Tokens
 
@@ -49,19 +52,27 @@ Singleton {
 
     readonly property var spacing: ({ scale: 1.0, xs: 2, sm: 4, md: 8, lg: 16 })
 
-    // --- DESIGN.md §4 motion posture ---------------------------------------
-    // State changes are instant or near-instant (no animated call site exists
-    // for one today — nothing to tokenize until a surface actually needs the
-    // 120-420ms eased transition DESIGN.md allows). The "breathing" opacity
-    // pulse is the one documented alive idiom (charging, an active call);
-    // PowerPanel.qml's charging pulse is its only call site today. The
-    // screensaver's continuous frame effect (Screensaver.qml) is the other
-    // named carve-out and isn't a QML Animation at all, so it has no token
-    // here. Nothing moves geometry anywhere in the shell.
-    readonly property var motion: ({
-        pulseDuration: 900,
-        pulseEasing: Easing.InOutQuad
-    })
+    // --- DESIGN.md §4 motion tokens -----------------------------------------
+    // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the
+    // enter/exit translate distance) / `easing` (the one ease-out curve every
+    // transition uses). motion.enabled=false in settings.json zeroes both
+    // durations (Tokens.motionTokens) — the shell's reduced-motion switch,
+    // since no Wayland analog of prefers-reduced-motion exists. The
+    // "breathing" opacity pulse (PowerPanel's charging state) and the
+    // screensaver's frame effect remain §4's two continuous-motion carve-outs
+    // and keep their own pacing.
+    readonly property bool motionEnabled: Config.get("motion.enabled", true) === true
+    readonly property var motion: {
+        var m = Tokens.motionTokens(root.motionEnabled);
+        return {
+            fast: m.fast,
+            standard: m.standard,
+            slide: m.slide,
+            easing: Easing.OutCubic,
+            pulseDuration: 900,
+            pulseEasing: Easing.InOutQuad
+        };
+    }
 
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");

@@ -284,15 +284,44 @@ floats with a margin or fuses to the screen edge.
   keyboard-navigable. Omarchy's skewed carousel remains an explicitly later
   flourish (spec §11), not adopted here.
 
-## 4. Motion posture (unchanged)
+## 4. Motion
 
-State changes are instant or near-instant color transitions
-(120–420ms eased, matching omarchy's own control transitions); the
-"breathing" opacity pulse is reserved for genuinely in-progress states
-(charging, an active call). Nothing slides, bounces, or zooms on a card or
-table surface. The screensaver and the lock backdrop blur remain the only
-two named, load-bearing exceptions to "flat and still" — not a crack in the
-doctrine, a documented carve-out each.
+Written to the owner's M13 brief verbatim: "fast and subtle, it should just
+look better." Motion is additive polish on top of the flat-and-still
+baseline above — it never changes an end state, never causes a layout jump,
+and every rule here is checkable:
+
+1. **Two durations, one curve.** `Theme.motion.fast` (100ms) paces hover
+   fills; `Theme.motion.standard` (130ms) paces surface enter/exit. Both
+   sit inside a hard 90–140ms band — nothing in the shell animates slower
+   or faster. The only easing curve is `Theme.motion.easing`
+   (`Easing.OutCubic`), used for enter and exit alike.
+2. **Opacity plus small translate only.** An entering surface fades from 0
+   and slides `Theme.motion.slide` (6px, hard band 4–8px) into its resting
+   place — a panel drops down from under the bar, the OSD rises from the
+   bottom edge, right-anchored surfaces slide in from the right. Exit is
+   the same pair reversed. No scale, no bounce, no blur, no zoom; radius
+   stays 0.
+3. **Full-bleed accent/selection swaps stay instant.** The ledger
+   inversion (menu cursor row, picker cell, center row), the focused
+   workspace's accent fill, an armed toggle, a critical cell's urgent fill
+   — these are *states*, not transitions (§1.1/§2.2/§2.4), and they snap.
+   Only the low-alpha hover fill fades; the moment a cell resolves to
+   `selected`/`accent`/`urgent`, the swap is immediate.
+4. **Every animation is interruptible.** Transitions are driven by
+   `Behavior`s (or a single animated scalar), so reversing a state
+   mid-flight reverses the animation from wherever it is — never a queued
+   replay, never a blocked input.
+5. **`motion.enabled: false`** (settings.json) zeroes both durations —
+   every transition collapses to today's instant state swap, pixels
+   untouched. This is the shell's reduced-motion switch; Wayland has no
+   `prefers-reduced-motion` to inherit.
+
+The "breathing" opacity pulse stays reserved for genuinely in-progress
+states (charging, an active call) at its own 900ms pacing, and the
+screensaver plus the lock backdrop blur remain the two named, load-bearing
+exceptions to "flat and still" — not a crack in the doctrine, a documented
+carve-out each.
 
 Do not restyle a surface outside a plan that schedules it (Tasks 2–7 of the
 M8b plan schedule every surface named above in turn).

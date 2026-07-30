@@ -73,8 +73,12 @@ PanelWindow {
     }
 
     screen: root._screen
-    visible: root.isOpen
-    color: Theme.color.background
+    // Held visible through the exit fade (DESIGN.md §4): close() drops
+    // isOpen, card's opacity Behavior runs to 0, then the window unmaps.
+    // The window itself is transparent so the fade covers the whole card —
+    // card paints its own background below.
+    visible: root.isOpen || card.opacity > 0
+    color: "transparent"
     implicitWidth: 420
 
     WlrLayershell.namespace: "formalshell:notifications-center"
@@ -85,134 +89,153 @@ PanelWindow {
     anchors { top: true; right: true; bottom: true }
     margins.top: root._barHeight
 
-    // Outer top/left rule — Cell.qml's shared-rule contract makes every cell
-    // draw its own bottom+right rule, so the container only needs to close
-    // off the top and left of the whole grid.
-    Rectangle {
-        id: topRule
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Theme.borderWidth
-        color: Theme.color.rule
-    }
+    // Enter/exit (DESIGN.md §4): the whole card fades and slides in from
+    // the right edge (this surface is right-anchored), one animated scalar
+    // so a reopen mid-exit reverses in place.
+    Item {
+        id: card
+        anchors.fill: parent
+        opacity: root.isOpen ? 1 : 0
+        transform: Translate { x: (1 - card.opacity) * Theme.motion.slide }
 
-    Rectangle {
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        width: Theme.borderWidth
-        color: Theme.color.rule
-    }
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+        }
 
-    Flickable {
-        anchors.top: topRule.bottom
-        anchors.left: parent.left
-        anchors.leftMargin: Theme.borderWidth
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        clip: true
-        contentWidth: width
-        contentHeight: column.implicitHeight
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.color.background
+        }
 
-        Column {
-            id: column
-            width: parent.width
+        // Outer top/left rule — Cell.qml's shared-rule contract makes every cell
+        // draw its own bottom+right rule, so the container only needs to close
+        // off the top and left of the whole grid.
+        Rectangle {
+            id: topRule
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: Theme.borderWidth
+            color: Theme.color.rule
+        }
 
-            Cell {
-                id: dndCell
-                width: parent.width
-                accent: NotificationService.dnd
-                selected: dndHover.containsMouse
+        Rectangle {
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            width: Theme.borderWidth
+            color: Theme.color.rule
+        }
 
-                Text {
-                    text: "DND"
-                    color: dndCell.foreground
-                    font.family: Theme.font.family
-                    font.pixelSize: Theme.fontSize.body
-                    font.capitalization: Font.AllUppercase
-                    font.letterSpacing: 1
-                }
+        Flickable {
+            anchors.top: topRule.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.borderWidth
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            clip: true
+            contentWidth: width
+            contentHeight: column.implicitHeight
 
-                MouseArea {
-                    id: dndHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: NotificationService.setDnd(!NotificationService.dnd)
-                }
-            }
-
-            Cell {
-                visible: NotificationService.pending.length === 0 && NotificationService.past.length === 0
+            Column {
+                id: column
                 width: parent.width
 
-                MetaLabel {
-                    text: "NO NOTIFICATIONS"
-                }
-            }
-
-            Cell {
-                visible: NotificationService.pending.length > 0
-                width: parent.width
-
-                MetaLabel {
-                    text: "PENDING / " + NotificationService.pending.length
-                }
-            }
-
-            Repeater {
-                model: NotificationService.pending
-
-                delegate: NotificationCard {
-                    id: pendingCard
-                    required property var modelData
-
-                    entry: pendingCard.modelData
-                    now: root._now
+                Cell {
+                    id: dndCell
                     width: parent.width
-                    invertOnHover: true
+                    accent: NotificationService.dnd
+                    selected: dndHover.containsMouse
 
-                    onDismiss: NotificationService.dismissOne(pendingCard.modelData.id)
-                    onBodyClicked: {
-                        if (pendingCard.modelData.actions.some(a => a.key === "default"))
-                            NotificationService.invokeAction(pendingCard.modelData.id, "default");
-                        else
-                            NotificationService.focusSender(pendingCard.modelData.id);
+                    Text {
+                        text: "DND"
+                        color: dndCell.foreground
+                        font.family: Theme.font.family
+                        font.pixelSize: Theme.fontSize.body
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
                     }
-                    onActionInvoked: key => NotificationService.invokeAction(pendingCard.modelData.id, key)
+
+                    MouseArea {
+                        id: dndHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: NotificationService.setDnd(!NotificationService.dnd)
+                    }
                 }
-            }
 
-            Cell {
-                visible: NotificationService.past.length > 0
-                width: parent.width
-
-                MetaLabel {
-                    text: "EARLIER / " + NotificationService.past.length
-                }
-            }
-
-            Repeater {
-                model: root._pastNewestFirst
-
-                delegate: NotificationCard {
-                    id: pastCard
-                    required property var modelData
-
-                    entry: pastCard.modelData
-                    now: root._now
+                Cell {
+                    visible: NotificationService.pending.length === 0 && NotificationService.past.length === 0
                     width: parent.width
-                    invertOnHover: true
 
-                    onDismiss: NotificationService.dismissOne(pastCard.modelData.id)
-                    onBodyClicked: {
-                        if (pastCard.modelData.actions.some(a => a.key === "default"))
-                            NotificationService.invokeAction(pastCard.modelData.id, "default");
-                        else
-                            NotificationService.focusSender(pastCard.modelData.id);
+                    MetaLabel {
+                        text: "NO NOTIFICATIONS"
                     }
-                    onActionInvoked: key => NotificationService.invokeAction(pastCard.modelData.id, key)
+                }
+
+                Cell {
+                    visible: NotificationService.pending.length > 0
+                    width: parent.width
+
+                    MetaLabel {
+                        text: "PENDING / " + NotificationService.pending.length
+                    }
+                }
+
+                Repeater {
+                    model: NotificationService.pending
+
+                    delegate: NotificationCard {
+                        id: pendingCard
+                        required property var modelData
+
+                        entry: pendingCard.modelData
+                        now: root._now
+                        width: parent.width
+                        invertOnHover: true
+
+                        onDismiss: NotificationService.dismissOne(pendingCard.modelData.id)
+                        onBodyClicked: {
+                            if (pendingCard.modelData.actions.some(a => a.key === "default"))
+                                NotificationService.invokeAction(pendingCard.modelData.id, "default");
+                            else
+                                NotificationService.focusSender(pendingCard.modelData.id);
+                        }
+                        onActionInvoked: key => NotificationService.invokeAction(pendingCard.modelData.id, key)
+                    }
+                }
+
+                Cell {
+                    visible: NotificationService.past.length > 0
+                    width: parent.width
+
+                    MetaLabel {
+                        text: "EARLIER / " + NotificationService.past.length
+                    }
+                }
+
+                Repeater {
+                    model: root._pastNewestFirst
+
+                    delegate: NotificationCard {
+                        id: pastCard
+                        required property var modelData
+
+                        entry: pastCard.modelData
+                        now: root._now
+                        width: parent.width
+                        invertOnHover: true
+
+                        onDismiss: NotificationService.dismissOne(pastCard.modelData.id)
+                        onBodyClicked: {
+                            if (pastCard.modelData.actions.some(a => a.key === "default"))
+                                NotificationService.invokeAction(pastCard.modelData.id, "default");
+                            else
+                                NotificationService.focusSender(pastCard.modelData.id);
+                        }
+                        onActionInvoked: key => NotificationService.invokeAction(pastCard.modelData.id, key)
+                    }
                 }
             }
         }

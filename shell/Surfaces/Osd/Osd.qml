@@ -70,7 +70,10 @@ PanelWindow {
     }
 
     screen: root._screen
-    visible: root.kind !== ""
+    // Held visible through the exit fade (DESIGN.md §4): the timer clears
+    // `kind`, the frame's opacity Behavior runs to 0, then the window
+    // unmaps. No input concerns — this surface never takes any.
+    visible: root.kind !== "" || frame.opacity > 0
     color: "transparent"
 
     WlrLayershell.namespace: "formalshell:osd"
@@ -153,6 +156,17 @@ PanelWindow {
         implicitHeight: row.implicitHeight + Theme.borderWidth
         width: implicitWidth
         height: implicitHeight
+
+        // Enter/exit (DESIGN.md §4): fade plus a rise from the bottom edge,
+        // one animated scalar so a retrigger mid-exit reverses in place.
+        // Kind-to-kind swaps while already showing (volume -> brightness)
+        // stay instant: opacity never leaves 1.
+        opacity: root.kind !== "" ? 1 : 0
+        transform: Translate { y: (1 - frame.opacity) * Theme.motion.slide }
+
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+        }
 
         // Opaque card backing (DESIGN.md's omarchy card chrome — "a single
         // bordered rectangle", M8b Task 5): without it the card was only

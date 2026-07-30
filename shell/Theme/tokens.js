@@ -51,6 +51,25 @@ function spacingTokens(scale) {
     return out;
 }
 
+// --- §4 motion tokens ---------------------------------------------------
+
+// The owner's brief verbatim: "fast and subtle, it should just look
+// better". `fast` paces hover fills, `standard` paces surface enter/exit —
+// both inside DESIGN.md §4's 90-140ms band. `slide` is the enter/exit
+// translate distance (§4's 4-8px). `enabled: false` (the motion.enabled
+// settings key) short-circuits both durations to 0 while leaving `slide`
+// intact: a zero-duration animation still lands on the same end state, so
+// disabling motion never moves a single pixel of chrome.
+var MOTION_BASE = { fast: 100, standard: 130, slide: 6 };
+
+function motionTokens(enabled) {
+    return {
+        fast: enabled ? MOTION_BASE.fast : 0,
+        standard: enabled ? MOTION_BASE.standard : 0,
+        slide: MOTION_BASE.slide
+    };
+}
+
 // --- 1.1 four interactive states --------------------------------------
 
 // fillAlpha/borderWidth/borderAlpha per state, independent of color — the
