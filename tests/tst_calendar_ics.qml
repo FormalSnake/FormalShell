@@ -144,4 +144,40 @@ TestCase {
         var events = [{ uid: "a", summary: "A", start: _local(2026, 2, 15), end: null, allDay: true }];
         compare(Ics.eventsOnDate(events, _local(2026, 2, 16)).length, 0);
     }
+
+    // mergeEvents
+
+    function _event(uid, summary) {
+        return { uid: uid, summary: summary, start: _local(2026, 2, 15), end: null, allDay: true };
+    }
+
+    function test_merge_concatenates_disjoint_uids_in_order() {
+        var merged = Ics.mergeEvents([_event("a", "A")], [_event("b", "B"), _event("c", "C")]);
+        compare(merged.length, 3);
+        compare(merged[0].uid, "a");
+        compare(merged[1].uid, "b");
+        compare(merged[2].uid, "c");
+    }
+
+    function test_merge_dedupes_by_uid_with_primary_winning() {
+        var merged = Ics.mergeEvents([_event("a", "ics copy")], [_event("a", "eds copy"), _event("b", "B")]);
+        compare(merged.length, 2);
+        compare(merged[0].summary, "ics copy");
+        compare(merged[1].uid, "b");
+    }
+
+    function test_merge_dedupes_within_one_array_too() {
+        var merged = Ics.mergeEvents([], [_event("a", "first"), _event("a", "second")]);
+        compare(merged.length, 1);
+        compare(merged[0].summary, "first");
+    }
+
+    function test_merge_keeps_every_event_with_an_empty_uid() {
+        var merged = Ics.mergeEvents([_event("", "one")], [_event("", "two")]);
+        compare(merged.length, 2);
+    }
+
+    function test_merge_of_two_empty_arrays_is_empty() {
+        compare(Ics.mergeEvents([], []).length, 0);
+    }
 }

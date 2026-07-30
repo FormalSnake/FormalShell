@@ -1,12 +1,12 @@
 .pragma library
 
 // Pure RFC 5545 VEVENT reader for the calendar panel's events feature (M6
-// Task 5's outcome — see docs/spikes/2026-07-28-eds-calendar-events.md:
-// EDS/GOA D-Bus calendar access proved infeasible without a compiled or
-// connection-holding helper, so events come from local .ics files in a
-// khal/vdir-style directory instead). No RRULE expansion: a recurring
-// event's anchoring VEVENT is read as a single occurrence and nothing
-// else — a documented v1 limitation, not an oversight.
+// Task 5's outcome — see docs/spikes/2026-07-28-eds-calendar-events.md).
+// Feeds from both of CalendarEventsService's backends: local .ics files in
+// a khal/vdir-style directory, and the raw ICS the formalshell-eds
+// companion CLI prints from EDS/GOA (M12 Task 3). No RRULE expansion: a
+// recurring event's anchoring VEVENT is read as a single occurrence and
+// nothing else — a documented v1 limitation, not an oversight.
 
 // RFC 5545 §3.1: content lines longer than 75 octets are folded onto a
 // continuation line starting with exactly one space or tab. Unfold before
@@ -90,6 +90,26 @@ function parseEvents(text) {
             events.push(event);
     }
     return events;
+}
+
+// Two parsed-event arrays -> one, deduped by UID with `primary` winning a
+// collision (the merge CalendarEventsService runs over its ics and EDS
+// backends). An event with an empty UID identifies nothing, so those are
+// always kept rather than collapsed onto each other.
+function mergeEvents(primary, secondary) {
+    var seen = Object.create(null);
+    var merged = [];
+    var all = primary.concat(secondary);
+    for (var i = 0; i < all.length; i++) {
+        var event = all[i];
+        if (event.uid !== "") {
+            if (seen[event.uid])
+                continue;
+            seen[event.uid] = true;
+        }
+        merged.push(event);
+    }
+    return merged;
 }
 
 function _sameDate(a, b) {

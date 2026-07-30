@@ -56,9 +56,16 @@ Panel {
 
     // "Today" is frozen at whatever it was when last computed — refreshed on
     // open (in case the panel sat instantiated-but-closed across midnight)
-    // and every minute while it stays open.
+    // and every minute while it stays open. Opening also re-reads both event
+    // backends (ics dir + EDS, M12 Task 3) so the grid isn't up to five
+    // minutes stale the moment it becomes visible.
     property date _today: new Date()
-    onIsOpenChanged: if (root.isOpen) root._today = new Date()
+    onIsOpenChanged: {
+        if (root.isOpen) {
+            root._today = new Date();
+            CalendarEventsService.refresh();
+        }
+    }
 
     Timer {
         interval: 60000

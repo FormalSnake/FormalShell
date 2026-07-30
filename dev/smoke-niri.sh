@@ -42,11 +42,17 @@
 # the bar's right region — see Panel.qml's own header comment), left open
 # through the run's normal screenshot so it shows in smoke.png/SMOKE_OK; it
 # has no auto-close, so no timing race with the rest of the run's triggers.
-# `--panel calendar` additionally proves real events render: the isolated
-# HOME always carries a one-event .ics fixture dated today (see the
-# calendar-events fixture setup below) pointed at by settings.json's
-# calendar.icsDir, so the day grid shows an accent dot on today's cell and
-# the TODAY section lists it by summary.
+# `--panel calendar` additionally proves real events render from BOTH of
+# CalendarEventsService's backends (M12 Task 3): the isolated HOME always
+# carries a one-event .ics fixture dated today (see the calendar-events
+# fixture setup below) pointed at by settings.json's calendar.icsDir, and a
+# drive script seeds one more real VEVENT into EDS's system-calendar over
+# the run's private session bus (`formalshell-eds seed`, a genuine
+# CreateObjects write that D-Bus-activates evolution-data-server in the
+# isolated session — never a mock) before opening the panel, whose on-open
+# refresh then reads it back through `formalshell-eds events`. The
+# screenshot must show both summaries under TODAY; the seed's own
+# stdout/rc lands in eds-seed.txt and a failed seed fails the run.
 # With --media, generates a short silent fixture track (ffmpeg lavfi
 # anullsrc, tagged with a title/artist via -metadata) and plays it with mpv
 # --script=<mpvScripts.mpris path> into the default (pipewire null-sink)
@@ -279,6 +285,17 @@ if $clipboard_mode; then
     wl_paste_bin=$(command -v wl-paste)
   else
     wl_paste_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-paste
+  fi
+fi
+
+# --panel calendar seeds a real VEVENT into EDS (M12 Task 3). In the VM
+# formalshell-eds sits in systemPackages; anywhere else, build it from this
+# repo's own flake output rather than guessing at a store path.
+if $panel_mode && [ "$panel_name" = "calendar" ]; then
+  if command -v formalshell-eds >/dev/null 2>&1; then
+    eds_bin=$(command -v formalshell-eds)
+  else
+    eds_bin=$(nix build .#formalshell-eds --no-link --print-out-paths)/bin/formalshell-eds
   fi
 fi
 
@@ -547,6 +564,7 @@ clip_list2_path="$shot_dir/clip-list-2.json"
 clip_copy_path="$shot_dir/clip-copy.txt"
 clip_paste_path="$shot_dir/clip-paste.txt"
 media_status_path="$shot_dir/media-status.json"
+eds_seed_path="$shot_dir/eds-seed.txt"
 media_pid_path="$shot_dir/mpv.pid"
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_error_path="$shot_dir/lock-error.png"
@@ -846,6 +864,25 @@ sleep 1
 EOF
 fi
 
+# --panel calendar's drive (M12 Task 3) replaces the generic sleep-3 panel
+# open below for that one panel name: seed one real VEVENT into EDS's
+# system-calendar first (the CreateObjects write itself D-Bus-activates
+# evolution-data-server on this run's private bus, under the isolated
+# HOME), then open the panel, whose on-open refresh reads the event back
+# through `formalshell-eds events`. Strictly ordered — seed, then open —
+# because the shell's own startup refresh has usually already run before
+# the seed lands.
+if $panel_mode && [ "$panel_name" = "calendar" ]; then
+  eds_drive_script="$shot_dir/eds-drive.sh"
+  cat > "$eds_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$eds_bin" seed "EDS FIXTURE EVENT" "\$(date +%F)" > "$eds_seed_path" 2>&1
+echo "rc=\$?" >> "$eds_seed_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call panel open calendar
+EOF
+fi
+
 # --lock's whole sequence lives in one script, same rationale as
 # clipboard_drive_script: everything here is strictly ordered (lock, prove
 # it over IPC, screenshot, type a wrong password, screenshot the error
@@ -1049,7 +1086,11 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && niri msg action screenshot-screen --path $osd_brightness_path\""
   fi
   if $panel_mode; then
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
+    if [ "$panel_name" = "calendar" ]; then
+      echo "spawn-at-startup \"bash\" \"$eds_drive_script\""
+    else
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
+    fi
   fi
   if $clipboard_mode; then
     echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
@@ -1128,6 +1169,12 @@ fi
     # smoke.png/SMOKE_OK is taken 3s after that, showing every registered
     # item as its own cell with the drawer already expanded.
     screenshot_delay=13
+  elif $panel_mode && [ "$panel_name" = "calendar" ]; then
+    # eds-drive.sh opens the panel only after its seed write returns
+    # (~4-6s in when this run's private bus has to cold-activate EDS
+    # first); 12s leaves the on-open refresh's own `formalshell-eds events`
+    # run comfortable room before the shot.
+    screenshot_delay=12
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -1233,6 +1280,19 @@ if $clipboard_mode; then
   fi
   if ! grep -q "clipboard smoke two" "$clip_paste_path"; then
     echo "SMOKE_FAIL: system clipboard did not flip to the re-copied entry — got: $(cat "$clip_paste_path")" >&2; exit 1
+  fi
+fi
+
+if $panel_mode && [ "$panel_name" = "calendar" ]; then
+  # The screenshot is the render proof; this guards the write path — a
+  # failed seed means the run showed the ics fixture alone and proved
+  # nothing about EDS.
+  if [ -s "$eds_seed_path" ] && grep -q '^rc=0$' "$eds_seed_path"; then
+    cat "$eds_seed_path"
+  else
+    echo "SMOKE_FAIL: formalshell-eds seed did not succeed" >&2
+    [ -f "$eds_seed_path" ] && cat "$eds_seed_path" >&2
+    exit 1
   fi
 fi
 
