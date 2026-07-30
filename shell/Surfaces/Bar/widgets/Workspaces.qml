@@ -2,23 +2,23 @@ import QtQuick
 import qs.Core
 import qs.Components
 import qs.Compositor
+import "../../../Bar/workspaces.js" as WorkspacesModel
 
-// One cell per workspace on this bar's output (DESIGN.md §3 Bar retrofit):
-// a standalone Cell per workspace — borderless at rest, hover-cursor chrome
-// on mouseover, the same discrete-module vocabulary every other bar widget
-// uses. The focused workspace is a full-bleed accent fill (DESIGN.md §2.4)
-// rather than a tinted border. Falls back to every workspace when none
-// match `outputName` (e.g. the compositor's output name disagrees with
-// Quickshell's screen name).
+// One cell per visible workspace on this bar's output (DESIGN.md §3 Bar
+// retrofit): a standalone Cell per workspace — borderless at rest,
+// hover-cursor chrome on mouseover, the same discrete-module vocabulary
+// every other bar widget uses. The focused workspace is a full-bleed accent
+// fill (DESIGN.md §2.4) rather than a tinted border. Which workspaces show
+// and in what order (sorted by the backend's `idx` ordinal, empty
+// non-active ones hidden, all-workspaces fallback when none match
+// `outputName`) is ../../../Bar/workspaces.js's call.
 Item {
     id: root
 
     property string outputName: ""
 
-    readonly property var onOutput: CompositorService.workspaces.filter(function (ws) {
-        return ws.output === root.outputName;
-    })
-    readonly property var visibleWorkspaces: onOutput.length > 0 ? onOutput : CompositorService.workspaces
+    readonly property var visibleWorkspaces: WorkspacesModel.visibleModel(
+        CompositorService.workspaces, CompositorService.windows, root.outputName)
 
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
