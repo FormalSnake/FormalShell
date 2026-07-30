@@ -49,6 +49,9 @@ import QtQuick
 // github.intervalMs (number, default 300000 — GithubWidget's `gh api`
 // poll cadence in ms; the widget itself is opt-in via bar.layout,
 // M12 Task 8).
+// screenshot.directory (string, default "" meaning $HOME/Pictures/
+// Screenshots: where ScreenshotIpc's grim captures land, created on first
+// capture, M12 Task 9).
 Singleton {
     id: root
 

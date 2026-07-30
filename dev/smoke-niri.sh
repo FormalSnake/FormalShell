@@ -188,6 +188,20 @@
 # still omits the `bar` key entirely, so their own screenshots keep proving
 # the no-config fallback renders today's exact arrangement.
 #
+# With --screenshot, drives the `screenshot` IPC target (M12 Task 9):
+# `screenshot full` replies synchronously with the destination path (the
+# grim/wl-copy pipeline it starts is async; `region` needs a human dragging
+# a slurp selection, so only `full` is headlessly verifiable), the drive
+# polls `screenshot status` until capturing:false, then dumps the
+# clipboard's offered MIME types via wl-paste. Post-run assertions: the
+# reply path exists and file(1) calls it a PNG, status settled with an
+# empty lastError and lastPath matching the reply, and the type dump
+# offers image/png (the wl-copy proof). No screenshot.directory is set in
+# the settings fixture on purpose: the capture landing under the isolated
+# HOME's Pictures/Screenshots proves the documented default resolves. This
+# run's generic smoke.png, taken at the usual 8s, additionally shows the
+# SCREENSHOT SAVED toast (fired around 4s, 6s popup timeout).
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -226,6 +240,7 @@ screensaver_gif_mode=false
 picker_mode=false
 tray_mode=false
 bar_layout_mode=false
+screenshot_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -243,7 +258,8 @@ while [ $# -gt 0 ]; do
     --picker) picker_mode=true; shift ;;
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout]" >&2; exit 1 ;;
+    --screenshot) screenshot_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
   esac
 done
 
@@ -284,10 +300,23 @@ if $clipboard_mode; then
   else
     wl_copy_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-copy
   fi
+fi
+
+# screenshot_mode only reads the clipboard back (the shell's own wrapper
+# PATH carries the wl-copy side); clipboard_mode needs both directions.
+if $clipboard_mode || $screenshot_mode; then
   if command -v wl-paste >/dev/null 2>&1; then
     wl_paste_bin=$(command -v wl-paste)
   else
     wl_paste_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-paste
+  fi
+fi
+
+if $screenshot_mode; then
+  if command -v file >/dev/null 2>&1; then
+    file_bin=$(command -v file)
+  else
+    file_bin=$(nix build 'nixpkgs#file^out' --no-link --print-out-paths)/bin/file
   fi
 fi
 
@@ -596,6 +625,9 @@ tray_status2_path="$shot_dir/tray-status-2.json"
 tray_collapsed_path="$shot_dir/tray-collapsed.png"
 tray_pids_path="$shot_dir/tray-pids.txt"
 bar_layout_path="$shot_dir/bar-layout.png"
+screenshot_reply_path="$shot_dir/screenshot-reply.txt"
+screenshot_status_path="$shot_dir/screenshot-status.json"
+screenshot_types_path="$shot_dir/screenshot-types.txt"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -1034,6 +1066,31 @@ cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selecti
 EOF
 fi
 
+# --screenshot: `screenshot full` replies with the destination path before
+# its grim/wl-copy pipeline finishes (IpcHandler replies are synchronous;
+# see ScreenshotIpc.qml's header), so the drive polls `screenshot status`
+# until capturing:false before dumping the clipboard's offered MIME types,
+# the wl-copy proof. The capture lands under the isolated HOME's default
+# Pictures/Screenshots directory (no screenshot.directory in the settings
+# fixture on purpose), and the assertions below read it back by the reply
+# path after the run.
+if $screenshot_mode; then
+  screenshot_drive_script="$shot_dir/screenshot-drive.sh"
+  cat > "$screenshot_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot full > "$screenshot_reply_path" 2>&1
+for _ in \$(seq 1 20); do
+  "$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_status_path" 2>&1
+  if grep -q '"capturing":false' "$screenshot_status_path"; then
+    break
+  fi
+  sleep 0.5
+done
+"$wl_paste_bin" --list-types > "$screenshot_types_path" 2>&1
+EOF
+fi
+
 # --tray: launches six real SNI producers in the background (PIDs recorded
 # for the kill step below), then proves the collapsed state (status dump +
 # screenshot) before driving the same expand() the overflow cell's own click
@@ -1178,6 +1235,9 @@ fi
   fi
   if $tray_mode; then
     echo "spawn-at-startup \"bash\" \"$tray_drive_script\""
+  fi
+  if $screenshot_mode; then
+    echo "spawn-at-startup \"bash\" \"$screenshot_drive_script\""
   fi
   if $bar_layout_mode; then
     # 5s: shell startup plus room for the command module's first poll
@@ -1571,6 +1631,41 @@ if $bar_layout_mode; then
     echo "SMOKE_BAR_LAYOUT $bar_layout_path"
   else
     echo "SMOKE_FAIL: no bar-layout screenshot produced" >&2; exit 1
+  fi
+fi
+
+if $screenshot_mode; then
+  if [ -s "$screenshot_reply_path" ]; then
+    cat "$screenshot_reply_path"
+  else
+    echo "SMOKE_FAIL: no screenshot IPC reply produced" >&2; exit 1
+  fi
+  screenshot_file=$(head -n1 "$screenshot_reply_path" | tr -d '\r')
+  case "$screenshot_file" in
+    error*|"") echo "SMOKE_FAIL: screenshot full replied with an error: $(cat "$screenshot_reply_path")" >&2; exit 1 ;;
+  esac
+  if [ ! -f "$screenshot_file" ]; then
+    echo "SMOKE_FAIL: screenshot reply path does not exist: $screenshot_file" >&2; exit 1
+  fi
+  if ! "$file_bin" "$screenshot_file" | grep -q "PNG image data"; then
+    echo "SMOKE_FAIL: screenshot file is not a valid PNG, file(1) says: $("$file_bin" -b "$screenshot_file")" >&2; exit 1
+  fi
+  echo "SMOKE_SCREENSHOT $screenshot_file ($("$file_bin" -b "$screenshot_file"))"
+  if [ -s "$screenshot_status_path" ]; then
+    cat "$screenshot_status_path"
+  else
+    echo "SMOKE_FAIL: no screenshot status produced" >&2; exit 1
+  fi
+  if ! grep -q '"capturing":false' "$screenshot_status_path" || ! grep -q '"lastError":""' "$screenshot_status_path"; then
+    echo "SMOKE_FAIL: screenshot status did not settle clean: $(cat "$screenshot_status_path")" >&2; exit 1
+  fi
+  if ! grep -qF "\"lastPath\":\"$screenshot_file\"" "$screenshot_status_path"; then
+    echo "SMOKE_FAIL: screenshot status lastPath does not match the reply path ($screenshot_file): $(cat "$screenshot_status_path")" >&2; exit 1
+  fi
+  if [ -s "$screenshot_types_path" ] && grep -q "image/png" "$screenshot_types_path"; then
+    cat "$screenshot_types_path"
+  else
+    echo "SMOKE_FAIL: wl-paste --list-types did not offer image/png after the capture: $(cat "$screenshot_types_path" 2>/dev/null)" >&2; exit 1
   fi
 fi
 

@@ -95,4 +95,5 @@ ShellRoot {
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
     PickerIpc { picker: imagePickerInstance }
+    ScreenshotIpc {}
 }

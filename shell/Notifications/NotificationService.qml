@@ -230,6 +230,30 @@ Singleton {
         function onDndChanged() { root._state = Model.setDnd(root._state, Core.State.dnd); }
     }
 
+    // Shell-authored notifications (ScreenshotIpc's saved/failed feedback):
+    // feed the reducer directly with a shell-local string id. The server
+    // path is unusable from inside the process that owns the bus name, and
+    // round-tripping through notify-send would add a binary dependency for
+    // no isolation gain. String ids can't collide with the server's uint
+    // ids; every _live[] lookup simply misses, which each caller already
+    // guards.
+    property int _localSerial: 0
+
+    function notify(summary, body) {
+        root._localSerial += 1;
+        root._state = Model.add(root._state, {
+            id: "local-" + root._localSerial,
+            appName: "formalshell",
+            appIcon: "",
+            summary: summary,
+            body: body,
+            urgency: 1,
+            actions: [],
+            image: "",
+            senderIsNotifySend: false
+        }, Date.now(), {});
+    }
+
     // Fires the most recent popup-or-pending entry's default action if it
     // has one, then dismisses it either way: a popup is archived to past
     // (dismissPopup's seen-and-keep contract), a pending entry is dropped

@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, qt6, formalshell-eds }:
+{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, qt6, formalshell-eds }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -14,7 +14,7 @@ stdenvNoCC.mkDerivation {
     cp -r ${../branding} $out/share/formalshell/branding
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl formalshell-eds ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds ]} \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \
