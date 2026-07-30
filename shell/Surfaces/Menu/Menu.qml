@@ -487,6 +487,61 @@ PanelWindow {
         root._completeSelect(searchInput.text);
     }
 
+    // Emoji instant paste (M13 Task 6): an activated row carrying `typeText`
+    // (Providers.emojiRows) closes the menu like any action, then auto-types
+    // the char into whatever window focus returned to. The wtype spawn is
+    // gated on the window's actual visible flip plus a short settle — typing
+    // while this keyboard-exclusive surface still holds focus would land the
+    // char in the menu's own search field. wtype missing from PATH (the sh
+    // wrapper's exit 127) or a compositor without the virtual-keyboard
+    // protocol degrade to the copy that already ran: one warning, no error
+    // surface. Re-opening before the settle fires drops the pending char
+    // (onVisibleChanged below) — better untyped than typed at the menu.
+    property string _pendingTypeText: ""
+
+    onVisibleChanged: {
+        if (visible) {
+            typeSettleTimer.stop();
+            root._pendingTypeText = "";
+        } else if (root._pendingTypeText !== "") {
+            typeSettleTimer.restart();
+        }
+    }
+
+    Timer {
+        id: typeSettleTimer
+        interval: 150
+        onTriggered: {
+            // No `--` guard needed: no emoji starts with ASCII `-` (keycap
+            // sequences start with `#`/`*`/digits), and the list form keeps
+            // the char out of any shell interpolation.
+            typeProc.command = ["sh", "-c", 'command -v wtype >/dev/null 2>&1 || exit 127; exec wtype "$1"', "sh", root._pendingTypeText];
+            root._pendingTypeText = "";
+            typeProc.running = true;
+        }
+    }
+
+    Process {
+        id: typeProc
+        onExited: exitCode => {
+            if (exitCode === 127)
+                console.warn("Menu: wtype not on PATH, emoji copied but not typed");
+            else if (exitCode !== 0)
+                console.warn("Menu: wtype failed (exit " + exitCode + "), emoji copied but not typed");
+        }
+    }
+
+    // The smoke rig's stand-in for Enter on the row at `index`
+    // (PickerIpc.choose's rationale: real keyboard delivery into an
+    // exclusive-focus layer surface isn't provable headlessly). Same path a
+    // real Enter takes.
+    function activate(index) {
+        if (!root.isOpen)
+            return false;
+        root._activateRow(index);
+        return true;
+    }
+
     // Debug-only: ranks `q` against the live tree without requiring the
     // surface to be open — backs the `debug query` IPC hook used to verify
     // the apps provider + fuzzy filtering where keyboard injection isn't
@@ -576,6 +631,8 @@ PanelWindow {
                 return;
             }
             root._runAction(node.action);
+            if (node.typeText)
+                root._pendingTypeText = node.typeText;
             root.close();
             return;
         }

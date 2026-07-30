@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, qt6, formalshell-eds }:
+{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -12,9 +12,15 @@ stdenvNoCC.mkDerivation {
     # in the repo, so Quickshell.shellPath("branding/...") still resolves it
     # once installed here alongside the copied shell tree.
     cp -r ${../branding} $out/share/formalshell/branding
+    # wtype (the menu's emoji instant-paste, M13 Task 6) is suffixed, not
+    # prefixed: an environment wtype must stay able to shadow the bundled
+    # one — the smoke rig substitutes an argv-logging shim to prove the
+    # spawn (real typing into a refocused window is host-trial territory),
+    # and any real wtype is equivalent for the typing itself.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds ]} \
+      --suffix PATH : ${lib.makeBinPath [ wtype ]} \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \

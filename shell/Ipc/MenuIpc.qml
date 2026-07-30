@@ -1,8 +1,8 @@
 import Quickshell.Io
 
-// `qs ipc call menu toggle|summon|close|refresh|ping|status|select|input` — the
-// menu's summon routes for direct compositor keybinds, plus the select/input
-// dmenu-replacement modes. select/input can't return their result directly
+// `qs ipc call menu toggle|summon|activate|close|refresh|ping|status|select|
+// input` — the menu's summon routes for direct compositor keybinds, plus the
+// select/input dmenu-replacement modes. select/input can't return their result directly
 // (IPC calls are synchronous request/response, the UI answer isn't): the
 // chosen value (or a cancel) is instead written to
 // $XDG_STATE_HOME/formalshell/menu-selection.txt as `{token, value}` /
@@ -36,6 +36,17 @@ IpcHandler {
             return "error: menu not ready";
         menu.open(route);
         return "ok";
+    }
+
+    // The rig's stand-in for Enter on the row at `index` (the same division
+    // picker's choose() draws: the action a real Enter takes, exposed over
+    // IPC rather than depending on unproven keyboard delivery into an
+    // exclusive-focus layer surface). Backs the --menu emoji instant-paste
+    // assertion.
+    function activate(index: int): string {
+        if (!menu)
+            return "error: menu not ready";
+        return menu.activate(index) ? "ok" : "error: menu not open";
     }
 
     function close(): string {

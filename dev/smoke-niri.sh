@@ -11,7 +11,12 @@
 # resulting selection.txt is read back to prove the {cancelled:true} write.
 # Menu.qml's FORMALSHELL_SMOKE_OPEN_MENU env-gated auto-open still exists
 # (harmless, useful for manual debugging) but this script no longer relies
-# on it now that the real IPC route is wired.
+# on it now that the real IPC route is wired. After the screenshot, the
+# finish script also drives the emoji instant-paste round trip (M13 Task 6):
+# `menu summon emoji` + `menu activate 0` wl-copies GRINNING FACE and, once
+# the surface has closed, spawns wtype with the same char — asserted via a
+# wl-paste readback plus an argv-logging wtype shim on the shell's PATH
+# (real typing into a refocused window is host-trial territory).
 # With --notify, fires `notify-send -u normal` then `-u critical` in-session
 # and screenshots the resulting toasts. Then flips DND on over the existing
 # `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
@@ -324,9 +329,10 @@ if $clipboard_mode; then
   fi
 fi
 
-# screenshot_mode only reads the clipboard back (the shell's own wrapper
-# PATH carries the wl-copy side); clipboard_mode needs both directions.
-if $clipboard_mode || $screenshot_mode; then
+# screenshot_mode and menu_mode only read the clipboard back (the shell's
+# own wrapper PATH carries the wl-copy side); clipboard_mode needs both
+# directions.
+if $clipboard_mode || $screenshot_mode || $menu_mode; then
   if command -v wl-paste >/dev/null 2>&1; then
     wl_paste_bin=$(command -v wl-paste)
   else
@@ -614,6 +620,9 @@ nix_query_arm_path="$shot_dir/nix-query-arm.json"
 nix_query_path="$shot_dir/nix-query.json"
 wall_query_path="$shot_dir/wall-query.json"
 toggle_path="$shot_dir/menu-toggle.txt"
+emoji_drive_path="$shot_dir/emoji-drive.txt"
+emoji_paste_path="$shot_dir/emoji-paste.txt"
+emoji_type_path="$shot_dir/emoji-wtype.txt"
 selection_path="$shot_dir/selection.txt"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
@@ -932,6 +941,25 @@ cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 
 } > "$toggle_path" 2>&1
 EOF
 
+  # Emoji instant paste (M13 Task 6), appended to the finish script so it
+  # runs from the same closed state the toggle round trip leaves behind:
+  # re-summon at the emoji route and activate row 0 (GRINNING FACE, the
+  # deterministic browse head; `menu activate` is the rig's stand-in for
+  # Enter, PickerIpc.choose's division). The row's action wl-copies the
+  # char, then Menu.qml's post-close settle spawns wtype — resolved here to
+  # the argv-logging shim below, which outranks the package's own bundled
+  # wtype because package.nix wires that one in with --suffix (see its
+  # comment). The 2s sleep covers close + 150ms settle + spawn on the VM's
+  # slow rig; real typing into a refocused window is host-trial territory.
+  cat >> "$menu_finish_script" <<EOF
+{
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu summon emoji
+  "$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0
+} > "$emoji_drive_path" 2>&1
+sleep 2
+"$wl_paste_bin" --no-newline > "$emoji_paste_path" 2>&1 || true
+EOF
+
   # PATH-shimmed nix fixture (M12 Task 7, same hermetic-producer idea as
   # dev/sni-stub.py): a canned `nix search nixpkgs <q> --json` answer so the
   # menu's nix runner plumbing (debounce -> Process -> parse -> rows) is
@@ -950,6 +978,17 @@ fi
 exit 1
 EOF
   chmod +x "$nix_shim_dir/nix"
+
+  # PATH-shimmed wtype (M13 Task 6, same hermetic-producer idea as the nix
+  # shim above): logs its argv instead of typing, proving Menu.qml's
+  # post-close spawn fired with the raw char.
+  wtype_shim_dir="$shot_dir/wtype-shim"
+  mkdir -p "$wtype_shim_dir"
+  cat > "$wtype_shim_dir/wtype" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" >> "$emoji_type_path"
+EOF
+  chmod +x "$wtype_shim_dir/wtype"
 fi
 
 # --clipboard's whole sequence lives in one script (internal sleeps, one
@@ -1197,7 +1236,7 @@ fi
   # what the nested session would inherit anyway.
   shim_path_prefix=""
   if $menu_mode; then
-    shim_path_prefix="$nix_shim_dir:$shim_path_prefix"
+    shim_path_prefix="$nix_shim_dir:$wtype_shim_dir:$shim_path_prefix"
   fi
   if $bar_layout_mode || $panel_github_mode; then
     shim_path_prefix="$gh_shim_dir:$shim_path_prefix"
@@ -1302,14 +1341,15 @@ fi
     # (fires immediately once Config.settings resolves, well under 2s).
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && niri msg action screenshot-screen --path $bar_layout_path\""
   fi
-  # menu_mode's finish script (menu close + selection read) fires 1s after
-  # the screenshot at sleep 9 — give it a 3s buffer before quit instead of
-  # the other modes' 1s so it has time to land first. osd_mode's brightness
-  # leg (sleep 13/14, see above) needs the same kind of buffer past its own
-  # sleep-10 screenshot.
+  # menu_mode's finish script (menu close + selection read + toggle round
+  # trip + the emoji instant-paste drive with its own internal 2s settle
+  # wait) fires 1s after the screenshot at sleep 9 and runs ~4s — give it a
+  # 6s buffer before quit instead of the other modes' 1s so it has time to
+  # land first. osd_mode's brightness leg (sleep 13/14, see above) needs
+  # the same kind of buffer past its own sleep-10 screenshot.
   tail_gap=1
   if $menu_mode; then
-    tail_gap=3
+    tail_gap=6
   elif $osd_mode; then
     tail_gap=5
   fi
@@ -1470,6 +1510,33 @@ if $menu_mode; then
     echo "SMOKE_FAIL: menu query ':nix hello' did not return the canned nix attr row" >&2
     [ -f "$nix_query_arm_path" ] && cat "$nix_query_arm_path" >&2
     [ -f "$nix_query_path" ] && cat "$nix_query_path" >&2
+    exit 1
+  fi
+  # Emoji instant paste (M13 Task 6): summon + activate must both answer
+  # ok, the row's copy action must land on the real session clipboard, and
+  # the post-close settle must have spawned wtype with the same raw char
+  # (the argv-logging shim's file).
+  if [ -s "$emoji_drive_path" ] && [ "$(grep -c '^ok$' "$emoji_drive_path")" = "2" ]; then
+    cat "$emoji_drive_path"
+  else
+    echo "SMOKE_FAIL: emoji summon/activate did not both answer ok" >&2
+    [ -f "$emoji_drive_path" ] && cat "$emoji_drive_path" >&2
+    exit 1
+  fi
+  # wl-paste --no-newline leaves no trailing newline — explicit echo, same
+  # as clip_paste_path below.
+  if [ -s "$emoji_paste_path" ] && grep -qF '😀' "$emoji_paste_path"; then
+    cat "$emoji_paste_path"; echo
+  else
+    echo "SMOKE_FAIL: emoji activation did not wl-copy 😀" >&2
+    [ -f "$emoji_paste_path" ] && cat "$emoji_paste_path" >&2
+    exit 1
+  fi
+  if [ -s "$emoji_type_path" ] && grep -qF '😀' "$emoji_type_path"; then
+    cat "$emoji_type_path"
+  else
+    echo "SMOKE_FAIL: wtype was not invoked with 😀 after the menu closed" >&2
+    [ -f "$emoji_type_path" ] && cat "$emoji_type_path" >&2
     exit 1
   fi
 fi

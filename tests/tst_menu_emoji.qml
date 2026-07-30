@@ -40,6 +40,9 @@ TestCase {
         compare(rows[0].label, "THUMBS UP");
         compare(rows[0].kind, "action");
         compare(rows[0].action, "wl-copy -- '👍'");
+        // typeText marks the row for Menu.qml's post-close wtype hook
+        // (M13 Task 6) — the raw char, never shell-quoted.
+        compare(rows[0].typeText, "👍");
     }
 
     function test_exact_beats_earlier_substring() {

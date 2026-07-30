@@ -143,6 +143,9 @@ function emojiSearch(list, query) {
 // icon slot, the uppercase name is the label. Single quotes are required
 // around the char: keycap sequences start with ASCII `#`/`*`/digits (comment
 // and glob hazards unquoted), and no emoji contains an ASCII apostrophe.
+// `typeText` marks the row for Menu.qml's instant-paste hook (M13 Task 6):
+// on top of the copy, the char is auto-typed via wtype into whatever window
+// focus returns to once the menu surface has actually closed.
 function emojiRows(list, query) {
     return emojiSearch(list, query).map(function (e) {
         return {
@@ -154,6 +157,7 @@ function emojiRows(list, query) {
             aliases: [],
             kind: "action",
             action: "wl-copy -- '" + e.ch + "'",
+            typeText: e.ch,
             childIds: []
         };
     });
