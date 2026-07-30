@@ -209,19 +209,27 @@
 # still omits the `bar` key entirely, so their own screenshots keep proving
 # the no-config fallback renders today's exact arrangement.
 #
-# With --screenshot, drives the `screenshot` IPC target (M12 Task 9):
-# `screenshot full` replies synchronously with the destination path (the
-# grim/wl-copy pipeline it starts is async; `region` needs a human dragging
-# a slurp selection, so only `full` is headlessly verifiable), the drive
-# polls `screenshot status` until capturing:false, then dumps the
-# clipboard's offered MIME types via wl-paste. Post-run assertions: the
-# reply path exists and file(1) calls it a PNG, status settled with an
-# empty lastError and lastPath matching the reply, and the type dump
-# offers image/png (the wl-copy proof). No screenshot.directory is set in
-# the settings fixture on purpose: the capture landing under the isolated
-# HOME's Pictures/Screenshots proves the documented default resolves. This
-# run's generic smoke.png, taken at the usual 8s, additionally shows the
-# SCREENSHOT SAVED toast (fired around 4s, 6s popup timeout).
+# With --screenshot, drives the `screenshot` IPC target (M12 Task 9, M13
+# Task 7). First the region/cancel round trip: `screenshot region` starts a
+# real themed slurp in the nested session (it blocks on a drag no headless
+# run can supply — the exact stuck state the cancel path exists for), the
+# drive proves it via pgrep plus status capturing:true, then `screenshot
+# cancel` kills it and status must settle to capturing:false /
+# lastCancelled:true / empty lastError with slurp gone and no file written.
+# Then the full-capture flow in the same session: `screenshot full` replies
+# synchronously with the destination path (the grim/wl-copy pipeline it
+# starts is async), the drive polls `screenshot status` until
+# capturing:false, then dumps the clipboard's offered MIME types via
+# wl-paste. Post-run assertions: the reply path exists and file(1) calls it
+# a PNG, status settled with an empty lastError and lastPath matching the
+# reply, and the type dump offers image/png (the wl-copy proof). No
+# screenshot.directory is set in the settings fixture on purpose: the
+# capture landing under the isolated HOME's Pictures/Screenshots proves the
+# documented default resolves. This run's generic smoke.png, taken at the
+# usual 8s, additionally shows the SCREENSHOT CANCELLED and SCREENSHOT
+# SAVED toasts (fired around 4-5s, 6s popup timeout). Slurp's dim/accent
+# overlay look and a real drag stay host-trial; the 90s watchdog rides the
+# same _cancel path the verb drives, so the verb round trip is its proof.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -666,6 +674,12 @@ bar_layout_path="$shot_dir/bar-layout.png"
 screenshot_reply_path="$shot_dir/screenshot-reply.txt"
 screenshot_status_path="$shot_dir/screenshot-status.json"
 screenshot_types_path="$shot_dir/screenshot-types.txt"
+screenshot_region_reply_path="$shot_dir/screenshot-region-reply.txt"
+screenshot_region_status_path="$shot_dir/screenshot-region-status.json"
+screenshot_cancel_reply_path="$shot_dir/screenshot-cancel-reply.txt"
+screenshot_cancelled_status_path="$shot_dir/screenshot-cancelled-status.json"
+screenshot_slurp_before_path="$shot_dir/screenshot-slurp-before.txt"
+screenshot_slurp_after_path="$shot_dir/screenshot-slurp-after.txt"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -1158,19 +1172,38 @@ cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selecti
 EOF
 fi
 
-# --screenshot: `screenshot full` replies with the destination path before
+# --screenshot: the region/cancel round trip runs first (M13 Task 7):
+# `screenshot region` launches a real themed slurp in the nested session and
+# blocks on a drag no headless run can supply — which is exactly the stuck
+# state the cancel path exists for. The drive proves slurp is genuinely
+# running (pgrep, plus status capturing:true), then `screenshot cancel` kills
+# it: status must settle to capturing:false with lastCancelled:true and an
+# empty lastError, pgrep must come back empty, and the region reply path
+# must never appear on disk. Then the original full-capture flow runs in the
+# same session: `screenshot full` replies with the destination path before
 # its grim/wl-copy pipeline finishes (IpcHandler replies are synchronous;
 # see ScreenshotIpc.qml's header), so the drive polls `screenshot status`
 # until capturing:false before dumping the clipboard's offered MIME types,
 # the wl-copy proof. The capture lands under the isolated HOME's default
 # Pictures/Screenshots directory (no screenshot.directory in the settings
 # fixture on purpose), and the assertions below read it back by the reply
-# path after the run.
+# path after the run. Slurp's overlay look (dim + accent border) and a real
+# drag stay host-trial: no synthetic pointer exists here. The watchdog
+# rides the same _cancel path the cancel verb drives, at its 90s default —
+# too slow to wait out in a smoke run, so the verb round trip is its proof.
 if $screenshot_mode; then
   screenshot_drive_script="$shot_dir/screenshot-drive.sh"
   cat > "$screenshot_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot region > "$screenshot_region_reply_path" 2>&1
+sleep 1
+pgrep -x slurp > "$screenshot_slurp_before_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_region_status_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot cancel > "$screenshot_cancel_reply_path" 2>&1
+sleep 1
+pgrep -x slurp > "$screenshot_slurp_after_path" 2>&1 || true
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_cancelled_status_path" 2>&1
 "$qs_bin" ipc --any-display -p "$shell_path" call screenshot full > "$screenshot_reply_path" 2>&1
 for _ in \$(seq 1 20); do
   "$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_status_path" 2>&1
@@ -1828,6 +1861,41 @@ if $bar_layout_mode; then
 fi
 
 if $screenshot_mode; then
+  if [ -s "$screenshot_region_reply_path" ]; then
+    cat "$screenshot_region_reply_path"
+  else
+    echo "SMOKE_FAIL: no screenshot region IPC reply produced" >&2; exit 1
+  fi
+  screenshot_region_file=$(head -n1 "$screenshot_region_reply_path" | tr -d '\r')
+  case "$screenshot_region_file" in
+    error*|"") echo "SMOKE_FAIL: screenshot region replied with an error: $(cat "$screenshot_region_reply_path")" >&2; exit 1 ;;
+  esac
+  if [ ! -s "$screenshot_slurp_before_path" ]; then
+    echo "SMOKE_FAIL: no slurp process found while the region capture was pending — slurp never launched" >&2; exit 1
+  fi
+  if ! grep -q '"capturing":true' "$screenshot_region_status_path"; then
+    echo "SMOKE_FAIL: status did not report capturing:true while slurp was pending: $(cat "$screenshot_region_status_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$screenshot_cancel_reply_path"; then
+    echo "SMOKE_FAIL: screenshot cancel did not return ok — got: $(cat "$screenshot_cancel_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -s "$screenshot_slurp_after_path" ]; then
+    echo "SMOKE_FAIL: slurp still running after cancel (pids: $(cat "$screenshot_slurp_after_path"))" >&2; exit 1
+  fi
+  if [ -s "$screenshot_cancelled_status_path" ]; then
+    cat "$screenshot_cancelled_status_path"
+  else
+    echo "SMOKE_FAIL: no post-cancel screenshot status produced" >&2; exit 1
+  fi
+  if ! grep -q '"capturing":false' "$screenshot_cancelled_status_path" \
+    || ! grep -q '"lastCancelled":true' "$screenshot_cancelled_status_path" \
+    || ! grep -q '"lastError":""' "$screenshot_cancelled_status_path"; then
+    echo "SMOKE_FAIL: post-cancel status did not settle to a clean cancel: $(cat "$screenshot_cancelled_status_path")" >&2; exit 1
+  fi
+  if [ -e "$screenshot_region_file" ]; then
+    echo "SMOKE_FAIL: cancelled region capture still wrote a file: $screenshot_region_file" >&2; exit 1
+  fi
+  echo "SMOKE_SCREENSHOT_CANCEL region pending -> cancelled clean, slurp killed, no file at $screenshot_region_file"
   if [ -s "$screenshot_reply_path" ]; then
     cat "$screenshot_reply_path"
   else
