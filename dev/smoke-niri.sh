@@ -161,7 +161,10 @@
 # rather than reinvented.
 #
 # With --bar-layout, points settings.json's bar.layout at a left region led
-# by six bar.modules entries, then the reordered builtins (activeWindow
+# by the opt-in github builtin (M12 Task 8, against a PATH-shimmed `gh`
+# returning canned graphql counts, same hermetic-producer idea as the nix
+# shim below — first in the list so the region's clip can never hide it),
+# then six bar.modules entries, then the reordered builtins (activeWindow
 # before workspaces — swapped from today's default, M10 Task 3): a
 # "command" module printing known Waybar-JSON `{text, tooltip, class}`
 # (happy path), four more "command" modules that each exercise one of
@@ -693,7 +696,7 @@ bar_cmd_badjson_path="$shot_dir/bar-cmd-badjson.sh"
 bar_cmd_timeout_path="$shot_dir/bar-cmd-timeout.sh"
 bar_qml_fixture_path="$shot_dir/bar-qml-fixture.qml"
 if $bar_layout_mode; then
-  bar_settings=', "bar": {"layout": {"left": ["custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
+  bar_settings=', "bar": {"layout": {"left": ["github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
 fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
 {"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings}
@@ -745,6 +748,22 @@ Text {
     font.pixelSize: Theme.fontSize.body
 }
 EOF
+  # PATH-shimmed gh fixture (M12 Task 8, same hermetic-producer idea as the
+  # nix shim above): a canned `gh api graphql` answer in the exact shape
+  # GithubWidget.qml's combined search query returns, so the screenshot
+  # proves the whole poll -> parse -> "3/2" cell path without network or
+  # auth. Real `gh` behaviour (auth, exit code 4) is host-trial territory.
+  gh_shim_dir="$shot_dir/gh-shim"
+  mkdir -p "$gh_shim_dir"
+  cat > "$gh_shim_dir/gh" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = "api" ]; then
+  printf '%s\n' '{"data":{"prs":{"issueCount":3},"issues":{"issueCount":2}}}'
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "$gh_shim_dir/gh"
 fi
 
 if $picker_mode; then
@@ -1056,14 +1075,21 @@ fi
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
   echo '}'
+  # Shims must sit ahead of the real binaries on the SHELL's own PATH
+  # (Menu.qml's search Process and GithubWidget.qml's poll inherit it) —
+  # scoped to this one spawn so a host whose $niri_bin is itself a
+  # `nix run ...` prefix, and every drive script below, keep resolving the
+  # real nix/gh. $PATH is expanded here at generation time: it's exactly
+  # what the nested session would inherit anyway.
+  shim_path_prefix=""
   if $menu_mode; then
-    # The nix shim must sit ahead of any real nix on the SHELL's own PATH
-    # (Menu.qml's search Process inherits it) — scoped to this one spawn so
-    # a host whose $niri_bin is itself a `nix run ...` prefix, and every
-    # drive script below, keep resolving the real nix. $PATH is expanded
-    # here at generation time: it's exactly what the nested session would
-    # inherit anyway.
-    echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$nix_shim_dir:$PATH' exec '$PWD/result/bin/formalshell'\""
+    shim_path_prefix="$nix_shim_dir:$shim_path_prefix"
+  fi
+  if $bar_layout_mode; then
+    shim_path_prefix="$gh_shim_dir:$shim_path_prefix"
+  fi
+  if [ -n "$shim_path_prefix" ]; then
+    echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell'\""
   else
     echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
   fi

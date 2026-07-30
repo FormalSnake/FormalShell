@@ -72,6 +72,16 @@ TestCase {
         compare(r.warnings.length, 1);
     }
 
+    function test_github_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["github"] } });
+        compare(names(r.regions.right), "github");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("github") < 0);
+        verify(names(d.regions.center).indexOf("github") < 0);
+        verify(names(d.regions.right).indexOf("github") < 0);
+    }
+
     function test_custom_module_id_never_collides_with_builtin_name() {
         var mod = { id: "clock", type: "command", command: ["echo", "hi"] };
         var r = Layout.resolve({ layout: { center: ["clock", "custom:clock"] }, modules: [mod] });

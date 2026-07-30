@@ -46,6 +46,9 @@ import QtQuick
 // (CommandModule.qml); "qml" loads a `source` file into a Loader
 // (QmlModule.qml)). An unknown widget name or a dangling module reference
 // is dropped with a console warning, never a crash.
+// github.intervalMs (number, default 300000 — GithubWidget's `gh api`
+// poll cadence in ms; the widget itself is opt-in via bar.layout,
+// M12 Task 8).
 Singleton {
     id: root
 

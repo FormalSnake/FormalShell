@@ -157,6 +157,11 @@ PanelWindow {
         }
     }
     Component {
+        id: githubComponent
+        GithubWidget {
+        }
+    }
+    Component {
         id: indicatorsComponent
         Indicators {
         }
@@ -183,6 +188,7 @@ PanelWindow {
         bluetooth: bluetoothComponent,
         weather: weatherComponent,
         tray: trayComponent,
+        github: githubComponent,
         indicators: indicatorsComponent
     })
 
