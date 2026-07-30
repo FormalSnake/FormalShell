@@ -30,10 +30,12 @@ PanelWindow {
 
     property bool isOpen: false
 
-    // Bar.qml's implicitHeight is a bare literal (32), not a shared Theme
-    // token — mirrored here (same as Toasts.qml) so the center starts
-    // exactly at its bottom edge.
-    readonly property int _barHeight: 32
+    // Bar.qml publishes its content-derived height as Theme.barHeight (the
+    // same lookup Panel.qml uses). The old hardcoded-32 mirror predated
+    // that: once the bar grew past 32px it left this surface overlapping
+    // the bar's bottom rows, covering the bell cell's center-open accent
+    // dot (found pixel-checking M13b Task 2's smoke screenshots).
+    readonly property int _barHeight: Theme.barHeight
 
     readonly property var _screen: {
         var name = CompositorService.focusedOutputName;

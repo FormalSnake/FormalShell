@@ -13,21 +13,21 @@ TestCase {
         var r = Layout.resolve(undefined);
         compare(names(r.regions.left), "workspaces,activeWindow");
         compare(names(r.regions.center), "clock,nowPlaying");
-        compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,indicators");
+        compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,bell,indicators");
         compare(r.warnings.length, 0);
     }
 
     function test_default_fallback_when_layout_key_missing() {
         var r = Layout.resolve({});
         compare(names(r.regions.left), "workspaces,activeWindow");
-        compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,indicators");
+        compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,bell,indicators");
     }
 
     function test_partial_layout_falls_back_per_region() {
         var r = Layout.resolve({ layout: { left: ["clock"] } });
         compare(names(r.regions.left), "clock");
         compare(names(r.regions.center), "clock,nowPlaying");
-        compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,indicators");
+        compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,bell,indicators");
     }
 
     function test_custom_order_is_preserved() {
@@ -80,6 +80,14 @@ TestCase {
         verify(names(d.regions.left).indexOf("github") < 0);
         verify(names(d.regions.center).indexOf("github") < 0);
         verify(names(d.regions.right).indexOf("github") < 0);
+    }
+
+    function test_bell_is_a_default_builtin_before_indicators() {
+        var r = Layout.resolve(undefined);
+        var right = names(r.regions.right).split(",");
+        var bell = right.indexOf("bell");
+        verify(bell >= 0);
+        compare(right[bell + 1], "indicators");
     }
 
     function test_custom_module_id_never_collides_with_builtin_name() {

@@ -31,9 +31,11 @@ PanelWindow {
     property var center: null
     screen: modelData
 
-    // Bar.qml's implicitHeight is a bare literal (32), not a shared Theme
-    // token — mirrored here so toasts start exactly at its bottom edge.
-    readonly property int _barHeight: 32
+    // Bar.qml publishes its content-derived height as Theme.barHeight (the
+    // same lookup Panel.qml uses) — the old hardcoded-32 mirror left toasts
+    // overlapping the bar's bottom rows once the bar grew taller (same
+    // stale literal Center.qml carried, fixed together in M13b Task 2).
+    readonly property int _barHeight: Theme.barHeight
 
     readonly property var _entries: NotificationService.popups
     visible: root._entries.length > 0 && !(root.center && root.center.isOpen)

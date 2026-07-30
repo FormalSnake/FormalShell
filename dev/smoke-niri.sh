@@ -26,15 +26,19 @@
 # and screenshots the resulting toasts. Then flips DND on over the existing
 # `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
 # notify-sends already landed, so this can't retroactively suppress them)
-# and screenshots the bar again (indicator-dnd.png) to prove Indicators.qml's
-# bell-off glyph appears (M10 Task 2).
+# and screenshots the bar again (indicator-dnd.png) to prove the bell cell
+# (BellWidget.qml, M13b Task 2) swaps to its bell-off glyph.
 # With --center, fires one more `notify-send -u normal` and waits for
 # non-critical popups to auto-expire into the `pending` tier before summoning
 # the notification center over the `notifications` IPC target and
 # screenshotting it — combine with --notify so there's a critical notify-send
 # still sitting sticky in the popup layer: Toasts.qml suppresses that whole
 # stack for as long as the center is open, so the screenshot shows the
-# center alone, not the two surfaces overlapping.
+# center alone, not the two surfaces overlapping. `notifications status` is
+# dumped closed -> open -> closed around a showHistory toggle round trip
+# (the same center.open()/close() the bell cell's own click calls, so this
+# is the click's IPC stand-in) and asserted: pending non-zero before the
+# summon, centerOpen flipping true then back false.
 # With --osd, drives the bottom-center OSD three ways: `qs ipc call osd
 # volume` (manual trigger, screenshotted as osd-manual.png — its path is
 # printed on its own line since it isn't the run's canonical SMOKE_OK
@@ -643,6 +647,9 @@ emoji_type_path="$shot_dir/emoji-wtype.txt"
 selection_path="$shot_dir/selection.txt"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
+center_status_before_path="$shot_dir/center-status-before.json"
+center_status_open_path="$shot_dir/center-status-open.json"
+center_status_closed_path="$shot_dir/center-status-closed.json"
 osd_manual_path="$shot_dir/osd-manual.png"
 osd_brightness_path="$shot_dir/osd-brightness.png"
 clip_list1_path="$shot_dir/clip-list-1.json"
@@ -1358,12 +1365,13 @@ fi
   if $notify_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -u normal 'Test' 'Hello'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$notify_send_bin' -u critical 'Crit' 'Now'\""
-    # Bar indicators slot (M10 Task 2): both notify-sends above have already
-    # fired by sleep 6, so flipping DND on here can't suppress them (dnd
-    # bypass is per-notification-on-arrival, not retroactive) — dndState is
-    # dumped right after the toggle to prove it actually flipped, then the
-    # bar is screenshotted a second later to show Indicators.qml's bell-off
-    # glyph appear.
+    # Bell cell DND display (M13b Task 2, formerly Indicators.qml's DND
+    # glyph, M10 Task 2): both notify-sends above have already fired by
+    # sleep 6, so flipping DND on here can't suppress them (dnd bypass is
+    # per-notification-on-arrival, not retroactive) — dndState is dumped
+    # right after the toggle to prove it actually flipped, then the bar is
+    # screenshotted a second later to show BellWidget.qml swap to its
+    # bell-off glyph.
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications setDnd true > $dnd_status_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $dnd_indicator_path\""
   fi
@@ -1374,7 +1382,17 @@ fi
     # before the summon below — the critical one from notify_mode is sticky
     # and stays a popup regardless.
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$notify_send_bin' -u normal 'Second' 'World'\""
+    # Status dumps bracket a showHistory toggle round trip: closed with a
+    # non-zero pending count (the same NotificationService.pending.length
+    # the bell cell's meta label renders), open right before this run's
+    # sleep-15 screenshot, closed again after a second showHistory at 16 —
+    # the IPC stand-in for the bell cell's own left click, which calls the
+    # exact same center.open()/close().
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 12 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications status > $center_status_before_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications showHistory\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications status > $center_status_open_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 16 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications showHistory\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 17 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications status > $center_status_closed_path 2>&1\""
   fi
   if $osd_mode; then
     # Manual trigger, screenshotted 1s later (well inside the 1.6s auto-hide
@@ -1443,6 +1461,10 @@ fi
     tail_gap=12
   elif $osd_mode; then
     tail_gap=5
+  elif $center_mode; then
+    # The toggle-closed leg (showHistory at 16, status dump at 17) lands
+    # after this mode's sleep-15 screenshot — 4s keeps it inside the run.
+    tail_gap=4
   fi
   # center_mode needs the popup->pending transition (see above) plus the
   # showHistory summon to land before the screenshot; osd_mode's final
@@ -2020,6 +2042,30 @@ if $notify_mode; then
     echo "SMOKE_INDICATOR_DND $dnd_indicator_path"
   else
     echo "SMOKE_FAIL: no indicator-dnd screenshot produced" >&2; exit 1
+  fi
+fi
+
+if $center_mode; then
+  for f in "$center_status_before_path" "$center_status_open_path" "$center_status_closed_path"; do
+    if [ -s "$f" ]; then
+      cat "$f"
+    else
+      echo "SMOKE_FAIL: no notifications status produced at $f" >&2; exit 1
+    fi
+  done
+  # "pending":0 would mean the expired notify-sends never reached the tier
+  # the bell cell counts — the center summon below would show an empty list.
+  if grep -q '"pending":0,' "$center_status_before_path"; then
+    echo "SMOKE_FAIL: pending count was zero before the center summon: $(cat "$center_status_before_path")" >&2; exit 1
+  fi
+  if ! grep -q '"centerOpen":false' "$center_status_before_path"; then
+    echo "SMOKE_FAIL: center reported open before the summon: $(cat "$center_status_before_path")" >&2; exit 1
+  fi
+  if ! grep -q '"centerOpen":true' "$center_status_open_path"; then
+    echo "SMOKE_FAIL: showHistory did not open the center: $(cat "$center_status_open_path")" >&2; exit 1
+  fi
+  if ! grep -q '"centerOpen":false' "$center_status_closed_path"; then
+    echo "SMOKE_FAIL: second showHistory did not close the center: $(cat "$center_status_closed_path")" >&2; exit 1
   fi
 fi
 

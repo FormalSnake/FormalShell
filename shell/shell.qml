@@ -39,6 +39,7 @@ ShellRoot {
                 weatherPanel: weatherPanelInstance
                 mediaPanel: mediaPanelInstance
                 githubPanel: githubPanelInstance
+                center: notificationsCenter
             }
         }
     }

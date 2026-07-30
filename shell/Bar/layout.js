@@ -18,14 +18,17 @@
 
 // "github" is deliberately absent from DEFAULT_LAYOUT below: it's an
 // opt-in builtin (M12 Task 8), so the no-config bar stays byte-identical.
-var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "indicators"];
+var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "bell", "indicators"];
 
 var MODULE_TYPES = ["command", "qml"];
 
 var DEFAULT_LAYOUT = {
     left: ["workspaces", "activeWindow"],
     center: ["clock", "nowPlaying"],
-    right: ["battery", "audio", "network", "bluetooth", "weather", "tray", "indicators"]
+    // "bell" joined the defaults in M13b Task 2 (owner-requested): the
+    // notification bell is always-visible, so unlike "github" it earns a
+    // default slot rather than opt-in status.
+    right: ["battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]
 };
 
 var REGIONS = ["left", "center", "right"];

@@ -12,7 +12,8 @@ import "../../Bar/layout.js" as Layout
 // than a fixed declaration order; an absent or partial `bar.layout` falls
 // back region-by-region to exactly today's arrangement (workspaces+active
 // window left, clock+now-playing center, battery/audio/network/bluetooth/
-// weather/tray/indicators right), so a user with no config sees no change.
+// weather/tray/bell/indicators right), so a user with no config sees no
+// change.
 // Layout entries name either a built-in widget (resolved against
 // `_builtinComponents` below, each pre-wired with the panel/screen context
 // only Bar.qml has) or a `bar.modules[]` custom module via a "custom:<id>"
@@ -38,6 +39,9 @@ PanelWindow {
     property var weatherPanel: null
     property var mediaPanel: null
     property var githubPanel: null
+    // The single Center instance (shell.qml's notificationsCenter) — the
+    // bell widget toggles it directly, same object NotificationsIpc drives.
+    property var center: null
     screen: modelData
     anchors { top: true; left: true; right: true }
 
@@ -164,6 +168,12 @@ PanelWindow {
         }
     }
     Component {
+        id: bellComponent
+        BellWidget {
+            center: bar.center
+        }
+    }
+    Component {
         id: indicatorsComponent
         Indicators {
         }
@@ -191,6 +201,7 @@ PanelWindow {
         weather: weatherComponent,
         tray: trayComponent,
         github: githubComponent,
+        bell: bellComponent,
         indicators: indicatorsComponent
     })
 
