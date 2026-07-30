@@ -179,8 +179,24 @@ nixpkgs.lib.nixosSystem {
           # accepts root-owned files unconditionally.
         };
 
+        # M12 Task 2: restore what the EDS spike removed again after its
+        # decision (docs/spikes/2026-07-28-eds-calendar-events.md "Cleanup")
+        # — the shell now really consumes EDS through the formalshell-eds
+        # CLI. The .service files delegate activation to systemd --user
+        # (SystemdService=), so registering the bus names alone is not
+        # enough: systemd.packages links the user units those names map to,
+        # the same three-line wiring upstream's
+        # services.gnome.evolution-data-server module does.
+        services.dbus.packages = [ pkgs.evolution-data-server ];
+        systemd.packages = [ pkgs.evolution-data-server ];
+
         environment.systemPackages = [
           self.packages.aarch64-linux.formalshell
+          # M12 Task 2: the EDS companion CLI on the interactive PATH so the
+          # smoke rig and ad hoc ssh sessions can seed/query calendars; the
+          # shell's own wrapper carries it separately via nix/package.nix.
+          self.packages.aarch64-linux.formalshell-eds
+          pkgs.evolution-data-server
           quickshellPkg
           pkgs.qt6.qtdeclarative
           pkgs.matugen

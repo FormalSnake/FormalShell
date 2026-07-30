@@ -52,7 +52,8 @@
           testvm = self.nixosConfigurations.testvm.config.system.build.vm;
         }))
         (forAllSystems (system: pkgs: rec {
-          formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; };
+          formalshell-eds = pkgs.callPackage ./nix/eds-package.nix { };
+          formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; inherit formalshell-eds; };
           formalshell-greeter = pkgs.callPackage ./nix/greeter-package.nix { quickshell = qsFor system; };
           default = formalshell;
         }));
