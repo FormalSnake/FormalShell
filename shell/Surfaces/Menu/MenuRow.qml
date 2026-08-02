@@ -29,12 +29,42 @@ Cell {
     accent: root.confirming
     hovered: hoverArea.containsMouse
 
+    // Clipboard image entries (M14 Task 6) ride a taller row: the thumbnail
+    // is twice the height a plain text row's content would be.
+    readonly property bool _isImage: (root.node.thumbSource || "") !== ""
+    readonly property real _bodyHeight: label.implicitHeight
+    readonly property real _thumbHeight: root._bodyHeight * 2
+
     width: ListView.view ? ListView.view.width : implicitWidth
-    height: label.implicitHeight + Theme.spacing.sm * 2 + Theme.borderWidth
+    height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.spacing.sm * 2 + Theme.borderWidth
 
     Row {
+        id: contentRow
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.spacing.sm
+
+        // Row has no per-item vertical-alignment property (verified against
+        // the pinned Qt qtdeclarative plugins.qmltypes: QQuickRow exposes
+        // only layoutDirection) — every child centers itself against the
+        // row's own auto-computed height (the tallest child, the thumbnail
+        // when one's present) via an explicit `y`, rather than the default
+        // top alignment.
+
+        // Clipboard image thumbnail (M14 Task 6): a plain file:// Image at
+        // twice the body row height, width capped so a wide capture doesn't
+        // stretch the row, PreserveAspectFit letterboxes rather than
+        // cropping, radius 0, no border — shares the ledger rule contract
+        // like every other row, it's just taller.
+        Image {
+            y: (contentRow.height - height) / 2
+            visible: root._isImage
+            source: root._isImage ? "file://" + root.node.thumbSource : ""
+            height: root._thumbHeight
+            width: root._thumbHeight * 3
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            cache: false
+        }
 
         // Image variant of the icon slot (app rows): a themed desktop icon
         // at the glyph cell's size, radius 0, no border — DESIGN.md's one
@@ -42,6 +72,7 @@ Cell {
         // check-resolved by the provider, so a failed lookup is "" and the
         // slot simply doesn't render (never a missing-texture box).
         Image {
+            y: (contentRow.height - height) / 2
             visible: (root.node.iconSource || "") !== ""
             source: root.node.iconSource || ""
             width: label.implicitHeight
@@ -52,6 +83,7 @@ Cell {
         }
 
         Text {
+            y: (contentRow.height - height) / 2
             visible: root.node.icon !== ""
             text: root.node.icon
             color: root.foreground
@@ -61,6 +93,7 @@ Cell {
 
         Text {
             id: label
+            y: (contentRow.height - height) / 2
             text: root.confirming ? ("CONFIRM " + root.node.label + "?") : root.node.label
             // `dim: true` marks a non-activatable honest-empty row (the nix
             // provider's NO NIX) — foregroundDim reads on both the normal
@@ -70,10 +103,11 @@ Cell {
             font.pixelSize: Theme.fontSize.body
         }
 
-        // Dimmed trailing description (nix search rows) — pre-truncated by
-        // the provider, same contract as clipboardProvider's previewLabel,
-        // so no elision is needed here.
+        // Dimmed trailing description (nix search rows, clipboard image
+        // captured-at) — pre-truncated by the provider, same contract as
+        // clipboardProvider's previewLabel, so no elision is needed here.
         Text {
+            y: (contentRow.height - height) / 2
             visible: (root.node.desc || "") !== ""
             text: root.node.desc || ""
             color: Theme.color.foregroundDim

@@ -562,16 +562,33 @@ inserting a duplicate — and persisted to
 `$XDG_STATE_HOME/formalshell/clipboard.json` via the same `FileView` +
 `JsonAdapter` pattern `Core/State.qml` uses for `state.json`.
 
+Images ride a SECOND, independent `wl-paste --type image/png --watch`
+`Process` alongside the text one, same sensitive-capture skip. Each capture
+streams to a mktemp file under `$XDG_STATE_HOME/formalshell/clipboard-images/`
+and is content-addressed to `<sha256>.png` — an existing hash drops the temp
+file and reuses the stored one, so a capture is de-duplicated by content the
+same way text is. Entries carry `kind: "text"|"image"` (entries persisted
+before images existed have no `kind` field and read as text); image entries
+additionally carry `path`/`mime` instead of `text`, and de-dupe by `path`
+rather than re-hashing. `copy(id)` branches on `kind`: image entries
+`wl-copy --type image/png` the stored file back rather than re-emitting
+text. Eviction (the 300-entry cap, `remove`, `clear`) deletes any
+newly-orphaned image file — the one place `ClipboardService` ever runs `rm`,
+and only ever on a path already confirmed to live under
+`clipboard-images/`.
+
 A `clipboard` menu provider node lists history entries as menu rows, newest
 first; `formalshell menu summon clipboard` (or `qs ipc call menu summon
 clipboard`) opens straight to them, and selecting a row re-copies it through
 the same `clipboard copy <id>` IPC verb below — the menu row is just that
-call, not a separate code path.
+call, not a separate code path. Image rows render a thumbnail (twice a text
+row's height, width capped, aspect preserved) with an `IMAGE` label and the
+capture time instead of a text preview.
 
 **IPC** (`target: "clipboard"`):
 
 ```bash
-qs ipc --any-display -p <store-path>/share/formalshell call clipboard list     # JSON array, newest first
+qs ipc --any-display -p <store-path>/share/formalshell call clipboard list     # JSON array, newest first — kind/path/mime included for image entries
 qs ipc --any-display -p <store-path>/share/formalshell call clipboard copy <id>
 qs ipc --any-display -p <store-path>/share/formalshell call clipboard remove <id>
 qs ipc --any-display -p <store-path>/share/formalshell call clipboard clear

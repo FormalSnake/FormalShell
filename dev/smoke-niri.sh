@@ -206,9 +206,18 @@
 # and reads the system clipboard back (clip-paste.txt — must have flipped to
 # the re-copied entry's text), proving the menu row's copy action actually
 # reaches the running shell end to end, not just that the rows render. Then
-# `menu summon clipboard` so the run's screenshot shows the provider's rows
-# rendered as real menu cells, left open through smoke.png/SMOKE_OK same as
-# --panel.
+# (M14 Task 6) an imagemagick fixture PNG is `wl-copy --type image/png`d,
+# `clipboard list` is dumped a third time (clip-list-3.json — must show the
+# new entry with `"kind":"image"` and a `path` under the isolated HOME's own
+# `clipboard-images/<sha256>.png`, proving the second watcher actually
+# content-addressed the capture), that entry's id is activated the same
+# self-targeting way (clip-image-copy.txt), and `wl-paste --type image/png`
+# is hashed and compared against the fixture's own hash (clip-image-paste-
+# sha.txt) — proving the image copy-back round trip end to end, not just
+# that a path string exists. Then `menu summon clipboard` so the run's
+# screenshot shows the provider's rows rendered as real menu cells — the
+# freshly-captured image now newest, so its thumbnail row is the one the
+# shot proves — left open through smoke.png/SMOKE_OK same as --panel.
 # With --tray, launches six dev/sni-stub.py processes (a minimal Python/GLib
 # StatusNotifierItem producer — see its own header comment) that each
 # register a real item on the isolated session bus, giving
@@ -392,7 +401,7 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode; then
+if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode || $clipboard_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -754,6 +763,10 @@ clip_list1_path="$shot_dir/clip-list-1.json"
 clip_list2_path="$shot_dir/clip-list-2.json"
 clip_copy_path="$shot_dir/clip-copy.txt"
 clip_paste_path="$shot_dir/clip-paste.txt"
+clip_image_fixture_path="$shot_dir/clip-fixture.png"
+clip_list3_path="$shot_dir/clip-list-3.json"
+clip_image_copy_path="$shot_dir/clip-image-copy.txt"
+clip_image_paste_sha_path="$shot_dir/clip-image-paste-sha.txt"
 wifi_scan_status_path="$shot_dir/wifi-scan-status.json"
 wifi_wrong_path="$shot_dir/wifi-wrong.png"
 wifi_wrong_status_path="$shot_dir/wifi-wrong-status.json"
@@ -1022,6 +1035,16 @@ if $picker_mode; then
   for name_color in "img-0:#c0392b" "img-1:#27ae60" "img-2:#2980b9" "img-3:#f1c40f" "img-4:#8e44ad"; do
     $convert_bin -size 64x64 "xc:${name_color#*:}" "$picker_dir/${name_color%:*}.png"
   done
+fi
+
+# --clipboard's image leg fixture: a tiny solid-color PNG, hashed up front
+# so the post-run assertions can predict the exact content-addressed path
+# ClipboardService's image watcher must produce ($clip_image_fixture_sha.png
+# under the isolated HOME's clipboard-images dir) and confirm the wl-paste
+# readback round trip byte-for-byte, not just that some path string exists.
+if $clipboard_mode; then
+  $convert_bin -size 32x32 xc:'#3fae2a' "$clip_image_fixture_path"
+  clip_image_fixture_sha=$(sha256sum "$clip_image_fixture_path" | cut -d ' ' -f1)
 fi
 
 if $wallpaper_mode; then
@@ -1314,6 +1337,15 @@ copy_id=\$(grep -o '"id":"[^"]*"' "$clip_list2_path" | sed -n '2p' | cut -d'"' -
 "$qs_bin" ipc --any-display -p "$shell_path" call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
 sleep 1
 "$wl_paste_bin" --no-newline > "$clip_paste_path" 2>&1
+sleep 1
+"$wl_copy_bin" --type image/png < "$clip_image_fixture_path"
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list3_path" 2>&1
+sleep 1
+image_id=\$(grep -o '"id":"[^"]*","kind":"image"' "$clip_list3_path" | head -n1 | cut -d'"' -f4)
+"$qs_bin" ipc --any-display -p "$shell_path" call clipboard copy "\$image_id" > "$clip_image_copy_path" 2>&1
+sleep 1
+"$wl_paste_bin" --type image/png --no-newline | sha256sum > "$clip_image_paste_sha_path" 2>&1
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
 EOF
@@ -1865,10 +1897,12 @@ fi
   elif $osd_mode; then
     screenshot_delay=10
   elif $clipboard_mode; then
-    # clipboard-drive.sh's last step (menu summon) lands at its own sleep 10
-    # (two dumps, a copy-and-paste round trip, then the summon); 3s buffer
-    # for the menu to render before the shot.
-    screenshot_delay=13
+    # clipboard-drive.sh's last step (menu summon) lands at its own sleep 15
+    # (text dumps, a copy-and-paste round trip, then the image leg's own
+    # wl-copy/list/copy/wl-paste round trip, then the summon); 3s buffer for
+    # the menu to render before the shot, which now shows the freshly
+    # captured image as the newest (topmost) row.
+    screenshot_delay=18
   elif $lock_mode; then
     # lock-drive.sh's own final step (the second isLocked/status dump) lands
     # around its internal sleep sum (~20s in, the wrong-password PAM round
@@ -2205,6 +2239,35 @@ if $clipboard_mode; then
   fi
   if ! grep -q "clipboard smoke two" "$clip_paste_path"; then
     echo "SMOKE_FAIL: system clipboard did not flip to the re-copied entry — got: $(cat "$clip_paste_path")" >&2; exit 1
+  fi
+  # Image leg (M14 Task 6): the watcher must have content-addressed the
+  # fixture to the exact predicted path — this is the actual proof the
+  # second wl-paste watcher captured, hashed, and stored the bytes, not just
+  # that some entry with kind:"image" showed up.
+  clip_image_expected_path="$iso_home/.local/state/formalshell/clipboard-images/$clip_image_fixture_sha.png"
+  if [ -s "$clip_list3_path" ] && grep -qF '"kind":"image"' "$clip_list3_path" && grep -qF "\"path\":\"$clip_image_expected_path\"" "$clip_list3_path"; then
+    cat "$clip_list3_path"
+  else
+    echo "SMOKE_FAIL: clipboard list did not show the captured image entry (kind:image, path=$clip_image_expected_path): $(cat "$clip_list3_path" 2>/dev/null)" >&2
+    exit 1
+  fi
+  if [ -s "$clip_image_copy_path" ]; then
+    cat "$clip_image_copy_path"
+  else
+    echo "SMOKE_FAIL: no clipboard copy result produced for the image entry" >&2; exit 1
+  fi
+  if ! grep -q "^ok$" "$clip_image_copy_path"; then
+    echo "SMOKE_FAIL: clipboard copy IPC call on the image entry did not return ok — got: $(cat "$clip_image_copy_path")" >&2; exit 1
+  fi
+  # The wl-copy-back round trip: reading image/png off the system clipboard
+  # must hash to exactly the fixture's own hash — proves copy() actually
+  # streamed the stored file's real bytes back, not a placeholder.
+  clip_image_paste_sha=$(awk '{print $1}' "$clip_image_paste_sha_path" 2>/dev/null)
+  if [ "$clip_image_paste_sha" = "$clip_image_fixture_sha" ]; then
+    echo "SMOKE_CLIPBOARD_IMAGE $clip_image_paste_sha (matches fixture)"
+  else
+    echo "SMOKE_FAIL: wl-paste --type image/png readback hash ($clip_image_paste_sha) does not match the fixture's hash ($clip_image_fixture_sha)" >&2
+    exit 1
   fi
 fi
 
