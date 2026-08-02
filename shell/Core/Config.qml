@@ -59,6 +59,11 @@ import QtQuick
 // motion.enabled (bool, default true — Theme's motion switch: false zeroes
 // every animation duration (Tokens.motionTokens) so all transitions become
 // instant state swaps, M13 Task 8).
+// usage.claude / usage.codex (bool, each default true — UsagePanel's
+// independent per-provider opt-out; a disabled provider polls nothing and
+// renders no section at all) and usage.intervalMs (number, default 900000
+// — the same panel's background poll cadence in ms; the widget itself is
+// opt-in via bar.layout, M14 Task 7).
 Singleton {
     id: root
 

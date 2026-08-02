@@ -44,10 +44,10 @@ arrangement:
 
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
 `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
-`indicators`, `github` (opt-in only — never part of the default
-arrangement; `bell` by contrast IS part of the defaults since M13b, so a
-config predating it that spells out its own `right` region won't show the
-bell until it's added there).
+`indicators`, `github`, `usage` (both opt-in only — never part of the
+default arrangement; `bell` by contrast IS part of the defaults since
+M13b, so a config predating it that spells out its own `right` region
+won't show the bell until it's added there).
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
@@ -119,6 +119,16 @@ states: `gh` missing from PATH hides the cell entirely;
 `NO AUTH` cell; any other failure or unparsable output renders a dim `NO GH`
 cell — never stale or invented counts. The cell also stays hidden until the
 first poll answers at all.
+
+**Usage** — opt-in via `bar.layout` (add `"usage"` to a region); a glyph
+plus the worst tracked rate-limit window's percent across Claude Code and
+Codex, both independently toggleable (`usage.claude`/`usage.codex` in
+`settings.json`, default `true`) and polled every `usage.intervalMs` (ms,
+default 900000). The whole cell goes full-bleed `urgent` at ≥90%
+utilization. Click toggles the usage panel (see [Panels](#panels)). Honest
+states: a disabled provider contributes nothing, and the cell stays hidden
+until at least one enabled provider has answered at all (its own `NO AUTH`/
+`NO CODEX` cell counts as an answer) — never an invented percentage.
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}
@@ -442,6 +452,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `weather`    | `LocationService` + open-meteo              | `WeatherWidget.qml`  |
 | `media`      | `Quickshell.Services.Mpris`                 | `NowPlaying.qml`     |
 | `github`     | one `gh api graphql` poll (shared with the bar cell) | `GithubWidget.qml` |
+| `usage`      | `~/.claude/.credentials.json` + Anthropic OAuth usage endpoint, `codex app-server` JSON-RPC | `UsageWidget.qml` |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` lists Pipewire output nodes then input nodes as
@@ -502,6 +513,21 @@ never names the github widget (the widget stays the opt-in switch for
 *background* polling; opening the panel always re-polls). Its honest
 states mirror the bar cell's: dim `NO GH` / `NO AUTH` cells, `LOADING`
 before the first answer, a dim `NONE` row under an empty section.
+`UsagePanel` shows a `CLAUDE` section (Anthropic OAuth usage) and a `CODEX`
+section (`codex app-server` JSON-RPC), each independently toggleable
+(`usage.claude`/`usage.codex`, default `true`) and skipped entirely when
+disabled; each section is a tier meta row (`Max 20x`, or the raw plan type)
+then one row per rate-limit window — an uppercase label (`5-HOUR`,
+`WEEKLY`), the percent, a full-width flat `accent` fill track that swaps to
+`urgent` at ≥90%, and a dim `RESETS 2H 14M` meta line. Claude reads
+`~/.claude/.credentials.json`'s OAuth token (never logged, never exposed on
+any IPC/debug surface) and hits `api.anthropic.com/api/oauth/usage`;
+missing, empty, or expired credentials render `NO AUTH` without probing.
+Codex speaks newline-delimited JSON-RPC to `codex -s read-only -a untrusted
+app-server` over its own stdin/stdout, matching replies by their `id`
+rather than assuming order; `codex` missing from PATH renders `NO CODEX`,
+any RPC-level failure (timeout, malformed reply) renders `ERROR` — never a
+fabricated percentage either way.
 
 **IPC** (`target: "panel"`, a documented spec addendum — see
 `docs/superpowers/plans/2026-07-28-m6-clipboard-and-panels.md`'s header note
@@ -512,7 +538,7 @@ keybinds and no way to be verified headlessly):
 qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a

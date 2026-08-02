@@ -8,7 +8,7 @@ import Quickshell.Io
 // frame falls back to sitting under the bar's right region. `registry` maps
 // panel name -> its Panel instance, wired from shell.qml as each panel is
 // added: audio, calendar, network, bluetooth, power, weather, media,
-// github.
+// github, usage.
 IpcHandler {
     target: "panel"
 

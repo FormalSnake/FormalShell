@@ -39,6 +39,7 @@ PanelWindow {
     property var weatherPanel: null
     property var mediaPanel: null
     property var githubPanel: null
+    property var usagePanel: null
     // The single Center instance (shell.qml's notificationsCenter) — the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
@@ -168,6 +169,12 @@ PanelWindow {
         }
     }
     Component {
+        id: usageComponent
+        UsageWidget {
+            panel: bar.usagePanel
+        }
+    }
+    Component {
         id: bellComponent
         BellWidget {
             center: bar.center
@@ -201,6 +208,7 @@ PanelWindow {
         weather: weatherComponent,
         tray: trayComponent,
         github: githubComponent,
+        usage: usageComponent,
         bell: bellComponent,
         indicators: indicatorsComponent
     })

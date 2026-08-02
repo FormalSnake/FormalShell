@@ -82,6 +82,16 @@ TestCase {
         verify(names(d.regions.right).indexOf("github") < 0);
     }
 
+    function test_usage_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["usage"] } });
+        compare(names(r.regions.right), "usage");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("usage") < 0);
+        verify(names(d.regions.center).indexOf("usage") < 0);
+        verify(names(d.regions.right).indexOf("usage") < 0);
+    }
+
     function test_bell_is_a_default_builtin_before_indicators() {
         var r = Layout.resolve(undefined);
         var right = names(r.regions.right).split(",");
