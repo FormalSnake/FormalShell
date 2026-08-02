@@ -456,10 +456,26 @@ networks get an extra `IDENTITY` field above the passphrase and connect
 through an `nmcli` Process that reads the password over stdin, never argv,
 and reports a `NO NMCLI` status if the binary is missing rather than a
 silent failure. Known, disconnected rows reveal a `FORGET` action on hover.
-`BluetoothPanel` shows paired
-devices with connect/disconnect as a row action, or a single dim `NO
-ADAPTER` cell when `Bluetooth.defaultAdapter` is null — the test VM's honest
-state, not a fabricated device. `PowerPanel` pairs a status row (an honest
+`BluetoothPanel` groups devices under `CONNECTED`/`PAIRED`/`AVAILABLE`
+headers via `Bluetooth/model.js`'s buckets (available devices, discovered
+scan results with a real name, only list while the adapter is actively
+discovering); a 1-second timer keeps nudging `adapter.discovering = true`
+while the panel is open and the adapter enabled — BlueZ rejects
+`StartDiscovery` while the adapter is powering up and lets discovery lapse
+on its own — and discovery stops the moment the panel closes. Clicking (or
+Enter-on-cursor) a connected row disconnects; a paired row connects; an
+available row runs a native pair-trust-connect sequence (`pair()`, then
+once BlueZ reports the device paired, `trusted = true` followed by
+`connect()` — the same sequence omarchy shells out to bluetoothctl for,
+expressed with the toolkit's own device methods). A 20-second fallback
+timer clears a stuck action to an honest `TIMED OUT` status, since
+`BluetoothDevice` has no failure signal to key off. Paired, disconnected
+rows reveal a `FORGET` action on hover, same restriction as the network
+panel's known rows. Honest states: a single dim cell reading `NO ADAPTER`
+when `Bluetooth.defaultAdapter` is null, `TURN ON TO SCAN` when the adapter
+is off, or `SCANNING…` when it's on and discovering but nothing has turned
+up yet — the test VM has no adapter at all, so `NO ADAPTER` is what its
+smoke screenshot shows. `PowerPanel` pairs a status row (an honest
 `AC POWER` cell rather than a lying `0%` when `UPower.displayDevice.isLaptopBattery`
 is false) with a keyboard-navigable power-profile picker (Up/Down to move,
 Enter to apply) under power-profiles-daemon, plus a breathing-opacity
