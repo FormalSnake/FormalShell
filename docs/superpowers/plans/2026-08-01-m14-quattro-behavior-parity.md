@@ -49,8 +49,12 @@ close reference."
   mapped NoSecrets→"Passphrase required" (reopens the prompt),
   WifiAuthTimeout→"Wrong password", WifiNetworkLost→"Network lost"
   (Model.js:335-343, Panel.qml:1801-1803); a 15s client-side timeout clears
-  a stuck busy state (Panel.qml:1025-1041). Enterprise (EAP) networks go
-  through an nmcli stdin script there — out of scope here (see Task 2).
+  a stuck busy state (Panel.qml:1025-1041). Enterprise (EAP) networks get
+  an extra identity field above the passphrase field
+  ("Identity (user@domain)" placeholder) and connect through an nmcli
+  profile-add/edit command that reads the password off **stdin** — never
+  argv, which is world-readable via /proc (Model.js:322-333; owner
+  explicitly asked for this flow to be included, 2026-08-02).
 - Omarchy bluetooth UX (`shell/plugins/panels/bluetooth/Panel.qml`,
   `Model.js`): discovery kept alive by a 1s self-healing timer that keeps
   nudging `adapter.discovering = true` while the panel is open and the
@@ -112,9 +116,12 @@ close reference."
   silent no-ops.
 - Secrets discipline: a wifi PSK typed into the panel goes straight to
   `connectWithPsk`, is never logged, never echoed into `debug` IPC dumps,
-  never written to state.json. The `network connect` IPC verb takes the
-  PSK as an argument for the headless rig only — USAGE.md documents that
-  argv is world-readable and the interactive prompt is the real path.
+  never written to state.json. The same applies to 802.1x identity and
+  password: the password reaches nmcli over stdin (or Process
+  environment), never argv, and is dropped from memory once the Process
+  exits. The `network connect`/`connectEap` IPC verbs take secrets as
+  arguments for the headless rig only — USAGE.md documents that argv is
+  world-readable and the interactive prompt is the real path.
 - The usage widget's OAuth token stays in memory, is never logged, and the
   `usage` IPC/debug surfaces expose percentages and reset times only,
   never the token or raw credentials JSON.
@@ -187,9 +194,20 @@ secured/connecting variant), `docs/USAGE.md` (network panel section).
    cell (masked `TextInput`, `●` U+25CF echo, uppercase dim
    `ENTER PASSPHRASE` placeholder, Enter → `connectWithPsk(text)`, Escape
    collapses — AuthPrompt's field idiom at ledger-row scale, one prompt
-   open at a time). Enterprise networks render a dim `ENTERPRISE` meta tag
-   instead of a prompt (honest limitation, documented in USAGE.md; omarchy
-   needs an nmcli side-script for these and we are not shelling out).
+   open at a time). Enterprise (WpaEap/Wpa2Eap) networks expand the same
+   prompt with an `IDENTITY` field above the passphrase field (omarchy's
+   exact UX). Submit builds/refreshes the NM profile via an `nmcli`
+   Process mirroring omarchy's command shape (read
+   `~/Developer/omarchy/shell/plugins/panels/network/Model.js:322-333`
+   and the bin script it invokes), with the password fed over **stdin**
+   (verify quickshell `Process` stdin-write support against the pinned
+   source; if stdin writing is genuinely unavailable, pass the secret via
+   the Process `environment` — owner-only readable on Linux — never
+   argv), then activates the now-known network. nmcli-via-Process sits
+   squarely in the shell's existing subprocess idiom (wl-paste, gh,
+   matugen); the pure-QML rule bans compiled companions, not Process.
+   `nmcli` missing from PATH → dim `NO NMCLI` status on submit, never a
+   silent no-op.
 5. Status sub-line per row driven by `state`/`stateChanging` and the
    `connectionFailed` signal: `CONNECTING…`, `DISCONNECTING…`,
    `FORGETTING…`, and failureText mappings; `NoSecrets` reopens the
@@ -227,6 +245,7 @@ if artifact pulls need it), `docs/USAGE.md` (IPC table); create
 2. `NetworkIpc.qml` (spec addendum, `panel` tradition): `status()` →
    compact JSON (wifi enabled, per-network name/known/connected/secured/
    signal), `connect(ssid, psk)` (empty psk = plain `connect()`),
+   `connectEap(ssid, identity, password)` (the Task 2 enterprise path),
    `forget(ssid)`, `wifi(enabled)`. Unknown ssid → error string. These
    drive the headless rig and give compositor keybinds a target; the
    argv-visibility caveat lands in USAGE.md.
@@ -238,6 +257,16 @@ if artifact pulls need it), `docs/USAGE.md` (IPC table); create
    (`wifi-connected.png`), then `forget`s and confirms the network drops
    back to not-known. Panel opened via the existing `panel open network`
    route so the screenshots show the real surface.
+4. Enterprise leg (owner-requested 2026-08-02): hostapd's **integrated
+   EAP server** on a third hwsim radio broadcasts `FORMALTEST-EAP`
+   (`ieee8021x=1`, `wpa_key_mgmt=WPA-EAP`, `eap_server=1`, an
+   `eap_user_file` with one PEAP/MSCHAPv2 throwaway user — the standard
+   hwsim test topology from wpa_supplicant's own test suite; no RADIUS
+   daemon needed). The `--wifi` leg then drives `connectEap` with the
+   fixture identity/password, polls to connected, and screenshots
+   (`wifi-eap-connected.png`). If PEAP under the VM's wpa_supplicant
+   proves genuinely unworkable after real attempts, report blocked
+   honestly with the supplicant log — never skip silently.
 
 **Verify:** `just vm-build` (rebuilds the VM image — budget for the
 rebuild+reboot cycle via `dev/vm.sh stop/start`), then `just vm-smoke
