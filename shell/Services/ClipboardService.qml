@@ -36,9 +36,9 @@ Singleton {
     }
 
     function _capture(text) {
-        var state = History.add({ items: root.items }, { id: root._nextId(), text: text }, Date.now());
-        if (state.items !== root.items)
-            adapter.items = state.items;
+        var result = History.add({ items: root.items }, { id: root._nextId(), text: text }, Date.now());
+        if (result.state.items !== root.items)
+            adapter.items = result.state.items;
     }
 
     function copy(id) {
@@ -49,15 +49,15 @@ Singleton {
     }
 
     function remove(id) {
-        var state = History.remove({ items: root.items }, id);
-        if (state.items !== root.items)
-            adapter.items = state.items;
+        var result = History.remove({ items: root.items }, id);
+        if (result.state.items !== root.items)
+            adapter.items = result.state.items;
     }
 
     function clear() {
-        var state = History.clear({ items: root.items });
-        if (state.items !== root.items)
-            adapter.items = state.items;
+        var result = History.clear({ items: root.items });
+        if (result.state.items !== root.items)
+            adapter.items = result.state.items;
     }
 
     FileView {
