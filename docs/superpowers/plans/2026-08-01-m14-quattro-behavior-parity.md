@@ -441,6 +441,14 @@ finds drift.
    `--clipboard` menu route, bar with active-window fixture).
 3. Final `just vm-test`, `just vm-lint`, full-default `just vm-smoke`
    green; tree clean; every commit pushed.
+4. Final x86_64 build on the e1504g (owner-sanctioned 2026-08-02,
+   superseding the earlier never-ssh rule for THIS step only): ssh in
+   (`e1504g`, fall back `e1504g-lan`) and
+   `nix build github:FormalSnake/FormalShell#formalshell` from the pushed
+   main, reading the build output. Build only — no runtime testing
+   against the host's live session, host-session safety unchanged. If the
+   host is unreachable, report that honestly and leave this to the
+   orchestrating session.
 
 **Verify:** the commands above, run and read. Commit(s)
 (`docs: …` / `fix(<scope>): …`).

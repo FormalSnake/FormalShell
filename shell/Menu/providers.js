@@ -77,14 +77,29 @@ function applyProviders(tree, providerFns) {
 // would silently hit "No running instances" instead of this shell. Every
 // other documented IPC call (README) passes the same two flags for the same
 // reason.
+//
+// Image entries (M14 Task 1, history.js's `kind: "image"`) get a fixed
+// "IMAGE" label instead of a text preview, a dimmed capture time in the
+// `desc` slot (same trailing-text idiom nixRows uses), and `thumbSource` —
+// a new node field MenuRow doesn't render yet (Task 6 wires the thumbnail
+// row); the activation action is identical to a text row's.
+function _capturedAtLabel(capturedAt) {
+    var d = new Date(capturedAt);
+    var pad2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+}
+
 function clipboardProvider(items, selfPath) {
     return (items || []).map(function (entry) {
+        var isImage = entry.kind === "image";
         return {
             id: "clipboard." + entry.id,
             parentId: null,
-            label: previewLabel(entry.text),
+            label: isImage ? "IMAGE" : previewLabel(entry.text),
             icon: "",
             title: "",
+            desc: isImage ? _capturedAtLabel(entry.capturedAt) : "",
+            thumbSource: isImage ? entry.path : "",
             aliases: [],
             kind: "action",
             action: "qs ipc --any-display -p " + selfPath + " call clipboard copy " + entry.id,
