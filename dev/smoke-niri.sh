@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Nested-niri smoke: run the built shell in an isolated niri window,
 # screenshot it, tear down. Prints the screenshot path on success.
+# The plain/default leg (no mode flag beyond --dump/--wallpaper/etc. below)
+# additionally focuses a real foot(1) window carrying the M13b
+# smoke-iconic fixture's app-id (M14 Task 5), so its own smoke.png proves
+# ActiveWindow.qml's bar cell renders the desktop entry's themed icon and
+# name — not the raw appId — with the window title following dimmed.
+# Every mode with its own dedicated surface to prove (menu/panel/wifi/lock/
+# etc.) skips it; see active_window_fixture_mode below.
 # With --dump, also calls the `debug` IPC target and cats the JSON reply.
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
@@ -360,6 +367,16 @@ if $panel_mode && [ "$panel_name" = "github" ]; then
   panel_github_mode=true
 fi
 
+# M14 Task 5: only the plain/default leg gets the focused fixture window —
+# every other mode's own smoke.png already exists to prove a different,
+# more specific surface (a summoned panel/menu, a locked screen, …), so
+# this stays scoped to the one leg CLAUDE.md already calls "THE visual
+# verification loop for any bar/surface change".
+active_window_fixture_mode=true
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode; then
+  active_window_fixture_mode=false
+fi
+
 git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
 nix build .#formalshell
 
@@ -375,11 +392,19 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode; then
+if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
     convert_bin="nix run nixpkgs#imagemagick -- convert"
+  fi
+fi
+
+if $active_window_fixture_mode; then
+  if command -v foot >/dev/null 2>&1; then
+    foot_bin=$(command -v foot)
+  else
+    foot_bin=$(nix build 'nixpkgs#foot^out' --no-link --print-out-paths)/bin/foot
   fi
 fi
 
@@ -745,6 +770,7 @@ eds_seed2_path="$shot_dir/eds-seed-2.txt"
 calendar_select_path="$shot_dir/calendar-select.txt"
 calendar_status_path="$shot_dir/calendar-status.json"
 media_pid_path="$shot_dir/mpv.pid"
+active_window_pid_path="$shot_dir/foot.pid"
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_error_path="$shot_dir/lock-error.png"
 lock_unlocked_path="$shot_dir/lock-unlocked.png"
@@ -818,7 +844,12 @@ EOF
 # quickshell rev), so the menu's app rows render one themed icon image and
 # one honest icon-less row ("Formal Test App" above: utilities-terminal has
 # no theme here, check-resolution answers "", never a missing-texture box).
-if $menu_mode; then
+# M14 Task 5 reuses this exact same fixture (its id, "formalshell-smoke-
+# iconic", is what the foot window below is spawned with as its Wayland
+# app-id) so DesktopEntries.heuristicLookup's exact-id path resolves it for
+# ActiveWindow.qml too, rather than standing up a second near-duplicate
+# .desktop file.
+if $menu_mode || $active_window_fixture_mode; then
   cat > "$iso_home/.local/share/applications/formalshell-smoke-iconic.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
@@ -1057,6 +1088,28 @@ EOF
 #!/usr/bin/env bash
 if [ -f "$media_pid_path" ]; then
   kill "\$(cat "$media_pid_path")" 2>/dev/null || true
+fi
+EOF
+fi
+
+if $active_window_fixture_mode; then
+  # Same script-file + exec-then-record-PID idiom as media_play_script
+  # above: foot's own PID (not a wrapper shell's) lands in the pid file,
+  # so active-window-kill.sh can close exactly this window before niri
+  # quits rather than leaving it to outlive the run.
+  active_window_play_script="$shot_dir/active-window-play.sh"
+  cat > "$active_window_play_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+echo \$\$ > "$active_window_pid_path"
+exec "$foot_bin" --app-id=formalshell-smoke-iconic --title="formalshell smoke session" sleep 300
+EOF
+
+  active_window_kill_script="$shot_dir/active-window-kill.sh"
+  cat > "$active_window_kill_script" <<EOF
+#!/usr/bin/env bash
+if [ -f "$active_window_pid_path" ]; then
+  kill "\$(cat "$active_window_pid_path")" 2>/dev/null || true
 fi
 EOF
 fi
@@ -1659,6 +1712,9 @@ fi
   else
     echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
   fi
+  if $active_window_fixture_mode; then
+    echo "spawn-at-startup \"bash\" \"$active_window_play_script\""
+  fi
   if $dump_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > $dump_path 2>&1\""
   fi
@@ -1872,7 +1928,13 @@ fi
   if $tray_mode; then
     tray_kill="bash '$tray_kill_script'; "
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # active_window_fixture_mode's foot window has no auto-close of its own
+  # either — same reasoning as media_kill above.
+  active_window_kill=""
+  if $active_window_fixture_mode; then
+    active_window_kill="bash '$active_window_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 # The 40s default comfortably outlives every mode's screenshot-then-quit

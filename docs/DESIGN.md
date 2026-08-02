@@ -239,10 +239,11 @@ floats with a margin or fuses to the screen edge.
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),
   search field as the top row, breadcrumb as an uppercase meta row (§2.3).
-  Launcher app rows are the sanctioned image-icon exception (M13b): the
-  desktop entry's icon-theme image renders at the glyph cell's size, radius
-  0, no border — like the DMS/omarchy launchers — while every other icon in
-  the shell stays a Nerd Font glyph.
+  Launcher app rows — and the bar's active-window cell (M14) — are the
+  sanctioned image-icon exception: the desktop entry's icon-theme image
+  renders at the glyph cell's size, radius 0, no border — like the
+  DMS/omarchy launchers — while every other icon in the shell stays a Nerd
+  Font glyph.
 - **Panels** (audio/network/bluetooth/power/calendar/weather/media) — each is one
   omarchy-style card anchored under its bar cell (`panelGap` margin,
   bordered, radius 0, `panelPadding` internal padding). Inside: an uppercase

@@ -286,6 +286,14 @@ nixpkgs.lib.nixosSystem {
           # (nm-applet/blueman-applet) this headless VM has no backing
           # device for anyway.
           (pkgs.python3.withPackages (ps: [ ps.pygobject3 ]))
+          # M14 Task 5: dev/smoke-niri.sh's default leg spawns a real
+          # toplevel with a controlled Wayland app-id (foot's --app-id) so
+          # ActiveWindow.qml's DesktopEntries.heuristicLookup has a genuine
+          # focused window to resolve against the smoke-iconic fixture's
+          # icon — foot needs no GPU/EGL context (wl_shm + pixman/fcft
+          # software text rendering), matching the VM's headless llvmpipe
+          # rendering everywhere else.
+          pkgs.foot
         ];
 
         # No hardware sink exists in a headless VM, so AudioService.available

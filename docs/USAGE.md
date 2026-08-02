@@ -77,6 +77,13 @@ workspace renders only if it holds at least one window or is
 active/focused, so nine persistent named niri workspaces with two windows
 open show two or three cells, not nine (`shell/Bar/workspaces.js`).
 
+**Active window** — the focused window's desktop entry
+(`DesktopEntries.heuristicLookup(appId)`, the same lookup the launcher
+uses) leads with its themed icon and display name in foreground, the
+window title following dimmed. No matching entry falls back to the raw
+`appId` dimmed with the title in foreground; no focused window hides the
+cell entirely.
+
 **Tray** — every real `org.kde.StatusNotifierItem` registered on the
 session bus (`Quickshell.Services.SystemTray`) renders as its own cell:
 left click activates it, middle click secondary-activates it, right click
