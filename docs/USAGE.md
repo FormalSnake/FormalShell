@@ -439,10 +439,24 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` lists Pipewire output nodes then input nodes as
 full-width sliders (flat accent fill, no round thumb) with a `MUTE` toggle
-cell per row. `NetworkPanel` groups connections under `WIRED`/`WI-FI`
-headers, the active connection inverted, Wi-Fi signal strength drawn as a
-discrete 5-segment block-character bar (the flat-fill slider idiom is
-reserved for continuous values like volume). `BluetoothPanel` shows paired
+cell per row. `NetworkPanel` groups connections under a `WIRED` header (a
+plain connect/disconnect row, unchanged) and a `WI-FI` section with omarchy's
+own behavior: a `WI-FI POWER` toggle, rows sorted by `Network/model.js`
+(connected, then known, then signal strength descending) under `KNOWN`/
+`AVAILABLE` headers, Wi-Fi signal strength drawn as a discrete 5-segment
+block-character bar (the flat-fill slider idiom stays reserved for
+continuous values like volume), a lock glyph on secured networks, and a
+status subline (`CONNECTING…`, a `connectionFailed` reason, or `TIMED OUT`
+if a 15-second fallback timer catches a stuck action). Clicking (or
+Enter-on-cursor) a connected row disconnects; a secured network with no
+saved credentials expands an inline passphrase row instead of connecting
+straight away (masked `TextInput`, Enter submits via `connectWithPsk`,
+Escape collapses just the prompt without closing the panel); 802.1x/EAP
+networks get an extra `IDENTITY` field above the passphrase and connect
+through an `nmcli` Process that reads the password over stdin, never argv,
+and reports a `NO NMCLI` status if the binary is missing rather than a
+silent failure. Known, disconnected rows reveal a `FORGET` action on hover.
+`BluetoothPanel` shows paired
 devices with connect/disconnect as a row action, or a single dim `NO
 ADAPTER` cell when `Bluetooth.defaultAdapter` is null — the test VM's honest
 state, not a fabricated device. `PowerPanel` pairs a status row (an honest
