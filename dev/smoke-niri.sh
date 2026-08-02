@@ -94,6 +94,30 @@
 # screenshot must show tomorrow's cell inverted (today's cell accent-filled
 # next to it) and the events ledger listing EDS TOMORROW EVENT under the
 # dated meta header; `calendar status` must report tomorrow selected.
+# With --wifi (M14 Task 3), drives the real `network` IPC target against
+# nix/testvm.nix's mac80211_hwsim rig — three simulated radios: wlan0 stays
+# NetworkManager's station device, wlan1/wlan2 are hostapd APs broadcasting
+# FORMALTEST (WPA2-PSK) and FORMALTEST-EAP (hostapd's own integrated EAP
+# server, PEAP/MSCHAPv2, no RADIUS daemon). `panel open network` first (turns
+# on WifiDevice.scannerEnabled, NetworkPanel.qml's isOpen-tracked idiom — the
+# station won't rescan without it), then polls `network status` for both
+# SSIDs to surface from a real scan. `network connect FORMALTEST` with a
+# WRONG psk drives NetworkManager's own real retry/give-up cycle (allow up
+# to 45s — NM_DEVICE_STATE_REASON_SUPPLICANT_TIMEOUT, the standard "wrong
+# wifi password" signal, verified against the pinned quickshell source's
+# nm/network.cpp reason mapping, not assumed), screenshotted as
+# wifi-wrong.png once `stateChanging` settles back to false (the panel's own
+# wifiRow Connections react to the same connectionFailed(reason) signal
+# regardless of who called connectWithPsk, so the WRONG PASSWORD row renders
+# without the panel driving the connect itself). The real psk then connects
+# for real (wifi-connected.png, polled for connected:true — hostapd's own
+# DHCP-serving dnsmasq on the AP interface is what lets this settle into a
+# genuine Connected state rather than stalling), `network forget` drops it
+# back to not-known, and `network connectEap FORMALTEST-EAP` drives the
+# enterprise leg (identity/password matching the eap_user_file fixture),
+# screenshotted as wifi-eap-connected.png once connected:true. Every step's
+# `network status` JSON lands on disk for the post-run assertions below —
+# never trusting the screenshot alone for what NetworkManager actually did.
 # With --media, generates a short silent fixture track (ffmpeg lavfi
 # anullsrc, tagged with a title/artist via -metadata) and plays it with mpv
 # --script=<mpvScripts.mpris path> into the default (pipewire null-sink)
@@ -297,6 +321,7 @@ osd_mode=false
 panel_mode=false
 panel_name=""
 clipboard_mode=false
+wifi_mode=false
 media_mode=false
 lock_mode=false
 screensaver_mode=false
@@ -316,6 +341,7 @@ while [ $# -gt 0 ]; do
     --osd) osd_mode=true; shift ;;
     --panel) panel_mode=true; panel_name="$2"; shift 2 ;;
     --clipboard) clipboard_mode=true; shift ;;
+    --wifi) wifi_mode=true; shift ;;
     --media) media_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
     --screensaver) screensaver_mode=true; shift ;;
@@ -324,7 +350,7 @@ while [ $# -gt 0 ]; do
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
   esac
 done
 
@@ -703,6 +729,14 @@ clip_list1_path="$shot_dir/clip-list-1.json"
 clip_list2_path="$shot_dir/clip-list-2.json"
 clip_copy_path="$shot_dir/clip-copy.txt"
 clip_paste_path="$shot_dir/clip-paste.txt"
+wifi_scan_status_path="$shot_dir/wifi-scan-status.json"
+wifi_wrong_path="$shot_dir/wifi-wrong.png"
+wifi_wrong_status_path="$shot_dir/wifi-wrong-status.json"
+wifi_connected_path="$shot_dir/wifi-connected.png"
+wifi_connected_status_path="$shot_dir/wifi-connected-status.json"
+wifi_forget_status_path="$shot_dir/wifi-forget-status.json"
+wifi_eap_connected_path="$shot_dir/wifi-eap-connected.png"
+wifi_eap_status_path="$shot_dir/wifi-eap-status.json"
 media_status_path="$shot_dir/media-status.json"
 eds_seed_path="$shot_dir/eds-seed.txt"
 eds_seed2_path="$shot_dir/eds-seed-2.txt"
@@ -1230,6 +1264,91 @@ sleep 1
 EOF
 fi
 
+# --wifi's whole sequence lives in one script, same rationale as
+# clipboard_drive_script: everything here is strictly ordered (open the
+# panel so the scanner turns on, wait for a real scan to surface both
+# fixture SSIDs, wrong-password round trip, real-password round trip,
+# forget, enterprise round trip) with nothing needing to interleave with a
+# niri-side sleep. Each `network status` poll writes over its own path, so
+# whatever the loop last saw is exactly what the post-run assertions below
+# read back — never a stale earlier snapshot passing by accident.
+if $wifi_mode; then
+  wifi_drive_script="$shot_dir/wifi-drive.sh"
+  cat > "$wifi_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call panel open network > /dev/null 2>&1
+
+SECONDS=0
+while [ "\$SECONDS" -lt 25 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_scan_status_path" 2>&1
+  if grep -qF '"name":"FORMALTEST"' "$wifi_scan_status_path" && grep -qF '"name":"FORMALTEST-EAP"' "$wifi_scan_status_path"; then
+    break
+  fi
+  sleep 1
+done
+
+"$qs_bin" ipc --any-display -p "$shell_path" call network connect FORMALTEST wrong-formaltest-psk > /dev/null 2>&1
+# connect() replies as soon as the IPC call returns, well before NM's own
+# ActiveConnection object exists — polling for the settled state right away
+# would see the identical pre-attempt idle snapshot (connected:false,
+# stateChanging:false) and declare victory before anything happened.
+# Confirmed by reproducing it: the very first --wifi run's wifi-wrong.png
+# showed blank unconnected rows, and the wpa_supplicant journal for that run
+# placed the real SME authenticate attempt AFTER the screenshot timestamp.
+# Waiting for stateChanging:true first proves NM actually started.
+SECONDS=0
+while [ "\$SECONDS" -lt 10 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
+  if grep -qE '"name":"FORMALTEST","known":(true|false),"connected":(true|false),"stateChanging":true' "$wifi_wrong_status_path"; then
+    break
+  fi
+  sleep 1
+done
+SECONDS=0
+while [ "\$SECONDS" -lt 45 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
+  if grep -qE '"name":"FORMALTEST","known":(true|false),"connected":false,"stateChanging":false' "$wifi_wrong_status_path"; then
+    break
+  fi
+  sleep 1
+done
+niri msg action screenshot-screen --path "$wifi_wrong_path"
+
+"$qs_bin" ipc --any-display -p "$shell_path" call network connect FORMALTEST formaltest-psk > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 25 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_connected_status_path" 2>&1
+  if grep -qF '"name":"FORMALTEST","known":true,"connected":true' "$wifi_connected_status_path"; then
+    break
+  fi
+  sleep 1
+done
+niri msg action screenshot-screen --path "$wifi_connected_path"
+
+"$qs_bin" ipc --any-display -p "$shell_path" call network forget FORMALTEST > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 15 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_forget_status_path" 2>&1
+  if grep -qF '"name":"FORMALTEST","known":false' "$wifi_forget_status_path"; then
+    break
+  fi
+  sleep 1
+done
+
+"$qs_bin" ipc --any-display -p "$shell_path" call network connectEap FORMALTEST-EAP formaltest formaltest-eap-pw > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 35 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_eap_status_path" 2>&1
+  if grep -qF '"name":"FORMALTEST-EAP","known":true,"connected":true' "$wifi_eap_status_path"; then
+    break
+  fi
+  sleep 1
+done
+niri msg action screenshot-screen --path "$wifi_eap_connected_path"
+EOF
+fi
+
 # --panel calendar's drive (M12 Task 3) replaces the generic sleep-3 panel
 # open below for that one panel name: seed one real VEVENT into EDS's
 # system-calendar first (the CreateObjects write itself D-Bus-activates
@@ -1571,6 +1690,9 @@ fi
   if $clipboard_mode; then
     echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
   fi
+  if $wifi_mode; then
+    echo "spawn-at-startup \"bash\" \"$wifi_drive_script\""
+  fi
   if $media_mode; then
     echo "spawn-at-startup \"bash\" \"$media_play_script\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open media\""
@@ -1671,6 +1793,14 @@ fi
     # on-open refresh's own `formalshell-eds events` run and the select
     # comfortable room before the shot.
     screenshot_delay=13
+  elif $wifi_mode; then
+    # wifi-drive.sh's own worst-case budget (scan wait 25s + wrong-password
+    # poll 45s + real-connect poll 25s + forget poll 15s + eap poll 35s =
+    # 145s, each ceiling only hit if NM/hostapd genuinely takes that long)
+    # plus room for its own three screenshot-screen calls; this run's
+    # generic smoke.png/SMOKE_OK is taken 15s after that worst case, so it
+    # shows the ordinary session with the eap leg already screenshotted.
+    screenshot_delay=160
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -1697,6 +1827,8 @@ fi
 session_timeout=40
 if $screensaver_mode; then
   session_timeout=62
+elif $wifi_mode; then
+  session_timeout=180
 fi
 
 HOME="$iso_home" \
@@ -1957,6 +2089,70 @@ if $clipboard_mode; then
   fi
   if ! grep -q "clipboard smoke two" "$clip_paste_path"; then
     echo "SMOKE_FAIL: system clipboard did not flip to the re-copied entry — got: $(cat "$clip_paste_path")" >&2; exit 1
+  fi
+fi
+
+if $wifi_mode; then
+  # Both hostapd fixture radios must have surfaced in a real scan before
+  # anything else in this leg means anything.
+  if [ -s "$wifi_scan_status_path" ] && grep -qF '"name":"FORMALTEST"' "$wifi_scan_status_path" && grep -qF '"name":"FORMALTEST-EAP"' "$wifi_scan_status_path"; then
+    cat "$wifi_scan_status_path"
+  else
+    echo "SMOKE_FAIL: FORMALTEST/FORMALTEST-EAP never surfaced in a wifi scan" >&2
+    [ -f "$wifi_scan_status_path" ] && cat "$wifi_scan_status_path" >&2
+    exit 1
+  fi
+  # Wrong password: NetworkManager must have genuinely given up (settled
+  # disconnected, not still mid-retry) before this run's own screenshot can
+  # be trusted as the failure state, not a lucky mid-flight capture.
+  if [ -s "$wifi_wrong_status_path" ] && grep -qE '"name":"FORMALTEST","known":(true|false),"connected":false,"stateChanging":false' "$wifi_wrong_status_path"; then
+    cat "$wifi_wrong_status_path"
+  else
+    echo "SMOKE_FAIL: wrong-password connect never settled to a stable disconnected state within the poll budget" >&2
+    [ -f "$wifi_wrong_status_path" ] && cat "$wifi_wrong_status_path" >&2
+    exit 1
+  fi
+  if [ -f "$wifi_wrong_path" ]; then
+    echo "SMOKE_WIFI_WRONG $wifi_wrong_path"
+  else
+    echo "SMOKE_FAIL: no wifi-wrong screenshot produced" >&2; exit 1
+  fi
+  # Real password: must reach a genuine connected:true, proving hostapd's
+  # own DHCP-serving dnsmasq actually handed the station an address rather
+  # than the panel stalling on a stateless timeout.
+  if [ -s "$wifi_connected_status_path" ] && grep -qF '"name":"FORMALTEST","known":true,"connected":true' "$wifi_connected_status_path"; then
+    cat "$wifi_connected_status_path"
+  else
+    echo "SMOKE_FAIL: real-password connect never reached connected:true within the poll budget" >&2
+    [ -f "$wifi_connected_status_path" ] && cat "$wifi_connected_status_path" >&2
+    exit 1
+  fi
+  if [ -f "$wifi_connected_path" ]; then
+    echo "SMOKE_WIFI_CONNECTED $wifi_connected_path"
+  else
+    echo "SMOKE_FAIL: no wifi-connected screenshot produced" >&2; exit 1
+  fi
+  # Forget: the network must drop back to not-known.
+  if [ -s "$wifi_forget_status_path" ] && grep -qF '"name":"FORMALTEST","known":false' "$wifi_forget_status_path"; then
+    cat "$wifi_forget_status_path"
+  else
+    echo "SMOKE_FAIL: forget did not drop FORMALTEST back to known:false within the poll budget" >&2
+    [ -f "$wifi_forget_status_path" ] && cat "$wifi_forget_status_path" >&2
+    exit 1
+  fi
+  # Enterprise leg: hostapd's own integrated EAP server (PEAP/MSCHAPv2)
+  # must accept the fixture identity/password and reach connected:true.
+  if [ -s "$wifi_eap_status_path" ] && grep -qF '"name":"FORMALTEST-EAP","known":true,"connected":true' "$wifi_eap_status_path"; then
+    cat "$wifi_eap_status_path"
+  else
+    echo "SMOKE_FAIL: connectEap never reached connected:true for FORMALTEST-EAP within the poll budget" >&2
+    [ -f "$wifi_eap_status_path" ] && cat "$wifi_eap_status_path" >&2
+    exit 1
+  fi
+  if [ -f "$wifi_eap_connected_path" ]; then
+    echo "SMOKE_WIFI_EAP_CONNECTED $wifi_eap_connected_path"
+  else
+    echo "SMOKE_FAIL: no wifi-eap-connected screenshot produced" >&2; exit 1
   fi
 fi
 

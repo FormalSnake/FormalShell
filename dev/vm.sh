@@ -197,6 +197,26 @@ cmd_smoke() {
     echo "pulled dump/status output: $local_json"
   fi
 
+  # Named secondary screenshots (M14 Task 3's `SMOKE_WIFI_*` lines, same
+  # convention --lock/--screensaver already print as SMOKE_LOCK_*/
+  # SMOKE_SCREENSAVER_*): any "SMOKE_<NAME> <remote-path>.png" line beyond
+  # the primary SMOKE_OK gets pulled too, under its own basename — a fixed
+  # name, not timestamped, since these are the specific named artifacts a
+  # task's own Verify step reads back (wifi-wrong.png, wifi-connected.png,
+  # wifi-eap-connected.png, …), not the generic per-run screenshot.
+  local extra_line remote_extra local_extra
+  while IFS= read -r extra_line; do
+    [ -z "$extra_line" ] && continue
+    remote_extra=$(printf '%s\n' "$extra_line" | awk '{print $2}')
+    case "$remote_extra" in
+      *.png)
+        local_extra="$repo_root/artifacts/$(basename "$remote_extra")"
+        scp "${scp_opts[@]}" "test@localhost:$remote_extra" "$local_extra"
+        echo "pulled screenshot: $local_extra"
+        ;;
+    esac
+  done <<< "$(printf '%s\n' "$out" | grep -oE '^SMOKE_[A-Z0-9_]+ [^[:space:]]+' | grep -v '^SMOKE_OK ')"
+
   # --screensaver-gif writes its committed output straight into the synced
   # repo's docs/media/ inside the VM, not artifacts/ — pull those back into
   # the real repo so the command actually reproduces the tracked GIFs

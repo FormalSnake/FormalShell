@@ -25,7 +25,7 @@ nixpkgs.lib.nixosSystem {
     (nixpkgs + "/nixos/modules/virtualisation/qemu-vm.nix")
     self.nixosModules.formalshell
     self.nixosModules.formalshell-greeter
-    ({ pkgs, ... }:
+    ({ pkgs, lib, ... }:
       let
         quickshellPkg = quickshell.packages.aarch64-linux.default;
         greeterPkg = self.packages.aarch64-linux.formalshell-greeter;
@@ -40,6 +40,35 @@ nixpkgs.lib.nixosSystem {
         # assume an interactive seat we don't have here.
         swayHeadlessConfig = pkgs.writeText "sway-headless-testhost.conf" ''
           exec "systemctl --user import-environment WAYLAND_DISPLAY DISPLAY; systemctl --user set-environment WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+        '';
+
+        # M14 Task 3: a throwaway self-signed TLS cert for hostapd's own
+        # integrated EAP server (PEAP wraps a TLS tunnel in phase 1 before
+        # MSCHAPv2 runs inside it — hostapd needs something to present).
+        # wpa_supplicant/NM's own connectEap flow never sets a client-side
+        # ca_cert (NetworkPanel.qml's _enterpriseScript), so nothing here
+        # ever validates the chain — a bare self-signed leaf is enough to
+        # complete the handshake. World-readable in the store, same
+        # throwaway-test-credential tradeoff as users.users.test.password
+        # below.
+        # allowSubstitutes = false: a brand-new, never-cached derivation
+        # otherwise triggers a cache.nixos.org narinfo lookup from whichever
+        # machine builds it — on the linux-builder VM that lookup's TLS
+        # handshake fails outright (broken guest CA trust store, the same
+        # class of issue T1/T2 already hit on the testvm's own network
+        # stack: `nix build .#testvm` reproducibly failed with "Problem with
+        # the SSL CA cert ... error adding trust anchors from file:
+        # /etc/ssl/certs/ca-certificates.crt" until this was set). `pkgs.
+        # writeText` elsewhere in this file never needs this: writeTextFile
+        # already defaults allowSubstitutes to false.
+        eapTestCert = pkgs.runCommand "formaltest-eap-cert" {
+          nativeBuildInputs = [ pkgs.openssl ];
+          allowSubstitutes = false;
+        } ''
+          mkdir -p "$out"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$out/server.key" -out "$out/server.pem" \
+            -days 3650 -subj "/CN=formaltest-eap"
         '';
       in
       {
@@ -296,6 +325,154 @@ nixpkgs.lib.nixosSystem {
         # genuine wired connection); the bluetooth panel needs bluez running
         # even though QEMU's aarch64 "virt" machine has no adapter at all —
         # its honest "NO ADAPTER" state is the expected, passing screenshot.
+
+        # M14 Task 3: three mac80211_hwsim radios give the network panel a
+        # genuine wifi story to go with the wired one above — wlan0 stays
+        # NetworkManager's station device, wlan1/wlan2 are hostapd APs NM
+        # must never touch (unmanaged below). qemu-vm.nix forces
+        # networking.wireless.enable = mkVMOverride false (priority 10,
+        # "used by nixos-rebuild build-vm") since a plain build-vm has no
+        # radio at all; networkmanager.nix's own normal-priority
+        # `wireless.enable = true` (set whenever NM is active and not
+        # delegating to static networks) loses to that override, which is
+        # why wpa_supplicant was silently absent from this VM's closure
+        # before this task — confirmed via `nix-store -qR /run/current-system
+        # | grep wpa`. The mkOverride 0 below is the identical fix NixOS's
+        # own hwsim test suite uses for the same reason
+        # (nixos/tests/wpa_supplicant.nix: "the override is needed because
+        # the wifi is disabled with mkVMOverride in qemu-vm.nix").
+        boot.kernelModules = [ "mac80211_hwsim" ];
+        boot.extraModprobeConfig = "options mac80211_hwsim radios=3";
+        networking.wireless.enable = lib.mkOverride 0 true;
+        # Scopes the wireless module's own client/AP-conflict warning to just
+        # the one interface it actually manages (wlan1/wlan2 are excluded
+        # from NM below, not from this list — the warning's check only knows
+        # about this option, not NM's own unmanaged exclusion, so leaving it
+        # at its "all interfaces implicit" default flags a conflict that
+        # isn't real).
+        networking.wireless.interfaces = [ "wlan0" ];
+        networking.networkmanager.unmanaged = [ "wlan1" "wlan2" ];
+
+        # NetworkManager's own polkit policy defaults network-control to
+        # allow_active=yes, but this headless, seatless VM never actually
+        # marks any session "active" for polkit's purposes (no display
+        # manager/seat to focus) — confirmed by reproducing it directly:
+        # `nmcli device wifi connect FORMALTEST password ...` over ssh as
+        # the "test" user (the exact account the shell itself runs as)
+        # answers "Not authorized to control networking." even though
+        # `loginctl` reports that same session's own Active=yes. Same
+        # "nothing here is worth protecting" reasoning as
+        # security.sudo.wheelNeedsPassword above, scoped to NM specifically
+        # rather than security.polkit.extraConfig's own documented (and
+        # much broader) "allow any local user to do anything" example.
+        security.polkit.extraConfig = ''
+          polkit.addRule(function(action, subject) {
+            if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0)
+              return polkit.Result.YES;
+          });
+        '';
+
+        services.hostapd = {
+          enable = true;
+          # FORMALTEST: plain WPA2-Personal, the `--wifi` smoke leg's
+          # wrong-password/connect/forget round trip.
+          radios.wlan1 = {
+            band = "2g";
+            channel = 1;
+            networks.wlan1 = {
+              ssid = "FORMALTEST";
+              authentication = {
+                mode = "wpa2-sha256";
+                wpaPasswordFile = pkgs.writeText "formaltest-psk" "formaltest-psk";
+              };
+            };
+          };
+          # FORMALTEST-EAP: hostapd's own integrated EAP server (eap_server=1,
+          # no RADIUS daemon) speaking PEAP/MSCHAPv2 — the standard
+          # wpa_supplicant/hostapd hwsim test topology. nixpkgs'
+          # services.hostapd module only has typed options for
+          # personal/SAE auth (no wpa-eap/ieee8021x knobs), so this network
+          # sets `authentication.mode = "none"` (keeps the module's own
+          # mode-driven optionalAttrs quiet — it would otherwise fight our
+          # own wpa_key_mgmt) and supplies the real WPA-EAP config through
+          # the freeform `settings`, whose `wpa = 2` beats the module's own
+          # `wpa = mkDefault 0` at normal priority.
+          radios.wlan2 = {
+            band = "2g";
+            channel = 6;
+            networks.wlan2 = {
+              ssid = "FORMALTEST-EAP";
+              authentication.mode = "none";
+              settings = {
+                wpa = 2;
+                wpa_key_mgmt = "WPA-EAP";
+                rsn_pairwise = "CCMP";
+                ieee8021x = 1;
+                eap_server = 1;
+                eap_user_file = toString (pkgs.writeText "formaltest-eap-users" ''
+                  *	PEAP
+                  "formaltest"	MSCHAPV2	"formaltest-eap-pw"	[2]
+                '');
+                server_cert = "${eapTestCert}/server.pem";
+                private_key = "${eapTestCert}/server.key";
+              };
+            };
+          };
+        };
+
+        # AP-side IP + DHCP so a successful hostapd association reaches a
+        # genuine Connected state on the station side (NM's own DHCP client)
+        # instead of stalling on NM's own May-Fail timeout. Neither AP
+        # interface is NM- or networkd-managed, so this is a plain oneshot
+        # rather than networking.interfaces.*; ordering after hostapd.service
+        # (not just the udev device) means the address survives hostapd's
+        # own interface-mode setup instead of racing it.
+        systemd.services.hwsim-ap-addrs = {
+          description = "static IPs for the hwsim AP interfaces";
+          after = [ "hostapd.service" ];
+          requires = [ "hostapd.service" ];
+          before = [ "dnsmasq.service" ];
+          wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.iproute2 ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = pkgs.writeShellScript "hwsim-ap-addrs" ''
+              set -eu
+              ip link set wlan1 up
+              ip addr replace 10.90.1.1/24 dev wlan1
+              ip link set wlan2 up
+              ip addr replace 10.90.2.1/24 dev wlan2
+            '';
+          };
+        };
+
+        # The default nixos-fw chain only accepts loopback/established/ssh/
+        # ping (confirmed via `iptables -L nixos-fw -n -v`: DHCP DISCOVER
+        # packets arriving on wlan1 were counted straight into the refuse
+        # rule) — trusting these two AP-only interfaces is what lets
+        # dnsmasq's own UDP/67 actually receive the station's DHCP request,
+        # the missing piece behind an otherwise-successful WPA handshake
+        # (wpa_supplicant's own log showed CTRL-EVENT-CONNECTED, then a
+        # locally-generated disconnect once NM's DHCP timeout gave up).
+        networking.firewall.trustedInterfaces = [ "wlan1" "wlan2" ];
+
+        services.dnsmasq = {
+          enable = true;
+          # DHCP only: port 0 disables dnsmasq's own DNS server so it never
+          # touches resolv.conf/networking.nameservers (the SLiRP DNS fix at
+          # the top of this file stays the only resolver).
+          resolveLocalQueries = false;
+          settings = {
+            port = 0;
+            interface = [ "wlan1" "wlan2" ];
+            bind-interfaces = true;
+            dhcp-range = [
+              "10.90.1.10,10.90.1.100,255.255.255.0,1h"
+              "10.90.2.10,10.90.2.100,255.255.255.0,1h"
+            ];
+          };
+        };
 
         # M6 Task 7 (enable now via services.formalshell.powerProfiles/
         # upower — M8 Task 3): the power panel needs a real

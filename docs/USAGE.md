@@ -501,6 +501,25 @@ binds {
 }
 ```
 
+**Network IPC** (`target: "network"`, a spec addendum in the same tradition —
+drives `Quickshell.Networking`'s wifi flow headlessly so the hwsim smoke rig
+and compositor keybinds have a target beyond just opening the panel):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call network status                          # JSON: {wifiEnabled, networks: [{name, known, connected, stateChanging, secured, signal}]}
+qs ipc --any-display -p <store-path>/share/formalshell call network connect FORMALTEST somepassword  # empty string = plain connect() (open network, or a known network's saved secrets)
+qs ipc --any-display -p <store-path>/share/formalshell call network connectEap FORMALTEST-EAP user@domain somepassword
+qs ipc --any-display -p <store-path>/share/formalshell call network forget FORMALTEST
+qs ipc --any-display -p <store-path>/share/formalshell call network wifi true                        # radio power
+```
+
+An unknown ssid returns `error: unknown ssid '<ssid>'`. `connect`/`connectEap`
+take the secret as a plain IPC argument, which lands in argv — world-readable
+via `/proc` on a multi-user system — so these two verbs exist for the
+headless rig, not as the recommended interactive path: a real session should
+type the passphrase into the panel's own inline prompt (stdin-fed, never
+argv, see the WI-FI section above).
+
 ## Clipboard
 
 `ClipboardService` captures via a long-running `wl-paste --type text --watch`
