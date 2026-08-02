@@ -737,6 +737,8 @@ wifi_connected_status_path="$shot_dir/wifi-connected-status.json"
 wifi_forget_status_path="$shot_dir/wifi-forget-status.json"
 wifi_eap_connected_path="$shot_dir/wifi-eap-connected.png"
 wifi_eap_status_path="$shot_dir/wifi-eap-status.json"
+wifi_eap_forget_status_path="$shot_dir/wifi-eap-forget-status.json"
+wifi_reset_status_path="$shot_dir/wifi-reset-status.json"
 media_status_path="$shot_dir/media-status.json"
 eds_seed_path="$shot_dir/eds-seed.txt"
 eds_seed2_path="$shot_dir/eds-seed-2.txt"
@@ -1279,6 +1281,33 @@ if $wifi_mode; then
 sleep 3
 "$qs_bin" ipc --any-display -p "$shell_path" call panel open network > /dev/null 2>&1
 
+# Self-heal before anything else: NetworkManager's system-connections dir
+# survives across runs (it's not part of the isolated per-run HOME), so a
+# prior --wifi run that never reached its own closing forget (interrupted
+# mid-leg, or a run from before that forget existed) can leave
+# FORMALTEST-EAP's nmcli profile still parked on wlan0 with autoconnect=yes,
+# so NetworkManager reassociates to it before this shell instance even
+# starts, and the station then never rescans up FORMALTEST at all.
+# Reproduced: exactly this state made the scan-wait loop below time out.
+# Forget whichever fixture SSID this run's own status already shows as
+# known (an SSID this VM hasn't associated with yet returns "unknown ssid"
+# from the IPC: harmless, no action gets armed) and wait for it to settle
+# before the scripted sequence below drives a real action.
+for ssid in FORMALTEST FORMALTEST-EAP; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
+  if grep -qF "\"name\":\"\$ssid\",\"known\":true" "$wifi_reset_status_path"; then
+    "$qs_bin" ipc --any-display -p "$shell_path" call network forget "\$ssid" > /dev/null 2>&1
+    SECONDS=0
+    while [ "\$SECONDS" -lt 15 ]; do
+      "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
+      if grep -qE "\"name\":\"\$ssid\",\"known\":false,\"connected\":false,\"stateChanging\":false" "$wifi_reset_status_path"; then
+        break
+      fi
+      sleep 1
+    done
+  fi
+done
+
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
   "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_scan_status_path" 2>&1
@@ -1327,10 +1356,20 @@ done
 niri msg action screenshot-screen --path "$wifi_connected_path"
 
 "$qs_bin" ipc --any-display -p "$shell_path" call network forget FORMALTEST > /dev/null 2>&1
+# known:false alone isn't enough to move on: NetworkPanel.qml's own
+# _actionKind only clears once BOTH !known and !stateChanging (its
+# _checkActionCompletion), and NetworkIpc.qml's connect/connectEap now
+# refuse to run while an action is still in flight (an honest error instead
+# of the silent no-op that used to swallow them). Stopping this poll on
+# known:false alone can hand control back to this script while the forget
+# is still mid-settle, and the connectEap call below would then get
+# rejected outright. Reproduced: exactly this race is what left a stray
+# unsubmitted password prompt open over a stale autoconnected profile in
+# wifi-eap-connected.png.
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
   "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_forget_status_path" 2>&1
-  if grep -qF '"name":"FORMALTEST","known":false' "$wifi_forget_status_path"; then
+  if grep -qE '"name":"FORMALTEST","known":false,"connected":false,"stateChanging":false' "$wifi_forget_status_path"; then
     break
   fi
   sleep 1
@@ -1346,6 +1385,20 @@ while [ "\$SECONDS" -lt 35 ]; do
   sleep 1
 done
 niri msg action screenshot-screen --path "$wifi_eap_connected_path"
+
+# Forget FORMALTEST-EAP too, symmetric with the FORMALTEST forget above:
+# leaving this out is exactly how a prior run corrupted the VM's persistent
+# NetworkManager state and broke every scan afterward (see the self-heal
+# block at the top of this script).
+"$qs_bin" ipc --any-display -p "$shell_path" call network forget FORMALTEST-EAP > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 15 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_eap_forget_status_path" 2>&1
+  if grep -qE '"name":"FORMALTEST-EAP","known":false,"connected":false,"stateChanging":false' "$wifi_eap_forget_status_path"; then
+    break
+  fi
+  sleep 1
+done
 EOF
 fi
 
@@ -1794,13 +1847,14 @@ fi
     # comfortable room before the shot.
     screenshot_delay=13
   elif $wifi_mode; then
-    # wifi-drive.sh's own worst-case budget (scan wait 25s + wrong-password
-    # poll 45s + real-connect poll 25s + forget poll 15s + eap poll 35s =
-    # 145s, each ceiling only hit if NM/hostapd genuinely takes that long)
-    # plus room for its own three screenshot-screen calls; this run's
-    # generic smoke.png/SMOKE_OK is taken 15s after that worst case, so it
-    # shows the ordinary session with the eap leg already screenshotted.
-    screenshot_delay=160
+    # wifi-drive.sh's own worst-case budget (self-heal reset poll 2x15s +
+    # scan wait 25s + wrong-password poll 45s + real-connect poll 25s +
+    # forget poll 15s + eap poll 35s + closing eap-forget poll 15s = 175s,
+    # each ceiling only hit if NM/hostapd genuinely takes that long) plus
+    # room for its own three screenshot-screen calls; this run's generic
+    # smoke.png/SMOKE_OK is taken 15s after that worst case, so it shows the
+    # ordinary session with the eap leg already screenshotted and forgotten.
+    screenshot_delay=190
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -1828,7 +1882,7 @@ session_timeout=40
 if $screensaver_mode; then
   session_timeout=62
 elif $wifi_mode; then
-  session_timeout=180
+  session_timeout=210
 fi
 
 HOME="$iso_home" \
@@ -2132,11 +2186,13 @@ if $wifi_mode; then
   else
     echo "SMOKE_FAIL: no wifi-connected screenshot produced" >&2; exit 1
   fi
-  # Forget: the network must drop back to not-known.
-  if [ -s "$wifi_forget_status_path" ] && grep -qF '"name":"FORMALTEST","known":false' "$wifi_forget_status_path"; then
+  # Forget: the network must settle fully back to idle (known:false AND
+  # stateChanging:false, not just known:false), since connectEap below
+  # relies on the panel's own action bookkeeping having actually cleared.
+  if [ -s "$wifi_forget_status_path" ] && grep -qE '"name":"FORMALTEST","known":false,"connected":false,"stateChanging":false' "$wifi_forget_status_path"; then
     cat "$wifi_forget_status_path"
   else
-    echo "SMOKE_FAIL: forget did not drop FORMALTEST back to known:false within the poll budget" >&2
+    echo "SMOKE_FAIL: forget did not settle FORMALTEST to known:false/stateChanging:false within the poll budget" >&2
     [ -f "$wifi_forget_status_path" ] && cat "$wifi_forget_status_path" >&2
     exit 1
   fi
@@ -2153,6 +2209,16 @@ if $wifi_mode; then
     echo "SMOKE_WIFI_EAP_CONNECTED $wifi_eap_connected_path"
   else
     echo "SMOKE_FAIL: no wifi-eap-connected screenshot produced" >&2; exit 1
+  fi
+  # Closing forget: FORMALTEST-EAP must not survive this run. A leftover
+  # profile here is exactly what corrupts the VM's persistent NM state for
+  # every run after this one.
+  if [ -s "$wifi_eap_forget_status_path" ] && grep -qE '"name":"FORMALTEST-EAP","known":false,"connected":false,"stateChanging":false' "$wifi_eap_forget_status_path"; then
+    cat "$wifi_eap_forget_status_path"
+  else
+    echo "SMOKE_FAIL: closing forget did not settle FORMALTEST-EAP to known:false/stateChanging:false within the poll budget" >&2
+    [ -f "$wifi_eap_forget_status_path" ] && cat "$wifi_eap_forget_status_path" >&2
+    exit 1
   fi
 fi
 

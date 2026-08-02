@@ -68,9 +68,28 @@ IpcHandler {
         return JSON.stringify({ wifiEnabled: Networking.wifiEnabled, networks: networks });
     }
 
+    // A network action already in flight (root._actionKind !== "") is not a
+    // condition connect/connectEap/forget below can ever proceed past:
+    // _activateWifiRow/_submitPassword/_forgetNetwork on the panel all
+    // early-return silently once busy, but _openPasswordPrompt (called
+    // directly by connect/connectEap below, ahead of _submitPassword) does
+    // not share that guard: it opens the inline prompt unconditionally.
+    // Reached over IPC while another action is still settling, that leaves
+    // a passphrase prompt open with nothing to ever close it (interactive
+    // clicks never hit this: _activateWifiRow guards opening the prompt on
+    // the same busy check, so only an IPC call that skips straight to
+    // _openPasswordPrompt could strand it). Guarding here, before any panel
+    // state is touched, is what keeps this an honest error instead of that
+    // silent no-op.
+    function _busyError() {
+        return "error: network action already in progress (" + panel._actionKind + " " + panel._actionSsid + ")";
+    }
+
     function connect(ssid: string, psk: string): string {
         if (!panel)
             return "error: network panel not ready";
+        if (panel._actionKind !== "")
+            return _busyError();
         var network = _findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
@@ -87,6 +106,8 @@ IpcHandler {
     function connectEap(ssid: string, identity: string, password: string): string {
         if (!panel)
             return "error: network panel not ready";
+        if (panel._actionKind !== "")
+            return _busyError();
         var network = _findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
@@ -100,6 +121,8 @@ IpcHandler {
     function forget(ssid: string): string {
         if (!panel)
             return "error: network panel not ready";
+        if (panel._actionKind !== "")
+            return _busyError();
         var network = _findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
