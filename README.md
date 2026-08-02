@@ -34,9 +34,13 @@ shots predate M13b, so their bars lack the notification bell cell. The
 greeter shot, the M10 bar shots (tray, custom modules), the three M13
 recaptures (tray with vertically centered cells, custom modules with the
 github cell and the idx-sorted workspace region, calendar with a selected
-day's inverted cell), and the four M13b shots (the bell cell in its DND
+day's inverted cell), the four M13b shots (the bell cell in its DND
 state, launcher rows with a real icon image, and the no-wallpaper theme
-toggle pair) are VM-sourced — no greetd module on g815 yet, and g815
+toggle pair), and the four M14 shots (the bar's active-window cell showing
+a themed icon and app name instead of the raw window id, the wifi-parity
+network panel scan/connect UI, the bluetooth panel's honest `NO ADAPTER`
+state on hardware the VM doesn't have, and a clipboard image entry's
+thumbnail row) are VM-sourced — no greetd module on g815 yet, and g815
 hasn't been re-swept since M10 landed. Details on what each shot proves
 are in `CLAUDE.md`'s verification loop section (the `dev/smoke-niri.sh`
 flag each was captured with) and git history.
@@ -49,6 +53,8 @@ flag each was captured with) and git history.
 | <img src="docs/screenshots/screensaver-niri.png" width="260"><br>**Screensaver** — g815 | <img src="docs/screenshots/picker-niri.png" width="260"><br>**Picker** — g815 | <img src="docs/screenshots/greeter-niri.png" width="260"><br>**Greeter** — mac VM |
 | <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Bell (DND) + toasts** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
 | <img src="docs/screenshots/menu-apps-niri.png" width="260"><br>**Launcher app icons** — mac VM | <img src="docs/screenshots/theme-dark-niri.png" width="260"><br>**Theme toggle: dark** — mac VM | <img src="docs/screenshots/theme-light-niri.png" width="260"><br>**Theme toggle: light** — mac VM |
+| <img src="docs/screenshots/active-window-niri.png" width="260"><br>**Active window icon** — mac VM | <img src="docs/screenshots/network-panel-niri.png" width="260"><br>**Network panel** — mac VM | <img src="docs/screenshots/bluetooth-panel-niri.png" width="260"><br>**Bluetooth panel** — mac VM |
+| <img src="docs/screenshots/clipboard-image-niri.png" width="260"><br>**Clipboard image entry** — mac VM | | |
 
 The Hyprland backend is implemented and verified against a live nested
 session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
