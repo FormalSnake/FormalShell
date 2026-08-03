@@ -64,6 +64,11 @@ Cell {
             fillMode: Image.PreserveAspectFit
             asynchronous: true
             cache: false
+            // Decode capped at the rendered thumb size (M16 Task 12): a
+            // multi-MB screenshot capture otherwise decodes at full
+            // resolution for a row-height slot.
+            sourceSize.width: root._thumbHeight * 3
+            sourceSize.height: root._thumbHeight
         }
 
         // Image variant of the icon slot (app rows): a themed desktop icon

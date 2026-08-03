@@ -78,6 +78,19 @@ Panel {
         };
     }
 
+    // Overrides Panel's own close(): every close path (backdrop click,
+    // Escape, PanelRegistry preempting this panel for another) already
+    // routes through here, so dropping _images here is the one place that
+    // needs it. The Repeater's model swap destroys every decoded Image
+    // delegate with it — reopening re-scans and re-decodes, which is cheap;
+    // the decodes themselves were the cost (M16 Task 12).
+    function close() {
+        root._images = [];
+        root.isOpen = false;
+        if (Core.PanelRegistry.current === root)
+            Core.PanelRegistry.current = null;
+    }
+
     // Callable over IPC (PickerIpc's choose()) as well as from Enter/click
     // below — the one function that actually resolves a request, so both
     // paths stay in perfect sync by construction. Refuses a path outside the
@@ -228,12 +241,21 @@ Panel {
                 height: width
                 selected: imageCell.index === root._cursor
 
+                // Decode capped at the cell's own on-screen size (M16 Task
+                // 12): without this, a 6000×4000 source decodes at full
+                // resolution into a 105px cell — ~96MB of resident RGBA for
+                // a thumbnail, times every file in the directory, forever
+                // (until close() above freed it). PreserveAspectCrop over a
+                // cell-sized decode is visually identical to cropping the
+                // full-res one.
                 Image {
                     anchors.fill: parent
                     source: "file://" + imageCell.modelData
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false
+                    sourceSize.width: imageCell.width * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.height: imageCell.height * (root.screen ? root.screen.devicePixelRatio : 1)
                 }
 
                 MouseArea {

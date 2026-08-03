@@ -107,6 +107,13 @@ PanelWindow {
                 background._startQueued();
             }
         }
+        // Decode capped at the screen's own size (M16 Task 12): a
+        // PreserveAspectCrop fill over a screen-sized decode is visually
+        // identical to a native-resolution one, at a fraction of the
+        // resident memory (a 3840×2160 source on a 1080p panel drops from
+        // ~33MB decoded to ~8MB).
+        sourceSize.width: background.width
+        sourceSize.height: background.height
     }
 
     Image {
@@ -124,6 +131,8 @@ PanelWindow {
                 opacity = 1;
             }
         }
+        sourceSize.width: background.width
+        sourceSize.height: background.height
         // Reaching full opacity only starts bottomImage's own decode of
         // the same source — it must stay the frontmost, fully-decoded
         // layer until bottomImage's onStatusChanged above confirms the

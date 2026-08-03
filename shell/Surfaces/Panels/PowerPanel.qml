@@ -185,8 +185,14 @@ Panel {
                     font.family: Theme.font.family
                     font.pixelSize: Theme.fontSize.body
 
+                    // Gated on root.isOpen too (M16 Task 12): this panel's
+                    // content is instantiated once for the shell's whole
+                    // lifetime (Panel.qml never destroys it on close, only
+                    // hides the window), so an unqualified `running:
+                    // root._charging` kept animating a fully hidden window
+                    // for as long as the laptop stayed on AC.
                     SequentialAnimation on opacity {
-                        running: root._charging
+                        running: root._charging && root.isOpen
                         loops: Animation.Infinite
                         NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
                         NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }

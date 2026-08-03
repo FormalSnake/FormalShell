@@ -31,6 +31,13 @@ Panel {
             source: MediaService.artUrl
             width: 96
             height: 96
+            // Decode capped at the slot size, and no pixmap cache (M16 Task
+            // 12): artUrl changes per track, so the default cache: true
+            // would accumulate full-res art across every track played this
+            // session instead of ever releasing the previous one.
+            sourceSize.width: 96
+            sourceSize.height: 96
+            cache: false
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
         }

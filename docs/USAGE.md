@@ -1150,6 +1150,24 @@ qs ipc --any-display -p <store-path>/share/formalshell call picker status   # {"
 cat $XDG_STATE_HOME/formalshell/picker-selection.txt
 ```
 
+**Memory**: each cell decodes at its own on-screen size (`sourceSize` capped
+to the cell's rendered dimensions × `devicePixelRatio`), not the source
+file's native resolution — a directory of 6000×4000 photos costs kilobytes
+per cell, not tens of megabytes. `close()` (Escape, click-outside, another
+panel taking over) drops the whole decoded set; reopening re-scans and
+re-decodes, which is cheap. To confirm on the host, compare
+`/proc/$(pgrep -f quickshell)/smaps_rollup` before and after opening/closing
+the picker:
+
+```bash
+grep -E "Rss|Pss" /proc/$(pgrep -f quickshell)/smaps_rollup
+```
+
+Expect the post-close reading to settle back near the pre-open one, and the
+open-state reading to scale with how many cells are on screen, not with the
+source images' file sizes. Steady state with a 1080p wallpaper is typically
+in the 150–300MB RSS band.
+
 ## Screenshots
 
 `shell/Ipc/ScreenshotIpc.qml` (M12 — a spec-addendum surface, same pattern

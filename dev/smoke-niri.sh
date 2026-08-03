@@ -299,7 +299,13 @@
 # fixture, and `close`'s already-happened write to
 # picker-selection.txt is read back (picker-selection.txt) to prove the
 # request/answer handshake — MenuIpc's select()/input() pattern, reused
-# rather than reinvented.
+# rather than reinvented. M16 Task 12: the same run also samples the shell
+# process's own /proc/<pid>/smaps_rollup Rss/Pss at three points (pre-open,
+# grid open, post-close) into picker-memory.json — the fixtures are tiny
+# 64x64 solid colors, so the absolute deltas are noise-sized, but the shape
+# (post-close not climbing above pre-open, per-image cost independent of
+# file size) is the evidence that ImagePicker.close() actually frees
+# _images and the per-cell sourceSize cap actually caps the decode.
 #
 # With --bar-layout, points settings.json's bar.layout at a left region led
 # by the opt-in github builtin (M12 Task 8, against a PATH-shimmed `gh`
@@ -910,6 +916,7 @@ ss_final_status_path="$shot_dir/screensaver-final-status.json"
 picker_grid_path="$shot_dir/picker-grid.png"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
 picker_selection_path="$shot_dir/picker-selection.txt"
+picker_mem_path="$shot_dir/picker-memory.json"
 tray_status1_path="$shot_dir/tray-status-1.json"
 tray_status2_path="$shot_dir/tray-status-2.json"
 tray_collapsed_path="$shot_dir/tray-collapsed.png"
@@ -1932,18 +1939,46 @@ if $picker_mode; then
   cat > "$picker_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
+# M16 Task 12: identify the running shell daemon among every process whose
+# cmdline mentions this run's own "-p \$shell_path" — nixpkgs' wrapProgram
+# renames the real quickshell binary to ".quickshell-wrapped" (comm reads
+# ".quickshell-wra", truncated — pgrep -x qs matches nothing), so matching
+# has to go by cmdline. That substring alone still catches this run's own
+# "qs ipc ... -p \$shell_path call ..." client processes (argv[1] "ipc")
+# alongside the daemon (argv[1] "-p"), so the argv[1] check below is load-
+# bearing, not belt-and-braces.
+shell_pid=""
+for pid in \$(pgrep -f -- "-p $shell_path"); do
+  if [ "\$(tr '\\0' '\\n' < /proc/\$pid/cmdline 2>/dev/null | sed -n '2p')" = "-p" ]; then
+    shell_pid="\$pid"
+    break
+  fi
+done
+_smaps() {
+  if [ -n "\$shell_pid" ] && [ -r "/proc/\$shell_pid/smaps_rollup" ]; then
+    rss=\$(awk '/^Rss:/ { print \$2 }' "/proc/\$shell_pid/smaps_rollup")
+    pss=\$(awk '/^Pss:/ { print \$2 }' "/proc/\$shell_pid/smaps_rollup")
+    printf '{"rssKb":%s,"pssKb":%s}' "\${rss:-null}" "\${pss:-null}"
+  else
+    printf 'null'
+  fi
+}
+pre_open=\$(_smaps)
 "$qs_bin" ipc --any-display -p "$shell_path" call picker summon > /dev/null 2>&1
 sleep 2
 niri msg action screenshot-screen --path "$picker_grid_path"
+open_state=\$(_smaps)
 "$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
 sleep 1
+post_close=\$(_smaps)
 "$qs_bin" ipc --any-display -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
 sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
+printf '{"shellPid":"%s","preOpenRss":%s,"openRss":%s,"postCloseRss":%s}\n' "\$shell_pid" "\$pre_open" "\$open_state" "\$post_close" > "$picker_mem_path"
 EOF
 fi
 
@@ -3046,6 +3081,19 @@ if $picker_mode; then
   fi
   if ! grep -q '"token":"tok-picker"' "$picker_selection_path" || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
     echo "SMOKE_FAIL: picker-selection.txt did not resolve tok-picker with the chosen path — got: $(cat "$picker_selection_path")" >&2; exit 1
+  fi
+  # M16 Task 12: the pre-open/open/post-close Rss/Pss samples — read by a
+  # human against DESIGN.md's expectation (open-state cost scales with cell
+  # count, not file size; post-close doesn't climb above pre-open). Not a
+  # scripted numeric assertion: the fixtures are tiny 64x64 solid colors, so
+  # glibc's allocator not returning small freed chunks to the OS would make
+  # a hard "post-close <= open" check flaky regardless of whether the fix
+  # itself works.
+  if [ -s "$picker_mem_path" ]; then
+    echo "SMOKE_PICKER_MEM $picker_mem_path"
+    cat "$picker_mem_path"
+  else
+    echo "SMOKE_FAIL: no picker-memory.json produced" >&2; exit 1
   fi
 fi
 

@@ -95,6 +95,10 @@ WlSessionLockSurface {
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false
+        // Decode capped at the surface's own size (M16 Task 12), same
+        // rationale as Background.qml's own wallpaper decode.
+        sourceSize.width: surfaceRoot.width
+        sourceSize.height: surfaceRoot.height
     }
 
     MultiEffect {

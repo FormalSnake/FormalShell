@@ -343,8 +343,14 @@ Panel {
                         font.family: Theme.font.family
                         font.pixelSize: Theme.fontSize.caption
 
+                        // Gated on root.isOpen too (M16 Task 12 hidden-
+                        // surface audit): panel content stays instantiated
+                        // behind a hidden window after close(), so an
+                        // in-flight `tailscale up` closed mid-connect would
+                        // otherwise keep this pulsing off-screen until the
+                        // process exits.
                         SequentialAnimation on opacity {
-                            running: root._actionKind === "up"
+                            running: root._actionKind === "up" && root.isOpen
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
                             NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
