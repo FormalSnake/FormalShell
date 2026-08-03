@@ -40,6 +40,7 @@ PanelWindow {
     property var mediaPanel: null
     property var githubPanel: null
     property var usagePanel: null
+    property var tailscalePanel: null
     // The single Center instance (shell.qml's notificationsCenter) — the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
@@ -175,6 +176,12 @@ PanelWindow {
         }
     }
     Component {
+        id: tailscaleComponent
+        TailscaleWidget {
+            panel: bar.tailscalePanel
+        }
+    }
+    Component {
         id: bellComponent
         BellWidget {
             center: bar.center
@@ -209,6 +216,7 @@ PanelWindow {
         tray: trayComponent,
         github: githubComponent,
         usage: usageComponent,
+        tailscale: tailscaleComponent,
         bell: bellComponent,
         indicators: indicatorsComponent
     })

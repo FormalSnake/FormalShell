@@ -41,6 +41,7 @@ ShellRoot {
                 mediaPanel: mediaPanelInstance
                 githubPanel: githubPanelInstance
                 usagePanel: usagePanelInstance
+                tailscalePanel: tailscalePanelInstance
                 center: notificationsCenter
             }
         }
@@ -95,6 +96,7 @@ ShellRoot {
     MediaPanel { id: mediaPanelInstance }
     GithubPanel { id: githubPanelInstance }
     UsagePanel { id: usagePanelInstance }
+    TailscalePanel { id: tailscalePanelInstance }
     ImagePicker { id: imagePickerInstance }
 
     DebugIpc { menu: menu }
@@ -103,7 +105,7 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance }) }
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     NetworkIpc { panel: networkPanelInstance }

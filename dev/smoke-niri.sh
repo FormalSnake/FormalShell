@@ -86,6 +86,12 @@
 # network or auth; the github widget itself stays out of the bar (the
 # default no-`bar`-key layout), which is exactly the no-widget IPC-open
 # path GithubPanel.qml's header describes.
+# `--panel tailscale` proves the honest unavailable state (M16 Task 8): the
+# VM carries no tailscaled/tailscale binary at all, so TailscalePanel.qml's
+# poll exits 127 and the screenshot must show the dim "NO TAILSCALE" row —
+# real evidence of the missing-CLI path, not a stub. The connected/toggle/
+# operator-permission states are owner-verified post-switchover against a
+# real tailscaled, stated honestly in SWITCHOVER.md.
 # `--panel calendar` additionally proves real events render from BOTH of
 # CalendarEventsService's backends (M12 Task 3): the isolated HOME always
 # carries a one-event .ics fixture dated today (see the calendar-events

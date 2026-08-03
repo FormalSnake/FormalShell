@@ -44,9 +44,9 @@ arrangement:
 
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
 `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
-`indicators`, `github`, `usage` (both opt-in only — never part of the
-default arrangement; `bell` by contrast IS part of the defaults since
-M13b, so a config predating it that spells out its own `right` region
+`indicators`, `github`, `usage`, `tailscale` (all three opt-in only — never
+part of the default arrangement; `bell` by contrast IS part of the defaults
+since M13b, so a config predating it that spells out its own `right` region
 won't show the bell until it's added there).
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
@@ -129,6 +129,17 @@ states: `gh` missing from PATH hides the cell entirely;
 `NO AUTH` cell; any other failure or unparsable output renders a dim `NO GH`
 cell — never stale or invented counts. The cell also stays hidden until the
 first poll answers at all.
+
+**Tailscale** — opt-in via `bar.layout` (add `"tailscale"` to a region); a
+single glyph, dim while stopped, normal while connected, polling
+`tailscale status --json` every `tailscale.intervalMs` (ms, default 60000).
+Click toggles the Tailscale panel (see [Panels](#panels)). Honest states:
+`tailscale` missing from PATH hides the cell entirely; any other failure
+(daemon unreachable, unparsable output) leaves it hidden too, since the
+panel folds both into the same `NO TAILSCALE` state and the widget only
+shows once a real answer — good or bad-but-parseable — has landed. The cell
+stays dim (rather than accent-colored) whenever `BackendState` isn't
+`Running`, including `NeedsLogin`.
 
 **Usage** — opt-in via `bar.layout` (add `"usage"` to a region); a glyph
 plus the worst tracked rate-limit window's percent across Claude Code and
@@ -472,7 +483,7 @@ binds {
 
 ## Panels
 
-Eight per-widget popouts share one component, `shell/Components/Panel.qml` — a
+Nine per-widget popouts share one component, `shell/Components/Panel.qml` — a
 ledger-table popout (header `MetaLabel` row, rows sharing hairline rules,
 `WlrLayershell` top layer, keyboard `OnDemand`, closes on Escape and on
 click-outside) anchored under the bar cell that opened it, or falling back to
@@ -498,6 +509,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `media`      | `Quickshell.Services.Mpris`                 | `NowPlaying.qml`     |
 | `github`     | one `gh api graphql` poll (shared with the bar cell) | `GithubWidget.qml` |
 | `usage`      | `~/.claude/.credentials.json` + Anthropic OAuth usage endpoint, `codex app-server` JSON-RPC | `UsageWidget.qml` |
+| `tailscale`  | `tailscale status --json` poll (shared with the bar cell) | `TailscaleWidget.qml` |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` is an omarchy-style mixer (M15 Task 4): `OUTPUT` is one
@@ -608,6 +620,23 @@ app-server` over its own stdin/stdout, matching replies by their `id`
 rather than assuming order; `codex` missing from PATH renders `NO CODEX`,
 any RPC-level failure (timeout, malformed reply) renders `ERROR` — never a
 fabricated percentage either way.
+`TailscalePanel` (M16 Task 8) pairs a `STATUS` action cell (`CONNECTED`/
+`STOPPED`, the running state inverted) with a self hostname+IP row (click
+copies the IP via `wl-copy`) above a `MACHINES` ledger — one row per peer
+(name, dim IP, an `ONLINE`/`OFFLINE` indicator that only breathes,
+`PowerPanel`'s charging-pulse idiom, while a `tailscale up` toggle is
+actively in flight), click copies that peer's IP. Clicking or
+Enter-on-cursor the `STATUS` cell runs `tailscale up`/`down`; a permission
+failure (a non-operator user lacks rights to toggle the daemon) renders an
+inline `NOT OPERATOR` state rather than pretending it worked — see
+[SWITCHOVER.md](SWITCHOVER.md) for the `tailscale set --operator=$USER`
+host-side prerequisite. The `tailscale status --json` poll lives in the
+panel, not the widget (`GithubPanel`'s own pattern), so `panel open
+tailscale` renders honestly even when `bar.layout` never names the
+tailscale widget. Honest states: `tailscale` missing from PATH or any other
+unparsable response renders a dim `NO TAILSCALE` cell (the VM smoke rig's
+own expected state — no tailscaled at all), `BackendState: "NeedsLogin"`
+renders a dim `NEEDS LOGIN` cell, `LOADING` before the first answer.
 
 **IPC** (`target: "panel"`, a documented spec addendum — see
 `docs/superpowers/plans/2026-07-28-m6-clipboard-and-panels.md`'s header note
@@ -618,7 +647,7 @@ keybinds and no way to be verified headlessly):
 qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a

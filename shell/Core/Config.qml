@@ -79,6 +79,9 @@ import QtQuick
 // nightlight.temp (number, default 4000 — the fixed low colour
 // temperature it pins via wlsunset's own SIGUSR1 runtime control, M16
 // Task 6).
+// tailscale.intervalMs (number, default 60000 — TailscalePanel's
+// `tailscale status --json` poll cadence in ms; the widget itself is
+// opt-in via bar.layout, M16 Task 8).
 Singleton {
     id: root
 

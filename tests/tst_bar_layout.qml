@@ -92,6 +92,16 @@ TestCase {
         verify(names(d.regions.right).indexOf("usage") < 0);
     }
 
+    function test_tailscale_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["tailscale"] } });
+        compare(names(r.regions.right), "tailscale");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("tailscale") < 0);
+        verify(names(d.regions.center).indexOf("tailscale") < 0);
+        verify(names(d.regions.right).indexOf("tailscale") < 0);
+    }
+
     function test_bell_is_a_default_builtin_before_indicators() {
         var r = Layout.resolve(undefined);
         var right = names(r.regions.right).split(",");
