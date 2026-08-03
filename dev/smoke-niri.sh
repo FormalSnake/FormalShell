@@ -385,6 +385,25 @@
 # numbers or an honest NO NETWORK/NO CURL/poll-ceiling outcome is accepted
 # as real evidence, the same bifurcation --nightlight already established.
 #
+# With --instance (post-M16 addendum, owner ask 2026-08-03: "i see two bars
+# there has to be instance locking"), proves InstanceLock.qml's takeover lock
+# for real: once the primary shell is up, the drive script launches a SECOND
+# copy of the same result/bin/formalshell wrapper in the same nested session
+# (the exact two-instance race the owner hit after a rebuild+respawn — the
+# wrapped launcher, not a bare qs invocation, since it carries QT_PLUGIN_PATH/
+# NIXPKGS_QT6_QML_IMPORT_PATH other services need), records both PIDs, then
+# polls (bounded, 15s — generous for the old instance's own
+# Wayland/D-Bus teardown on llvmpipe) until exactly one real daemon process
+# remains (the same argv[1]=="-p" cmdline match the picker-memory leg already
+# uses to tell the daemon apart from this run's own "qs ipc ... call"
+# clients). Post-run assertions: the survivor's PID must be the second
+# (newer) one, not the first, and both instances' own stdout/stderr are
+# captured so the takeover's log lines ("live instance found" / "acquired
+# at" on the new side, "being replaced" on the old side) are real evidence,
+# not inferred from process counts alone. This run's generic smoke.png,
+# taken after convergence, shows a single bar — the old instance's Wayland
+# surfaces are already gone by then, not just its process.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -429,6 +448,7 @@ bar_layout_mode=false
 screenshot_mode=false
 nightlight_mode=false
 speedtest_mode=false
+instance_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -452,7 +472,8 @@ while [ $# -gt 0 ]; do
     --screenshot) screenshot_mode=true; shift ;;
     --nightlight) nightlight_mode=true; shift ;;
     --speedtest) speedtest_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest]" >&2; exit 1 ;;
+    --instance) instance_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance]" >&2; exit 1 ;;
   esac
 done
 
@@ -468,7 +489,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -659,6 +680,17 @@ if $notify_mode || $center_mode; then
 fi
 shell_path=$(readlink -f result/share/formalshell)
 sni_stub_path="$PWD/dev/sni-stub.py"
+
+# The nested niri invocation below deliberately keeps the outer XDG_RUNTIME_DIR
+# (host-session-safety comment above), so InstanceLock.qml's fixed socket path
+# is stable across runs, not just within one — a previous run's shell only
+# leaves that file behind if it exited abnormally rather than losing its
+# nested Wayland connection cleanly (the ordinary path every other leg here
+# already relies on). Clearing it first keeps this leg's own takeover proof
+# from being confused by unrelated history.
+if $instance_mode; then
+  rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/formalshell/instance.sock" 2>/dev/null || true
+fi
 
 # The nested instance is a Wayland client of the host compositor, so it needs
 # the host's WAYLAND_DISPLAY. This shell may not have it exported (e.g. a
@@ -927,6 +959,9 @@ tray_pids_path="$shot_dir/tray-pids.txt"
 tray_activate_path="$shot_dir/tray-activate.txt"
 tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
 bar_layout_path="$shot_dir/bar-layout.png"
+instance_status_path="$shot_dir/instance-status.json"
+instance_primary_log_path="$shot_dir/instance-primary.log"
+instance_second_log_path="$shot_dir/instance-second.log"
 audio_panel_path="$shot_dir/audio-panel.png"
 screenshot_reply_path="$shot_dir/screenshot-reply.txt"
 screenshot_status_path="$shot_dir/screenshot-status.json"
@@ -2107,6 +2142,53 @@ fi
 EOF
 fi
 
+# --instance: launches a second real daemon against the same shell_path
+# after the primary is up, then polls until exactly one survives. Both
+# instances are Wayland clients of this same nested niri session, so — same
+# as the primary formalshell process every other leg already relies on —
+# neither needs an explicit kill script: whichever one loses the takeover
+# exits on its own, and the survivor dies with the session at teardown.
+if $instance_mode; then
+  instance_drive_script="$shot_dir/instance-drive.sh"
+  cat > "$instance_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+# Same argv[1]=="-p" idiom the picker-memory leg uses to isolate the real
+# daemon process(es) from this run's own "qs ipc ... call" client
+# invocations, which also match a bare "pgrep -f -- -p \$shell_path".
+find_daemon_pids() {
+  for pid in \$(pgrep -f -- "-p $shell_path"); do
+    if [ "\$(tr '\\0' '\\n' < /proc/\$pid/cmdline 2>/dev/null | sed -n '2p')" = "-p" ]; then
+      echo "\$pid"
+    fi
+  done
+}
+old_pid=\$(find_daemon_pids | head -n1)
+# The wrapped launcher, not a bare "\$qs_bin -p \$shell_path": the wrapper
+# carries QT_PLUGIN_PATH/NIXPKGS_QT6_QML_IMPORT_PATH for QtPositioning and
+# QtMultimedia (nix/package.nix), which a raw qs invocation lacks — every
+# real second instance (niri respawn, terminal, keybind) goes through this
+# same wrapper, so this is the faithful reproduction of the owner's actual
+# two-bar scenario, not a shortcut around it.
+"$PWD/result/bin/formalshell" > "$instance_second_log_path" 2>&1 &
+new_pid=\$!
+waited=0
+count=0
+while [ "\$waited" -lt 15000 ]; do
+  sleep 0.5
+  waited=\$((waited + 500))
+  count=\$(find_daemon_pids | wc -l | tr -d ' ')
+  if [ "\$count" = "1" ]; then
+    break
+  fi
+done
+survivor=\$(find_daemon_pids | head -n1)
+printf '{"oldPid":%s,"newPid":%s,"survivorPid":%s,"waitedMs":%s,"finalCount":%s}\n' \
+  "\${old_pid:-null}" "\${new_pid:-null}" "\${survivor:-null}" "\$waited" "\${count:-0}" \
+  > "$instance_status_path"
+EOF
+fi
+
 {
   echo 'hotkey-overlay {'
   echo '    skip-at-startup'
@@ -2124,7 +2206,12 @@ fi
   if $bar_layout_mode || $panel_github_mode; then
     shim_path_prefix="$gh_shim_dir:$shim_path_prefix"
   fi
-  if [ -n "$shim_path_prefix" ]; then
+  if $instance_mode; then
+    # Captures the primary instance's own stdout/stderr so InstanceLock.qml's
+    # "being replaced" log line is real evidence below, not inferred from the
+    # process disappearing.
+    echo "spawn-at-startup \"sh\" \"-c\" \"exec '$PWD/result/bin/formalshell' > '$instance_primary_log_path' 2>&1\""
+  elif [ -n "$shim_path_prefix" ]; then
     echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell'\""
   else
     echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
@@ -2267,6 +2354,9 @@ fi
     # (fires immediately once Config.settings resolves, well under 2s).
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && niri msg action screenshot-screen --path $bar_layout_path\""
   fi
+  if $instance_mode; then
+    echo "spawn-at-startup \"bash\" \"$instance_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read + toggle round
   # trip + emoji instant-paste + apps + nix toast legs) fires 1s after the
   # screenshot at sleep 9 and needs a much longer buffer before quit than
@@ -2387,6 +2477,12 @@ fi
     # 13s after that worst case, so it shows the ordinary session with the
     # eap leg already screenshotted and forgotten.
     screenshot_delay=190
+  elif $instance_mode; then
+    # instance-drive.sh's own worst case (3s initial sleep + 15s poll
+    # ceiling) lands ~18s in; this run's generic smoke.png/SMOKE_OK is taken
+    # 3s after that, showing the ordinary session with the takeover already
+    # resolved to a single bar.
+    screenshot_delay=21
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -3210,6 +3306,47 @@ if $tray_mode; then
   if [ "$tray_activate_lines" != "1" ]; then
     echo "SMOKE_FAIL: expected exactly one activate record (got $tray_activate_lines) — activate hit more than the targeted item" >&2; exit 1
   fi
+fi
+
+if $instance_mode; then
+  if [ -s "$instance_status_path" ]; then
+    cat "$instance_status_path"
+  else
+    echo "SMOKE_FAIL: no instance-status.json produced — the second daemon may never have launched" >&2; exit 1
+  fi
+  instance_old=$(grep -o '"oldPid":[A-Za-z0-9]*' "$instance_status_path" | cut -d: -f2)
+  instance_new=$(grep -o '"newPid":[A-Za-z0-9]*' "$instance_status_path" | cut -d: -f2)
+  instance_survivor=$(grep -o '"survivorPid":[A-Za-z0-9]*' "$instance_status_path" | cut -d: -f2)
+  instance_final_count=$(grep -o '"finalCount":[0-9]*' "$instance_status_path" | cut -d: -f2)
+  # The two instances' own log lines are always surfaced here, pass or fail —
+  # a failure still needs to be loud about what each side actually logged,
+  # not just that the pids didn't match.
+  echo "-- instance-primary.log (instance lock lines) --"
+  grep "instance lock" "$instance_primary_log_path" 2>/dev/null || echo "(none found)"
+  echo "-- instance-second.log (instance lock lines) --"
+  grep "instance lock" "$instance_second_log_path" 2>/dev/null || echo "(none found)"
+  if [ "$instance_old" = "null" ] || [ -z "$instance_old" ]; then
+    echo "SMOKE_FAIL: no live primary instance was found before the second launch — the takeover path was never exercised" >&2; exit 1
+  fi
+  if [ "$instance_final_count" != "1" ]; then
+    echo "SMOKE_FAIL: expected exactly one surviving daemon after the takeover poll, got $instance_final_count" >&2; exit 1
+  fi
+  if [ -z "$instance_survivor" ] || [ "$instance_survivor" = "null" ]; then
+    echo "SMOKE_FAIL: takeover poll settled on a count of 1 but recorded no survivor pid" >&2; exit 1
+  fi
+  if [ "$instance_survivor" != "$instance_new" ]; then
+    echo "SMOKE_FAIL: survivor pid ($instance_survivor) is not the second instance's pid ($instance_new) — the old instance won the takeover instead of quitting" >&2; exit 1
+  fi
+  if ! grep -q "instance lock — being replaced" "$instance_primary_log_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: primary instance log never logged being replaced" >&2; exit 1
+  fi
+  if ! grep -q "instance lock — live instance found, requesting takeover" "$instance_second_log_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: second instance log never logged finding a live instance" >&2; exit 1
+  fi
+  if ! grep -q "instance lock — acquired at" "$instance_second_log_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: second instance log never logged acquiring the lock" >&2; exit 1
+  fi
+  echo "SMOKE_INSTANCE old=$instance_old new=$instance_new survivor=$instance_survivor"
 fi
 
 if $bar_layout_mode; then

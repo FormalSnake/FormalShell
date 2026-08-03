@@ -17,8 +17,14 @@ import qs.Surfaces.Screensaver
 import qs.Surfaces.Picker
 import qs.Surfaces.Polkit
 import qs.Ipc
+import qs.Services
 
 ShellRoot {
+    // Single-instance takeover lock (post-M16 addendum) — wired first so a
+    // stale/duplicate instance is caught before any surface renders. See
+    // InstanceLock.qml's own header comment for the takeover protocol.
+    InstanceLock {}
+
     Variants {
         model: Quickshell.screens
 

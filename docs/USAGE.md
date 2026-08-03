@@ -20,6 +20,7 @@ Product overview, screenshots, features, and install instructions live in
 - [Screensaver](#screensaver)
 - [Picker](#picker)
 - [Screenshots](#screenshots)
+- [Instance lock](#instance-lock)
 
 ## Bar
 
@@ -1224,3 +1225,14 @@ binds {
     Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "region"; }
 }
 ```
+
+## Instance lock
+
+Launching `formalshell` replaces any instance already running — there is no
+"two bars" state after a rebuild-and-respawn. On startup the shell binds a
+lock at `$XDG_RUNTIME_DIR/formalshell/instance.sock`; if a live instance
+already holds it, the new process asks it to quit, waits for it to exit, and
+takes over the same lock. This works no matter how the shell is launched
+(a compositor `spawn-at-startup`, a terminal, a keybind) and survives across
+rebuilds, since the lock lives in the runtime directory rather than under the
+nix store path a given build happens to have.
