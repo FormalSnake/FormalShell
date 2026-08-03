@@ -106,6 +106,27 @@ TestCase {
         compare(m.reveal, 0);
     }
 
+    // M16 Task 11: marquee/rotate carve-outs — a rate and a cadence, not
+    // durations, so `enabled: false` leaves them alone; the consumer gates
+    // the whole animation on `Theme.motionEnabled` itself instead.
+    function test_motion_tokens_marquee_pace_matches_the_owner_brief() {
+        var m = Tokens.motionTokens(true);
+        compare(m.marqueePxPerSec, 30);
+        compare(m.marqueeHoldMs, 2000);
+    }
+
+    function test_motion_tokens_rotate_period_is_three_seconds() {
+        compare(Tokens.motionTokens(true).rotatePeriod, 3000);
+    }
+
+    function test_motion_tokens_marquee_and_rotate_are_not_zeroed_when_disabled() {
+        var enabled = Tokens.motionTokens(true);
+        var disabled = Tokens.motionTokens(false);
+        compare(disabled.marqueePxPerSec, enabled.marqueePxPerSec);
+        compare(disabled.marqueeHoldMs, enabled.marqueeHoldMs);
+        compare(disabled.rotatePeriod, enabled.rotatePeriod);
+    }
+
     // 1.1 four interactive states
 
     function test_state_appearance_normal() {

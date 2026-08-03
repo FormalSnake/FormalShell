@@ -126,6 +126,9 @@ PanelWindow {
         id: nowPlayingComponent
         NowPlaying {
             panel: bar.mediaPanel
+            // M16 Task 11: gates the marquee off while the bar's own
+            // PanelWindow isn't on screen.
+            windowVisible: bar.visible
         }
     }
     Component {

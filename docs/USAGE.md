@@ -215,10 +215,21 @@ workspace's fill) are states, not transitions, and stay instant. The
 wallpaper crossfade is the one carve-out outside that band: setting a new
 wallpaper (`wallpaper set`, the picker) fades it in over
 `Theme.motion.reveal` (400ms, `Easing.InOutQuad`) while the previous
-wallpaper stays painted underneath, instead of a hard cut.
+wallpaper stays painted underneath, instead of a hard cut. Two more
+carve-outs (owner-requested, gated subtle): the bar's now-playing title
+marquee-scrolls at `Theme.motion.marqueePxPerSec` (~30px/s, no easing)
+with a `Theme.motion.marqueeHoldMs` (~2s) hold at the loop start, but only
+when the title actually overflows its cell and the bar window is on
+screen — a title that fits never moves. The power panel's charging/
+discharging status line rotates its real phrase set (state, time-to-full/
+empty, charge rate) every `Theme.motion.rotatePeriod` (~3s) while the
+panel is open, fading at `Theme.motion.standard` — a single-phrase set
+never rotates.
 `motion.enabled: false` in `settings.json` zeroes every duration —
 including `reveal` — the shell's reduced-motion switch, since Wayland has
-no `prefers-reduced-motion` to inherit:
+no `prefers-reduced-motion` to inherit. The marquee and the status
+rotation respect it too: disabled falls back to a plain elide and a static
+primary phrase, respectively.
 
 ```jsonc
 // ~/.config/formalshell/settings.json

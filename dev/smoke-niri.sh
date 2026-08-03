@@ -145,8 +145,14 @@
 # `panel open media` then shows the screenshot with the panel open (album
 # art cell, meta row, transport cells, progress fill), and `media status` is
 # dumped to media-status.json so its title/artist can be cross-checked
-# against the fixture's own tags. mpv is killed by PID right after the
-# screenshot, before niri quits, so no player process outlives the run.
+# against the fixture's own tags. Then M16 Task 11's marquee proof: the
+# short-title state is screenshotted (media-marquee-static.png, expected
+# static — the fixture title doesn't overflow the bar cell), mpv is
+# retitled to a second, deliberately long fixture track (kill by PID,
+# respawn on the long track), `media status` is polled until the long
+# title lands, and a second screenshot lands mid-scroll
+# (media-marquee-scroll.png). mpv is killed by PID right after, before
+# niri quits, so no player process outlives the run.
 # With --lock: first, before the nested session even starts, runs
 # `result/bin/formalshell-lock-before-sleep` with no shell instance running
 # at all and records its exit code (lock-before-sleep-rc.txt must be "0" —
@@ -872,6 +878,9 @@ wifi_eap_status_path="$shot_dir/wifi-eap-status.json"
 wifi_eap_forget_status_path="$shot_dir/wifi-eap-forget-status.json"
 wifi_reset_status_path="$shot_dir/wifi-reset-status.json"
 media_status_path="$shot_dir/media-status.json"
+media_marquee_static_path="$shot_dir/media-marquee-static.png"
+media_marquee_scroll_path="$shot_dir/media-marquee-scroll.png"
+media_status_long_path="$shot_dir/media-status-long.json"
 eds_seed_path="$shot_dir/eds-seed.txt"
 eds_seed2_path="$shot_dir/eds-seed-2.txt"
 calendar_select_path="$shot_dir/calendar-select.txt"
@@ -1191,6 +1200,17 @@ if $media_mode || $screensaver_mode; then
 fi
 
 if $media_mode; then
+  # Deliberately long — comfortably past NowPlaying.qml's 220px maxWidth at
+  # the shell's default 13px monospace body size — so the marquee's
+  # overflow gate actually trips (M16 Task 11).
+  media_track_long_path="$shot_dir/smoke-track-long.flac"
+  media_track_title_long="FormalShell Marquee Autoscroll Verification Overflow Track"
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
+    -metadata "title=$media_track_title_long" -metadata "artist=$media_track_artist" \
+    -c:a flac -y "$media_track_long_path"
+fi
+
+if $media_mode; then
   # Script files (same rationale as menu_mode's below: real files sidestep
   # quoting hell through both this generator and niri's KDL string parser).
   # mpv's PID is written before the exec — exec replaces the shell's own
@@ -1215,6 +1235,36 @@ EOF
 if [ -f "$media_pid_path" ]; then
   kill "\$(cat "$media_pid_path")" 2>/dev/null || true
 fi
+EOF
+
+  # M16 Task 11's marquee proof, one script (same rationale as
+  # nightlight-drive.sh: everything here is strictly ordered). The short
+  # title from media_play_script above is already playing by sleep 7
+  # (established well before this run's own sleep-5/6 panel-open/status
+  # steps); screenshot it first as the "no marquee" baseline, then kill and
+  # respawn on the long-title track (overwriting media_pid_path, so the
+  # generic media_kill_script above still targets the live process), poll
+  # `media status` for the retitle to land, then wait past the marquee's
+  # hold plus well into its scroll before the second screenshot.
+  media_marquee_script="$shot_dir/media-marquee.sh"
+  cat > "$media_marquee_script" <<EOF
+#!/usr/bin/env bash
+sleep 7
+niri msg action screenshot-screen --path "$media_marquee_static_path"
+if [ -f "$media_pid_path" ]; then
+  kill "\$(cat "$media_pid_path")" 2>/dev/null || true
+fi
+sleep 1
+"$mpv_bin" --no-video --really-quiet "$media_track_long_path" &
+echo \$! > "$media_pid_path"
+SECONDS=0
+while [ "\$SECONDS" -lt 8 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call media status > "$media_status_long_path" 2>&1
+  grep -qF "\"title\":\"$media_track_title_long\"" "$media_status_long_path" && break
+  sleep 1
+done
+sleep 5
+niri msg action screenshot-screen --path "$media_marquee_scroll_path"
 EOF
 fi
 
@@ -2107,6 +2157,7 @@ fi
     echo "spawn-at-startup \"bash\" \"$media_play_script\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open media\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call media status > $media_status_path 2>&1\""
+    echo "spawn-at-startup \"bash\" \"$media_marquee_script\""
     # --media --panel audio: the generic panel_mode open above (sleep 3)
     # and this leg's own "panel open media" (sleep 5) both go through
     # PanelRegistry, which only ever holds one open panel — media wins
@@ -2182,6 +2233,12 @@ fi
     screenshot_delay=14
   elif $osd_mode; then
     screenshot_delay=10
+  elif $media_mode; then
+    # media-marquee.sh's own worst case (7s static shot + kill/respawn +
+    # up to 8s retitle poll + 5s into-scroll wait = 21s) lands ~21s in;
+    # this run's generic smoke.png/SMOKE_OK is taken 3s after that, so it
+    # shows the ordinary session mid-scroll on the long-title track.
+    screenshot_delay=24
   elif $clipboard_mode; then
     # clipboard-drive.sh's last step (menu summon) lands at its own sleep 15
     # (text dumps, a copy-and-paste round trip, then the image leg's own
@@ -2722,6 +2779,29 @@ if $media_mode; then
   fi
   if ! grep -q "\"artist\":\"$media_track_artist\"" "$media_status_path"; then
     echo "SMOKE_FAIL: media status artist does not match the fixture track's tag ($media_track_artist) — got: $(cat "$media_status_path")" >&2; exit 1
+  fi
+  # M16 Task 11: the marquee's own two-state proof. The static shot lands
+  # while the short fixture title (confirmed non-overflowing above) is
+  # still playing; media_status_long_path confirms the retitle to the
+  # deliberately long fixture actually landed before the scroll shot is
+  # trusted as evidence of the marquee, not a stale static frame.
+  if [ -f "$media_marquee_static_path" ]; then
+    echo "SMOKE_MEDIA_MARQUEE_STATIC $media_marquee_static_path"
+  else
+    echo "SMOKE_FAIL: no media-marquee-static screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$media_status_long_path" ]; then
+    cat "$media_status_long_path"
+  else
+    echo "SMOKE_FAIL: no media status produced after the marquee retitle" >&2; exit 1
+  fi
+  if ! grep -q "\"title\":\"$media_track_title_long\"" "$media_status_long_path"; then
+    echo "SMOKE_FAIL: media status after retitle does not show the long overflow title ($media_track_title_long) — got: $(cat "$media_status_long_path")" >&2; exit 1
+  fi
+  if [ -f "$media_marquee_scroll_path" ]; then
+    echo "SMOKE_MEDIA_MARQUEE_SCROLL $media_marquee_scroll_path"
+  else
+    echo "SMOKE_FAIL: no media-marquee-scroll screenshot produced" >&2; exit 1
   fi
   # --media --panel audio (M15 Task 4): media_status_path above already
   # proves mpv's stream is real and playing; this proves the audio panel

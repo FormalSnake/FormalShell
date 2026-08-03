@@ -68,7 +68,13 @@ Singleton {
     // Wayland analog of prefers-reduced-motion exists. The "breathing"
     // opacity pulse (PowerPanel's charging state) and the screensaver's
     // frame effect remain §4's other two continuous-motion carve-outs and
-    // keep their own pacing, unaffected by motion.enabled.
+    // keep their own pacing, unaffected by motion.enabled. `marqueePxPerSec`/
+    // `marqueeHoldMs` (the now-playing bar cell's overflow scroll) and
+    // `rotatePeriod` (the power panel's phrase rotation) are the fourth and
+    // fifth carve-outs (M16 Task 11) — unlike the pulse and the screensaver,
+    // both DO respect motion.enabled, but each consumer gates on
+    // `motionEnabled` directly rather than this object zeroing a rate/period
+    // to 0.
     readonly property bool motionEnabled: Config.get("motion.enabled", true) === true
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
@@ -80,7 +86,10 @@ Singleton {
             reveal: m.reveal,
             revealEasing: Easing.InOutQuad,
             pulseDuration: 900,
-            pulseEasing: Easing.InOutQuad
+            pulseEasing: Easing.InOutQuad,
+            marqueePxPerSec: m.marqueePxPerSec,
+            marqueeHoldMs: m.marqueeHoldMs,
+            rotatePeriod: m.rotatePeriod
         };
     }
 

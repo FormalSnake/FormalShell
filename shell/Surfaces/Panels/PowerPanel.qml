@@ -39,6 +39,30 @@ Panel {
     readonly property real _timeToFull: root._hasBattery ? root._device.timeToFull : 0
     readonly property real _changeRate: root._hasBattery ? root._device.changeRate : 0
 
+    // M16 Task 11 (owner-requested, gated subtle): the glanceable phrase
+    // set the status line rotates through — state first, then whichever
+    // real fields the static rows below already render, same skip-if-
+    // absent rule (never a "--", never a phrase for a field that isn't
+    // reporting). A set with only one phrase (no time-to-X, no rate) never
+    // rotates; the primary phrase is always index 0, so a closed/reopened
+    // panel or a disabled-motion session both show exactly today's line.
+    readonly property var _phrases: {
+        if (!root._hasBattery)
+            return [];
+        var list = [root._percent + "%  " + UPowerDeviceState.toString(root._device.state).toUpperCase()];
+        if (root._charging && root._timeToFull > 0)
+            list.push("TIME TO FULL " + Power.formatDuration(root._timeToFull));
+        if (!root._charging && root._timeToEmpty > 0)
+            list.push("TIME TO EMPTY " + Power.formatDuration(root._timeToEmpty));
+        if (root._changeRate !== 0)
+            list.push("RATE " + Power.formatRate(root._changeRate));
+        return list;
+    }
+    readonly property bool _rotating: root._hasBattery
+        && (root._device.state === UPowerDeviceState.Charging || root._device.state === UPowerDeviceState.Discharging)
+        && root._phrases.length > 1
+    property int _phraseIndex: 0
+
     // Hysteresis state for Power/model.js's warnEvent() — persisted here
     // across calls, never reset except by the model's own re-arm-on-charge
     // rule. See model.js's own header comment for the full behavior.
@@ -85,6 +109,7 @@ Panel {
     onIsOpenChanged: {
         if (root.isOpen) {
             root._cursor = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
+            root._phraseIndex = 0;
             BrightnessService.refreshDevices();
         }
     }
@@ -142,19 +167,54 @@ Panel {
             width: parent.width
             spacing: Theme.space.xxs
 
-            Text {
-                id: statusText
-                text: root._percent + "%  " + UPowerDeviceState.toString(root._device ? root._device.state : UPowerDeviceState.Unknown).toUpperCase()
-                color: statusCell.foreground
-                font.family: Theme.font.family
-                font.pixelSize: Theme.fontSize.body
+            // M16 Task 11: the phrase swap fades `statusTextWrap`'s opacity,
+            // never `statusText`'s own — that one already carries the
+            // charging breathing pulse below, and two animations writing
+            // the same property would fight. Wrapping keeps them
+            // independent: total rendered opacity is just the product of
+            // both, so a swap mid-breath still reads as one organism.
+            Item {
+                id: statusTextWrap
+                width: statusText.implicitWidth
+                height: statusText.implicitHeight
 
-                SequentialAnimation on opacity {
-                    running: root._charging
-                    loops: Animation.Infinite
-                    NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
-                    NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                Text {
+                    id: statusText
+                    text: root._phrases.length > 0 ? root._phrases[root._phraseIndex % root._phrases.length] : ""
+                    color: statusCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.body
+
+                    SequentialAnimation on opacity {
+                        running: root._charging
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                        NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                    }
                 }
+            }
+
+            // Advances `_phraseIndex` every `Theme.motion.rotatePeriod`
+            // while the panel is open, motion is enabled, and there's more
+            // than one real phrase to show — closing the panel, disabling
+            // motion, or losing the rotating state all just stop new
+            // triggers; the in-flight fade (if any) still runs to
+            // completion on its own since nothing else writes
+            // `statusTextWrap.opacity`.
+            Timer {
+                id: phraseTimer
+                interval: Theme.motion.rotatePeriod
+                running: root.isOpen && Theme.motionEnabled && root._rotating
+                repeat: true
+                triggeredOnStart: false
+                onTriggered: phraseFade.restart()
+            }
+
+            SequentialAnimation {
+                id: phraseFade
+                PropertyAnimation { target: statusTextWrap; property: "opacity"; to: 0.0; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+                ScriptAction { script: root._phraseIndex = (root._phraseIndex + 1) % Math.max(1, root._phrases.length) }
+                PropertyAnimation { target: statusTextWrap; property: "opacity"; to: 1.0; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
             }
 
             // Flat accent fill, no thumb, no radius — same idiom as

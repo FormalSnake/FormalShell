@@ -333,6 +333,24 @@ and every rule here is checkable:
    inside this carve-out that does fade, opacity only at
    `Theme.motion.standard` (no slide — a full-screen surface has no edge
    to slide in from).
+7. **Marquee-on-overflow and status rotation** (owner-requested, M16 Task
+   11) are the fourth and fifth continuous-motion carve-outs, each with a
+   real gate — never a decoration running for its own sake. The bar's
+   now-playing title scrolls (`Theme.motion.marqueePxPerSec`, ~30px/s, no
+   easing, a `Theme.motion.marqueeHoldMs` ~2s hold at the loop start) only
+   when the title genuinely overflows its cell's cap AND the bar window is
+   actually on screen; a title that fits never moves. The power panel's
+   charging/discharging status line cycles its real phrase set (state,
+   time-to-full/empty, charge rate) every `Theme.motion.rotatePeriod`
+   (~3s), fading at `Theme.motion.standard`, only while the panel is open
+   and more than one phrase is real — a single-phrase set stays put. Both
+   sit outside rule 1's 90–140ms band on purpose (a scrolling title or a
+   phrase change reads better paced in seconds, not fractions of one) —
+   only the rotation's own fade transition uses `Theme.motion.standard`.
+   Unlike the pulse and the screensaver, both DO respect
+   `motion.enabled: false`: a disabled marquee falls back to today's plain
+   elide, and disabled rotation just stops advancing past the primary
+   phrase.
 
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the
@@ -343,7 +361,9 @@ carve-out each. The wallpaper crossfade (`Background.qml`) is the third:
 90–140ms band on purpose — a full-screen image swap reads better slower
 than a control hover — and, unlike the pulse, it does respect
 `motion.enabled: false` (zeroed to a hard cut straight onto the new
-wallpaper, same as `fast`/`standard`).
+wallpaper, same as `fast`/`standard`). The now-playing marquee and the
+power panel's status rotation are the fourth and fifth (rule 7 above) —
+gated subtle by owner request, never running unwatched or undisableable.
 
 Do not restyle a surface outside a plan that schedules it (Tasks 2–7 of the
 M8b plan schedule every surface named above in turn).
