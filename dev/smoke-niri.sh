@@ -105,7 +105,14 @@
 # nix/testvm.nix's mac80211_hwsim rig — three simulated radios: wlan0 stays
 # NetworkManager's station device, wlan1/wlan2 are hostapd APs broadcasting
 # FORMALTEST (WPA2-PSK) and FORMALTEST-EAP (hostapd's own integrated EAP
-# server, PEAP/MSCHAPv2, no RADIUS daemon). `panel open network` first (turns
+# server, PEAP/MSCHAPv2, no RADIUS daemon). Before anything else, restarts
+# wpa_supplicant's own per-interface unit (`wpa_supplicant-wlan0.service`) —
+# its internal scan-request queue can wedge from a prior run independently
+# of anything NetworkManager itself persists, repeating "Reject scan trigger
+# since one is already pending" forever and starving every SME authenticate
+# attempt; the restart is what unwedges it, confirmed by reproducing the
+# stuck state directly, and NetworkManager reconnects to the fresh
+# supplicant over D-Bus on its own. `panel open network` first (turns
 # on WifiDevice.scannerEnabled, NetworkPanel.qml's isOpen-tracked idiom — the
 # station won't rescan without it), then polls `network status` for both
 # SSIDs to surface from a real scan. `network connect FORMALTEST` with a
@@ -1364,9 +1371,26 @@ if $wifi_mode; then
   cat > "$wifi_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
+
+# Self-heal before anything else (part 1): wpa_supplicant's own internal
+# scan-request queue can wedge across runs independently of anything
+# NetworkManager persists. Reproduced directly: a clean run's journal showed
+# wpa_supplicant repeating "wlan0: Reject scan trigger since one is already
+# pending" forever, and NetworkManager logging "Activation: association took
+# too long, failing activation" with zero SME authenticate attempts ever
+# reaching the radio — the scan-wait loop below then times out with
+# FORMALTEST/FORMALTEST-EAP never surfacing. \`systemctl restart\` of
+# wpa_supplicant's per-interface unit is exactly the fix that unwedged it by
+# hand; NetworkManager reconnects to the fresh supplicant instance over
+# D-Bus on its own (no NM restart needed). Cheap and idempotent, so it runs
+# unconditionally rather than gating it behind a slower, flakier "is the scan
+# stuck" check from the outside.
+sudo systemctl restart wpa_supplicant-wlan0.service
+sleep 2
+
 "$qs_bin" ipc --any-display -p "$shell_path" call panel open network > /dev/null 2>&1
 
-# Self-heal before anything else: NetworkManager's system-connections dir
+# Self-heal before anything else (part 2): NetworkManager's system-connections dir
 # survives across runs (it's not part of the isolated per-run HOME), so a
 # prior --wifi run that never reached its own closing forget (interrupted
 # mid-leg, or a run from before that forget existed) can leave
@@ -1937,13 +1961,14 @@ fi
     # comfortable room before the shot.
     screenshot_delay=13
   elif $wifi_mode; then
-    # wifi-drive.sh's own worst-case budget (self-heal reset poll 2x15s +
-    # scan wait 25s + wrong-password poll 45s + real-connect poll 25s +
-    # forget poll 15s + eap poll 35s + closing eap-forget poll 15s = 175s,
-    # each ceiling only hit if NM/hostapd genuinely takes that long) plus
-    # room for its own three screenshot-screen calls; this run's generic
-    # smoke.png/SMOKE_OK is taken 15s after that worst case, so it shows the
-    # ordinary session with the eap leg already screenshotted and forgotten.
+    # wifi-drive.sh's own worst-case budget (wpa_supplicant restart settle
+    # 2s + self-heal reset poll 2x15s + scan wait 25s + wrong-password poll
+    # 45s + real-connect poll 25s + forget poll 15s + eap poll 35s + closing
+    # eap-forget poll 15s = 177s, each ceiling only hit if NM/hostapd
+    # genuinely takes that long) plus room for its own three
+    # screenshot-screen calls; this run's generic smoke.png/SMOKE_OK is taken
+    # 13s after that worst case, so it shows the ordinary session with the
+    # eap leg already screenshotted and forgotten.
     screenshot_delay=190
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
