@@ -172,6 +172,10 @@ Panel {
     function _stopSpeedTest() {
         if (root._stPhase === "idle")
             return;
+        if (ifaceProc.running)
+            ifaceProc.running = false;
+        if (curlCheckProc.running)
+            curlCheckProc.running = false;
         root._stopWorkers();
         statTimer.stop();
         phaseTimer.stop();
@@ -246,6 +250,12 @@ Panel {
             id: ifaceCollector
         }
         onExited: exitCode => {
+            // Guards against the panel closing (or the run being stopped)
+            // between this Process starting and exiting: _stopSpeedTest()
+            // resets _stPhase to "idle", and without this check the chain
+            // below would resurrect a full run against a closed panel.
+            if (root._stPhase !== "resolving")
+                return;
             var iface = SpeedTest.parseIface(ifaceCollector.text);
             if (!iface) {
                 root._abortSpeedTest("NO NETWORK");
@@ -260,6 +270,9 @@ Panel {
         id: curlCheckProc
         command: ["sh", "-c", "command -v curl >/dev/null 2>&1"]
         onExited: exitCode => {
+            // Same resurrection guard as ifaceProc.onExited above.
+            if (root._stPhase !== "resolving")
+                return;
             if (exitCode !== 0) {
                 root._abortSpeedTest("NO CURL");
                 return;
