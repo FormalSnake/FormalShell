@@ -215,11 +215,25 @@ function sanitizeBody(body, appName, appIcon) {
         .replace(_CHROMIUM_BARE_URL_PREFIX_RE, "");
 }
 
-// sanitizeBody() plus the one further transform StyledText needs: raw \n
-// is invisible to Text.StyledText, so it has to become <br/> — nothing
-// else about the sanitized text is escaped or altered.
+var _HTML_ESCAPE_RE = /[&<>]/g;
+var _HTML_ESCAPE_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+
+function _escapeHtml(text) {
+    return text.replace(_HTML_ESCAPE_RE, function (ch) { return _HTML_ESCAPE_MAP[ch]; });
+}
+
+// sanitizeBody() plus the two further transforms StyledText needs: the
+// server advertises no body-markup capability (NotificationService.qml's
+// NotificationServer leaves bodyMarkupSupported at its false default), so
+// senders are never told markup is safe to send and any `&`/`<`/`>` in
+// their text is incidental, not intentional tags — escape it first or
+// Text.StyledText's parser silently swallows everything after a bare `<`
+// (an unterminated tag) or misreads it as real markup. Only then does raw
+// \n become <br/>, since StyledText otherwise ignores it — the <br/> we
+// insert is deliberately unescaped, it's the one piece of markup this
+// pipeline actually means to emit.
 function styledBody(body, appName, appIcon) {
-    return sanitizeBody(body, appName, appIcon).replace(/\r\n|\r|\n/g, "<br/>");
+    return _escapeHtml(sanitizeBody(body, appName, appIcon)).replace(/\r\n|\r|\n/g, "<br/>");
 }
 
 // now/Nm/Nh/Nd ago, each unit's own upper bound exclusive so an exact

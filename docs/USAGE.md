@@ -373,9 +373,12 @@ Opening the history center marks everything in `pending` seen and moves it
 to `past`, which self-prunes after 15 minutes.
 
 **Card density** (M15): summary clamps to 2 lines, body to 3 — rendered as
-`Text.StyledText` so a sender's own markup (bold, links) renders instead of
-showing as literal tags, with raw `\n` converted to `<br/>` since
-`StyledText` otherwise ignores it. `sanitizeBody` always strips `<img>` tags
+`Text.StyledText` so raw `\n` can become `<br/>` (`StyledText` otherwise
+ignores it). The server never advertises body-markup support
+(`NotificationServer.bodyMarkupSupported: false`), so a sender's own
+`&`/`<`/`>` are escaped rather than interpreted as tags — real markup shows
+as literal text, the same as before M15, instead of being misparsed and
+silently truncating the rest of the body. `sanitizeBody` always strips `<img>` tags
 (the icon slot below already carries any real image) and, for
 Chromium-derived senders (Chrome/Brave/Vivaldi/Edge/Opera, matched on app
 name or icon), strips the leading URL-as-link or bare-URL line those

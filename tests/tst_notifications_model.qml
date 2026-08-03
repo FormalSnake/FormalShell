@@ -353,6 +353,28 @@ TestCase {
         compare(out, "line one<br/>line two");
     }
 
+    // Regression: the server never advertises body-markup support
+    // (NotificationService.qml's bodyMarkupSupported: false), so a bare
+    // `<`/`&`/`>` in a sender's plain text is incidental, not markup —
+    // styledBody() must escape it rather than hand it to Text.StyledText's
+    // parser, which otherwise drops everything after an unterminated tag.
+
+    function test_styled_body_escapes_bare_angle_brackets_instead_of_dropping_text() {
+        var out = M.styledBody("5 < 10 && 3 > 1", "Slack", "");
+        compare(out, "5 &lt; 10 &amp;&amp; 3 &gt; 1");
+    }
+
+    function test_styled_body_escapes_unterminated_tag_without_losing_the_tail() {
+        var body = "unterminated <b tag swallows this whole tail";
+        var out = M.styledBody(body, "Slack", "");
+        compare(out, "unterminated &lt;b tag swallows this whole tail");
+    }
+
+    function test_styled_body_escapes_comparison_text_without_losing_the_tail() {
+        var out = M.styledBody("disk usage a < b and more text after", "Slack", "");
+        compare(out, "disk usage a &lt; b and more text after");
+    }
+
     // relTime
 
     function test_rel_time_under_a_minute_is_now() {

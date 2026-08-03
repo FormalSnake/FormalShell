@@ -88,6 +88,13 @@ Singleton {
         keepOnReload: true
         actionsSupported: true
         bodySupported: true
+        // false (the default, spelled out here since it's load-bearing):
+        // styledBody() in model.js escapes `&`/`<`/`>` on the assumption
+        // that senders were truthfully told markup isn't safe to send and
+        // may include those characters incidentally. Flipping this to true
+        // without also parsing/whitelisting real sender markup would be a
+        // lie the escaping then contradicts.
+        bodyMarkupSupported: false
         imageSupported: true
         persistenceSupported: true
 
