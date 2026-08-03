@@ -648,6 +648,39 @@ shows the scrolled state mid-loop. Read the PNGs. Commit
 `just vm-smoke --wallpaper --media` still green. Commit
 (`perf(shell): …`).
 
+### Task 13: Usage panel — dynamic rate-limit buckets (owner-requested)
+
+**Origin (2026-08-03):** "for the claude code usage i wonder if you can
+show a separate bar for fable usage." Verified live against the oauth
+usage endpoint with the owner's own token (2026-08-03): the response now
+carries per-model buckets — `seven_day_opus`, `seven_day_sonnet`, plus
+experimental keys — each shaped `{utilization, resets_at, …}` like
+`five_hour`/`seven_day`. No `fable` bucket exists yet; the fix is to stop
+hardcoding bucket names so new ones appear the day the API adds them.
+
+**Files:** modify `shell/Usage/usage.js`, `tests/tst_usage.qml`,
+`shell/Surfaces/Panels/UsagePanel.qml` (only if row rendering needs it),
+`docs/USAGE.md`.
+
+**Produces:**
+1. `parseUsage` enumerates every response key whose value looks like a
+   rate window (object with numeric `utilization` and a `resets_at`)
+   instead of naming buckets: label derived from the key
+   (`five_hour`→`5-HOUR`, `seven_day`→`WEEKLY`,
+   `seven_day_opus`→`WEEKLY OPUS`, `seven_day_sonnet`→`WEEKLY SONNET`,
+   unknown keys → uppercased, underscores to spaces). Stable order:
+   `five_hour`, `seven_day`, then alphabetical. Buckets with absent/null
+   utilization are skipped honestly, never rendered as 0%.
+2. The CLAUDE section renders one row per bucket through the existing
+   row idiom; the bar widget's worst-window percent considers every
+   bucket. A future `*fable*` bucket therefore appears with zero code
+   changes.
+3. Tests: a fixture carrying opus/sonnet/unknown/absent-utilization
+   buckets asserting enumeration, labels, order, and the skip rule.
+
+**Verify:** `just vm-test`; `just vm-smoke --panel usage` (the VM's
+honest `NO AUTH` state unchanged). Commit (`feat(usage): …`).
+
 ---
 
 ## Review checkpoints
@@ -663,6 +696,7 @@ unpushed commits), and after Task 12 (the perf evidence is real —
 re-run `--picker` and read the Rss JSON yourself; the marquee/rotation
 gates actually stop the animations when hidden or motion-disabled).
 
-Tasks 11–12 were added while Tasks 1–10 were already executing; they
-run as a follow-up workflow after the first completes, with the Task 12
-checkpoint closing the milestone.
+Tasks 11–13 were added while Tasks 1–10 were already executing; they
+run as a follow-up workflow after the first completes, with one closing
+checkpoint covering all three (the Task 12 hunt-list above plus Task
+13's bucket enumeration honesty).
