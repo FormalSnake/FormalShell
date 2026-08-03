@@ -283,11 +283,20 @@
 # smoke.png/SMOKE_OK is taken after the expand call, so it shows every item
 # as its own cell, drawer open. The stub processes are killed by PID
 # (tray-pids.txt, same pattern as --media's mpv) right before niri quits.
-# With --picker, generates a handful of fixture PNGs (imagemagick, one solid
-# color each) into a directory pointed at by settings.json's picker.directory,
-# then drives the `picker` IPC target: `summon` opens the wallpaper-mode grid
-# (screenshotted as picker-grid.png — cursor cell inverted on the first
-# image, proving the surface itself), `choose` picks a non-first fixture by
+# With --picker, generates 20 fixture PNGs (imagemagick, solid colors at
+# 1920x1080 — bigger than the grid cell's decode cap and the VM's own
+# screen, so both actually downscale rather than passing an already-smaller
+# source through untouched) into a directory pointed at by settings.json's
+# picker.directory, then drives the `picker` IPC target: `summon` opens the
+# wallpaper-mode grid (screenshotted as picker-grid.png — cursor cell
+# inverted on the first image, proving the surface itself). M16 Task 12: the
+# same run first brackets a bare summon/close (no choose) with
+# /proc/<pid>/smaps_rollup Rss samples at three points (pre-open, grid open,
+# post-close) into picker-memory.json, scripted this time (open > pre-open,
+# post-close < open) — kept deliberately separate from the choose()/retheme
+# flow below, since setWallpaper()'s matugen retheme and Background's
+# crossfade would otherwise swamp the picker's own delta. Only once that
+# bracket closes does a fresh summon/`choose` pick a non-first fixture by
 # path — the same action Enter/click on a cell would take, exposed over IPC
 # rather than relying on unproven real keyboard/pointer delivery into an
 # OnDemand-focus layer surface, the same "verify the action, not the input
@@ -299,13 +308,7 @@
 # fixture, and `close`'s already-happened write to
 # picker-selection.txt is read back (picker-selection.txt) to prove the
 # request/answer handshake — MenuIpc's select()/input() pattern, reused
-# rather than reinvented. M16 Task 12: the same run also samples the shell
-# process's own /proc/<pid>/smaps_rollup Rss/Pss at three points (pre-open,
-# grid open, post-close) into picker-memory.json — the fixtures are tiny
-# 64x64 solid colors, so the absolute deltas are noise-sized, but the shape
-# (post-close not climbing above pre-open, per-image cost independent of
-# file size) is the evidence that ImagePicker.close() actually frees
-# _images and the per-cell sourceSize cap actually caps the decode.
+# rather than reinvented.
 #
 # With --bar-layout, points settings.json's bar.layout at a left region led
 # by the opt-in github builtin (M12 Task 8, against a PATH-shimmed `gh`
@@ -1151,8 +1154,20 @@ EOF
 fi
 
 if $picker_mode; then
-  for name_color in "img-0:#c0392b" "img-1:#27ae60" "img-2:#2980b9" "img-3:#f1c40f" "img-4:#8e44ad"; do
-    $convert_bin -size 64x64 "xc:${name_color#*:}" "$picker_dir/${name_color%:*}.png"
+  # M16 Task 12 perf evidence: fixtures must be genuinely bigger than the
+  # grid cell's decode cap (105px cell, 2x for the cover-not-fit fix, so
+  # ~210px) and numerous enough that the Grid/Repeater's simultaneous decode
+  # (no virtualization — every delegate decodes on open regardless of
+  # scroll position) is real, measurable work. A 64x64-times-5 fixture set
+  # decodes at native res regardless of any cap and frees under a megabyte
+  # on close — indistinguishable from allocator noise. 20 fixtures at
+  # 1920x1080 (also bigger than the VM's own screen, so a chosen one
+  # exercises Background/LockSurface's cap too) give a signal an order of
+  # magnitude above that. img-0..img-4 keep their original colors — later
+  # assertions reference img-1.png/img-3.png by path, not color.
+  picker_colors=(c0392b 27ae60 2980b9 f1c40f 8e44ad e67e22 16a085 2c3e50 d35400 c2185b 00838f 5d4037 7cb342 512da8 0097a7 ff7043 78909c 43a047 6d4c41 3949ab)
+  for i in "${!picker_colors[@]}"; do
+    $convert_bin -size 1920x1080 "xc:#${picker_colors[$i]}" "$picker_dir/img-$i.png"
   done
 fi
 
@@ -1168,7 +1183,11 @@ fi
 
 if $wallpaper_mode; then
   wp_path="$shot_dir/wp.png"
-  $convert_bin -size 640x480 xc:'#7a3fb0' "$wp_path"
+  # 1920x1080, not 640x480: smaller than the VM's own screen never exercises
+  # Background/LockSurface's sourceSize cap at all (Qt only scales a decode
+  # down, never up, so a source already below the cap just decodes native)
+  # — a fixture has to exceed the screen to prove the cap actually engages.
+  $convert_bin -size 1920x1080 xc:'#7a3fb0' "$wp_path"
 fi
 
 # --theme-toggle's drive: the dark shot waits out shell startup (same 4s the
@@ -1928,10 +1947,17 @@ fi
 
 # --picker: summon opens the wallpaper-mode grid (cursor defaults to index 0,
 # so the screenshot needs no keypress at all to show the cursor cell
-# inverted); choose picks a non-first fixture by path, over IPC — the same
-# _choose() function Enter/click on a cell would call — proving both that a
-# real selection sets the wallpaper (picker-theme-status.json, same
-# `theme status` proof --wallpaper already uses) and, via a second
+# inverted). The Rss bracket (pre-open/open/post-close) closes over IPC
+# without choosing anything, deliberately separate from the choose()/theme/
+# select() round trip below it — choose() drives Core.State.setWallpaper(),
+# which fires matugen's retheme and Background's crossfade (two more
+# screen-sized decodes) well after the picker's own grid is gone, and a
+# post-close sample taken after that would measure the retheme, not the
+# picker (M16 Task 12 review finding, 2026-08-03). Once the bracket is
+# closed, a fresh summon/choose picks a non-first fixture by path, over IPC
+# — the same _choose() function Enter/click on a cell would call — proving
+# both that a real selection sets the wallpaper (picker-theme-status.json,
+# same `theme status` proof --wallpaper already uses) and, via a second
 # select()/choose() round trip over an explicit token, that the generic
 # image-selector's answer channel actually resolves.
 if $picker_mode; then
@@ -1968,11 +1994,25 @@ pre_open=\$(_smaps)
 sleep 2
 niri msg action screenshot-screen --path "$picker_grid_path"
 open_state=\$(_smaps)
+# Close without choosing — isolates ImagePicker.close()'s own _images free
+# from setWallpaper()'s retheme/crossfade (see header comment above).
+"$qs_bin" ipc --any-display -p "$shell_path" call picker close > /dev/null 2>&1
+# 20s, not a couple: QML's V4 engine reclaims a destroyed Repeater's JS-side
+# heap (delegate objects, property-binding closures) on its own idle-driven
+# GC schedule, not synchronously on model-clear. Measured on this rig
+# (2026-08-03): the Rss sat flat for the first 8s after close, then dropped
+# ~37MB in the next 10s once a GC cycle actually ran. Sampling early doesn't
+# show a leak — it shows a GC that hasn't fired yet.
+sleep 20
+post_close=\$(_smaps)
+# Reopen for the real choose()/theme/select() round trip the assertions
+# below need — deliberately outside the memory bracket above.
+"$qs_bin" ipc --any-display -p "$shell_path" call picker summon > /dev/null 2>&1
+sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
 sleep 1
-post_close=\$(_smaps)
 "$qs_bin" ipc --any-display -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
 sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
@@ -2318,10 +2358,12 @@ fi
     screenshot_delay=44
   elif $picker_mode; then
     # picker-drive.sh's own final step (the selection-file readback) lands
-    # around its internal sleep sum (~10s in); this run's generic
-    # smoke.png/SMOKE_OK is taken 4s after that, showing the ordinary session
-    # with the picker already closed again.
-    screenshot_delay=14
+    # around its internal sleep sum (~31s in — the post-close Rss sample
+    # alone waits 20s for the QML engine's own GC cycle to actually run, see
+    # its own comment); this run's generic smoke.png/SMOKE_OK is taken 4s
+    # after that, showing the ordinary session with the picker already
+    # closed again.
+    screenshot_delay=35
   elif $tray_mode; then
     # tray-drive.sh's own final step (the activate call on fixture 2) lands
     # around its internal sleep sum (~11s in); this run's generic
@@ -3082,16 +3124,38 @@ if $picker_mode; then
   if ! grep -q '"token":"tok-picker"' "$picker_selection_path" || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
     echo "SMOKE_FAIL: picker-selection.txt did not resolve tok-picker with the chosen path — got: $(cat "$picker_selection_path")" >&2; exit 1
   fi
-  # M16 Task 12: the pre-open/open/post-close Rss/Pss samples — read by a
-  # human against DESIGN.md's expectation (open-state cost scales with cell
-  # count, not file size; post-close doesn't climb above pre-open). Not a
-  # scripted numeric assertion: the fixtures are tiny 64x64 solid colors, so
-  # glibc's allocator not returning small freed chunks to the OS would make
-  # a hard "post-close <= open" check flaky regardless of whether the fix
-  # itself works.
+  # M16 Task 12: the pre-open/open/post-close Rss samples, scripted this
+  # time — 20 fixtures at 1920x1080 (bigger than the grid's decode cap and
+  # past glibc's mmap_threshold, so freed pages are actually returned to the
+  # OS, not just retained in an arena) give a real signal instead of noise.
+  # post-close samples 20s after close(), not a couple: measured on this rig
+  # (2026-08-03), Rss sat flat for 8s after close then dropped ~37MB in the
+  # next 10s once the QML engine's own idle-driven GC cycle actually ran —
+  # sampling early reads as a leak that isn't one. Three checks: open must
+  # exceed pre-open (proves a real decode happened, not a no-op on
+  # undersized fixtures), post-close must drop below open (proves close()
+  # freed something), and post-close must land within 40MB of pre-open
+  # (proves it actually came back down, not just down-from-peak) — 40MB
+  # against an observed ~6.5MB steady-state gap is slack for GC-timing
+  # jitter, not for a real leak.
   if [ -s "$picker_mem_path" ]; then
     echo "SMOKE_PICKER_MEM $picker_mem_path"
     cat "$picker_mem_path"
+    picker_rss_pre=$(grep -o '"rssKb":[0-9]*' "$picker_mem_path" | sed -n '1p' | cut -d: -f2)
+    picker_rss_open=$(grep -o '"rssKb":[0-9]*' "$picker_mem_path" | sed -n '2p' | cut -d: -f2)
+    picker_rss_close=$(grep -o '"rssKb":[0-9]*' "$picker_mem_path" | sed -n '3p' | cut -d: -f2)
+    if [ -z "$picker_rss_pre" ] || [ -z "$picker_rss_open" ] || [ -z "$picker_rss_close" ]; then
+      echo "SMOKE_FAIL: picker-memory.json missing an Rss sample (shell pid not found?) — got: $(cat "$picker_mem_path")" >&2; exit 1
+    fi
+    if [ "$picker_rss_open" -le "$picker_rss_pre" ]; then
+      echo "SMOKE_FAIL: picker open-state Rss ($picker_rss_open KB) didn't grow over pre-open ($picker_rss_pre KB) — fixtures too small to prove a decode happened" >&2; exit 1
+    fi
+    if [ "$picker_rss_close" -ge "$picker_rss_open" ]; then
+      echo "SMOKE_FAIL: picker post-close Rss ($picker_rss_close KB) did not drop below open-state Rss ($picker_rss_open KB) — ImagePicker.close() isn't freeing the grid's decodes" >&2; exit 1
+    fi
+    if [ $((picker_rss_close - picker_rss_pre)) -gt 40000 ]; then
+      echo "SMOKE_FAIL: picker post-close Rss ($picker_rss_close KB) is more than 40MB above pre-open ($picker_rss_pre KB) even after the GC settle window — looks like a real leak, not GC timing" >&2; exit 1
+    fi
   else
     echo "SMOKE_FAIL: no picker-memory.json produced" >&2; exit 1
   fi

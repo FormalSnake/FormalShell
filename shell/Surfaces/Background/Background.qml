@@ -107,13 +107,21 @@ PanelWindow {
                 background._startQueued();
             }
         }
-        // Decode capped at the screen's own size (M16 Task 12): a
-        // PreserveAspectCrop fill over a screen-sized decode is visually
-        // identical to a native-resolution one, at a fraction of the
-        // resident memory (a 3840×2160 source on a 1080p panel drops from
-        // ~33MB decoded to ~8MB).
-        sourceSize.width: background.width
-        sourceSize.height: background.height
+        // Decode capped near the screen's own size (M16 Task 12), at a
+        // fraction of the resident memory a native-resolution decode would
+        // take. sourceSize with both dimensions set fits the decode INSIDE
+        // that box (Qt's KeepAspectRatio), not covering it, so requesting
+        // the box straight (width, height) would starve whichever axis a
+        // non-screen-aspect wallpaper doesn't bind on and PreserveAspectCrop
+        // would upscale it back out. Requesting a square box sized to the
+        // screen's larger side instead covers any wallpaper at least as
+        // wide (relatively) as the screen itself — true for virtually all
+        // real wallpapers, landscape photos included — with zero decode
+        // overhead over the straight box whenever it holds; only a source
+        // more extreme than the screen's own aspect (ultra-panoramic on a
+        // standard screen, or portrait) falls back to a mild upscale.
+        sourceSize.width: Math.max(background.width, background.height)
+        sourceSize.height: Math.max(background.width, background.height)
     }
 
     Image {
@@ -131,8 +139,9 @@ PanelWindow {
                 opacity = 1;
             }
         }
-        sourceSize.width: background.width
-        sourceSize.height: background.height
+        // Same cover-vs-fit rationale as bottomImage's sourceSize above.
+        sourceSize.width: Math.max(background.width, background.height)
+        sourceSize.height: Math.max(background.width, background.height)
         // Reaching full opacity only starts bottomImage's own decode of
         // the same source — it must stay the frontmost, fully-decoded
         // layer until bottomImage's onStatusChanged above confirms the

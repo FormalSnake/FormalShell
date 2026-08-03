@@ -31,12 +31,19 @@ Panel {
             source: MediaService.artUrl
             width: 96
             height: 96
-            // Decode capped at the slot size, and no pixmap cache (M16 Task
-            // 12): artUrl changes per track, so the default cache: true
+            // Decode capped near the slot size, and no pixmap cache (M16
+            // Task 12): artUrl changes per track, so the default cache: true
             // would accumulate full-res art across every track played this
             // session instead of ever releasing the previous one.
-            sourceSize.width: 96
-            sourceSize.height: 96
+            //
+            // 2x the slot, not the slot itself: sourceSize with both
+            // dimensions set fits the decode inside that box (Qt's
+            // KeepAspectRatio) rather than covering it, so non-square art
+            // (rare, but not guaranteed square like typical covers) would
+            // decode short on one axis and PreserveAspectCrop would upscale
+            // it back out. 2x covers any art up to a 2:1 aspect ratio.
+            sourceSize.width: 192
+            sourceSize.height: 192
             cache: false
             fillMode: Image.PreserveAspectCrop
             asynchronous: true

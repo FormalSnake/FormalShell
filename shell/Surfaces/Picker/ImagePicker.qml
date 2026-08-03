@@ -245,17 +245,26 @@ Panel {
                 // 12): without this, a 6000×4000 source decodes at full
                 // resolution into a 105px cell — ~96MB of resident RGBA for
                 // a thumbnail, times every file in the directory, forever
-                // (until close() above freed it). PreserveAspectCrop over a
-                // cell-sized decode is visually identical to cropping the
-                // full-res one.
+                // (until close() above freed it).
+                //
+                // The 2x factor matters: sourceSize with both dimensions set
+                // decodes to FIT INSIDE that box (Qt's KeepAspectRatio), not
+                // to cover it, so a non-square source into this square cell
+                // would decode short on one axis and PreserveAspectCrop
+                // would upscale it back out — visibly blurrier than an
+                // uncapped decode. Requesting a box 2x the cell's side keeps
+                // the fit-inside decode covering the cell for any source up
+                // to a 2:1 aspect ratio (landscape or portrait) — comfortably
+                // past 16:9 — while still capping memory to a small multiple
+                // of the cell, not the source resolution.
                 Image {
                     anchors.fill: parent
                     source: "file://" + imageCell.modelData
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false
-                    sourceSize.width: imageCell.width * (root.screen ? root.screen.devicePixelRatio : 1)
-                    sourceSize.height: imageCell.height * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.width: imageCell.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.height: imageCell.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
                 }
 
                 MouseArea {
