@@ -326,6 +326,17 @@ nixpkgs.lib.nixosSystem {
 
         hardware.graphics.enable = true;
         security.polkit.enable = true;
+        # M16 Task 4: on this pinned nixpkgs rev, `security.polkit.enable`
+        # alone no longer gives a working `pkexec` — the setuid wrapper is
+        # its own opt-in (`security.wrappers.pkexec.enable = cfg.
+        # enablePkexecWrapper`, default false, nixos/modules/security/
+        # polkit.nix) since a recent nixpkgs hardening change split it out
+        # from the daemon itself. Without this, `pkexec` resolves to the
+        # unwrapped `environment.systemPackages` binary at
+        # /run/current-system/sw/bin/pkexec, which refuses to run at all
+        # ("pkexec must be setuid root", exit 127) — reproduced directly.
+        # The `--polkit` smoke leg's `pkexec true` needs the real wrapper.
+        security.polkit.enablePkexecWrapper = true;
 
         # M6 Task 6 (enable now via services.formalshell.networkmanager/
         # bluetooth — M8 Task 3): the network panel needs a real

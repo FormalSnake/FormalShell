@@ -67,6 +67,10 @@ import QtQuick
 // weather.intervalMs (number, default 900000 — WeatherPanel's open-meteo
 // background poll cadence in ms; the widget stays in bar.layout by
 // default, so this generally runs whenever the bar does, M15 Task 3).
+// polkit.enabled (bool, default true — gates whether PolkitService.qml
+// even constructs a PolkitAgent element at all, since registration is
+// attempted the instant one exists; false means the shell never tries to
+// register, M16 Task 4).
 Singleton {
     id: root
 

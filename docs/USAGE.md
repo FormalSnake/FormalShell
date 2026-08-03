@@ -864,6 +864,39 @@ qs ipc --any-display -p <store-path>/share/formalshell call lock isLocked   # "t
 qs ipc --any-display -p <store-path>/share/formalshell call lock status     # {"locked":…,"secure":…,"authError":…,"blanked":…}
 ```
 
+## Polkit
+
+`PolkitService.qml` (`shell/Services/`) registers a native
+`Quickshell.Services.Polkit.PolkitAgent` (path `/org/formalshell/PolkitAgent`)
+behind `polkit.enabled` in `settings.json` (default **true**) — the setting
+is checked before the agent element is even constructed (a `Loader`, not a
+property on the element itself), since registration is attempted the
+instant a `PolkitAgent` is created. `PolkitDialog.qml`
+(`shell/Surfaces/Polkit/`) is the one surface it drives: a centered
+omarchy-style card (radius 0, border 2, monospace) shown for as long as a
+real authentication request is in flight — uppercase `AUTHENTICATION
+REQUIRED` header, the requesting action's own message, the identity being
+asked to authenticate as a dim meta row, and the same `AuthPrompt` field
+idiom the lock screen uses (masked `●` input, `CHECKING…` while an attempt
+is in flight, `WRONG PASSWORD` in urgent italic on retry — no shake).
+Escape cancels the request; the typed password only ever reaches the
+agent's own `AuthFlow.submit()`, never logged, mirrored into
+settings/state, or surfaced by the `debug` IPC dump.
+
+**Only one polkit agent can register per session.** If another one is
+already running — a desktop environment's own agent, or (on the e1504g
+specifically, as of 2026-08-03) `polkit-kde-authentication-agent-1` — this
+agent's `isRegistered` stays false, one line is logged, and
+`PolkitDialog.qml` simply never has anything to show; it never fights the
+other agent over the registration. See `docs/SWITCHOVER.md` for what has
+to be dropped from a host's config before this agent can register there.
+
+No dedicated IPC target: unlike the lock screen or menu, a polkit request
+is triggered by the OS (`pkexec`, a GUI app's own privileged action), never
+by the shell itself, so there is nothing to summon. `dev/smoke-niri.sh
+--polkit` verifies the whole flow with a real `pkexec` invocation and real
+`wtype` keystrokes, the same "type into it for real" idiom `--lock` uses.
+
 ## Screensaver
 
 `IdleService.qml` wraps one shared `IdleMonitor` (`respectInhibitors: true`,

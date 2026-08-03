@@ -15,6 +15,7 @@ import qs.Surfaces.Panels
 import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
 import qs.Surfaces.Picker
+import qs.Surfaces.Polkit
 import qs.Ipc
 
 ShellRoot {
@@ -77,6 +78,11 @@ ShellRoot {
     // comment) — one instance here, its internal Variants loop covers every
     // output.
     Screensaver { id: screensaver; lockScreen: lock }
+
+    // Same "one controller, shown on the focused screen at trigger time"
+    // reasoning as Osd — but this one's trigger is a real polkit
+    // authentication request, not an IPC call.
+    PolkitDialog { id: polkitDialog }
 
     // Same reasoning again: one instance per panel kind, opened on the
     // focused screen at summon time.

@@ -183,6 +183,7 @@ hardware.
 | Theming (matugen) | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/wallpaper.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/wallpaper.png` — real matugen run recoloring bar/workspace accents from a wallpaper, confirmed on a second real host |
 | Theming: no-wallpaper mode toggle | VM-only | M13b (bf993e3), `dev/smoke-niri.sh --theme-toggle` — with wallpaper kept `""`, `theme mode toggle` flips `theme status` to `mode:"light"` and back, and the paired screenshots (`docs/screenshots/theme-dark-niri.png` / `theme-light-niri.png`, 2026-07-30, same session seconds apart) show the whole shell recoloring between the Flexoki dark and light fallbacks with no matugen involved; a following `--wallpaper` run proves the matugen path unchanged |
 | Screensaver: continuous cycling | VM-only | M13b (f336f98), `dev/smoke-niri.sh --screensaver` extended — `holdSeconds` shortened via the settings fixture, then past convergence + hold the run asserts `screensaver frameInfo`'s new `cycles` counter incremented and the reported effect changed with no IPC nudge (reroll logic unit-covered in `tests/tst_screensaver_effect.qml`: random never repeats the immediately previous effect, a pinned name rerolls a fresh seed); `--screensaver-gif` still records single deterministic effects, cycling suspended while `frame(n)` pins the surface. Overnight wall-clock feel on a real idle host is trial territory |
+| Polkit agent | VM-only | M16 Task 4, `dev/smoke-niri.sh --polkit` — a real `pkexec true` request routes to `PolkitService.qml`'s registered `PolkitAgent`: `polkit-active.png` shows the centered `AUTHENTICATION REQUIRED` card, `polkit-error.png` shows the urgent-italic `WRONG PASSWORD` retry state after a real `wtype`d wrong password, and the run asserts the backgrounded `pkexec`'s own exit code is 0 once the VM's real test password resolves the same `AuthFlow`. Needed `security.polkit.enablePkexecWrapper = true` in `nix/testvm.nix`: on this pinned nixpkgs rev, `security.polkit.enable` alone no longer installs the setuid `pkexec` wrapper (a recent hardening split) — reproduced directly (`pkexec must be setuid root`, exit 127) before adding it. Never run on real hardware — see §2's one-agent-per-session gap below |
 
 Everything marked hardware-verified above is the **niri** backend only. The
 Hyprland backend has never run on either Linux host — it exists only as
@@ -272,6 +273,18 @@ Hyprland backend has never run on either Linux host — it exists only as
   overflow drawer (`Tray.qml`), and DND/idle-inhibit surface as glyphs
   (`Indicators.qml`) — see the parity table's three new Bar rows. All three
   are VM-only verified so far, not yet re-swept on a real host.
+- **Polkit agent needs a host's existing agent dropped first — only one can
+  register per session.** M16 Task 4's `PolkitService.qml` never fights
+  over the D-Bus registration: if another agent already owns it,
+  `isRegistered` stays false, one line is logged, and `PolkitDialog.qml`
+  simply never has a flow to show. **The e1504g runs
+  `polkit-kde-authentication-agent-1` today (verified 2026-08-03)** —
+  switchover means dropping that package/service from the host's own nix
+  config, or FormalShell's agent never actually takes over privilege
+  prompts there. g815's own agent situation is unconfirmed. VM-only
+  verified either way (parity table) — real GUI privilege prompts (a real
+  `pkexec`-using app, not the smoke rig's own `true`) have never reached
+  this agent on real hardware.
 
 ## 3. The exact install path
 

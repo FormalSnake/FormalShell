@@ -160,6 +160,33 @@
 # round trip completed and the state flipped back to false. This run's
 # generic smoke.png/SMOKE_OK is taken after the round trip, so it shows the
 # normal unlocked session.
+# With --polkit, drives the real polkit agent end to end: `pkexec true` is
+# spawned in-session (backgrounded within its own drive script so the
+# script can keep issuing input while it blocks on the conversation) —
+# the generic `org.freedesktop.policykit.exec` action's own shipped
+# defaults are `auth_admin` for allow_any/allow_inactive/allow_active
+# alike, so no extra polkit *policy* fixture is needed: the "test" user's
+# existing `wheel` membership (an admin identity, `security.polkit.
+# adminIdentities`'s own default) is the whole auth prerequisite. The one
+# real fixture nix/testvm.nix needs is `security.polkit.
+# enablePkexecWrapper = true` — on this pinned nixpkgs rev, `security.
+# polkit.enable` alone no longer installs the setuid `pkexec` wrapper (a
+# recent hardening split, reproduced directly: without it, `pkexec`
+# resolves to the unwrapped, non-setuid `environment.systemPackages`
+# binary and refuses to run at all, "pkexec must be setuid root", exit
+# 127). Once PolkitDialog.qml maps (screenshotted as polkit-active.png),
+# `wtype` types a wrong password and Return — the PAM round trip for a
+# failed attempt is socket-activated (polkit-agent-helper@.service, not an
+# in-process PamContext like --lock's), so it gets a 10s buffer rather
+# than --lock's own 5s — screenshotted as polkit-error.png (urgent-italic
+# "WRONG PASSWORD" over a still-usable field, the AuthPrompt idiom's retry
+# state, M16 Task 4). Retyping the
+# VM's real test password and Return resolves the same AuthFlow
+# (module.md: a failed attempt auto-starts a fresh session, no second
+# pkexec invocation needed); the backgrounded pkexec is then `wait`ed and
+# its exit code recorded (polkit-rc.txt) — must be 0, the real proof `true`
+# actually ran as root. This run's generic smoke.png/SMOKE_OK, taken after
+# that, shows the ordinary session with the dialog already gone.
 # With --screensaver, shortens screensaver.timeoutSeconds to 3s via the
 # isolated settings.json fixture (real IdleMonitor, not a fake clock) and
 # plays the same silent fixture track --media uses so MediaService.isPlaying
@@ -347,6 +374,7 @@ clipboard_mode=false
 wifi_mode=false
 media_mode=false
 lock_mode=false
+polkit_mode=false
 screensaver_mode=false
 screensaver_gif_mode=false
 picker_mode=false
@@ -367,13 +395,14 @@ while [ $# -gt 0 ]; do
     --wifi) wifi_mode=true; shift ;;
     --media) media_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
+    --polkit) polkit_mode=true; shift ;;
     --screensaver) screensaver_mode=true; shift ;;
     --screensaver-gif) screensaver_gif_mode=true; shift ;;
     --picker) picker_mode=true; shift ;;
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
   esac
 done
 
@@ -389,7 +418,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -497,7 +526,7 @@ if $media_mode || $screensaver_mode; then
   fi
 fi
 
-if $lock_mode || $menu_mode; then
+if $lock_mode || $polkit_mode || $menu_mode; then
   if command -v wtype >/dev/null 2>&1; then
     wtype_bin=$(command -v wtype)
   else
@@ -505,7 +534,28 @@ if $lock_mode || $menu_mode; then
   fi
 fi
 
-if $lock_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode; then
+# No nix-build fallback: a pkexec built as a plain derivation has no setuid
+# bit (the Nix store never preserves one), so it cannot actually escalate —
+# unlike wtype/grim, this one has to already be the real, wrapper-owned
+# binary nix/testvm.nix's `security.polkit.enable` installs.
+if $polkit_mode; then
+  if command -v pkexec >/dev/null 2>&1; then
+    pkexec_bin=$(command -v pkexec)
+  else
+    echo "SMOKE_FAIL: pkexec not found on PATH — needs a real security.polkit.enablePkexecWrapper host (the setuid wrapper), not buildable via nix fallback" >&2
+    exit 1
+  fi
+  # pkexec resets PATH to its own compiled-in secure default before
+  # exec'ing the target, which has no notion of the Nix store — a bare
+  # `true` 127s. `type -P`, not `command -v`: bash's own builtin `true`
+  # shadows the real binary, and `command -v` on a builtin returns just the
+  # bare word "true" (not a path) — reproduced directly, that bare word fed
+  # to pkexec still 127s. `-P` forces a real $PATH search, skipping
+  # builtins/aliases/functions entirely.
+  true_bin=$(type -P true)
+fi
+
+if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -801,6 +851,9 @@ lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
 lock_status_path="$shot_dir/lock-status.json"
 lock_call_rc_path="$shot_dir/lock-call-rc.txt"
 lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
+polkit_active_path="$shot_dir/polkit-active.png"
+polkit_error_path="$shot_dir/polkit-error.png"
+polkit_rc_path="$shot_dir/polkit-rc.txt"
 ss_pid_path="$shot_dir/ss-mpv.pid"
 ss_guard_status_path="$shot_dir/screensaver-guard-status.json"
 ss_auto_path="$shot_dir/screensaver-auto.png"
@@ -1624,6 +1677,50 @@ sleep 1
 EOF
 fi
 
+# --polkit: pkexec has to run backgrounded within this same script (`&` +
+# a trailing `wait`) rather than as its own separate spawn-at-startup
+# entry — the script needs to keep issuing wtype input into the dialog
+# while pkexec itself sits blocked on the conversation, then capture its
+# real exit code once the conversation resolves.
+if $polkit_mode; then
+  polkit_drive_script="$shot_dir/polkit-drive.sh"
+  polkit_debug_path="$shot_dir/polkit-debug.log"
+  cat > "$polkit_drive_script" <<EOF
+#!/usr/bin/env bash
+: > "$polkit_debug_path"
+log() { echo "\$(date +%s.%N) \$1" >> "$polkit_debug_path"; }
+log start
+sleep 3
+"$pkexec_bin" "$true_bin" 2> "$shot_dir/polkit-stderr.txt" &
+polkit_pid=\$!
+log "pkexec launched pid=\$polkit_pid"
+sleep 3
+"$grim_bin" "$polkit_active_path"
+log active-screenshot
+sleep 1
+"$wtype_bin" "wrong-password"
+"$wtype_bin" -k Return
+log wrong-password-typed
+# polkit's own PAM round trip is socket-activated
+# (polkit-agent-helper@.service) rather than an in-process PamContext like
+# --lock's, so the first conversation can genuinely be slower to fail than
+# --lock's own 5s buffer accounts for — 10s here, verified generous against
+# real timestamps in polkit-debug.log rather than guessed twice.
+sleep 10
+"$grim_bin" "$polkit_error_path"
+log error-screenshot
+sleep 1
+"$wtype_bin" "formalshell-test"
+"$wtype_bin" -k Return
+log real-password-typed
+sleep 3
+wait \$polkit_pid
+polkit_rc=\$?
+log "pkexec exited rc=\$polkit_rc"
+echo \$polkit_rc > "$polkit_rc_path"
+EOF
+fi
+
 # --screensaver: mpv starts almost immediately (sleep 1, same fixture track
 # --media uses) so MediaService.isPlaying is genuinely true well before
 # settings.json's shortened 3s timeout can elapse — nothing else in this
@@ -1926,6 +2023,9 @@ fi
   if $lock_mode; then
     echo "spawn-at-startup \"bash\" \"$lock_drive_script\""
   fi
+  if $polkit_mode; then
+    echo "spawn-at-startup \"bash\" \"$polkit_drive_script\""
+  fi
   if $screensaver_mode; then
     echo "spawn-at-startup \"bash\" \"$ss_play_script\""
     echo "spawn-at-startup \"bash\" \"$ss_drive_script\""
@@ -1999,6 +2099,14 @@ fi
     # taken 2s after that, so it shows the ordinary unlocked session, not
     # mid-round-trip.
     screenshot_delay=22
+  elif $polkit_mode; then
+    # polkit-drive.sh's own internal sleep sum (3 + 3 + 1 + 10 + 1 + 3 = 21s)
+    # plus real margin for `wait $polkit_pid` itself, which blocks for
+    # however long the socket-activated polkit-agent-helper@ conversation
+    # actually takes to resolve past that last sleep — generous rather than
+    # tightly calibrated, since a first-ever socket activation in this
+    # session's own lifetime is the slow path being budgeted for here.
+    screenshot_delay=32
   elif $screensaver_mode; then
     # ss-drive.sh's cycle-proof poll can run until its 40s SECONDS deadline
     # (worst first random pick, see the drive script's own comment), and the
@@ -2562,6 +2670,24 @@ if $lock_mode; then
   fi
   if ! grep -q '"locked":false' "$lock_status_path"; then
     echo "SMOKE_FAIL: lock status did not report locked:false after unlock — got: $(cat "$lock_status_path")" >&2; exit 1
+  fi
+fi
+
+if $polkit_mode; then
+  if [ -f "$polkit_active_path" ]; then
+    echo "SMOKE_POLKIT_ACTIVE $polkit_active_path"
+  else
+    echo "SMOKE_FAIL: no polkit-active screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$polkit_error_path" ]; then
+    echo "SMOKE_POLKIT_ERROR $polkit_error_path"
+  else
+    echo "SMOKE_FAIL: no polkit-error screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$polkit_rc_path" ] && grep -q "^0$" "$polkit_rc_path"; then
+    :
+  else
+    echo "SMOKE_FAIL: pkexec true did not exit 0 after real authentication — got: $(cat "$polkit_rc_path" 2>/dev/null); stderr: $(cat "$shot_dir/polkit-stderr.txt" 2>/dev/null); debug: $(cat "$shot_dir/polkit-debug.log" 2>/dev/null)" >&2; exit 1
   fi
 fi
 
