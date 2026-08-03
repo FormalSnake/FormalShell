@@ -59,6 +59,19 @@ PanelWindow {
         return "AS " + (identity.displayName || identity.string || "");
     }
 
+    // PAM's own conversation prompt, verbatim (trimmed) — never the
+    // static "Enter Password" once a real one has arrived. A single-
+    // prompt password-only stack never notices ("Password: " trimmed
+    // reads the same as the fallback); a 2FA/U2F stack's later prompts
+    // ("Verification code: ", "Please touch the device.") show their own
+    // question instead of a placeholder that no longer matches what's
+    // being asked for.
+    function _fieldPlaceholder() {
+        var flow = root._flow;
+        var prompt = flow ? flow.inputPrompt.trim() : "";
+        return prompt !== "" ? prompt : "Enter Password";
+    }
+
     function _submit() {
         var flow = root._flow;
         if (!flow || !flow.isResponseRequired)
@@ -114,7 +127,18 @@ PanelWindow {
         // forever. Every real keystroke silently went nowhere; the field
         // itself was correctly enabled (a live binding), just never
         // actually focused.
+        //
+        // Also the only place a second (or later) PAM prompt in the same
+        // session can clear `submitted`: quickshell's AuthFlow::request()
+        // (flow.cpp) flips `isResponseRequired` true again for every
+        // conversation prompt, not just the first — a 2FA/U2F stack that
+        // asks twice would otherwise leave `submitted` latched from the
+        // first `_submit()` forever (it's only ever cleared by a fresh
+        // request or a failed one), stranding the card on "CHECKING…"
+        // with the field permanently hidden.
         function onIsResponseRequiredChanged() {
+            if (root._flow && root._flow.isResponseRequired)
+                root.submitted = false;
             Qt.callLater(root._refocus);
         }
     }
@@ -252,7 +276,7 @@ PanelWindow {
                     MetaLabel {
                         anchors.centerIn: parent
                         visible: passwordInput.text.length === 0
-                        text: "Enter Password"
+                        text: root._fieldPlaceholder()
                     }
 
                     TextInput {
