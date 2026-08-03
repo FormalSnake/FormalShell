@@ -391,6 +391,10 @@ Panel {
                         anchors.horizontalCenter: parent.horizontalCenter
                         color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.accent
                         opacity: dayCell.hasEvents ? 1 : 0
+
+                        Behavior on opacity {
+                            NumberAnimation { duration: Core.Theme.motion.fast; easing.type: Core.Theme.motion.easing }
+                        }
                     }
                 }
 

@@ -348,6 +348,24 @@ PanelWindow {
     readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.popupPadding * 2
     readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height))
 
+    // Card-top freeze (omarchy parity, M16 Task 2): the first filter
+    // keystroke or submenu move in a session pins the top margin at
+    // whatever it currently resolves to, so every row-count change after
+    // that grows/shrinks the card downward instead of re-centering it.
+    // null means "not frozen yet" — margins.top below falls back to the
+    // live centered formula. Released on every open()/openSelect()/
+    // openInput()/close() so a fresh summon always starts re-centered.
+    property var _frozenTop: null
+
+    function _freezeTop() {
+        if (root._frozenTop === null && root._screen)
+            root._frozenTop = Math.round((root._screen.height - root.implicitHeight) / 2);
+    }
+
+    function _releaseTopFreeze() {
+        root._frozenTop = null;
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -432,6 +450,7 @@ PanelWindow {
 
     function open(route) {
         root._abandonPendingSelect();
+        root._releaseTopFreeze();
         // Fresh session: last session's condition results must not leak
         // into this one (a `when`/`checked` shell command can change
         // between opens — bluetooth power, mode toggle, device presence).
@@ -462,6 +481,7 @@ PanelWindow {
 
     function openSelect(prompt, options, token) {
         root._beginSelectionRequest();
+        root._releaseTopFreeze();
         root._mode = "select";
         root._selectPrompt = prompt;
         root._selectOptions = options;
@@ -475,6 +495,7 @@ PanelWindow {
 
     function openInput(prompt, token) {
         root._beginSelectionRequest();
+        root._releaseTopFreeze();
         root._mode = "input";
         root._selectPrompt = prompt;
         root._selectOptions = [];
@@ -490,6 +511,7 @@ PanelWindow {
         root._abandonPendingSelect();
         root.isOpen = false;
         root._confirmPendingId = "";
+        root._releaseTopFreeze();
     }
 
     // Force an immediate re-read of default+user jsonc — Config's settings
@@ -622,6 +644,11 @@ PanelWindow {
         root._confirmPendingId = "";
         searchInput.text = "";
         root._evalConditions();
+        // Only a real submenu move (drilling in via _activateRow, popping
+        // via _pop) freezes the card's top — open()'s own initial level
+        // entry runs before isOpen flips true, so it's exempt.
+        if (root.isOpen)
+            root._freezeTop();
     }
 
     function _pop() {
@@ -787,7 +814,10 @@ PanelWindow {
     anchors { top: true; left: true }
     margins {
         left: root._screen ? Math.round((root._screen.width - root.implicitWidth) / 2) : 0
-        top: root._screen ? Math.round((root._screen.height - root.implicitHeight) / 2) : 0
+        // Frozen once a session's first filter keystroke/submenu move
+        // fires (_freezeTop): every row-count change from there on grows
+        // or shrinks the card downward instead of re-centering it.
+        top: root._frozenTop !== null ? root._frozenTop : (root._screen ? Math.round((root._screen.height - root.implicitHeight) / 2) : 0)
     }
 
     // Enter/exit (DESIGN.md §4): the whole card fades and slides down into
@@ -879,6 +909,12 @@ PanelWindow {
                     onTextChanged: {
                         root._cursorIndex = 0;
                         root._confirmPendingId = "";
+                        // Real filter keystrokes freeze the card's top the
+                        // same as a submenu move; open()'s own prefill/reset
+                        // writes land before isOpen flips true, so they're
+                        // exempt (see _enterLevel's matching guard).
+                        if (root.isOpen)
+                            root._freezeTop();
                         // Arm the debounced nix search from the event, never
                         // from the _displayRows binding (side effect).
                         if (root._mode === "menu") {

@@ -497,7 +497,7 @@ if $media_mode || $screensaver_mode; then
   fi
 fi
 
-if $lock_mode; then
+if $lock_mode || $menu_mode; then
   if command -v wtype >/dev/null 2>&1; then
     wtype_bin=$(command -v wtype)
   else
@@ -754,6 +754,8 @@ nix_toast_status_path="$shot_dir/nix-toast-status.json"
 wall_query_path="$shot_dir/wall-query.json"
 apps_query_path="$shot_dir/apps-query.json"
 menu_apps_png="$shot_dir/menu-apps.png"
+menu_top_before_png="$shot_dir/menu-top-before.png"
+menu_top_after_png="$shot_dir/menu-top-after.png"
 toggle_path="$shot_dir/menu-toggle.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
@@ -1247,6 +1249,28 @@ until [ -f "$nix_states_done_path" ]; do sleep 0.5; done
 sleep 1
 "$grim_bin" "$nix_toast_png" 2>/dev/null || true
 "$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$nix_toast_status_path" 2>&1
+EOF
+
+  # Card-top freeze (M16 Task 2), the final leg: from the closed state the
+  # nix/toast leg above leaves behind, summon root fresh (the ~8 top-level
+  # rows, unfiltered) and grim its resting top edge, then wtype real
+  # keystrokes — not another IPC `menu select`/`activate`, this is
+  # specifically proving the real TextInput.onTextChanged path — spelling
+  # "wall", the same deterministic single-row-match query the debug-query
+  # leg above already relies on (wall_query_path), so the row count is
+  # known to drop from ~8 to 1. A second grim afterward is the pair Menu.qml's
+  # top-freeze is asserted against: the card's top edge must read identical
+  # pixel position in both PNGs even though the card is visibly shorter in
+  # the second one.
+  cat >> "$menu_finish_script" <<EOF
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon "" > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$menu_top_before_png" 2>/dev/null || true
+"$wtype_bin" "wall"
+sleep 1
+"$grim_bin" "$menu_top_after_png" 2>/dev/null || true
+"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
 EOF
 
   # PATH-shimmed nix fixture (M12 Task 7; M13b Task 4 made it dispatch on
@@ -1928,11 +1952,16 @@ fi
   # past its own sleep-10 screenshot.
   tail_gap=1
   if $menu_mode; then
-    # 18, not the pre-Task-4 12: after the apps leg the finish script now
+    # 26, not the pre-Task-2 18: after the toast leg (landing ~23-26s in,
+    # see below) the finish script now runs one more leg — summon root,
+    # grim, wtype "wall", grim, close — another ~4s (M16 Task 2's top-freeze
+    # proof), landing ~27-30s in.
+    #
+    # Pre-Task-2 breakdown, unchanged: after the apps leg the finish script
     # waits for the nix states script's done flag (~13-17s in) and runs the
-    # toast leg (summon + 2s debounce wait + activate + grim + status,
-    # ~5s), landing ~23-26s in on the VM's llvmpipe timing.
-    tail_gap=18
+    # toast leg (summon + 2s debounce wait + activate + grim + status, ~5s),
+    # landing ~23-26s in on the VM's llvmpipe timing.
+    tail_gap=26
   elif $osd_mode; then
     tail_gap=5
   elif $center_mode; then
@@ -2256,6 +2285,22 @@ if $menu_mode; then
     [ -f "$emoji_type_path" ] && cat "$emoji_type_path" >&2
     exit 1
   fi
+  # Card-top freeze (M16 Task 2): both PNGs must exist — the row-count
+  # drop between them (root's ~8 rows -> the "wall" query's single
+  # wallpaper match, same deterministic query wall_query_path already
+  # proves) is the visual evidence the top edge held still while the card
+  # shrank. SMOKE_-tagged (not the plain "menu apps screenshot:" style
+  # above) so dev/vm.sh's own scp-back grep actually pulls both to the mac.
+  if [ ! -s "$menu_top_before_png" ]; then
+    echo "SMOKE_FAIL: no pre-filter menu screenshot produced at $menu_top_before_png" >&2
+    exit 1
+  fi
+  echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png"
+  if [ ! -s "$menu_top_after_png" ]; then
+    echo "SMOKE_FAIL: no post-filter menu screenshot produced at $menu_top_after_png" >&2
+    exit 1
+  fi
+  echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png"
 fi
 
 if $clipboard_mode; then

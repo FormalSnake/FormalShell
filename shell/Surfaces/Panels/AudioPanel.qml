@@ -253,6 +253,10 @@ Panel {
                         font.family: Theme.font.family
                         font.pixelSize: Theme.fontSize.caption
                         opacity: streamCell._muted ? 0.5 : 1.0
+
+                        Behavior on opacity {
+                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        }
                     }
 
                     Cell {

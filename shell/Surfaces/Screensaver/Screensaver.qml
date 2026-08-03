@@ -287,68 +287,87 @@ Item {
                     }
                 }
 
-                Canvas {
-                    id: canvas
+                // Enter fades in (DESIGN.md §4/§3), opacity only — a
+                // full-screen surface has no edge to slide in from; exit
+                // stays instant, since `surface.visible` above unmaps the
+                // whole window the moment it drops, before this `enabled`
+                // guard would ever get to animate it back down. Lives on an
+                // inner Item, not `surface` itself — PanelWindow has no
+                // Item-style `opacity` of its own (Panel.qml/Menu.qml's
+                // frame/card carry their own fades the same way).
+                Item {
+                    id: content
                     anchors.fill: parent
-                    renderStrategy: Canvas.Cooperative
+                    opacity: surface.visible ? 1 : 0
 
-                    onPaint: {
-                        var ctx = canvas.getContext("2d");
-                        ctx.fillStyle = Core.Theme.color.background;
-                        ctx.fillRect(0, 0, width, height);
-                        var banner = root._banner;
-                        if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
-                            return;
-                        ctx.font = surface._cellHeight + "px " + Core.Theme.font.family;
-                        ctx.textBaseline = "top";
-                        var offsetCol = Math.floor((surface._columns - banner.width) / 2);
-                        var offsetRow = Math.floor((surface._rows - banner.height) / 2);
-                        var grid = Effect.frameState(root._effectiveEffect, surface._renderFrame, banner);
-                        for (var r = 0; r < grid.length; r++) {
-                            var rowCells = grid[r];
-                            for (var c = 0; c < rowCells.length; c++) {
-                                var cell = rowCells[c];
-                                if (cell.opacity <= 0)
-                                    continue;
-                                ctx.globalAlpha = cell.opacity;
-                                ctx.fillStyle = Core.Theme.color.accent;
-                                ctx.fillText(cell.char, (offsetCol + c) * surface._cellWidth, (offsetRow + r) * surface._cellHeight);
-                            }
-                        }
-                        ctx.globalAlpha = 1;
+                    Behavior on opacity {
+                        enabled: surface.visible
+                        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
                     }
-                }
 
-                // Any input dismisses it (spec §10): hover-tracks pointer
-                // movement and key presses, both calling the same stop()
-                // path ScreensaverIpc's own explicit verb uses. The first
-                // position report after becoming visible is recorded as a
-                // baseline rather than treated as activity — see
-                // onVisibleChanged above for why that first report can't be
-                // trusted as real movement.
-                MouseArea {
-                    id: dismissArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    focus: surface.visible
-                    property bool _hasBaseline: false
-                    property real _lastX: 0
-                    property real _lastY: 0
-                    Keys.onPressed: root.stop()
-                    onPositionChanged: mouse => {
-                        if (!dismissArea._hasBaseline) {
-                            dismissArea._hasBaseline = true;
+                    Canvas {
+                        id: canvas
+                        anchors.fill: parent
+                        renderStrategy: Canvas.Cooperative
+
+                        onPaint: {
+                            var ctx = canvas.getContext("2d");
+                            ctx.fillStyle = Core.Theme.color.background;
+                            ctx.fillRect(0, 0, width, height);
+                            var banner = root._banner;
+                            if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
+                                return;
+                            ctx.font = surface._cellHeight + "px " + Core.Theme.font.family;
+                            ctx.textBaseline = "top";
+                            var offsetCol = Math.floor((surface._columns - banner.width) / 2);
+                            var offsetRow = Math.floor((surface._rows - banner.height) / 2);
+                            var grid = Effect.frameState(root._effectiveEffect, surface._renderFrame, banner);
+                            for (var r = 0; r < grid.length; r++) {
+                                var rowCells = grid[r];
+                                for (var c = 0; c < rowCells.length; c++) {
+                                    var cell = rowCells[c];
+                                    if (cell.opacity <= 0)
+                                        continue;
+                                    ctx.globalAlpha = cell.opacity;
+                                    ctx.fillStyle = Core.Theme.color.accent;
+                                    ctx.fillText(cell.char, (offsetCol + c) * surface._cellWidth, (offsetRow + r) * surface._cellHeight);
+                                }
+                            }
+                            ctx.globalAlpha = 1;
+                        }
+                    }
+
+                    // Any input dismisses it (spec §10): hover-tracks pointer
+                    // movement and key presses, both calling the same stop()
+                    // path ScreensaverIpc's own explicit verb uses. The first
+                    // position report after becoming visible is recorded as a
+                    // baseline rather than treated as activity — see
+                    // onVisibleChanged above for why that first report can't be
+                    // trusted as real movement.
+                    MouseArea {
+                        id: dismissArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        focus: surface.visible
+                        property bool _hasBaseline: false
+                        property real _lastX: 0
+                        property real _lastY: 0
+                        Keys.onPressed: root.stop()
+                        onPositionChanged: mouse => {
+                            if (!dismissArea._hasBaseline) {
+                                dismissArea._hasBaseline = true;
+                                dismissArea._lastX = mouse.x;
+                                dismissArea._lastY = mouse.y;
+                                return;
+                            }
+                            if (mouse.x === dismissArea._lastX && mouse.y === dismissArea._lastY)
+                                return;
                             dismissArea._lastX = mouse.x;
                             dismissArea._lastY = mouse.y;
-                            return;
+                            root.stop();
                         }
-                        if (mouse.x === dismissArea._lastX && mouse.y === dismissArea._lastY)
-                            return;
-                        dismissArea._lastX = mouse.x;
-                        dismissArea._lastY = mouse.y;
-                        root.stop();
+                        onClicked: root.stop()
                     }
-                    onClicked: root.stop()
                 }
             }
         }

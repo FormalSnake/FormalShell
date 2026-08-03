@@ -127,6 +127,10 @@ Panel {
             enabled: MediaService.canGoPrevious
             opacity: MediaService.canGoPrevious ? 1.0 : 0.35
 
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            }
+
             Text {
                 anchors.centerIn: parent
                 text: "󰒮"
@@ -172,6 +176,10 @@ Panel {
             selected: nextArea.containsMouse
             enabled: MediaService.canGoNext
             opacity: MediaService.canGoNext ? 1.0 : 0.35
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            }
 
             Text {
                 anchors.centerIn: parent

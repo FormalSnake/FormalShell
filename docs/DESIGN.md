@@ -325,6 +325,14 @@ and every rule here is checkable:
    every transition collapses to today's instant state swap, pixels
    untouched. This is the shell's reduced-motion switch; Wayland has no
    `prefers-reduced-motion` to inherit.
+6. **Sanctioned-instant surfaces.** Lock/greeter enter and exit, and the
+   screensaver's own exit, stay deliberately unanimated — a security
+   surface snapping shut/open is intentional (CLAUDE.md), and dismissing
+   the screensaver must read as regaining control immediately, not
+   waiting out a fade. The screensaver's *entrance* is the one exception
+   inside this carve-out that does fade, opacity only at
+   `Theme.motion.standard` (no slide — a full-screen surface has no edge
+   to slide in from).
 
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the

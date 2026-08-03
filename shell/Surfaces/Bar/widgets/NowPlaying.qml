@@ -27,6 +27,12 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // Track title changes resize this cell — animate the width instead of
+    // shoving the bar's other widgets instantly (DESIGN.md §4, M16 Task 2).
+    Behavior on implicitWidth {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
