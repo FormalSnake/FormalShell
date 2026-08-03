@@ -65,6 +65,18 @@ PanelWindow {
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false
+        // Catches up to a just-promoted topImage in the background. Only
+        // once this decode actually lands do we drop topImage — never in
+        // the same tick as the source swap, or the screen shows nothing
+        // but Theme.color.background for the length of this decode (the
+        // bug this split guards against).
+        onStatusChanged: {
+            if (status === Image.Ready && topImage.opacity === 1 && source === topImage.source) {
+                background._suppressTopFade = true;
+                topImage.opacity = 0;
+                background._suppressTopFade = false;
+            }
+        }
     }
 
     Image {
@@ -82,13 +94,13 @@ PanelWindow {
                 opacity = 1;
             }
         }
+        // Reaching full opacity only starts bottomImage's own decode of
+        // the same source — it must stay the frontmost, fully-decoded
+        // layer until bottomImage's onStatusChanged above confirms the
+        // catch-up landed and hides it.
         onOpacityChanged: {
-            if (opacity === 1 && !background._suppressTopFade) {
-                background._suppressTopFade = true;
+            if (opacity === 1 && !background._suppressTopFade)
                 bottomImage.source = topImage.source;
-                topImage.opacity = 0;
-                background._suppressTopFade = false;
-            }
         }
         Behavior on opacity {
             enabled: !background._suppressTopFade
