@@ -70,8 +70,14 @@ Scope {
                 FS_SLURP_SEL: "#00000000",
                 FS_SLURP_WEIGHT: "" + Theme.borderWidth
             });
+            // 0</dev/null is load-bearing: slurp reads stdin to EOF before
+            // connecting to the compositor whenever stdin is not a tty (its
+            // predefined-boxes feature), and quickshell's Process hands it a
+            // pipe that never closes — slurp then blocks forever with zero
+            // wayland fds and no surface (diagnosed live on the e1504g,
+            // 2026-08-03; this was M13's "slurp sat invisible" mystery too).
             slurpProc.command = ["sh", "-c",
-                'exec slurp -d -w "$FS_SLURP_WEIGHT" -b "$FS_SLURP_BG" -c "$FS_SLURP_BORDER" -s "$FS_SLURP_SEL"'];
+                'exec slurp -d -w "$FS_SLURP_WEIGHT" -b "$FS_SLURP_BG" -c "$FS_SLURP_BORDER" -s "$FS_SLURP_SEL" 0</dev/null'];
             slurpProc.running = true;
             watchdog.interval = Config.get("screenshot.timeoutSeconds", 90) * 1000;
             watchdog.restart();
