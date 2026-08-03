@@ -71,10 +71,28 @@ Panel {
     property var _batteryFired: Power.initialFired()
     property var _lastBatteryPercent: null
 
+    // The watcher's charging input is "anything that isn't actively
+    // draining" (Charging/FullyCharged/PendingCharge re-arm), not the
+    // pulse's narrow state === Charging — a battery sitting at 100% on AC
+    // reports FullyCharged, and treating that as "discharging" would let
+    // thresholds fire on it.
+    readonly property bool _draining: root._hasBattery
+        && (root._device.state === UPowerDeviceState.Discharging
+            || root._device.state === UPowerDeviceState.PendingDischarge
+            || root._device.state === UPowerDeviceState.Empty)
+
     function _checkBatteryThresholds() {
         if (!root._hasBattery)
             return;
-        var result = Power.warnEvent(root._lastBatteryPercent, root._percent, root._charging, root._batteryFired, root._warnPercentPref, root._criticalPercentPref);
+        // Unknown means UPower's properties haven't populated yet (fresh
+        // shell start): percentage can still read 0 here, and evaluating
+        // that fired a false CRITICAL BATTERY at 100% on the e1504g
+        // (2026-08-03). Skip WITHOUT recording _lastBatteryPercent, so the
+        // first meaningful reading still gets the boot-below-threshold
+        // rule against a null prev instead of a bogus notRising guard.
+        if (root._device.state === UPowerDeviceState.Unknown)
+            return;
+        var result = Power.warnEvent(root._lastBatteryPercent, root._percent, !root._draining, root._batteryFired, root._warnPercentPref, root._criticalPercentPref);
         root._lastBatteryPercent = root._percent;
         root._batteryFired = result.fired;
         if (result.event === "warn")
@@ -92,6 +110,7 @@ Panel {
     on_PercentChanged: root._checkBatteryThresholds()
     on_ChargingChanged: root._checkBatteryThresholds()
     on_HasBatteryChanged: root._checkBatteryThresholds()
+    on_DrainingChanged: root._checkBatteryThresholds()
 
     // Fixed order matching the PowerProfile enum, so `_profiles[i] === i` —
     // PowerProfilesQml exposes no enumerable "available profiles" list, only
