@@ -279,4 +279,112 @@ TestCase {
         M.prunePast(s, 5000);
         compare(JSON.stringify(s), before);
     }
+
+    function test_replace_by_id_never_creates_a_second_popup_entry() {
+        // Proves the freedesktop replaces_id contract: NotificationService.qml
+        // resyncs an existing id via update() on every property change
+        // instead of calling add() again, so the reducer must never grow a
+        // second entry for the same id.
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1), 1000, {});
+        s = M.update(s, "a", { summary: "Song B" }, 2000);
+        s = M.update(s, "a", { summary: "Song C" }, 3000);
+        compare(s.popups.length, 1);
+        compare(s.popups[0].summary, "Song C");
+    }
+
+    // isChromiumDerived / sanitizeBody / styledBody
+
+    function test_is_chromium_derived_matches_known_browsers_by_app_name() {
+        verify(M.isChromiumDerived("Google Chrome", ""));
+        verify(M.isChromiumDerived("Brave Browser", ""));
+        verify(M.isChromiumDerived("Vivaldi", ""));
+        // Edge's Linux sender reports its binary name, not the title-case
+        // brand string, and the marker list matches that literally.
+        verify(M.isChromiumDerived("microsoft-edge", ""));
+        verify(M.isChromiumDerived("Opera", ""));
+    }
+
+    function test_is_chromium_derived_matches_via_app_icon_too() {
+        verify(M.isChromiumDerived("Unknown", "google-chrome"));
+    }
+
+    function test_is_chromium_derived_false_for_unrelated_sender() {
+        verify(!M.isChromiumDerived("Slack", "slack"));
+    }
+
+    function test_sanitize_body_strips_img_tag_regardless_of_sender() {
+        var out = M.sanitizeBody('<img src="x.png">Hello', "Slack", "");
+        compare(out, "Hello");
+    }
+
+    function test_sanitize_body_leaves_non_chromium_url_prefix_untouched() {
+        var body = "https://example.com/x Something happened";
+        compare(M.sanitizeBody(body, "Slack", ""), body);
+    }
+
+    function test_sanitize_body_strips_chromium_link_prefix_github_fixture() {
+        // The exact "GH notifs are ugly" shape: Chrome glues a
+        // URL-as-link line to the front of the body.
+        var body = '<a href="https://github.com/notifications">github.com</a> '
+            + 'New comment on issue #42: "Fix the thing"';
+        var out = M.sanitizeBody(body, "Google Chrome", "");
+        compare(out, 'New comment on issue #42: "Fix the thing"');
+    }
+
+    function test_sanitize_body_strips_chromium_bare_url_prefix() {
+        var body = "github.com/owner/repo/pull/7 Review requested";
+        var out = M.sanitizeBody(body, "Google Chrome", "");
+        compare(out, "Review requested");
+    }
+
+    function test_sanitize_body_chromium_sender_still_strips_img() {
+        var out = M.sanitizeBody('<img src="x.png">Plain text', "Brave Browser", "");
+        compare(out, "Plain text");
+    }
+
+    function test_styled_body_converts_all_newline_forms_to_br() {
+        compare(M.styledBody("a\nb\r\nc\rd", "Slack", ""), "a<br/>b<br/>c<br/>d");
+    }
+
+    function test_styled_body_applies_sanitize_before_newline_conversion() {
+        var body = '<a href="https://github.com/x">github.com</a> line one\nline two';
+        var out = M.styledBody(body, "Google Chrome", "");
+        compare(out, "line one<br/>line two");
+    }
+
+    // relTime
+
+    function test_rel_time_under_a_minute_is_now() {
+        compare(M.relTime(1000, 1000), "now");
+        compare(M.relTime(60999, 1000), "now");
+    }
+
+    function test_rel_time_minute_boundary() {
+        compare(M.relTime(61000, 1000), "1m ago");
+    }
+
+    function test_rel_time_minutes_just_under_an_hour() {
+        compare(M.relTime(1000 + 59 * 60 * 1000, 1000), "59m ago");
+    }
+
+    function test_rel_time_hour_boundary_reads_hours_not_sixty_minutes() {
+        compare(M.relTime(1000 + 60 * 60 * 1000, 1000), "1h ago");
+    }
+
+    function test_rel_time_hours_just_under_a_day() {
+        compare(M.relTime(1000 + 23 * 60 * 60 * 1000, 1000), "23h ago");
+    }
+
+    function test_rel_time_day_boundary_reads_days_not_twentyfour_hours() {
+        compare(M.relTime(1000 + 24 * 60 * 60 * 1000, 1000), "1d ago");
+    }
+
+    function test_rel_time_multiple_days() {
+        compare(M.relTime(1000 + 3 * 24 * 60 * 60 * 1000, 1000), "3d ago");
+    }
+
+    function test_rel_time_clamps_future_arrival_to_now() {
+        compare(M.relTime(1000, 5000), "now");
+    }
 }

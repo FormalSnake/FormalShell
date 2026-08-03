@@ -188,6 +188,54 @@ function clearPending(state) {
     return Object.assign({}, state, { pending: [] });
 }
 
+// Chromium-derived sender detection and the body prefix strip below are
+// ported from omarchy's NotificationLogic.js (MIT, Copyright (c) David
+// Heinemeier Hansson): GitHub web notifications (and any other Chromium
+// browser notification) arrive with a URL-as-link or bare-URL line glued
+// to the front of the body, which is what made GH notifs unreadable.
+var _CHROMIUM_MARKERS = ["chrom", "brave", "vivaldi", "microsoft-edge", "opera"];
+
+function isChromiumDerived(appName, appIcon) {
+    var source = (String(appName || "") + "\n" + String(appIcon || "")).toLowerCase();
+    return _CHROMIUM_MARKERS.some(function (marker) { return source.indexOf(marker) >= 0; });
+}
+
+var _IMG_TAG_RE = /<img[^>]*>/gi;
+var _CHROMIUM_LINK_PREFIX_RE = /^\s*<a\b[^>]*>\s*(?:https?:\/\/|www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^<\s]*)?\s*<\/a>\s*/i;
+var _CHROMIUM_BARE_URL_PREFIX_RE = /^\s*(?:https?:\/\/|www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/\S*)?\s+/i;
+
+// <img> tags are always stripped (Center/toasts render the notification's
+// own image via a dedicated icon slot, never inline in body text); the
+// Chromium URL-prefix strip only applies once isChromiumDerived matches.
+function sanitizeBody(body, appName, appIcon) {
+    var text = String(body || "").replace(_IMG_TAG_RE, "");
+    if (!isChromiumDerived(appName, appIcon)) return text;
+    return text
+        .replace(_CHROMIUM_LINK_PREFIX_RE, "")
+        .replace(_CHROMIUM_BARE_URL_PREFIX_RE, "");
+}
+
+// sanitizeBody() plus the one further transform StyledText needs: raw \n
+// is invisible to Text.StyledText, so it has to become <br/> — nothing
+// else about the sanitized text is escaped or altered.
+function styledBody(body, appName, appIcon) {
+    return sanitizeBody(body, appName, appIcon).replace(/\r\n|\r|\n/g, "<br/>");
+}
+
+// now/Nm/Nh/Nd ago, each unit's own upper bound exclusive so an exact
+// hour reads "1h ago" rather than "60m ago", not the previous unit
+// forever (the "600m ago" bug this replaces).
+function relTime(nowMs, arrivedAtMs) {
+    var diff = Math.max(0, nowMs - arrivedAtMs);
+    var minute = 60 * 1000;
+    var hour = 60 * minute;
+    var day = 24 * hour;
+    if (diff < minute) return "now";
+    if (diff < hour) return Math.floor(diff / minute) + "m ago";
+    if (diff < day) return Math.floor(diff / hour) + "h ago";
+    return Math.floor(diff / day) + "d ago";
+}
+
 function setDnd(state, on) {
     if (state.dnd === on) return state;
     return Object.assign({}, state, { dnd: on });

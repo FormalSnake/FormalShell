@@ -206,4 +206,47 @@ TestCase {
         // 2026-07-28 is a Tuesday (UTC).
         compare(Openmeteo.weekdayLabel("2026-07-28"), "TUE");
     }
+
+    // glyphForCode — codepoints asserted by charCodeAt against the pinned
+    // nerd-fonts-jetbrains-mono cmap (verified via fonttools ttx), never
+    // against literal PUA characters typed into this test file.
+
+    function test_glyph_for_code_clear_day_matches_pinned_codepoint() {
+        compare(Openmeteo.glyphForCode(0, true).charCodeAt(0), 0xe30d); // weather-day_sunny
+    }
+
+    function test_glyph_for_code_clear_night_matches_pinned_codepoint() {
+        compare(Openmeteo.glyphForCode(0, false).charCodeAt(0), 0xe32b); // weather-night_clear
+    }
+
+    function test_glyph_for_code_defaults_to_day_when_isday_omitted() {
+        compare(Openmeteo.glyphForCode(0).charCodeAt(0), Openmeteo.glyphForCode(0, true).charCodeAt(0));
+    }
+
+    function test_glyph_for_code_overcast_same_glyph_day_and_night() {
+        compare(Openmeteo.glyphForCode(3, true), Openmeteo.glyphForCode(3, false));
+    }
+
+    function test_glyph_for_code_day_and_night_differ_for_directional_conditions() {
+        [0, 2, 45, 51, 56, 61, 71, 80, 95].forEach(function (code) {
+            verify(Openmeteo.glyphForCode(code, true) !== Openmeteo.glyphForCode(code, false));
+        });
+    }
+
+    function test_glyph_for_code_unknown_code_returns_fallback() {
+        compare(Openmeteo.glyphForCode(999, true).charCodeAt(0), 0xe34e); // weather-thermometer_exterior
+        compare(Openmeteo.glyphForCode(999, false).charCodeAt(0), 0xe34e);
+    }
+
+    function test_glyph_for_code_totality_every_documented_code_resolves() {
+        // Every WMO code openmeteo.js's _conditions table maps, mirroring
+        // the conditionKey coverage above — none of these may fall back.
+        var codes = [0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 66, 67, 61, 63, 65,
+            71, 73, 75, 77, 85, 86, 80, 81, 82, 95, 96, 99];
+        var fallback = 0xe34e;
+        codes.forEach(function (code) {
+            verify(Openmeteo.glyphForCode(code, true).charCodeAt(0) !== fallback);
+            verify(Openmeteo.glyphForCode(code, false).charCodeAt(0) !== fallback);
+        });
+    }
 }

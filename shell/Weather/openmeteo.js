@@ -124,3 +124,36 @@ var _weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 function weekdayLabel(dateStr) {
     return _weekdays[new Date(dateStr + "T00:00:00Z").getUTCDay()];
 }
+
+// Nerd Font weather glyphs (nix/testvm.nix's pinned nerd-fonts-jetbrains-mono
+// cmap, verified via fonttools ttx per the WeatherWidget.qml/GithubWidget.qml
+// precedent, never from memory): day/night pairs from the "weathericons"
+// glyph set for every condition key above; "overcast" has no day/night
+// distinction in the set (full cloud cover reads the same either way).
+// FALLBACK reuses weather-thermometer_exterior, the same glyph the bar cell
+// already shows before the first fetch lands, so an unmapped code degrades
+// to the existing honest "no data yet" look rather than a blank glyph.
+var _glyphs = {
+    "clear": { day: "", night: "" },
+    "partly-cloudy": { day: "", night: "" },
+    "overcast": { day: "", night: "" },
+    "fog": { day: "", night: "" },
+    "drizzle": { day: "", night: "" },
+    "freezing-rain": { day: "", night: "" },
+    "rain": { day: "", night: "" },
+    "snow": { day: "", night: "" },
+    "showers": { day: "", night: "" },
+    "thunderstorm": { day: "", night: "" }
+};
+
+var _fallbackGlyph = ""; // weather-thermometer_exterior, U+E34E
+
+// isDay defaults true (falls back to the day glyph) unless explicitly
+// false: open-meteo's `current.is_day` is 0/1, WeatherPanel.qml converts
+// to boolean before this ever runs, and a first-fetch caller with no
+// day/night signal yet should read as day rather than guessing night.
+function glyphForCode(code, isDay) {
+    var pair = _glyphs[conditionKey(code)];
+    if (!pair) return _fallbackGlyph;
+    return isDay === false ? pair.night : pair.day;
+}
