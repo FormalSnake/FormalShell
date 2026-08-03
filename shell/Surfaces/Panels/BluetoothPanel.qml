@@ -28,6 +28,13 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // pairing/forgetting move a device between buckets exactly on the property
 // change being watched, which would tear down and recreate the Repeater
 // delegate holding a per-row Connections at the worst possible moment.
+// forget() is the one action that Connections block can never see complete:
+// it issues BlueZ's RemoveDevice, which destroys the device object outright
+// rather than flipping a property on it (pinned quickshell source,
+// bluez.cpp's onInterfacesRemoved: adapter->devices()->removeObject(device);
+// delete device), so a successful forget leaves `_actionDevice` null with no
+// paired/bonded/trustedChanged signal ever having fired — a second
+// Connections block below watches the adapter's device list itself instead.
 // FORGET is hover-revealed on PAIRED rows only, the same "known and not
 // currently connected" restriction NetworkPanel's FORGET already applies.
 // Bound directly to Quickshell.Bluetooth, same as every other panel binds
@@ -242,6 +249,26 @@ Panel {
         }
         function onTrustedChanged() {
             root._checkActionCompletion(root._actionDevice);
+        }
+    }
+
+    // forget()'s completion signal: RemoveDevice deletes the device object
+    // (see the header comment), so the Connections block above never fires
+    // for it. adapter.devices is an ObjectModel — removeObject() emits
+    // valuesChanged before the C++ delete runs, and root._devices (bound to
+    // devices.values) is already reactive to that, so by the time this
+    // handler runs the forgotten address is simply absent from it.
+    Connections {
+        target: root._adapter ? root._adapter.devices : null
+
+        function onValuesChanged() {
+            if (root._actionKind !== "forget" || root._actionAddress === "")
+                return;
+            for (var i = 0; i < root._devices.length; i++) {
+                if (root._devices[i].address === root._actionAddress)
+                    return;
+            }
+            root._clearAction();
         }
     }
 
