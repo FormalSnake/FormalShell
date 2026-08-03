@@ -25,15 +25,55 @@ import "../../Weather/openmeteo.js" as Openmeteo
 // weather-cloudy U+E312, weather-fog U+E313, weather-sprinkle U+E31B,
 // weather-rain_mix U+E316, weather-rain U+E318, weather-snow U+E31A,
 // weather-showers U+E319, weather-thunderstorm U+E31D, weather-na U+E374.
+// The forecast ledger keeps these generic (no time-of-day) glyphs since a
+// daily high/low row isn't "now"; the current-conditions row below uses
+// openmeteo.js's day/night-aware glyphForCode instead (M15 Task 3), the
+// same function WeatherWidget.qml binds for its own live bar-cell glyph.
+//
+// Poll ownership (M15 Task 3, GithubPanel/UsagePanel's own pollEnabled
+// precedent — see GithubPanel.qml's header for the IPC-open rationale):
+// WeatherWidget flips pollEnabled on when it's actually present in
+// bar.layout (never part of DEFAULT_LAYOUT's absence — weather IS in the
+// default arrangement, so pollEnabled ends up true whenever the bar looks
+// like it does today; a custom layout that drops the widget stops the
+// background timer, same as GitHub/Usage). `panel open weather` over IPC
+// still renders honestly regardless, since opening always refetches.
 Panel {
     id: root
 
     panelTitle: "WEATHER"
     panelWidth: 260
 
+    // Flipped true by WeatherWidget's Component.onCompleted, mirroring
+    // GithubWidget/UsageWidget.
+    property bool pollEnabled: false
+
     property var _result: null
     property string _error: ""
     property bool _loading: false
+
+    readonly property int _interval: {
+        var v = Config.get("weather.intervalMs", 900000);
+        return (typeof v === "number" && v > 0) ? v : 900000;
+    }
+
+    // A rough local wall-clock day/night split for the current-conditions
+    // glyph — open-meteo's current.is_day isn't requested (openmeteo.js's
+    // URL/parsing stay untouched by this task), so this reads the host's
+    // own clock rather than the API's. Good enough for a glyph choice; a
+    // real sunrise/sunset calculation would need the coordinates anyway.
+    readonly property bool _isDay: {
+        var h = new Date().getHours();
+        return h >= 6 && h < 20;
+    }
+
+    // Bound by WeatherWidget for its own live bar-cell glyph/temp; the
+    // sentinels (NaN/-1) resolve through glyphForCode's own unknown-code
+    // fallback, so the widget never needs a second "no data" branch.
+    readonly property bool hasCurrent: root._result !== null
+    readonly property real currentTemp: root.hasCurrent ? root._result.current.temperature : NaN
+    readonly property int currentCode: root.hasCurrent ? root._result.current.code : -1
+    readonly property bool currentIsDay: root._isDay
 
     function _glyphFor(code) {
         switch (Openmeteo.conditionKey(code)) {
@@ -83,15 +123,15 @@ Panel {
     }
 
     onIsOpenChanged: if (root.isOpen) root._fetch();
+    onPollEnabledChanged: if (root.pollEnabled) root._fetch();
 
-    // Re-fetch periodically while open — mirrors CalendarPanel's own
-    // minute Timer for "today" — rather than wiring a dedicated
-    // location-changed handler: LocationService's streaming updates matter
-    // for eventual accuracy, not for retriggering a forecast fetch on every
-    // GPS tick.
+    // Runs in the background once the widget opts in (pollEnabled) and
+    // also while the panel itself is open — GithubPanel/UsagePanel's own
+    // Timer shape. LocationService's streaming updates matter for eventual
+    // accuracy, not for retriggering a forecast fetch on every GPS tick.
     Timer {
-        interval: 10 * 60 * 1000
-        running: root.isOpen
+        interval: root._interval
+        running: root.pollEnabled || root.isOpen
         repeat: true
         onTriggered: root._fetch()
     }
@@ -144,7 +184,7 @@ Panel {
                 spacing: Theme.spacing.sm
 
                 Text {
-                    text: root._result ? root._glyphFor(root._result.current.code) : ""
+                    text: root._result ? Openmeteo.glyphForCode(root._result.current.code, root._isDay) : ""
                     color: currentCell.foreground
                     font.family: Theme.font.family
                     font.pixelSize: Theme.fontSize.body

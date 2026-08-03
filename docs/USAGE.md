@@ -109,6 +109,16 @@ always-visible bell cell above, which owns both DND display and its
 toggle. Recording has no glyph yet — nothing in this shell or a reachable
 service reports screen recording as of 2026-07-29.
 
+**Weather** (M15): a glyph plus rounded current temperature (`14°`) once
+`WeatherPanel`'s open-meteo poll has data, refreshed every
+`weather.intervalMs` (ms, default 900000) and on every panel open. The
+glyph switches between day and night variants of the current condition
+(`Weather/openmeteo.js`'s `glyphForCode`) based on the host's local clock.
+Before the first fetch lands, or with no location fix, the cell stays a
+dim glyph rather than the old static "WEATHER" label or a fake reading —
+the same honest-fallback shape every other widget uses. Click toggles the
+weather panel (see [Panels](#panels)).
+
 **GitHub** — opt-in via `bar.layout` (add `"github"` to a region); polls one
 `gh api graphql` call every `github.intervalMs` (ms, default 300000) for the
 count of open PRs you authored and open issues assigned to you, rendered as
@@ -525,8 +535,11 @@ showing a stub `0%`. `WeatherPanel` shows current conditions as a header row
 and a forecast ledger (one row per open-meteo daily period, glyph + weekday
 + high/low mono temps pinned right), falling back to an honest `NO LOCATION`
 or `UNAVAILABLE` cell (with openmeteo.js's specific failure code) rather
-than a stale or invented forecast. `GithubPanel` lists open PRs you
-authored and open issues assigned to you as two ledger sections
+than a stale or invented forecast. The open-meteo poll lives in the panel,
+not the widget (M15 Task 3, `GithubPanel`'s own pattern): `WeatherWidget`
+flips `pollEnabled` on for background polling every `weather.intervalMs`,
+and `panel open weather` re-polls on open regardless. `GithubPanel` lists
+open PRs you authored and open issues assigned to you as two ledger sections
 (`PULL REQUESTS / n`, `ISSUES / n` — the first 15 of each), every row a
 title plus dimmed repo slug; clicking a row opens its URL via `xdg-open`
 and closes the panel. The `gh api graphql` poll lives in the panel, not

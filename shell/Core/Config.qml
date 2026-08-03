@@ -64,6 +64,9 @@ import QtQuick
 // renders no section at all) and usage.intervalMs (number, default 900000
 // — the same panel's background poll cadence in ms; the widget itself is
 // opt-in via bar.layout, M14 Task 7).
+// weather.intervalMs (number, default 900000 — WeatherPanel's open-meteo
+// background poll cadence in ms; the widget stays in bar.layout by
+// default, so this generally runs whenever the bar does, M15 Task 3).
 Singleton {
     id: root
 
