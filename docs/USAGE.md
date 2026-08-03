@@ -478,6 +478,12 @@ ledger-table popout (header `MetaLabel` row, rows sharing hairline rules,
 click-outside) anchored under the bar cell that opened it, or falling back to
 the bar's right region when opened over IPC with no cell to anchor under
 (Wayland gives clients no cross-window global coordinates for a real anchor).
+On a multi-monitor rig, a click on any *other* screen closes the panel too
+(`Components/DismissTwins.qml`, M16 Task 7) — the compositor only ever hands
+pointer input to the backdrop on the panel's own output, so a transparent
+twin window per other screen exists for as long as the panel is open, purely
+to catch that click; the Menu and notification center use the same
+component. Single-monitor rigs (the VM smoke rig included) spawn zero twins.
 Each panel binds a first-party quickshell service directly — no intervening
 service wrapper, the same pattern `AudioPanel` establishes for the rest:
 

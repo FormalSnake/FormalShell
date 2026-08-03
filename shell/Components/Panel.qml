@@ -242,4 +242,12 @@ PanelWindow {
             }
         }
     }
+
+    // Multi-monitor dismiss (M16 Task 7): backdrop above only ever catches
+    // clicks on this panel's own output.
+    DismissTwins {
+        active: root.isOpen
+        ownScreen: root.screen
+        onDismissed: root.close()
+    }
 }

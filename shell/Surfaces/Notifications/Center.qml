@@ -280,4 +280,12 @@ PanelWindow {
             }
         }
     }
+
+    // Multi-monitor dismiss (M16 Task 7): a click on another screen closes
+    // the center exactly like the bell toggle does.
+    DismissTwins {
+        active: root.isOpen
+        ownScreen: root.screen
+        onDismissed: root.close()
+    }
 }

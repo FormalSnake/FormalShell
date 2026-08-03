@@ -1011,4 +1011,12 @@ PanelWindow {
             color: Core.Theme.color.background
         }
     }
+
+    // Multi-monitor dismiss (M16 Task 7): a click on another screen closes
+    // the menu exactly like Escape does.
+    DismissTwins {
+        active: root.isOpen
+        ownScreen: root.screen
+        onDismissed: root.close()
+    }
 }
