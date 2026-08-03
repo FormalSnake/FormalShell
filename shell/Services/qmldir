@@ -6,5 +6,6 @@ singleton ClipboardService ClipboardService.qml
 singleton IdleService IdleService.qml
 singleton LocationService LocationService.qml
 singleton MediaService MediaService.qml
+singleton NightLightService NightLightService.qml
 singleton PolkitService PolkitService.qml
 singleton TrayService TrayService.qml

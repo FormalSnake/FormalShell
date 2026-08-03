@@ -113,4 +113,5 @@ ShellRoot {
     ScreensaverIpc { screensaver: screensaver }
     PickerIpc { picker: imagePickerInstance }
     ScreenshotIpc {}
+    NightLightIpc {}
 }

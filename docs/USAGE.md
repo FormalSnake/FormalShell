@@ -915,6 +915,37 @@ by the shell itself, so there is nothing to summon. `dev/smoke-niri.sh
 --polkit` verifies the whole flow with a real `pkexec` invocation and real
 `wtype` keystrokes, the same "type into it for real" idiom `--lock` uses.
 
+## Night light
+
+`NightLightService.qml` (`shell/Services/`) is an opt-in warm-temperature
+filter, off by default (`nightlight.startOn`, `settings.json`, default
+**false**), driving a real `wlsunset` process (`wlr-gamma-control-unstable-v1`
+— reimplemented against the pinned 0.4.0 source rather than ported from
+omarchy, which drives Hyprland's own `hyprsunset` IPC instead). "Fixed-temp
+mode, not schedule": wlsunset has no such mode of its own, so
+`NightLightService` uses its documented `SIGUSR1` runtime control (cycles
+OFF -> forced-high -> forced-low -> OFF/automatic) to pin the low
+temperature permanently the moment it starts — never a day/night cycle —
+each signal sent only after wlsunset's own stderr confirms the previous one
+landed. `nightlight.temp` (default 4000) sets the pinned Kelvin value.
+`Indicators.qml`'s bar slot shows a `md-lightbulb_night` glyph while active;
+that same live binding is what wakes the singleton at shell startup so
+`nightlight.startOn` actually takes effect (PolkitService's own
+`PolkitDialog.qml` binding is the established precedent for this).
+
+`wlsunset` missing from PATH, or a nested/windowed compositor backend that
+doesn't implement the gamma-control protocol at all, surfaces as an honest
+`active: false` with `lastError` populated — never a silent no-op.
+
+**IPC** (`target: "nightlight"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call nightlight enable
+qs ipc --any-display -p <store-path>/share/formalshell call nightlight disable
+qs ipc --any-display -p <store-path>/share/formalshell call nightlight toggle
+qs ipc --any-display -p <store-path>/share/formalshell call nightlight status  # {"active":…,"temp":…,"lastError":…}
+```
+
 ## Screensaver
 
 `IdleService.qml` wraps one shared `IdleMonitor` (`respectInhibitors: true`,

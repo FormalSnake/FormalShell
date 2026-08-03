@@ -286,6 +286,12 @@ nixpkgs.lib.nixosSystem {
           # (nm-applet/blueman-applet) this headless VM has no backing
           # device for anyway.
           (pkgs.python3.withPackages (ps: [ ps.pygobject3 ]))
+          # M16 Task 6: NightLightService drives this directly as a Process
+          # (wlr-gamma-control-unstable-v1) — a nested niri session's winit
+          # backend may or may not implement that protocol; either way the
+          # binary itself needs to be on PATH for the honest active/lastError
+          # split to be real evidence rather than a "command not found" no-op.
+          pkgs.wlsunset
           # M14 Task 5: dev/smoke-niri.sh's default leg spawns a real
           # toplevel with a controlled Wayland app-id (foot's --app-id) so
           # ActiveWindow.qml's DesktopEntries.heuristicLookup has a genuine

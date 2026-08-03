@@ -339,6 +339,21 @@
 # overlay look and a real drag stay host-trial; the 90s watchdog rides the
 # same _cancel path the verb drives, so the verb round trip is its proof.
 #
+# With --nightlight (M16 Task 6), drives the `nightlight` IPC target: `enable`
+# starts a real wlsunset process (manual -S/-s dummy times plus -t
+# <nightlight.temp>, default 4000 — kept out of wlsunset's geo-coordinate
+# validation path on purpose, see NightLightService.qml's own header
+# comment) and pins it to the fixed low temperature via wlsunset's own
+# documented RUNTIME CONTROL (SIGUSR1 cycles OFF -> forced-high ->
+# forced-low, each sent only after the previous one's own stderr
+# confirmation line). `nightlight status` is polled until either
+# `active:true` lands or a `lastError` appears — both are real evidence:
+# nested niri's winit backend may not implement
+# wlr-gamma-control-unstable-v1 at all, in which case wlsunset exits
+# immediately and the honest failure surface (active:false + lastError) is
+# exactly what gets screenshotted, never a silent no-op. `disable` then
+# stops the process and status confirms active:false again.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -381,6 +396,7 @@ picker_mode=false
 tray_mode=false
 bar_layout_mode=false
 screenshot_mode=false
+nightlight_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -402,7 +418,8 @@ while [ $# -gt 0 ]; do
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot]" >&2; exit 1 ;;
+    --nightlight) nightlight_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight]" >&2; exit 1 ;;
   esac
 done
 
@@ -418,7 +435,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -883,6 +900,9 @@ screenshot_cancel_reply_path="$shot_dir/screenshot-cancel-reply.txt"
 screenshot_cancelled_status_path="$shot_dir/screenshot-cancelled-status.json"
 screenshot_slurp_before_path="$shot_dir/screenshot-slurp-before.txt"
 screenshot_slurp_after_path="$shot_dir/screenshot-slurp-after.txt"
+nightlight_active_path="$shot_dir/nightlight-active.png"
+nightlight_status1_path="$shot_dir/nightlight-status-1.json"
+nightlight_status2_path="$shot_dir/nightlight-status-2.json"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -1459,6 +1479,33 @@ sleep 1
 EOF
 fi
 
+# --nightlight's whole sequence lives in one script, same rationale as
+# clipboard_drive_script above. The poll loop breaks early on either
+# outcome the plan calls real evidence: active:true, or a populated
+# lastError (the honest failure surface for a nested compositor backend
+# without wlr-gamma-control-unstable-v1) — the second grep fails (and so
+# breaks the loop) the moment lastError stops being the empty-string
+# literal.
+if $nightlight_mode; then
+  nightlight_drive_script="$shot_dir/nightlight-drive.sh"
+  cat > "$nightlight_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call nightlight enable > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 8 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$nightlight_status1_path" 2>&1
+  grep -qF '"active":true' "$nightlight_status1_path" && break
+  grep -qF '"lastError":""' "$nightlight_status1_path" || break
+  sleep 1
+done
+niri msg action screenshot-screen --path "$nightlight_active_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call nightlight disable > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$nightlight_status2_path" 2>&1
+EOF
+fi
+
 # --wifi's whole sequence lives in one script, same rationale as
 # clipboard_drive_script: everything here is strictly ordered (open the
 # panel so the scanner turns on, wait for a real scan to surface both
@@ -2003,6 +2050,9 @@ fi
   if $clipboard_mode; then
     echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
   fi
+  if $nightlight_mode; then
+    echo "spawn-at-startup \"bash\" \"$nightlight_drive_script\""
+  fi
   if $wifi_mode; then
     echo "spawn-at-startup \"bash\" \"$wifi_drive_script\""
   fi
@@ -2092,6 +2142,12 @@ fi
     # the menu to render before the shot, which now shows the freshly
     # captured image as the newest (topmost) row.
     screenshot_delay=18
+  elif $nightlight_mode; then
+    # nightlight-drive.sh's own worst-case budget (3s initial sleep + 8s
+    # poll ceiling + disable/sleep1) lands ~12s in; this run's generic
+    # smoke.png/SMOKE_OK is taken 4s after that, showing the ordinary
+    # session with night light already disabled again.
+    screenshot_delay=16
   elif $lock_mode; then
     # lock-drive.sh's own final step (the second isLocked/status dump) lands
     # around its internal sleep sum (~20s in, the wrong-password PAM round
@@ -2688,6 +2744,37 @@ if $polkit_mode; then
     :
   else
     echo "SMOKE_FAIL: pkexec true did not exit 0 after real authentication — got: $(cat "$polkit_rc_path" 2>/dev/null); stderr: $(cat "$shot_dir/polkit-stderr.txt" 2>/dev/null); debug: $(cat "$shot_dir/polkit-debug.log" 2>/dev/null)" >&2; exit 1
+  fi
+fi
+
+if $nightlight_mode; then
+  if [ -f "$nightlight_active_path" ]; then
+    echo "SMOKE_NIGHTLIGHT_ACTIVE $nightlight_active_path"
+  else
+    echo "SMOKE_FAIL: no nightlight-active screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$nightlight_status1_path" ]; then
+    cat "$nightlight_status1_path"
+  else
+    echo "SMOKE_FAIL: no nightlight status produced after enable" >&2; exit 1
+  fi
+  # Honest bifurcation (plan wording): a nested niri whose winit backend
+  # lacks wlr-gamma-control-unstable-v1 makes wlsunset exit immediately,
+  # which is the correctly-surfaced failure path, not a bug —
+  # active:false WITH a populated lastError is exactly as real a pass as
+  # active:true. active:false with an EMPTY lastError is the one shape
+  # that's never acceptable: a silent no-op.
+  if grep -qF '"active":true' "$nightlight_status1_path"; then
+    echo "nightlight: reached active:true — nested niri supports wlr-gamma-control-unstable-v1"
+  elif grep -qF '"active":false' "$nightlight_status1_path" && ! grep -qF '"lastError":""' "$nightlight_status1_path"; then
+    echo "nightlight: honest failure surface (active:false, lastError populated) — nested niri likely lacks wlr-gamma-control-unstable-v1"
+  else
+    echo "SMOKE_FAIL: nightlight enable produced neither active:true nor an honest lastError — got: $(cat "$nightlight_status1_path")" >&2; exit 1
+  fi
+  if [ -s "$nightlight_status2_path" ] && grep -qF '"active":false' "$nightlight_status2_path"; then
+    cat "$nightlight_status2_path"
+  else
+    echo "SMOKE_FAIL: nightlight disable did not confirm active:false — got: $(cat "$nightlight_status2_path" 2>/dev/null)" >&2; exit 1
   fi
 fi
 

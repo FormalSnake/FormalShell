@@ -74,6 +74,11 @@ import QtQuick
 // battery.warnPercent / battery.criticalPercent (numbers, default 10 / 5 —
 // Power/model.js's warnEvent() thresholds, read by PowerPanel's own
 // hysteresis watcher and Battery.qml's urgent-cell check, M16 Task 5).
+// nightlight.startOn (bool, default false — opt-in: whether
+// NightLightService starts wlsunset automatically at shell boot) and
+// nightlight.temp (number, default 4000 — the fixed low colour
+// temperature it pins via wlsunset's own SIGUSR1 runtime control, M16
+// Task 6).
 Singleton {
     id: root
 
