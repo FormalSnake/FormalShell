@@ -71,6 +71,9 @@ import QtQuick
 // even constructs a PolkitAgent element at all, since registration is
 // attempted the instant one exists; false means the shell never tries to
 // register, M16 Task 4).
+// battery.warnPercent / battery.criticalPercent (numbers, default 10 / 5 —
+// Power/model.js's warnEvent() thresholds, read by PowerPanel's own
+// hysteresis watcher and Battery.qml's urgent-cell check, M16 Task 5).
 Singleton {
     id: root
 

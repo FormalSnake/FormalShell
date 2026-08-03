@@ -163,6 +163,7 @@ hardware.
 | Panel: network | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-network.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-network.png` — real SSID `kaiiserni` at 62% (the 0..1-scaling bug stayed fixed on a second real host) |
 | Panel: bluetooth | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the adapter-state title-case defect (`artifacts/e1504g/panel-bluetooth.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against a real adapter and three real paired devices (`MX Master 3S M`, `CMF Headphone Pro`, `AirPods Pro`), status correctly uppercase `ENABLED` — `artifacts/g815-head/panel-bluetooth.png` |
 | Panel: power | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-power.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-power.png` — real battery 79%, uppercase `PENDING CHARGE`, correct active-profile highlight |
+| Panel: power: brightness (backlight + DDC), low-battery warnings, static battery stats | VM-only | M16 Task 5, `dev/smoke-niri.sh --panel power` — the VM (no battery, no backlight device, no DDC monitors) renders the fully honest fallback: `AC POWER` cell, no `DISPLAY` header, a single dim `NO BACKLIGHT` row. `Power/model.js`'s `warnEvent()` hysteresis (crossings, re-arm-on-charge, charge interruptions, boot-below-threshold) is unit-covered in `tests/tst_power_model.qml`, not screenshot-provable on hardware without draining a real battery to 5-10%. **Never run against real hardware:** a real internal backlight driving `BrightnessService.set()`/`step()`, and DDC control of an actual external monitor via `ddcutil`, are both real-host-trial territory — see §2's i2c-permissions gap below |
 | Panel: calendar | Hardware-verified (ics path) | e1504g @ 1300b02, `artifacts/e1504g/panel-calendar.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-calendar.png` — real month grid, local-.ics fixture event. `docs/screenshots/calendar-niri.png` was recaptured 2026-07-30 (M13) from the mac VM: tomorrow's cell inverted with its EDS fixture event under the `JUL 31` dated header, today's cell keeping its accent fill |
 | Calendar: EDS/GOA events | VM-only | mac VM rig @ 57efc97, `dev/smoke-niri.sh --panel calendar` — the rig seeds one real VEVENT over `formalshell-eds seed` into EDS's `system-calendar` on the run's private session bus, the service reads it back through `formalshell-eds events`, and the run's screenshot showed both the ics and the EDS fixture events under `TODAY` (the published `docs/screenshots/calendar-niri.png` has since been recaptured with M13's selected-day state, tomorrow's EDS fixture under its dated header — same rig, same backends). The GOA OAuth path (a real online account feeding EDS) has never run anywhere — the VM has no GOA account, so that leg is real-host-trial territory |
 | Calendar: day selection | VM-only | M13 (2b23b4c), `dev/smoke-niri.sh --panel calendar` — the drive seeds a second EDS VEVENT dated tomorrow, calls `calendar select <tomorrow>` after the open, asserts `calendar status` reports tomorrow selected, and the screenshot (`docs/screenshots/calendar-niri.png`, recaptured 2026-07-30) shows tomorrow's cell inverted with its fixture event under the dated meta header while today keeps its accent marker |
@@ -273,6 +274,17 @@ Hyprland backend has never run on either Linux host — it exists only as
   overflow drawer (`Tray.qml`), and DND/idle-inhibit surface as glyphs
   (`Indicators.qml`) — see the parity table's three new Bar rows. All three
   are VM-only verified so far, not yet re-swept on a real host.
+- **DDC brightness control needs `i2c-dev` loaded and i2c group access —
+  `ddcutil` fails silently (honestly) without either.** `BrightnessService`'s
+  DDC path (M16 Task 5) shells out to `ddcutil detect --brief`/`getvcp`/
+  `setvcp`, which need the kernel's `i2c-dev` module loaded
+  (`hardware.i2c.enable = true;` in NixOS, or `modprobe i2c-dev`) and the
+  invoking user in the `i2c` group (or an equivalent udev rule granting
+  `/dev/i2c-*` access) — without both, `ddcutil detect` finds nothing and
+  the panel's `DISPLAY` section just shows the backlight-only rows it
+  already shows in the VM, no error surfaced anywhere. Neither Linux host's
+  i2c/DDC state has been checked yet; this is what switchover needs to
+  confirm before external-monitor brightness can work at all.
 - **Polkit agent needs a host's existing agent dropped first — only one can
   register per session.** M16 Task 4's `PolkitService.qml` never fights
   over the D-Bus registration: if another agent already owns it,

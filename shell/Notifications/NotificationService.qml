@@ -300,7 +300,13 @@ Singleton {
     // guards.
     property int _localSerial: 0
 
-    function notify(summary, body) {
+    // urgency defaults to normal (1); pass 2 for a critical local warning
+    // (M16 Task 5's low-battery path) — Model.add() already makes those
+    // sticky and model.js's bypassesDnd() already lets a `local` entry
+    // through DND on its own honest marker, same as a real notify-send
+    // critical.
+    function notify(summary, body, urgency) {
+        urgency = urgency === undefined ? 1 : urgency;
         root._localSerial += 1;
         root._state = Model.add(root._state, {
             id: "local-" + root._localSerial,
@@ -308,10 +314,11 @@ Singleton {
             appIcon: "",
             summary: summary,
             body: body,
-            urgency: 1,
+            urgency: urgency,
             actions: [],
             image: "",
-            senderIsNotifySend: false
+            senderIsNotifySend: false,
+            local: true
         }, Date.now(), {});
     }
 

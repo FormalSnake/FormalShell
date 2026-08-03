@@ -19,6 +19,13 @@ import qs.Components
 // mono cmap (nix/testvm.nix), rounded to the nearest 10%: md-battery_outline
 // U+F008E (0%), md-battery_NN U+F007A..F0082 (10%..90%), md-battery U+F0079
 // (100%).
+//
+// Critical battery (M16 Task 5, DESIGN.md §2.4): at/below
+// battery.criticalPercent while discharging, the cell goes full-bleed
+// urgent — Cell's own `urgent` state, same fill Model.js's model would
+// give a critical toast, never a tinted border. Charging past the
+// threshold (still plugged in, recovering) drops back to normal
+// immediately — it's a live state, not a one-shot alarm.
 Cell {
     id: root
 
@@ -28,6 +35,8 @@ Cell {
     readonly property var _device: UPower.displayDevice
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
     readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
+    readonly property bool _discharging: root._hasBattery && root._device.state === UPowerDeviceState.Discharging
+    readonly property bool _critical: root._discharging && root._percent <= Config.get("battery.criticalPercent", 5)
     readonly property string _glyph: {
         var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
         switch (bucket) {
@@ -53,6 +62,7 @@ Cell {
 
     visible: root.shown
     standalone: true
+    urgent: root._critical
     hovered: hoverArea.containsMouse
 
     Row {

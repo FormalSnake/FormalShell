@@ -15,7 +15,8 @@ TestCase {
             urgency: urgency,
             actions: [],
             image: "",
-            senderIsNotifySend: false
+            senderIsNotifySend: false,
+            local: false
         };
         Object.keys(extra || {}).forEach(function (k) { base[k] = extra[k]; });
         return base;
@@ -41,6 +42,14 @@ TestCase {
 
     function test_bypasses_dnd_false_for_notify_send_at_normal_urgency() {
         verify(!M.bypassesDnd(notif("a", 1, { senderIsNotifySend: true })));
+    }
+
+    function test_bypasses_dnd_true_for_critical_local() {
+        verify(M.bypassesDnd(notif("a", 2, { local: true })));
+    }
+
+    function test_bypasses_dnd_false_for_local_at_normal_urgency() {
+        verify(!M.bypassesDnd(notif("a", 1, { local: true })));
     }
 
     function test_add_dnd_on_non_bypassing_routes_to_pending() {

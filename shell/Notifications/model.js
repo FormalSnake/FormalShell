@@ -17,8 +17,11 @@ function initialState() {
 // notify-send itself get through DND. A chat app marking its messages
 // critical does not qualify — senderIsNotifySend is set by the server
 // layer from the sender's app info, never inferred from urgency alone.
+// A shell-authored local entry (NotificationService.notify(), M16 Task 5's
+// critical battery warning) earns the same bypass on its own honest
+// `local` marker — it never claims to be notify-send.
 function bypassesDnd(notif) {
-    return notif.urgency === 2 && notif.senderIsNotifySend === true;
+    return notif.urgency === 2 && (notif.senderIsNotifySend === true || notif.local === true);
 }
 
 function makeEntry(notif, now, expiresAt) {
@@ -31,6 +34,7 @@ function makeEntry(notif, now, expiresAt) {
         urgency: notif.urgency,
         actions: notif.actions || [],
         image: notif.image || "",
+        local: notif.local === true,
         arrivedAt: now,
         seenAt: null,
         expiresAt: expiresAt

@@ -550,9 +550,27 @@ smoke screenshot shows. `PowerPanel` pairs a status row (an honest
 `AC POWER` cell rather than a lying `0%` when `UPower.displayDevice.isLaptopBattery`
 is false) with a keyboard-navigable power-profile picker (Up/Down to move,
 Enter to apply) under power-profiles-daemon, plus a breathing-opacity
-charging pulse while genuinely charging; `Battery.qml`'s bar cell goes
+charging pulse while genuinely charging and dim meta rows for time-to-full/
+time-to-empty/charge rate wherever `UPowerDevice` reports them
+(`timeToFull`/`timeToEmpty`/`changeRate`, each rendered only when nonzero —
+no rotation, no invented value). `Battery.qml`'s bar cell goes
 further and drops out of the bar entirely on the same condition, rather than
-showing a stub `0%`. `WeatherPanel` shows current conditions as a header row
+showing a stub `0%`, and goes full-bleed `urgent` at/below
+`battery.criticalPercent` while discharging. `PowerPanel` also carries a
+`DISPLAY` section, one `BRIGHTNESS` row per controllable monitor — the
+internal backlight (`BrightnessService`, `brightnessctl`-backed) labeled
+`INTERNAL`, plus one row per DDC-capable external monitor `ddcutil` can
+reach, keyed by DRM connector name; wheel, or `h`/`l` while hovering a row,
+steps it 5%, detection runs once per panel open (never a poll loop — `
+ddcutil`'s I2C round-trips are seconds-slow), and the section collapses to a
+single dim `NO BACKLIGHT` row when nothing is controllable — the test VM's
+expected state. `Power/model.js`'s `warnEvent()` hysteresis (persisted on
+the panel, which stays live in the background regardless of whether it's
+open) fires a normal `LOW BATTERY` toast crossing `battery.warnPercent`
+(default 10) while discharging, and a sticky, DND-bypassing
+`CRITICAL BATTERY` toast at `battery.criticalPercent` (default 5); either
+threshold re-arms the instant the battery starts charging, so unplugging
+again while still low warns again. `WeatherPanel` shows current conditions as a header row
 and a forecast ledger (one row per open-meteo daily period, glyph + weekday
 + high/low mono temps pinned right), falling back to an honest `NO LOCATION`
 or `UNAVAILABLE` cell (with openmeteo.js's specific failure code) rather
