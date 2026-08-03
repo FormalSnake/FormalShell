@@ -545,7 +545,23 @@ networks get an extra `IDENTITY` field above the passphrase and connect
 through an `nmcli` Process that reads the password over stdin, never argv,
 and reports a `NO NMCLI` status if the binary is missing rather than a
 silent failure. Known, disconnected rows reveal a `FORGET` action on hover.
-`BluetoothPanel` groups devices under `CONNECTED`/`PAIRED`/`AVAILABLE`
+`NetworkPanel` also carries a `SPEED TEST` section (M16 Task 9, omarchy's
+feature reimplemented as flat ledger rows: the arc-gauge chrome is left
+behind): a `RUN` cell resolves the active interface (`ip route get
+1.1.1.1`), confirms `curl` is on PATH, then measures `DOWNLOAD` then
+`UPLOAD` in turn, parallel `curl` transfers against Cloudflare's `__down`/
+`__up` speed endpoints while a 500ms sampling timer reads
+`/sys/class/net/<iface>/statistics/{rx,tx}_bytes`, each phase a flat
+accent-fill ledger row (current/expected-max, capped) with a live Mbps
+readout and a dim `MEASURING DOWN…`/`MEASURING UP…` meta line. Each phase
+runs for a fixed 5 seconds regardless of transfer progress, then kills its
+`curl` workers by PID (not just SIGTERM to a wrapper; see
+`NetworkPanel.qml`'s own header comment on the bash `trap`/`pkill -P`
+mechanism this depends on) before starting the next phase; closing the
+panel mid-run kills them the same way. Honest states: no resolvable
+interface renders `NO NETWORK`, no `curl` on PATH renders `NO CURL`.
+Results stay on screen until the panel closes. `BluetoothPanel` groups
+devices under `CONNECTED`/`PAIRED`/`AVAILABLE`
 headers via `Bluetooth/model.js`'s buckets (available devices, discovered
 scan results with a real name, only list while the adapter is actively
 discovering); a 1-second timer keeps nudging `adapter.discovering = true`
@@ -669,6 +685,8 @@ qs ipc --any-display -p <store-path>/share/formalshell call network connect FORM
 qs ipc --any-display -p <store-path>/share/formalshell call network connectEap FORMALTEST-EAP user@domain somepassword
 qs ipc --any-display -p <store-path>/share/formalshell call network forget FORMALTEST
 qs ipc --any-display -p <store-path>/share/formalshell call network wifi true                        # radio power
+qs ipc --any-display -p <store-path>/share/formalshell call network speedtest                        # starts a SPEED TEST run (M16 Task 9)
+qs ipc --any-display -p <store-path>/share/formalshell call network speedstatus                      # JSON: {running, phase, downMbps, upMbps, error}
 ```
 
 An unknown ssid returns `error: unknown ssid '<ssid>'`. `connect`/`connectEap`
@@ -676,7 +694,9 @@ take the secret as a plain IPC argument, which lands in argv — world-readable
 via `/proc` on a multi-user system — so these two verbs exist for the
 headless rig, not as the recommended interactive path: a real session should
 type the passphrase into the panel's own inline prompt (stdin-fed, never
-argv, see the WI-FI section above).
+argv, see the WI-FI section above). `speedtest` returns `error: speed test
+already running` while one is in flight rather than starting a second
+overlapping run; `phase` is one of `idle`/`resolving`/`down`/`up`/`done`.
 
 ## Clipboard
 

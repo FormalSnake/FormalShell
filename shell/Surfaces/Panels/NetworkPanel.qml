@@ -4,6 +4,7 @@ import Quickshell.Networking
 import qs.Core
 import qs.Components
 import "../../Network/model.js" as NetworkModel
+import "../../Network/speedtest.js" as SpeedTest
 
 // Network panel (DESIGN.md §Panels, spec §2, M6 Task 6; wifi behavior parity
 // M14 Task 2): a ledger table of connections grouped WIRED then WI-FI
@@ -22,6 +23,32 @@ import "../../Network/model.js" as NetworkModel
 // than going through a Services wrapper. Honest empty state: "NO DEVICES"
 // when Networking.devices is empty; a section with zero rows simply omits
 // its header rather than inventing a placeholder row.
+//
+// SPEED TEST (M16 Task 9, "flat ledger rows, no gauges": omarchy's own
+// SpeedTestPanel.qml renders a pair of floating arc gauges; that chrome is
+// deliberately left behind, only the measurement technique is ported, and
+// reimplemented rather than copied). A RUN cell kicks off `_startSpeedTest`:
+// resolve the active interface via a real `ip route get 1.1.1.1` Process
+// (`SpeedTest.parseIface`), confirm `curl` is on PATH, then run DOWNLOAD
+// then UPLOAD in turn. Each phase spawns `_stWorkerCount` parallel `curl`
+// Processes: download loops plain GETs against Cloudflare's `__down`
+// endpoint, upload loops a single indefinitely-streaming
+// `-X POST -T /dev/zero` against `__up` (verified directly: curl treats
+// `/dev/zero` as a file with no EOF and streams it chunked until killed),
+// while a 500ms sampling Timer reads `/sys/class/net/<iface>/statistics/
+// {rx,tx}_bytes` via `cat` (no shell) and folds each reading through
+// `SpeedTest.addSample`. The phase's own bounded-duration Timer, not
+// transfer completion, ends it: `_stopWorkers` sets each worker's `running`
+// to false, which sends SIGTERM (Quickshell's own documented behavior) to
+// that worker's `bash -c` wrapper; the wrapper's `trap '... EXIT'` calls
+// `pkill -TERM -P $$` on itself first, killing its own foreground curl by
+// PID before it exits. Verified directly: a bare SIGTERM to the wrapper
+// alone orphans a still-running foreground child, and the trap's explicit
+// pkill closes that gap, so "kill the curls by PID on stop" is real, not
+// just SIGTERM-and-hope. Closing the panel mid-run does the same ("...on
+// close"). Honest states: no resolvable interface (including `ip` missing)
+// renders `NO NETWORK`, no `curl` on PATH renders `NO CURL`. Results stay
+// on screen until the panel closes.
 Panel {
     id: root
 
@@ -90,8 +117,201 @@ Panel {
         if (!root.isOpen) {
             root._cancelPasswordPrompt();
             root._cursorSsid = "";
+            root._stopSpeedTest();
         }
     }
+
+    // ---- Speed test (M16 Task 9) ----------------------------------------
+
+    readonly property int _stWorkerCount: 4
+    readonly property int _stPhaseDurationMs: 5000
+    readonly property int _stSampleIntervalMs: 500
+    readonly property string _stDownloadUrl: "https://speed.cloudflare.com/__down?bytes=25000000"
+    readonly property string _stUploadUrl: "https://speed.cloudflare.com/__up"
+
+    // Each worker loops its own foreground curl until killed; the trap
+    // fires on the SIGTERM `running = false` sends (Process.running's own
+    // documented behavior), `pkill -TERM -P $$` reaching the in-flight curl
+    // before the wrapper itself exits (see the header comment for why a
+    // bare SIGTERM to the wrapper alone isn't enough).
+    readonly property string _stDownloadScript:
+        "trap 'pkill -TERM -P $$ 2>/dev/null' EXIT;" +
+        " url=\"$1\";" +
+        " while true; do curl -s -o /dev/null \"$url\" || break; done"
+    readonly property string _stUploadScript:
+        "trap 'pkill -TERM -P $$ 2>/dev/null' EXIT;" +
+        " url=\"$1\";" +
+        " while true; do curl -s -o /dev/null -X POST -T /dev/zero \"$url\" || break; done"
+
+    // "idle" | "resolving" | "down" | "up" | "done"
+    property string _stPhase: "idle"
+    property string _stError: ""
+    property string _stIface: ""
+    property var _stDownWindow: SpeedTest.initWindow()
+    property var _stUpWindow: SpeedTest.initWindow()
+    property real _stDownResult: 0
+    property real _stUpResult: 0
+
+    readonly property bool _stRunning: root._stPhase === "resolving" || root._stPhase === "down" || root._stPhase === "up"
+
+    readonly property var _stWorkers: [speedWorker0, speedWorker1, speedWorker2, speedWorker3]
+
+    function _startSpeedTest() {
+        if (root._stRunning)
+            return;
+        root._stError = "";
+        root._stIface = "";
+        root._stDownWindow = SpeedTest.initWindow();
+        root._stUpWindow = SpeedTest.initWindow();
+        root._stDownResult = 0;
+        root._stUpResult = 0;
+        root._stPhase = "resolving";
+        ifaceProc.running = true;
+    }
+
+    function _stopSpeedTest() {
+        if (root._stPhase === "idle")
+            return;
+        root._stopWorkers();
+        statTimer.stop();
+        phaseTimer.stop();
+        root._stPhase = "idle";
+        root._stError = "";
+        root._stDownResult = 0;
+        root._stUpResult = 0;
+    }
+
+    function _abortSpeedTest(message) {
+        root._stopWorkers();
+        statTimer.stop();
+        phaseTimer.stop();
+        root._stError = message;
+        root._stPhase = "done";
+    }
+
+    function _startWorkers(direction) {
+        var script = direction === "down" ? root._stDownloadScript : root._stUploadScript;
+        var url = direction === "down" ? root._stDownloadUrl : root._stUploadUrl;
+        for (var i = 0; i < root._stWorkers.length; i++) {
+            var worker = root._stWorkers[i];
+            worker.command = ["bash", "-c", script, "speedtest-" + direction, url];
+            worker.running = true;
+        }
+    }
+
+    function _stopWorkers() {
+        for (var i = 0; i < root._stWorkers.length; i++) {
+            if (root._stWorkers[i].running)
+                root._stWorkers[i].running = false;
+        }
+    }
+
+    function _beginPhase(direction) {
+        root._stPhase = direction;
+        if (direction === "down")
+            root._stDownWindow = SpeedTest.initWindow();
+        else
+            root._stUpWindow = SpeedTest.initWindow();
+        root._startWorkers(direction);
+        root._sample();
+        phaseTimer.restart();
+    }
+
+    function _endPhase() {
+        root._stopWorkers();
+        if (root._stPhase === "down") {
+            root._stDownResult = root._stDownWindow.avgMbps;
+            root._beginPhase("up");
+        } else if (root._stPhase === "up") {
+            root._stUpResult = root._stUpWindow.avgMbps;
+            statTimer.stop();
+            root._stPhase = "done";
+        }
+    }
+
+    function _sample() {
+        if (root._stIface === "" || statProc.running)
+            return;
+        statProc.command = ["cat", "/sys/class/net/" + root._stIface + "/statistics/rx_bytes", "/sys/class/net/" + root._stIface + "/statistics/tx_bytes"];
+        statProc.running = true;
+    }
+
+    // ip route get 1.1.1.1 -> the active interface's name (SpeedTest.parseIface).
+    // No route at all, or `ip` missing from PATH, both leave stdout without
+    // a "dev <iface>" pair, the same honest NO NETWORK either way.
+    Process {
+        id: ifaceProc
+        command: ["sh", "-c", "ip route get 1.1.1.1 2>/dev/null"]
+        stdout: StdioCollector {
+            id: ifaceCollector
+        }
+        onExited: exitCode => {
+            var iface = SpeedTest.parseIface(ifaceCollector.text);
+            if (!iface) {
+                root._abortSpeedTest("NO NETWORK");
+                return;
+            }
+            root._stIface = iface;
+            curlCheckProc.running = true;
+        }
+    }
+
+    Process {
+        id: curlCheckProc
+        command: ["sh", "-c", "command -v curl >/dev/null 2>&1"]
+        onExited: exitCode => {
+            if (exitCode !== 0) {
+                root._abortSpeedTest("NO CURL");
+                return;
+            }
+            root._beginPhase("down");
+        }
+    }
+
+    // Sampling read: two argv paths straight to `cat`, no shell. An
+    // interface that disappears mid-run (or never had readable statistics)
+    // makes SpeedTest.parseStatBytes() return null, which aborts the whole
+    // test honestly rather than reporting a stale/invented rate.
+    Process {
+        id: statProc
+        stdout: StdioCollector {
+            id: statCollector
+        }
+        onExited: exitCode => {
+            var stats = SpeedTest.parseStatBytes(statCollector.text);
+            if (!stats) {
+                root._abortSpeedTest("NO NETWORK");
+                return;
+            }
+            var t = Date.now();
+            if (root._stPhase === "down")
+                root._stDownWindow = SpeedTest.addSample(root._stDownWindow, t, stats.rx);
+            else if (root._stPhase === "up")
+                root._stUpWindow = SpeedTest.addSample(root._stUpWindow, t, stats.tx);
+        }
+    }
+
+    Timer {
+        id: statTimer
+        interval: root._stSampleIntervalMs
+        repeat: true
+        running: root._stPhase === "down" || root._stPhase === "up"
+        onTriggered: root._sample()
+    }
+
+    // The phase's own bounded duration ends it, not transfer completion and
+    // not the sampling cadence.
+    Timer {
+        id: phaseTimer
+        interval: root._stPhaseDurationMs
+        repeat: false
+        onTriggered: root._endPhase()
+    }
+
+    Process { id: speedWorker0 }
+    Process { id: speedWorker1 }
+    Process { id: speedWorker2 }
+    Process { id: speedWorker3 }
 
     // One action in flight at a time (omarchy's runNetworkAction/actionKind
     // pattern): "connect" | "disconnect" | "forget" | "" while idle.
@@ -677,5 +897,153 @@ Panel {
     Repeater {
         model: root._availableRows
         delegate: wifiRow
+    }
+
+    Cell {
+        id: speedTestCell
+        width: parent.width
+
+        Row {
+            width: parent.width
+            spacing: Theme.space.sm
+
+            Text {
+                width: parent.width - runToggle.width - parent.spacing
+                text: "SPEED TEST"
+                color: speedTestCell.foreground
+                font.family: Theme.font.family
+                font.pixelSize: Theme.fontSize.body
+            }
+
+            Cell {
+                id: runToggle
+                width: implicitWidth
+                height: implicitHeight
+                selected: root._stRunning
+
+                MetaLabel {
+                    text: root._stRunning ? "RUNNING…" : "RUN"
+                    color: runToggle.foreground
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: !root._stRunning
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root._startSpeedTest()
+                }
+            }
+        }
+    }
+
+    Cell {
+        visible: root._stError !== ""
+        width: parent.width
+
+        MetaLabel { text: root._stError; color: Theme.color.urgent }
+    }
+
+    Cell {
+        id: downloadCell
+        visible: root._stError === "" && (root._stPhase === "down" || root._stPhase === "up" || root._stPhase === "done")
+        width: parent.width
+
+        readonly property real _mbps: root._stPhase === "down" ? root._stDownWindow.liveMbps : root._stDownResult
+
+        Column {
+            width: parent.width
+            spacing: Theme.space.xxs
+
+            Row {
+                width: parent.width
+                spacing: Theme.space.sm
+
+                Text {
+                    width: parent.width - downloadValue.width - parent.spacing
+                    text: "DOWNLOAD"
+                    color: downloadCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.body
+                }
+
+                Text {
+                    id: downloadValue
+                    text: SpeedTest.formatMbps(downloadCell._mbps) + " MBPS"
+                    color: downloadCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.body
+                }
+            }
+
+            // Flat accent fill, no thumb, no gauge: same idiom as every
+            // other slider in the shell.
+            Rectangle {
+                width: parent.width
+                height: Theme.space.trackThickness
+                color: Theme.color.rule
+
+                Rectangle {
+                    width: parent.width * SpeedTest.fillFraction(downloadCell._mbps)
+                    height: parent.height
+                    color: Theme.color.accent
+                }
+            }
+
+            MetaLabel {
+                visible: root._stPhase === "down"
+                text: "MEASURING DOWN…"
+            }
+        }
+    }
+
+    Cell {
+        id: uploadCell
+        visible: root._stError === "" && (root._stPhase === "up" || root._stPhase === "done")
+        width: parent.width
+
+        readonly property real _mbps: root._stPhase === "up" ? root._stUpWindow.liveMbps : root._stUpResult
+
+        Column {
+            width: parent.width
+            spacing: Theme.space.xxs
+
+            Row {
+                width: parent.width
+                spacing: Theme.space.sm
+
+                Text {
+                    width: parent.width - uploadValue.width - parent.spacing
+                    text: "UPLOAD"
+                    color: uploadCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.body
+                }
+
+                Text {
+                    id: uploadValue
+                    text: SpeedTest.formatMbps(uploadCell._mbps) + " MBPS"
+                    color: uploadCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.body
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                height: Theme.space.trackThickness
+                color: Theme.color.rule
+
+                Rectangle {
+                    width: parent.width * SpeedTest.fillFraction(uploadCell._mbps)
+                    height: parent.height
+                    color: Theme.color.accent
+                }
+            }
+
+            MetaLabel {
+                visible: root._stPhase === "up"
+                text: "MEASURING UP…"
+            }
+        }
     }
 }

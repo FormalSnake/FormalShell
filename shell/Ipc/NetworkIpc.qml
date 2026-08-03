@@ -134,4 +134,31 @@ IpcHandler {
         Networking.wifiEnabled = enabled;
         return "ok";
     }
+
+    // Speed test verbs (M16 Task 9): drive NetworkPanel's own
+    // _startSpeedTest()/state, the same "route through the panel's real
+    // methods" rationale as connect/connectEap/forget above, so a headless
+    // run renders exactly what clicking RUN would.
+    function speedtest(): string {
+        if (!panel)
+            return "error: network panel not ready";
+        if (panel._stRunning)
+            return "error: speed test already running";
+        panel._startSpeedTest();
+        return "ok";
+    }
+
+    function speedstatus(): string {
+        if (!panel)
+            return "error: network panel not ready";
+        var downMbps = panel._stPhase === "down" ? panel._stDownWindow.liveMbps : panel._stDownResult;
+        var upMbps = panel._stPhase === "up" ? panel._stUpWindow.liveMbps : panel._stUpResult;
+        return JSON.stringify({
+            running: panel._stRunning,
+            phase: panel._stPhase,
+            downMbps: downMbps,
+            upMbps: upMbps,
+            error: panel._stError
+        });
+    }
 }

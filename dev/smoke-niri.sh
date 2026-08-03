@@ -360,6 +360,16 @@
 # exactly what gets screenshotted, never a silent no-op. `disable` then
 # stops the process and status confirms active:false again.
 #
+# With --speedtest (M16 Task 9), drives the `network` IPC target's
+# `speedtest`/`speedstatus` verbs: opens the network panel, starts a run,
+# then polls status until `phase` reaches "done" (or a generous ceiling
+# elapses) before screenshotting the panel. The VM's virtio NIC gives real
+# NAT-routed internet access, so this exercises the genuine measurement:
+# real `ip route get`/`cat /sys/class/net/.../statistics/*`/parallel `curl`
+# transfers against Cloudflare's speed endpoints, not a stub; either real
+# numbers or an honest NO NETWORK/NO CURL/poll-ceiling outcome is accepted
+# as real evidence, the same bifurcation --nightlight already established.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -403,6 +413,7 @@ tray_mode=false
 bar_layout_mode=false
 screenshot_mode=false
 nightlight_mode=false
+speedtest_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -425,7 +436,8 @@ while [ $# -gt 0 ]; do
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
     --nightlight) nightlight_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight]" >&2; exit 1 ;;
+    --speedtest) speedtest_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest]" >&2; exit 1 ;;
   esac
 done
 
@@ -441,7 +453,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -909,6 +921,8 @@ screenshot_slurp_after_path="$shot_dir/screenshot-slurp-after.txt"
 nightlight_active_path="$shot_dir/nightlight-active.png"
 nightlight_status1_path="$shot_dir/nightlight-status-1.json"
 nightlight_status2_path="$shot_dir/nightlight-status-2.json"
+speedtest_panel_path="$shot_dir/speedtest-panel.png"
+speedtest_status_path="$shot_dir/speedtest-status.json"
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -1512,6 +1526,30 @@ sleep 1
 EOF
 fi
 
+# --speedtest's whole sequence lives in one script, same rationale as
+# nightlight-drive.sh above. The panel opens first so the run's own
+# screenshot at the end shows the SPEED TEST section; the two bounded 5s
+# phases (resolving/curl-check are near-instant local checks) settle
+# `phase` to "done" deterministically regardless of real transfer speed;
+# the poll ceiling below is a generous safety net, not the expected path.
+if $speedtest_mode; then
+  speedtest_drive_script="$shot_dir/speedtest-drive.sh"
+  cat > "$speedtest_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc --any-display -p "$shell_path" call panel open network > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call network speedtest > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 25 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call network speedstatus > "$speedtest_status_path" 2>&1
+  grep -qF '"phase":"done"' "$speedtest_status_path" && break
+  sleep 1
+done
+niri msg action screenshot-screen --path "$speedtest_panel_path"
+EOF
+fi
+
 # --wifi's whole sequence lives in one script, same rationale as
 # clipboard_drive_script: everything here is strictly ordered (open the
 # panel so the scanner turns on, wait for a real scan to surface both
@@ -2059,6 +2097,9 @@ fi
   if $nightlight_mode; then
     echo "spawn-at-startup \"bash\" \"$nightlight_drive_script\""
   fi
+  if $speedtest_mode; then
+    echo "spawn-at-startup \"bash\" \"$speedtest_drive_script\""
+  fi
   if $wifi_mode; then
     echo "spawn-at-startup \"bash\" \"$wifi_drive_script\""
   fi
@@ -2154,6 +2195,13 @@ fi
     # smoke.png/SMOKE_OK is taken 4s after that, showing the ordinary
     # session with night light already disabled again.
     screenshot_delay=16
+  elif $speedtest_mode; then
+    # speedtest-drive.sh's own worst-case budget (3s initial sleep + 1s
+    # panel-open settle + up-to-25s poll ceiling for the two bounded 5s
+    # phases) lands ~29s in at worst; the typical path (phase reaches
+    # "done" on its own) lands ~15s in. This run's generic smoke.png/
+    # SMOKE_OK is taken 3s past the worst case.
+    screenshot_delay=32
   elif $lock_mode; then
     # lock-drive.sh's own final step (the second isLocked/status dump) lands
     # around its internal sleep sum (~20s in, the wrong-password PAM round
@@ -2781,6 +2829,32 @@ if $nightlight_mode; then
     cat "$nightlight_status2_path"
   else
     echo "SMOKE_FAIL: nightlight disable did not confirm active:false — got: $(cat "$nightlight_status2_path" 2>/dev/null)" >&2; exit 1
+  fi
+fi
+
+if $speedtest_mode; then
+  if [ -f "$speedtest_panel_path" ]; then
+    echo "SMOKE_SPEEDTEST_PANEL $speedtest_panel_path"
+  else
+    echo "SMOKE_FAIL: no speedtest-panel screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$speedtest_status_path" ]; then
+    cat "$speedtest_status_path"
+  else
+    echo "SMOKE_FAIL: no network speedstatus produced" >&2; exit 1
+  fi
+  # Honest bifurcation, same shape as --nightlight: "done" with real numbers
+  # is the expected path (the VM's virtio NIC has real NAT internet access),
+  # but an honest NO NETWORK/NO CURL abort (also settling to "done") is
+  # equally real evidence; only a poll ceiling with neither is a failure.
+  if grep -qF '"phase":"done"' "$speedtest_status_path"; then
+    if grep -qF '"error":""' "$speedtest_status_path"; then
+      echo "speedtest: reached done with a real measurement"
+    else
+      echo "speedtest: reached done via an honest failure surface"
+    fi
+  else
+    echo "SMOKE_FAIL: speed test never reached phase:done, got: $(cat "$speedtest_status_path")" >&2; exit 1
   fi
 fi
 
