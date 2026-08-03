@@ -698,6 +698,22 @@ argv, see the WI-FI section above). `speedtest` returns `error: speed test
 already running` while one is in flight rather than starting a second
 overlapping run; `phase` is one of `idle`/`resolving`/`down`/`up`/`done`.
 
+**Bluetooth IPC** (`target: "bluetooth"`, M16 Task 10, omarchy `f54edbe`
+parity — `toggleBluetooth`, radio power for compositor keybinds and the
+smoke rig; bound directly to `Quickshell.Bluetooth`, same as
+`BluetoothPanel.qml`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call bluetooth status   # JSON: {available, enabled, connected}
+qs ipc --any-display -p <store-path>/share/formalshell call bluetooth toggle   # flips adapter power
+qs ipc --any-display -p <store-path>/share/formalshell call bluetooth power on # or "off"
+```
+
+`status` always answers with JSON, `available: false` when
+`Bluetooth.defaultAdapter` is null (the test VM's expected state). `toggle`/
+`power` return `error: no bluetooth adapter` under the same condition, and
+`power` rejects any argument that isn't `on`/`off` — never a silent no-op.
+
 ## Clipboard
 
 `ClipboardService` captures via a long-running `wl-paste --type text --watch`

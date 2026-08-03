@@ -109,6 +109,7 @@ ShellRoot {
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     NetworkIpc { panel: networkPanelInstance }
+    BluetoothIpc {}
     MediaIpc {}
     TrayIpc {}
     LockIpc { lockScreen: lock }
