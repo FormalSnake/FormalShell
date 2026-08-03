@@ -58,5 +58,12 @@ Cell {
             if (root.panel)
                 root.panel.toggle(root.mapToItem(null, 0, 0).x);
         }
+        // 5% steps, same as the panel's own tracks (M15 Task 4 parity) —
+        // scrolling the bar cell adjusts the default sink without opening
+        // the panel at all.
+        onWheel: wheel => {
+            AudioService.setVolume(AudioService.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
+            wheel.accepted = true;
+        }
     }
 }

@@ -487,9 +487,23 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `usage`      | `~/.claude/.credentials.json` + Anthropic OAuth usage endpoint, `codex app-server` JSON-RPC | `UsageWidget.qml` |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
-is open. `AudioPanel` lists Pipewire output nodes then input nodes as
-full-width sliders (flat accent fill, no round thumb) with a `MUTE` toggle
-cell per row. `NetworkPanel` groups connections under a `WIRED` header (a
+is open. `AudioPanel` is an omarchy-style mixer (M15 Task 4): `OUTPUT` is one
+master slider row for the current default sink (flat accent fill, `MUTE`
+cell, 0..1) followed by one selectable row per candidate sink — click or
+Enter-on-cursor sets `Pipewire.preferredDefaultAudioSink`, the active row
+inverted; `INPUT` is the same shape for sources, the whole section (header
+included) omitted when no input hardware exists; `APPS` lists real playback
+streams (`Audio/model.js.isPlaybackStream`, filtered without ever reading a
+pre-bind node's `properties`) as label/percent/`MUTE` rows with their own
+0..1.5 overdrive track and a hairline notch at the 1.0 mark, omitted
+entirely with no streams. Stream labels resolve `application.name` →
+`node.description` → `media.name` → `node.name`, read only once
+`node.ready`. Keyboard: Up/Down walk one combined cursor across every row
+(a master slider counts as its own row), `h`/`l` step whichever slider-shaped
+row the cursor is on by 5%, `m` mutes it, Enter activates (default-switch on
+a device row, mute-toggle everywhere else); wheel over any track, or over
+the bar cell itself, steps 5% too. `NetworkPanel` groups connections under a
+`WIRED` header (a
 plain connect/disconnect row, unchanged) and a `WI-FI` section with omarchy's
 own behavior: a `WI-FI POWER` toggle, rows sorted by `Network/model.js`
 (connected, then known, then signal strength descending) under `KNOWN`/

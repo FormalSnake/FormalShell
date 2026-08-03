@@ -818,6 +818,7 @@ tray_pids_path="$shot_dir/tray-pids.txt"
 tray_activate_path="$shot_dir/tray-activate.txt"
 tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
 bar_layout_path="$shot_dir/bar-layout.png"
+audio_panel_path="$shot_dir/audio-panel.png"
 screenshot_reply_path="$shot_dir/screenshot-reply.txt"
 screenshot_status_path="$shot_dir/screenshot-status.json"
 screenshot_types_path="$shot_dir/screenshot-types.txt"
@@ -1888,6 +1889,15 @@ fi
     echo "spawn-at-startup \"bash\" \"$media_play_script\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open media\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call media status > $media_status_path 2>&1\""
+    # --media --panel audio: the generic panel_mode open above (sleep 3)
+    # and this leg's own "panel open media" (sleep 5) both go through
+    # PanelRegistry, which only ever holds one open panel — media wins
+    # that race. Reopen audio afterward so it (with mpv's now-registered
+    # Pipewire stream under APPS) is what the screenshot below shows.
+    if $panel_mode && [ "$panel_name" = "audio" ]; then
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open audio\""
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $audio_panel_path\""
+    fi
   fi
   if $lock_mode; then
     echo "spawn-at-startup \"bash\" \"$lock_drive_script\""
@@ -2449,6 +2459,18 @@ if $media_mode; then
   fi
   if ! grep -q "\"artist\":\"$media_track_artist\"" "$media_status_path"; then
     echo "SMOKE_FAIL: media status artist does not match the fixture track's tag ($media_track_artist) — got: $(cat "$media_status_path")" >&2; exit 1
+  fi
+  # --media --panel audio (M15 Task 4): media_status_path above already
+  # proves mpv's stream is real and playing; this proves the audio panel
+  # itself is what the screenshot shows (not the media panel that also
+  # opened during this run) — the APPS row inside it is Read from the PNG,
+  # same as every other panel screenshot in this rig.
+  if $panel_mode && [ "$panel_name" = "audio" ]; then
+    if [ -f "$audio_panel_path" ]; then
+      echo "SMOKE_AUDIO_PANEL $audio_panel_path"
+    else
+      echo "SMOKE_FAIL: no audio-panel screenshot produced" >&2; exit 1
+    fi
   fi
 fi
 
