@@ -1,16 +1,18 @@
 import QtQuick
+import Quickshell
 import qs.Core
 import qs.Components
+import "../../Notifications/model.js" as Model
 
-// One notification row (DESIGN.md §Notifications, M8b Task 5): meta row (app
-// name / relative time) + summary + elided body, a dismiss cell, and — only
-// when the notification carries them — a bottom row of action cells.
-// Critical urgency (2) fills the whole card as an urgent cell per DESIGN's
-// §2.4 "critical severity is a full-bleed urgent fill" — never priority
-// downgraded to the generic `accent` full-bleed, since the two are distinct
-// matugen-driven palette roles. Purely presentational: Toasts.qml/Center.qml
-// own fetching the entry from NotificationService and wiring the signals
-// below to its verbs.
+// One notification row (DESIGN.md §Notifications, M8b Task 5, M15 Task 2):
+// meta row (app name / relative time) + summary + sanitized/styled body, an
+// icon slot, a dismiss cell, and — only when the notification carries them —
+// a bottom row of action cells. Critical urgency (2) fills the whole card as
+// an urgent cell per DESIGN's §2.4 "critical severity is a full-bleed urgent
+// fill" — never priority downgraded to the generic `accent` full-bleed,
+// since the two are distinct matugen-driven palette roles. Purely
+// presentational: Toasts.qml/Center.qml own fetching the entry from
+// NotificationService and wiring the signals below to its verbs.
 //
 // `invertOnHover` (default false, keeping Toasts.qml's standalone popup
 // cards as plain hover-tint) lets Center.qml opt a row into the ASCII-OS
@@ -44,22 +46,80 @@ Cell {
         acceptedButtons: Qt.NoButton
     }
 
-    readonly property string _relTime: {
-        var minutes = Math.max(0, Math.floor((root.now - root.entry.arrivedAt) / 60000));
-        return minutes < 1 ? "now" : minutes + "m ago";
+    // sanitizeBody/styledBody live once in model.js and are applied here at
+    // the shared-component boundary, so both Toasts.qml's popups and
+    // Center.qml's rows get the Chromium URL-prefix strip and the newline ->
+    // <br/> conversion for free (DESIGN.md §Notifications, M15 origin: "GH
+    // notifs are ugly").
+    readonly property string _sanitizedBody: Model.sanitizeBody(root.entry.body, root.entry.appName, root.entry.appIcon)
+    readonly property string _styledBody: Model.styledBody(root.entry.body, root.entry.appName, root.entry.appIcon)
+    readonly property bool _singleLine: root._sanitizedBody.length === 0
+    readonly property string _relTime: Model.relTime(root.now, root.entry.arrivedAt)
+
+    // Icon slot (DESIGN.md's third sanctioned image-icon exception, added by
+    // this task): the notification's own image wins when it resolved
+    // (server already ran it through IconImageProvider, see
+    // notification.cpp's updateProperties — always a usable Image.source or
+    // ""); otherwise the sender's appIcon, which the server does NOT
+    // pre-resolve, so it needs the same file://\image://\absolute-path\
+    // themed-name branching M14's ActiveWindow uses for desktop-entry icons.
+    function _appIconSource(icon) {
+        var value = String(icon || "");
+        if (value.length === 0)
+            return "";
+        if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0)
+            return value;
+        if (value.charAt(0) === "/")
+            return "file://" + value;
+        return Quickshell.iconPath(value, true);
     }
+    readonly property string _iconSource: root.entry.image.length > 0
+        ? root.entry.image
+        : root._appIconSource(root.entry.appIcon)
 
     Column {
         width: parent.width
         spacing: Theme.spacing.sm
 
+        // Single-line entries (no body) skip both spacers and the two
+        // spacing gaps they'd otherwise pull in, landing on Cell's own
+        // baseline inset alone — the tighter padding a one-line toast reads
+        // better with; a real body earns the extra breathing room.
+        Item {
+            visible: !root._singleLine
+            height: Theme.spacing.xs
+        }
+
         Row {
+            id: contentRow
             width: parent.width
             spacing: Theme.spacing.sm
 
             Item {
+                id: iconSlot
+                width: 40
+                height: 40
+                anchors.verticalCenter: parent.verticalCenter
+                // Hidden entirely — not a broken-image box — when neither
+                // the notification's image nor the sender's app icon
+                // resolves.
+                visible: root._iconSource !== "" && iconImage.status !== Image.Error
+
+                Image {
+                    id: iconImage
+                    anchors.fill: parent
+                    source: root._iconSource
+                    asynchronous: true
+                    smooth: true
+                    fillMode: Image.PreserveAspectFit
+                    sourceSize.width: parent.width
+                    sourceSize.height: parent.height
+                }
+            }
+
+            Item {
                 id: textArea
-                width: parent.width - dismissCell.width - parent.spacing
+                width: parent.width - dismissCell.width - (iconSlot.visible ? iconSlot.width + contentRow.spacing : 0) - contentRow.spacing
                 implicitHeight: textColumn.implicitHeight
                 height: implicitHeight
 
@@ -82,19 +142,20 @@ Cell {
                         font.bold: true
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
-                        maximumLineCount: 1
+                        maximumLineCount: 2
                     }
 
                     Text {
-                        visible: root.entry.body.length > 0
+                        visible: root._styledBody.length > 0
                         width: parent.width
-                        text: root.entry.body
+                        text: root._styledBody
+                        textFormat: Text.StyledText
                         color: root.foreground
                         font.family: Theme.font.family
                         font.pixelSize: Theme.fontSize.bodySmall
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
-                        maximumLineCount: 2
+                        maximumLineCount: 3
                     }
                 }
 
@@ -175,6 +236,11 @@ Cell {
                     }
                 }
             }
+        }
+
+        Item {
+            visible: !root._singleLine
+            height: Theme.spacing.xs
         }
     }
 }

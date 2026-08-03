@@ -1319,6 +1319,29 @@ EOF
   chmod +x "$wtype_shim_dir/wtype"
 fi
 
+# --notify and --center both need this once (M15 Task 2): a dense,
+# Chromium-app-name notification whose body carries the exact "GH notifs are
+# ugly" shape sanitizeBody exists to fix — a leading <a href>github.com</a>
+# link prefix glued onto a long PR-title line, followed by six more lines of
+# body. Fired early (well before notify_mode's own DND flip at sleep 6) so
+# it is still a live popup for --notify's dnd-indicator screenshot (sleep 7)
+# and has long since expired into pending by --center's sleep-15 summon
+# screenshot. A real bash script, not another `sh -c` KDL string, since the
+# body needs its own literal double quotes and newlines.
+if $notify_mode || $center_mode; then
+  chromium_notify_script="$shot_dir/chromium-notify.sh"
+  cat > "$chromium_notify_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+"$notify_send_bin" -a "Google Chrome" -u normal "GitHub" '<a href="https://github.com/formalshell/formalshell/pull/142">github.com</a> New comment on pull request #142: "Rewrite the notification pipeline for omarchy card density"
+Second line of the review comment, already past the two-line summary clamp on its own.
+Third line keeps going to prove the three-line body clamp actually holds.
+Fourth line continues describing the same review thread in more detail.
+Fifth line, still going, well past what any card should ever show.
+Sixth line is the last one before this fixture stops adding more.'
+EOF
+fi
+
 # --clipboard's whole sequence lives in one script (internal sleeps, one
 # spawn-at-startup line) rather than --menu's per-step files: nothing here
 # needs to interleave with a niri-side sleep the way menu-select's KDL
@@ -1795,6 +1818,9 @@ fi
     echo "spawn-at-startup \"bash\" \"$nix_states_script\""
     echo "spawn-at-startup \"bash\" \"$menu_select_script\""
     echo "spawn-at-startup \"bash\" \"$menu_finish_script\""
+  fi
+  if $notify_mode || $center_mode; then
+    echo "spawn-at-startup \"bash\" \"$chromium_notify_script\""
   fi
   if $notify_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -u normal 'Test' 'Hello'\""

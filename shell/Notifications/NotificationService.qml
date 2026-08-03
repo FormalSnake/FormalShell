@@ -34,6 +34,41 @@ Singleton {
     // sender, an action's implicit close, a generation switch — never
     // touched the model at all and must be dropped from it here.
     property var _selfClosing: ({})
+    // Popup ids currently under the pointer (Toasts.qml's NotificationCard
+    // hover -> setPopupHovered below): the 1s expiry Timer pushes these
+    // ids' expiresAt forward by its own tick instead of letting
+    // Model.expire see them cross 0, so hovering pauses a toast's
+    // countdown (omarchy's !card.hovered gate) without model.js needing any
+    // hover concept of its own.
+    property var _hoveredPopups: ({})
+
+    // Omarchy's duration bands (low 5s / normal 8s / cap 30s), honoring a
+    // sender's own expireTimeout hint (freedesktop spec: milliseconds,
+    // <=0 meaning "use the server default") when it falls inside the band.
+    // Critical is sticky regardless — Model.add()/update() already force
+    // expiresAt to 0 for urgency 2, so the value returned here for
+    // critical is never actually consulted.
+    readonly property int _lowPopupDurationMs: 5000
+    readonly property int _normalPopupDurationMs: 8000
+    readonly property int _maxPopupDurationMs: 30000
+
+    function _requestedDurationMs(expireTimeout) {
+        var ms = Number(expireTimeout || 0);
+        return (isFinite(ms) && ms > 0) ? Math.round(ms) : 0;
+    }
+
+    function _timeoutMsFor(urgency, expireTimeout) {
+        var requested = root._requestedDurationMs(expireTimeout);
+        var floor = urgency === 0 ? root._lowPopupDurationMs : root._normalPopupDurationMs;
+        return Math.min(root._maxPopupDurationMs, Math.max(floor, requested));
+    }
+
+    function setPopupHovered(id, hovered) {
+        if (hovered)
+            root._hoveredPopups[id] = true;
+        else
+            delete root._hoveredPopups[id];
+    }
 
     readonly property var popups: root._state.popups
     readonly property var pending: root._state.pending
@@ -123,7 +158,9 @@ Singleton {
                 // NotificationLogic.js shouldBypassDnd): the literal CLI
                 // default app_name, nothing inferred from urgency alone.
                 senderIsNotifySend: notification.appName === "notify-send"
-            }, Date.now(), {});
+            }, Date.now(), {
+                timeoutMs: root._timeoutMsFor(notification.urgency, notification.expireTimeout)
+            });
         }
     }
 
@@ -135,12 +172,28 @@ Singleton {
         running: true
         repeat: true
         onTriggered: {
+            // Pause-on-hover: push every hovered, non-sticky popup's
+            // expiresAt out by this tick's own interval before Model.expire
+            // ever sees it, so the countdown holds for as long as the
+            // pointer stays over the card. model.js has no hover concept;
+            // this is a plain reassignment of the same shape Model.add()
+            // itself returns.
+            if (Object.keys(root._hoveredPopups).length > 0) {
+                var pushed = root._state.popups.map(p => {
+                    if (p.expiresAt !== 0 && root._hoveredPopups[p.id])
+                        return Object.assign({}, p, { expiresAt: p.expiresAt + 1000 });
+                    return p;
+                });
+                root._state = Object.assign({}, root._state, { popups: pushed });
+            }
+
             var before = root._state.popups.map(p => p.id);
             var next = Model.expire(root._state, Date.now());
             var stillPopup = {};
             next.popups.forEach(p => stillPopup[p.id] = true);
             before.forEach(id => {
                 if (stillPopup[id]) return;
+                delete root._hoveredPopups[id];
                 var notif = root._live[id];
                 if (notif) {
                     root._selfClosing[id] = true;
@@ -163,6 +216,7 @@ Singleton {
     }
 
     function dismissPopup(id) {
+        delete root._hoveredPopups[id];
         root._state = Model.dismissPopup(root._state, id, Date.now());
         var notif = root._live[id];
         if (notif) {

@@ -353,10 +353,27 @@ ledger rows), and a summonable history center — see `docs/DESIGN.md` and
 
 **Three tiers.** A notification lands in `popups` (a top-right toast, capped
 at 4 — the oldest overflows to `pending`) unless DND is on, in which case it
-goes straight to `pending`. A popup that times out (6s default, sticky for
-`urgency: critical`) moves to `pending`, unseen. Opening the history center
-marks everything in `pending` seen and moves it to `past`, which self-prunes
-after 15 minutes.
+goes straight to `pending`. A popup that times out moves to `pending`,
+unseen — the duration is Omarchy's own band, honoring a sender's own
+`expire_timeout` hint when it falls inside the band: 5s floor for
+`urgency: low`, 8s floor otherwise, 30s cap either way, sticky (never times
+out on its own) for `urgency: critical`. Hovering a popup pauses its
+countdown; it resumes from wherever it left off once the pointer leaves.
+Opening the history center marks everything in `pending` seen and moves it
+to `past`, which self-prunes after 15 minutes.
+
+**Card density** (M15): summary clamps to 2 lines, body to 3 — rendered as
+`Text.StyledText` so a sender's own markup (bold, links) renders instead of
+showing as literal tags, with raw `\n` converted to `<br/>` since
+`StyledText` otherwise ignores it. `sanitizeBody` always strips `<img>` tags
+(the icon slot below already carries any real image) and, for
+Chromium-derived senders (Chrome/Brave/Vivaldi/Edge/Opera, matched on app
+name or icon), strips the leading URL-as-link or bare-URL line those
+browsers glue to the front of the body — the fix for GitHub web
+notifications reading as an unreadable wall of link markup. A single-line
+entry (no body) gets tighter vertical padding than one with a body. The
+icon slot (40×40) shows the notification's own image, else the sender's
+themed app icon, hidden entirely when neither resolves.
 
 **DND bypass is deliberately narrow** (Omarchy's rule, not a general
 "urgent" exception): only `urgency: critical` notifications sent by the
@@ -373,6 +390,11 @@ of silently resetting to off.
 pointer: left click toggles the center `showHistory` drives, right click
 flips the same DND flag `toggleDnd` does, and its pending-count meta label
 reads the same `pending` tier `status` reports.
+
+**The center's `CLEAR ALL` cell** (beside DND) drops every row currently
+listed there — `pending` and `past` — through the same `clearPending`/
+`dismissOne` verbs the IPC surface exposes; live popups (Toasts.qml's own
+surface) are untouched, same as DND only ever governing what lands here.
 
 **IPC** (`target: "notifications"`):
 

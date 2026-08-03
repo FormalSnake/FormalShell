@@ -132,6 +132,12 @@ PanelWindow {
                     entry: cardFrame.modelData
                     now: root._now
 
+                    // Pause-on-hover (DESIGN.md §Notifications, M15 Task 2):
+                    // NotificationService's own 1s expiry timer reads this
+                    // back to hold the popup's countdown while the pointer
+                    // is over it.
+                    onHoveredChanged: NotificationService.setPopupHovered(cardFrame.modelData.id, card.hovered)
+
                     onDismiss: NotificationService.dismissPopup(cardFrame.modelData.id)
                     onBodyClicked: {
                         if (cardFrame.modelData.actions.some(a => a.key === "default"))

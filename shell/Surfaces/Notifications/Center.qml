@@ -64,6 +64,17 @@ PanelWindow {
         NotificationService.markAllSeen();
     }
 
+    // Composed entirely from existing service verbs (M15 Task 2's produces
+    // list is explicit that this shouldn't need a new one): clearPending()
+    // already drops the whole tier, and dismissOne() already generalizes
+    // across tiers, so sweeping past with it needs nothing model.js doesn't
+    // already expose. Popups are Toasts.qml's own surface and untouched
+    // here, same as the DND toggle only ever governing what lands here.
+    function clearAll() {
+        NotificationService.clearPending();
+        NotificationService.past.forEach(e => NotificationService.dismissOne(e.id));
+    }
+
     // Relative timestamps ("2m ago") only ever recompute off this timer per
     // the plan-wide constraint — never off the reducer's own 1s tick.
     property double _now: Date.now()
@@ -143,27 +154,54 @@ PanelWindow {
                 id: column
                 width: parent.width
 
-                Cell {
-                    id: dndCell
+                Row {
                     width: parent.width
-                    accent: NotificationService.dnd
-                    selected: dndHover.containsMouse
 
-                    Text {
-                        text: "DND"
-                        color: dndCell.foreground
-                        font.family: Theme.font.family
-                        font.pixelSize: Theme.fontSize.body
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: 1
+                    Cell {
+                        id: dndCell
+                        width: parent.width / 2
+                        accent: NotificationService.dnd
+                        selected: dndHover.containsMouse
+
+                        Text {
+                            text: "DND"
+                            color: dndCell.foreground
+                            font.family: Theme.font.family
+                            font.pixelSize: Theme.fontSize.body
+                            font.capitalization: Font.AllUppercase
+                            font.letterSpacing: 1
+                        }
+
+                        MouseArea {
+                            id: dndHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: NotificationService.setDnd(!NotificationService.dnd)
+                        }
                     }
 
-                    MouseArea {
-                        id: dndHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: NotificationService.setDnd(!NotificationService.dnd)
+                    Cell {
+                        id: clearAllCell
+                        width: parent.width - dndCell.width
+                        selected: clearAllHover.containsMouse
+
+                        Text {
+                            text: "CLEAR ALL"
+                            color: clearAllCell.foreground
+                            font.family: Theme.font.family
+                            font.pixelSize: Theme.fontSize.body
+                            font.capitalization: Font.AllUppercase
+                            font.letterSpacing: 1
+                        }
+
+                        MouseArea {
+                            id: clearAllHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.clearAll()
+                        }
                     }
                 }
 

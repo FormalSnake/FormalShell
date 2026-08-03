@@ -257,7 +257,11 @@ floats with a margin or fuses to the screen edge.
   fused adjacency. The notification **center** (the summoned history list)
   is the ASCII-OS table surface: rows share rules, app-name-plus-timestamp
   is an uppercase meta row, a selected/highlighted row inverts. Critical
-  severity is a full-bleed `urgent` fill (§2.4) on either surface.
+  severity is a full-bleed `urgent` fill (§2.4) on either surface. Cards
+  render the notification's own image, or else the sender's themed app
+  icon, in a 40×40 slot, hidden entirely when neither resolves — the
+  shell's third sanctioned image-icon exception (M15), after the menu's
+  launcher rows and the bar's active-window cell.
 - **OSD** — one small omarchy card, three-cell row inside it (icon | label |
   value fill track), fixed widths per the existing M-plan contract.
 - **Lock/greeter** — one composed centered block (Task 6's brief), not three
