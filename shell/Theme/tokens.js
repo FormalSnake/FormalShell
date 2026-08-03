@@ -72,17 +72,22 @@ function letterSpacingTokens(scale) {
 // The owner's brief verbatim: "fast and subtle, it should just look
 // better". `fast` paces hover fills, `standard` paces surface enter/exit —
 // both inside DESIGN.md §4's 90-140ms band. `slide` is the enter/exit
-// translate distance (§4's 4-8px). `enabled: false` (the motion.enabled
-// settings key) short-circuits both durations to 0 while leaving `slide`
-// intact: a zero-duration animation still lands on the same end state, so
-// disabling motion never moves a single pixel of chrome.
-var MOTION_BASE = { fast: 100, standard: 130, slide: 6 };
+// translate distance (§4's 4-8px). `reveal` is the wallpaper crossfade
+// duration (§4's third named carve-out, beside the pulse and the
+// screensaver) — deliberately outside the 90-140ms band since a full-screen
+// image swap reads better slower than a control hover. `enabled: false`
+// (the motion.enabled settings key) short-circuits `fast`/`standard`/
+// `reveal` to 0 while leaving `slide` intact: a zero-duration animation
+// still lands on the same end state, so disabling motion never moves a
+// single pixel of chrome.
+var MOTION_BASE = { fast: 100, standard: 130, slide: 6, reveal: 400 };
 
 function motionTokens(enabled) {
     return {
         fast: enabled ? MOTION_BASE.fast : 0,
         standard: enabled ? MOTION_BASE.standard : 0,
-        slide: MOTION_BASE.slide
+        slide: MOTION_BASE.slide,
+        reveal: enabled ? MOTION_BASE.reveal : 0
     };
 }
 

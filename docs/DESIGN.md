@@ -338,7 +338,12 @@ The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the
 screensaver plus the lock backdrop blur remain the two named, load-bearing
 exceptions to "flat and still" — not a crack in the doctrine, a documented
-carve-out each.
+carve-out each. The wallpaper crossfade (`Background.qml`) is the third:
+`Theme.motion.reveal` (400ms, `Easing.InOutQuad`) sits outside rule 1's
+90–140ms band on purpose — a full-screen image swap reads better slower
+than a control hover — and, unlike the pulse, it does respect
+`motion.enabled: false` (zeroed to a hard cut straight onto the new
+wallpaper, same as `fast`/`standard`).
 
 Do not restyle a surface outside a plan that schedules it (Tasks 2–7 of the
 M8b plan schedule every surface named above in turn).

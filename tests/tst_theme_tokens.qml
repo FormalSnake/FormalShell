@@ -96,6 +96,16 @@ TestCase {
         compare(m.slide, Tokens.motionTokens(true).slide);
     }
 
+    function test_motion_tokens_reveal_is_the_400ms_carve_out() {
+        var m = Tokens.motionTokens(true);
+        compare(m.reveal, 400);
+    }
+
+    function test_motion_tokens_disabled_zeroes_reveal_too() {
+        var m = Tokens.motionTokens(false);
+        compare(m.reveal, 0);
+    }
+
     // 1.1 four interactive states
 
     function test_state_appearance_normal() {

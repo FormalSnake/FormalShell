@@ -200,10 +200,14 @@ qs ipc --any-display -p <store-path>/share/formalshell call theme status        
 enter/exit, one ease-out curve, opacity plus a 6px translate only — no
 scale, no bounce, end states pixel-identical to the unanimated shell.
 Full-bleed accent/selection swaps (the ledger inversion, the focused
-workspace's fill) are states, not transitions, and stay instant.
-`motion.enabled: false` in `settings.json` zeroes every duration — the
-shell's reduced-motion switch, since Wayland has no
-`prefers-reduced-motion` to inherit:
+workspace's fill) are states, not transitions, and stay instant. The
+wallpaper crossfade is the one carve-out outside that band: setting a new
+wallpaper (`wallpaper set`, the picker) fades it in over
+`Theme.motion.reveal` (400ms, `Easing.InOutQuad`) while the previous
+wallpaper stays painted underneath, instead of a hard cut.
+`motion.enabled: false` in `settings.json` zeroes every duration —
+including `reveal` — the shell's reduced-motion switch, since Wayland has
+no `prefers-reduced-motion` to inherit:
 
 ```jsonc
 // ~/.config/formalshell/settings.json

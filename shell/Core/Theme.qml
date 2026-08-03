@@ -60,12 +60,15 @@ Singleton {
     // --- DESIGN.md §4 motion tokens -----------------------------------------
     // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the
     // enter/exit translate distance) / `easing` (the one ease-out curve every
-    // transition uses). motion.enabled=false in settings.json zeroes both
-    // durations (Tokens.motionTokens) — the shell's reduced-motion switch,
-    // since no Wayland analog of prefers-reduced-motion exists. The
-    // "breathing" opacity pulse (PowerPanel's charging state) and the
-    // screensaver's frame effect remain §4's two continuous-motion carve-outs
-    // and keep their own pacing.
+    // transition uses) / `reveal` (the wallpaper crossfade duration,
+    // §4's third carve-out) / `revealEasing` (its own curve — a full-screen
+    // image swap reads better on InOutQuad than the control-chrome OutCubic).
+    // motion.enabled=false in settings.json zeroes `fast`/`standard`/`reveal`
+    // (Tokens.motionTokens) — the shell's reduced-motion switch, since no
+    // Wayland analog of prefers-reduced-motion exists. The "breathing"
+    // opacity pulse (PowerPanel's charging state) and the screensaver's
+    // frame effect remain §4's other two continuous-motion carve-outs and
+    // keep their own pacing, unaffected by motion.enabled.
     readonly property bool motionEnabled: Config.get("motion.enabled", true) === true
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
@@ -74,6 +77,8 @@ Singleton {
             standard: m.standard,
             slide: m.slide,
             easing: Easing.OutCubic,
+            reveal: m.reveal,
+            revealEasing: Easing.InOutQuad,
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad
         };
