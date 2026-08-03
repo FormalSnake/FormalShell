@@ -169,7 +169,7 @@ PanelWindow {
                             font.family: Theme.font.family
                             font.pixelSize: Theme.fontSize.body
                             font.capitalization: Font.AllUppercase
-                            font.letterSpacing: 1
+                            font.letterSpacing: Theme.letterSpacing.meta
                         }
 
                         MouseArea {
@@ -192,7 +192,7 @@ PanelWindow {
                             font.family: Theme.font.family
                             font.pixelSize: Theme.fontSize.body
                             font.capitalization: Font.AllUppercase
-                            font.letterSpacing: 1
+                            font.letterSpacing: Theme.letterSpacing.meta
                         }
 
                         MouseArea {

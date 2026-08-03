@@ -55,7 +55,7 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Theme.space.xxs
 
             MetaLabel {
                 text: "NOW PLAYING / " + MediaService.identity
@@ -91,7 +91,7 @@ Panel {
         Rectangle {
             id: progressTrack
             width: parent.width
-            height: 6
+            height: Theme.space.trackThickness
             color: Theme.color.rule
 
             readonly property real _fraction: MediaService.length > 0

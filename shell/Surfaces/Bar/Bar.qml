@@ -259,15 +259,18 @@ PanelWindow {
     Row {
         id: leftRegion
         anchors.left: parent.left
-        anchors.leftMargin: Theme.spacing.md
+        anchors.leftMargin: Theme.space.lg
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spacing.md
+        // Widget gap unified with center/right (M16 Task 1) — was the
+        // legacy fixed scale's 8px "md" step; tightens to match the other
+        // two regions' Theme.space.sm.
+        spacing: Theme.space.sm
         clip: true
         // A settings-driven left region can outgrow the gap before the
         // center region (custom command/qml modules have no fixed count) —
         // capped to whatever space actually remains left of centerRegion.x
         // so overflow clips here instead of drawing over the clock.
-        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - 2 * Theme.spacing.md - Theme.borderWidth))
+        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - 2 * Theme.space.lg - Theme.borderWidth))
 
         Repeater {
             id: leftRepeater
@@ -278,10 +281,10 @@ PanelWindow {
 
     Rectangle {
         anchors.left: leftRegion.right
-        anchors.leftMargin: Theme.spacing.md
+        anchors.leftMargin: Theme.space.lg
         anchors.verticalCenter: parent.verticalCenter
         width: Theme.borderWidth
-        height: parent.height - Theme.spacing.sm * 2
+        height: parent.height - Theme.space.sm * 2
         color: Theme.color.rule
     }
 
@@ -299,24 +302,24 @@ PanelWindow {
 
     Rectangle {
         anchors.right: rightRegion.left
-        anchors.rightMargin: Theme.spacing.md
+        anchors.rightMargin: Theme.space.lg
         anchors.verticalCenter: parent.verticalCenter
         width: Theme.borderWidth
-        height: parent.height - Theme.spacing.sm * 2
+        height: parent.height - Theme.space.sm * 2
         color: Theme.color.rule
     }
 
     Row {
         id: rightRegion
         anchors.right: parent.right
-        anchors.rightMargin: Theme.spacing.md
+        anchors.rightMargin: Theme.space.lg
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.sm
         clip: true
         // Mirror of leftRegion's cap: never draws left past centerRegion's
         // right edge, regardless of how many built-ins plus custom modules
         // settings.json's bar.layout.right names.
-        width: Math.min(implicitWidth, Math.max(0, bar.width - 2 * Theme.spacing.md - Theme.borderWidth - centerRegion.x - centerRegion.width))
+        width: Math.min(implicitWidth, Math.max(0, bar.width - 2 * Theme.space.lg - Theme.borderWidth - centerRegion.x - centerRegion.width))
 
         Repeater {
             id: rightRepeater

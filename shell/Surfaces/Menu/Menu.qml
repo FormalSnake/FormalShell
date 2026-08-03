@@ -855,12 +855,12 @@ PanelWindow {
             anchors.left: parent.left
             anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
             width: root._contentWidth
-            height: searchColumn.implicitHeight + Core.Theme.spacing.sm * 2 + Core.Theme.borderWidth
+            height: searchColumn.implicitHeight + Core.Theme.space.sm * 2 + Core.Theme.borderWidth
 
             Column {
                 id: searchColumn
                 width: parent.width
-                spacing: Core.Theme.spacing.xs
+                spacing: Core.Theme.space.xxs
 
                 MetaLabel {
                     text: root.breadcrumb

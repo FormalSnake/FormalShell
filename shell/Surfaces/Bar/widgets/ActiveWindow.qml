@@ -51,7 +51,7 @@ Item {
     Row {
         id: row
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spacing.xs
+        spacing: Theme.space.xxs
 
         // Launcher-row image-icon exception (DESIGN.md §3 Bar), glyph-cell
         // sized, radius 0 — only when the entry resolves one.

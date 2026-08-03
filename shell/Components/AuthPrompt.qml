@@ -120,7 +120,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.formatDate(root.now, "dddd, MMMM d")
             font.pixelSize: Theme.fontSize.subtitle
-            font.letterSpacing: 2
+            font.letterSpacing: Theme.letterSpacing.wide
         }
 
         Rectangle {

@@ -79,7 +79,7 @@ Cell {
 
     Column {
         width: parent.width
-        spacing: Theme.spacing.sm
+        spacing: Theme.space.sm
 
         // Single-line entries (no body) skip both spacers and the two
         // spacing gaps they'd otherwise pull in, landing on Cell's own
@@ -87,13 +87,13 @@ Cell {
         // better with; a real body earns the extra breathing room.
         Item {
             visible: !root._singleLine
-            height: Theme.spacing.xs
+            height: Theme.space.xxs
         }
 
         Row {
             id: contentRow
             width: parent.width
-            spacing: Theme.spacing.sm
+            spacing: Theme.space.sm
 
             Item {
                 id: iconSlot
@@ -126,7 +126,7 @@ Cell {
                 Column {
                     id: textColumn
                     width: parent.width
-                    spacing: Theme.spacing.xs
+                    spacing: Theme.space.xxs
 
                     MetaLabel {
                         color: root.foreground
@@ -240,7 +240,7 @@ Cell {
 
         Item {
             visible: !root._singleLine
-            height: Theme.spacing.xs
+            height: Theme.space.xxs
         }
     }
 }

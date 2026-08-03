@@ -11,7 +11,12 @@ use case. In my design language animations are subtle, smooth, and
 tasteful. We use ASCII and nerd fonts, to match the terminal TUI aesthetic.
 Make sure font sizes and densities are consistent too." Follow-up
 (same day): "tailscale, speed-test, multi monitor and DDC is good for us
-too" — those four move from the skip list into Tasks 5/7/8/9.
+too" — those four move from the skip list into Tasks 5/7/8/9. Second
+follow-up (same day): "i want autoscroll yeah, and the status text seems
+cool as long as it doesnt distract. Also, check performance because i
+have a low end laptop, and its using more than a gigabyte RAM" — marquee
+and status rotation un-skip into Task 11, and the RAM report is
+confirmed by live measurement (Task 12's research below).
 
 **Research already done (2026-08-03), do not re-derive.** Omarchy clone
 freshly pulled to `12af188` (23 commits past M14's `fa95901`; 9 touch the
@@ -138,18 +143,48 @@ file:line pointers.
   gauge overlay (`SpeedTestPanel.qml`) is NOT our chrome; the feature is
   reimplemented as flat ledger rows.
 
+*Performance baseline, measured live on the e1504g (2026-08-03,
+owner-sanctioned read-only ssh — `ps`/`/proc` only, zero interaction
+with the running session):* the shell (quickshell 0.3.0, PID 263496,
+up 1h37m) sat at **RSS 584MB + 443MB swapped = ~1.03GB anonymous
+footprint, peak RSS (VmHWM) 948MB, 6.2% average CPU**. Root cause is
+fully explained by static analysis plus the host's actual data:
+
+- `ImagePicker.qml:220-237` — `Repeater { model: root._images }` with
+  full-res `Image` cells: no `sourceSize`, and `close()` never clears
+  `_images` (`onIsOpenChanged` only abandons a pending select), so
+  every decoded image **stays resident forever after the picker is
+  opened once**. The owner's `picker.directory` holds ~17 top-level
+  images at 3840×2160 up to 6000×4000 — ≈850MB decoded RGBA. This is
+  the gigabyte.
+- `Background.qml:19-26` — wallpaper `Image` has `cache: false` but no
+  `sourceSize`: the active 3840×2160 wallpaper decodes at native size
+  (~33MB) per screen, on a 1080p panel that needs ~8MB.
+- `LockSurface.qml:89-97` — same native-size decode per screen while
+  locked (feeds the MultiEffect blur).
+- `MenuRow.qml:58-67` — clipboard image thumbnails decode at capture
+  resolution (screenshots are multi-MB) for a row-height slot.
+- `MediaPanel.qml:30-36` — album art: no `sourceSize` AND default
+  `cache: true` with a per-track `artUrl`, so the pixmap cache
+  accumulates full-res art across tracks for a 96×96 slot.
+- CPU: 6.2% average is far above an event-driven bar's budget; the one
+  confirmed always-running animation is `PowerPanel.qml:93-98`'s
+  charging pulse gated only on `_charging`, not on panel visibility —
+  Task 12 measures before assuming it's the whole story.
+
 *Deliberately NOT ported (bloat or design-language violations — do not
 re-propose in future audits):* bar drag-and-drop reordering, move-bar-edge
-gesture, bar transparency toggle, bar tooltips, hero status phrase
-rotation (2.8s ambient subtitle cycler — its *content* ports as static
-rows in Task 5, the motion does not), media marquee scroll (continuously
-auto-scrolling now-playing ticker — we elide; continuous ambient motion
-violates DESIGN.md §4's flat-and-still doctrine), tray 600ms drawer
+gesture, bar transparency toggle, bar tooltips, tray 600ms drawer
 slide, the speed-test arc-gauge chrome (feature ports flat in Task 9),
 wifi QR overlay, DNS provider picker, Dropbox panel, system-update
 widget (Arch-specific), keyboard-layout and microphone widgets (revisit
 only on owner request), reminders overlay, omarchy's 420ms slanted
-wallpaper wipe (we crossfade instead), polkit failure shake.
+wallpaper wipe (we crossfade instead), polkit failure shake. The hero
+status rotation and media marquee were on this list until the owner's
+second follow-up un-skipped them — they port in Task 11 as gated,
+subtle variants (omarchy's exact pacing references:
+`shell/plugins/services/media/BarWidget.qml:64-71` marquee,
+`shell/plugins/panels/power/Panel.qml:245-261` rotation).
 
 ## Constraints
 
@@ -305,7 +340,10 @@ today's contract (recolored bar, new wallpaper fully opaque). Commit
    polkit subject after real attempts, report blocked honestly with the
    polkitd/journal evidence — never fake the flow.
 4. USAGE.md + SWITCHOVER.md document the agent, the setting, and the
-   one-agent-per-session caveat.
+   one-agent-per-session caveat — including the e1504g specifically:
+   `polkit-kde-authentication-agent-1` is running there today (verified
+   2026-08-03) and must be dropped from the owner's nix config for
+   FormalShell's agent to register.
 
 **Verify:** `just vm-test`; `just vm-lint`; `just vm-smoke --polkit` —
 Read all three PNGs. Commit (`feat(polkit): …`).
@@ -528,15 +566,103 @@ finds drift.
 **Verify:** the commands above, run and read. Commit(s) (`feat(ipc): …`,
 `docs: …`).
 
+### Task 11: Marquee autoscroll + rotating status text (owner-requested, gated subtle)
+
+**Files:** modify `shell/Surfaces/Bar/widgets/NowPlaying.qml`,
+`shell/Surfaces/Panels/PowerPanel.qml`, `shell/Theme/tokens.js` (+ its
+test), `shell/Core/Theme.qml`, `docs/DESIGN.md` (§4 amendment),
+`docs/USAGE.md`.
+
+**Produces:**
+1. `NowPlaying` marquee: when (and only when) the title text overflows
+   the cell's existing max width, the label auto-scrolls — a clipped
+   two-copy seamless loop, slow constant linear rate (a
+   `Theme.motion.marqueePxPerSec`-style token, ~30px/s, with a ~2s hold
+   at the loop start so the beginning is always readable), no easing
+   (constant-rate is the point). Non-overflowing titles never move;
+   `motion.enabled: false` collapses to today's elide; the animation
+   runs ONLY while the bar window is visible — never a hidden-window
+   ticker burning CPU (Task 12's budget applies to new code first).
+2. `PowerPanel` status rotation: the existing charging status line
+   (which already breathes) cycles its text through the real phrase set
+   — state (`CHARGING`), time-to-full/empty, charge rate — every ~3s
+   (`Theme.motion.rotatePeriod` token), fading out/in at
+   `Theme.motion.standard`; runs ONLY while the panel is open and a
+   rotating state (charging/discharging) is active; single-phrase sets
+   never rotate. Task 5's static rows stay — rotation is the glanceable
+   summary, the ledger rows are the detail (omarchy has both).
+3. DESIGN.md §4: the two continuous-motion carve-outs are named
+   (marquee-on-overflow, status rotation) beside the pulse — each with
+   its gate conditions spelled out; `motion.enabled: false` zeroes
+   both. USAGE.md documents the tokens.
+
+**Verify:** `just vm-test` (token test extended); `just vm-lint`;
+`just vm-smoke --media` — the fixture track title is short, so the
+honest expectation is NO marquee (static label); a second assertion
+retitles the fixture (mpv metadata or a longer fixture tag) so the PNG
+shows the scrolled state mid-loop. Read the PNGs. Commit
+(`feat(bar): …`).
+
+### Task 12: Performance — cap image decodes, free the picker, kill hidden-surface work
+
+**Files:** modify `shell/Surfaces/Picker/ImagePicker.qml`,
+`shell/Surfaces/Background/Background.qml`,
+`shell/Surfaces/Lock/LockSurface.qml`, `shell/Surfaces/Menu/MenuRow.qml`,
+`shell/Surfaces/Panels/MediaPanel.qml`,
+`shell/Surfaces/Panels/PowerPanel.qml`, `dev/smoke-niri.sh`
+(measurement evidence), `docs/USAGE.md` if any behavior note changes.
+
+**Produces:**
+1. `sourceSize` caps everywhere the research header names: picker cells
+   decode at cell size × `Screen.devicePixelRatio` (a 96MB 6000×4000
+   decode becomes ~0.2MB); `Background`/`LockSurface` wallpaper decodes
+   cap at the owning screen's dimensions (PreserveAspectCrop over a
+   screen-sized decode is visually identical); `MenuRow` thumbs cap at
+   the rendered thumb size; `MediaPanel` art caps at its 96×96 slot and
+   sets `cache: false` (per-track URLs must not accumulate). Task 3's
+   crossfade buffers inherit the screen cap automatically.
+2. `ImagePicker.close()` clears `_images` (and the Repeater with it) so
+   closing the picker returns its memory; reopening re-lists — the
+   directory scan is cheap, the decodes were the cost.
+3. Hidden-surface work audit: the charging pulse (and any other
+   always-running animation the audit finds — grep every
+   `loops: Animation.Infinite` and `running:` gate) additionally gates
+   on its surface being visible/open. New Task 11 animations are
+   re-checked under the same rule.
+4. Measurement evidence, before/after, inside the VM rig: extend the
+   `--picker` smoke leg to record the shell process's
+   `/proc/<pid>/smaps_rollup` Rss at three points — pre-open, picker
+   open (fixtures decoded), post-close — into an artifacts JSON. With
+   solid-color fixtures the absolute numbers are small; the assertion
+   is the *shape*: post-close returns to ~pre-open (the leak is gone)
+   and open-state cost scales with cell size, not file size. The
+   before-numbers from the e1504g baseline in the research header go in
+   the commit message for the record.
+5. A SWITCHOVER/USAGE note telling the owner how to verify on the host:
+   `grep -E "Rss|Pss" /proc/$(pgrep -f quickshell)/smaps_rollup` before
+   and after a picker open/close, expected steady state in the
+   150–300MB band with a 1080p wallpaper.
+
+**Verify:** `just vm-test`; `just vm-lint`; `just vm-smoke --picker`
+(Read the PNG — grid unchanged visually — and the new Rss JSON);
+`just vm-smoke --wallpaper --media` still green. Commit
+(`perf(shell): …`).
+
 ---
 
 ## Review checkpoints
 
-Three: after Task 4 (polkit is this plan's riskiest infrastructure — a
+Four: after Task 4 (polkit is this plan's riskiest infrastructure — a
 reviewer re-runs `--polkit`, reads the PNGs for fake evidence, and greps
 for password leakage into logs/dumps), after Task 8 (density/motion
 regressions against the value-preserving constraint, the DDC/tailscale
 Process hygiene — no poll loops against slow CLIs, PIDs killed, honest
-states), and after Task 10 (full sweep: design drift, motion-band
+states), after Task 10 (full sweep: design drift, motion-band
 violations, host-safety leaks, contract drift on the new IPC targets,
-unpushed commits).
+unpushed commits), and after Task 12 (the perf evidence is real —
+re-run `--picker` and read the Rss JSON yourself; the marquee/rotation
+gates actually stop the animations when hidden or motion-disabled).
+
+Tasks 11–12 were added while Tasks 1–10 were already executing; they
+run as a follow-up workflow after the first completes, with the Task 12
+checkpoint closing the milestone.

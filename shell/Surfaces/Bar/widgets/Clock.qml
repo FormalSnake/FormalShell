@@ -20,7 +20,7 @@ Cell {
 
     Column {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spacing.xs
+        spacing: Theme.space.xxs
 
         MetaLabel {
             text: "TIME"

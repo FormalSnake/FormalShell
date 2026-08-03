@@ -41,8 +41,8 @@ Item {
     // content sitting visibly high-left of the cell's true center.
     readonly property real _ruleReserve: standalone ? 0 : Theme.borderWidth
 
-    implicitWidth: content.implicitWidth + Theme.spacing.md * 2 + _ruleReserve
-    implicitHeight: content.implicitHeight + Theme.spacing.sm * 2 + _ruleReserve
+    implicitWidth: content.implicitWidth + Theme.space.lg * 2 + _ruleReserve
+    implicitHeight: content.implicitHeight + Theme.space.sm * 2 + _ruleReserve
 
     // Full-bleed state fills snap (DESIGN.md §4.3: accent/selection swaps
     // are states, not transitions) — only the hover layer below fades.
@@ -78,10 +78,10 @@ Item {
     Item {
         id: content
         anchors.fill: parent
-        anchors.leftMargin: Theme.spacing.md
-        anchors.topMargin: Theme.spacing.sm
-        anchors.rightMargin: Theme.spacing.md + root._ruleReserve
-        anchors.bottomMargin: Theme.spacing.sm + root._ruleReserve
+        anchors.leftMargin: Theme.space.lg
+        anchors.topMargin: Theme.space.sm
+        anchors.rightMargin: Theme.space.lg + root._ruleReserve
+        anchors.bottomMargin: Theme.space.sm + root._ruleReserve
 
         // Item never derives implicit size from children — only positioners
         // and Text/Image do that automatically — so without this,

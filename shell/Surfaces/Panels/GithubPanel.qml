@@ -152,7 +152,7 @@ Panel {
 
             Column {
                 width: parent.width
-                spacing: Theme.spacing.xs
+                spacing: Theme.space.xxs
 
                 Text {
                     width: parent.width

@@ -149,7 +149,7 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Theme.space.xxs
 
             MetaLabel { text: "UNAVAILABLE" }
 
@@ -176,12 +176,12 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Theme.space.xxs
 
             MetaLabel { text: root._result ? Openmeteo.conditionLabel(root._result.current.code) : "" }
 
             Row {
-                spacing: Theme.spacing.sm
+                spacing: Theme.space.sm
 
                 Text {
                     text: root._result ? Openmeteo.glyphForCode(root._result.current.code, root._isDay) : ""
@@ -217,7 +217,7 @@ Panel {
 
             Row {
                 width: parent.width
-                spacing: Theme.spacing.sm
+                spacing: Theme.space.sm
 
                 Text {
                     id: glyphText

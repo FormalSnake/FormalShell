@@ -81,7 +81,7 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Theme.space.xxs
 
             Text {
                 id: statusText
@@ -103,7 +103,7 @@ Panel {
             // bar, read-only here (no MouseArea; the level isn't settable).
             Rectangle {
                 width: parent.width
-                height: 6
+                height: Theme.space.trackThickness
                 color: Theme.color.rule
 
                 Rectangle {

@@ -231,11 +231,11 @@ Panel {
 
             Column {
                 width: parent.width
-                spacing: Theme.spacing.xs
+                spacing: Theme.space.xxs
 
                 Row {
                     width: parent.width
-                    spacing: Theme.spacing.sm
+                    spacing: Theme.space.sm
 
                     Text {
                         width: parent.width - streamPercent.width - streamMuteCell.width - parent.spacing * 2
@@ -274,7 +274,7 @@ Panel {
                 Rectangle {
                     id: streamTrack
                     width: parent.width
-                    height: 6
+                    height: Theme.space.trackThickness
                     color: Theme.color.rule
 
                     Rectangle {
@@ -335,11 +335,11 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Theme.space.xxs
 
             Row {
                 width: parent.width
-                spacing: Theme.spacing.sm
+                spacing: Theme.space.sm
 
                 Text {
                     width: parent.width - outputMuteCell.width - parent.spacing
@@ -368,7 +368,7 @@ Panel {
             Rectangle {
                 id: outputTrack
                 width: parent.width
-                height: 6
+                height: Theme.space.trackThickness
                 color: Theme.color.rule
 
                 Rectangle {
@@ -415,11 +415,11 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Theme.spacing.xs
+            spacing: Theme.space.xxs
 
             Row {
                 width: parent.width
-                spacing: Theme.spacing.sm
+                spacing: Theme.space.sm
 
                 Text {
                     width: parent.width - inputMuteCell.width - parent.spacing
@@ -448,7 +448,7 @@ Panel {
             Rectangle {
                 id: inputTrack
                 width: parent.width
-                height: 6
+                height: Theme.space.trackThickness
                 color: Theme.color.rule
 
                 Rectangle {

@@ -55,12 +55,28 @@ TestCase {
         compare(s.panelGap, 14);
         compare(s.panelPadding, 18);
         compare(s.popupPadding, 14);
+        compare(s.trackThickness, 6);
     }
 
     function test_spacing_tokens_rescale_with_scale_factor() {
         var s = Tokens.spacingTokens(2.0);
         compare(s.sm, 8);
         compare(s.panelPadding, 36);
+        compare(s.trackThickness, 12);
+    }
+
+    // letter-spacing tokens
+
+    function test_letter_spacing_tokens_at_scale_one() {
+        var l = Tokens.letterSpacingTokens(1.0);
+        compare(l.meta, 1);
+        compare(l.wide, 2);
+    }
+
+    function test_letter_spacing_tokens_rescale_with_font_scale() {
+        var l = Tokens.letterSpacingTokens(2.0);
+        compare(l.meta, 2);
+        compare(l.wide, 4);
     }
 
     // §4 motion tokens
@@ -185,5 +201,26 @@ TestCase {
         var pair = Tokens.invertedPair(colors, true);
         compare(pair.bg, colors.accent);
         compare(pair.fg, colors.onAccent);
+    }
+
+    // Regression guard (M16 Task 1): the legacy fixed Theme.spacing object
+    // ({xs:2, sm:4, md:8, lg:16}, never scaling) is deleted from Theme.qml,
+    // every consumer migrated onto the scaling `space` set above. The
+    // Singleton itself isn't reachable from qmltestrunner (no `qs.*` module
+    // resolution outside the real Quickshell engine — no test in this suite
+    // imports one), so this reads Theme.qml's own source text via the same
+    // XHR-file-read pattern tst_menu_emoji.qml uses, and asserts the
+    // property declaration is gone rather than merely unused — so it can't
+    // silently return.
+    function test_legacy_theme_spacing_property_is_deleted() {
+        var done = false;
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) done = true;
+        };
+        xhr.open("GET", Qt.resolvedUrl("../shell/Core/Theme.qml"));
+        xhr.send();
+        tryVerify(function () { return done; }, 5000);
+        verify(xhr.responseText.indexOf("property var spacing") === -1);
     }
 }

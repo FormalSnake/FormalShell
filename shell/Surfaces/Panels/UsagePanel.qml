@@ -299,7 +299,7 @@ Panel {
 
             Column {
                 width: parent.width
-                spacing: Theme.spacing.xs
+                spacing: Theme.space.xxs
 
                 MetaLabel { text: rowCell.modelData.label }
 
@@ -312,7 +312,7 @@ Panel {
 
                 Rectangle {
                     width: parent.width
-                    height: 6
+                    height: Theme.space.trackThickness
                     color: Theme.color.rule
 
                     Rectangle {

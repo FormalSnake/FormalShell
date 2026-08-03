@@ -17,10 +17,12 @@ Singleton {
     readonly property int radius: 0
 
     // --- DESIGN.md §1 scale roots + state/border tokens -----------------
-    // Additive to the legacy `font`/`spacing`/`control()`/`inverted()` below:
-    // nothing here renames or reuses an existing key, so every surface still
+    // Additive to the legacy `font`/`control()`/`inverted()` below: nothing
+    // here renames or reuses an existing key, so every surface still
     // consuming the legacy API keeps rendering identically until its own
-    // retrofit task (M8b plan, Tasks 3-7) switches it over.
+    // retrofit task (M8b plan, Tasks 3-7) switches it over. The legacy
+    // fixed `spacing` object (M16 Task 1) is gone — every surface now reads
+    // the scaling `space` set above.
 
     // fontBaseSize is the rem root (default 13, the shell's existing body
     // size, so fontScale is 1.0 out of the box). Retheming this one number
@@ -33,6 +35,11 @@ Singleton {
     // roomier spacing automatically) but can be pinned independently.
     property real spacingScale: fontScale
     readonly property var space: Tokens.spacingTokens(spacingScale)
+
+    // Letter-spacing tokens (DESIGN.md §2.3's meta-row tracking, plus the
+    // wider variant the lock/greeter date label uses) — scale with
+    // fontScale, since tracking is a font metric, not a layout gap.
+    readonly property var letterSpacing: Tokens.letterSpacingTokens(fontScale)
 
     // Live bar height, reported by Bar.qml's own content-derived
     // _cellHeight (a fixed literal here would drift the moment any bar cell
@@ -49,8 +56,6 @@ Singleton {
         body: 13, subtitle: Math.round(13 * 1.083),
         title: Math.round(13 * 1.167), heading: Math.round(13 * 1.333)
     })
-
-    readonly property var spacing: ({ scale: 1.0, xs: 2, sm: 4, md: 8, lg: 16 })
 
     // --- DESIGN.md §4 motion tokens -----------------------------------------
     // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the

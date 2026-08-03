@@ -205,7 +205,7 @@ PanelWindow {
 
             Cell {
                 id: iconCell
-                width: root._iconWidth + Theme.spacing.md * 2 + Theme.borderWidth
+                width: root._iconWidth + Theme.space.lg * 2 + Theme.borderWidth
                 height: root._rowHeight
 
                 Text {
@@ -221,7 +221,7 @@ PanelWindow {
 
             Cell {
                 id: labelCell
-                width: (root.kind === "media" ? root._mediaLabelWidth : root._labelWidth) + Theme.spacing.md * 2 + Theme.borderWidth
+                width: (root.kind === "media" ? root._mediaLabelWidth : root._labelWidth) + Theme.space.lg * 2 + Theme.borderWidth
                 height: root._rowHeight
 
                 MetaLabel {
@@ -239,7 +239,7 @@ PanelWindow {
             Cell {
                 id: valueCell
                 visible: root.kind !== "media"
-                width: visible ? (root._valueWidth + Theme.spacing.md * 2 + Theme.borderWidth) : 0
+                width: visible ? (root._valueWidth + Theme.space.lg * 2 + Theme.borderWidth) : 0
                 height: root._rowHeight
 
                 // Muted keeps showing the pre-mute volume number (still
@@ -254,7 +254,7 @@ PanelWindow {
 
                 Column {
                     width: parent.width
-                    spacing: Theme.spacing.xs
+                    spacing: Theme.space.xxs
 
                     Text {
                         width: parent.width
@@ -270,7 +270,7 @@ PanelWindow {
                     // flat accent block" rule, sized by fraction only.
                     Rectangle {
                         width: parent.width
-                        height: 4
+                        height: Theme.space.trackThickness
                         color: Theme.color.rule
 
                         Rectangle {

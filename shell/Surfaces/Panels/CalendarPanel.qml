@@ -372,7 +372,7 @@ Panel {
 
                 Column {
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: Core.Theme.space.xxs
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -441,7 +441,7 @@ Panel {
 
         Column {
             width: parent.width
-            spacing: Core.Theme.spacing.xs
+            spacing: Core.Theme.space.xxs
 
             MetaLabel {
                 text: root._displayLabel
@@ -460,7 +460,7 @@ Panel {
             // time, toggles year<->life once a valid pair exists.
             Rectangle {
                 width: parent.width
-                height: 6
+                height: Core.Theme.space.trackThickness
                 color: Core.Theme.color.rule
 
                 Rectangle {

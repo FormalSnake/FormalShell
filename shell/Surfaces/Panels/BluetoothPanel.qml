@@ -301,7 +301,7 @@ Panel {
 
             Column {
                 width: parent.width
-                spacing: Theme.spacing.xs
+                spacing: Theme.space.xxs
 
                 Item {
                     width: parent.width
@@ -311,7 +311,7 @@ Panel {
                         id: nameText
                         anchors.left: parent.left
                         anchors.right: btCell._canForget ? forgetCell.left : parent.right
-                        anchors.rightMargin: btCell._canForget ? Theme.spacing.sm : 0
+                        anchors.rightMargin: btCell._canForget ? Theme.space.sm : 0
                         anchors.verticalCenter: parent.verticalCenter
                         text: btCell._device.name || btCell._device.deviceName
                         color: btCell.foreground
@@ -388,7 +388,7 @@ Panel {
 
         Row {
             width: parent.width
-            spacing: Theme.spacing.sm
+            spacing: Theme.space.sm
 
             Text {
                 width: parent.width - powerCell.width - parent.spacing

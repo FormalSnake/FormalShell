@@ -36,12 +36,12 @@ Cell {
     readonly property real _thumbHeight: root._bodyHeight * 2
 
     width: ListView.view ? ListView.view.width : implicitWidth
-    height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.spacing.sm * 2 + Theme.borderWidth
+    height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.space.sm * 2 + Theme.borderWidth
 
     Row {
         id: contentRow
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spacing.sm
+        spacing: Theme.space.sm
 
         // Row has no per-item vertical-alignment property (verified against
         // the pinned Qt qtdeclarative plugins.qmltypes: QQuickRow exposes
@@ -118,7 +118,7 @@ Cell {
 
     Text {
         anchors.right: parent.right
-        anchors.rightMargin: Theme.spacing.md + Theme.borderWidth
+        anchors.rightMargin: Theme.space.lg + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         visible: !root.confirming && (root.checkedState || root.isBranch)
         text: root.checkedState ? "✓" : "▸"
@@ -132,10 +132,10 @@ Cell {
     Rectangle {
         visible: (root.node.meta || "") !== ""
         anchors.right: parent.right
-        anchors.rightMargin: Theme.spacing.md + Theme.borderWidth
+        anchors.rightMargin: Theme.space.lg + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
-        width: metaTag.implicitWidth + Theme.spacing.sm * 2
-        height: metaTag.implicitHeight + Theme.spacing.xs * 2
+        width: metaTag.implicitWidth + Theme.space.sm * 2
+        height: metaTag.implicitHeight + Theme.space.xxs * 2
         color: Theme.color.accent
 
         MetaLabel {

@@ -328,11 +328,11 @@ Panel {
 
             Column {
                 width: parent.width
-                spacing: Theme.spacing.xs
+                spacing: Theme.space.xxs
 
                 Row {
                     width: parent.width
-                    spacing: Theme.spacing.sm
+                    spacing: Theme.space.sm
 
                     Text {
                         width: parent.width - actionCell.width - parent.spacing
@@ -426,7 +426,7 @@ Panel {
             Column {
                 id: rowColumn
                 width: parent.width
-                spacing: Theme.spacing.xs
+                spacing: Theme.space.xxs
 
                 Item {
                     id: topLine
@@ -437,7 +437,7 @@ Panel {
                         id: leftBits
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.spacing.sm
+                        spacing: Theme.space.sm
 
                         Text {
                             text: NetworkModel.signalBar(wifiCell._network.signalStrength)
@@ -491,9 +491,9 @@ Panel {
                     Text {
                         id: ssidText
                         anchors.left: leftBits.right
-                        anchors.leftMargin: Theme.spacing.sm
+                        anchors.leftMargin: Theme.space.sm
                         anchors.right: wifiCell._canForget ? forgetCell.left : parent.right
-                        anchors.rightMargin: wifiCell._canForget ? Theme.spacing.sm : 0
+                        anchors.rightMargin: wifiCell._canForget ? Theme.space.sm : 0
                         anchors.verticalCenter: parent.verticalCenter
                         text: wifiCell._ssid !== "" ? wifiCell._ssid : "HIDDEN"
                         color: wifiCell._ssid !== "" ? wifiCell.foreground : Theme.color.foregroundDim
@@ -527,7 +527,7 @@ Panel {
                 Column {
                     width: parent.width
                     visible: wifiCell._promptOpen
-                    spacing: Theme.spacing.xs
+                    spacing: Theme.space.xxs
 
                     Item {
                         width: parent.width
@@ -625,7 +625,7 @@ Panel {
 
         Row {
             width: parent.width
-            spacing: Theme.spacing.sm
+            spacing: Theme.space.sm
 
             Text {
                 width: parent.width - wifiPowerToggle.width - parent.spacing

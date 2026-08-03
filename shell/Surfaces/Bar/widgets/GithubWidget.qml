@@ -44,7 +44,7 @@ Cell {
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.spacing.xs
+        spacing: Theme.space.xxs
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
