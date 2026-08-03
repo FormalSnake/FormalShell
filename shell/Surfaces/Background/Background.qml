@@ -17,6 +17,15 @@ import qs.Core as Core
 // bottomImage so the next change has a clean top layer to fade into. First
 // paint and motion.enabled: false both skip the fade — a hard cut straight
 // onto bottomImage, today's behavior.
+//
+// A request that arrives while topImage is already fully faded in
+// (opacity 1) but bottomImage is still catching up to it queues instead of
+// clobbering topImage.source: overwriting it there wouldn't re-fire
+// onOpacityChanged (opacity isn't changing), so bottomImage's catch-up
+// check would compare against a source it'll never match and the promote
+// would never run — topImage stuck at opacity 1 for the rest of the
+// session. The queued request replaces any earlier one and is applied the
+// moment the in-flight promote actually lands.
 PanelWindow {
     id: background
     required property var modelData
@@ -29,6 +38,8 @@ PanelWindow {
     // Guards the promote-time opacity reset from re-triggering the fade
     // Behavior — that reset is bookkeeping, not a user-visible transition.
     property bool _suppressTopFade: false
+    property bool _hasQueued: false
+    property string _queuedUrl: ""
 
     function _wallpaperUrl(path) {
         return path !== "" ? "file://" + path : "";
@@ -38,6 +49,7 @@ PanelWindow {
         var url = background._wallpaperUrl(path);
         if (background._firstPaint || Core.Theme.motion.reveal === 0) {
             background._firstPaint = false;
+            background._hasQueued = false;
             background._suppressTopFade = true;
             topImage.source = "";
             topImage.opacity = 0;
@@ -45,6 +57,20 @@ PanelWindow {
             bottomImage.source = url;
             return;
         }
+        if (topImage.opacity === 1) {
+            background._queuedUrl = url;
+            background._hasQueued = true;
+            return;
+        }
+        topImage._pendingFade = true;
+        topImage.source = url;
+    }
+
+    function _startQueued() {
+        if (!background._hasQueued)
+            return;
+        var url = background._queuedUrl;
+        background._hasQueued = false;
         topImage._pendingFade = true;
         topImage.source = url;
     }
@@ -69,12 +95,16 @@ PanelWindow {
         // once this decode actually lands do we drop topImage — never in
         // the same tick as the source swap, or the screen shows nothing
         // but Theme.color.background for the length of this decode (the
-        // bug this split guards against).
+        // bug this split guards against). Clearing topImage.source here
+        // (not just its opacity) is what keeps the crossfade from holding
+        // two full-size decodes of the same wallpaper resident forever.
         onStatusChanged: {
             if (status === Image.Ready && topImage.opacity === 1 && source === topImage.source) {
                 background._suppressTopFade = true;
                 topImage.opacity = 0;
+                topImage.source = "";
                 background._suppressTopFade = false;
+                background._startQueued();
             }
         }
     }
