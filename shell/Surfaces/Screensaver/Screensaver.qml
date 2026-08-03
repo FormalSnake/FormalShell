@@ -232,6 +232,17 @@ Item {
                         // makes dismissArea treat that first report as a
                         // reference point instead of real activity.
                         dismissArea._hasBaseline = false;
+                        // Imperative, not `opacity: surface.visible ? 1 : 0`
+                        // with a `Behavior … { enabled: surface.visible }`
+                        // guard: QML evaluates that opacity binding before
+                        // the Behavior's own `enabled` binding reacts to the
+                        // same `visible` change, so the guard is still false
+                        // when the write lands and the fade never runs.
+                        // Driving opacity from here sidesteps the ordering
+                        // race — the Behavior stays unconditionally enabled.
+                        content.opacity = 1;
+                    } else {
+                        content.opacity = 0;
                     }
                 }
 
@@ -289,19 +300,20 @@ Item {
 
                 // Enter fades in (DESIGN.md §4/§3), opacity only — a
                 // full-screen surface has no edge to slide in from; exit
-                // stays instant, since `surface.visible` above unmaps the
-                // whole window the moment it drops, before this `enabled`
-                // guard would ever get to animate it back down. Lives on an
-                // inner Item, not `surface` itself — PanelWindow has no
-                // Item-style `opacity` of its own (Panel.qml/Menu.qml's
-                // frame/card carry their own fades the same way).
+                // reads as instant regardless, since `surface.visible`
+                // above unmaps the whole window the moment it drops.
+                // Driven imperatively from `onVisibleChanged` above, not a
+                // `surface.visible ? 1 : 0` binding — see that handler's
+                // comment for why. Lives on an inner Item, not `surface`
+                // itself — PanelWindow has no Item-style `opacity` of its
+                // own (Panel.qml/Menu.qml's frame/card carry their own
+                // fades the same way).
                 Item {
                     id: content
                     anchors.fill: parent
-                    opacity: surface.visible ? 1 : 0
+                    opacity: 0
 
                     Behavior on opacity {
-                        enabled: surface.visible
                         NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
                     }
 
