@@ -636,12 +636,22 @@ before the first answer, a dim `NONE` row under an empty section.
 section (`codex app-server` JSON-RPC), each independently toggleable
 (`usage.claude`/`usage.codex`, default `true`) and skipped entirely when
 disabled; each section is a tier meta row (`Max 20x`, or the raw plan type)
-then one row per rate-limit window — an uppercase label (`5-HOUR`,
-`WEEKLY`), the percent, a full-width flat `accent` fill track that swaps to
-`urgent` at ≥90%, and a dim `RESETS 2H 14M` meta line. Claude reads
-`~/.claude/.credentials.json`'s OAuth token (never logged, never exposed on
-any IPC/debug surface) and hits `api.anthropic.com/api/oauth/usage`;
-missing, empty, or expired credentials render `NO AUTH` without probing.
+then one row per rate-limit window — an uppercase label, the percent, a
+full-width flat `accent` fill track that swaps to `urgent` at ≥90%, and a
+dim `RESETS 2H 14M` meta line. Claude reads `~/.claude/.credentials.json`'s
+OAuth token (never logged, never exposed on any IPC/debug surface) and hits
+`api.anthropic.com/api/oauth/usage`; missing, empty, or expired credentials
+render `NO AUTH` without probing. The CLAUDE rows are not a fixed pair:
+`shell/Usage/usage.js`'s `parseUsage` enumerates every key in the response
+shaped like a rate window (an object carrying `utilization`) rather than
+naming buckets, so a future window (a `fable` bucket, another per-model
+key) renders with zero code changes the day the API adds it. Labels derive
+from the key — `five_hour`→`5-HOUR`, `seven_day`→`WEEKLY`, any
+`seven_day_*` key→`WEEKLY <REST>` (`seven_day_opus`→`WEEKLY OPUS`,
+`seven_day_sonnet`→`WEEKLY SONNET`), anything else uppercased with
+underscores turned to spaces. Row order is stable: `5-HOUR`, `WEEKLY`, then
+the rest alphabetically by key. A bucket with absent or `null` utilization
+is skipped honestly rather than rendered as 0%.
 Codex speaks newline-delimited JSON-RPC to `codex -s read-only -a untrusted
 app-server` over its own stdin/stdout, matching replies by their `id`
 rather than assuming order; `codex` missing from PATH renders `NO CODEX`,

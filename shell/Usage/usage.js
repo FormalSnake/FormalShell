@@ -53,10 +53,12 @@ function credentialsExpired(expiresAtMs, nowMs) {
     return expiresAtMs > 0 && expiresAtMs <= nowMs;
 }
 
-// GET https://api.anthropic.com/api/oauth/usage's body: `five_hour` and
-// `seven_day`/`seven_day_oauth_apps` buckets, each `{utilization, resets_at}`.
-// seven_day_oauth_apps is preferred over seven_day when both are present
-// (the app-scoped weekly window, not the account-wide one).
+// GET https://api.anthropic.com/api/oauth/usage's body: a flat object whose
+// keys are rate-limit windows, each shaped `{utilization, resets_at}` —
+// `five_hour`, `seven_day`, and (2026-08-03) per-model keys like
+// `seven_day_opus`/`seven_day_sonnet` that the endpoint adds without notice.
+// Every such key is rendered, so a future bucket (e.g. a `fable` window)
+// shows up the day the API adds it with zero code changes here.
 function parseUsage(body) {
     var payload;
     try {
@@ -67,29 +69,52 @@ function parseUsage(body) {
     if (!_isObject(payload))
         return { ok: false, error: "malformed_json" };
 
-    var sessionBucket = _bucket(payload, "five_hour");
-    var weeklyBucket = _bucket(payload, "seven_day_oauth_apps") || _bucket(payload, "seven_day");
-    if (!sessionBucket && !weeklyBucket)
+    var keys = _rateWindowKeys(payload);
+    if (keys.length === 0)
         return { ok: false, error: "missing_fields" };
 
-    var percentScale = _usesPercentScale([sessionBucket, weeklyBucket]);
+    var buckets = keys.map(function (k) { return payload[k]; });
+    var percentScale = _usesPercentScale(buckets);
 
     var rows = [];
-    var session = _usageRow("5-HOUR", sessionBucket, percentScale);
-    if (session)
-        rows.push(session);
-    var weekly = _usageRow("WEEKLY", weeklyBucket, percentScale);
-    if (weekly)
-        rows.push(weekly);
+    for (var i = 0; i < keys.length; i++) {
+        var row = _usageRow(_bucketLabel(keys[i]), payload[keys[i]], percentScale);
+        if (row)
+            rows.push(row);
+    }
 
     if (rows.length === 0)
         return { ok: false, error: "missing_fields" };
     return { ok: true, rows: rows };
 }
 
-function _bucket(payload, key) {
-    var b = payload[key];
-    return _isObject(b) ? b : null;
+// Every own key whose value looks like a rate window (an object carrying a
+// `utilization` field), ordered `five_hour`, `seven_day`, then alphabetical
+// — stable regardless of the source object's own key order.
+function _rateWindowKeys(payload) {
+    var candidates = [];
+    for (var key in payload) {
+        var value = payload[key];
+        if (_isObject(value) && "utilization" in value)
+            candidates.push(key);
+    }
+
+    var head = ["five_hour", "seven_day"].filter(function (k) { return candidates.indexOf(k) !== -1; });
+    var rest = candidates.filter(function (k) { return head.indexOf(k) === -1; }).sort();
+    return head.concat(rest);
+}
+
+// five_hour -> 5-HOUR, seven_day -> WEEKLY, seven_day_<x> -> WEEKLY <X>
+// (covers seven_day_opus/seven_day_sonnet and any future per-model window),
+// anything else -> uppercased with underscores turned to spaces.
+function _bucketLabel(key) {
+    if (key === "five_hour")
+        return "5-HOUR";
+    if (key === "seven_day")
+        return "WEEKLY";
+    if (key.indexOf("seven_day_") === 0)
+        return "WEEKLY " + key.slice("seven_day_".length).replace(/_/g, " ").toUpperCase();
+    return key.replace(/_/g, " ").toUpperCase();
 }
 
 // The endpoint has been observed to report both percent-scaled (37.0) and
@@ -109,7 +134,7 @@ function _usesPercentScale(buckets) {
 }
 
 function _usageRow(label, bucket, percentScale) {
-    if (!bucket)
+    if (!bucket || bucket.utilization === null || bucket.utilization === undefined)
         return null;
     var n = Number(bucket.utilization);
     if (!isFinite(n) || n < 0)

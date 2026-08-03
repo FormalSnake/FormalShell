@@ -77,14 +77,41 @@ TestCase {
         compare(r.rows[1].percent, 0.1);
     }
 
-    function test_parse_usage_prefers_seven_day_oauth_apps_over_seven_day() {
+    function test_parse_usage_enumerates_dynamic_buckets_in_stable_order() {
         var r = Usage.parseUsage(JSON.stringify({
-            five_hour: { utilization: 5.0 },
-            seven_day: { utilization: 99.0 },
-            seven_day_oauth_apps: { utilization: 20.0, resets_at: "2026-08-06T00:00:00Z" }
+            seven_day_sonnet: { utilization: 8.0, resets_at: "2026-08-05T00:00:00Z" },
+            experimental_window: { utilization: 3.0, resets_at: "2026-08-05T00:00:00Z" },
+            five_hour: { utilization: 42.0, resets_at: "2026-08-02T10:00:00Z" },
+            seven_day_opus: { utilization: 15.0, resets_at: "2026-08-05T00:00:00Z" },
+            seven_day: { utilization: 10.0, resets_at: "2026-08-05T00:00:00Z" }
         }));
-        compare(r.rows[1].percent, 0.2);
-        compare(r.rows[1].resetsAt, "2026-08-06T00:00:00Z");
+        compare(r.ok, true);
+        compare(r.rows.length, 5);
+        compare(r.rows[0].label, "5-HOUR");
+        compare(r.rows[1].label, "WEEKLY");
+        compare(r.rows[2].label, "EXPERIMENTAL WINDOW");
+        compare(r.rows[3].label, "WEEKLY OPUS");
+        compare(r.rows[4].label, "WEEKLY SONNET");
+        compare(r.rows[3].percent, 0.15);
+        compare(r.rows[4].percent, 0.08);
+    }
+
+    function test_parse_usage_skips_null_utilization_bucket_without_dropping_others() {
+        var r = Usage.parseUsage(JSON.stringify({
+            five_hour: { utilization: 42.0, resets_at: "2026-08-02T10:00:00Z" },
+            seven_day_opus: { utilization: null, resets_at: "2026-08-05T00:00:00Z" }
+        }));
+        compare(r.ok, true);
+        compare(r.rows.length, 1);
+        compare(r.rows[0].label, "5-HOUR");
+    }
+
+    function test_parse_usage_all_buckets_null_utilization_is_missing_fields() {
+        var r = Usage.parseUsage(JSON.stringify({
+            seven_day_opus: { utilization: null, resets_at: "2026-08-05T00:00:00Z" }
+        }));
+        compare(r.ok, false);
+        compare(r.error, "missing_fields");
     }
 
     function test_parse_usage_treats_fraction_scale_when_nothing_is_percent() {
