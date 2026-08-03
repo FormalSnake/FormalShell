@@ -12,10 +12,13 @@ modules so a consuming config needs almost no glue.
 
 ![FormalShell bar on niri](docs/screenshots/bar-niri.png)
 
-**Status:** pre-alpha. M1 through M13b (walking skeleton through the greeter
+**Status:** pre-alpha. M1 through M15 (walking skeleton through the greeter
 and NixOS modules, bar completeness, screensaver effect gifs, DMS parity
-gaps + EDS/GOA calendar events, and two rounds of e1504g daily-drive trial
-feedback) are complete, behind CI (qmllint + headless
+gaps + EDS/GOA calendar events, quattro behavior parity for the network/
+Bluetooth/usage/clipboard/active-window surfaces, and three rounds of
+e1504g daily-drive trial feedback — most recently a live bar weather cell,
+denser sanitized notification cards, and an omarchy-style audio mixer) are
+complete, behind CI (qmllint + headless
 qml-tests) and nested-compositor smoke loops for every change. See
 `docs/SWITCHOVER.md` for the current hardware-vs-VM verification parity
 table before switching a real machine over, and
@@ -41,7 +44,11 @@ a themed icon and app name instead of the raw window id, the wifi-parity
 network panel scan/connect UI, the bluetooth panel's honest `NO ADAPTER`
 state on hardware the VM doesn't have, and a clipboard image entry's
 thumbnail row) are VM-sourced — no greetd module on g815 yet, and g815
-hasn't been re-swept since M10 landed. Details on what each shot proves
+hasn't been re-swept since M10 landed. The four M15 shots (the notification
+center's density language and `CLEAR ALL` cell, the toast stack's sanitized
+Chromium-derived body, the rebuilt omarchy-style audio mixer with a live
+`mpv` stream under `APPS`, and the weather bar cell's live glyph + temp
+next to its panel) are VM-sourced too. Details on what each shot proves
 are in `CLAUDE.md`'s verification loop section (the `dev/smoke-niri.sh`
 flag each was captured with) and git history.
 
@@ -51,10 +58,11 @@ flag each was captured with) and git history.
 | <img src="docs/screenshots/osd-niri.png" width="260"><br>**OSD** — g815 | <img src="docs/screenshots/panels-niri.png" width="260"><br>**Panels** — g815 | <img src="docs/screenshots/calendar-niri.png" width="260"><br>**Calendar** — mac VM |
 | <img src="docs/screenshots/clipboard-niri.png" width="260"><br>**Clipboard** — g815 | <img src="docs/screenshots/media-niri.png" width="260"><br>**Now playing** — g815 | <img src="docs/screenshots/lock-niri.png" width="260"><br>**Lock screen** — g815 |
 | <img src="docs/screenshots/screensaver-niri.png" width="260"><br>**Screensaver** — g815 | <img src="docs/screenshots/picker-niri.png" width="260"><br>**Picker** — g815 | <img src="docs/screenshots/greeter-niri.png" width="260"><br>**Greeter** — mac VM |
-| <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Bell (DND) + toasts** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
+| <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Bell (DND) + sanitized toasts** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
 | <img src="docs/screenshots/menu-apps-niri.png" width="260"><br>**Launcher app icons** — mac VM | <img src="docs/screenshots/theme-dark-niri.png" width="260"><br>**Theme toggle: dark** — mac VM | <img src="docs/screenshots/theme-light-niri.png" width="260"><br>**Theme toggle: light** — mac VM |
 | <img src="docs/screenshots/active-window-niri.png" width="260"><br>**Active window icon** — mac VM | <img src="docs/screenshots/network-panel-niri.png" width="260"><br>**Network panel** — mac VM | <img src="docs/screenshots/bluetooth-panel-niri.png" width="260"><br>**Bluetooth panel** — mac VM |
-| <img src="docs/screenshots/clipboard-image-niri.png" width="260"><br>**Clipboard image entry** — mac VM | | |
+| <img src="docs/screenshots/clipboard-image-niri.png" width="260"><br>**Clipboard image entry** — mac VM | <img src="docs/screenshots/notifications-center-niri.png" width="260"><br>**Notification center: density + CLEAR ALL** — mac VM | <img src="docs/screenshots/audio-panel-niri.png" width="260"><br>**Audio panel: omarchy mixer** — mac VM |
+| <img src="docs/screenshots/weather-niri.png" width="260"><br>**Weather: live bar cell + panel** — mac VM | | |
 
 The Hyprland backend is implemented and verified against a live nested
 session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
