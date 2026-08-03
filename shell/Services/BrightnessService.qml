@@ -23,10 +23,12 @@ Singleton {
 
     // Per-monitor brightness (M16 Task 5): `devices` unions the backlight
     // above with any DDC-capable external monitor — one entry per
-    // controllable display, `id` "backlight" for the internal panel or a
-    // DRM connector name (e.g. "DP-1") for an external one. Reimplements
-    // the shape of omarchy's omarchy-brightness-display-ddc (I2C-bus
-    // detection via `ddcutil detect --brief`, VCP feature 10 for
+    // controllable display, `deviceId` "backlight" for the internal panel
+    // or a DRM connector name (e.g. "DP-1") for an external one (role
+    // named `deviceId` rather than `id`, since `id` is a reserved QML
+    // attribute and can't be used as a ListModel role/delegate property).
+    // Reimplements the shape of omarchy's omarchy-brightness-display-ddc
+    // (I2C-bus detection via `ddcutil detect --brief`, VCP feature 10 for
     // read/write) against this shell's different call pattern: one
     // singleton doing one detect pass per panel open, not a fresh script
     // invocation per keystroke, so the connector->bus cache omarchy keeps
@@ -35,18 +37,52 @@ Singleton {
     // runs on a timer — ddcutil's I2C round-trips are seconds-slow, and
     // PowerPanel.qml is the only caller, from its own onIsOpenChanged. A
     // missing `ddcutil` binary or a detect that finds nothing just leaves
-    // `_ddcDevices` empty — identical, honest fallback to today's
+    // the DDC rows empty — identical, honest fallback to today's
     // backlight-only behavior either way.
-    readonly property var devices: {
-        var list = [];
-        if (root.available)
-            list.push({ id: "backlight", label: "INTERNAL", percent: root.percent });
-        return list.concat(root._ddcDevices);
-    }
+    //
+    // `devices` is a ListModel, not a `property var` JS array: PowerPanel's
+    // `Repeater { model: BrightnessService.devices }` used to bind against
+    // a freshly-built array every time `percent` changed (every set()/
+    // step()/refresh() reply), and Repeater does a full delegate
+    // destroy/recreate whenever the model *identity* changes — which
+    // dropped the mouse grab mid-drag on the brightness slider. A
+    // ListModel has one stable identity; rows are mutated in place
+    // (`setProperty`/`insert`/`remove`), so an in-progress drag's
+    // MouseArea is never torn down under it.
+    readonly property ListModel devices: ListModel {}
 
     property var _ddcBuses: ({})   // connector -> I2C bus number (string)
-    property var _ddcDevices: []   // [{id, label, percent, max}]
     property var _ddcQueue: []     // connectors still awaiting a getvcp read
+
+    function _deviceIndex(id) {
+        for (var i = 0; i < root.devices.count; i++) {
+            if (root.devices.get(i).deviceId === id)
+                return i;
+        }
+        return -1;
+    }
+
+    function _clearDdcRows() {
+        for (var i = root.devices.count - 1; i >= 0; i--) {
+            if (root.devices.get(i).deviceId !== "backlight")
+                root.devices.remove(i);
+        }
+    }
+
+    function _syncBacklightRow() {
+        const idx = root._deviceIndex("backlight");
+        if (root.available) {
+            if (idx === -1)
+                root.devices.insert(0, { deviceId: "backlight", label: "INTERNAL", percent: root.percent, max: 100 });
+            else
+                root.devices.setProperty(idx, "percent", root.percent);
+        } else if (idx !== -1) {
+            root.devices.remove(idx);
+        }
+    }
+
+    onAvailableChanged: root._syncBacklightRow()
+    onPercentChanged: root._syncBacklightRow()
 
     function refreshDevices() {
         root.refresh();
@@ -64,17 +100,18 @@ Singleton {
     }
 
     function stepDevicePercent(id, delta) {
-        const device = root.devices.find(d => d.id === id);
-        if (!device)
+        const idx = root._deviceIndex(id);
+        if (idx === -1)
             return;
-        root.setDevicePercent(id, device.percent + delta);
+        root.setDevicePercent(id, root.devices.get(idx).percent + delta);
     }
 
     function _setDdc(connector, pct) {
         const bus = root._ddcBuses[connector];
-        const device = root._ddcDevices.find(d => d.id === connector);
-        if (bus === undefined || !device)
+        const idx = root._deviceIndex(connector);
+        if (bus === undefined || idx === -1)
             return;
+        const device = root.devices.get(idx);
         // Never write a literal 0% over DDC — omarchy's own floor
         // (../../bin/omarchy-brightness-display-ddc there): some panels
         // treat VCP 10 = 0 as "off", not "dim".
@@ -86,7 +123,7 @@ Singleton {
         // back, and re-running the whole (slow) getvcp chain just to
         // confirm a value this function itself just chose is exactly the
         // poll-loop-shaped cost this file's design avoids.
-        root._ddcDevices = root._ddcDevices.map(d => d.id === connector ? Object.assign({}, d, { percent: target }) : d);
+        root.devices.setProperty(idx, "percent", target);
     }
 
     function _applyDetect(text) {
@@ -106,7 +143,7 @@ Singleton {
             }
         }
         root._ddcBuses = buses;
-        root._ddcDevices = [];
+        root._clearDdcRows();
         root._ddcQueue = Object.keys(buses);
         root._pumpDdcQueue();
     }
@@ -188,8 +225,8 @@ Singleton {
         onExited: exitCode => {
             if (exitCode === 127) {
                 root._ddcBuses = ({});
-                root._ddcDevices = [];
                 root._ddcQueue = [];
+                root._clearDdcRows();
             }
         }
     }
@@ -208,7 +245,7 @@ Singleton {
                     const current = parseInt(m[1], 10);
                     const max = parseInt(m[2], 10);
                     const pct = max > 0 ? Math.round(current * 100 / max) : 0;
-                    root._ddcDevices = root._ddcDevices.concat([{ id: ddcGetvcpProc.connector, label: ddcGetvcpProc.connector, percent: pct, max: max }]);
+                    root.devices.append({ deviceId: ddcGetvcpProc.connector, label: ddcGetvcpProc.connector, percent: pct, max: max });
                 }
                 root._pumpDdcQueue();
             }

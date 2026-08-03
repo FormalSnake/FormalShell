@@ -205,14 +205,14 @@ Panel {
     }
 
     Cell {
-        visible: BrightnessService.devices.length > 0
+        visible: BrightnessService.devices.count > 0
         width: parent.width
 
         MetaLabel { text: "DISPLAY" }
     }
 
     Cell {
-        visible: BrightnessService.devices.length === 0
+        visible: BrightnessService.devices.count === 0
         width: parent.width
 
         MetaLabel { text: "NO BACKLIGHT" }
@@ -231,9 +231,11 @@ Panel {
 
         Cell {
             id: brightnessCell
-            required property var modelData
+            required property string deviceId
+            required property string label
+            required property real percent
             width: parent.width
-            hovered: root._brightnessHoverId === brightnessCell.modelData.id
+            hovered: root._brightnessHoverId === brightnessCell.deviceId
 
             Column {
                 width: parent.width
@@ -245,7 +247,7 @@ Panel {
 
                     Text {
                         width: parent.width - percentText.width - parent.spacing
-                        text: brightnessCell.modelData.label
+                        text: brightnessCell.label
                         color: brightnessCell.foreground
                         font.family: Theme.font.family
                         font.pixelSize: Theme.fontSize.body
@@ -253,7 +255,7 @@ Panel {
 
                     Text {
                         id: percentText
-                        text: brightnessCell.modelData.percent + "%"
+                        text: brightnessCell.percent + "%"
                         color: brightnessCell.foreground
                         font.family: Theme.font.family
                         font.pixelSize: Theme.fontSize.body
@@ -269,7 +271,7 @@ Panel {
                     color: Theme.color.rule
 
                     Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, brightnessCell.modelData.percent / 100))
+                        width: parent.width * Math.max(0, Math.min(1, brightnessCell.percent / 100))
                         height: parent.height
                         color: Theme.color.accent
                     }
@@ -277,15 +279,15 @@ Panel {
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: root._brightnessHoverId = brightnessCell.modelData.id
-                        onExited: if (root._brightnessHoverId === brightnessCell.modelData.id) root._brightnessHoverId = ""
+                        onEntered: root._brightnessHoverId = brightnessCell.deviceId
+                        onExited: if (root._brightnessHoverId === brightnessCell.deviceId) root._brightnessHoverId = ""
                         function _setFromX(x) {
-                            BrightnessService.setDevicePercent(brightnessCell.modelData.id, (x / brightnessTrack.width) * 100);
+                            BrightnessService.setDevicePercent(brightnessCell.deviceId, (x / brightnessTrack.width) * 100);
                         }
                         onPressed: mouse => _setFromX(mouse.x)
                         onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
                         onWheel: wheel => {
-                            BrightnessService.stepDevicePercent(brightnessCell.modelData.id, wheel.angleDelta.y > 0 ? 5 : -5);
+                            BrightnessService.stepDevicePercent(brightnessCell.deviceId, wheel.angleDelta.y > 0 ? 5 : -5);
                             wheel.accepted = true;
                         }
                     }
