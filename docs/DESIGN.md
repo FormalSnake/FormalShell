@@ -368,6 +368,19 @@ and every rule here is checkable:
    `motion.enabled: false`: a disabled marquee falls back to today's plain
    elide, and disabled rotation just stops advancing past the primary
    phrase.
+8. **The bar's ASCII visualizer** (owner-requested: "next to the now
+   playing it would be nice to have an ASCII style audio visualizer") is
+   the sixth continuous-motion carve-out. Its live frames come from a real
+   `cava` child process (`VisualizerService.qml`), not a QML animation, so
+   the gate kills the process outright rather than pausing a paint: it
+   runs only while `MediaService.isPlaying` AND the bar window showing the
+   widget is actually on screen AND `Theme.motionEnabled` — any one going
+   false stops the process, zero CPU, same as the marquee/rotation gates
+   above but enforced on a real OS process instead of a `Behavior`. Like
+   the marquee and rotation, this DOES respect `motion.enabled: false`:
+   a disabled-motion session renders the widget's flat all-lowest-glyph
+   baseline row exactly as if nothing were playing, never a live
+   spectrum.
 
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the
@@ -381,6 +394,8 @@ than a control hover — and, unlike the pulse, it does respect
 wallpaper, same as `fast`/`standard`). The now-playing marquee and the
 power panel's status rotation are the fourth and fifth (rule 7 above) —
 gated subtle by owner request, never running unwatched or undisableable.
+The bar's ASCII visualizer (rule 8 above) is the sixth, the only one of
+the six gated on a real child process rather than a QML animation.
 
 Do not restyle a surface outside a plan that schedules it (Tasks 2–7 of the
 M8b plan schedule every surface named above in turn).

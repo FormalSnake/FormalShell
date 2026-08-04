@@ -434,6 +434,19 @@
 # against it must come back empty, and `menu summon` + screenshot
 # (share-menu-absent.png) must show the root menu with no SHARE row at all.
 #
+# With --visualizer (owner ask: "next to the now playing it would be nice
+# to have an ASCII style audio visualizer"), points settings.json's
+# bar.layout at `["clock", "nowPlaying", "visualizer"]` (the settings-fixture
+# idiom --bar-layout uses), generates a non-silent sine-tone fixture (unlike
+# --media's silent one — cava needs a real signal), plays it with mpv into
+# the pipewire null sink, and pgreps for the real `cava` child process
+# VisualizerService.qml owns: present while the tone plays
+# (visualizer-playing.png, screenshotted a couple seconds in so autosens has
+# settled past the widget's all-baseline row), gone within a few seconds of
+# killing mpv — DESIGN.md §4 rule 8's hard gate proven from outside the
+# process, the same way share_mode's own pgrep proves a real
+# `localsend_app` process rather than trusting an IPC reply.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -480,6 +493,7 @@ nightlight_mode=false
 speedtest_mode=false
 instance_mode=false
 share_mode=false
+visualizer_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -505,7 +519,8 @@ while [ $# -gt 0 ]; do
     --speedtest) speedtest_mode=true; shift ;;
     --instance) instance_mode=true; shift ;;
     --share) share_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance] [--share]" >&2; exit 1 ;;
+    --visualizer) visualizer_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer]" >&2; exit 1 ;;
   esac
 done
 
@@ -521,7 +536,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -602,7 +617,7 @@ if $panel_mode && [ "$panel_name" = "calendar" ]; then
   fi
 fi
 
-if $media_mode || $screensaver_mode; then
+if $media_mode || $screensaver_mode || $visualizer_mode; then
   # The VM's mpv is pre-wrapped with mpvScripts.mpris baked into its
   # --script= flags (nix/testvm.nix's `mpv.override { scripts = ... }`), so
   # plain `mpv` on PATH there already announces itself over MPRIS. A host
@@ -610,7 +625,9 @@ if $media_mode || $screensaver_mode; then
   # built from this repo's own pinned nixpkgs input, not the flake registry
   # (`.override` isn't expressible as a flake installable attribute path).
   # screensaver_mode reuses this same fixture track/player to give
-  # MediaService.isPlaying a real value to guard against.
+  # MediaService.isPlaying a real value to guard against; visualizer_mode
+  # needs it too (its own fixture is a real tone, not the silent one below,
+  # so cava has an actual spectrum to read).
   if command -v mpv >/dev/null 2>&1; then
     mpv_bin=$(command -v mpv)
   else
@@ -960,6 +977,10 @@ eds_seed2_path="$shot_dir/eds-seed-2.txt"
 calendar_select_path="$shot_dir/calendar-select.txt"
 calendar_status_path="$shot_dir/calendar-status.json"
 media_pid_path="$shot_dir/mpv.pid"
+visualizer_pid_path="$shot_dir/visualizer-mpv.pid"
+visualizer_playing_path="$shot_dir/visualizer-playing.png"
+visualizer_pgrep_playing_path="$shot_dir/visualizer-pgrep-playing.txt"
+visualizer_pgrep_after_path="$shot_dir/visualizer-pgrep-after.txt"
 active_window_pid_path="$shot_dir/foot.pid"
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_error_path="$shot_dir/lock-error.png"
@@ -1187,6 +1208,11 @@ bar_cmd_timeout_path="$shot_dir/bar-cmd-timeout.sh"
 bar_qml_fixture_path="$shot_dir/bar-qml-fixture.qml"
 if $bar_layout_mode; then
   bar_settings=', "bar": {"layout": {"left": ["github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
+elif $visualizer_mode; then
+  # Puts the widget right where the owner asked for it — next to
+  # nowPlaying — leaving left/right at their own DEFAULT_LAYOUT fallback
+  # (only the `center` key is present).
+  bar_settings=', "bar": {"layout": {"center": ["clock", "nowPlaying", "visualizer"]}}'
 fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
 {"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings}
@@ -1398,6 +1424,67 @@ while [ "\$SECONDS" -lt 8 ]; do
 done
 sleep 5
 niri msg action screenshot-screen --path "$media_marquee_scroll_path"
+EOF
+fi
+
+# --visualizer needs a genuinely non-silent fixture — --media's own
+# smoke-track.flac above is silent by design (nothing for MediaPanel's own
+# assertions to hear), which would leave cava with no real signal and the
+# widget stuck on its baseline row the whole run. A fixed-frequency sine
+# tone is simple, deterministic, and gives cava's FFT real energy to bin.
+if $visualizer_mode; then
+  visualizer_track_path="$shot_dir/smoke-tone.flac"
+  visualizer_track_title="FormalShell Visualizer Smoke Tone"
+  visualizer_track_artist="FormalShell Test Artist"
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=20" -ac 2 \
+    -metadata "title=$visualizer_track_title" -metadata "artist=$visualizer_track_artist" \
+    -c:a flac -y "$visualizer_track_path"
+
+  # One ordered script (media-marquee.sh's own idiom): start mpv in the
+  # background (not exec'd — this script keeps running after it to poll
+  # and eventually kill it, unlike media-play.sh's single long-lived
+  # exec), poll for the shared cava process to actually appear (its own
+  # bootstrap chain — mkdir, config write, PATH probe — plus
+  # MediaService.isPlaying flipping true all have to land first), screenshot
+  # once it's had a couple seconds of real signal to settle past the
+  # all-baseline row, then kill mpv and poll for cava to disappear —
+  # DESIGN.md §4 rule 8's hard gate, proven from outside the process
+  # rather than inferred.
+  visualizer_drive_script="$shot_dir/visualizer-drive.sh"
+  cat > "$visualizer_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+"$mpv_bin" --no-video --really-quiet "$visualizer_track_path" &
+mpv_pid=\$!
+echo "\$mpv_pid" > "$visualizer_pid_path"
+SECONDS=0
+while [ "\$SECONDS" -lt 10 ]; do
+  pgrep -f -- "cava -p" > "$visualizer_pgrep_playing_path" 2>&1 || true
+  [ -s "$visualizer_pgrep_playing_path" ] && break
+  sleep 1
+done
+sleep 2
+niri msg action screenshot-screen --path "$visualizer_playing_path"
+kill "\$mpv_pid" 2>/dev/null || true
+wait "\$mpv_pid" 2>/dev/null || true
+SECONDS=0
+: > "$visualizer_pgrep_after_path"
+while [ "\$SECONDS" -lt 6 ]; do
+  pgrep -f -- "cava -p" > "$visualizer_pgrep_after_path" 2>&1 || true
+  [ ! -s "$visualizer_pgrep_after_path" ] && break
+  sleep 1
+done
+EOF
+
+  # Safety net only — visualizer-drive.sh above already kills mpv well
+  # before the run ends; same "harmless if already dead" shape as
+  # media-kill.sh.
+  visualizer_kill_script="$shot_dir/visualizer-kill.sh"
+  cat > "$visualizer_kill_script" <<EOF
+#!/usr/bin/env bash
+if [ -f "$visualizer_pid_path" ]; then
+  kill "\$(cat "$visualizer_pid_path")" 2>/dev/null || true
+fi
 EOF
 fi
 
@@ -2525,6 +2612,9 @@ fi
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $audio_panel_path\""
     fi
   fi
+  if $visualizer_mode; then
+    echo "spawn-at-startup \"bash\" \"$visualizer_drive_script\""
+  fi
   if $lock_mode; then
     echo "spawn-at-startup \"bash\" \"$lock_drive_script\""
   fi
@@ -2707,6 +2797,13 @@ fi
       # survivor and its menu already closed again.
       screenshot_delay=36
     fi
+  elif $visualizer_mode; then
+    # visualizer-drive.sh's own worst case (2s pre-mpv sleep + up to 10s
+    # cava-appears poll + 2s settle + screenshot + kill + up to 6s
+    # cava-gone poll = 20s) lands ~20s in; this run's generic smoke.png/
+    # SMOKE_OK is taken 3s after that, showing the ordinary session with
+    # the widget already hidden again (no player, same as nowPlaying).
+    screenshot_delay=23
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -2730,7 +2827,14 @@ fi
   if $active_window_fixture_mode; then
     active_window_kill="bash '$active_window_kill_script'; "
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # visualizer-drive.sh already kills its own mpv well before this run's
+  # own screenshot_delay budget elapses — this is a safety net only, same
+  # "harmless if already dead" shape as media_kill above.
+  visualizer_kill=""
+  if $visualizer_mode; then
+    visualizer_kill="bash '$visualizer_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 # The 40s default comfortably outlives every mode's screenshot-then-quit
@@ -3223,6 +3327,31 @@ if $media_mode; then
     else
       echo "SMOKE_FAIL: no audio-panel screenshot produced" >&2; exit 1
     fi
+  fi
+fi
+
+if $visualizer_mode; then
+  # Process-level proof, same idiom as share_mode's own localsend_app
+  # pgrep evidence: VisualizerService.qml owns a real `cava` child process,
+  # not something an IPC call can introspect, so pgrep from outside is the
+  # actual verification, not a screenshot.
+  if [ -s "$visualizer_pgrep_playing_path" ]; then
+    cat "$visualizer_pgrep_playing_path"
+  else
+    echo "SMOKE_FAIL: cava never appeared while the visualizer smoke tone was playing — pgrep output: $(cat "$visualizer_pgrep_playing_path" 2>/dev/null)" >&2; exit 1
+  fi
+  # DESIGN.md §4 rule 8's hard gate: the process must be gone once
+  # playback stops, not just paused-looking. An empty (or absent) pgrep
+  # file after visualizer-drive.sh's own post-kill poll is the honest
+  # positive result here.
+  if [ -s "$visualizer_pgrep_after_path" ]; then
+    echo "SMOKE_FAIL: cava is still running after mpv was killed — pgrep output: $(cat "$visualizer_pgrep_after_path")" >&2; exit 1
+  fi
+  echo "SMOKE_VISUALIZER_CAVA_KILLED_AFTER_PAUSE ok"
+  if [ -f "$visualizer_playing_path" ]; then
+    echo "SMOKE_VISUALIZER_PLAYING $visualizer_playing_path"
+  else
+    echo "SMOKE_FAIL: no visualizer-playing screenshot produced" >&2; exit 1
   fi
 fi
 

@@ -189,6 +189,15 @@ PanelWindow {
         }
     }
     Component {
+        id: visualizerComponent
+        Visualizer {
+            // M16 Task 11's gate idiom, reused for VisualizerService's
+            // shared cava process: registers this bar's on-screen state
+            // rather than gating any local animation.
+            windowVisible: bar.visible
+        }
+    }
+    Component {
         id: bellComponent
         BellWidget {
             center: bar.center
@@ -224,6 +233,7 @@ PanelWindow {
         github: githubComponent,
         usage: usageComponent,
         tailscale: tailscaleComponent,
+        visualizer: visualizerComponent,
         bell: bellComponent,
         indicators: indicatorsComponent
     })

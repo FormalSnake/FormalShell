@@ -16,10 +16,11 @@
 // `bar.layout` falls back to DEFAULT_LAYOUT for that region alone (today's
 // exact arrangement); a region present but empty (`[]`) stays empty.
 
-// "github", "usage", and "tailscale" are deliberately absent from
-// DEFAULT_LAYOUT below: all three are opt-in builtins (M12 Task 8, M14 Task
-// 7, M16 Task 8), so the no-config bar stays byte-identical.
-var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "bell", "indicators"];
+// "github", "usage", "tailscale", and "visualizer" are deliberately absent
+// from DEFAULT_LAYOUT below: all four are opt-in builtins (M12 Task 8, M14
+// Task 7, M16 Task 8, the ASCII visualizer's own owner-ask task), so the
+// no-config bar stays byte-identical.
+var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators"];
 
 var MODULE_TYPES = ["command", "qml"];
 

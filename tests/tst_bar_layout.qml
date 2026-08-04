@@ -102,6 +102,16 @@ TestCase {
         verify(names(d.regions.right).indexOf("tailscale") < 0);
     }
 
+    function test_visualizer_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["visualizer"] } });
+        compare(names(r.regions.right), "visualizer");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("visualizer") < 0);
+        verify(names(d.regions.center).indexOf("visualizer") < 0);
+        verify(names(d.regions.right).indexOf("visualizer") < 0);
+    }
+
     function test_bell_is_a_default_builtin_before_indicators() {
         var r = Layout.resolve(undefined);
         var right = names(r.regions.right).split(",");

@@ -45,10 +45,10 @@ arrangement:
 
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
 `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
-`indicators`, `github`, `usage`, `tailscale` (all three opt-in only — never
-part of the default arrangement; `bell` by contrast IS part of the defaults
-since M13b, so a config predating it that spells out its own `right` region
-won't show the bell until it's added there).
+`indicators`, `github`, `usage`, `tailscale`, `visualizer` (all four opt-in
+only — never part of the default arrangement; `bell` by contrast IS part of
+the defaults since M13b, so a config predating it that spells out its own
+`right` region won't show the bell until it's added there).
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
@@ -151,6 +151,20 @@ utilization. Click toggles the usage panel (see [Panels](#panels)). Honest
 states: a disabled provider contributes nothing, and the cell stays hidden
 until at least one enabled provider has answered at all (its own `NO AUTH`/
 `NO CODEX` cell counts as an answer) — never an invented percentage.
+
+**Visualizer** — opt-in via `bar.layout` (add `"visualizer"` to a region);
+a live ASCII spectrum next to `nowPlaying`, ten block glyphs
+(`▁▂▃▄▅▆▇█`) in one monospace `Text`, driven by a shared `cava` process
+(`VisualizerService.qml`) reading real system audio over PipeWire. The
+process exists only while a track is genuinely playing AND a bar showing
+the widget is on screen AND motion is enabled (DESIGN.md §4 rule 8) —
+paused music, a hidden bar, or `motion.enabled: false` kills it outright,
+and the widget falls back to its flat baseline row (`▁▁▁▁▁▁▁▁▁▁`) rather
+than a frozen last frame. The cell appears and disappears together with
+`nowPlaying` (both gate on `MediaService.available`). Honest states: `cava`
+missing from PATH renders a dim `NO CAVA` cell once the one-shot PATH probe
+answers, regardless of playback — never a silently-empty cell pretending
+to be idle.
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}

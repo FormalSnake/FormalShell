@@ -258,6 +258,12 @@ nixpkgs.lib.nixosSystem {
           # binary asset.
           (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
           pkgs.ffmpeg-headless
+          # ASCII visualizer owner-ask task: VisualizerService.qml drives
+          # this over PipeWire ([input] method=pipewire in the config it
+          # writes) to feed the bar's cava widget real spectrum data;
+          # nixpkgs' cava has withPipewire = stdenv.hostPlatform.isLinux,
+          # true for this VM, so plain `cava` on PATH is pipewire-capable.
+          pkgs.cava
           # M7 Task 3: --lock's round-trip proof types the real test
           # password into the real password TextInput via a genuine
           # virtual-keyboard-unstable-v1 client rather than a headless IPC
