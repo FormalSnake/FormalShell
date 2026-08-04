@@ -284,6 +284,15 @@ PanelWindow {
     })
     readonly property var _nodes: root._tree.nodes
 
+    // True while the current level's own node carries an unsatisfied (or
+    // not-yet-resolved) `when` gate — see _displayRows' own comment for why
+    // this only matters for the direct-summon path.
+    readonly property bool _currentNodeGated: {
+        if (root.currentNodeId === null) return false;
+        var node = root._nodes[root.currentNodeId];
+        return node ? !Model.isWhenVisible(node, root._condResults) : false;
+    }
+
     readonly property var _displayRows: {
         if (root._mode === "select") {
             var query = searchInput.text.toLowerCase();
@@ -310,8 +319,22 @@ PanelWindow {
         var nixQuery = Providers.nixTriggerQuery(q);
         if (root.currentNodeId === "nix" || nixQuery !== null)
             return root._nixRowsFor(nixQuery !== null ? nixQuery : q);
-        if (q.length === 0)
+        if (q.length === 0) {
+            // Route-summon when-gate guard (M17 review finding, item F):
+            // `open(route)` resolves a node by id directly, bypassing the
+            // parent-level isWhenVisible() filter that keeps a gated node
+            // (e.g. "share" without localsend_app) from ever appearing as
+            // a row in the first place — without this, landing on that
+            // level here would still list its children as if the gate
+            // never existed. `root._currentNodeGated` covers "not yet
+            // resolved" the same as "resolved false": _condResults starts
+            // empty every open()/_enterLevel(), so a level entered before
+            // its own condition Process has exited must not flash
+            // actionable rows it may end up refusing a moment later.
+            if (root._currentNodeGated)
+                return [Model.gatedNoteRow(root._nodes[root.currentNodeId])];
             return Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
+        }
         // A query that parses as an expression leads with the CALC result row
         // (M12 Task 5). At the dedicated calc level the result row is the
         // whole surface — whole-tree matches would just be root search noise

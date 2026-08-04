@@ -171,6 +171,29 @@ function isWhenVisible(node, condResults) {
     return condResults[node.id] === true;
 }
 
+// Honest placeholder for a level whose own `when` gate isn't satisfied (M17
+// review finding, M-polish batch item F): summoning a route directly
+// (Menu.qml's `open(route)` -> `_resolveRoute`/`_enterLevel`) bypasses the
+// parent-level `isWhenVisible()` filter that would otherwise have kept a
+// gated node off screen entirely — `menu summon share` without
+// localsend_app used to render SHARE's actionable children anyway, each
+// one silently exiting 127 on activation. Never activatable ("note" kind,
+// `dim: true`), the same honest-unavailable shape every other absent state
+// in this tree already uses (nix's NO NIX, share's own NOTHING TO SHARE).
+function gatedNoteRow(node) {
+    return {
+        id: node.id + ".unavailable",
+        parentId: node.id,
+        label: "UNAVAILABLE",
+        icon: "",
+        title: "",
+        aliases: [],
+        kind: "note",
+        dim: true,
+        childIds: []
+    };
+}
+
 // A link's own subtree is empty by construction (it points elsewhere), so
 // pruning must follow the target's children rather than the link node's.
 function directChildren(nodes, id) {

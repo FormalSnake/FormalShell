@@ -255,6 +255,20 @@ submenu. `when`/`checked` are shell condition strings, batched into one
 hides a node outright, a real command's exit code decides visibility live
 (e.g. `system.logout`'s `test -n "$NIRI_SOCKET"` guard).
 
+**Route-summon when-gate guard.** Normal navigation never shows a row for a
+node whose own `when` hasn't resolved true — but `menu summon <route>`
+(or a compositor keybind wired straight to one) resolves a node by id
+directly, bypassing that parent-level check. Landing on a level whose own
+`when` isn't satisfied (or hasn't resolved yet) renders one honest, dim,
+non-activatable `UNAVAILABLE` row instead of that level's real children —
+e.g. `menu summon share` without `localsend_app` on PATH shows
+`UNAVAILABLE` rather than `CLIPBOARD`/`PICK FROM HISTORY`/`RECEIVE` rows
+that would each exit 127 on activation. The condition still resolves
+asynchronously in the background, so the row updates the moment it lands.
+
+**App rows.** Each launchable app shows the entry's display name (falling
+back to its id only when the name is genuinely empty) and renders the
+
 **App rows.** Each launchable app shows the entry's display name (falling
 back to its id only when the name is genuinely empty) and renders the
 entry's icon-theme icon as an image at the glyph cell's size — radius 0,

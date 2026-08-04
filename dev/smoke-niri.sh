@@ -3670,8 +3670,13 @@ if $share_mode; then
   done
   cat "$share_absent_query1_path"; echo
   cat "$share_absent_query2_path"; echo
-  if grep -qF '"id":"share"' "$share_absent_query1_path" || grep -qF '"id":"share"' "$share_absent_query2_path"; then
-    echo "SMOKE_FAIL: share node was still visible with localsend_app shadowed off PATH" >&2; exit 1
+  # Exact "share" id, AND the "share." prefix a leaked child row (e.g.
+  # "share.clipboard") would carry (M17 review finding, item F: a summoned
+  # route used to render its actionable children even with its own `when`
+  # gate false) — hardened past the exact-id-only check this replaced.
+  if grep -qF '"id":"share"' "$share_absent_query1_path" || grep -qF '"id":"share"' "$share_absent_query2_path" \
+    || grep -qF '"id":"share.' "$share_absent_query1_path" || grep -qF '"id":"share.' "$share_absent_query2_path"; then
+    echo "SMOKE_FAIL: share node (or one of its children) was still visible with localsend_app shadowed off PATH" >&2; exit 1
   fi
   if [ -f "$share_menu_absent_path" ]; then
     echo "SMOKE_SHARE_MENU_ABSENT $share_menu_absent_path"

@@ -169,4 +169,17 @@ TestCase {
         }
         verify(threw);
     }
+
+    // gatedNoteRow (M17 review finding, M-polish batch item F): the
+    // route-summon when-gate guard's honest placeholder row.
+    function test_gated_note_row_is_a_non_activatable_dim_note_under_the_node() {
+        var node = { id: "share" };
+        var row = M.gatedNoteRow(node);
+        compare(row.id, "share.unavailable");
+        compare(row.parentId, "share");
+        compare(row.label, "UNAVAILABLE");
+        compare(row.kind, "note");
+        compare(row.dim, true);
+        compare(row.childIds.length, 0);
+    }
 }
