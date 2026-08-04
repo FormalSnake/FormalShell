@@ -132,4 +132,22 @@ TestCase {
     function test_format_rate_negative_shows_magnitude() {
         compare(Power.formatRate(-8.05), "8.1W");
     }
+
+    // staticFieldsVisible
+
+    function test_static_fields_hidden_while_motion_enabled_and_rotating() {
+        compare(Power.staticFieldsVisible(true, true), false);
+    }
+
+    function test_static_fields_shown_when_motion_disabled_even_if_rotating() {
+        compare(Power.staticFieldsVisible(false, true), true);
+    }
+
+    function test_static_fields_shown_when_not_rotating_even_with_motion_enabled() {
+        compare(Power.staticFieldsVisible(true, false), true);
+    }
+
+    function test_static_fields_shown_when_motion_disabled_and_not_rotating() {
+        compare(Power.staticFieldsVisible(false, false), true);
+    }
 }

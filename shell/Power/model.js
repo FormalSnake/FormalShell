@@ -70,3 +70,17 @@ function formatDuration(totalSeconds) {
 function formatRate(watts) {
     return Math.abs(watts).toFixed(1) + "W";
 }
+
+// Whether the static TIME TO FULL/EMPTY/RATE meta rows should render
+// (M-polish batch item D, owner-reported: they duplicated the same fields
+// the status line above already rotates through). The static rows defer
+// only while the rotation is actually going to show those fields —
+// `rotating` already requires charging/discharging AND more than one real
+// phrase — so a field that would never get a turn in rotation (motion
+// enabled but the device isn't charging/discharging) still falls back to
+// rendering statically instead of vanishing outright. With motion
+// disabled, `rotating` is irrelevant: the status line never advances past
+// phrase 0, so the static rows always carry the extra fields.
+function staticFieldsVisible(motionEnabled, rotating) {
+    return !(motionEnabled && rotating);
+}

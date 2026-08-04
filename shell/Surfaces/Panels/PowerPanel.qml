@@ -63,6 +63,10 @@ Panel {
         && root._phrases.length > 1
     property int _phraseIndex: 0
 
+    // Battery info dedup (owner: duplicate fields while discharging) —
+    // Power.staticFieldsVisible's own header comment has the full rule.
+    readonly property bool _staticFieldsVisible: Power.staticFieldsVisible(Theme.motionEnabled, root._rotating)
+
     // Hysteresis state for Power/model.js's warnEvent() — persisted here
     // across calls, never reset except by the model's own re-arm-on-charge
     // rule. See model.js's own header comment for the full behavior.
@@ -264,19 +268,24 @@ Panel {
             // source's own contract), so at most one of the two is ever
             // visible; changeRate is 0 when UPower simply has no reading
             // yet. Nothing renders in place of an absent value — no
-            // "--", no rotation, no timer (Task 11's job).
+            // "--", no rotation, no timer (Task 11's job). Gated on
+            // `_staticFieldsVisible` (dedup fix, owner-reported): while the
+            // status line above is actually rotating through these same
+            // fields, showing them here too doubled the information: the
+            // rotating line owns them, and these rows only render once it
+            // isn't (motion disabled, or nothing to rotate through).
             MetaLabel {
-                visible: root._charging && root._timeToFull > 0
+                visible: root._staticFieldsVisible && root._charging && root._timeToFull > 0
                 text: "TIME TO FULL " + Power.formatDuration(root._timeToFull)
             }
 
             MetaLabel {
-                visible: !root._charging && root._timeToEmpty > 0
+                visible: root._staticFieldsVisible && !root._charging && root._timeToEmpty > 0
                 text: "TIME TO EMPTY " + Power.formatDuration(root._timeToEmpty)
             }
 
             MetaLabel {
-                visible: root._changeRate !== 0
+                visible: root._staticFieldsVisible && root._changeRate !== 0
                 text: "RATE " + Power.formatRate(root._changeRate)
             }
         }
