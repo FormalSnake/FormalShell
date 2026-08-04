@@ -107,6 +107,21 @@ Where the ASCII-OS accent overrides this for a genuinely tabular surface
 an urgent/accent-carrying row). Inversion and the fill-alpha model are
 never both active on the same cell.
 
+**Amendment (bar-cell hover, owner directive over a tint/underline).** The
+bar's own discrete widget cells (`Cell.qml`'s `standalone` contract, §3)
+apply this same fg/bg inversion to the `hover-cursor` state too, not just
+tabular selection: hovering a bar cell swaps its fill to `foreground` and
+its content (text and glyphs alike) to `background`, replacing the
+fill-alpha tint + hover border every other cell still uses. The fill still
+fades in over `Theme.motion.fast` (the fade lives on the fill layer, not
+the color swap), but the content color itself snaps instantly the moment
+the state resolves, same as every other inversion in this document (§4.3).
+Cells already carrying a full-bleed `accent`/`urgent`/`selected` fill (the
+focused workspace, a critical battery) keep that fill instead — no double
+treatment. Panels, menu, and every other non-`standalone` cell are
+unaffected; the menu's cursor row already inverted on its own, so this
+change unifies the idiom rather than introducing a second one.
+
 ### 1.2 Border specs
 
 A border is a small object, not a scalar width:
@@ -226,9 +241,11 @@ floats with a margin or fuses to the screen edge.
 ## 3. Concrete translations
 
 - **Bar** — a single-row strip of **discrete widget cells**, each its own
-  `normal`/`hover-cursor`/`selected` control (§1.1), separated by
-  `Theme.spacing.sm`-ish gaps in the omarchy style — not forced edge-to-edge
-  adjacency. The focused workspace cell is a full-bleed `accent` fill
+  `normal`/`hover-cursor`/`selected` control (§1.1) — `hover-cursor`
+  rendered as full fg/bg inversion rather than a tint or border, per §1.1's
+  bar-cell amendment above — separated by `Theme.spacing.sm`-ish gaps in
+  the omarchy style — not forced edge-to-edge adjacency. The focused
+  workspace cell is a full-bleed `accent` fill
   (§2.4); other workspace cells are `normal`. A widget with an open panel
   gets omarchy's small **accent dot** on its inner edge (the edge facing the
   desktop) rather than a border-color change, so "panel open" reads at a

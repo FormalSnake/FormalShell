@@ -14,11 +14,21 @@ import qs.Core
 // (a distinct palette role from `accent`, both matugen-driven) instead.
 //
 // `standalone` (DESIGN.md §3 Bar retrofit) swaps that contract for
-// omarchy's own module chrome: borderless at rest, a hover-cursor fill and
-// border that only appear on mouseover, no persistent rule at all — the
-// bar's discrete widget cells opt into this. Every fused-ledger consumer
-// (menu rows, panel device lists, notification center, the lock field)
-// keeps the shared-rule default until its own scheduled retrofit task.
+// omarchy's own module chrome: borderless at rest, no persistent rule at
+// all — the bar's discrete widget cells opt into this. Every fused-ledger
+// consumer (menu rows, panel device lists, notification center, the lock
+// field) keeps the shared-rule default until its own scheduled retrofit
+// task.
+//
+// Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, owner
+// directive over a tint/underline): a standalone cell's hover-cursor state
+// swaps its fill to `foreground` and its content to `background` — the
+// same fg/bg swap the ledger accent already uses elsewhere in this file —
+// instead of the fill-alpha tint + border every other cell still uses.
+// `foreground` below is the one place that swap has to happen: every
+// widget's own Text/glyph already reads `root.foreground` (or a Cell id's
+// `.foreground` alias), so the inversion flows through with no per-widget
+// edit needed.
 Item {
     id: root
 
@@ -30,9 +40,15 @@ Item {
     property bool hovered: false
     property bool standalone: false
 
+    // Bar cells only: hovered, and not already carrying one of the other
+    // full-bleed states (selected/accent/urgent keep their own fill — no
+    // double treatment, DESIGN.md §2.4).
+    readonly property bool _hoverFillActive: root.hovered && !root.selected && !root.accent && !root.urgent
+    readonly property bool _hoverInverted: root.standalone && root._hoverFillActive
+
     readonly property color foreground: (accent || urgent)
         ? Theme.color.onAccent
-        : (selected ? Theme.inverted().fg : Theme.color.foreground)
+        : (root._hoverInverted ? Theme.color.background : (selected ? Theme.inverted().fg : Theme.color.foreground))
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
@@ -89,16 +105,19 @@ Item {
     }
 
     // Hover fill on its own layer so it can fade (DESIGN.md §4.1,
-    // Theme.motion.fast) without ever animating the state fills above.
-    // The standalone hover border rides the same opacity, so it fades in
-    // step with the fill instead of snapping.
+    // Theme.motion.fast) without ever animating the state fills above —
+    // the fade stays on this layer even for the standalone/bar case below;
+    // only the swap itself (this fill's own color, and `foreground` above)
+    // is instant, matching every other ledger inversion (DESIGN.md §4.3).
+    // Standalone (bar) cells get a full opaque `foreground` fill — the
+    // inversion — instead of every other cell's low-alpha tint.
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
-        color: Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
-        border.width: root.standalone ? root._hoverAppearance.borderWidth : 0
-        border.color: Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.borderAlpha)
-        opacity: root.hovered && !root.selected && !root.accent && !root.urgent ? 1 : 0
+        color: root.standalone
+            ? Theme.color.foreground
+            : Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
+        opacity: root._hoverFillActive ? 1 : 0
 
         Behavior on opacity {
             NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
