@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Core
 import qs.Compositor
+import qs.Components
 
 // Icon + app name of the focused window (DESIGN.md's launcher-row
 // image-icon exception, extended to the bar in M14): the desktop entry
@@ -16,6 +17,11 @@ Item {
     id: root
 
     property real maxWidth: 320
+    // Set from Bar.qml (`windowVisible: bar.visible`) so the title marquee
+    // below can gate on the bar's own PanelWindow actually being on screen —
+    // same rationale as NowPlaying.qml's own windowVisible. Defaults true so
+    // any other embedding still animates.
+    property bool windowVisible: true
 
     readonly property var focusedWindow: {
         var id = CompositorService.focusedWindowId;
@@ -84,22 +90,27 @@ Item {
             font.pixelSize: Theme.fontSize.body
         }
 
-        Text {
+        // M-polish batch item A: the window title scrolls on overflow via
+        // the shared MarqueeText mechanism (Components/MarqueeText.qml,
+        // extracted from NowPlaying.qml's M16 Task 11 now-playing ticker).
+        // `leftPadding` widens the gap to the app name without touching
+        // `row.spacing` — that stays tight (xxs) for the icon+name lockup.
+        MarqueeText {
             id: titleText
+            anchors.verticalCenter: parent.verticalCenter
             text: root.title
             // Roles swap once an entry is found: the title follows dimmed
             // instead of leading foreground.
             color: root.desktopEntry ? Theme.color.foregroundDim : Theme.color.foreground
-            font.family: Theme.font.family
-            font.pixelSize: Theme.fontSize.body
-            elide: Text.ElideRight
-            width: {
+            leftPadding: Theme.space.md
+            windowVisible: root.windowVisible
+            maxWidth: {
                 var used = 0;
                 if (appIcon.visible)
                     used += appIcon.width + row.spacing;
                 if (primaryText.visible)
                     used += primaryText.width + row.spacing;
-                return Math.min(implicitWidth, Math.max(0, root.maxWidth - used));
+                return Math.max(0, root.maxWidth - used);
             }
         }
     }

@@ -114,6 +114,10 @@ PanelWindow {
         id: activeWindowComponent
         ActiveWindow {
             maxWidth: bar.width * 0.4
+            // Gates the title marquee off while the bar's own PanelWindow
+            // isn't on screen — same rationale as NowPlaying's own
+            // windowVisible below.
+            windowVisible: bar.visible
         }
     }
     Component {

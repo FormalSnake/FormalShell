@@ -1,5 +1,6 @@
 AuthPrompt AuthPrompt.qml
 Cell Cell.qml
 DismissTwins DismissTwins.qml
+MarqueeText MarqueeText.qml
 MetaLabel MetaLabel.qml
 Panel Panel.qml
