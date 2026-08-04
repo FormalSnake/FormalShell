@@ -53,7 +53,15 @@ function _sortByLabel(devices) {
 // stops. Devices without a human-readable name are dropped from every
 // bucket, connected or not.
 function buckets(devices, discovering) {
-    var list = Array.isArray(devices) ? devices : [];
+    // `devices` arrives either as a plain JS array (tests) or as QML's
+    // sequence wrapper over QList<QObject*> (adapter.devices.values fed
+    // straight in by BluetoothPanel) — and Array.isArray is FALSE for the
+    // wrapper, which made this guard discard every real device on the
+    // live host (2026-08-04) while fixture-fed tests stayed green. Copy
+    // via indexed loop, the one protocol both shapes share.
+    var list = [];
+    if (devices && devices.length !== undefined)
+        for (var c = 0; c < devices.length; c++) list.push(devices[c]);
     var connected = [];
     var known = [];
     var available = [];

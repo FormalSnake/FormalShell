@@ -34,6 +34,20 @@ TestCase {
         compare(BluetoothModel.hasHumanName("Sony WH-1000XM4"), true);
     }
 
+    function test_buckets_accepts_sequence_shaped_list_not_just_arrays() {
+        // QML feeds buckets() adapter.devices.values — a Qt sequence
+        // wrapper, NOT a JS Array (Array.isArray === false). An
+        // array-like with length+indices mimics that shape; devices must
+        // classify, not vanish (the 2026-08-04 live-host regression).
+        var seq = { length: 2 };
+        seq[0] = dev("AirPods Pro", { connected: true, paired: true, bonded: true, trusted: true });
+        seq[1] = dev("MX Master 3S M", { connected: true, paired: true, bonded: true, trusted: true });
+        var b = BluetoothModel.buckets(seq, false);
+        compare(names(b.connected), "AirPods Pro,MX Master 3S M");
+        compare(b.known.length, 0);
+        compare(b.available.length, 0);
+    }
+
     function test_buckets_splits_connected_known_available_while_discovering() {
         var devices = [
             dev("Zeta", { connected: true, paired: true }),
