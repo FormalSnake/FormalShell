@@ -41,8 +41,38 @@ Item {
     // content sitting visibly high-left of the cell's true center.
     readonly property real _ruleReserve: standalone ? 0 : Theme.borderWidth
 
-    implicitWidth: content.implicitWidth + Theme.space.lg * 2 + _ruleReserve
-    implicitHeight: content.implicitHeight + Theme.space.sm * 2 + _ruleReserve
+    implicitWidth: root._measure(false) + Theme.space.lg * 2 + _ruleReserve
+    implicitHeight: root._measure(true) + Theme.space.sm * 2 + _ruleReserve
+
+    // How big the content wants to be. This used to be `content`'s own
+    // childrenRect, which closes a cycle, since content is anchored to fill
+    // the cell: childrenRect measures a fill-anchored child (every cell's
+    // hit area) at exactly the width of the cell the measurement is sizing,
+    // and it measures each child's x/y, so a centered child's offset (half
+    // the leftover room) lands back in the size that leftover room came
+    // from. QML answers a looping binding by aborting it, which leaves the
+    // cell at whatever size it had reached: never smaller than the widest
+    // transient it ever saw, and on a first-pass abort, nothing at all.
+    //
+    // So measure each child's own extent and drop the two terms that feed
+    // back. Nothing else changes: a child's position never described how
+    // much room the content needs, and a child anchored to fill the cell
+    // takes its size from the cell, so it can't be what determines it.
+    //
+    // `vertical` picks the axis, one function, since the two differ by
+    // nothing but the property pair.
+    function _measure(vertical) {
+        var max = 0;
+        for (var i = 0; i < content.children.length; i++) {
+            var child = content.children[i];
+            if (child.anchors.fill === content)
+                continue;
+            var extent = vertical ? child.height : child.width;
+            if (extent > max)
+                max = extent;
+        }
+        return max;
+    }
 
     // Full-bleed state fills snap (DESIGN.md §4.3: accent/selection swaps
     // are states, not transitions) — only the hover layer below fades.
@@ -83,14 +113,9 @@ Item {
         anchors.rightMargin: Theme.space.lg + root._ruleReserve
         anchors.bottomMargin: Theme.space.sm + root._ruleReserve
 
-        // Item never derives implicit size from children — only positioners
-        // and Text/Image do that automatically — so without this,
-        // content.implicit* (read by root.implicit* above) is permanently 0
-        // no matter what's inside. childrenRect is the collective bounding
-        // box of content's actual children, which gives a bare Item the
-        // same auto-sizing behavior.
-        implicitWidth: childrenRect.width
-        implicitHeight: childrenRect.height
+        // Deliberately no implicit size of its own: root._measure() reads
+        // the children directly, so nothing ever writes an implicit size
+        // onto an item whose geometry those same children track.
     }
 
     Rectangle {

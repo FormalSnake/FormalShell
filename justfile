@@ -7,8 +7,10 @@ lint:
     git add -A && nix flake check -L
 # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads shell/Menu/emoji.json,
 # which sits outside the test file's own directory subtree.
+# -import tests/stubs: resolves the `qs.Core` module for the tests that
+# instantiate real shell components (tst_cell_geometry.qml).
 test:
-    nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -input tests
+    nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests
 
 vm-up:
     ./dev/vm.sh start
@@ -19,7 +21,7 @@ vm-build:
     ./dev/vm.sh run 'git add -A && nix build --print-out-paths .#formalshell'
 vm-test:
     ./dev/vm.sh sync
-    ./dev/vm.sh run 'nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -input tests'
+    ./dev/vm.sh run 'nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests'
 vm-lint:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'git add -A && nix flake check -L'

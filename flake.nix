@@ -28,7 +28,9 @@
         cp -r ${./.}/shell shell; cp -r ${./.}/tests tests
         # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads
         # shell/Menu/emoji.json, outside the test's own directory subtree.
-        QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -input tests
+        # -import tests/stubs: resolves the `qs.Core` module for the tests
+        # that instantiate real shell components (tst_cell_geometry.qml).
+        QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests
         touch $out
       '';
     in

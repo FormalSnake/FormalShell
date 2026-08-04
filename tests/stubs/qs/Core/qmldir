@@ -1,0 +1,2 @@
+module qs.Core
+singleton Theme Theme.qml
