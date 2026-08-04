@@ -922,6 +922,7 @@ emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
 emoji_type_path="$shot_dir/emoji-wtype.txt"
 selection_path="$shot_dir/selection.txt"
+menu_done_path="$shot_dir/menu-done.flag"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
 center_status_before_path="$shot_dir/center-status-before.json"
@@ -1542,6 +1543,9 @@ sleep 2
 sleep 1
 "$grim_bin" "$menu_top_after_png" 2>/dev/null || true
 "$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+# Literal last action: releases share_drive_script's own wait gate (see
+# its own comment) when --share runs alongside --menu.
+touch "$menu_done_path"
 EOF
 
   # PATH-shimmed nix fixture (M12 Task 7; M13b Task 4 made it dispatch on
@@ -1685,10 +1689,27 @@ fi
 # to share_noshare_dir (built above), so its own `when` check genuinely
 # cannot find localsend_app — not a second nested niri session, just a
 # second formalshell process under the same one.
+#
+# Combined with --menu (M17 Task 3's own regression check), this script's
+# "menu summon share" / "menu activate 0" calls would otherwise race
+# --menu's script for the same shared menu surface — observed for real:
+# --menu's own pending select() (armed at its sleep 6) was still open when
+# share's "menu activate 0" landed, so it picked select-list index 0
+# ("a") instead of the SHARE.CLIPBOARD row, leaving menu-selection.txt
+# with a real {token,value} pick instead of the close-to-cancel
+# {"cancelled":true} --menu's own assertion expects. share_menu_wait below
+# makes this script wait for menu_finish_script's own completion marker
+# (touched as its literal last action) before touching the menu route at
+# all, so the two scripts' menu interactions never overlap.
+share_menu_wait=""
+if $menu_mode; then
+  share_menu_wait="until [ -f \"$menu_done_path\" ]; do sleep 0.5; done"
+fi
 if $share_mode; then
   share_drive_script="$shot_dir/share-drive.sh"
   cat > "$share_drive_script" <<EOF
 #!/usr/bin/env bash
+$share_menu_wait
 sleep 2
 "$wl_copy_bin" "share smoke fixture"
 sleep 1
@@ -2372,7 +2393,13 @@ fi
     # phase reuses the takeover protocol, so this instance's own "being
     # replaced" log line is what proves the PATH-shadowed instance actually
     # won the handoff rather than the poll merely timing out at count 1.
-    echo "spawn-at-startup \"sh\" \"-c\" \"exec '$PWD/result/bin/formalshell' > '$share_primary_log_path' 2>&1\""
+    # shim_path_prefix (empty unless $menu_mode) still has to land on this
+    # instance's own PATH: dropping it here previously sent
+    # menu_finish_script's `nix search` calls at the VM's real `nix`
+    # instead of the deterministic shim, so the released-search assertion
+    # never saw the canned rows (found combining --share --menu for the
+    # first time, M17 Task 3).
+    echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell' > '$share_primary_log_path' 2>&1\""
   elif [ -n "$shim_path_prefix" ]; then
     echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell'\""
   else
@@ -2529,7 +2556,13 @@ fi
   # brightness leg (sleep 13/14, see above) needs the same kind of buffer
   # past its own sleep-10 screenshot.
   tail_gap=1
-  if $menu_mode; then
+  if $menu_mode && $share_mode; then
+    # share_drive_script now waits on menu_finish_script's own completion
+    # marker (see share_menu_wait above) before it touches the menu route
+    # at all, so its worst case runs entirely inside screenshot_delay's
+    # own combined budget below rather than needing a tail past the shot.
+    tail_gap=3
+  elif $menu_mode; then
     # 26, not the pre-Task-2 18: after the toast leg (landing ~23-26s in,
     # see below) the finish script now runs one more leg — summon root,
     # grim, wtype "wall", grim, close — another ~4s (M16 Task 2's top-freeze
@@ -2649,15 +2682,25 @@ fi
     # resolved to a single bar.
     screenshot_delay=21
   elif $share_mode; then
-    # share-drive.sh's own worst case (~12s through the present-case kill —
-    # the localsend_app pgrep step polls up to 6s rather than a flat sleep,
-    # since Flutter app startup isn't instant — plus a 15s takeover poll
-    # ceiling for the absent-case handoff, plus the closing query/screenshot
-    # round trip) lands ~30s in; this run's generic smoke.png/SMOKE_OK is
-    # taken 6s after that, showing the ordinary session with the second
-    # (shadowed-PATH) instance now the sole survivor and its menu already
-    # closed again.
-    screenshot_delay=36
+    if $menu_mode; then
+      # share_menu_wait (see share-drive.sh's own comment) holds share's
+      # whole sequence off the menu route until menu_finish_script's own
+      # completion marker lands (~27-30s in, same landing time as the
+      # plain --menu case above), then share's own worst case runs in full
+      # from there (the same ~30s-to-kill plus 6s margin as the alone case
+      # below) — 30 (menu) + 36 (share) rounded up for VM slop.
+      screenshot_delay=72
+    else
+      # share-drive.sh's own worst case (~12s through the present-case kill
+      # — the localsend_app pgrep step polls up to 6s rather than a flat
+      # sleep, since Flutter app startup isn't instant — plus a 15s
+      # takeover poll ceiling for the absent-case handoff, plus the closing
+      # query/screenshot round trip) lands ~30s in; this run's generic
+      # smoke.png/SMOKE_OK is taken 6s after that, showing the ordinary
+      # session with the second (shadowed-PATH) instance now the sole
+      # survivor and its menu already closed again.
+      screenshot_delay=36
+    fi
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -2695,7 +2738,13 @@ if $screensaver_mode; then
 elif $wifi_mode; then
   session_timeout=210
 elif $share_mode; then
-  session_timeout=50
+  if $menu_mode; then
+    # screenshot_delay=72 plus tail_gap=3 (share_menu_wait's combined
+    # budget above) needs real margin past 75, not share_mode-alone's 50.
+    session_timeout=85
+  else
+    session_timeout=50
+  fi
 fi
 
 HOME="$iso_home" \
@@ -2768,7 +2817,9 @@ if $menu_mode; then
   if [ -s "$selection_path" ] && grep -q '"cancelled":true' "$selection_path"; then
     cat "$selection_path"
   else
-    echo "SMOKE_FAIL: menu close in select mode did not write {cancelled:true}" >&2; exit 1
+    echo "SMOKE_FAIL: menu close in select mode did not write {cancelled:true}" >&2
+    [ -f "$selection_path" ] && cat "$selection_path" >&2
+    exit 1
   fi
   # Calc provider (M12 Task 5): the ranked result for an expression query
   # must lead with the CALC row's "= 8" label.
