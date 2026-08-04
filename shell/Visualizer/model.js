@@ -20,7 +20,10 @@
 
 var GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
-var BAR_COUNT = 10;
+// 6 bars at caption size, not 10 at body — the owner wants the cell
+// DMS-compact ("less wide"), and a fixed-frequency spectrum reads fine
+// at this resolution.
+var BAR_COUNT = 6;
 var MAX_LEVEL = 100;
 
 function baselineText() {

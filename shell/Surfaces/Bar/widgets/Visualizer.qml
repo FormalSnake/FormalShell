@@ -73,7 +73,7 @@ Cell {
         text: root._state === "missing" ? "NO CAVA" : VisualizerService.frameText
         color: root._state === "missing" ? Theme.color.foregroundDim : root.foreground
         font.family: Theme.font.family
-        font.pixelSize: root._state === "missing" ? Theme.fontSize.caption : Theme.fontSize.body
+        font.pixelSize: Theme.fontSize.caption
         font.capitalization: root._state === "missing" ? Font.AllUppercase : Font.MixedCase
         font.letterSpacing: root._state === "missing" ? Theme.letterSpacing.meta : 0
     }
