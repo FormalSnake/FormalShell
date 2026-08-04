@@ -137,17 +137,24 @@ function _shq(value) {
 // localsend/localsend — has no `--headless`/`send` mode at all: unknown
 // dash-flags are silently skipped and a bare non-path token like "send" is
 // silently ignored too, so omarchy's invocation happens to still work by
-// accident, not by design). The real, verified mechanism: a bare file path
-// argument pre-populates the GUI's send selection (`AddFilesAction`), and
-// `-t <text>`/`--text <text>` does the same for a raw text message
-// (`AddMessageAction`) — no temp file needed at all for text, unlike
-// omarchy's wl-paste-to-mktemp round trip. Either way this only launches
-// the picker; LocalSend's own GUI still owns actually starting the
-// transfer to a chosen device.
+// accident, not by design). The real, verified mechanism is narrower still:
+// LoadSelectionFromArgsAction (app/lib/provider/selection/
+// selected_sending_files_provider.dart:290-293) skips every arg starting
+// with "-" outright, then only keeps args where File(arg).existsSync() or
+// Directory(arg).existsSync() — a bare file path pre-populates the GUI's
+// send selection (`AddFilesAction`), but `-t`/`--text` are dash-prefixed so
+// they're dropped before that check ever runs, and the text that follows
+// isn't a path either, so nothing gets added. `AddMessageAction` (the
+// in-app text-share path) is only reachable from macOS drop streams and
+// mobile share intents, never from CLI argv. So text, like omarchy's own
+// clipboard mode, has to become a real file: written to a mktemp `.txt`
+// file and shared by path exactly like an image entry. Either way this
+// only launches the picker; LocalSend's own GUI still owns actually
+// starting the transfer to a chosen device.
 function shareEntryCommand(entry) {
     if (entry.kind === "image")
         return "localsend_app " + _shq(entry.path);
-    return "localsend_app -t " + _shq(entry.text);
+    return "tmp=$(mktemp --suffix=.txt) && printf '%s' " + _shq(entry.text) + " > \"$tmp\" && exec localsend_app \"$tmp\"";
 }
 
 // Root "share.clipboard" leaf (Task 1), injected the same way

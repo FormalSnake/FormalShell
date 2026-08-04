@@ -12,14 +12,14 @@ import "../shell/Menu/providers.js" as Providers
 TestCase {
     name: "MenuShare"
 
-    function test_text_entry_uses_the_localsend_text_flag() {
+    function test_text_entry_writes_a_mktemp_file_and_shares_its_path() {
         var cmd = Providers.shareEntryCommand({ id: "a", text: "hello world" });
-        compare(cmd, "localsend_app -t 'hello world'");
+        compare(cmd, "tmp=$(mktemp --suffix=.txt) && printf '%s' 'hello world' > \"$tmp\" && exec localsend_app \"$tmp\"");
     }
 
     function test_text_entry_escapes_embedded_single_quotes() {
         var cmd = Providers.shareEntryCommand({ id: "a", text: "it's here" });
-        compare(cmd, "localsend_app -t 'it'\\''s here'");
+        compare(cmd, "tmp=$(mktemp --suffix=.txt) && printf '%s' 'it'\\''s here' > \"$tmp\" && exec localsend_app \"$tmp\"");
     }
 
     function test_image_entry_shares_its_content_addressed_path_directly() {
@@ -49,7 +49,7 @@ TestCase {
         ]);
         var node = entry["share.clipboard"];
         compare(node.label, "Clipboard");
-        compare(node.action, "localsend_app -t 'newest'");
+        compare(node.action, "tmp=$(mktemp --suffix=.txt) && printf '%s' 'newest' > \"$tmp\" && exec localsend_app \"$tmp\"");
     }
 
     // Mirrors tst_menu_wallpaper.qml's merge test: default-menu.jsonc
@@ -83,7 +83,7 @@ TestCase {
         compare(nodes[0].id, "share.history.a");
         compare(nodes[0].label, "hello");
         compare(nodes[0].kind, "action");
-        compare(nodes[0].action, "localsend_app -t 'hello'");
+        compare(nodes[0].action, "tmp=$(mktemp --suffix=.txt) && printf '%s' 'hello' > \"$tmp\" && exec localsend_app \"$tmp\"");
     }
 
     function test_share_mode_preserves_image_rows_shape() {

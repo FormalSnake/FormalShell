@@ -412,15 +412,18 @@
 # already show it resolved; the second is redundant confirmation, not a
 # race with a still-pending first pass), `menu summon share` + screenshot
 # (share-menu.png — CLIPBOARD/PICK FROM HISTORY/RECEIVE rows), then `menu
-# activate 0` fires the CLIPBOARD row: a real `localsend_app -t <text>`
-# process must appear (pgrep -f) — the real, verified LocalSend CLI shape
-# (`LoadSelectionFromArgsAction`, localsend/localsend upstream; there is no
-# `--headless`/`send` mode, omarchy's own invocation just happens to still
-# work because unknown dash-flags are silently skipped there) — and its
-# /proc cmdline must contain the exact fixture text as the argument
-# following `-t`, proof the real text reached the launched process, not
-# just that some string was passed. It's killed by PID (no auto-close of
-# its own, same reasoning as media_kill_script). A second phase proves the
+# activate 0` fires the CLIPBOARD row: a real `localsend_app <path>` process
+# must appear (pgrep -f) — the real, verified LocalSend CLI shape
+# (`LoadSelectionFromArgsAction`, localsend/localsend upstream, skips every
+# dash-prefixed arg outright and only keeps args that pass
+# File(arg).existsSync()/Directory(arg).existsSync() — no `-t`/`--text`
+# flag reaches a real message the way omarchy's own invocation implies; a
+# text entry has to become a real file first) — its final argv element must
+# be a real path this run's own drive script can still read off disk after
+# the process is killed, and that path's contents must be the exact
+# fixture text, proof the text reached LocalSend through a real file, not
+# just that some string was passed on argv. It's killed by PID (no
+# auto-close of its own, same reasoning as media_kill_script). A second phase proves the
 # honest absent state for real, not inferred: a shim dir mirrors the
 # session's own $PATH one level minus any entry named "localsend_app"
 # (every other binary still resolves), and a second `formalshell` process
@@ -1012,6 +1015,7 @@ share_query2_path="$shot_dir/share-query-2.json"
 share_menu_path="$shot_dir/share-menu.png"
 share_pgrep_path="$shot_dir/share-pgrep.txt"
 share_cmdline_path="$shot_dir/share-cmdline.txt"
+share_tmpfile_path="$shot_dir/share-tmpfile.txt"
 share_primary_log_path="$shot_dir/share-primary.log"
 share_second_log_path="$shot_dir/share-second.log"
 share_instance_status_path="$shot_dir/share-instance-status.json"
@@ -1739,13 +1743,15 @@ done
 "$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0 > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 6 ]; do
-  pgrep -f -- "localsend_app -t" > "$share_pgrep_path" 2>&1 || true
+  pgrep -f -- "localsend_app" > "$share_pgrep_path" 2>&1 || true
   [ -s "$share_pgrep_path" ] && break
   sleep 1
 done
 share_pid=\$(head -n1 "$share_pgrep_path")
 if [ -n "\$share_pid" ]; then
   tr '\\0' '\\n' < /proc/\$share_pid/cmdline > "$share_cmdline_path" 2>&1
+  share_tmp_arg=\$(tail -n1 "$share_cmdline_path")
+  [ -f "\$share_tmp_arg" ] && cat "\$share_tmp_arg" > "$share_tmpfile_path" 2>&1
   kill "\$share_pid" 2>/dev/null || true
 fi
 "$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
@@ -3605,13 +3611,15 @@ if $share_mode; then
   else
     echo "SMOKE_FAIL: no share-menu screenshot produced" >&2; exit 1
   fi
-  # The CLIPBOARD row's activation: a real `localsend_app -t <text>`
-  # process, its /proc cmdline readable and containing the exact fixture
-  # text as the argument following -t — proof the real text reached the
-  # launched process's argv, not just that some string was passed.
+  # The CLIPBOARD row's activation: a real `localsend_app <path>` process
+  # whose final argv element is a mktemp .txt path (upstream's own arg
+  # parser drops dash-flags and non-path text alike, so the fixture text
+  # can only reach LocalSend as a real file) — that path's contents, read
+  # back off disk by PID before the process is killed, must be the exact
+  # fixture text, not just some string on argv.
   share_pid=$(head -n1 "$share_pgrep_path" 2>/dev/null)
   if [ -z "$share_pid" ]; then
-    echo "SMOKE_FAIL: no localsend_app -t process ever appeared — pgrep output: $(cat "$share_pgrep_path" 2>/dev/null)" >&2; exit 1
+    echo "SMOKE_FAIL: no localsend_app process ever appeared — pgrep output: $(cat "$share_pgrep_path" 2>/dev/null)" >&2; exit 1
   fi
   echo "SMOKE_SHARE_PID $share_pid"
   if [ -s "$share_cmdline_path" ]; then
@@ -3619,8 +3627,16 @@ if $share_mode; then
   else
     echo "SMOKE_FAIL: could not read the launched process's /proc cmdline" >&2; exit 1
   fi
-  if ! grep -qF "share smoke fixture" "$share_cmdline_path"; then
-    echo "SMOKE_FAIL: launched process argv did not contain the fixture text — got: $(cat "$share_cmdline_path" | tr '\n' ' ')" >&2; exit 1
+  if ! tail -n1 "$share_cmdline_path" | grep -qE '\.txt$'; then
+    echo "SMOKE_FAIL: launched process argv did not end in a mktemp .txt path — got: $(cat "$share_cmdline_path" | tr '\n' ' ')" >&2; exit 1
+  fi
+  if [ -s "$share_tmpfile_path" ]; then
+    cat "$share_tmpfile_path"; echo
+  else
+    echo "SMOKE_FAIL: could not read the shared temp file's contents off disk" >&2; exit 1
+  fi
+  if ! grep -qF "share smoke fixture" "$share_tmpfile_path"; then
+    echo "SMOKE_FAIL: shared temp file did not contain the fixture text — got: $(cat "$share_tmpfile_path" | tr '\n' ' ')" >&2; exit 1
   fi
   # Phase two: the absent case, proven live through a second instance whose
   # PATH is genuinely scoped away from localsend_app (same takeover

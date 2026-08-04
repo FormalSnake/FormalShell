@@ -307,16 +307,19 @@ any declared node, including `"hidden": true`.
 condition — the same idiom `system.logout`'s `NIRI_SOCKET` guard uses),
 never a config toggle; no `localsend_app` means no `SHARE` node at all, no
 dim placeholder. `CLIPBOARD` shares the newest clipboard entry: a text entry
-launches `localsend_app -t <text>`, an image entry launches `localsend_app
-<path>` against its existing content-addressed path — either way spawned
-detached through the same `sh -c` action route every other menu action
-uses. LocalSend has no true headless auto-send mode (omarchy's own
-`omarchy-menu-share` script assumes `localsend --headless send`, but that
-binary name and those flags don't exist on the package this shell ships;
-verified against LocalSend's own arg parser): a bare file path or `-t
-<text>` just pre-populates the GUI's send selection, and the GUI itself
-still owns picking a device and starting the transfer. An empty clipboard
-renders a dim `NOTHING TO SHARE` row instead of an action. `PICK FROM
+is written to a mktemp `.txt` file and launches `localsend_app <tmpfile>`,
+an image entry launches `localsend_app <path>` against its existing
+content-addressed path — either way spawned detached through the same
+`sh -c` action route every other menu action uses. LocalSend has no true
+headless auto-send mode (omarchy's own `omarchy-menu-share` script assumes
+`localsend --headless send`, but that binary name and those flags don't
+exist on the package this shell ships; verified against LocalSend's own
+arg parser, `LoadSelectionFromArgsAction`): only a bare path that exists on
+disk pre-populates the GUI's send selection, dash-prefixed args like `-t`
+are silently skipped and never reach a message, so text has to become a
+real file first — the GUI itself still owns picking a device and starting
+the transfer. An empty clipboard renders a dim `NOTHING TO SHARE` row
+instead of an action. `PICK FROM
 HISTORY` lists the same clipboard history rows as the `CLIPBOARD` node, but
 Enter shares the chosen entry instead of copying it (`providers.js`'s
 `clipboardProvider(items, selfPath, mode)` backs both, `mode: "share"`
