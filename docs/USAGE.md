@@ -1149,12 +1149,29 @@ immediately either way. Any real input (key or pointer movement) dismisses
 it; `screensaver.lockAfterSeconds` (default 0, disabled) optionally chains
 into the lock screen after continuing to show for that much longer.
 
+**Stay awake.** `IdleService.stayAwake` (omarchy's own StayAwake indicator
+semantics, read-only reference `omarchy/shell/plugins/bar/indicators/
+StayAwake.qml`) is an explicit, session-only toggle — never persisted, a
+shell restart always comes back off — that holds the whole
+screensaver/auto-lock idle chain exactly like the existing media guard,
+gating `Screensaver.qml`'s own activation (`lockAfterSeconds`'s auto-lock
+timer only ever runs while the screensaver is active, so gating activation
+is enough to hold that chain too). The bar's coffee-glyph indicator cell
+binds ONLY to this toggle — clicking it turns stayAwake off; a media
+player keeping the screensaver at bay no longer shows a glyph of its own,
+only the explicit toggle does. `Menu`'s `System` section carries a
+`STAY AWAKE` row that flips the same toggle through the shell's own IPC
+self-target.
+
 **IPC** (`target: "screensaver"`):
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver start
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver stop
-qs ipc --any-display -p <store-path>/share/formalshell call screensaver status  # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver stayAwakeOn
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver stayAwakeOff
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver stayAwakeToggle
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver status  # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…,"stayAwake":…}
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver frameInfo  # {"effect":…,"convergenceFrame":…,"cycles":…}
 ```
 

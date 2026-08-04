@@ -244,6 +244,7 @@ PanelWindow {
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
         var wallpaper = Providers.wallpaperEntry(Quickshell.shellDir);
+        var stayAwake = Providers.stayAwakeEntry(Quickshell.shellDir);
         // Live, unlike wallpaper/buttons above: its action depends on the
         // CURRENT newest clipboard entry, so ClipboardService.items rides
         // this same binding for _defaultObj (and _tree below) to recompute
@@ -255,6 +256,7 @@ PanelWindow {
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
         Object.keys(wallpaper).forEach(function (k) { merged[k] = wallpaper[k]; });
+        Object.keys(stayAwake).forEach(function (k) { merged[k] = stayAwake[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
     }

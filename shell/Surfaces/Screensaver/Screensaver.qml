@@ -129,9 +129,14 @@ Item {
     // MediaService, so a track starting or ending mid-idle-stretch flips
     // this immediately either way — spec §10's "never activates while ...
     // media is actually playing" is a standing condition, not a one-time
-    // check made only at the moment idle first fires.
+    // check made only at the moment idle first fires. IdleService.stayAwake
+    // (M-polish batch item B) holds the whole idle chain exactly like the
+    // media guard — lockAfterSeconds' own auto-lock timer only ever runs
+    // while `active` is true, so gating activation here is enough to hold
+    // that chain too, with no separate check needed there.
     readonly property bool _autoWant: IdleService.isIdle && !root._suppressed
         && (!root.guardMediaPlayback || !MediaService.isPlaying)
+        && !IdleService.stayAwake
 
     readonly property bool active: root._forced || root._autoWant
 

@@ -1,10 +1,14 @@
 import Quickshell.Io
 import qs.Services
 
-// `qs ipc call screensaver start|stop|status` — spec's IPC list. Same
-// division of labour as MediaIpc/LockIpc: the surface owns the real
-// start()/stop()/guard logic; this just exposes it for compositor keybinds
-// and headless smoke verification.
+// `qs ipc call screensaver start|stop|status|stayAwakeOn|stayAwakeOff|
+// stayAwakeToggle` — spec's IPC list. Same division of labour as
+// MediaIpc/LockIpc: the surface owns the real start()/stop()/guard logic;
+// this just exposes it for compositor keybinds and headless smoke
+// verification. The stayAwake verbs (M-polish batch item B) drive
+// IdleService.stayAwake directly — there is no separate "stayAwake" IPC
+// target, it rides the existing "screensaver" one since that's the surface
+// the toggle actually gates.
 IpcHandler {
     target: "screensaver"
 
@@ -25,6 +29,21 @@ IpcHandler {
         return "ok";
     }
 
+    function stayAwakeOn(): string {
+        IdleService.stayAwake = true;
+        return "ok";
+    }
+
+    function stayAwakeOff(): string {
+        IdleService.stayAwake = false;
+        return "ok";
+    }
+
+    function stayAwakeToggle(): string {
+        IdleService.toggleStayAwake();
+        return "ok";
+    }
+
     function status(): string {
         if (!screensaver)
             return "error: screensaver not ready";
@@ -32,7 +51,8 @@ IpcHandler {
             active: screensaver.active,
             isIdle: IdleService.isIdle,
             guardMediaPlayback: screensaver.guardMediaPlayback,
-            mediaPlaying: MediaService.isPlaying
+            mediaPlaying: MediaService.isPlaying,
+            stayAwake: IdleService.stayAwake
         });
     }
 

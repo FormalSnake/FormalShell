@@ -421,3 +421,21 @@ function wallpaperEntry(selfPath) {
         }
     };
 }
+
+// "system.stay-awake" row (M-polish batch item B), merged into the default
+// tree object exactly like wallpaperEntry() above — same reason: the
+// action needs the running shell's own path, which static jsonc can't
+// express. Dotted id auto-nests it under the already-declared "system"
+// node. Toggles via the shell's own IPC self-target rather than an
+// in-process "@ipc:" dispatch (clipboardProvider's own self-targeting
+// rationale) so the row exercises the real `screensaver` IPC target like
+// any external caller would.
+function stayAwakeEntry(selfPath) {
+    return {
+        "system.stay-awake": {
+            label: "Stay Awake",
+            icon: "\u{F0176}", // md-coffee, same glyph Indicators.qml's cell uses
+            action: "qs ipc --any-display -p " + selfPath + " call screensaver stayAwakeToggle"
+        }
+    };
+}

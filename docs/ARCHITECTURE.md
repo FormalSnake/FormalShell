@@ -596,8 +596,11 @@ regardless of which screen's bar owns the click. `dev/sni-stub.py` is the
 VM's real StatusNotifierItem producer (PyGObject, registers on the session
 bus for real — never faked inside the shell).
 
-**Indicators** (`Indicators.qml`): DND straight off `NotificationService.dnd`
-and idle-inhibit off `IdleService.inhibited` — no second DND state
+**Indicators** (`Indicators.qml`): stay-awake off the explicit
+`IdleService.stayAwake` toggle (click the glyph to turn it off; the media
+guard that also holds the idle chain no longer shows a glyph of its own)
+and night light off `NightLightService.active`. DND has its own
+always-visible cell in `BellWidget.qml` instead — no second DND state
 machine. Recording has no glyph: nothing in this shell or a reachable
 service reports screen recording (no screencast portal, no compositor IPC
 surfaces it) as of 2026-07-29 — not wired rather than invented.

@@ -3,7 +3,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Core as Core
-import qs.Services
 
 // Session-wide idle detection (spec §10, M7 Task 5): one shared IdleMonitor
 // on top of ext-idle-notify-v1. `respectInhibitors: true` means `isIdle`
@@ -47,18 +46,17 @@ Singleton {
     property int timeoutSeconds: 300
     readonly property bool isIdle: monitor.isIdle
 
-    // Surfaced for the bar's indicators slot (M10 Task 2, spec §Surfaces-1):
-    // true while Screensaver.qml's own media guard is holding (the same
-    // `screensaver.guardMediaPlayback` + MediaService.isPlaying condition it
-    // already evaluates before auto-activating), i.e. one of the spec's two
-    // named "idle inhibitor or active media playback" cases. A generic
-    // Wayland-protocol idle-inhibit held by an arbitrary client is already
-    // folded into `isIdle` above (respectInhibitors: true) but Quickshell's
-    // IdleMonitor exposes no separate boolean for "an inhibitor is currently
-    // held" versus "the user is currently providing input" — there is no
-    // real way to distinguish those from this API, so this property covers
-    // only the media case rather than guessing at the other.
-    readonly property bool inhibited: Core.Config.get("screensaver.guardMediaPlayback", true) && MediaService.isPlaying
+    // Explicit session-only "keep the screen on" toggle (M-polish batch item
+    // B, omarchy's StayAwake indicator semantics — binds to the toggle
+    // itself, never a media-inferred state) — deliberately not persisted:
+    // a shell restart always comes back to false, same as the media guard
+    // it sits alongside. Screensaver.qml's own _autoWant reads this exactly
+    // like its existing guardMediaPlayback term below.
+    property bool stayAwake: false
+
+    function toggleStayAwake() {
+        root.stayAwake = !root.stayAwake;
+    }
 
     function _armMonitor() {
         root.timeoutSeconds = Core.Config.get("screensaver.timeoutSeconds", 300);
