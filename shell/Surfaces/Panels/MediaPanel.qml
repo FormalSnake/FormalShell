@@ -23,75 +23,95 @@ Panel {
         MetaLabel { text: "NO PLAYER" }
     }
 
-    Cell {
-        visible: MediaService.available && MediaService.artUrl !== ""
-        width: parent.width
-
-        Image {
-            source: MediaService.artUrl
-            width: 96
-            height: 96
-            // Decode capped near the slot size, and no pixmap cache (M16
-            // Task 12): artUrl changes per track, so the default cache: true
-            // would accumulate full-res art across every track played this
-            // session instead of ever releasing the previous one.
-            //
-            // 2x the slot, not the slot itself: sourceSize with both
-            // dimensions set fits the decode inside that box (Qt's
-            // KeepAspectRatio) rather than covering it, so non-square art
-            // (rare, but not guaranteed square like typical covers) would
-            // decode short on one axis and PreserveAspectCrop would upscale
-            // it back out. 2x covers any art up to a 2:1 aspect ratio.
-            sourceSize.width: 192
-            sourceSize.height: 192
-            cache: false
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-        }
-
-        // Apple Music animated cover (M7 Task 2, opt-in): layered over the
-        // static art above, which stays the permanent fallback for every
-        // failure path — disabled, no match, no animated art, download
-        // failure, or a missing QtMultimedia module. Active only while the
-        // panel is open and the track actually playing, per the spec.
-        Loader {
-            width: 96
-            height: 96
-            active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
-            source: "AnimatedAlbumArt.qml"
-        }
-    }
-
+    // Art + identity merged into one row cell (owner: the two-cell layout
+    // left the art centered in its own mostly-empty row; omarchy's own
+    // popup composition — read-only reference `omarchy/shell/plugins/
+    // services/media/BarWidget.qml:111-180` — pairs them in a single row
+    // instead). Rendered in our own ledger chrome, not omarchy's: radius 0,
+    // no border on the art, the panel's usual shared Cell rule below it.
     Cell {
         id: infoCell
         visible: MediaService.available
         width: parent.width
 
-        Column {
+        Row {
+            id: infoRow
             width: parent.width
-            spacing: Theme.space.xxs
+            spacing: Theme.space.md
 
-            MetaLabel {
-                text: "NOW PLAYING / " + MediaService.identity
+            Item {
+                id: artSlot
+                width: 96
+                height: 96
+                anchors.verticalCenter: parent.verticalCenter
+
+                Image {
+                    visible: MediaService.artUrl !== ""
+                    source: MediaService.artUrl
+                    width: 96
+                    height: 96
+                    // Decode capped near the slot size, and no pixmap cache
+                    // (M16 Task 12): artUrl changes per track, so the
+                    // default cache: true would accumulate full-res art
+                    // across every track played this session instead of
+                    // ever releasing the previous one.
+                    //
+                    // 2x the slot, not the slot itself: sourceSize with
+                    // both dimensions set fits the decode inside that box
+                    // (Qt's KeepAspectRatio) rather than covering it, so
+                    // non-square art (rare, but not guaranteed square like
+                    // typical covers) would decode short on one axis and
+                    // PreserveAspectCrop would upscale it back out. 2x
+                    // covers any art up to a 2:1 aspect ratio.
+                    sourceSize.width: 192
+                    sourceSize.height: 192
+                    cache: false
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                }
+
+                // Apple Music animated cover (M7 Task 2, opt-in): layered
+                // over the static art above, which stays the permanent
+                // fallback for every failure path — disabled, no match, no
+                // animated art, download failure, or a missing
+                // QtMultimedia module. Active only while the panel is open
+                // and the track actually playing, per the spec. Rides the
+                // art slot unchanged by this merge.
+                Loader {
+                    width: 96
+                    height: 96
+                    active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
+                    source: "AnimatedAlbumArt.qml"
+                }
             }
 
-            Text {
-                width: parent.width
-                text: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
-                color: infoCell.foreground
-                font.family: Theme.font.family
-                font.pixelSize: Theme.fontSize.subtitle
-                elide: Text.ElideRight
-            }
+            Column {
+                width: infoRow.width - artSlot.width - infoRow.spacing
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.space.xxs
 
-            Text {
-                width: parent.width
-                visible: MediaService.artist !== ""
-                text: MediaService.artist
-                color: Theme.color.foregroundDim
-                font.family: Theme.font.family
-                font.pixelSize: Theme.fontSize.body
-                elide: Text.ElideRight
+                MetaLabel {
+                    text: "NOW PLAYING / " + MediaService.identity
+                }
+
+                Text {
+                    width: parent.width
+                    text: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
+                    color: infoCell.foreground
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.subtitle
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    visible: MediaService.artist !== ""
+                    text: MediaService.artist
+                    color: Theme.color.foregroundDim
+                    font.family: Theme.font.family
+                    font.pixelSize: Theme.fontSize.body
+                    elide: Text.ElideRight
+                }
             }
         }
     }
