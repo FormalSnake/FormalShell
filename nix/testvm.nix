@@ -300,6 +300,15 @@ nixpkgs.lib.nixosSystem {
           # software text rendering), matching the VM's headless llvmpipe
           # rendering everywhere else.
           pkgs.foot
+          # M17 Task 1: the SHARE menu route's presence gate is a plain
+          # `command -v localsend_app` — that's the actual binary this
+          # package installs (nixpkgs names it after upstream's Linux
+          # release asset, not the bare `localsend` omarchy's own Arch
+          # packaging assumes; verified against the built closure). Installing
+          # the real package here is what lets --share prove the working
+          # path (a genuine `localsend_app -t <text>` spawn) rather than
+          # only the honest-absent one.
+          pkgs.localsend
         ];
 
         # No hardware sink exists in a headless VM, so AudioService.available

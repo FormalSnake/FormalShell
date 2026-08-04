@@ -302,6 +302,29 @@ keyboard-exclusive focus. The node is injected at tree-build time
 shell's own path), but overrides address it by its `"wallpaper"` id like
 any declared node, including `"hidden": true`.
 
+**Share (LocalSend).** The root `SHARE` submenu exists only when
+`localsend_app` resolves on PATH (`command -v localsend_app`, a live `when`
+condition — the same idiom `system.logout`'s `NIRI_SOCKET` guard uses),
+never a config toggle; no `localsend_app` means no `SHARE` node at all, no
+dim placeholder. `CLIPBOARD` shares the newest clipboard entry: a text entry
+launches `localsend_app -t <text>`, an image entry launches `localsend_app
+<path>` against its existing content-addressed path — either way spawned
+detached through the same `sh -c` action route every other menu action
+uses. LocalSend has no true headless auto-send mode (omarchy's own
+`omarchy-menu-share` script assumes `localsend --headless send`, but that
+binary name and those flags don't exist on the package this shell ships;
+verified against LocalSend's own arg parser): a bare file path or `-t
+<text>` just pre-populates the GUI's send selection, and the GUI itself
+still owns picking a device and starting the transfer. An empty clipboard
+renders a dim `NOTHING TO SHARE` row instead of an action. `PICK FROM
+HISTORY` lists the same clipboard history rows as the `CLIPBOARD` node, but
+Enter shares the chosen entry instead of copying it (`providers.js`'s
+`clipboardProvider(items, selfPath, mode)` backs both, `mode: "share"`
+swapping only the id prefix and activation). `RECEIVE` launches
+`localsend_app` with no arguments, opening the same GUI empty — there is no
+in-shell file browser or transfer progress UI. Host-side prerequisite
+(package + firewall) is in `docs/SWITCHOVER.md`.
+
 **Calculator.** A root-menu query that parses as an arithmetic expression
 (`+ - * / % ^`, parentheses, unary minus, decimals — a real
 recursive-descent parser in `shell/Menu/calc.js`, never `eval`) leads the

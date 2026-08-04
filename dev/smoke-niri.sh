@@ -404,6 +404,33 @@
 # taken after convergence, shows a single bar — the old instance's Wayland
 # surfaces are already gone by then, not just its process.
 #
+# With --share (M17 Task 1), `wl-copy`s a fixture string, two-pass
+# `debug query "share"` (the `when` condition's `command -v localsend_app`
+# check resolves once at shell startup — Menu.qml's own
+# `defaultMenuFile.onLoaded` runs _evalConditions() before this drive
+# script's first sleep even elapses — so both passes are expected to
+# already show it resolved; the second is redundant confirmation, not a
+# race with a still-pending first pass), `menu summon share` + screenshot
+# (share-menu.png — CLIPBOARD/PICK FROM HISTORY/RECEIVE rows), then `menu
+# activate 0` fires the CLIPBOARD row: a real `localsend_app -t <text>`
+# process must appear (pgrep -f) — the real, verified LocalSend CLI shape
+# (`LoadSelectionFromArgsAction`, localsend/localsend upstream; there is no
+# `--headless`/`send` mode, omarchy's own invocation just happens to still
+# work because unknown dash-flags are silently skipped there) — and its
+# /proc cmdline must contain the exact fixture text as the argument
+# following `-t`, proof the real text reached the launched process, not
+# just that some string was passed. It's killed by PID (no auto-close of
+# its own, same reasoning as media_kill_script). A second phase proves the
+# honest absent state for real, not inferred: a shim dir mirrors the
+# session's own $PATH one level minus any entry named "localsend_app"
+# (every other binary still resolves), and a second `formalshell` process
+# is launched with PATH scoped to just that shim — the same takeover
+# protocol --instance mode already proves (the first instance answers,
+# hands off, quits) — so the surviving instance genuinely cannot find
+# `localsend_app` on its own PATH. Two more `debug query "share"` passes
+# against it must come back empty, and `menu summon` + screenshot
+# (share-menu-absent.png) must show the root menu with no SHARE row at all.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -449,6 +476,7 @@ screenshot_mode=false
 nightlight_mode=false
 speedtest_mode=false
 instance_mode=false
+share_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -473,7 +501,8 @@ while [ $# -gt 0 ]; do
     --nightlight) nightlight_mode=true; shift ;;
     --speedtest) speedtest_mode=true; shift ;;
     --instance) instance_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance]" >&2; exit 1 ;;
+    --share) share_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance] [--share]" >&2; exit 1 ;;
   esac
 done
 
@@ -489,7 +518,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -532,7 +561,7 @@ if $osd_mode; then
   fi
 fi
 
-if $clipboard_mode; then
+if $clipboard_mode || $share_mode; then
   if command -v wl-copy >/dev/null 2>&1; then
     wl_copy_bin=$(command -v wl-copy)
   else
@@ -977,6 +1006,44 @@ nightlight_status1_path="$shot_dir/nightlight-status-1.json"
 nightlight_status2_path="$shot_dir/nightlight-status-2.json"
 speedtest_panel_path="$shot_dir/speedtest-panel.png"
 speedtest_status_path="$shot_dir/speedtest-status.json"
+share_query1_path="$shot_dir/share-query-1.json"
+share_query2_path="$shot_dir/share-query-2.json"
+share_menu_path="$shot_dir/share-menu.png"
+share_pgrep_path="$shot_dir/share-pgrep.txt"
+share_cmdline_path="$shot_dir/share-cmdline.txt"
+share_primary_log_path="$shot_dir/share-primary.log"
+share_second_log_path="$shot_dir/share-second.log"
+share_instance_status_path="$shot_dir/share-instance-status.json"
+share_absent_query1_path="$shot_dir/share-absent-query-1.json"
+share_absent_query2_path="$shot_dir/share-absent-query-2.json"
+share_menu_absent_path="$shot_dir/share-menu-absent.png"
+
+# --share's second phase (the honest-absent proof) needs a PATH that
+# genuinely cannot find `localsend_app` — not a shim with a fake one ahead
+# of it (the nix/gh/wtype shims above), but the session's real PATH minus
+# that one binary, so every OTHER Process the shell spawns (sh for the
+# `when` check itself, wl-paste, matugen, …) still resolves normally. PATH
+# order is preserved (first directory wins) so this is a faithful mirror,
+# not a guess at what else needs to be on it.
+if $share_mode; then
+  share_noshare_dir="$shot_dir/share-noshare-shim"
+  mkdir -p "$share_noshare_dir"
+  _share_saved_ifs="$IFS"
+  IFS=':'
+  for _share_path_dir in $PATH; do
+    IFS="$_share_saved_ifs"
+    [ -d "$_share_path_dir" ] || continue
+    for _share_path_entry in "$_share_path_dir"/*; do
+      [ -e "$_share_path_entry" ] || continue
+      _share_entry_name=$(basename "$_share_path_entry")
+      [ "$_share_entry_name" = "localsend_app" ] && continue
+      [ -e "$share_noshare_dir/$_share_entry_name" ] && continue
+      ln -s "$_share_path_entry" "$share_noshare_dir/$_share_entry_name"
+    done
+    IFS=':'
+  done
+  IFS="$_share_saved_ifs"
+fi
 
 # lock-before-sleep exit-0-always proof (spec §8), run BEFORE the nested
 # session below ever starts a shell instance — the exact "no running
@@ -1610,6 +1677,95 @@ sleep 1
 EOF
 fi
 
+# --share's whole sequence lives in one script, same rationale as
+# clipboard_drive_script above. Phase one proves the working path against
+# the session's real PATH (localsend_app genuinely installed, M17 Task 1's
+# nix/testvm.nix addition); phase two reuses --instance mode's own proven
+# takeover protocol to hand off to a second instance whose PATH is scoped
+# to share_noshare_dir (built above), so its own `when` check genuinely
+# cannot find localsend_app — not a second nested niri session, just a
+# second formalshell process under the same one.
+if $share_mode; then
+  share_drive_script="$shot_dir/share-drive.sh"
+  cat > "$share_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+"$wl_copy_bin" "share smoke fixture"
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_query1_path" 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_query2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon share > /dev/null 2>&1
+sleep 1
+niri msg action screenshot-screen --path "$share_menu_path"
+# niri's own screenshot action puts the image on the Wayland clipboard too
+# (write-to-disk is additive, not exclusive — confirmed via
+# \`niri msg action screenshot-screen --help\`), which ClipboardService's
+# live watcher captures as a new newest entry, superseding the fixture text
+# just copied above. A single re-copy isn't enough on its own: capturing an
+# image entry (read the clipboard, hash the bytes, write the content-
+# addressed file) is slower than capturing text, so a re-copy issued right
+# after the screenshot can still get overtaken by the screenshot's own
+# still-in-flight image capture finishing later. Re-copy and poll
+# \`clipboard list\` until its own newest entry is genuinely text again
+# before activating, rather than gambling on a fixed sleep.
+for _i in 1 2 3 4 5 6; do
+  "$wl_copy_bin" "share smoke fixture"
+  sleep 1
+  clip_kind=\$("$qs_bin" ipc --any-display -p "$shell_path" call clipboard list 2>/dev/null | grep -o '"kind":"[^"]*"' | head -n1 | cut -d'"' -f4)
+  [ "\$clip_kind" = "text" ] && break
+done
+"$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0 > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 6 ]; do
+  pgrep -f -- "localsend_app -t" > "$share_pgrep_path" 2>&1 || true
+  [ -s "$share_pgrep_path" ] && break
+  sleep 1
+done
+share_pid=\$(head -n1 "$share_pgrep_path")
+if [ -n "\$share_pid" ]; then
+  tr '\\0' '\\n' < /proc/\$share_pid/cmdline > "$share_cmdline_path" 2>&1
+  kill "\$share_pid" 2>/dev/null || true
+fi
+"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+sleep 1
+# Same argv[1]=="-p" idiom instance_drive_script's own find_daemon_pids
+# uses to tell the real daemon apart from this script's own "qs ipc ...
+# call" clients.
+find_daemon_pids() {
+  for pid in \$(pgrep -f -- "-p $shell_path"); do
+    if [ "\$(tr '\\0' '\\n' < /proc/\$pid/cmdline 2>/dev/null | sed -n '2p')" = "-p" ]; then
+      echo "\$pid"
+    fi
+  done
+}
+old_pid=\$(find_daemon_pids | head -n1)
+PATH="$share_noshare_dir" "$PWD/result/bin/formalshell" > "$share_second_log_path" 2>&1 &
+new_pid=\$!
+waited=0
+count=0
+while [ "\$waited" -lt 15000 ]; do
+  sleep 0.5
+  waited=\$((waited + 500))
+  count=\$(find_daemon_pids | wc -l | tr -d ' ')
+  if [ "\$count" = "1" ]; then
+    break
+  fi
+done
+survivor=\$(find_daemon_pids | head -n1)
+printf '{"oldPid":%s,"newPid":%s,"survivorPid":%s,"waitedMs":%s,"finalCount":%s}\n' \
+  "\${old_pid:-null}" "\${new_pid:-null}" "\${survivor:-null}" "\$waited" "\${count:-0}" \
+  > "$share_instance_status_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_absent_query1_path" 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_absent_query2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon "" > /dev/null 2>&1
+sleep 1
+niri msg action screenshot-screen --path "$share_menu_absent_path"
+"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+EOF
+fi
+
 # --nightlight's whole sequence lives in one script, same rationale as
 # clipboard_drive_script above. The poll loop breaks early on either
 # outcome the plan calls real evidence: active:true, or a populated
@@ -2211,6 +2367,12 @@ fi
     # "being replaced" log line is real evidence below, not inferred from the
     # process disappearing.
     echo "spawn-at-startup \"sh\" \"-c\" \"exec '$PWD/result/bin/formalshell' > '$instance_primary_log_path' 2>&1\""
+  elif $share_mode; then
+    # Same rationale as instance_mode above: share-drive.sh's own second
+    # phase reuses the takeover protocol, so this instance's own "being
+    # replaced" log line is what proves the PATH-shadowed instance actually
+    # won the handoff rather than the poll merely timing out at count 1.
+    echo "spawn-at-startup \"sh\" \"-c\" \"exec '$PWD/result/bin/formalshell' > '$share_primary_log_path' 2>&1\""
   elif [ -n "$shim_path_prefix" ]; then
     echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell'\""
   else
@@ -2357,6 +2519,9 @@ fi
   if $instance_mode; then
     echo "spawn-at-startup \"bash\" \"$instance_drive_script\""
   fi
+  if $share_mode; then
+    echo "spawn-at-startup \"bash\" \"$share_drive_script\""
+  fi
   # menu_mode's finish script (menu close + selection read + toggle round
   # trip + emoji instant-paste + apps + nix toast legs) fires 1s after the
   # screenshot at sleep 9 and needs a much longer buffer before quit than
@@ -2483,6 +2648,16 @@ fi
     # 3s after that, showing the ordinary session with the takeover already
     # resolved to a single bar.
     screenshot_delay=21
+  elif $share_mode; then
+    # share-drive.sh's own worst case (~12s through the present-case kill —
+    # the localsend_app pgrep step polls up to 6s rather than a flat sleep,
+    # since Flutter app startup isn't instant — plus a 15s takeover poll
+    # ceiling for the absent-case handoff, plus the closing query/screenshot
+    # round trip) lands ~30s in; this run's generic smoke.png/SMOKE_OK is
+    # taken 6s after that, showing the ordinary session with the second
+    # (shadowed-PATH) instance now the sole survivor and its menu already
+    # closed again.
+    screenshot_delay=36
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -2511,12 +2686,16 @@ fi
 
 # The 40s default comfortably outlives every mode's screenshot-then-quit
 # schedule except screensaver_mode's, whose worst-case cycle-proof poll
-# pushes the smoke.png shot itself to 44s (see screenshot_delay above).
+# pushes the smoke.png shot itself to 44s (see screenshot_delay above), and
+# share_mode's, whose own worst case (screenshot_delay=36 plus tail_gap)
+# leaves too little margin against 40s.
 session_timeout=40
 if $screensaver_mode; then
   session_timeout=62
 elif $wifi_mode; then
   session_timeout=210
+elif $share_mode; then
+  session_timeout=50
 fi
 
 HOME="$iso_home" \
@@ -3347,6 +3526,91 @@ if $instance_mode; then
     echo "SMOKE_FAIL: second instance log never logged acquiring the lock" >&2; exit 1
   fi
   echo "SMOKE_INSTANCE old=$instance_old new=$instance_new survivor=$instance_survivor"
+fi
+
+if $share_mode; then
+  # Phase one: the present case. Two passes, both expected to already show
+  # "share" resolved — not a "first pass must miss it" race: Menu.qml's
+  # `defaultMenuFile.onLoaded` runs _evalConditions() once at shell startup
+  # (long before this drive script's own sleeps), so every `when`-gated
+  # node's condition is already settled well ahead of the first debug
+  # query here. The second pass exists as redundant confirmation, not to
+  # catch a still-pending state.
+  for f in "$share_query1_path" "$share_query2_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no debug query produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$share_query1_path"; echo
+  cat "$share_query2_path"; echo
+  if ! grep -qF '"id":"share"' "$share_query1_path"; then
+    echo "SMOKE_FAIL: first debug query never saw the share node present — got: $(cat "$share_query1_path")" >&2; exit 1
+  fi
+  if ! grep -qF '"id":"share"' "$share_query2_path"; then
+    echo "SMOKE_FAIL: second debug query never saw the share node present — got: $(cat "$share_query2_path")" >&2; exit 1
+  fi
+  if [ -f "$share_menu_path" ]; then
+    echo "SMOKE_SHARE_MENU $share_menu_path"
+  else
+    echo "SMOKE_FAIL: no share-menu screenshot produced" >&2; exit 1
+  fi
+  # The CLIPBOARD row's activation: a real `localsend_app -t <text>`
+  # process, its /proc cmdline readable and containing the exact fixture
+  # text as the argument following -t — proof the real text reached the
+  # launched process's argv, not just that some string was passed.
+  share_pid=$(head -n1 "$share_pgrep_path" 2>/dev/null)
+  if [ -z "$share_pid" ]; then
+    echo "SMOKE_FAIL: no localsend_app -t process ever appeared — pgrep output: $(cat "$share_pgrep_path" 2>/dev/null)" >&2; exit 1
+  fi
+  echo "SMOKE_SHARE_PID $share_pid"
+  if [ -s "$share_cmdline_path" ]; then
+    cat "$share_cmdline_path"; echo
+  else
+    echo "SMOKE_FAIL: could not read the launched process's /proc cmdline" >&2; exit 1
+  fi
+  if ! grep -qF "share smoke fixture" "$share_cmdline_path"; then
+    echo "SMOKE_FAIL: launched process argv did not contain the fixture text — got: $(cat "$share_cmdline_path" | tr '\n' ' ')" >&2; exit 1
+  fi
+  # Phase two: the absent case, proven live through a second instance whose
+  # PATH is genuinely scoped away from localsend_app (same takeover
+  # protocol instance_mode's own block above already proves).
+  if [ -s "$share_instance_status_path" ]; then
+    cat "$share_instance_status_path"
+  else
+    echo "SMOKE_FAIL: no share-instance-status.json produced — the second daemon may never have launched" >&2; exit 1
+  fi
+  share_old=$(grep -o '"oldPid":[A-Za-z0-9]*' "$share_instance_status_path" | cut -d: -f2)
+  share_new=$(grep -o '"newPid":[A-Za-z0-9]*' "$share_instance_status_path" | cut -d: -f2)
+  share_survivor=$(grep -o '"survivorPid":[A-Za-z0-9]*' "$share_instance_status_path" | cut -d: -f2)
+  share_final_count=$(grep -o '"finalCount":[0-9]*' "$share_instance_status_path" | cut -d: -f2)
+  echo "-- share-primary.log (instance lock lines) --"
+  grep "instance lock" "$share_primary_log_path" 2>/dev/null || echo "(none found)"
+  echo "-- share-second.log (instance lock lines) --"
+  grep "instance lock" "$share_second_log_path" 2>/dev/null || echo "(none found)"
+  if [ "$share_old" = "null" ] || [ -z "$share_old" ]; then
+    echo "SMOKE_FAIL: no live primary share instance was found before the second launch" >&2; exit 1
+  fi
+  if [ "$share_final_count" != "1" ] || [ "$share_survivor" != "$share_new" ]; then
+    echo "SMOKE_FAIL: the shadowed-PATH instance did not win the takeover (finalCount=$share_final_count survivor=$share_survivor new=$share_new)" >&2; exit 1
+  fi
+  if ! grep -q "instance lock — being replaced" "$share_primary_log_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: primary share instance log never logged being replaced" >&2; exit 1
+  fi
+  for f in "$share_absent_query1_path" "$share_absent_query2_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no debug query produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$share_absent_query1_path"; echo
+  cat "$share_absent_query2_path"; echo
+  if grep -qF '"id":"share"' "$share_absent_query1_path" || grep -qF '"id":"share"' "$share_absent_query2_path"; then
+    echo "SMOKE_FAIL: share node was still visible with localsend_app shadowed off PATH" >&2; exit 1
+  fi
+  if [ -f "$share_menu_absent_path" ]; then
+    echo "SMOKE_SHARE_MENU_ABSENT $share_menu_absent_path"
+  else
+    echo "SMOKE_FAIL: no share-menu-absent screenshot produced" >&2; exit 1
+  fi
 fi
 
 if $bar_layout_mode; then

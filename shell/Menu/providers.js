@@ -89,11 +89,20 @@ function _capturedAtLabel(capturedAt) {
     return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
 
-function clipboardProvider(items, selfPath) {
+// `mode` ("copy", the default, or "share") only changes the row's id
+// prefix and activation — label/desc/thumbSource stay identical either
+// way. "share" rows need their own id namespace ("share.history.<id>"
+// rather than "clipboard.<id>"): both providers read the SAME
+// ClipboardService.items list, and tree.nodes is one flat map keyed by id,
+// so reusing "clipboard.<id>" here would silently overwrite the real
+// clipboard node's own rows (or vice versa, depending on provider order).
+function clipboardProvider(items, selfPath, mode) {
+    mode = mode || "copy";
+    var idPrefix = mode === "share" ? "share.history." : "clipboard.";
     return (items || []).map(function (entry) {
         var isImage = entry.kind === "image";
         return {
-            id: "clipboard." + entry.id,
+            id: idPrefix + entry.id,
             parentId: null,
             label: isImage ? "IMAGE" : previewLabel(entry.text),
             icon: "",
@@ -102,10 +111,76 @@ function clipboardProvider(items, selfPath) {
             thumbSource: isImage ? entry.path : "",
             aliases: [],
             kind: "action",
-            action: "qs ipc --any-display -p " + selfPath + " call clipboard copy " + entry.id,
+            action: mode === "share"
+                ? shareEntryCommand(entry)
+                : "qs ipc --any-display -p " + selfPath + " call clipboard copy " + entry.id,
             childIds: []
         };
     });
+}
+
+// Single-quotes `value` for a sh -c string, escaping embedded single quotes
+// the same way HyprlandBackend.qml's _quoteArg does ('\'' — close the
+// quote, an escaped literal quote, reopen). Clipboard text can contain
+// anything a shell would otherwise interpret, so this is the one place a
+// captured entry's raw content reaches a spawned command.
+function _shq(value) {
+    return "'" + String(value).replace(/'/g, "'\\''") + "'";
+}
+
+// The SHARE route's launch command. omarchy's own bin/omarchy-menu-share
+// invokes `localsend --headless send <path>`, but that binary name and
+// those flags don't exist on the package this shell actually ships
+// (nixpkgs' pkgs.localsend installs a binary named `localsend_app`, and
+// upstream's own arg parser — LoadSelectionFromArgsAction in
+// app/lib/provider/selection/selected_sending_files_provider.dart,
+// localsend/localsend — has no `--headless`/`send` mode at all: unknown
+// dash-flags are silently skipped and a bare non-path token like "send" is
+// silently ignored too, so omarchy's invocation happens to still work by
+// accident, not by design). The real, verified mechanism: a bare file path
+// argument pre-populates the GUI's send selection (`AddFilesAction`), and
+// `-t <text>`/`--text <text>` does the same for a raw text message
+// (`AddMessageAction`) — no temp file needed at all for text, unlike
+// omarchy's wl-paste-to-mktemp round trip. Either way this only launches
+// the picker; LocalSend's own GUI still owns actually starting the
+// transfer to a chosen device.
+function shareEntryCommand(entry) {
+    if (entry.kind === "image")
+        return "localsend_app " + _shq(entry.path);
+    return "localsend_app -t " + _shq(entry.text);
+}
+
+// Root "share.clipboard" leaf (Task 1), injected the same way
+// wallpaperEntry() is: its action depends on the CURRENT newest clipboard
+// entry (items[0]), which static jsonc can't express. default-menu.jsonc
+// still declares a "share.clipboard" placeholder so this fragment's key
+// overwrites an already-present entry rather than appending a new one —
+// JS object property order only tracks first insertion, so overwriting
+// keeps the row's position (right after "share", ahead of "share.history"/
+// "share.receive") instead of the row jumping to the end of the level.
+// Empty history is the one shape model.js's inferKind can't produce on its
+// own (no action/target/provider to key off), which is what the explicit
+// `kind`/`dim` override exists for: an honest NOTHING TO SHARE row, the
+// same non-activatable shape as nix's own unavailable-state rows.
+function shareClipboardEntry(items) {
+    var newest = (items || [])[0];
+    if (!newest) {
+        return {
+            "share.clipboard": {
+                label: "Nothing To Share",
+                icon: "",
+                kind: "note",
+                dim: true
+            }
+        };
+    }
+    return {
+        "share.clipboard": {
+            label: "Clipboard",
+            icon: "\u{F014D}", // nf-md-clipboard_text, same glyph the root clipboard node uses
+            action: shareEntryCommand(newest)
+        }
+    };
 }
 
 // First non-blank line only, capped at maxLen chars — clipboard captures can

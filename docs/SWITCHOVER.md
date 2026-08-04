@@ -171,6 +171,7 @@ hardware.
 | Menu: calculator | VM-only | mac VM rig @ 61da420, `dev/smoke-niri.sh --menu` — `debug query "2+2*3"` returns the `= 8` CALC row as the first ranked result (the run's `calc-query.json` artifact); parser edge cases in `tests/tst_menu_calc.qml` |
 | Menu: emoji | VM-only | mac VM rig @ 913d9a3, `dev/smoke-niri.sh --menu` — `debug query ":e thumbs"` returns the 👍 THUMBS UP row from the vendored `emoji.json` (the run's `emoji-query.json` artifact); dataset load + search in `tests/tst_menu_emoji.qml` |
 | Menu: nix runner | VM-only | mac VM rig @ 76757d5, `dev/smoke-niri.sh --menu` — two-pass `debug query ":nix hello"` against the PATH-shimmed `nix` returns the canned `hello` attr row after the 500ms debounce (the run's `nix-query.json` artifact). M13b (5bea2ed) added the honest states, each asserted by the extended drive against a query-dispatching shim: `SEARCHING` while the shim blocks on a gate flag file, `NO RESULTS` on a clean `{}`, `SEARCH FAILED` on a nonzero exit, plus a screenshotted `NIX RUN` toast (`nix-toast.png`) on row activation with a `notifications status` popup-count assert. Real `nix search` timing (the tens-of-seconds cold-cache first run the `SEARCHING` row exists for) and the `ghostty` spawn stay host-trial territory |
+| Menu: share (LocalSend) | VM-only | M17 Task 1, `dev/smoke-niri.sh --share` — the presence gate resolves for real against the VM's `pkgs.localsend` closure (share-menu.png — CLIPBOARD/PICK FROM HISTORY/RECEIVE rows, not yet promoted to `docs/screenshots/`); activating CLIPBOARD launches a real `localsend_app -t <text>` process, its `/proc` cmdline read back to confirm the exact fixture text reached argv. A second phase hands off to a PATH-shadowed second instance (the same takeover protocol `--instance` mode proves) whose own presence check genuinely cannot find `localsend_app`, and the SHARE node disappears from the tree entirely, screenshotted with the plain root menu and no SHARE row at all. LocalSend's own CLI has no headless auto-send mode (verified against upstream's `LoadSelectionFromArgsAction`) — a share still ends with LocalSend's GUI open, which is real-host-trial territory, along with a genuine cross-device transfer over LAN |
 | Screenshot IPC | VM-only | mac VM rig @ fd56a5f, `dev/smoke-niri.sh --screenshot` — `screenshot full`'s replied path exists as a valid PNG and `wl-paste --list-types` offers `image/png` in-session. M13 (d2d55a5) added the region watchdog and cancel: the extended drive starts `screenshot region`, round-trips `status` through `capturing:true`, calls `cancel`, and confirms cancelled-not-stuck state plus a still-working `full` afterward in the same session. The themed slurp overlay under a real drag stays host-trial — no synthetic pointer exists in the rig |
 | Bar + panel: weather | VM-only | Never included in any real-hardware sweep (neither e1504g's 18-mode run, the older g815 run, nor the 2026-07-29 g815 HEAD resweep drove `--panel weather`) — still real-host-trial territory. **Closed the "never a repeatable smoke run" half:** M15 (e789de0) replaced the bar cell's static `WEATHER` label with a live day/night condition glyph + rounded temperature (poll now owned by `WeatherPanel`, same pattern as `GithubPanel`, so the widget just flips `pollEnabled`), and `dev/smoke-niri.sh --panel weather`'s location-override fixture makes the run reproducible: `docs/screenshots/weather-niri.png` shows the bar cell's live `☁ 16°` cell next to a real open-meteo fetch in the panel (`OVERCAST 16°` hero row, a 5-day forecast ledger). Before the first fetch, or with no location fix, both the cell and this same fixture-less run show the honest dim static glyph instead of a fake reading (confirmed on a separate `just vm-smoke` run taken before the async fetch resolves) |
 | Notifications | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/notify.png`, `notify-center.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/notify.png`, `notify-center.png` (`docs/screenshots/notifications-niri.png`) |
@@ -299,6 +300,25 @@ Hyprland backend has never run on either Linux host — it exists only as
   verified either way (parity table) — real GUI privilege prompts (a real
   `pkexec`-using app, not the smoke rig's own `true`) have never reached
   this agent on real hardware.
+- **The menu's `SHARE` route needs `localsend_app` on the host's own PATH,
+  and its firewall ports open for peer discovery/transfer to actually
+  work.** `default-menu.jsonc`'s `share` node gates on a live `command -v
+  localsend_app` check (nixpkgs' `pkgs.localsend` installs a binary named
+  `localsend_app`, not the bare `localsend` omarchy's own Arch packaging
+  assumes — verified against the built package, not guessed), so nothing
+  renders at all without it — but the binary alone still can't see or reach
+  peers on the LAN without inbound 53317/tcp and 53317/udp allowed
+  (omarchy's own `firewall.sh` opens the same two ports). Neither Linux
+  host has `localsend` installed or those ports opened yet; switchover
+  means adding the package and the firewall rule to the owner's own nix
+  config (outside this repo). Also worth knowing going in: LocalSend has no
+  true headless auto-send CLI — `localsend_app -t <text>` or a bare file
+  path just pre-populates the GUI's send selection (verified against
+  upstream's own arg parser), so a share still ends with LocalSend's window
+  open, waiting for a device to be picked. Read-only proof that the
+  presence gate works and that the process launches with the right
+  argument is VM-only (parity table) — a real cross-device transfer over
+  LAN has never run anywhere.
 - **Tailscale up/down needs the invoking user set as operator first —
   otherwise the daemon refuses the toggle.** `TailscalePanel.qml`'s STATUS
   action cell shells out to `tailscale up`/`down` unprivileged; the real

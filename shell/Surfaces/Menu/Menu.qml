@@ -244,8 +244,16 @@ PanelWindow {
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
         var wallpaper = Providers.wallpaperEntry(Quickshell.shellDir);
+        // Live, unlike wallpaper/buttons above: its action depends on the
+        // CURRENT newest clipboard entry, so ClipboardService.items rides
+        // this same binding for _defaultObj (and _tree below) to recompute
+        // whenever it changes. Merged as a plain overwrite of the
+        // "share.clipboard" key default-menu.jsonc already declares, so the
+        // row keeps that declared position instead of jumping to the end.
+        var shareClipboard = Providers.shareClipboardEntry(ClipboardService.items);
         var merged = {};
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
+        Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
         Object.keys(wallpaper).forEach(function (k) { merged[k] = wallpaper[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
@@ -269,7 +277,8 @@ PanelWindow {
                 return Quickshell.iconPath(name, true);
             });
         },
-        clipboard: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir); }
+        clipboard: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir); },
+        shareHistory: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir, "share"); }
     })
     readonly property var _nodes: root._tree.nodes
 

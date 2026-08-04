@@ -69,6 +69,13 @@ function titleCase(segment) {
 }
 
 function inferKind(entry) {
+    // An explicit `kind` wins outright — the one escape hatch for a kind
+    // the other four fields can't express, e.g. "note" (nix's own
+    // non-activatable NO NIX/SEARCHING rows): those are hand-built Node
+    // fragments from a provider fn today, bypassing buildTree entirely, but
+    // a dynamically-injected root entry (providers.js's wallpaperEntry()
+    // pattern) still goes through here and has no other way to ask for it.
+    if (entry.kind !== undefined) return entry.kind;
     if (entry.action !== undefined) return "action";
     if (entry.target !== undefined) return "link";
     if (entry.provider !== undefined) return "provider";
@@ -142,6 +149,7 @@ function buildTree(defaultObj, userObj) {
         if (entry.when !== undefined) node.when = entry.when;
         if (entry.checked !== undefined) node.checked = entry.checked;
         if (entry.confirm !== undefined) node.confirm = entry.confirm;
+        if (entry.dim !== undefined) node.dim = entry.dim;
         nodes[id] = node;
     });
 

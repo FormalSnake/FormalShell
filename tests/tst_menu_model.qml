@@ -53,6 +53,20 @@ TestCase {
         compare(tree.nodes["d"].kind, "submenu");
     }
 
+    // The "note"/`dim` escape hatch (M17 Task 1): an explicit `kind` wins
+    // over inference from action/target/provider, and `dim` rides along —
+    // the shape a dynamically-injected root entry (providers.js's
+    // shareClipboardEntry()) needs for an honest, non-activatable empty row
+    // that static jsonc's action/target/provider fields can't express.
+    function test_explicit_kind_override_and_dim_passthrough() {
+        var def = {
+            "a": { label: "Nothing To Share", kind: "note", dim: true }
+        };
+        var tree = M.buildTree(def, {});
+        compare(tree.nodes["a"].kind, "note");
+        compare(tree.nodes["a"].dim, true);
+    }
+
     function test_user_override_of_default_label() {
         var def = { "apps": { label: "Applications", icon: "" } };
         var user = { "apps": { label: "My Apps" } };

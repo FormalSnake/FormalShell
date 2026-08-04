@@ -44,7 +44,21 @@
     },
 
     "theme": { "label": "Theme", "icon": "󰏘" },
-    "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" }
+    "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" },
+
+    // SHARE (M17 Task 1): present only when `localsend_app` resolves on
+    // PATH (nixpkgs' pkgs.localsend package, verified against its actual
+    // installed bin/ — not the bare `localsend` name omarchy assumes) — the
+    // standard `command -v` presence guard (see TailscalePanel.qml's own
+    // "NO TAILSCALE" check for the same idiom). "share.clipboard" is a
+    // placeholder: providers.js's shareClipboardEntry() overwrites it at
+    // tree-build time with the live newest-clipboard-entry action (or the
+    // honest NOTHING TO SHARE row), keeping its declared position ahead of
+    // "share.history"/"share.receive" below.
+    "share": { "label": "Share", "icon": "󰒗", "when": "command -v localsend_app >/dev/null 2>&1" },
+    "share.clipboard": { "label": "Clipboard" },
+    "share.history": { "label": "Pick From History", "provider": "shareHistory", "icon": "󰋚" },
+    "share.receive": { "label": "Receive", "action": "localsend_app", "icon": "󰥦" }
 
     // The root "wallpaper" node (opens the image picker grid) is injected at
     // tree-build time by Menu.qml via providers.js's wallpaperEntry(): its
