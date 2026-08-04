@@ -233,6 +233,18 @@ PanelWindow {
         }
     }
 
+    // Mirrors ClipboardService.items ONLY while the menu is actually open
+    // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
+    // the ternary's closed branch never reads ClipboardService.items, so
+    // QML's binding dependency tracker doesn't subscribe to it while
+    // closed: a clipboard capture landing while the menu is closed no
+    // longer touches this property at all, which is what keeps
+    // _defaultObj/_tree below from rebuilding the ENTIRE tree (every app,
+    // every provider) on every single capture. The moment isOpen flips
+    // true this re-reads the live list and resubscribes, so content is
+    // exactly as fresh as before for as long as the menu stays open.
+    readonly property var _liveClipboardItems: root.isOpen ? ClipboardService.items : []
+
     readonly property var _defaultObj: {
         if (!root._defaultMenuText) return {};
         var parsed;
@@ -245,13 +257,15 @@ PanelWindow {
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
         var wallpaper = Providers.wallpaperEntry(Quickshell.shellDir);
         var stayAwake = Providers.stayAwakeEntry(Quickshell.shellDir);
-        // Live, unlike wallpaper/buttons above: its action depends on the
-        // CURRENT newest clipboard entry, so ClipboardService.items rides
-        // this same binding for _defaultObj (and _tree below) to recompute
-        // whenever it changes. Merged as a plain overwrite of the
+        // Live-while-open, unlike wallpaper/buttons above: its action
+        // depends on the current newest clipboard entry, so
+        // _liveClipboardItems rides this same binding for _defaultObj (and
+        // _tree below) to recompute whenever it changes — but only while
+        // that dependency is actually subscribed (see _liveClipboardItems'
+        // own comment). Merged as a plain overwrite of the
         // "share.clipboard" key default-menu.jsonc already declares, so the
         // row keeps that declared position instead of jumping to the end.
-        var shareClipboard = Providers.shareClipboardEntry(ClipboardService.items);
+        var shareClipboard = Providers.shareClipboardEntry(root._liveClipboardItems);
         var merged = {};
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
@@ -279,8 +293,8 @@ PanelWindow {
                 return Quickshell.iconPath(name, true);
             });
         },
-        clipboard: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir); },
-        shareHistory: function () { return Providers.clipboardProvider(ClipboardService.items, Quickshell.shellDir, "share"); }
+        clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir); },
+        shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); }
     })
     readonly property var _nodes: root._tree.nodes
 
