@@ -615,7 +615,24 @@ panel's known rows. Honest states: a single dim cell reading `NO ADAPTER`
 when `Bluetooth.defaultAdapter` is null, `TURN ON TO SCAN` when the adapter
 is off, or `SCANNING…` when it's on and discovering but nothing has turned
 up yet — the test VM has no adapter at all, so `NO ADAPTER` is what its
-smoke screenshot shows. `PowerPanel` pairs a status row (an honest
+smoke screenshot shows.
+
+**AirPods noise control (LibrePods, M17 Task 2).** Upstream librepods
+(`github.com/kavishdevar/librepods`) ships no D-Bus surface at all — its
+only IPC is a `QLocalServer` named `app_server`, which Qt's local-socket
+backend resolves to a real filesystem socket at `/tmp/app_server` (the
+app's own single-instance cleanup hardcodes that exact path). The protocol
+is four write-only messages (`noise:off`/`noise:anc`/`noise:transparency`/
+`noise:adaptive`); battery and the active mode are never exported outside
+the GUI. `LibrePodsService.qml` probes that socket (bare connect,
+disconnect, never a write) once each time the bluetooth panel opens — never
+a poll loop — and renders an `AIRPODS NOISE` row with a dim `SET ONLY` meta
+tag only while the probe succeeds. The row is four plain action cells (`OFF`
+/ `ANC` / `TRANSPARENCY` / `ADAPTIVE`) joining the panel's existing
+address-keyed keyboard cursor; none of them ever renders as selected or
+active, since the protocol has no read-back to key that off. No socket
+present (the test VM's default state) means the row simply doesn't exist —
+the rest of the panel renders byte-identical. `PowerPanel` pairs a status row (an honest
 `AC POWER` cell rather than a lying `0%` when `UPower.displayDevice.isLaptopBattery`
 is false) with a keyboard-navigable power-profile picker (Up/Down to move,
 Enter to apply) under power-profiles-daemon, plus a breathing-opacity

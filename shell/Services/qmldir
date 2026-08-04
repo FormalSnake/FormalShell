@@ -5,6 +5,7 @@ singleton CalendarEventsService CalendarEventsService.qml
 singleton ClipboardService ClipboardService.qml
 singleton IdleService IdleService.qml
 InstanceLock InstanceLock.qml
+singleton LibrePodsService LibrePodsService.qml
 singleton LocationService LocationService.qml
 singleton MediaService MediaService.qml
 singleton NightLightService NightLightService.qml

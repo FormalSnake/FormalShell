@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Bluetooth
 import qs.Core
 import qs.Components
+import qs.Services
 import "../../Bluetooth/model.js" as BluetoothModel
 
 // Bluetooth panel (DESIGN.md §Panels, spec §2, M6 Task 6; behavior parity M14
@@ -43,6 +44,15 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // renders the honest "NO ADAPTER" cell — the adapter-off ("TURN ON TO SCAN")
 // and discovering-empty ("SCANNING…") states below it are exercised by the
 // model.js bucket tests, not the smoke rig.
+//
+// AIRPODS NOISE (M17 Task 2): four plain action cells (OFF/ANC/
+// TRANSPARENCY/ADAPTIVE) that join the same address-keyed cursor list as
+// the device rows above, appended last, and appear only while
+// `LibrePodsService.available` — probed once per panel open, never a poll.
+// The protocol behind them is write-only (no D-Bus, a raw QLocalServer
+// socket — see LibrePodsService.qml), so none of the four ever renders as
+// selected/active; the header's dim "SET ONLY" tag is what tells the
+// owner that's deliberate, not broken.
 Panel {
     id: root
 
@@ -56,12 +66,24 @@ Panel {
     readonly property var _availableRows: root._buckets.available
     readonly property bool _hasAnyRows: root._connectedRows.length > 0 || root._pairedRows.length > 0 || root._availableRows.length > 0
 
+    readonly property bool _airpodsAvailable: LibrePodsService.available
+    readonly property var _airpodsModes: [
+        { key: "off", label: "OFF" },
+        { key: "anc", label: "ANC" },
+        { key: "transparency", label: "TRANSPARENCY" },
+        { key: "adaptive", label: "ADAPTIVE" }
+    ]
+
     readonly property var _allRows: {
         var out = [];
         var i;
         for (i = 0; i < root._connectedRows.length; i++) out.push({ device: root._connectedRows[i], bucket: "connected" });
         for (i = 0; i < root._pairedRows.length; i++) out.push({ device: root._pairedRows[i], bucket: "paired" });
         for (i = 0; i < root._availableRows.length; i++) out.push({ device: root._availableRows[i], bucket: "available" });
+        if (root._airpodsAvailable) {
+            for (i = 0; i < root._airpodsModes.length; i++)
+                out.push({ device: { address: "airpods:" + root._airpodsModes[i].key, mode: root._airpodsModes[i].key }, bucket: "airpods" });
+        }
         return out;
     }
 
@@ -89,7 +111,9 @@ Panel {
     }
 
     onIsOpenChanged: {
-        if (!root.isOpen) {
+        if (root.isOpen) {
+            LibrePodsService.probe();
+        } else {
             root._cursorAddress = "";
             if (root._adapter)
                 root._adapter.discovering = false;
@@ -179,6 +203,10 @@ Panel {
     function _activateRow(bucket, device) {
         if (!device || root._actionKind !== "")
             return;
+        if (bucket === "airpods") {
+            LibrePodsService.setNoise(device.mode);
+            return;
+        }
         if (bucket === "connected") {
             if (root._runAction("disconnect", device))
                 device.disconnect();
@@ -475,5 +503,67 @@ Panel {
     Repeater {
         model: root._availableRows.map(function (d) { return { device: d, bucket: "available" }; })
         delegate: deviceRow
+    }
+
+    Cell {
+        visible: root._airpodsAvailable
+        width: parent.width
+
+        Row {
+            width: parent.width
+            spacing: Theme.space.sm
+
+            MetaLabel {
+                width: parent.width - setOnlyLabel.width - parent.spacing
+                text: "AIRPODS NOISE"
+            }
+
+            MetaLabel {
+                id: setOnlyLabel
+                text: "SET ONLY"
+            }
+        }
+    }
+
+    Component {
+        id: airpodsModeCell
+
+        Cell {
+            id: modeCell
+            required property var modelData
+            readonly property string _key: modeCell.modelData.key
+            readonly property string _address: "airpods:" + modeCell._key
+            width: implicitWidth
+            height: implicitHeight
+            hovered: modeMouse.containsMouse || (root._cursorAddress !== "" && root._cursorAddress === modeCell._address)
+
+            MetaLabel {
+                text: modeCell.modelData.label
+                color: modeCell.foreground
+            }
+
+            MouseArea {
+                id: modeMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: LibrePodsService.setNoise(modeCell._key)
+            }
+        }
+    }
+
+    Cell {
+        visible: root._airpodsAvailable
+        width: parent.width
+
+        Row {
+            width: parent.width
+            spacing: Theme.space.sm
+
+            Repeater {
+                model: root._airpodsModes
+                delegate: airpodsModeCell
+            }
+        }
     }
 }
