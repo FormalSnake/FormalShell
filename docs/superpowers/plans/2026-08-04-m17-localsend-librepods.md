@@ -25,21 +25,27 @@ or omits the section (LibrePods) — zero cost, zero chrome when absent.
   **image** entries are already content-addressed files on disk
   (`$XDG_STATE_HOME/formalshell/clipboard-images/<sha>.png`), so images
   share by path directly — no temp file, unlike omarchy.
-- **LibrePods** (`github.com/kavishdevar/librepods`): the Linux side
-  ships a daemon exposing `org.librepods.Daemon` on the **session**
-  D-Bus — battery per bud + case, noise-control mode get/set
-  (Off/ANC/Transparency/Adaptive), ear detection — drivable via
-  `gdbus`/`busctl`. Exact object path, interface, property, and method
-  names were NOT captured in this session's research and MUST be read
-  from the librepods source before any QML is written (clone
-  read-reference to `~/Developer/librepods`; find the daemon's D-Bus
-  registration/introspection XML). If the shipped daemon's interface
-  differs from the web-search summary, the source wins — never guess a
-  bus name into existence. Sibling prior art if the interface proves
-  unclear: `github.com/Anoryth/librepods-gnome` (a GNOME consumer of
-  the same daemon) and `github.com/Explor3Universe/LinuxPods` (KDE
-  equivalent with its own daemon — read-reference only, GPL caution:
-  reimplement, never copy).
+- **LibrePods** (`github.com/kavishdevar/librepods`) — CORRECTED
+  2026-08-04 after reading the actual source (cloned to
+  `~/Developer/librepods`; the earlier web-research claim of an
+  `org.librepods.Daemon` D-Bus service was FALSE): the Linux app
+  exposes **no D-Bus surface at all**, on either branch. The stable Qt
+  app registers a `QLocalServer` named `"app_server"` (Unix socket,
+  file at `/tmp/app_server`) accepting exactly five **write-only**
+  messages: `reopen`, `noise:off`, `noise:anc`, `noise:transparency`,
+  `noise:adaptive` (`linux/main.cpp:1092-1103`, mirrored by its own
+  `librepods-ctl` CLI). Battery levels and current mode are never
+  exported outside the GUI process. The `linux/rust` rewrite branch is
+  the same: D-Bus used only as an MPRIS client, no service of its own.
+  The owner runs exactly this Qt app on the e1504g (PID 3117, verified
+  live) — so the honest integration is **set-only noise control over
+  that socket**: no battery rows, no active-mode read-back, no
+  invented state. Two unrelated GPL-3.0 projects (EarPort /
+  `io.github.anoryth.EarPort1` from librepods-gnome, and LinuxPods /
+  `io.github.Explor3Universe.LinuxPods.Manager`) DO ship
+  battery-capable daemons — deliberately NOT integrated here: the
+  owner doesn't run either, and adopting one is a host-setup decision
+  for a future milestone, not something this plan smuggles in.
 - Quickshell has no general-purpose QML D-Bus client API (tray/
   notifications/mpris are dedicated C++ services) — LibrePods talks
   through `busctl --user`/`gdbus` Processes, the shell's established
@@ -121,56 +127,52 @@ leg), `docs/USAGE.md`, `docs/SWITCHOVER.md`.
 Read the PNG + the process-argv evidence in the log. Commit
 (`feat(menu): …`).
 
-### Task 2: LibrePods section in the bluetooth panel
+### Task 2: LibrePods noise-control cells in the bluetooth panel (set-only, corrected scope)
 
-**Files:** create `shell/Services/LibrePodsService.qml`,
-`shell/Airpods/model.js` (pure), `tests/tst_airpods_model.qml`; modify
+**Files:** create `shell/Services/LibrePodsService.qml`; modify
 `shell/Surfaces/Panels/BluetoothPanel.qml`, `docs/USAGE.md`,
 `docs/SWITCHOVER.md`.
 
 **Produces:**
-1. FIRST: clone `github.com/kavishdevar/librepods` to
-   `~/Developer/librepods` (read-reference only) and read the Linux
-   daemon's D-Bus surface — bus name, object path, interface(s),
-   property/method names, signal shapes, battery units, mode enum
-   values. Every wire detail in the QML/JS below comes from that
-   source. If the daemon exposes no stable D-Bus interface (or the
-   project's Linux daemon turns out to work differently than the
-   research summary), STOP and report blocked with what the source
-   actually shows — never ship a section speaking a guessed protocol.
-2. `Airpods/model.js` (pure): parsers for the daemon's replies
-   (battery levels per bud/case, charging flags, mode int ↔ label
-   mapping `OFF / ANC / TRANSPARENCY / ADAPTIVE`), unit conversion at
-   the boundary if needed, honest nulls for absent buds (single-bud
-   use). Tests against fixture strings captured verbatim from the
-   daemon source/docs.
-3. `LibrePodsService.qml` (Singleton): `available` (bus name has an
-   owner — one `busctl --user status`-shaped probe when the bluetooth
-   panel opens, refreshed by the monitor below), battery/mode state,
-   `setMode(mode)` via the daemon's method call. A monitor Process
-   subscribing to the daemon's signals runs ONLY while the bluetooth
-   panel is open; panel close kills it (M16 Task 12's rule). All
-   Processes are `busctl`/`gdbus` argv — no shell wrappers, no polling
-   timers.
-4. `BluetoothPanel.qml`: an `AIRPODS` section (uppercase meta header,
-   ledger rows) rendered only while `available`: battery rows for
-   LEFT / RIGHT / CASE (percent + the panel's existing battery
-   rendering idiom; absent bud → row omitted, not `--`), and a
-   four-cell mode row (active mode inverted per the ledger selection
-   contract, click/Enter/keyboard-cursor sets it through the same nav
-   the panel already has). No daemon → the section does not exist; the
-   rest of the panel is byte-identical to today.
-5. USAGE.md documents the section + its presence condition;
-   SWITCHOVER.md documents that the librepods daemon itself is
-   owner-side setup (package/service + its BlueZ prerequisites per the
-   librepods README) and the shell only consumes its session-bus
-   interface.
+1. `LibrePodsService.qml` (Singleton): `available` — true while the
+   librepods app's control socket exists AND connects (a
+   `Quickshell.Io.Socket` to the `QLocalServer` path; verify the exact
+   socket path resolution from `linux/main.cpp` — QLocalServer names
+   resolve under `$XDG_RUNTIME_DIR` or `/tmp` depending on Qt
+   configuration, so read what the app actually creates, and probe by
+   connecting, not just stat-ing a maybe-stale file). `setNoise(mode)`
+   writes the verbatim message (`noise:off|anc|transparency|adaptive`)
+   — the protocol is write-only; the service stores no invented state.
+   Probe on bluetooth-panel open only; no poll loops (M16 hidden-work
+   rule).
+2. `BluetoothPanel.qml`: an `AIRPODS NOISE` row (uppercase meta
+   header) rendered only while `available`: four action cells `OFF /
+   ANC / TRANSPARENCY / ADAPTIVE`. The protocol has NO read-back, so
+   NO cell renders as selected/active — they are plain action cells
+   (hover/press states only), and the header carries a dim `SET ONLY`
+   meta tag so the absence of an active indicator reads as designed,
+   not broken. Joins the panel's existing keyboard-cursor system. No
+   socket → the row does not exist; the rest of the panel is
+   byte-identical.
+3. No pure model file: there is nothing to parse (write-only fixed
+   strings). No fake battery, no fake active mode — the moment
+   upstream librepods ships a readable interface, a future task can
+   grow this honestly.
+4. USAGE.md documents the row + its presence condition; SWITCHOVER.md
+   notes the prerequisite is simply the librepods Qt app running (the
+   owner's existing setup), and records the deliberate non-goals:
+   battery/active-mode need a daemon upstream doesn't provide (EarPort
+   / LinuxPods exist as GPL alternatives, owner's call, out of scope).
 
-**Verify:** `just vm-test` (model fixtures); `just vm-lint`;
-`just vm-smoke --panel bluetooth` — the VM has no daemon (and no
-adapter), so the honest unchanged panel is the expected screenshot;
-Read it. Live AirPods behavior is owner-verified post-ship, stated
-honestly in the commit. Commit (`feat(bluetooth): …`).
+**Verify:** `just vm-lint`; `just vm-test` (no new suite needed;
+existing suites must stay green); `just vm-smoke --panel bluetooth` —
+the VM has no librepods socket, so the honest unchanged panel is the
+expected screenshot; Read it. A socket-fixture leg is sanctioned IF
+cheap: a `socat`/python stand-in QLocalServer in the nested session
+that records received bytes proves the four cells send the exact
+protocol strings — prefer this over shipping unverified writes; if the
+rig can't host one honestly, say so in the commit and the owner
+verifies live. Commit (`feat(bluetooth): …`).
 
 ### Task 3: Docs, screenshots, closing sweep
 
