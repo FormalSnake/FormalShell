@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 
 import "reducer.js" as Reducer
+import "../../Display/outputs.js" as Outputs
 
 // Niri backend over niri's two-socket JSON IPC: the event-stream socket
 // monopolizes its connection once activated ("EventStream" turns the
@@ -19,7 +20,10 @@ Scope {
     readonly property bool available: eventSocket.connected && requestSocket.connected
     property var workspaces: state.workspaces
     property var windows: state.windows
-    property var outputs: state.outputs
+    // Not reducer-derived, unlike everything else here: niri's event stream
+    // carries no output event at all (niri-ipc's `Event` enum, lib.rs:1571),
+    // so outputs only ever arrive as replies to an explicit Outputs request.
+    property var outputs: []
     property string focusedWindowId: state.focusedWindowId
     property string focusedWorkspaceId: state.focusedWorkspaceId
     property string focusedOutputName: state.focusedOutputName
@@ -52,6 +56,40 @@ Scope {
         requestSocket.request({ Action: { LoadConfigFile: {} } });
     }
 
+    readonly property bool outputConfigAvailable: true
+    // niri-ipc's OutputAction (lib.rs:1018) is Off/On/Mode/CustomMode/
+    // Modeline/Scale/Transform/Position/Vrr — no mirror variant, because niri
+    // has no mirroring primitive at all. setOutputMirror below is therefore a
+    // declared no-op rather than a missing symbol, matching how
+    // HyprlandBackend states applyThemeFragment's absence; the panel gates on
+    // this flag and renders an honest unavailable cell.
+    readonly property bool mirrorSupported: false
+
+    // Output names are plain strings on the wire on both compositors — niri
+    // keys its Outputs map by name — so none of the requests below carry the
+    // Number(id) conversion the window/workspace actions above need.
+    // Set across the request so the shared reply parser can attribute an Err
+    // to this request rather than to one of the action acks that use the same
+    // connection.
+    property bool _outputsRequested: false
+
+    function refreshOutputs() {
+        root._outputsRequested = true;
+        requestSocket.request("Outputs");
+    }
+
+    function setOutputEnabled(name, enabled) {
+        requestSocket.request({ Output: { output: name, action: enabled ? "On" : "Off" } });
+        outputRefreshTimer.restart();
+    }
+
+    function setOutputScale(name, scale) {
+        requestSocket.request({ Output: { output: name, action: { Scale: { scale: { Specific: scale } } } } });
+        outputRefreshTimer.restart();
+    }
+
+    function setOutputMirror(name, sourceName) {} // see mirrorSupported above
+
     function _connect() {
         if (root.socketPath === "")
             return;
@@ -65,6 +103,15 @@ Scope {
         id: reconnectTimer
         interval: 2000
         onTriggered: root._connect()
+    }
+
+    // niri applies an Output request from an idle callback (src/ipc/server.rs:415
+    // schedules apply_transient_output_config), so its reply lands before the
+    // change does — re-reading immediately would report the old geometry back.
+    Timer {
+        id: outputRefreshTimer
+        interval: 300
+        onTriggered: root.refreshOutputs()
     }
 
     Socket {
@@ -94,8 +141,12 @@ Scope {
                 if (event.Ok !== undefined || event.Err !== undefined)
                     return; // reply to the "EventStream" request itself, not an Event
                 root.state = Reducer.reduce(root.state, event);
-                if (event.ConfigLoaded !== undefined)
+                if (event.ConfigLoaded !== undefined) {
                     root.configReloaded(event.ConfigLoaded.failed);
+                    // A reloaded config is the one thing that can change the
+                    // output set without this shell having asked for it.
+                    root.refreshOutputs();
+                }
             }
         }
     }
@@ -105,7 +156,9 @@ Scope {
         path: root.socketPath
 
         onConnectionStateChanged: {
-            if (!connected) {
+            if (connected) {
+                root.refreshOutputs();
+            } else {
                 connected = false;
                 reconnectTimer.restart();
             }
@@ -116,6 +169,38 @@ Scope {
         function request(obj) {
             write(JSON.stringify(obj) + "\n");
             flush();
+        }
+
+        // niri answers every request on this connection with exactly one
+        // `Reply` line (src/ipc/server.rs:187's read/reply loop), so a plain
+        // line parser correlates by shape: only an Ok(Outputs) reply carries
+        // state, and Handled / OutputConfigChanged acks and Err strings alike
+        // fall through untouched.
+        parser: SplitParser {
+            onRead: line => {
+                var reply;
+                try {
+                    reply = JSON.parse(line);
+                } catch (e) {
+                    return;
+                }
+                // An Err reply to an Outputs request is a failed enumeration,
+                // not an empty one — see BackendBase's outputsState comment for
+                // why the panel must be able to tell those apart. Errs to other
+                // requests are indistinguishable on this shared connection, so
+                // only an outstanding Outputs request claims one.
+                if (reply && reply.Err !== undefined && root._outputsRequested) {
+                    root._outputsRequested = false;
+                    root.outputs = [];
+                    root.outputsState = "failed";
+                    return;
+                }
+                if (!reply || !reply.Ok || reply.Ok.Outputs === undefined)
+                    return;
+                root._outputsRequested = false;
+                root.outputs = Outputs.normalizeNiriOutputs(reply.Ok.Outputs);
+                root.outputsState = "ok";
+            }
         }
     }
 }

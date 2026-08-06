@@ -1,6 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
+
+import "../../Display/outputs.js" as Outputs
 
 // Hyprland backend over Quickshell's native Hyprland IPC module. Hyprland.workspaces/
 // toplevels/monitors are already-reactive ObjectModels (unlike niri's raw socket, no
@@ -43,9 +46,14 @@ Scope {
         };
     })
 
-    readonly property var outputs: Hyprland.monitors.values.map(function (m) {
-        return { name: m.name, x: m.x, y: m.y, width: m.width, height: m.height, scale: m.scale };
-    })
+    // Not derived from Hyprland.monitors, unlike everything else here:
+    // Quickshell populates that model from `j/monitors`, which omits disabled
+    // monitors entirely (connection.cpp:805 there) — an output switched off
+    // would vanish from the very list DisplayPanel needs to switch it back on
+    // from. `hyprctl monitors all -j` is the only enumeration that includes
+    // them, and it carries `disabled`/`mirrorOf` too, which the model doesn't
+    // expose at all.
+    property var outputs: []
 
     readonly property string focusedWindowId: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
     readonly property string focusedWorkspaceId: Hyprland.focusedWorkspace ? String(Hyprland.focusedWorkspace.id) : ""
@@ -126,11 +134,114 @@ Scope {
     // niri only) — no-op, matching BackendBase's contract default.
     function applyThemeFragment() {}
 
+    readonly property bool outputConfigAvailable: true
+    readonly property bool mirrorSupported: true
+
+    // Output configuration goes through `hyprctl keyword monitor` rather than
+    // Hyprland.dispatch(): monitor layout is a config keyword, not a
+    // dispatcher, and Quickshell exposes only dispatch() plus the request
+    // socket's path (qml.hpp:52 there) — makeRequest() itself is C++-private.
+    // hyprctl is guaranteed present wherever HYPRLAND_INSTANCE_SIGNATURE is
+    // set, and that env guard matters: CompositorService instantiates every
+    // backend regardless of which one it goes on to select, so without it a
+    // niri session would spawn a doomed hyprctl on startup — the same reason
+    // NiriBackend's own _connect() bails on an empty socket path.
+    function refreshOutputs() {
+        if (!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || outputsProc.running)
+            return;
+        outputsProc.running = true;
+    }
+
+    // Output names are plain strings on the wire on both compositors — the
+    // `monitor` keyword takes the name verbatim — so none of the requests
+    // below carry any id conversion, unlike the window selectors above.
+    function setOutputEnabled(name, enabled) {
+        // Re-enabling deliberately re-derives the mode, position and scale
+        // (`preferred,auto,auto`) instead of restating the row's own: a
+        // disabled monitor reports a zero mode, so there is nothing truthful
+        // left to restate.
+        root._keyword(enabled ? name + ",preferred,auto,auto" : name + ",disable");
+    }
+
+    function setOutputScale(name, scale) {
+        var row = Outputs.findOutput(root.outputs, name);
+        if (!row)
+            return;
+        root._keyword(Outputs.hyprlandMonitorArg(row, { scale: scale }));
+    }
+
+    function setOutputMirror(name, sourceName) {
+        var row = Outputs.findOutput(root.outputs, name);
+        if (!row)
+            return;
+        root._keyword(Outputs.hyprlandMonitorArg(row, { mirrorOf: sourceName }));
+    }
+
+    // MIRROR fires one keyword per mirrored output at once, so these queue:
+    // reassigning a Process's command while it is still running would drop
+    // the in-flight invocation on the floor, silently losing a user action.
+    property var _keywordQueue: []
+
+    function _keyword(monitorArg) {
+        root._keywordQueue = root._keywordQueue.concat([monitorArg]);
+        root._drainKeywords();
+    }
+
+    function _drainKeywords() {
+        if (keywordProc.running || root._keywordQueue.length === 0)
+            return;
+        var next = root._keywordQueue[0];
+        root._keywordQueue = root._keywordQueue.slice(1);
+        keywordProc.command = ["hyprctl", "keyword", "monitor", next];
+        keywordProc.running = true;
+    }
+
+    Process {
+        id: outputsProc
+        command: ["hyprctl", "monitors", "all", "-j"]
+        stdout: StdioCollector {
+            id: outputsCollector
+        }
+        onExited: exitCode => {
+            // A failed enumeration reports nothing rather than leaving the
+            // last good list on screen — a stale row is not the truth. But it
+            // is flagged as a FAILURE rather than as an empty result, so the
+            // panel says so instead of claiming the session has no displays.
+            if (exitCode !== 0) {
+                root.outputs = [];
+                root.outputsState = "failed";
+                return;
+            }
+            root.outputs = Outputs.parseHyprlandOutputs(outputsCollector.text);
+            root.outputsState = "ok";
+        }
+    }
+
+    // Hyprland applies a monitor keyword before hyprctl exits, so unlike
+    // niri's idle-scheduled Output request this needs no settling delay — but
+    // the re-read waits until the whole queue has drained, so a mirror of
+    // three outputs reports once, not once per leg.
+    Process {
+        id: keywordProc
+        onExited: {
+            if (root._keywordQueue.length > 0)
+                root._drainKeywords();
+            else
+                root.refreshOutputs();
+        }
+    }
+
+    Component.onCompleted: root.refreshOutputs()
+
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (event.name === "configreloaded")
+            if (event.name === "configreloaded") {
                 root.configReloaded(false);
+                root.refreshOutputs();
+            } else if (event.name === "monitoraddedv2" || event.name === "monitorremoved") {
+                root.refreshOutputs();
+            }
         }
     }
 }
