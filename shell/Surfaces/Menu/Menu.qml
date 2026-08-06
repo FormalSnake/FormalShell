@@ -233,6 +233,24 @@ PanelWindow {
         }
     }
 
+    // ~/.clipssh/aliases — clipssh's own `name=user@host` store, optional
+    // like menu.jsonc but with none of its retry machinery: open() reloads
+    // it every summon, so an alias added mid-session (even before the file
+    // first existed) shows on the next open without a watch ever having
+    // attached. Absence just means zero aliases — clipsshRows' own NO
+    // ALIASES note row — never a warning.
+    property string _clipsshAliasesText: ""
+
+    FileView {
+        id: clipsshAliasFile
+        printErrors: false
+        path: Quickshell.env("HOME") + "/.clipssh/aliases"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: root._clipsshAliasesText = clipsshAliasFile.text()
+        onLoadFailed: root._clipsshAliasesText = ""
+    }
+
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
     // the ternary's closed branch never reads ClipboardService.items, so
@@ -294,7 +312,8 @@ PanelWindow {
             });
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir); },
-        shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); }
+        shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); },
+        clipssh: function () { return Providers.clipsshRows(Providers.clipsshAliases(root._clipsshAliasesText)); }
     })
     readonly property var _nodes: root._tree.nodes
 
@@ -504,6 +523,7 @@ PanelWindow {
         // between opens — bluetooth power, mode toggle, device presence).
         root._condResults = {};
         root._checkedResults = {};
+        clipsshAliasFile.reload();
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
         // (onTextChanged side effects included, so the debounced search

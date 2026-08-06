@@ -385,6 +385,66 @@ function nixSearchingRow() { return _nixNoteRow("nix.searching", "SEARCHING"); }
 function nixNoResultsRow() { return _nixNoteRow("nix.noresults", "NO RESULTS"); }
 function nixFailedRow() { return _nixNoteRow("nix.failed", "SEARCH FAILED"); }
 
+// ~/.clipssh/aliases (`name=user@host` lines, clipssh's own alias store —
+// its alias_add rejects `=`/whitespace in names) -> [{name, target}].
+// Malformed or blank lines are skipped: the file is clipssh's own state,
+// not input this shell owns validating.
+function clipsshAliases(text) {
+    var out = [];
+    String(text || "").split("\n").forEach(function (line) {
+        var trimmed = line.trim();
+        if (trimmed === "") return;
+        var eq = trimmed.indexOf("=");
+        if (eq <= 0 || eq === trimmed.length - 1) return;
+        var name = trimmed.slice(0, eq);
+        if (/\s/.test(name)) return;
+        out.push({ name: name, target: trimmed.slice(eq + 1) });
+    });
+    return out;
+}
+
+// Alias rows for the clipssh route: Enter spawns `clipssh <name>` through
+// the normal activation path — clipssh grabs the clipboard image, scp's it
+// to the alias's host, and wl-copy's the remote path back, which
+// ClipboardService captures like any other copy, so the new clipboard
+// entry IS the success feedback. The scp can take seconds, so the row also
+// fires the activation toast (nixRows' notifySummary idiom) the moment
+// Enter lands. Names go through _shq: clipssh bans `=`/whitespace in them
+// but nothing else. Empty store renders one dim note row whose desc is the
+// exact add command, not a bare shrug.
+function clipsshRows(aliases) {
+    if (!aliases || aliases.length === 0) {
+        return [{
+            id: "clipssh.empty",
+            parentId: null,
+            label: "NO ALIASES",
+            icon: "",
+            title: "",
+            desc: "clipssh alias add <name> <user@host>",
+            aliases: [],
+            kind: "note",
+            dim: true,
+            childIds: []
+        }];
+    }
+    return aliases.map(function (a) {
+        return {
+            id: "clipssh." + a.name,
+            parentId: null,
+            label: a.name,
+            icon: "",
+            title: "",
+            desc: a.target,
+            aliases: [],
+            kind: "action",
+            action: "clipssh " + _shq(a.name),
+            notifySummary: "CLIPSSH",
+            notifyBody: a.name,
+            childIds: []
+        };
+    });
+}
+
 // Expands Config's `menu.customPowerButtons` (the spec's "first-class, not
 // a workaround" case — e.g. an owner's Windows-reboot bootloader shortcut)
 // into JSONC-shaped entry fragments keyed by dotted id, meant to be merged

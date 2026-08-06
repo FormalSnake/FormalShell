@@ -58,7 +58,15 @@
     "share": { "label": "Share", "icon": "󰒗", "when": "command -v localsend_app >/dev/null 2>&1" },
     "share.clipboard": { "label": "Clipboard" },
     "share.history": { "label": "Pick From History", "provider": "shareHistory", "icon": "󰋚" },
-    "share.receive": { "label": "Receive", "action": "localsend_app", "icon": "󰥦" }
+    "share.receive": { "label": "Receive", "action": "localsend_app", "icon": "󰥦" },
+
+    // CLIPSSH: present only when `clipssh` resolves on PATH (the same
+    // presence-gate idiom as "share" above) — each row is a saved alias
+    // from ~/.clipssh/aliases (providers.js's clipsshRows), Enter sends
+    // the current clipboard image to that host and copies the remote path
+    // back. md-console_network U+F08A9, pinned nerd-fonts-jetbrains-mono
+    // cmap via fonttools ttx.
+    "clipssh": { "label": "Clipssh", "provider": "clipssh", "icon": "󰢩", "when": "command -v clipssh >/dev/null 2>&1" }
 
     // The root "wallpaper" node (opens the image picker grid) is injected at
     // tree-build time by Menu.qml via providers.js's wallpaperEntry(): its
