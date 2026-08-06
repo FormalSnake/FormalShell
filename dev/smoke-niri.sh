@@ -983,6 +983,7 @@ visualizer_pgrep_playing_path="$shot_dir/visualizer-pgrep-playing.txt"
 visualizer_pgrep_after_path="$shot_dir/visualizer-pgrep-after.txt"
 active_window_pid_path="$shot_dir/foot.pid"
 lock_locked_path="$shot_dir/lock-locked.png"
+lock_typing_path="$shot_dir/lock-typing.png"
 lock_error_path="$shot_dir/lock-error.png"
 lock_unlocked_path="$shot_dir/lock-unlocked.png"
 lock_islocked1_path="$shot_dir/lock-islocked-1.txt"
@@ -2131,6 +2132,11 @@ sleep 3
 "$grim_bin" "$lock_locked_path"
 sleep 2
 "$wtype_bin" "wrong-password"
+# Mid-typing state, before Return: the masked dot run with NO text cursor
+# (AuthPrompt suppresses cursorVisible entirely while masked — a password
+# field is dots alone, so a bar in this shot is a regression).
+sleep 1
+"$grim_bin" "$lock_typing_path"
 "$wtype_bin" -k Return
 # The PAM round trip for a wrong password (subprocess fork/exec through the
 # full auth stack) measured ~2.5-3s on this VM, longer than a first glance
@@ -3375,6 +3381,11 @@ if $lock_mode; then
     echo "SMOKE_LOCK_LOCKED $lock_locked_path"
   else
     echo "SMOKE_FAIL: no lock-locked screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$lock_typing_path" ]; then
+    echo "SMOKE_LOCK_TYPING $lock_typing_path"
+  else
+    echo "SMOKE_FAIL: no lock-typing screenshot produced" >&2; exit 1
   fi
   if [ -f "$lock_error_path" ]; then
     echo "SMOKE_LOCK_ERROR $lock_error_path"

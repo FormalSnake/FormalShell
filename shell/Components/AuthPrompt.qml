@@ -206,13 +206,15 @@ Item {
                         enabled: root.inputEnabled && !root.checking
                         focus: true
                         selectByMouse: true
-                        // Cursor only shows once there's real content — an
-                        // empty, centred cursor otherwise lands squarely
-                        // inside the centred placeholder, printing as a
-                        // stray bar through the middle of a word (round-1
-                        // screenshot). Not a plain `cursorVisible: text.length
-                        // > 0` binding: QQuickTextInput's own C++
-                        // focusInEvent() calls setCursorVisible(true)
+                        // Masked fields never show a cursor — password entry
+                        // is the dot run alone, the way real password fields
+                        // behave. Unmasked (greeter username) shows it only
+                        // once there's real content — an empty, centred
+                        // cursor otherwise lands squarely inside the centred
+                        // placeholder, printing as a stray bar through the
+                        // middle of a word (round-1 screenshot). Not a plain
+                        // `cursorVisible` binding either way: QQuickTextInput's
+                        // own C++ focusInEvent() calls setCursorVisible(true)
                         // directly the moment focus lands (forceActiveFocus()
                         // in LockSurface/greeter's onVisibleChanged), which
                         // silently breaks any declarative binding on this
@@ -223,9 +225,9 @@ Item {
                         // what actually sticks.
                         onActiveFocusChanged: {
                             if (activeFocus)
-                                Qt.callLater(function () { input.cursorVisible = input.text.length > 0; });
+                                Qt.callLater(function () { input.cursorVisible = !root.masked && input.text.length > 0; });
                         }
-                        onTextChanged: input.cursorVisible = input.text.length > 0
+                        onTextChanged: input.cursorVisible = !root.masked && input.text.length > 0
 
                         // Shrink-to-fit dot spacing: as more dots need to
                         // fit the fixed field width, letter-spacing narrows
