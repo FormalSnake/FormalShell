@@ -26,6 +26,23 @@ var GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 var BAR_COUNT = 6;
 var MAX_LEVEL = 100;
 
+// Below this level a bar reads as silence and snaps flat. cava's own
+// `ignore` knob would do the same job but has been deprecated since 0.8.0
+// (verified against its 0.10.7 example config), and doing it here keeps the
+// threshold visible next to the curve it interacts with.
+var NOISE_FLOOR = 2;
+
+// Square root, not linear. A linear level->glyph map spends most of its
+// range on peaks a real track almost never hits, so the row sits pinned at
+// ▁▂ and barely moves; sqrt lifts the mid-levels where music actually lives.
+// This is the same perceptual curve DMS applies to its own cava values
+// (`Math.sqrt(x * 0.01)` in `Modules/DankBar/Widgets/AudioVisualization.qml`)
+// and is the larger half of why theirs reads livelier — the other half is
+// VisualizerService's cava tuning (fixed sensitivity, monstercat spread).
+function _response(fraction) {
+    return Math.sqrt(fraction);
+}
+
 function baselineText() {
     var s = "";
     for (var i = 0; i < BAR_COUNT; i++)
@@ -48,13 +65,14 @@ function parseFrame(line, barCount) {
     return levels;
 }
 
-// level 0..max -> glyph index, clamped to GLYPHS' own range regardless of
-// how far out of band a malformed or autosens-overshooting value lands.
+// level 0..max -> glyph index through the response curve, clamped to
+// GLYPHS' own range regardless of how far out of band a malformed or
+// overshooting value lands.
 function levelToGlyph(level, maxLevel) {
     var max = maxLevel === undefined ? MAX_LEVEL : maxLevel;
-    if (max <= 0)
+    if (max <= 0 || level < NOISE_FLOOR)
         return GLYPHS[0];
-    var idx = Math.floor((level / max) * GLYPHS.length);
+    var idx = Math.floor(_response(level / max) * GLYPHS.length);
     if (idx < 0)
         idx = 0;
     if (idx > GLYPHS.length - 1)

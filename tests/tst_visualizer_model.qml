@@ -66,12 +66,24 @@ TestCase {
         compare(Model.levelToGlyph(100, 100), Model.GLYPHS[7]);
     }
 
-    function test_level_to_glyph_midpoint_lands_midscale() {
-        compare(Model.levelToGlyph(50, 100), Model.GLYPHS[4]);
+    // sqrt, not linear: a quarter of the range reads half-scale. Linear would
+    // put this at GLYPHS[2] and leave the row pinned near the floor for
+    // everything a real track actually does.
+    function test_level_to_glyph_applies_the_square_root_response_curve() {
+        compare(Model.levelToGlyph(25, 100), Model.GLYPHS[4]);
+        compare(Model.levelToGlyph(50, 100), Model.GLYPHS[5]);
+    }
+
+    // Doing what cava's deprecated `ignore` knob used to: near-silence is
+    // flat, not a jittering bottom row.
+    function test_level_to_glyph_snaps_below_noise_floor_to_lowest() {
+        compare(Model.levelToGlyph(Model.NOISE_FLOOR - 1, 100), Model.GLYPHS[0]);
+        verify(Model.levelToGlyph(Model.NOISE_FLOOR, 100) !== Model.GLYPHS[0]);
     }
 
     function test_level_to_glyph_clamps_values_above_max() {
-        // autosens can legitimately overshoot ascii_max_range momentarily.
+        // cava can still overshoot ascii_max_range on a transient even with
+        // autosens off.
         compare(Model.levelToGlyph(1000, 100), Model.GLYPHS[7]);
     }
 
