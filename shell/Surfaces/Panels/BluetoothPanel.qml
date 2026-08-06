@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell.Bluetooth
+import Quickshell.Io
 import qs.Core
 import qs.Components
 import qs.Services
@@ -38,6 +39,27 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // Connections block below watches the adapter's device list itself instead.
 // FORGET is hover-revealed on PAIRED rows only, the same "known and not
 // currently connected" restriction NetworkPanel's FORGET already applies.
+//
+// TRUSTED is a peer of those actions — same _runAction machinery, same
+// failure surface — with one behavior difference the toolkit forces.
+// BluetoothDevice::setTrusted stores its local bindable and fires
+// trustedChanged BEFORE it pushes org.freedesktop.DBus.Properties.Set
+// (pinned quickshell source, src/bluetooth/device.cpp:64-68), and
+// DBusPropertyGroup::pushPropertyUpdate only qCWarnings a Set that comes
+// back an error: it never rolls the local value back and raises no signal
+// (src/dbus/properties.cpp:268-297). So `trusted` reading back as asked is
+// quickshell's optimism, not BlueZ's answer, and clearing the action on it
+// would paint a success nobody verified. What IS observable is a rejection —
+// BlueZ pushing the old value back through the same property binding, which
+// fires trustedChanged in disagreement with what was asked — so the row
+// stays in flight over a short settle window that fails it on that
+// disagreement, and a window elapsing without one is this action's success
+// signal, the exact opposite of what actionTimeout means for
+// pair/connect/disconnect/forget. The toggle is hover-revealed next to
+// FORGET and only on a device BlueZ reports `paired`; the row's status line
+// carries the persistent TRUSTED marker, hidden for as long as a write on
+// that row is still settling.
+//
 // Bound directly to Quickshell.Bluetooth, same as every other panel binds
 // its backend directly rather than through a Services wrapper. The test VM
 // has no adapter at all, so `Bluetooth.defaultAdapter` is null and the panel
@@ -192,6 +214,18 @@ Panel {
         root._failureText = "";
     }
 
+    // Ends an in-flight action on the row it was armed for, leaving the
+    // failure text behind for _statusText to render. actionTimeout's own
+    // expiry lands here too, so every honest failure on this panel is
+    // written in exactly one place.
+    function _failAction(text) {
+        actionTimeout.stop();
+        root._failureAddress = root._actionAddress;
+        root._failureText = text;
+        root._actionAddress = "";
+        root._actionKind = "";
+    }
+
     function _checkActionCompletion(device) {
         if (!device || root._actionKind === "" || root._actionAddress !== device.address)
             return;
@@ -231,21 +265,97 @@ Panel {
             device.forget();
     }
 
+    // Trust toggle (header comment carries the round-trip rationale). Only
+    // BlueZ-`paired` devices are eligible, and a write that wouldn't change
+    // anything is dropped before it arms the machinery: setTrusted
+    // early-returns on an unchanged value (device.cpp:65), so an action
+    // armed for one would sit in flight with no signal to ever answer it.
+    function _setTrust(device, want) {
+        if (!device || device.paired !== true || device.trusted === want)
+            return;
+        if (root._runAction(want ? "trust" : "untrust", device))
+            device.trusted = want;
+    }
+
     // Safety net (omarchy's pendingTimeout, Panel.qml:465-470 there): if the
     // completion signals below never fire — a pair() that BlueZ silently
     // rejects, a connect that never settles — this clears a stuck busy row
     // to an honest "TIMED OUT" instead of "PAIRING…"/"CONNECTING…" forever.
+    //
+    // The trust kinds run on their own clock and with the opposite meaning
+    // (header comment): their window only has to outlast a BlueZ rejection
+    // arriving back over the system bus, not a whole pairing handshake, and
+    // elapsing without one is what CLEARS the row rather than what fails it.
     Timer {
         id: actionTimeout
-        interval: 20000
+        interval: (root._actionKind === "trust" || root._actionKind === "untrust") ? 2000 : 20000
         repeat: false
         onTriggered: {
             if (root._actionKind === "")
                 return;
-            root._failureAddress = root._actionAddress;
-            root._failureText = "TIMED OUT";
-            root._actionAddress = "";
-            root._actionKind = "";
+            if (root._actionKind === "trust" || root._actionKind === "untrust") {
+                root._verifyTrust();
+                return;
+            }
+            root._failAction("TIMED OUT");
+        }
+    }
+
+    // Elapsing without a disagreement is NOT proof the write landed, so the
+    // settle window ends in a real read-back rather than an assumption.
+    // Quickshell's setTrusted stores the requested value locally and emits
+    // trustedChanged BEFORE it pushes the D-Bus Set, and a Set that BlueZ
+    // rejects is only qCWarning'd — no rollback, no signal (device.cpp:64-68,
+    // properties.cpp:268-297). BlueZ emits no PropertiesChanged for a property
+    // that never changed either, so the disagreement branch above can never
+    // fire for an ordinary rejection: without this, a refused trust would
+    // settle into a persistent TRUSTED marker painted purely from the
+    // optimistic local value. `bluetoothctl info` reports BlueZ's own answer.
+    property string _trustProbeText: ""
+
+    function _verifyTrust() {
+        var device = root._actionDevice;
+        if (!device) {
+            root._clearAction();
+            return;
+        }
+        root._trustProbeText = "";
+        trustProbeProc.address = device.address;
+        trustProbeProc.running = true;
+    }
+
+    Process {
+        id: trustProbeProc
+        property string address: ""
+        // Routed through `sh` so a missing bluetoothctl comes back as an
+        // ordinary 127 rather than a FailedToStart that never emits `exited`
+        // (src/io/process.cpp:289-297) and would strand the row busy forever.
+        command: ["sh", "-c", 'command -v bluetoothctl >/dev/null 2>&1 || exit 127; exec bluetoothctl info "$1"', "sh", trustProbeProc.address]
+        stdout: SplitParser {
+            onRead: line => root._trustProbeText += line + "\n"
+        }
+        onExited: exitCode => {
+            var out = root._trustProbeText;
+            root._trustProbeText = "";
+            if (root._actionKind !== "trust" && root._actionKind !== "untrust")
+                return;
+            var want = root._actionKind === "trust";
+            // No bluetoothctl, or a device BlueZ no longer knows: the write's
+            // outcome is genuinely unknown, and claiming either result would
+            // be inventing one.
+            if (exitCode !== 0) {
+                root._failAction("UNVERIFIED");
+                return;
+            }
+            var m = /^\s*Trusted:\s*(yes|no)\s*$/m.exec(out);
+            if (!m) {
+                root._failAction("UNVERIFIED");
+                return;
+            }
+            if ((m[1] === "yes") === want)
+                root._clearAction();
+            else
+                root._failAction(want ? "TRUST FAILED" : "UNTRUST FAILED");
         }
     }
 
@@ -279,7 +389,20 @@ Panel {
             root._checkActionCompletion(root._actionDevice);
         }
         function onTrustedChanged() {
-            root._checkActionCompletion(root._actionDevice);
+            var device = root._actionDevice;
+            if (!device)
+                return;
+            if (root._actionKind === "trust" || root._actionKind === "untrust") {
+                // Only a disagreement carries information: _setTrust's own
+                // write fired this signal synchronously with the requested
+                // value already stored, so agreement is the toolkit echoing
+                // us back. A value that disagrees can only have come from
+                // BlueZ pushing the real one in over the property binding.
+                if (device.trusted !== (root._actionKind === "trust"))
+                    root._failAction(root._actionKind === "trust" ? "TRUST FAILED" : "UNTRUST FAILED");
+                return;
+            }
+            root._checkActionCompletion(device);
         }
     }
 
@@ -314,14 +437,22 @@ Panel {
             readonly property string _bucket: btCell.modelData.bucket
             readonly property string _address: btCell._device.address || ""
             readonly property bool _canForget: btCell._bucket === "paired"
+            // Eligibility is BlueZ's own `paired`, not the bucket: `known`
+            // also holds bonded/trusted-but-unpaired devices (model.js:73),
+            // and BlueZ has nothing to trust on one of those.
+            readonly property bool _canTrust: btCell._device.paired === true
+            readonly property bool _isTrusted: btCell._device.trusted === true
+            readonly property bool _trustPending: (root._actionKind === "trust" || root._actionKind === "untrust") && root._actionAddress === btCell._address
             selected: btCell._bucket === "connected"
-            hovered: rowMouse.containsMouse || forgetMouse.containsMouse || (root._cursorAddress !== "" && root._cursorAddress === btCell._address)
+            hovered: rowMouse.containsMouse || trustMouse.containsMouse || forgetMouse.containsMouse || (root._cursorAddress !== "" && root._cursorAddress === btCell._address)
 
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionAddress === btCell._address) {
                     if (root._actionKind === "pair") return "PAIRING…";
                     if (root._actionKind === "connect") return "CONNECTING…";
                     if (root._actionKind === "disconnect") return "DISCONNECTING…";
+                    if (root._actionKind === "trust") return "TRUSTING…";
+                    if (root._actionKind === "untrust") return "UNTRUSTING…";
                     return "FORGETTING…";
                 }
                 if (root._failureAddress !== "" && root._failureAddress === btCell._address)
@@ -336,13 +467,18 @@ Panel {
 
                 Item {
                     width: parent.width
-                    height: Math.max(nameText.implicitHeight, forgetCell.height)
+                    // Read off the cells rather than actionsRow: a Cell keeps
+                    // its implicit height while hidden, but a Row drops a
+                    // hidden child from its own, which would leave AVAILABLE
+                    // rows (neither cell eligible) shorter than the rest and
+                    // break the ledger's uniform row height.
+                    height: Math.max(nameText.implicitHeight, trustCell.height, forgetCell.height)
 
                     Text {
                         id: nameText
                         anchors.left: parent.left
-                        anchors.right: btCell._canForget ? forgetCell.left : parent.right
-                        anchors.rightMargin: btCell._canForget ? Theme.space.sm : 0
+                        anchors.right: actionsRow.left
+                        anchors.rightMargin: actionsRow.width > 0 ? Theme.space.sm : 0
                         anchors.verticalCenter: parent.verticalCenter
                         text: btCell._device.name || btCell._device.deviceName
                         color: btCell.foreground
@@ -351,32 +487,71 @@ Panel {
                         font.pixelSize: Theme.fontSize.body
                     }
 
-                    Cell {
-                        id: forgetCell
-                        visible: btCell._canForget
-                        opacity: btCell._canForget && btCell.hovered ? 1 : 0
-                        enabled: opacity > 0 && root._actionKind === ""
+                    // A Row rather than the chain of conditional anchors a
+                    // second hover cell would otherwise need: TRUST and FORGET
+                    // are independently eligible (see _canTrust), so every
+                    // combination has to lay out without leaving a gap where
+                    // the ineligible one would have been. Collapses to zero
+                    // width when neither applies, which is why nameText and
+                    // rowMouse can anchor to it unconditionally.
+                    Row {
+                        id: actionsRow
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        width: implicitWidth
-                        height: implicitHeight
+                        spacing: Theme.space.sm
 
-                        Behavior on opacity {
-                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        Cell {
+                            id: trustCell
+                            visible: btCell._canTrust
+                            opacity: btCell._canTrust && btCell.hovered ? 1 : 0
+                            enabled: opacity > 0 && root._actionKind === ""
+                            width: implicitWidth
+                            height: implicitHeight
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                            }
+
+                            MetaLabel {
+                                text: btCell._isTrusted ? "UNTRUST" : "TRUST"
+                                color: btCell.foreground
+                            }
+
+                            MouseArea {
+                                id: trustMouse
+                                anchors.fill: parent
+                                enabled: trustCell.enabled
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root._setTrust(btCell._device, !btCell._isTrusted)
+                            }
                         }
 
-                        MetaLabel {
-                            text: "FORGET"
-                            color: Theme.color.urgent
-                        }
+                        Cell {
+                            id: forgetCell
+                            visible: btCell._canForget
+                            opacity: btCell._canForget && btCell.hovered ? 1 : 0
+                            enabled: opacity > 0 && root._actionKind === ""
+                            width: implicitWidth
+                            height: implicitHeight
 
-                        MouseArea {
-                            id: forgetMouse
-                            anchors.fill: parent
-                            enabled: forgetCell.enabled
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root._forgetDevice(btCell._device)
+                            Behavior on opacity {
+                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                            }
+
+                            MetaLabel {
+                                text: "FORGET"
+                                color: Theme.color.urgent
+                            }
+
+                            MouseArea {
+                                id: forgetMouse
+                                anchors.fill: parent
+                                enabled: forgetCell.enabled
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root._forgetDevice(btCell._device)
+                            }
                         }
                     }
 
@@ -385,7 +560,7 @@ Panel {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
-                        anchors.right: btCell._canForget ? forgetCell.left : parent.right
+                        anchors.right: actionsRow.left
                         enabled: root._actionKind === ""
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
@@ -393,13 +568,30 @@ Panel {
                     }
                 }
 
-                Text {
-                    visible: btCell._statusText !== ""
-                    text: btCell._statusText
-                    color: btCell._isFailed ? Theme.color.urgent : btCell.foreground
-                    font.italic: btCell._isFailed
-                    font.family: Theme.font.family
-                    font.pixelSize: Theme.fontSize.caption
+                // The status line doubles as the row's trust marker
+                // (DESIGN.md §2.3's uppercase meta row): TRUSTED reports what
+                // BlueZ holds, and stays hidden for as long as a write on this
+                // row is inside its settle window, so the marker never asserts
+                // a state the panel hasn't finished verifying.
+                Row {
+                    visible: btCell._statusText !== "" || (btCell._isTrusted && !btCell._trustPending)
+                    width: parent.width
+                    spacing: Theme.space.sm
+
+                    Text {
+                        visible: btCell._statusText !== ""
+                        text: btCell._statusText
+                        color: btCell._isFailed ? Theme.color.urgent : btCell.foreground
+                        font.italic: btCell._isFailed
+                        font.family: Theme.font.family
+                        font.pixelSize: Theme.fontSize.caption
+                    }
+
+                    MetaLabel {
+                        visible: btCell._isTrusted && !btCell._trustPending
+                        text: "TRUSTED"
+                        color: btCell.foreground
+                    }
                 }
             }
         }
