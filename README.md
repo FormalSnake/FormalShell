@@ -95,21 +95,29 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   flips DND), an idle-inhibit indicator, clock, battery, audio,
   network/Bluetooth, weather, now playing, an opt-in GitHub PR/issue
   counter — fully reorderable from `settings.json`, plus custom `command`
-  and `qml` widget modules.
+  and `qml` widget modules. Hovering a cell opens a tooltip card naming
+  what it is and what it currently reads, including honest states like
+  `BLUETOOTH / NO ADAPTER`.
 - **Menu** — one fuzzy-searchable, keyboard-driven surface doubling as app
   launcher (rows carry each app's themed desktop icon), system/power menu,
   and a `select`/`input` dmenu replacement — with an inline calculator row,
   an emoji picker (`:e`) that copies AND auto-types the pick, a nixpkgs
   package runner (`:nix`, with honest searching/failed/empty states and a
   launch toast), and a wallpaper entry opening the picker grid built in as
-  routes.
+  routes. App rows rank by launch frecency (persisted to `state.json`), and
+  a launch that puts nothing on screen within two seconds gets a
+  `LAUNCHING` notification instead of a claim it worked.
 - **Notifications** — a mako-replacement stack: freedesktop server,
   independent card toasts, a summonable history center, a narrow DND bypass.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
   media.
-- **Panels** — eight per-widget popouts (audio, calendar, network,
-  bluetooth, power, weather, media, github) sharing one component and one
-  IPC target.
+- **Panels** — eleven popouts (audio, calendar, network, bluetooth, power,
+  weather, media, github, usage, tailscale, display) sharing one component
+  and one IPC target, each taking keyboard focus as it opens so a panel
+  summoned from a keybind is usable immediately. Network adds a Wi-Fi QR
+  share (optional `qrencode`) and a saved-password reveal; Bluetooth adds
+  per-device trust; display lists every connected output with on/off,
+  scale, and mirror.
 - **Clipboard** — capped, deduplicated history surfaced through the menu.
 - **Calendar** — month grid with clickable day selection, a year/life-
   progress bar, and events from local `.ics` files and EDS/GNOME Online
@@ -274,6 +282,12 @@ just smoke    # nested niri + screenshot, the visual verification loop
 The full set of smoke-mode flags (`--wallpaper`, `--menu`, `--notify`,
 `--panel <name>`, `--tray`, …), the Hyprland equivalent, and the mac-only
 nested-VM rig for testing without a Linux box are documented in `CLAUDE.md`.
+
+`qs ipc call gallery open` opens the dev gallery: one sheet rendering the
+real shared components (cells, meta labels, the type/spacing/color scales,
+the panel frame itself) so a regression in any of them is visible in a
+single screenshot. It has no bar cell and is not in the `panel` registry,
+so it only ever appears when asked for by name.
 
 ## License
 

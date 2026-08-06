@@ -465,7 +465,11 @@
 # desktop on every smoke run — observed 2026-07-27. WAYLAND_DISPLAY and
 # XDG_RUNTIME_DIR stay the host's: the nested compositor is a Wayland client
 # of the host and needs the real socket to connect and to publish its own
-# IPC/quickshell sockets.
+# IPC/quickshell sockets. Anything the nested shell keys off XDG_RUNTIME_DIR
+# is therefore shared with the owner's live shell and has to distinguish the
+# two itself: InstanceLock.qml's lock socket is per-WAYLAND_DISPLAY for exactly
+# that reason (see its header), since a fixed name had the nested shell sending
+# the owner's real bar a takeover request and quitting it on every run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -494,6 +498,7 @@ speedtest_mode=false
 instance_mode=false
 share_mode=false
 visualizer_mode=false
+gallery_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -520,7 +525,8 @@ while [ $# -gt 0 ]; do
     --instance) instance_mode=true; shift ;;
     --share) share_mode=true; shift ;;
     --visualizer) visualizer_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer]" >&2; exit 1 ;;
+    --gallery) gallery_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery]" >&2; exit 1 ;;
   esac
 done
 
@@ -536,7 +542,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode; then
   active_window_fixture_mode=false
 fi
 
@@ -730,17 +736,6 @@ fi
 shell_path=$(readlink -f result/share/formalshell)
 sni_stub_path="$PWD/dev/sni-stub.py"
 
-# The nested niri invocation below deliberately keeps the outer XDG_RUNTIME_DIR
-# (host-session-safety comment above), so InstanceLock.qml's fixed socket path
-# is stable across runs, not just within one — a previous run's shell only
-# leaves that file behind if it exited abnormally rather than losing its
-# nested Wayland connection cleanly (the ordinary path every other leg here
-# already relies on). Clearing it first keeps this leg's own takeover proof
-# from being confused by unrelated history.
-if $instance_mode; then
-  rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/formalshell/instance.sock" 2>/dev/null || true
-fi
-
 # The nested instance is a Wayland client of the host compositor, so it needs
 # the host's WAYLAND_DISPLAY. This shell may not have it exported (e.g. a
 # non-interactive session) even though the host session is up; fall back to
@@ -768,6 +763,24 @@ fi
 if [ -z "$wayland_display" ]; then
   echo "SMOKE_FAIL: no live WAYLAND_DISPLAY found (host compositor not running?)" >&2
   exit 1
+fi
+
+# InstanceLock.qml keys its socket on WAYLAND_DISPLAY, so the nested shell and
+# the owner's live bar can never share a lock even though this run deliberately
+# keeps the outer XDG_RUNTIME_DIR (host-session-safety comment above). Stale
+# sockets from earlier nested runs can still pile up in that shared runtime
+# dir when a previous run's shell exited abnormally rather than losing its
+# nested Wayland connection cleanly, so clear them before --instance's takeover
+# proof runs. The host's own socket is skipped by name: removing it would not
+# quit the live bar, but it would strand the next real rebuild+respawn takeover.
+if $instance_mode; then
+  instance_lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/formalshell"
+  for stale in "$instance_lock_dir"/instance-*.sock; do
+    [ -e "$stale" ] || continue
+    if [ "$stale" != "$instance_lock_dir/instance-$wayland_display.sock" ]; then
+      rm -f "$stale" 2>/dev/null || true
+    fi
+  done
 fi
 
 host_wayland_display=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
@@ -981,6 +994,7 @@ visualizer_pid_path="$shot_dir/visualizer-mpv.pid"
 visualizer_playing_path="$shot_dir/visualizer-playing.png"
 visualizer_pgrep_playing_path="$shot_dir/visualizer-pgrep-playing.txt"
 visualizer_pgrep_after_path="$shot_dir/visualizer-pgrep-after.txt"
+gallery_log_path="$shot_dir/gallery.log"
 active_window_pid_path="$shot_dir/foot.pid"
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_typing_path="$shot_dir/lock-typing.png"
@@ -2591,6 +2605,9 @@ fi
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
     fi
   fi
+  if $gallery_mode; then
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call gallery open > '$gallery_log_path' 2>&1; '$qs_bin' ipc --any-display -p '$shell_path' call gallery status >> '$gallery_log_path' 2>&1\""
+  fi
   if $clipboard_mode; then
     echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
   fi
@@ -3358,6 +3375,16 @@ if $visualizer_mode; then
     echo "SMOKE_VISUALIZER_PLAYING $visualizer_playing_path"
   else
     echo "SMOKE_FAIL: no visualizer-playing screenshot produced" >&2; exit 1
+  fi
+fi
+
+# The gallery has no on-screen state anything else asserts, so the IPC
+# replies are the proof the route ran at all: `show` must answer ok and
+# `status` must report isOpen true by the time the screenshot is taken.
+if $gallery_mode; then
+  echo "SMOKE_GALLERY_IPC $(tr '\n' ' ' < "$gallery_log_path" 2>/dev/null || echo '(no reply)')"
+  if ! grep -q '"isOpen":true' "$gallery_log_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: gallery did not report isOpen after show — $(cat "$gallery_log_path" 2>/dev/null)" >&2; exit 1
   fi
 fi
 

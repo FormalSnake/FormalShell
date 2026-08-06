@@ -60,12 +60,15 @@ with a console warning — never a crash.
 
 - **`command`** — runs `command` (an argv array) on an interval
   (`interval`, ms, default 5000) and parses stdout as
-  Waybar-JSON-compatible `{"text": "…", "tooltip": "…", "class": "…"}`;
-  only `text` renders today. `class: "warning"` renders an accent-filled
+  Waybar-JSON-compatible `{"text": "…", "tooltip": "…", "class": "…"}`.
+  `text` renders in the cell and `tooltip` becomes that cell's hover
+  tooltip verbatim — the module author's own wording, never reworded here
+  (**Tooltips**, below). `class: "warning"` renders an accent-filled
   cell, `"critical"`/`"urgent"` renders the urgent fill, anything else
   renders plain. A non-zero exit, a timeout (`timeout`, ms, default 5000),
   malformed JSON, or a command that fails to start at all all render the
-  same honest `MODULE ERROR` cell rather than a stale value.
+  same honest `MODULE ERROR` cell — with no tooltip, rather than the last
+  good one — instead of a stale value.
 - **`qml`** — loads a `source` file (an absolute path) into a `Loader`.
   This isolates only *load-time* failures (bad syntax, an unresolvable
   import) as the same `MODULE ERROR` cell — a file that parses fine has
@@ -150,21 +153,68 @@ default 900000). The whole cell goes full-bleed `urgent` at ≥90%
 utilization. Click toggles the usage panel (see [Panels](#panels)). Honest
 states: a disabled provider contributes nothing, and the cell stays hidden
 until at least one enabled provider has answered at all (its own `NO AUTH`/
-`NO CODEX` cell counts as an answer) — never an invented percentage.
+`STALE`/`NO CODEX` cell counts as an answer) — never an invented percentage.
 
 **Visualizer** — opt-in via `bar.layout` (add `"visualizer"` to a region);
-a live ASCII spectrum next to `nowPlaying`, ten block glyphs
+a live ASCII spectrum next to `nowPlaying`, six caption-size block glyphs
 (`▁▂▃▄▅▆▇█`) in one monospace `Text`, driven by a shared `cava` process
 (`VisualizerService.qml`) reading real system audio over PipeWire. The
 process exists only while a track is genuinely playing AND a bar showing
 the widget is on screen AND motion is enabled (DESIGN.md §4 rule 8) —
 paused music, a hidden bar, or `motion.enabled: false` kills it outright,
-and the widget falls back to its flat baseline row (`▁▁▁▁▁▁▁▁▁▁`) rather
+and the widget falls back to its flat baseline row (`▁▁▁▁▁▁`) rather
 than a frozen last frame. The cell appears and disappears together with
 `nowPlaying` (both gate on `MediaService.available`). Honest states: `cava`
 missing from PATH renders a dim `NO CAVA` cell once the one-shot PATH probe
 answers, regardless of playback — never a silently-empty cell pretending
 to be idle.
+
+The generated `cava.conf` is tuned rather than left at defaults, and the
+level-to-glyph map is a square root rather than linear. Both exist to stop
+the row sitting pinned near its floor: cava's `autosens` is off in favour of
+a fixed 800% sensitivity (auto-gain renormalizes a quiet passage up to the
+same full-scale row as a loud one, so nothing appears to respond),
+`monstercat = 1.5` bleeds each bar into its neighbours so six bars read as
+one connected spectrum, `noise_reduction = 35` tracks transients that cava's
+77 default smears, and `higher_cutoff_freq = 12000` gives the top bar
+cymbals to show. Below level 2 a bar snaps flat, standing in for cava's
+`ignore` knob (deprecated since 0.8.0). The shape is DankMaterialShell's
+`CavaService`; the gain is measured against this shell's own eight discrete
+glyph steps rather than copied, since DMS renders continuous shader bars
+that read fine at heights this row would draw as a flat stroke. None of it
+is configurable from `settings.json`.
+
+**Tooltips** — hovering a bar cell for 400ms opens one omarchy card under
+it (`shell/Components/Tooltip.qml`, namespace `formalshell:tooltip`),
+carrying a single uppercase meta row that names what the cell is and what
+it currently reads. It is its own layer surface rather than an item inside
+the bar — the bar window is exactly one cell tall — and takes input on
+neither axis: keyboard focus `None`, plus an empty input region so clicks
+and hovers pass through to the bar and the desktop underneath. The row
+tracks the cell's value live while it's up (a ticking volume, a settling
+battery estimate) instead of freezing at hover time, and it suppresses
+itself for as long as any panel is open, since a popout anchors at exactly
+the same spot under the same cell. The 400ms is a delay, not motion, so it
+holds with `motion.enabled: false` too — that setting collapses the
+fade-and-slide, not the wait. Leaving the cell hides the card immediately.
+
+Cells carrying one today: workspaces (`WORKSPACE 2 / 3 WINDOWS`, counted
+off the live window list), audio (`OUTPUT VOLUME` / `OUTPUT MUTED`, the
+state the glyph alone carries), battery (percent plus `FULL IN 1H 20M` /
+`2H 5M LEFT` when UPower reports the applicable estimate, the state name
+when it reports 0), network (`WI-FI / <ssid> 62%`, `NETWORK / WIRED`,
+`NETWORK / OFFLINE`), bluetooth (the connected devices by name), weather
+(the condition the glyph draws), now playing (artist plus the whole title
+the cell is marquee-scrolling), bell (`DND ON`, `N PENDING`,
+`NONE PENDING`), each tray item (its own SNI `ToolTip.title`, falling back
+to `Title` then `Id` — another process's words, never reformatted here) and
+the overflow cell, github (`N PRS M ISSUES`), tailscale, the stay-awake and
+night-light indicator glyphs, and `command` modules (their own `tooltip`
+field). Honest states ride along unchanged rather than getting second
+wordings: `BLUETOOTH / NO ADAPTER`, `BLUETOOTH / NO DEVICES`,
+`GITHUB / NOT AUTHENTICATED`, `GITHUB / UNAVAILABLE`,
+`WEATHER / UNAVAILABLE`. A cell with nothing to say sets no tooltip at all
+and shows no card.
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}
@@ -282,15 +332,49 @@ asynchronously in the background, so the row updates the moment it lands.
 
 **App rows.** Each launchable app shows the entry's display name (falling
 back to its id only when the name is genuinely empty) and renders the
-
-**App rows.** Each launchable app shows the entry's display name (falling
-back to its id only when the name is genuinely empty) and renders the
 entry's icon-theme icon as an image at the glyph cell's size — radius 0,
 no border, `docs/DESIGN.md`'s one sanctioned image-icon exception (M13b;
 before that the raw icon *name*, which conventionally equals the app id,
 rendered as literal text in the icon slot). An icon the current theme
 can't resolve means the row simply has no leading image — never a
 broken-image box.
+
+**Launch ranking.** App rows are ordered by launch frecency — how often an
+entry gets launched, decayed by how long ago (`shell/Menu/frecency.js`, a
+14-day half-life over a per-entry count). The ledger persists to
+`$XDG_STATE_HOME/formalshell/state.json` as `appLaunches`
+(`[{ id, count, lastMs }]`, keyed by desktop-entry id, capped at the 200
+highest-scoring records on write), the same `Core.State` file wallpaper/
+mode/DND already live in — a launch count is runtime state, and
+`settings.json` stays read-only. Ranking reach is deliberately narrow: it
+decides the order rows are declared in, and `search.js` breaks *equal*-score
+ties by declaration order, so frecency picks which of two equally good
+matches leads and nothing more. A stronger match tier still wins outright,
+and a profile with no launch history browses apps in `DesktopEntries`' own
+order exactly as before.
+
+**Launch feedback.** `DesktopEntry.execute()` reports nothing back, so Enter
+on an app row baselines the compositor's window count and focused window id
+and watches for 2 seconds. A new window (or a focus change) inside that
+window IS the feedback and nothing else fires. Only a grace period that
+passes with nothing new gets a `LAUNCHING <app>` notification through the
+shell's own stack — which is all that is actually known, since a slow cold
+start, a second instance handing its argv to an already-open window, and an
+`Exec` line that died immediately are indistinguishable from outside.
+Success is never claimed and neither is failure. One watch at a time, so a
+burst of Enters can't stack toasts; with no compositor backend connected at
+all there is nothing to observe, and the notification fires immediately
+instead.
+
+**Hover and the keyboard cursor.** Hover moves the cursor row only when the
+pointer is genuinely the thing that moved (`shell/Components/PointerMoveGate.qml`).
+Qt re-delivers a hover move to whatever row slides under a parked pointer,
+so before this every filter keystroke and every arrow key yanked the
+keyboard cursor to wherever the mouse happened to be resting. Typing, arrow
+navigation, a level change, and close all re-arm the gate; the first real
+pointer movement takes the cursor straight back. A click is the pointer
+acting, so the level it opens does hand the cursor to whatever row lands
+under the still-parked pointer.
 
 **User overrides.** `~/.config/formalshell/menu.jsonc` merges **per-key over**
 the default tree — user wins field-by-field, and `"hidden": true` removes a
@@ -549,9 +633,10 @@ binds {
 
 ## Panels
 
-Nine per-widget popouts share one component, `shell/Components/Panel.qml` — a
-ledger-table popout (header `MetaLabel` row, rows sharing hairline rules,
-`WlrLayershell` top layer, keyboard `OnDemand`, closes on Escape and on
+Eleven popouts — ten per-widget, plus the IPC-only `display` — share one
+component, `shell/Components/Panel.qml`: a ledger-table popout (header
+`MetaLabel` row, rows sharing hairline rules, `WlrLayershell` top layer,
+closes on Escape and on
 click-outside) anchored under the bar cell that opened it, or falling back to
 the bar's right region when opened over IPC with no cell to anchor under
 (Wayland gives clients no cross-window global coordinates for a real anchor).
@@ -561,6 +646,18 @@ pointer input to the backdrop on the panel's own output, so a transparent
 twin window per other screen exists for as long as the panel is open, purely
 to catch that click; the Menu and notification center use the same
 component. Single-monitor rigs (the VM smoke rig included) spawn zero twins.
+
+**Keyboard focus** is primed on every open, not just declared: wlroots only
+hands an `OnDemand` surface focus once the compositor routes input there —
+i.e. after a click — so a panel summoned from a compositor keybind used to
+come up with Escape dead and its arrow keys ignored. Every `open()` now
+takes focus with `Exclusive` and settles back to `OnDemand` 75ms later, once
+that focus has landed. The window is short on purpose: Hyprland routes every
+pointer event to an exclusive-focus surface regardless of which output the
+cursor is over, so a permanently-exclusive panel would kill clicks on every
+other monitor, including the dismiss catchers above. Closing releases focus
+on `close()` rather than when the exit fade finishes.
+
 Each panel binds a first-party quickshell service directly — no intervening
 service wrapper, the same pattern `AudioPanel` establishes for the rest:
 
@@ -576,6 +673,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `github`     | one `gh api graphql` poll (shared with the bar cell) | `GithubWidget.qml` |
 | `usage`      | `~/.claude/.credentials.json` + Anthropic OAuth usage endpoint, `codex app-server` JSON-RPC | `UsageWidget.qml` |
 | `tailscale`  | `tailscale status --json` poll (shared with the bar cell) | `TailscaleWidget.qml` |
+| `display`    | the compositor backend's own output contract  | none (IPC only)      |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` is an omarchy-style mixer (M15 Task 4): `OUTPUT` is one
@@ -626,8 +724,44 @@ runs for a fixed 5 seconds regardless of transfer progress, then kills its
 mechanism this depends on) before starting the next phase; closing the
 panel mid-run kills them the same way. Honest states: no resolvable
 interface renders `NO NETWORK`, no `curl` on PATH renders `NO CURL`.
-Results stay on screen until the panel closes. `BluetoothPanel` groups
-devices under `CONNECTED`/`PAIRED`/`AVAILABLE`
+Results stay on screen until the panel closes.
+
+A `SHARE` row with a `QR` toggle expands a scannable code for the network
+this machine is already on (omarchy's `bin/omarchy-network-qr` as a
+collapsed ledger row rather than its centered scrim overlay): resolve the
+active wifi device, read that connection's own settings with `nmcli`, build
+a `WIFI:` payload (`shell/Network/wifiqr.js`, pure and TDD'd — the escaping
+rules, the WPA/WEP/open branch, and the ASCII-pair collapse), pipe it
+through `qrencode --type ASCII`, and draw the collapsed matrix as real
+square rectangles rather than block glyphs, since a scanner reads the grid's
+geometry and a monospace cell is 2:1. `qrencode` is an optional host binary
+— the package wrapper puts only `brightnessctl`, `wl-clipboard`, `curl`,
+`grim`, `slurp`, `formalshell-eds` and `wtype` on PATH — so it joins `cava`,
+`gh`, `codex`, `tailscale`, `nmcli`, `ddcutil`, `wlsunset` and
+`localsend_app` as something the host provides or the surface says it
+doesn't have. `nix/testvm.nix` installs it so a smoke run proves the working
+path, not only the absent one. Honest states, one dim cell each:
+`NO QRENCODE`, `NOT CONNECTED`, `ENTERPRISE CANNOT SHARE`
+(802.1x authenticates against a server, so there is no shared secret to
+encode), and `ERROR` for any other nmcli/qrencode failure — never a partial
+matrix. The payload carries the passphrase, so it goes to qrencode over
+stdin, never argv, and the rendered code lives exactly as long as the
+expanded row: collapsing it or closing the panel drops it.
+
+A `PASSWORD` row with a `SHOW`/`HIDE` toggle reveals the saved secret for
+that same connected network, for reading out to someone. It rides the QR
+share's own `nmcli` read rather than running a second one, and the read only
+happens when `SHOW` is pressed — nothing reads secrets speculatively. Until
+then the row shows a fixed-width `●` mask, deliberately unrelated to the
+real length. The revealed text is dropped on `HIDE`, on the panel closing,
+and on roaming to another network; it is never logged, never written to
+disk, and no IPC verb can reach it (there is deliberately no reveal route —
+an IPC reply is exactly the surface a secret must never reach). The row only
+exists while a wifi network is actually connected; past that, honest states
+one dim cell each: `OPEN NETWORK`, `ENTERPRISE`, `NO NMCLI`, and
+`NO PASSWORD SAVED` when nmcli answers with nothing usable.
+
+`BluetoothPanel` groups devices under `CONNECTED`/`PAIRED`/`AVAILABLE`
 headers via `Bluetooth/model.js`'s buckets (available devices, discovered
 scan results with a real name, only list while the adapter is actively
 discovering); a 1-second timer keeps nudging `adapter.discovering = true`
@@ -642,8 +776,26 @@ expressed with the toolkit's own device methods). A 20-second fallback
 timer clears a stuck action to an honest `TIMED OUT` status, since
 `BluetoothDevice` has no failure signal to key off. Paired, disconnected
 rows reveal a `FORGET` action on hover, same restriction as the network
-panel's known rows. Honest states: a single dim cell reading `NO ADAPTER`
-when `Bluetooth.defaultAdapter` is null, `TURN ON TO SCAN` when the adapter
+panel's known rows.
+
+Any device BlueZ reports as `paired` also reveals a `TRUST`/`UNTRUST`
+toggle on hover, next to `FORGET`, with a persistent `TRUSTED` marker on
+the row's status line. Trust is the one action here that cannot confirm
+itself: quickshell stores the new value and fires `trustedChanged` *before*
+it pushes the D-Bus `Set`, and a rejected `Set` is only warned about, never
+rolled back — so reading `trusted` back as asked proves nothing, and BlueZ
+emits no `PropertiesChanged` for a property that never changed either. The
+row therefore stays `TRUSTING…`/`UNTRUSTING…` for a 2-second settle window,
+and that window ends in a real read-back of `bluetoothctl info <address>`'s
+own `Trusted:` line rather than in an assumption: agreement clears the row,
+disagreement fails it to `TRUST FAILED`/`UNTRUST FAILED`, and a missing
+`bluetoothctl` or a device BlueZ no longer knows fails it to `UNVERIFIED`
+rather than inventing an outcome. The `TRUSTED` marker stays hidden for as
+long as a write on that row is still settling, so it never asserts a state
+the panel hasn't finished verifying.
+
+Honest states: a single dim cell reading `NO ADAPTER` when
+`Bluetooth.defaultAdapter` is null, `TURN ON TO SCAN` when the adapter
 is off, or `SCANNING…` when it's on and discovering but nothing has turned
 up yet — the test VM has no adapter at all, so `NO ADAPTER` is what its
 smoke screenshot shows.
@@ -712,8 +864,24 @@ then one row per rate-limit window — an uppercase label, the percent, a
 full-width flat `accent` fill track that swaps to `urgent` at ≥90%, and a
 dim `RESETS 2H 14M` meta line. Claude reads `~/.claude/.credentials.json`'s
 OAuth token (never logged, never exposed on any IPC/debug surface) and hits
-`api.anthropic.com/api/oauth/usage`; missing, empty, or expired credentials
-render `NO AUTH` without probing. The CLAUDE rows are not a fixed pair:
+`api.anthropic.com/api/oauth/usage`; missing or empty credentials render
+`NO AUTH` without probing.
+
+An *expired* access token is a separate state. That file's `accessToken`
+lives about 12 hours while its `refreshToken` lives about 10 days, and only
+a `claude` run refreshes the pair on disk — so a machine that hasn't run
+Claude Code today is still fully logged in with a token this shell can't
+use. That renders `STALE` in the bar cell and `STALE / RUN CLAUDE TO
+REFRESH` in the panel, never `NO AUTH`. The shell deliberately does not
+perform the OAuth refresh itself: Anthropic rotates the refresh token on
+use, so redeeming it here would invalidate the copy Claude Code still holds
+and log you out of your own CLI. The local `expiresAt` is advisory only —
+a probe fires whenever a token exists at all and the server settles the
+state (`401`/`403` → `STALE` when a refresh token is present, `NO AUTH`
+when it isn't) so a skewed clock can't hide real numbers. A failed read of
+the credentials file retries after 300 ms rather than waiting out the full
+`usage.intervalMs`, since Claude Code rewrites that file by rename and a
+poll can land in the gap. The CLAUDE rows are not a fixed pair:
 `shell/Usage/usage.js`'s `parseUsage` enumerates every key in the response
 shaped like a rate window (an object carrying `utilization`) rather than
 naming buckets, so a future window (a `fable` bucket, another per-model
@@ -746,6 +914,34 @@ tailscale widget. Honest states: `tailscale` missing from PATH or any other
 unparsable response renders a dim `NO TAILSCALE` cell (the VM smoke rig's
 own expected state — no tailscaled at all), `BackendState: "NeedsLogin"`
 renders a dim `NEEDS LOGIN` cell, `LOADING` before the first answer.
+`DisplayPanel` (M17) is the one panel with no bar cell of its own —
+`panel open display` is the only way in — and lists every connected output
+as a row: name, an `ON`/`OFF` toggle, a status meta line
+(`2560x1440@59.95 / 1.5X`, `MIRRORS DP-1`, or just `DISABLED`), the make
+and model when the compositor reports them, and a flat accent-fill `SCALE`
+track from 1x to 3x in 0.25 steps. Press or wheel the track to commit one
+value (no drag-to-scrub — every step is a real output reconfiguration), or
+use the keyboard: Up/Down move the cursor, Enter toggles that output,
+`h`/`l` step its scale, the same binding `PowerPanel`'s brightness rows
+use. The focused output's row is inverted. A `MIRROR` section below points
+every other enabled output at the focused one, and off clears every output
+currently mirroring anything.
+
+Everything reads and writes through the compositor backend contract
+(`outputs`/`refreshOutputs`/`setOutput*`), never `niri msg` or `hyprctl`
+from the panel. Neither compositor pushes output changes, so an open panel
+re-reads every 5 seconds; nothing reconfigures an output at startup or on
+open, and the panel's only unprompted traffic is that read. Output names are
+opaque strings end to end, exactly like window and workspace ids. Honest
+states: `NO OUTPUTS` when the backend reports none (including "no compositor
+detected", which needs no branch of its own — it simply has no outputs);
+`MIRROR UNSUPPORTED` under niri, whose IPC has no mirroring primitive at
+all; `SINGLE DISPLAY` when fewer than two outputs are enabled and there is
+nothing to mirror onto; and a dimmed, unclickable `ON` cell on the last
+enabled output, since both compositors would happily leave the session with
+nothing on screen and no surface left to undo it from. A disabled output
+reports a zero mode rather than its last known one, which is why its status
+line says only `DISABLED`.
 
 **IPC** (`target: "panel"`, a documented spec addendum — see
 `docs/superpowers/plans/2026-07-28-m6-clipboard-and-panels.md`'s header note
@@ -755,8 +951,9 @@ keybinds and no way to be verified headlessly):
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
+qs ipc --any-display -p <store-path>/share/formalshell call panel open display   # the display panel has no bar cell; this is its only summon path
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "display"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a
@@ -797,15 +994,48 @@ smoke rig; bound directly to `Quickshell.Bluetooth`, same as
 `BluetoothPanel.qml`):
 
 ```bash
-qs ipc --any-display -p <store-path>/share/formalshell call bluetooth status   # JSON: {available, enabled, connected}
+qs ipc --any-display -p <store-path>/share/formalshell call bluetooth status   # JSON: {available, enabled, connected, devices: [{address, name, paired, trusted, connected}]}
 qs ipc --any-display -p <store-path>/share/formalshell call bluetooth toggle   # flips adapter power
 qs ipc --any-display -p <store-path>/share/formalshell call bluetooth power on # or "off"
+qs ipc --any-display -p <store-path>/share/formalshell call bluetooth trust AA:BB:CC:DD:EE:FF     # headless path for the panel's TRUST cell
+qs ipc --any-display -p <store-path>/share/formalshell call bluetooth untrust AA:BB:CC:DD:EE:FF
 ```
 
 `status` always answers with JSON, `available: false` when
 `Bluetooth.defaultAdapter` is null (the test VM's expected state). `toggle`/
 `power` return `error: no bluetooth adapter` under the same condition, and
 `power` rejects any argument that isn't `on`/`off` — never a silent no-op.
+`trust`/`untrust` write the device's `trusted` property directly rather than
+routing through the panel, so they never arm its in-flight row state and
+`ok` means the write was issued, exactly as it already does for `power`.
+`status`'s `devices[].trusted` is NOT proof the write reached BlueZ and no
+smoke assertion may treat it as such: quickshell never rolls back a `Set`
+BlueZ rejected, so that field reports what was asked for whenever the two
+disagree. `bluetoothctl info <address>`'s `Trusted:` line is the only real
+read-back, and it is what the panel itself settles against.
+Addresses match case-insensitively (BlueZ hands them out uppercase). An
+address no device on the adapter answers to returns
+`error: unknown device '<address>'`, and one BlueZ hasn't paired returns
+`error: device '<address>' is not paired`.
+
+**Dev gallery** (`target: "gallery"`) is a component-QA sheet, not a user
+surface: it renders the REAL shared components (`Cell`, `MetaLabel`,
+`MarqueeText`, `AuthPrompt`, the type/spacing/color scales, `Panel` itself)
+in one screenshot-sized `Panel`, so a regression in any of them shows up
+where it can be seen. Nothing loads until it is summoned, no bar cell opens
+it, no `bar.layout` entry names it, and it is deliberately absent from
+`panel`'s registry — asking for it by name over its own target is the only
+way in. The one component it can't paint is the tooltip, since `Tooltip.qml`
+hides itself while any panel is open; that row carries a real `tooltipText`
+and says plainly that the card won't appear here rather than standing a
+lookalike in its place.
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call gallery open
+qs ipc --any-display -p <store-path>/share/formalshell call gallery close
+qs ipc --any-display -p <store-path>/share/formalshell call gallery toggle
+qs ipc --any-display -p <store-path>/share/formalshell call gallery status   # {"isOpen":…}
+```
 
 ## Clipboard
 
@@ -1318,9 +1548,13 @@ binds {
 
 Launching `formalshell` replaces any instance already running — there is no
 "two bars" state after a rebuild-and-respawn. On startup the shell binds a
-lock at `$XDG_RUNTIME_DIR/formalshell/instance.sock`; if a live instance
-already holds it, the new process asks it to quit, waits for it to exit, and
-takes over the same lock. This works no matter how the shell is launched
-(a compositor `spawn-at-startup`, a terminal, a keybind) and survives across
-rebuilds, since the lock lives in the runtime directory rather than under the
-nix store path a given build happens to have.
+lock at `$XDG_RUNTIME_DIR/formalshell/instance-$WAYLAND_DISPLAY.sock`; if a
+live instance already holds it, the new process asks it to quit, waits for it
+to exit, and takes over the same lock. This works no matter how the shell is
+launched (a compositor `spawn-at-startup`, a terminal, a keybind) and survives
+across rebuilds, since the lock lives in the runtime directory rather than
+under the nix store path a given build happens to have.
+
+The lock is scoped to one compositor, not one login: a shell running in a
+nested test session (`dev/smoke-*.sh`) shares the host's `XDG_RUNTIME_DIR` but
+has its own `WAYLAND_DISPLAY`, so it never asks the desktop's real bar to quit.
