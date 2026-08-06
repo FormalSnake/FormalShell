@@ -35,6 +35,23 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // One glyph, dim or not — nothing on the cell says what it stands for.
+    // Every branch is TailscalePanel.qml's own wording for the SAME poll
+    // state, because `status` is documented meaningful only while pollState is
+    // "ok" (it is null on the error path): reading `_running` unconditionally
+    // would report STOPPED for a daemon that is running but not logged in, and
+    // for a status reply this shell failed to parse at all — inventing a
+    // daemon state never observed. The cell is visible for those states too,
+    // so they need real wording rather than a default.
+    tooltipText: {
+        switch (root._state) {
+        case "needsLogin": return "TAILSCALE / NEEDS LOGIN";
+        case "error": return "TAILSCALE / NO TAILSCALE";
+        case "ok": return "TAILSCALE / " + (root._running ? "CONNECTED" : "STOPPED");
+        default: return "TAILSCALE";
+        }
+    }
+
     Component.onCompleted: {
         if (root.panel)
             root.panel.pollEnabled = true;

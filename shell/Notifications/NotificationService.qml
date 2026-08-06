@@ -70,6 +70,14 @@ Singleton {
             delete root._hoveredPopups[id];
     }
 
+    // Written by the single Center instance (Surfaces/Notifications/Center.qml)
+    // so surfaces that never get a handle on it can still see it. Toasts.qml
+    // already suppresses its own stack while the center is up, and Tooltip.qml
+    // needs the same fact: the center is a Top-layer card anchored top-right
+    // under the bar, exactly where a tooltip for a right-region cell lands, but
+    // it is not a Panel so it never registers with PanelRegistry.
+    property bool centerOpen: false
+
     readonly property var popups: root._state.popups
     readonly property var pending: root._state.pending
     readonly property var past: root._state.past

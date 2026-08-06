@@ -33,6 +33,16 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // The cell shows the title alone, and marquees or elides it once it
+    // outgrows maxWidth — the tooltip adds the artist and, for a title that
+    // was scrolling, lets it be read in one piece.
+    tooltipText: {
+        if (!root.shown)
+            return "";
+        var track = MediaService.title !== "" ? MediaService.title : MediaService.identity;
+        return "NOW PLAYING / " + (MediaService.artist !== "" ? MediaService.artist + " / " : "") + track;
+    }
+
     // Track title changes resize this cell — animate the width instead of
     // shoving the bar's other widgets instantly (DESIGN.md §4, M16 Task 2).
     Behavior on implicitWidth {

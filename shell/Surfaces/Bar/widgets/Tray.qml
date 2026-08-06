@@ -84,6 +84,13 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             standalone: true
             hovered: itemHover.containsMouse
+            // The item's own words, in the SNI's own order of preference:
+            // ToolTip.title is what the spec means for hover text, Title is
+            // the display name, and Id is the last thing that is always set.
+            // Nothing here is ours to rewrite — hence `tooltipVerbatim`, which
+            // keeps the card from uppercasing another process's string.
+            tooltipText: itemCell.modelData.tooltipTitle || itemCell.modelData.title || itemCell.modelData.id
+            tooltipVerbatim: true
 
             IconImage {
                 anchors.verticalCenter: parent.verticalCenter
@@ -119,6 +126,9 @@ Row {
         visible: root._overflowing
         standalone: true
         hovered: overflowHover.containsMouse
+        tooltipText: TrayService.drawerExpanded
+            ? "TRAY / HIDE " + root._overflowCount
+            : "TRAY / SHOW " + root._overflowCount + " MORE"
 
         Text {
             anchors.verticalCenter: parent.verticalCenter

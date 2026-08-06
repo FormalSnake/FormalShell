@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Services.UPower
 import qs.Core
 import qs.Components
+import "../../../Power/model.js" as Power
 
 // Bar cell for the laptop battery (DESIGN.md §Bar's own "battery cell BAT / 87%"
 // meta idiom, spec §1, M6 Task 7): a level glyph plus the BAT / NN% meta
@@ -36,6 +37,7 @@ Cell {
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
     readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
     readonly property bool _discharging: root._hasBattery && root._device.state === UPowerDeviceState.Discharging
+    readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
     readonly property bool _critical: root._discharging && root._percent <= Config.get("battery.criticalPercent", 5)
     readonly property string _glyph: {
         var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
@@ -64,6 +66,22 @@ Cell {
     standalone: true
     urgent: root._critical
     hovered: hoverArea.containsMouse
+
+    // What the BAT / NN% label can't say: how long that percentage is worth.
+    // UPower reports 0 for whichever estimate doesn't apply — timeToFull
+    // while discharging, timeToEmpty while charging — and for both while it
+    // has no reading at all (PowerPanel.qml's own note on the same fields),
+    // so the state name is the honest fallback rather than a guessed time.
+    tooltipText: {
+        if (!root._hasBattery)
+            return "";
+        var head = "BATTERY " + root._percent + "%";
+        if (root._charging && root._device.timeToFull > 0)
+            return head + " / FULL IN " + Power.formatDuration(root._device.timeToFull);
+        if (root._discharging && root._device.timeToEmpty > 0)
+            return head + " / " + Power.formatDuration(root._device.timeToEmpty) + " LEFT";
+        return head + " / " + UPowerDeviceState.toString(root._device.state).toUpperCase();
+    }
 
     Row {
         anchors.verticalCenter: parent.verticalCenter

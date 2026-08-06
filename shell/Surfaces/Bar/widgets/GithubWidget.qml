@@ -37,6 +37,11 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // "3/7" is unreadable without knowing which number is which.
+    tooltipText: root._state === "ok"
+        ? "GITHUB / " + root._prs + " PRS " + root._issues + " ISSUES"
+        : (root._state === "noauth" ? "GITHUB / NOT AUTHENTICATED" : "GITHUB / UNAVAILABLE")
+
     Component.onCompleted: {
         if (root.panel)
             root.panel.pollEnabled = true;

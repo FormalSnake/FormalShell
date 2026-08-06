@@ -18,6 +18,11 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // Muted keeps showing the pre-mute percentage (Osd.qml makes the same
+    // call — it's still the level you'll get back), which leaves the mute
+    // state resting entirely on one glyph. This names it.
+    tooltipText: AudioService.muted ? "OUTPUT MUTED" : "OUTPUT VOLUME"
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs

@@ -27,6 +27,11 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // The glyph carries the condition and the label the temperature, but a
+    // glyph is a guess until it's named. "UNAVAILABLE" is WeatherPanel.qml's
+    // own honest-empty string for a forecast that hasn't resolved.
+    tooltipText: "WEATHER / " + (root._hasCurrent ? Openmeteo.conditionLabel(root.panel.currentCode) : "UNAVAILABLE")
+
     Component.onCompleted: {
         if (root.panel)
             root.panel.pollEnabled = true;

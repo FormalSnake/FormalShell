@@ -35,14 +35,25 @@ Item {
                 id: cell
                 required property var modelData
                 readonly property var ws: modelData
+                readonly property string label: ws.name !== "" ? ws.name : String(ws.idx)
+                // Counted the same way workspaces.js decides a workspace is
+                // occupied at all: by workspaceId over the windows list, ids
+                // compared as the opaque strings they are.
+                readonly property int windowCount: CompositorService.windows.filter(function (w) {
+                    return w.workspaceId === cell.ws.id;
+                }).length
 
                 standalone: true
                 accent: ws.isFocused
                 hovered: hoverArea.containsMouse
+                // A bare ordinal says nothing about what is on it, and the
+                // occupancy filter means the numbers can skip.
+                tooltipText: "WORKSPACE " + cell.label + " / " + cell.windowCount
+                    + (cell.windowCount === 1 ? " WINDOW" : " WINDOWS")
 
                 Text {
                     anchors.centerIn: parent
-                    text: ws.name !== "" ? ws.name : String(ws.idx)
+                    text: cell.label
                     color: cell.foreground
                     font.family: Theme.font.family
                     font.pixelSize: Theme.fontSize.body

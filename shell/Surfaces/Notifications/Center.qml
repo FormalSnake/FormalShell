@@ -30,6 +30,10 @@ PanelWindow {
 
     property bool isOpen: false
 
+    // Mirrored onto the service so surfaces with no handle on this instance can
+    // see it — see NotificationService.centerOpen's own comment.
+    onIsOpenChanged: NotificationService.centerOpen = root.isOpen
+
     // Bar.qml publishes its content-derived height as Theme.barHeight (the
     // same lookup Panel.qml uses). The old hardcoded-32 mirror predated
     // that: once the bar grew past 32px it left this surface overlapping

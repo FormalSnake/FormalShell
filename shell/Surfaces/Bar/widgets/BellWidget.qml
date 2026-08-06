@@ -27,6 +27,15 @@ Cell {
     standalone: true
     hovered: hoverArea.containsMouse
 
+    // The bell-off glyph reads as "DND" only if you already know the pair,
+    // and the bare count next to it doesn't say what it counts. Suppression
+    // while the notification center is open is Tooltip.qml's job, not this
+    // widget's — the center collides with a tooltip for EVERY right-region
+    // cell, not just this one.
+    tooltipText: root._dnd
+        ? "NOTIFICATIONS / DND ON"
+        : (root._pending > 0 ? "NOTIFICATIONS / " + root._pending + " PENDING" : "NOTIFICATIONS / NONE PENDING")
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs

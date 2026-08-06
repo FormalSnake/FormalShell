@@ -50,6 +50,11 @@ Row {
         visible: root._stayAwakeActive
         standalone: true
         hovered: stayAwakeArea.containsMouse
+        // These two cells are the shell's only glyph-and-nothing-else bar
+        // cells, and both appear out of nowhere the moment their state
+        // turns on — exactly the case a tooltip earns its place on. Both
+        // read "ON" because neither cell exists in the off state at all.
+        tooltipText: "STAY AWAKE ON"
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -72,6 +77,8 @@ Row {
         id: nightLightCell
         visible: root._nightLightActive
         standalone: true
+        hovered: nightLightArea.containsMouse
+        tooltipText: "NIGHT LIGHT ON"
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -79,6 +86,18 @@ Row {
             color: nightLightCell.foreground
             font.family: Theme.font.family
             font.pixelSize: Theme.fontSize.body
+        }
+
+        // Hover only — this cell has no action of its own (night light is
+        // toggled from the menu, not here), so it takes no buttons and
+        // leaves the cursor alone; all it does is give the tooltip above
+        // something to trigger on, and pick up the bar's usual hover
+        // inversion while it's there.
+        MouseArea {
+            id: nightLightArea
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
         }
     }
 }

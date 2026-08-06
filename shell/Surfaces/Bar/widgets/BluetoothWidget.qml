@@ -18,15 +18,35 @@ Cell {
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     readonly property var _adapter: Bluetooth.defaultAdapter
-    readonly property bool _connected: root._adapter
-        ? root._adapter.devices.values.some(function (d) { return d.connected; })
-        : false
+    // BluetoothPanel.qml's own device-row accessor (`name || deviceName`):
+    // `name` is the alias the user may have set, `deviceName` the one the
+    // device reports for itself.
+    readonly property var _connectedNames: root._adapter
+        ? root._adapter.devices.values
+            .filter(function (d) { return d.connected; })
+            .map(function (d) { return d.name || d.deviceName; })
+        : []
+    readonly property bool _connected: root._connectedNames.length > 0
     readonly property string _glyph: (!root._adapter || !root._adapter.enabled)
         ? "󰂲"
         : (root._connected ? "󰂱" : "󰂯")
 
     standalone: true
     hovered: hoverArea.containsMouse
+
+    // Three glyphs cover four states between them (no adapter and adapter
+    // off share one), and none of them names the device that's connected.
+    // "NO ADAPTER"/"NO DEVICES" are BluetoothPanel.qml's own honest-empty
+    // strings, not second wordings for the same states.
+    tooltipText: {
+        if (!root._adapter)
+            return "BLUETOOTH / NO ADAPTER";
+        if (!root._adapter.enabled)
+            return "BLUETOOTH / OFF";
+        if (root._connectedNames.length === 0)
+            return "BLUETOOTH / NO DEVICES";
+        return "BLUETOOTH / " + root._connectedNames.join(", ");
+    }
 
     Text {
         anchors.verticalCenter: parent.verticalCenter

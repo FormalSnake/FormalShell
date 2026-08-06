@@ -25,8 +25,40 @@ Cell {
     })
     readonly property string _glyph: root._wiredConnected ? "󰈀" : (root._wifiConnected ? "󰖩" : "󰖪")
 
+    // The connected network behind the wifi glyph, if NetworkManager has one
+    // to name — NetworkDevice.networks carries the device's own scan list,
+    // of which at most one is `connected` at a time.
+    readonly property var _activeWifi: {
+        for (var i = 0; i < root._devices.length; i++) {
+            var device = root._devices[i];
+            if (device.type !== DeviceType.Wifi || !device.connected)
+                continue;
+            var networks = device.networks.values;
+            for (var j = 0; j < networks.length; j++) {
+                if (networks[j].connected)
+                    return networks[j];
+            }
+        }
+        return null;
+    }
+
     standalone: true
     hovered: hoverArea.containsMouse
+
+    // The glyph alone says "wifi", never which network or how well. Same
+    // precedence the glyph uses (wired beats wifi beats nothing).
+    // ⚠️ signalStrength is a 0..1 fraction, not a percent (quickshell
+    // src/network/wifi.hpp:23) — the same conversion NetworkPanel.qml's own
+    // signal column makes.
+    tooltipText: {
+        if (root._wiredConnected)
+            return "NETWORK / WIRED";
+        if (root._activeWifi)
+            return "WI-FI / " + root._activeWifi.name + " " + Math.round(root._activeWifi.signalStrength * 100) + "%";
+        if (root._wifiConnected)
+            return "WI-FI / CONNECTED";
+        return "NETWORK / OFFLINE";
+    }
 
     Text {
         anchors.verticalCenter: parent.verticalCenter

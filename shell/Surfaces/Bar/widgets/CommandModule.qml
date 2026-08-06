@@ -7,14 +7,17 @@ import "../../../Bar/commandOutput.js" as CommandOutput
 // Bar cell for a `bar.modules[]` entry with type "command" (DESIGN.md
 // §Bar, spec §Surfaces-1, M10 Task 3): runs `module.command` on an
 // interval and parses its stdout as Waybar-JSON-compatible
-// `{text, tooltip, class}`. `text` is the only field actually rendered —
-// this shell has no established tooltip affordance yet, so `tooltip` is
-// parsed and kept (future use) rather than shown. `class` maps onto the
-// two states Cell already has (DESIGN's accent/urgent are flat blocks, not
-// arbitrary CSS classes, so only "warning" and "critical"/"urgent" are
+// `{text, tooltip, class}`. `text` renders in the cell and `tooltip` goes
+// straight to Cell's hover tooltip verbatim — the module author's own
+// wording, never reformatted or uppercased here (MetaLabel's own
+// `font.capitalization` does the casing on the way out). `class` maps onto
+// the two states Cell already has (DESIGN's accent/urgent are flat blocks,
+// not arbitrary CSS classes, so only "warning" and "critical"/"urgent" are
 // recognised; anything else renders plain). A non-zero exit, a timeout, or
 // output that fails to parse as JSON with a string `text` all render the
-// same honest "MODULE ERROR" cell instead of a stale value.
+// same honest "MODULE ERROR" cell — with no tooltip, since
+// commandOutput.js's error state carries an empty one — instead of a stale
+// value.
 Cell {
     id: root
 
@@ -32,8 +35,10 @@ Cell {
     property bool _sawExit: false
 
     standalone: true
+    hovered: hoverArea.containsMouse
     accent: root._class === "warning"
     urgent: root._class === "critical" || root._class === "urgent"
+    tooltipText: root._tooltip
 
     function _run() {
         // `.length` truthiness, not Array.isArray: `module` crossed a
@@ -120,5 +125,16 @@ Cell {
         color: root.foreground
         font.family: Theme.font.family
         font.pixelSize: Theme.fontSize.body
+    }
+
+    // Hover only: a command module has no click action of its own, so this
+    // takes no buttons and leaves the cursor alone. It exists to drive the
+    // tooltip above, and brings this cell's hover chrome in line with every
+    // other bar cell while it's there.
+    MouseArea {
+        id: hoverArea
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.NoButton
     }
 }

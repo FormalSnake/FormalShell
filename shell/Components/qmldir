@@ -4,3 +4,5 @@ DismissTwins DismissTwins.qml
 MarqueeText MarqueeText.qml
 MetaLabel MetaLabel.qml
 Panel Panel.qml
+PointerMoveGate PointerMoveGate.qml
+Tooltip Tooltip.qml

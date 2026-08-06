@@ -11,8 +11,9 @@ import qs.Components
 // display name, which leads in foreground; the window title follows
 // dimmed. No entry resolves → falls back to exactly today's rendering
 // (dim raw appId, foreground title, no icon). No focused window → hidden.
-// Elides once the combined label would exceed maxWidth (the bar sets this
-// to ~40% of its own width).
+// The app name elides and the title marquee-scrolls once the combined
+// label would exceed maxWidth, which the whole cell is capped to (the bar
+// sets it to a quarter of its own width under a hard ceiling).
 Item {
     id: root
 
@@ -88,6 +89,12 @@ Item {
             color: root.desktopEntry ? Theme.color.foreground : Theme.color.foregroundDim
             font.family: Theme.font.family
             font.pixelSize: Theme.fontSize.body
+            // Never more than half the cell: an entry name (or a raw appId
+            // in the no-entry fallback) long enough to eat the whole budget
+            // otherwise starves the title of every pixel and gets hard-cut
+            // mid-glyph by root's own clip, since a Row won't shrink it.
+            width: Math.min(implicitWidth, root.maxWidth * 0.5)
+            elide: Text.ElideRight
         }
 
         // M-polish batch item A: the window title scrolls on overflow via

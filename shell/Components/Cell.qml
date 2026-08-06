@@ -40,6 +40,26 @@ Item {
     property bool hovered: false
     property bool standalone: false
 
+    // Hover tooltip (owner directive, reversing the M16 audit's "bar
+    // tooltips" skip): a short uppercase line naming what this cell is and
+    // what it currently reads, shown after Tooltip.qml's own delay once the
+    // pointer settles and dropped the instant it leaves. Empty — the default
+    // — means no tooltip at all, so every cell that doesn't opt in is
+    // untouched, including the ones that never set `hovered`.
+    //
+    // ⚠️ The surface deliberately does not live in `content`: _measure()
+    // below sizes the cell off EVERY direct child of `content` regardless of
+    // visibility, so a tooltip drawn as a child item would widen (and
+    // heighten) every cell it was attached to by its own card. Tooltip.qml
+    // is a layer-shell window of its own instead, held by the Loader below,
+    // which sits outside `content` and carries no size either way.
+    property string tooltipText: ""
+
+    // Set when `tooltipText` is a foreign process's own string rather than
+    // wording this shell chose (tray item titles). Renders it verbatim instead
+    // of uppercasing it — see Tooltip.qml's label for the reasoning.
+    property bool tooltipVerbatim: false
+
     // Bar cells only: hovered, and not already carrying one of the other
     // full-bleed states (selected/accent/urgent keep their own fill — no
     // double treatment, DESIGN.md §2.4).
@@ -88,6 +108,37 @@ Item {
                 max = extent;
         }
         return max;
+    }
+
+    function _openTooltip() {
+        if (!root.hovered || root.tooltipText === "")
+            return;
+        tooltipLoader.active = true;
+        tooltipLoader.item.anchorItem = root;
+        tooltipLoader.item.verbatim = root.tooltipVerbatim;
+        tooltipLoader.item.text = root.tooltipText;
+        tooltipLoader.item.show();
+    }
+
+    onHoveredChanged: {
+        if (root.hovered)
+            root._openTooltip();
+        else if (tooltipLoader.item)
+            tooltipLoader.item.hide();
+    }
+
+    // Live while shown: a cell's value moves under a parked pointer (volume
+    // ticking, a battery estimate settling), and the card is meant to read
+    // as the cell's own state, not a snapshot of when the pointer arrived.
+    // Never re-opens through _openTooltip() once the surface exists — that
+    // would restart its show delay and blink the card on every tick. The
+    // else branch covers the one case a text change IS an open: the cell had
+    // nothing to say when the pointer arrived and now does.
+    onTooltipTextChanged: {
+        if (tooltipLoader.item)
+            tooltipLoader.item.text = root.tooltipText;
+        else
+            root._openTooltip();
     }
 
     // Full-bleed state fills snap (DESIGN.md §4.3: accent/selection swaps
@@ -153,5 +204,29 @@ Item {
         anchors.right: parent.right
         width: Theme.borderWidth
         color: Theme.color.rule
+    }
+
+    // Loaded by URL rather than declared as a `Tooltip {}`, for two reasons.
+    // Tooltip.qml pulls in Quickshell and Quickshell.Wayland, while Cell.qml
+    // is instantiated head-on by tests/tst_cell_geometry.qml and
+    // tst_cell_hover_inversion.qml under a plain qmltestrunner that has no
+    // Quickshell module at all; and Tooltip.qml's card is itself built from
+    // a Cell, so a type reference would ask QML to resolve each of the two
+    // files while compiling the other. A URL resolves only when the Loader
+    // activates — which no test ever does, and which the tooltip's own inner
+    // Cell never does either, since nothing gives it a tooltipText.
+    //
+    // `active` starts false (Loader's own default is true) and is written
+    // imperatively from onHoveredChanged above, never bound: that load has
+    // to have completed by the next statement, which only a synchronous
+    // activation guarantees. It then stays loaded — unloading on pointer
+    // exit would cut the exit fade short and re-pay the surface's creation
+    // on every pass along the bar, while every cell in the shell loading one
+    // up front would cost a layer-shell window per cell per output for cells
+    // that may never be hovered at all.
+    Loader {
+        id: tooltipLoader
+        active: false
+        source: "Tooltip.qml"
     }
 }
