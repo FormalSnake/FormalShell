@@ -33,9 +33,13 @@ function parseCredentials(body) {
     if (accessToken === "")
         return { ok: false, error: "missing_fields" };
 
+    // The refresh token itself is never returned — only whether one is
+    // present, which is all the caller needs to tell "logged out" apart from
+    // "logged in, access token needs refreshing" (see credentialsExpired).
     return {
         ok: true,
         accessToken: accessToken,
+        hasRefreshToken: typeof oauth.refreshToken === "string" && oauth.refreshToken !== "",
         expiresAtMs: _normalizeExpiresAtMs(oauth.expiresAt),
         subscriptionType: typeof oauth.subscriptionType === "string" ? oauth.subscriptionType : "",
         rateLimitTier: typeof oauth.rateLimitTier === "string" ? oauth.rateLimitTier : ""
@@ -49,6 +53,13 @@ function _normalizeExpiresAtMs(value) {
 
 // 0/absent expiresAtMs means the credentials carry no expiry info at all —
 // not the same as "expired now".
+//
+// Claude Code's accessToken lives ~12h while its refreshToken lives ~10d, and
+// only a Claude Code run refreshes the pair on disk. An expired accessToken
+// therefore means "logged in, token needs refreshing", NOT "logged out" — the
+// caller renders those as different states. This is advisory only: the local
+// clock decides which label shows while a probe is in flight, the server's own
+// 401 decides the settled state.
 function credentialsExpired(expiresAtMs, nowMs) {
     return expiresAtMs > 0 && expiresAtMs <= nowMs;
 }

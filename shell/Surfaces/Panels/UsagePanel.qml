@@ -24,8 +24,23 @@ import "../../Usage/usage.js" as Usage
 // (`api.anthropic.com/api/oauth/usage`, headers `Authorization: Bearer
 // <token>` + `anthropic-beta: oauth-2025-04-20` + `Accept:
 // application/json` — WeatherPanel's own XMLHttpRequest idiom). Missing
-// credentials, an empty token, or an expired one all render an honest `NO
-// AUTH` state rather than probing at all.
+// credentials or an empty token render an honest `NO AUTH`.
+//
+// An *expired* access token is a third state, not `NO AUTH`: the file's
+// accessToken lives ~12h while its refreshToken lives ~10d, and only a Claude
+// Code run refreshes the pair on disk, so a machine that hasn't run `claude`
+// today is still fully logged in with a token this shell can't use. That
+// renders `STALE` and points at the fix. The shell deliberately does NOT
+// perform the refresh itself: Anthropic rotates the refresh token on use, so
+// redeeming it here would invalidate the copy Claude Code still holds and log
+// the owner out of their own CLI.
+//
+// The local `expiresAt` is advisory — a skewed clock or a changed field
+// meaning must not be able to hide real usage numbers — so a probe fires
+// whenever a token exists at all and the server's own verdict settles the
+// state: 2xx wins outright, 401/403 falls back to `STALE` (refresh token
+// present) or `NO AUTH` (none), anything else is `ERROR`. `expiresAt` only
+// picks the label shown while that probe is in flight.
 //
 // Codex leg: `codex -s read-only -a untrusted app-server` speaks
 // newline-delimited JSON-RPC over stdin/stdout (verified against
@@ -62,11 +77,12 @@ Panel {
         return (typeof v === "number" && v > 0) ? v : 900000;
     }
 
-    // "unknown" (pre-first-answer) | "noauth" | "loading" | "error" | "ok"
+    // "unknown" (pre-first-answer) | "noauth" | "stale" | "loading" | "error" | "ok"
     property string claudeState: "unknown"
     property string claudeTier: ""
     property var claudeRows: []
     property string _claudeAccessToken: ""
+    property bool _claudeHasRefreshToken: false
 
     // "unknown" | "missing" | "loading" | "error" | "ok"
     property string codexState: "unknown"
@@ -91,6 +107,7 @@ Panel {
     function claudeStatusText() {
         switch (root.claudeState) {
         case "noauth": return "NO AUTH";
+        case "stale": return "STALE";
         case "loading": return "LOADING";
         case "error": return "ERROR";
         default: return "";
@@ -118,10 +135,12 @@ Panel {
     }
 
     function _poll() {
-        if (root.claudeEnabled)
+        if (root.claudeEnabled) {
+            root._credentialsRetries = 0;
             credentialsFile.reload();
-        else
+        } else {
             root.claudeState = "unknown";
+        }
         if (root.codexEnabled)
             root._pollCodex();
         else
@@ -150,35 +169,63 @@ Panel {
         onLoadFailed: error => {
             root.claudeState = "noauth";
             root._claudeAccessToken = "";
+            root._claudeHasRefreshToken = false;
             root.claudeRows = [];
+            if (error === FileViewError.FileNotFound && root.claudeEnabled && root._credentialsRetries < root._maxCredentialsRetries) {
+                root._credentialsRetries++;
+                credentialsRewatch.restart();
+            }
         }
     }
 
+    // Config.qml's own rewatch idiom, for the same reason: Claude Code
+    // rewrites `.credentials.json` by rename, which both unhooks the watch
+    // from the replaced inode and can land a poll on the gap between unlink
+    // and link. Without this a one-frame miss reads as NO AUTH until the next
+    // `usage.intervalMs` tick a quarter of an hour later.
+    //
+    // BOUNDED, unlike Config.qml's and Theme.qml's copies of this idiom: those
+    // terminate because the shell writes settings.json/theme.json itself, so
+    // the file always eventually appears. Nothing here ever creates
+    // `.credentials.json`, so an unbounded retry would be a permanent 3.3Hz
+    // stat loop on every machine without Claude Code installed — including the
+    // VM smoke rig, and the honest NO AUTH state itself. A rename gap closes in
+    // milliseconds, so a short burst covers it; after that the normal poll and
+    // the FileView's own watch are what pick the file up.
+    property int _credentialsRetries: 0
+    readonly property int _maxCredentialsRetries: 3
+
+    Timer {
+        id: credentialsRewatch
+        interval: 300
+        onTriggered: credentialsFile.reload()
+    }
+
     function _applyCredentials(text) {
+        root._credentialsRetries = 0;
         var parsed = Usage.parseCredentials(text);
-        if (!parsed.ok) {
+        if (!parsed.ok || parsed.accessToken === "") {
             root.claudeState = "noauth";
             root._claudeAccessToken = "";
+            root._claudeHasRefreshToken = false;
             root.claudeRows = [];
             return;
         }
         root._claudeAccessToken = parsed.accessToken;
+        root._claudeHasRefreshToken = parsed.hasRefreshToken;
         root.claudeTier = Usage.tierLabel(parsed.subscriptionType, parsed.rateLimitTier);
-        if (Usage.credentialsExpired(parsed.expiresAtMs, Date.now())) {
-            root.claudeState = "noauth";
-            root._claudeAccessToken = "";
-            root.claudeRows = [];
-            return;
-        }
-        root._probeClaudeUsage();
+        root._probeClaudeUsage(Usage.credentialsExpired(parsed.expiresAtMs, Date.now()));
     }
 
-    function _probeClaudeUsage() {
+    // `expiredLocally` only picks the in-flight label (STALE reads truer than
+    // LOADING when the file already says the token is dead) — the reply below
+    // settles the state either way.
+    function _probeClaudeUsage(expiredLocally) {
         if (root._claudeAccessToken === "") {
             root.claudeState = "noauth";
             return;
         }
-        root.claudeState = "loading";
+        root.claudeState = expiredLocally ? "stale" : "loading";
         var xhr = new XMLHttpRequest();
         xhr.open("GET", "https://api.anthropic.com/api/oauth/usage");
         xhr.setRequestHeader("Authorization", "Bearer " + root._claudeAccessToken);
@@ -187,6 +234,11 @@ Panel {
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== XMLHttpRequest.DONE)
                 return;
+            if (xhr.status === 401 || xhr.status === 403) {
+                root.claudeState = root._claudeHasRefreshToken ? "stale" : "noauth";
+                root.claudeRows = [];
+                return;
+            }
             if (xhr.status < 200 || xhr.status >= 300) {
                 root.claudeState = "error";
                 return;
@@ -339,11 +391,18 @@ Panel {
         MetaLabel { text: "CLAUDE" + (root.claudeTier !== "" ? " / " + root.claudeTier : "") }
     }
 
+    // The bar cell only has room for the status word, so the actionable half
+    // of the STALE state ("errors say how to fix") lives here where there's
+    // width for it.
     Cell {
         visible: root.claudeEnabled && root.claudeState !== "ok"
         width: parent.width
 
-        MetaLabel { text: root.claudeState === "unknown" ? "LOADING" : root.claudeStatusText() }
+        MetaLabel {
+            text: root.claudeState === "unknown" ? "LOADING"
+                : root.claudeState === "stale" ? "STALE / RUN CLAUDE TO REFRESH"
+                : root.claudeStatusText()
+        }
     }
 
     Repeater {

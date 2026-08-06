@@ -11,6 +11,7 @@ TestCase {
         var r = Usage.parseCredentials(JSON.stringify({
             claudeAiOauth: {
                 accessToken: "tok123",
+                refreshToken: "ref456",
                 expiresAt: 1700000000000,
                 subscriptionType: "pro",
                 rateLimitTier: "max_20x"
@@ -18,9 +19,34 @@ TestCase {
         }));
         compare(r.ok, true);
         compare(r.accessToken, "tok123");
+        compare(r.hasRefreshToken, true);
         compare(r.expiresAtMs, 1700000000000);
         compare(r.subscriptionType, "pro");
         compare(r.rateLimitTier, "max_20x");
+    }
+
+    // The refresh token is what separates "logged out" from "logged in,
+    // access token needs a claude run to refresh" — its value never leaves
+    // the parser, only its presence.
+    function test_parse_credentials_never_returns_the_refresh_token_itself() {
+        var r = Usage.parseCredentials(JSON.stringify({
+            claudeAiOauth: { accessToken: "tok", refreshToken: "ref456" }
+        }));
+        compare(r.hasRefreshToken, true);
+        compare(r.refreshToken, undefined);
+    }
+
+    function test_parse_credentials_absent_refresh_token() {
+        var r = Usage.parseCredentials(JSON.stringify({ claudeAiOauth: { accessToken: "tok" } }));
+        compare(r.ok, true);
+        compare(r.hasRefreshToken, false);
+    }
+
+    function test_parse_credentials_empty_refresh_token_counts_as_absent() {
+        var r = Usage.parseCredentials(JSON.stringify({
+            claudeAiOauth: { accessToken: "tok", refreshToken: "" }
+        }));
+        compare(r.hasRefreshToken, false);
     }
 
     function test_parse_credentials_malformed_json() {
