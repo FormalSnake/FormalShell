@@ -6,13 +6,23 @@ import Quickshell.Io
 // "i see two bars there has to be instance locking" — a rebuild+respawn had
 // raced an old shell instance against a new one, each drawing its own bar).
 //
-// The lock is a fixed unix socket at $XDG_RUNTIME_DIR/formalshell/instance.sock
-// — deliberately NOT derived from the nix store path the running shell was
-// built from, because that path changes on every rebuild: two builds of "the
-// same" shell would never recognize each other as one instance if the lock
-// lived under a store-path-keyed name. $XDG_RUNTIME_DIR is stable across
-// rebuilds within a login session, which is exactly the scope a "one shell
-// per session" invariant needs.
+// The lock is a unix socket at
+// $XDG_RUNTIME_DIR/formalshell/instance-$WAYLAND_DISPLAY.sock, deliberately
+// NOT derived from the nix store path the running shell was built from,
+// because that path changes on every rebuild: two builds of "the same" shell
+// would never recognize each other as one instance if the lock lived under a
+// store-path-keyed name. $XDG_RUNTIME_DIR is stable across rebuilds within a
+// login session, which is the scope a "one shell per session" invariant needs.
+//
+// The $WAYLAND_DISPLAY suffix is what makes "session" mean *compositor*
+// rather than *login*. dev/smoke-*.sh nest a test compositor inside the
+// owner's live session and deliberately keep the host's XDG_RUNTIME_DIR (the
+// nested niri connects to the host's Wayland socket through it), so a fixed
+// socket name put the nested shell and the owner's real bar on the same lock:
+// the nested one greeted the live bar, sent it a takeover, and Qt.quit() took
+// the owner's desktop bar down on every smoke run. Keying on the display the
+// shell is actually attached to keeps the original rebuild+respawn takeover
+// working (same compositor, same key) while a nested compositor gets its own.
 //
 // Takeover protocol, line-delimited over the socket:
 //   - on accepting a connection, the listening (old) side writes
@@ -20,7 +30,7 @@ import Quickshell.Io
 //   - the connecting (new) side replies "takeover <pid>\n"
 //   - the old side, on reading a "takeover" line, logs and calls Qt.quit()
 //
-// Every instance starts by connecting as a *client* to the fixed path. A
+// Every instance starts by connecting as a *client* to that path. A
 // live instance answers with the greeting; the new instance requests
 // takeover and polls (bounded, ~2s) for that connection to drop before
 // binding its own SocketServer at the same path. If nothing answers (no
@@ -38,7 +48,14 @@ Scope {
     id: root
 
     readonly property string _runtimeDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/formalshell"
-    readonly property string socketPath: root._runtimeDir + "/instance.sock"
+
+    // WAYLAND_DISPLAY is a bare socket name ("wayland-1") in every ordinary
+    // session, but libwayland also accepts an absolute path, so slashes are
+    // folded into the filename rather than being allowed to name directories
+    // that were never created. Empty only if the shell is somehow running
+    // without a compositor, where the fixed fallback is as good a key as any.
+    readonly property string _sessionKey: (Quickshell.env("WAYLAND_DISPLAY") || "default").replace(/\//g, "_")
+    readonly property string socketPath: root._runtimeDir + "/instance-" + root._sessionKey + ".sock"
     readonly property bool active: server.active
 
     // Whether the initial probe's outcome (a live instance found, or none)
