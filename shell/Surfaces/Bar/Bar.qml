@@ -113,7 +113,11 @@ PanelWindow {
     Component {
         id: activeWindowComponent
         ActiveWindow {
-            maxWidth: bar.width * 0.4
+            // A quarter of the bar under a hard px ceiling. The previous
+            // flat 40% handed this one cell over a thousand pixels of a
+            // wide display before the title's marquee engaged at all, so
+            // "the title is too long" was the cap, not the marquee.
+            maxWidth: Math.min(bar.width * 0.25, 420)
             // Gates the title marquee off while the bar's own PanelWindow
             // isn't on screen — same rationale as NowPlaying's own
             // windowVisible below.

@@ -27,6 +27,8 @@ QtObject {
 
     readonly property var font: ({ family: "monospace", display: "monospace" })
 
+    readonly property bool motionEnabled: true
+
     readonly property var motion: {
         var m = Tokens.motionTokens(true);
         return {
@@ -35,7 +37,9 @@ QtObject {
             slide: m.slide,
             easing: Easing.OutCubic,
             reveal: m.reveal,
-            revealEasing: Easing.InOutQuad
+            revealEasing: Easing.InOutQuad,
+            marqueePxPerSec: m.marqueePxPerSec,
+            marqueeHoldMs: m.marqueeHoldMs
         };
     }
 

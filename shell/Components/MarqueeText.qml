@@ -15,6 +15,9 @@ Item {
     property string text: ""
     property color color: Theme.color.foreground
     property int pixelSize: Theme.fontSize.body
+    // Caps this item's WHOLE width, `leftPadding` included, so an embedder
+    // that hands out a width budget gets an item that fits it exactly
+    // instead of one overshooting by the padding and being clipped.
     property real maxWidth: 220
     // Extra inset before the text itself, on top of whatever Row spacing
     // already separates this from its previous sibling — plain QtQuick
@@ -26,13 +29,35 @@ Item {
     // any other embedding still animates.
     property bool windowVisible: true
 
-    readonly property bool _overflow: measureText.implicitWidth > root.maxWidth
+    readonly property real _fullWidth: root.leftPadding + measureText.implicitWidth
+    readonly property bool _overflow: root._fullWidth > root.maxWidth
     readonly property bool _marquee: root._overflow && Theme.motionEnabled && root.windowVisible
-    readonly property real _loopWidth: measureText.implicitWidth + Theme.space.xl
+    // Blank between the two copies, sized off the text rather than the
+    // spacing scale: at marqueePxPerSec a space.xl gap passes in a third of
+    // a second, so the wrap reads as the title running into itself instead
+    // of looping.
+    readonly property real _gap: Math.round(root.pixelSize * 2.5)
+    readonly property real _loopWidth: measureText.implicitWidth + root._gap
 
-    width: root.leftPadding + Math.min(measureText.implicitWidth, root.maxWidth)
+    width: Math.min(root._fullWidth, root.maxWidth)
     height: measureText.implicitHeight
-    clip: true
+
+    // A new overflowing title (window switch, track change) has to start at
+    // the hold with its own left edge showing. `running` below stays true
+    // straight through the swap, so nothing restarts the loop on its own and
+    // the incoming title would otherwise pick up wherever the outgoing one
+    // had scrolled to, staying wrong for up to a full cycle. Driven off the
+    // measured width as well as `text` itself: Text lays out on the next
+    // polish, so at onTextChanged `_loopWidth` is still the outgoing title's.
+    function _restartMarquee() {
+        if (!marqueeAnim.running)
+            return;
+        marqueeAnim.stop();
+        marqueeRow.x = 0;
+        marqueeAnim.start();
+    }
+
+    onTextChanged: root._restartMarquee()
 
     Text {
         id: measureText
@@ -40,41 +65,53 @@ Item {
         text: root.text
         font.family: Theme.font.family
         font.pixelSize: root.pixelSize
+        onImplicitWidthChanged: root._restartMarquee()
     }
 
-    Text {
+    // The scroll is clipped to start AFTER the inset, not at the item's own
+    // left edge: clipping at the edge leaves the padding strip inside the
+    // visible region, so a scrolling title slides straight into it and runs
+    // up against whatever sits to the left (the app name, in ActiveWindow).
+    // The inset only ever read as a gap while the loop sat at its hold.
+    Item {
+        id: viewport
         x: root.leftPadding
-        visible: !root._marquee
-        text: root.text
-        color: root.color
-        font.family: Theme.font.family
-        font.pixelSize: root.pixelSize
-        elide: Text.ElideRight
         width: root.width - root.leftPadding
-    }
-
-    // Two copies of the title, a gap apart, scrolled together as one Row —
-    // once `x` reaches `leftPadding - _loopWidth` the second copy sits
-    // exactly where the first one started, so the wrap is seamless with no
-    // reset needed between loops.
-    Row {
-        id: marqueeRow
-        x: root.leftPadding
-        visible: root._marquee
-        spacing: 0
+        height: root.height
+        clip: true
 
         Text {
+            visible: !root._marquee
             text: root.text
             color: root.color
             font.family: Theme.font.family
             font.pixelSize: root.pixelSize
+            elide: Text.ElideRight
+            width: viewport.width
         }
-        Item { width: Theme.space.xl; height: 1 }
-        Text {
-            text: root.text
-            color: root.color
-            font.family: Theme.font.family
-            font.pixelSize: root.pixelSize
+
+        // Two copies of the title, a gap apart, scrolled together as one Row —
+        // once `x` reaches `-_loopWidth` the second copy sits exactly where
+        // the first one started, so the wrap is seamless with no reset
+        // needed between loops.
+        Row {
+            id: marqueeRow
+            visible: root._marquee
+            spacing: 0
+
+            Text {
+                text: root.text
+                color: root.color
+                font.family: Theme.font.family
+                font.pixelSize: root.pixelSize
+            }
+            Item { width: root._gap; height: 1 }
+            Text {
+                text: root.text
+                color: root.color
+                font.family: Theme.font.family
+                font.pixelSize: root.pixelSize
+            }
         }
     }
 
@@ -82,6 +119,7 @@ Item {
     // scroll the full loop width at a slow constant rate — no easing, since
     // a steady speed is the point (DESIGN.md §4).
     SequentialAnimation {
+        id: marqueeAnim
         running: root._marquee
         loops: Animation.Infinite
 
@@ -89,8 +127,8 @@ Item {
         NumberAnimation {
             target: marqueeRow
             property: "x"
-            from: root.leftPadding
-            to: root.leftPadding - root._loopWidth
+            from: 0
+            to: -root._loopWidth
             duration: root._loopWidth / Theme.motion.marqueePxPerSec * 1000
             easing.type: Easing.Linear
         }
