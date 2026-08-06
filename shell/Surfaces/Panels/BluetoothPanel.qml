@@ -48,7 +48,10 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // AIRPODS NOISE (M17 Task 2): four plain action cells (OFF/ANC/
 // TRANSPARENCY/ADAPTIVE) that join the same address-keyed cursor list as
 // the device rows above, appended last, and appear only while
-// `LibrePodsService.available` — probed once per panel open, never a poll.
+// `LibrePodsService.available` (probed once per panel open, never a poll)
+// AND a connected device actually names itself AirPods
+// (model.js's hasConnectedAirpods) — the socket alone only proves the
+// LibrePods app is running, not that the earbuds are here.
 // The protocol behind them is write-only (no D-Bus, a raw QLocalServer
 // socket — see LibrePodsService.qml), so none of the four ever renders as
 // selected/active; the header's dim "SET ONLY" tag is what tells the
@@ -66,7 +69,7 @@ Panel {
     readonly property var _availableRows: root._buckets.available
     readonly property bool _hasAnyRows: root._connectedRows.length > 0 || root._pairedRows.length > 0 || root._availableRows.length > 0
 
-    readonly property bool _airpodsAvailable: LibrePodsService.available
+    readonly property bool _airpodsAvailable: LibrePodsService.available && BluetoothModel.hasConnectedAirpods(root._connectedRows)
     readonly property var _airpodsModes: [
         { key: "off", label: "OFF" },
         { key: "anc", label: "ANC" },

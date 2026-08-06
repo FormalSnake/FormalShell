@@ -108,4 +108,15 @@ TestCase {
     function test_statusText_blank_for_null_device() {
         compare(BluetoothModel.statusText(null), "");
     }
+
+    function test_hasConnectedAirpods_name_contains_case_insensitive() {
+        verify(BluetoothModel.hasConnectedAirpods([dev("Kyan's AirPods Pro", { connected: true })]));
+        verify(BluetoothModel.hasConnectedAirpods([dev("airpods max", { connected: true })]));
+    }
+
+    function test_hasConnectedAirpods_false_for_other_devices() {
+        verify(!BluetoothModel.hasConnectedAirpods([dev("WH-1000XM5", { connected: true }), dev("Keychron K2", { connected: true })]));
+        verify(!BluetoothModel.hasConnectedAirpods([]));
+        verify(!BluetoothModel.hasConnectedAirpods(undefined));
+    }
 }

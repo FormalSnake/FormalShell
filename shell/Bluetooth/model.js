@@ -81,6 +81,18 @@ function buckets(devices, discovering) {
     };
 }
 
+// AIRPODS NOISE gate: the LibrePods socket existing only proves the app is
+// running, not that AirPods are anywhere near the machine — noise cells
+// for an absent device are dead controls. Case-insensitive name-contains
+// match over the connected bucket, so "AirPods Pro"/"Kyan's AirPods" all
+// count and nothing paired-but-away does.
+function hasConnectedAirpods(connectedRows) {
+    for (var i = 0; i < (connectedRows || []).length; i++) {
+        if (_label(connectedRows[i]).toLowerCase().indexOf("airpods") >= 0) return true;
+    }
+    return false;
+}
+
 // PAIRING…/CONNECTING… take priority over a stale battery reading; battery
 // only renders for an already-connected device that reports one.
 function statusText(device) {
