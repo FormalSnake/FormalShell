@@ -31,6 +31,11 @@ PanelWindow {
     // which falls back to the bar's right region, where every M6 widget
     // cell lives.
     property real anchorX: -1
+    // Focus-prime phase, read only by the keyboardFocus binding below (which
+    // carries the full rationale): false for the brief Exclusive prime that
+    // actually acquires keyboard focus, true once the surface can settle on
+    // OnDemand without losing it.
+    property bool _focusPrimed: false
     default property alias content: contentColumn.data
 
     // Forwarded from backdrop's own Keys.onPressed (M6 Task 7): the ONE
@@ -79,6 +84,8 @@ PanelWindow {
         PanelRegistry.current = root;
         root.anchorX = x !== undefined ? x : -1;
         root.isOpen = true;
+        root._focusPrimed = false;
+        root._beginFocusPrime();
         Qt.callLater(function () { backdrop.forceActiveFocus(); });
     }
 
@@ -104,7 +111,52 @@ PanelWindow {
     WlrLayershell.namespace: "formalshell:panel"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
-    WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    // Keyboard focus follows isOpen, never `visible` — the surface stays
+    // mapped through the exit fade above, but input ownership has to release
+    // the instant close() fires.
+    //
+    // OnDemand on its own is not enough to make a keyboard-summoned panel
+    // usable: wlroots only hands an OnDemand surface focus once the
+    // compositor routes it there, i.e. after a click. `qs ipc call panel open
+    // audio` from a compositor keybind therefore produced a panel where
+    // Escape did nothing and PowerPanel's arrow keys were dead. So every
+    // open() primes with Exclusive — which takes focus unconditionally, both
+    // at map time and when an already-mapped fade-out surface is resummoned —
+    // then settles back to OnDemand once that focus has landed.
+    //
+    // ⚠️ Do NOT "simplify" this to the plain Exclusive binding Menu.qml and
+    // PolkitDialog.qml can afford. Hyprland routes EVERY pointer event to an
+    // exclusive-focus surface regardless of which output the cursor is over,
+    // so a permanently-exclusive panel leaves clicks on every other monitor
+    // dead — including the DismissTwins catchers below, whose entire job is
+    // dismissing this panel from another output. Omarchy hit and documented
+    // exactly this (its `shell/Ui/KeyboardPanel.qml` header comment); the
+    // prime window is kept short so that grab is never perceptible.
+    WlrLayershell.keyboardFocus: root.isOpen
+        ? (root._focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
+        : WlrKeyboardFocus.None
+
+    // A cold open flips `visible` before the surface exists, so open()'s own
+    // call finds no backing window yet and the timer below never starts —
+    // this catches the map itself. A reopen mid-fade never changes this flag
+    // (the window stayed mapped throughout), which is why open() arms the
+    // prime as well: between them every open path is covered exactly once.
+    onBackingWindowVisibleChanged: root._beginFocusPrime()
+
+    function _beginFocusPrime() {
+        if (root.isOpen && root.backingWindowVisible)
+            focusPrimeTimer.restart();
+    }
+
+    Timer {
+        id: focusPrimeTimer
+        // Room for several Qt/Wayland commit cycles — the compositor grants
+        // focus on the commit carrying the Exclusive role, not on the QML
+        // property write — while keeping the compositor-wide pointer grab
+        // described above far too brief to notice.
+        interval: 75
+        onTriggered: if (root.isOpen) root._focusPrimed = true
+    }
 
     anchors { top: true; left: true; right: true; bottom: true }
 
