@@ -16,6 +16,7 @@ import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
 import qs.Surfaces.Picker
 import qs.Surfaces.Polkit
+import qs.Surfaces.Gallery
 import qs.Ipc
 import qs.Services
 
@@ -103,7 +104,14 @@ ShellRoot {
     GithubPanel { id: githubPanelInstance }
     UsagePanel { id: usagePanelInstance }
     TailscalePanel { id: tailscalePanelInstance }
+    DisplayPanel { id: displayPanelInstance }
     ImagePicker { id: imagePickerInstance }
+
+    // Dev surface, reachable only through `gallery open|toggle` — no bar
+    // cell, no bar.layout entry, and deliberately absent from PanelIpc's
+    // registry below. Its own Loader stays inactive until summoned, so an
+    // ordinary session pays nothing for it.
+    Gallery { id: galleryInstance }
 
     DebugIpc { menu: menu }
     ThemeIpc {}
@@ -111,7 +119,7 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance }) }
+    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, display: displayPanelInstance }) }
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     NetworkIpc { panel: networkPanelInstance }
@@ -123,4 +131,5 @@ ShellRoot {
     PickerIpc { picker: imagePickerInstance }
     ScreenshotIpc {}
     NightLightIpc {}
+    GalleryIpc { gallery: galleryInstance }
 }
