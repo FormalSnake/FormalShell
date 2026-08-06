@@ -21,7 +21,10 @@ Cell {
     property bool confirming: false
 
     signal activate
-    signal hoverIn
+    // Carries the raw pointer sample rather than "the pointer is here now":
+    // whether it counts as a real move is PointerMoveGate's call, and only
+    // Menu.qml holds the gate (one gate for the whole list, not one per row).
+    signal hoverMoved(var source, real x, real y)
 
     readonly property bool isBranch: node.kind === "submenu" || node.kind === "link" || node.kind === "provider"
 
@@ -156,7 +159,10 @@ Cell {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onPositionChanged: root.hoverIn()
+        // Qt re-delivers a hover move to whichever row slid under a parked
+        // pointer, so this fires on every filter keystroke and every scroll
+        // with the pointer untouched — hence the gate on the other end.
+        onPositionChanged: event => root.hoverMoved(hoverArea, event.x, event.y)
         onClicked: root.activate()
     }
 }
