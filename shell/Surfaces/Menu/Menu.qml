@@ -11,6 +11,7 @@ import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
 import "../../Menu/providers.js" as Providers
 import "../../Menu/calc.js" as Calc
+import "../../Menu/frecency.js" as Frecency
 
 // The unified menu (DESIGN.md §Concrete translations/Menu): a single
 // keyboard-exclusive top-layer window, centered on the focused output. Top
@@ -306,10 +307,17 @@ PanelWindow {
     readonly property var _tree: Providers.applyProviders(Model.buildTree(root._defaultObj, root._userObj), {
         // check=true so a name the icon theme can't resolve yields "" (the
         // glyph-slot fallback) instead of the provider's missing-texture box.
+        //
+        // Core.State.appLaunches rides this binding deliberately: recording
+        // a launch (_activateRow below) rebuilds the tree, which is what
+        // re-orders the rows for the next summon. It lands as the menu is
+        // closing, where _liveClipboardItems' own isOpen flip already pays
+        // for a rebuild. Date.now() is read at rebuild time, so the recency
+        // decay is as fresh as the tree itself.
         apps: function () {
             return Providers.appsProvider(DesktopEntries.applications.values, function (name) {
                 return Quickshell.iconPath(name, true);
-            });
+            }, Core.State.appLaunches, Date.now());
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir); },
         shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); },
@@ -580,6 +588,10 @@ PanelWindow {
         root.isOpen = false;
         root._confirmPendingId = "";
         root._releaseTopFreeze();
+        // The next summon maps the card wherever it centers, possibly under a
+        // pointer that never moved: a sample left over from this session would
+        // read that as a move.
+        pointerGate.reset();
     }
 
     // Force an immediate re-read of default+user jsonc — Config's settings
@@ -643,6 +655,66 @@ PanelWindow {
                 console.warn("Menu: wtype not on PATH, emoji copied but not typed");
             else if (exitCode !== 0)
                 console.warn("Menu: wtype failed (exit " + exitCode + "), emoji copied but not typed");
+        }
+    }
+
+    // Launch feedback for app rows. DesktopEntry.execute() is
+    // fire-and-forget — it hands the entry's Exec line off and reports
+    // nothing back — so the only truthful confirmation a launch can ever
+    // get is the app's own window turning up. CompositorService.windows is
+    // the live toplevel list on both backends, so this watches instead of
+    // claiming: baseline the window count (and the focused window id) the
+    // moment Enter lands, and if something new arrives within
+    // `_launchGraceMs`, THE WINDOW is the feedback and no toast fires at
+    // all. omarchy's AppLibrary.qml (launchSerial/launchToplevelCount/
+    // launchActiveToplevel, and its note about the OSD outliving the launch
+    // that opened it) takes the same position for the same reason. Only a
+    // grace period that passes with nothing new gets a toast, and it says
+    // exactly what is known: LAUNCHING, this app, nothing on screen yet.
+    //
+    // Success is never claimed, and neither is failure: a slow cold start,
+    // a second instance handing its argv to an already-open window, and an
+    // Exec line that died immediately are indistinguishable from out here,
+    // so one honest in-progress wording covers all three. The one case that
+    // fires immediately is a backend that isn't connected
+    // (CompositorService.available false, e.g. an unrecognized compositor):
+    // there is nothing to observe at any point, so waiting out the grace
+    // period would only delay the same sentence.
+    //
+    // One watch at a time — a second launch inside the grace period
+    // supersedes the first, so a burst of Enters can't stack up toasts.
+    readonly property int _launchGraceMs: 2000
+    property string _launchWatchLabel: ""
+    property int _launchBaselineWindows: 0
+    property string _launchBaselineFocusedId: ""
+
+    function _beginLaunchWatch(label) {
+        if (!CompositorService.available) {
+            NotificationService.notify("LAUNCHING", label);
+            return;
+        }
+        root._launchWatchLabel = label;
+        root._launchBaselineWindows = (CompositorService.windows || []).length;
+        root._launchBaselineFocusedId = CompositorService.focusedWindowId;
+        launchGraceTimer.restart();
+    }
+
+    Timer {
+        id: launchGraceTimer
+        interval: root._launchGraceMs
+        onTriggered: {
+            var label = root._launchWatchLabel;
+            root._launchWatchLabel = "";
+            if (label === "")
+                return;
+            // A focus move is evidence alongside the count: an app that
+            // raised an already-open window of its own never changes the
+            // total. Either reading can also be the user's own doing, which
+            // costs at worst one toast NOT shown — never a false claim.
+            if ((CompositorService.windows || []).length > root._launchBaselineWindows
+                || CompositorService.focusedWindowId !== root._launchBaselineFocusedId)
+                return;
+            NotificationService.notify("LAUNCHING", label);
         }
     }
 
@@ -711,6 +783,8 @@ PanelWindow {
         root._cursorIndex = 0;
         root._confirmPendingId = "";
         searchInput.text = "";
+        // A whole new row set arrives under an unmoved pointer, in or out.
+        pointerGate.reset();
         root._evalConditions();
         // Only a real submenu move (drilling in via _activateRow, popping
         // via _pop) freezes the card's top — open()'s own initial level
@@ -727,17 +801,39 @@ PanelWindow {
         root._enterLevel(root._nodes[root.currentNodeId].parentId);
     }
 
+    // Hover owns the cursor only while the pointer is the thing that moved.
+    // Filtering re-renders the row list under a parked pointer on every
+    // keystroke, and Qt hands the row that slid underneath a hover move
+    // indistinguishable from a real one — which used to yank the keyboard
+    // cursor to wherever the mouse happened to be sitting. Every keyboard
+    // path below re-arms the gate; the first genuine pointer movement takes
+    // the cursor straight back.
+    PointerMoveGate {
+        id: pointerGate
+    }
+
     function _moveCursor(delta) {
         var n = root._displayRows.length;
         if (n === 0) return;
         root._cursorIndex = (root._cursorIndex + delta + n) % n;
         root._confirmPendingId = "";
+        pointerGate.reset();
     }
 
     function _setCursor(index) {
         if (index === root._cursorIndex) return;
         root._cursorIndex = index;
         root._confirmPendingId = "";
+    }
+
+    // A click IS the pointer acting, so the level it opens hands the cursor to
+    // whatever row lands under the (still parked) pointer: re-arm one
+    // stationary sample after _activateRow's own level change has reset the
+    // gate. Only the row delegate's own MouseArea takes this path — activate()
+    // over IPC stays keyboard-shaped.
+    function _activateFromPointer(index) {
+        root._activateRow(index);
+        pointerGate.allowStationarySample();
     }
 
     function _activateRow(index) {
@@ -765,7 +861,15 @@ PanelWindow {
             return;
         }
         if (node.kind === "app") {
+            // Baseline first: nothing can map a window inside this same JS
+            // block, so the count _beginLaunchWatch reads is genuinely the
+            // "before". execute() stays exactly as it was — the entry's own
+            // Exec field codes and quoting only survive that path (see
+            // providers.js's header), so the feedback wraps it rather than
+            // routing around it.
+            root._beginLaunchWatch(node.label);
             node._entry.execute();
+            Core.State.setAppLaunches(Frecency.record(Core.State.appLaunches, node._entry.id, Date.now()));
             root.close();
             return;
         }
@@ -977,6 +1081,9 @@ PanelWindow {
                     onTextChanged: {
                         root._cursorIndex = 0;
                         root._confirmPendingId = "";
+                        // Typing re-ranks the rows under a pointer that hasn't
+                        // moved — the churn the gate exists for.
+                        pointerGate.reset();
                         // Real filter keystrokes freeze the card's top the
                         // same as a submenu move; open()'s own prefill/reset
                         // writes land before isOpen flips true, so they're
@@ -1051,8 +1158,11 @@ PanelWindow {
                 checkedState: node.checked !== undefined && root._checkedResults[node.id] === true
                 confirming: root._confirmPendingId === node.id
 
-                onActivate: root._activateRow(index)
-                onHoverIn: root._setCursor(index)
+                onActivate: root._activateFromPointer(index)
+                onHoverMoved: (source, x, y) => {
+                    if (pointerGate.moved(source, x, y))
+                        root._setCursor(index);
+                }
             }
         }
 

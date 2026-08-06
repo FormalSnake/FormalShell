@@ -15,6 +15,7 @@ Singleton {
     property alias dnd: adapter.dnd
     property alias calendarBirthYear: adapter.calendarBirthYear
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
+    property alias appLaunches: adapter.appLaunches
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -45,6 +46,16 @@ Singleton {
         stateFile.writeAdapter();
     }
 
+    // The menu's app-launch ledger — [{ id, count, lastMs }], the shape
+    // shell/Menu/frecency.js owns end to end. This file only stores it:
+    // the caller passes the already-recorded array (Frecency.record()
+    // returns a fresh one, which is also what makes the alias' change
+    // signal fire), so no scoring logic leaks into Core.
+    function setAppLaunches(entries) {
+        adapter.appLaunches = entries;
+        stateFile.writeAdapter();
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -68,6 +79,7 @@ Singleton {
             property bool dnd: false
             property int calendarBirthYear: 0
             property int calendarLifeExpectancy: 0
+            property var appLaunches: []
         }
     }
 }

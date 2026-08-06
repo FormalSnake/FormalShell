@@ -1,4 +1,5 @@
 .pragma library
+.import "frecency.js" as Frecency
 
 // Provider functions populate a "provider" kind node's children at
 // tree-build time (Model.buildTree() infers "provider" from an entry's
@@ -25,8 +26,20 @@
 // cell, never a missing-texture box. `entry.name` can't be empty for listed
 // applications (quickshell drops invalid entries in onScanCompleted), but
 // the id fallback keeps the row honest if that ever changes.
-function appsProvider(entries, resolveIcon) {
-    return (entries || []).map(function (entry) {
+//
+// `launches` (Core.State.appLaunches, frecency.js's record array) and
+// `nowMs` order the entries by launch frecency BEFORE the map, which is
+// the whole of frecency's reach into ranking: search.js:85-89 breaks
+// equal-score ties by declaration order, and a provider's rows are
+// declared in exactly the order returned here (applyProviders below pushes
+// them onto childIds in order, and Search.rank's declIndex counts that
+// same depth-first walk). So a launched app leads a tie against an app
+// that matched the query exactly as well, while a stronger match tier
+// still beats any launch count outright. Empty/absent `launches` leaves
+// DesktopEntries' own order intact.
+function appsProvider(entries, resolveIcon, launches, nowMs) {
+    var ordered = Frecency.order(entries || [], launches, nowMs === undefined ? Date.now() : nowMs);
+    return ordered.map(function (entry) {
         var iconName = entry.icon || "";
         return {
             id: "apps." + entry.id,
