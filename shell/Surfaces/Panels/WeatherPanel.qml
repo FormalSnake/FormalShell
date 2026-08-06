@@ -136,6 +136,17 @@ Panel {
         onTriggered: root._fetch()
     }
 
+    // Wifi coming back should not leave an UNAVAILABLE forecast sitting out
+    // the rest of a 15-minute tick (ConnectivityService's whole purpose);
+    // gate matches the Timer's own running condition.
+    Connections {
+        target: ConnectivityService
+        function onReconnected() {
+            if (root.pollEnabled || root.isOpen)
+                root._fetch();
+        }
+    }
+
     Cell {
         visible: !LocationService.available
         width: parent.width

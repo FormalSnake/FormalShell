@@ -75,6 +75,16 @@ Singleton {
         onTriggered: root._lookup()
     }
 
+    // A lookup that died offline stored nothing (only real answers land in
+    // _cache), so re-scheduling on reconnect retries the current track's
+    // art; a cached track short-circuits in _schedule() and costs nothing.
+    Connections {
+        target: ConnectivityService
+        function onReconnected() {
+            root._schedule();
+        }
+    }
+
     // One-shot child process -> (exitCode, stdoutText) callback. A fresh
     // Process per call (never one shared/reused instance) so overlapping
     // lookups for different tracks run concurrently without one call's

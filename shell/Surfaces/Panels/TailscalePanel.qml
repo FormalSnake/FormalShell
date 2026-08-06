@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Io
 import qs.Core
 import qs.Components
+import qs.Services
 import "../../Tailscale/model.js" as Tailscale
 
 // Tailscale panel (DESIGN.md §Panels, M16 Task 8): the popout behind
@@ -71,6 +72,17 @@ Panel {
         running: root.pollEnabled
         repeat: true
         onTriggered: root._poll()
+    }
+
+    // Tailscale's own state usually flips with the underlying link — poll
+    // right after a reconnect instead of showing the pre-drop answer for up
+    // to a minute (ConnectivityService).
+    Connections {
+        target: ConnectivityService
+        function onReconnected() {
+            if (root.pollEnabled || root.isOpen)
+                root._poll();
+        }
     }
 
     Process {

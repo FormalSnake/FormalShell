@@ -3,6 +3,7 @@ import Quickshell.Io
 import qs.Core
 import qs.Components
 import qs.Compositor
+import qs.Services
 
 // GitHub panel (DESIGN.md §Panels, M13 Task 3): the popout behind
 // GithubWidget's bar cell — two ledger sections, "PULL REQUESTS / n" then
@@ -81,6 +82,16 @@ Panel {
         running: root.pollEnabled
         repeat: true
         onTriggered: root._poll()
+    }
+
+    // Refresh the moment the network comes back rather than waiting out the
+    // rest of a 5-minute tick on a NO GH cell (ConnectivityService).
+    Connections {
+        target: ConnectivityService
+        function onReconnected() {
+            if (root.pollEnabled || root.isOpen)
+                root._poll();
+        }
     }
 
     Process {
