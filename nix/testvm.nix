@@ -264,6 +264,14 @@ nixpkgs.lib.nixosSystem {
           # nixpkgs' cava has withPipewire = stdenv.hostPlatform.isLinux,
           # true for this VM, so plain `cava` on PATH is pipewire-capable.
           pkgs.cava
+          # Wi-Fi QR share owner-ask task: NetworkPanel.qml pipes its
+          # `WIFI:` payload through a real `qrencode --type ASCII` child
+          # process rather than encoding QR symbols in QML, and guards the
+          # binary with `command -v` so its absence is an honest NO
+          # QRENCODE cell. Installing it here is what lets a smoke run
+          # prove the working path (a real matrix over the VM's own
+          # FORMALTEST connection) instead of only the absent one.
+          pkgs.qrencode
           # M7 Task 3: --lock's round-trip proof types the real test
           # password into the real password TextInput via a genuine
           # virtual-keyboard-unstable-v1 client rather than a headless IPC
