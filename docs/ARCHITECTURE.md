@@ -322,6 +322,9 @@ Core.State (state.json: wallpaper, mode)
   |  Connections { onWallpaperChanged / onModeChanged -> ThemeEngine.retheme() }
   v
 Theme.ThemeEngine (running/pending queue; a retheme() mid-run just sets pending)
+  |  asserts the runtime light/dark signal: dconf write org.gnome.desktop.interface
+  |    color-scheme prefer-{dark,light} + gtk-theme adw-gtk3[-dark] (portal re-broadcasts
+  |    it as org.freedesktop.appearance, which is what GTK/browsers/Electron/Qt watch)
   |  reads ~/.config/matugen/config.toml + ~/.config/formalshell/matugen.d/*.toml (one `cat` Process)
   |  Theme.matugen.js#buildConfig() -> matugen-merged.toml (spec merge order)
   |  Process: matugen image <wallpaper> -m <mode> -c matugen-merged.toml --prefer darkness|lightness
@@ -330,6 +333,10 @@ Theme.ThemeEngine (running/pending queue; a retheme() mid-run just sets pending)
 matugen renders templates/theme.json.tmpl + templates/niri-border.kdl.tmpl
   -> <state-dir>/{theme.json,niri-border.kdl}.tmp
   |  atomic `mv` into place on success
+  |  (same run also renders templates/gtk-colors.css.tmpl ->
+  |   ~/.config/gtk-{3,4}.0/formalshell-colors.css and
+  |   templates/qtct-colors.conf.tmpl -> ~/.config/qt{5,6}ct/colors/matugen.conf,
+  |   written directly — apps read those at launch, nothing watches them)
   v
 $XDG_STATE_HOME/formalshell/theme.json          $XDG_STATE_HOME/formalshell/niri-border.kdl
   |  FileView watch (Core/Theme.qml)               |  niri `include`s this path from its own config

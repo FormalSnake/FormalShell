@@ -43,6 +43,20 @@ function buildConfig(opts) {
     parts.push(templateBlock("formalshell-niri-border",
         opts.shellTemplateDir + "/niri-border.kdl.tmpl", opts.stateDir + "/niri-border.kdl.tmp"));
 
+    // App-facing palettes, written straight to their final config paths: only
+    // theme.json/niri-border.kdl need the .tmp + rename dance (the shell
+    // watches those); GTK and Qt apps read these at launch, so a direct
+    // matugen write is fine. gtk.css imports formalshell-colors.css; the
+    // qt{5,6}ct.conf color_scheme_path points at colors/matugen.conf.
+    parts.push(templateBlock("formalshell-gtk3",
+        opts.shellTemplateDir + "/gtk-colors.css.tmpl", opts.homeDir + "/.config/gtk-3.0/formalshell-colors.css"));
+    parts.push(templateBlock("formalshell-gtk4",
+        opts.shellTemplateDir + "/gtk-colors.css.tmpl", opts.homeDir + "/.config/gtk-4.0/formalshell-colors.css"));
+    parts.push(templateBlock("formalshell-qt5ct",
+        opts.shellTemplateDir + "/qtct-colors.conf.tmpl", opts.homeDir + "/.config/qt5ct/colors/matugen.conf"));
+    parts.push(templateBlock("formalshell-qt6ct",
+        opts.shellTemplateDir + "/qtct-colors.conf.tmpl", opts.homeDir + "/.config/qt6ct/colors/matugen.conf"));
+
     if (opts.userConfigText) {
         var userTemplates = extractSection(opts.userConfigText, "templates");
         if (userTemplates) parts.push(userTemplates);

@@ -57,7 +57,8 @@ Singleton {
         return xdgState + "/formalshell";
     }
     readonly property string _templateDir: Quickshell.shellPath("Theme/templates")
-    readonly property string _userConfigPath: (Quickshell.env("HOME") || "") + "/.config/matugen/config.toml"
+    readonly property string _homeDir: Quickshell.env("HOME") || ""
+    readonly property string _userConfigPath: root._homeDir + "/.config/matugen/config.toml"
     readonly property string _dropInDir: (Quickshell.env("HOME") || "") + "/.config/formalshell/matugen.d"
     readonly property string _mergedConfigPath: root.stateDir + "/matugen-merged.toml"
     readonly property string _themeJsonPath: root.stateDir + "/theme.json"
@@ -114,7 +115,35 @@ Singleton {
         }
     }
 
+    // Ordinary apps never read theme.json: GTK4/libadwaita, GTK3 (≥3.24.30,
+    // via the settings portal), browsers and Electron learn light/dark and
+    // the GTK theme name from org.gnome.desktop.interface, which
+    // xdg-desktop-portal-gtk re-broadcasts as org.freedesktop.appearance —
+    // so every retheme must assert the runtime signal too, or Mod+Shift+T
+    // recolors the shell while every app stays frozen in its old mode.
+    // dconf, not gsettings: on NixOS glib schemas live under per-package
+    // share/gsettings-schemas/ paths, so a bare `gsettings set` from the
+    // shell's environment fails with "No schemas installed" (verified on the
+    // e1504g); `dconf write` hits the same backend schema-free. Fire and
+    // forget — the matugen pipeline must not gate on it.
+    function _syncSystemScheme() {
+        var dark = Core.State.mode !== "light";
+        var proc = writeFileProcComponent.createObject(root, {
+            _onDone: function (exitCode) {
+                if (exitCode !== 0)
+                    console.warn("ThemeEngine: dconf color-scheme sync failed, code", exitCode);
+            }
+        });
+        proc.command = ["sh", "-c",
+            'dconf write /org/gnome/desktop/interface/color-scheme "$1" && dconf write /org/gnome/desktop/interface/gtk-theme "$2"',
+            "sh",
+            dark ? "'prefer-dark'" : "'prefer-light'",
+            dark ? "'adw-gtk3-dark'" : "'adw-gtk3'"];
+        proc.running = true;
+    }
+
     function _start() {
+        root._syncSystemScheme();
         if (Core.State.wallpaper === "") {
             root._writeFile(root._themeJsonPath, JSON.stringify(Palette.fallback(Core.State.mode), null, 2), exitCode => {
                 if (exitCode !== 0)
@@ -142,6 +171,7 @@ Singleton {
                 var cfg = Matugen.buildConfig({
                     shellTemplateDir: root._templateDir,
                     stateDir: root.stateDir,
+                    homeDir: root._homeDir,
                     userConfigText: userConfigText,
                     dropInTexts: dropInsText ? [dropInsText] : []
                 });
