@@ -39,6 +39,15 @@ Item {
     property bool urgent: false
     property bool hovered: false
     property bool standalone: false
+    // Dithered resting backdrop (DESIGN.md §2.8) for a still-unseen row —
+    // NotificationCard.qml's pending notification-center rows, currently the
+    // only consumer. Rendered here, not by a child dropped into the default
+    // `data` slot below: that slot forwards into `content`, which is inset
+    // by the control padding, so a `DitherFill { anchors.fill: parent }`
+    // declared from outside would fill the padded text box instead of the
+    // row. Loader-gated like the tooltip below — most cells never set this,
+    // so most cells never pay for the Canvas.
+    property bool pending: false
 
     // Hover tooltip (owner directive, reversing the M16 audit's "bar
     // tooltips" skip): a short uppercase line naming what this cell is and
@@ -155,6 +164,18 @@ Item {
                 : root.selected
                     ? Theme.inverted().bg
                     : "transparent"
+    }
+
+    // Pending backdrop (DESIGN.md §2.8): dropped the instant a fuller-bleed
+    // state already owns the cell — §2.4's "no double treatment" applies to
+    // this ornament too. `active` gates the Canvas itself, not just
+    // visibility, so the common case (pending false) never allocates one.
+    Loader {
+        anchors.fill: parent
+        active: root.pending && !root.urgent && !root.accent && !root.selected
+        sourceComponent: DitherFill {
+            anchors.fill: parent
+        }
     }
 
     // Hover fill on its own layer so it can fade (DESIGN.md §4.1,
