@@ -10,8 +10,8 @@ import qs.Notifications
 // M8b Task 5): summonable, right-anchored, full height below the bar — the
 // ASCII-OS table surface (DESIGN.md §2), unlike Toasts.qml's individually
 // carded popups: rows share rules, and both the DND toggle and every
-// notification row invert fg/bg on hover (§2.2's "a highlighted
-// notification-center row swaps foreground/background") via `selected`,
+// notification row invert to the accent pair on hover (§2.2's "a
+// highlighted notification-center row inverts") via `selected`,
 // not the plain hover-tint the shared NotificationCard otherwise defaults
 // to (`invertOnHover: true` below opts these rows into it). Two ledger
 // sections — PENDING (unseen) then EARLIER (seen, rolling 15min TTL) —

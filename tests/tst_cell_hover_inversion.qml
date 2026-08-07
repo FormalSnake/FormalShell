@@ -3,11 +3,12 @@ import QtTest
 import qs.Core
 import "../shell/Components"
 
-// Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, M-polish
-// batch item E): a standalone (bar) cell's hover-cursor state swaps its
-// fill to `foreground` and its content to `background`, replacing the
-// fill-alpha tint + border every other cell keeps. Full-bleed accent/urgent
-// cells ink with their own `on*` role (§2.4), never each other's.
+// Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, M18 Task 4):
+// a standalone (bar) cell's hover-cursor state swaps its fill and content to
+// the accent pair (`Theme.inverted()`, same pair the ledger's `selected`
+// fill uses), replacing the fill-alpha tint + border every other cell keeps.
+// Full-bleed accent/urgent cells ink with their own `on*` role (§2.4), never
+// each other's.
 //
 // Verified against a synthetic palette (init()/cleanup() below), not
 // Palette.fallback()'s real hex values: the Flexoki fallback sets
@@ -60,11 +61,11 @@ TestCase {
         wait(50);
     }
 
-    function test_standalone_hover_inverts_foreground_to_background() {
+    function test_standalone_hover_inverts_to_accent_pair() {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.background));
+        verify(Qt.colorEqual(cell.foreground, Theme.inverted().fg));
     }
 
     function test_non_standalone_hover_keeps_the_tint_model() {

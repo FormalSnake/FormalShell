@@ -22,10 +22,10 @@ import qs.Core
 //
 // Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, owner
 // directive over a tint/underline): a standalone cell's hover-cursor state
-// swaps its fill to `foreground` and its content to `background` — the
-// same fg/bg swap the ledger accent already uses elsewhere in this file —
-// instead of the fill-alpha tint + border every other cell still uses.
-// `foreground` below is the one place that swap has to happen: every
+// swaps its fill and content to the accent pair (`Theme.inverted()`, same
+// `{ bg: accent, fg: onAccent }` the ledger's `selected` fill already uses
+// below) instead of the fill-alpha tint + border every other cell still
+// uses. `foreground` below is the one place that swap has to happen: every
 // widget's own Text/glyph already reads `root.foreground` (or a Cell id's
 // `.foreground` alias), so the inversion flows through with no per-widget
 // edit needed.
@@ -70,7 +70,7 @@ Item {
         ? Theme.color.onUrgent
         : accent
             ? Theme.color.onAccent
-            : (root._hoverInverted ? Theme.color.background : (selected ? Theme.inverted().fg : Theme.color.foreground))
+            : ((root._hoverInverted || selected) ? Theme.inverted().fg : Theme.color.foreground)
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
@@ -162,13 +162,14 @@ Item {
     // the fade stays on this layer even for the standalone/bar case below;
     // only the swap itself (this fill's own color, and `foreground` above)
     // is instant, matching every other ledger inversion (DESIGN.md §4.3).
-    // Standalone (bar) cells get a full opaque `foreground` fill — the
-    // inversion — instead of every other cell's low-alpha tint.
+    // Standalone (bar) cells get a full opaque accent fill — `Theme.inverted().bg`,
+    // the same pair the ledger's `selected` fill below uses — instead of
+    // every other cell's low-alpha tint.
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
         color: root.standalone
-            ? Theme.color.foreground
+            ? Theme.inverted().bg
             : Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
         opacity: root._hoverFillActive ? 1 : 0
 
