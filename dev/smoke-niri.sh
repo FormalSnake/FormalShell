@@ -1789,7 +1789,21 @@ if $clipboard_mode; then
   clipboard_drive_script="$shot_dir/clipboard-drive.sh"
   cat > "$clipboard_drive_script" <<EOF
 #!/usr/bin/env bash
-sleep 2
+# ClipboardService's wl-paste watcher can take several seconds to come
+# online in a fresh session (observed 5-7s on the mac VM rig, 2026-08-07,
+# twice losing the first two fixture copies outright under the old fixed
+# "sleep 2" head start). Poll a warmup copy into the ledger until capture
+# provably works, then clear it so the real fixture sequence still starts
+# from the same empty state the count assertions below expect.
+for _ in \$(seq 1 10); do
+  "$wl_copy_bin" "clipboard smoke warmup"
+  sleep 1
+  if "$qs_bin" ipc --any-display -p "$shell_path" call clipboard list 2>/dev/null | grep -qF warmup; then
+    break
+  fi
+done
+"$qs_bin" ipc --any-display -p "$shell_path" call clipboard clear > /dev/null 2>&1
+sleep 1
 "$wl_copy_bin" "clipboard smoke one"
 sleep 1
 "$wl_copy_bin" "clipboard smoke two"
@@ -2761,12 +2775,13 @@ fi
     # shows the ordinary session mid-scroll on the long-title track.
     screenshot_delay=24
   elif $clipboard_mode; then
-    # clipboard-drive.sh's last step (menu summon) lands at its own sleep 15
-    # (text dumps, a copy-and-paste round trip, then the image leg's own
-    # wl-copy/list/copy/wl-paste round trip, then the summon); 3s buffer for
-    # the menu to render before the shot, which now shows the freshly
-    # captured image as the newest (topmost) row.
-    screenshot_delay=18
+    # clipboard-drive.sh's last step (menu summon) lands after its warmup
+    # poll (typically 5-7s until the wl-paste watcher is up, 11s ceiling)
+    # plus the ~14s fixture sequence (text dumps, a copy-and-paste round
+    # trip, then the image leg's own wl-copy/list/copy/wl-paste round trip,
+    # then the summon); the shot lands past the worst case, showing the
+    # freshly captured image as the newest (topmost) row.
+    screenshot_delay=28
   elif $nightlight_mode; then
     # nightlight-drive.sh's own worst-case budget (3s initial sleep + 8s
     # poll ceiling + disable/sleep1) lands ~12s in; this run's generic
