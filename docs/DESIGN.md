@@ -52,17 +52,69 @@ wrong for the visual language specifically. Concretely, this revision changes:
 No feature, IPC target, provider, or state machine changes. This is a
 rewrite of *how things are drawn*, not what they do.
 
+## Revision 2026-08-07: warm ink hierarchy (the mek ramp)
+
+Owner ask: next to mek.gallery the shell "just looks high contrasty".
+Measured from mek.gallery's shipped CSS (fetched 2026-08-07), the
+reference is not high contrast. It is a six-step warm ramp (canvas
+#eee9dc, panel #d9d2c1, fills rgba(99,96,89,0.08), hairlines #b6b1a3,
+meta inks #9c9587 and #636059, content ink #2e2e2e) with exactly one
+loud color (#0099ff), 1px rules, 6px corner marks on cards, and dithered
+1-bit imagery. FormalShell's failure was never temperature (Flexoki is
+already warm paper); it was a compressed ramp: borders drawn as
+foreground alphas shout as loudly as content, and selection is a photo
+negative instead of the accent. This revision changes:
+
+- **Ink hierarchy becomes law (§1.4, new).** Loudness on any surface is
+  strictly content ink (`foreground`) > meta (`foregroundDim`) > faint
+  (`foregroundFaint`, new role) > rules and borders (`rule`). Structural
+  rules and control borders always draw the `rule` token at alpha 1.0;
+  the state table's border-alpha column is retired (§1.1). Fill alphas
+  are unchanged.
+- **The palette grows 8 → 12 roles (§1.5, new).** `foregroundFaint`,
+  `warning`, `onWarning`, `onUrgent`. theme.json stays the entire
+  theming contract: matugen's template re-spreads Material roles so the
+  ramp survives wallpaper theming, and any other engine (pywal, a
+  hand-written file) rendering the same keys themes the shell
+  identically; the per-key Flexoki fallback keeps pre-expansion
+  theme.json files valid.
+- **Selection inverts through accent, never a photo negative (§2.2).**
+  The cursor row, current picker cell, and bar-cell hover invert to
+  `{ bg: accent, fg: onAccent }` (`{ bg: urgent, fg: onUrgent }` on
+  urgent-carrying rows). The plain foreground/background swap is retired
+  shell-wide. §1.1's bar-cell amendment stands as a directive (hover is
+  an inversion, not a tint), now rendered through accent.
+- **Ornament (§2 items 7-8, new).** 6px corner marks become the one
+  sanctioned ornament on floating-card outer chrome; ordered Bayer
+  dither becomes the sanctioned texture for track remainders and pending
+  fills. Scanline/CRT effects stay banned.
+- **Spacing discipline (§1.3).** Every gap, padding, and row height is a
+  `Theme.space`/`Theme.fontSize` token; sibling surfaces use the same
+  token for the same structural element; a between-groups gap is at
+  least twice the within-group gap.
+
+Verified contrast (WCAG 2, both modes) for the new and changed pairs:
+dark ramp 11.98 (fg) / 5.19 (dim) / 2.61 (faint) / 1.80 (rule); light
+ramp 12+ / 4.97 / 2.64 / 1.55. Dark `onAccent` flips to ink (#100F0F on
+#4385BE is 4.86:1, beating paper's failing 3.83:1); light keeps paper on
+accent (6.36:1). Warning pairs: 5.77:1 dark, 4.69:1 light. Ink on urgent
+is 4.42:1, the best available over Flexoki red 400, large-text AA only.
+`foregroundFaint` (2.6:1) is legal for ornament and faint/disabled meta
+only, never content ink. No feature, IPC, or layout-structure change;
+drawn output only.
+
 ## 1. The token system
 
 Every value below is a **default**; nothing here freezes a magic number —
 each is reachable through the base-size/scale roots so retheming rescales
 the whole shell from two numbers. Task 2 implements this vocabulary in
-`shell/Core/Theme.qml`; existing matugen-driven palette roles
-(`background`, `backgroundAlt`, `foreground`, `foregroundDim`, `accent`,
-`urgent`, `rule`, `onAccent` — `shell/Theme/palette.js`) are the color
-tokens the state/border machinery below resolves against. Matugen wiring,
-`theme.json`, and the Flexoki fallback are unchanged by this document —
-only what a theme's colors get *rendered into* changes.
+`shell/Core/Theme.qml`; the matugen-driven palette roles (twelve since
+the 2026-08-07 revision: `background`, `backgroundAlt`, `foreground`,
+`foregroundDim`, `foregroundFaint`, `rule`, `accent`, `onAccent`,
+`urgent`, `onUrgent`, `warning`, `onWarning` — `shell/Theme/palette.js`,
+full table in §1.5) are the color tokens the state/border machinery
+below resolves against. Matugen wiring and `theme.json` remain the
+theming contract; §1.5 defines how the twelve roles are populated.
 
 ### 1.1 Four interactive states
 
@@ -76,43 +128,57 @@ field) is in exactly one of four states at any moment:
 | `selected` | persistent chosen/current (the enabled toggle, the current workspace, the checked radio) | `foreground` |
 | `focus` | real Qt `activeFocus`; defaults to mirroring `hover-cursor` so Tab-focus and mouse-hover read identically | inherits `hover-cursor` |
 
-Each state carries a **fill alpha** and a **border alpha**, applied
-independently against the state's resolved color (a palette role —
-`foreground` / `accent` / `urgent` / `background` — or a raw hex from a
-theme override):
+Each state carries a **fill alpha**, applied against the state's
+resolved color (a palette role — `foreground` / `accent` / `urgent` /
+`background` — or a raw hex from a theme override). Borders are simpler
+since the 2026-08-07 revision: a control's border always draws the
+`rule` token at alpha 1.0 (§1.4's ink hierarchy makes rules the
+quietest ink on screen, so no alpha games are needed), and the old
+per-state border alphas are retired:
 
-| state | fill alpha | border width | border alpha |
+| state | fill alpha | border width | border color |
 | --- | --- | --- | --- |
-| `normal` | 0.04 | 2 | 0.4 |
-| `hover-cursor` | 0.08 | 2 | 0.25 |
-| `selected` | 0.18 | 0 | 1.0 |
+| `normal` | 0.04 | 2 | `rule` |
+| `hover-cursor` | 0.08 | 2 | `rule` |
+| `selected` | 0.18 | 0 | (borderless) |
 | `focus` | = hover-cursor | = hover-cursor | = hover-cursor |
 | `pressed` (mouse-down only, not a persistent state) | 0.22 | — | — |
 
 Border width defaults to **2** — the spec's non-negotiable brutalist
 baseline (`docs/superpowers/specs/2026-07-27-formalshell-design.md`,
-CLAUDE.md's hard rules) — not omarchy's own 1px default; every other number
-in this table (alphas, the state vocabulary itself, the per-side/gradient
-spec shape) carries over from omarchy as-is. A state's border width of `0`
-drops that border entirely — `selected` is borderless by default (the fill
-alone reads as chosen), while a text field or a bar cell that wants a
-visible ring uses the 2px default. Paint priority when more than one
+CLAUDE.md's hard rules) — not omarchy's own 1px default; the fill
+alphas, the state vocabulary itself, and the per-side/gradient spec
+shape carry over from omarchy as-is. A state's border width of `0`
+drops that border entirely — `selected` is borderless by default (the
+fill alone reads as chosen), while a text field or a bar cell that
+wants a visible ring uses the 2px default. Exception to the
+borders-are-`rule` doctrine: a border that *means* something (the lock
+field's error state in `urgent`, an accent-carrying focus ring named
+by a surface's own brief) may draw its semantic role instead; plain
+structural chrome never does. Paint priority when more than one
 applies: `pressed` > `focus` (only when the control is real-focusable) >
 `hover-cursor` > `selected` > `normal`.
 
 Where the ASCII-OS accent overrides this for a genuinely tabular surface
-(menu cursor row, picker grid, notification-center row — see §2), fg/bg
-**inversion** replaces the fill-tint for the *selected*/cursor state only:
-`{ bg: foreground, fg: background }` (or `{ bg: accent, fg: onAccent }` for
-an urgent/accent-carrying row). Inversion and the fill-alpha model are
-never both active on the same cell.
+(menu cursor row, picker grid, notification-center row — see §2),
+**inversion** replaces the fill-tint for the *selected*/cursor state
+only, and since the 2026-08-07 revision the pair is always
+accent-carried: `{ bg: accent, fg: onAccent }` (`{ bg: urgent,
+fg: onUrgent }` for an urgent-carrying row). The old photo-negative
+`{ bg: foreground, fg: background }` pair is retired shell-wide; it is
+what made the shell read as a high-contrast terminal instead of an old
+OS (mek.gallery's selection is always its blue, never a negative).
+Inversion and the fill-alpha model are never both active on the same
+cell.
 
 **Amendment (bar-cell hover, owner directive over a tint/underline).** The
 bar's own discrete widget cells (`Cell.qml`'s `standalone` contract, §3)
-apply this same fg/bg inversion to the `hover-cursor` state too, not just
-tabular selection: hovering a bar cell swaps its fill to `foreground` and
-its content (text and glyphs alike) to `background`, replacing the
-fill-alpha tint + hover border every other cell still uses. The fill still
+apply this same inversion to the `hover-cursor` state too, not just
+tabular selection: hovering a bar cell swaps its fill to `accent` and
+its content (text and glyphs alike) to `onAccent` (the accent pair per
+the 2026-08-07 revision; the directive is "hover inverts", the pair is
+accent's), replacing the fill-alpha tint + hover border every other
+cell still uses. The fill still
 fades in over `Theme.motion.fast` (the fade lives on the fill layer, not
 the color swap), but the content color itself snaps instantly the moment
 the state resolves, same as every other inversion in this document (§4.3).
@@ -189,6 +255,72 @@ Two numbers set the whole shell's size:
   per-token (a theme pins `display` to something huge for the lock clock
   without moving `body`).
 
+Spacing discipline (2026-08-07): every gap, padding, margin, and row
+height in shell QML resolves through `Theme.space`/`Theme.fontSize`
+tokens — a raw pixel literal for any of these is a defect, with the
+only exceptions being genuinely structural sizes a surface's own brief
+names (the lock field's 381×67, the notification image's 40×40 slot,
+screen-relative anchors). Sibling surfaces use the *same* token for the
+same structural element: one `trackThickness` for every flat track, one
+`popupRowHeight` for every ledger row, one `panelPadding` for every
+card. A gap between groups is at least twice the gap within a group, or
+the grouping reads as noise. Checkable: `grep` for numeric
+margin/padding/spacing literals, and diff any two sibling surfaces'
+row/padding tokens.
+
+### 1.4 Ink hierarchy
+
+On any surface, loudness is strictly ordered, and every element belongs
+to exactly one band:
+
+| band | role | carries |
+| --- | --- | --- |
+| 1 (loudest) | `foreground` | content: values, titles, body text, glyphs |
+| 2 | `foregroundDim` | meta: uppercase section headers, timestamps, captions (§2.3) |
+| 3 | `foregroundFaint` | faint: disabled states, placeholder ornament, dither texture, corner marks |
+| 4 (quietest) | `rule` | structure: hairline rules, control borders, card borders |
+
+`accent`/`urgent`/`warning` sit outside the ramp: they are the loud
+exceptions (§2.4), spent only where a state genuinely demands one, and
+always as full-bleed fills or inversions carrying their `on*` ink —
+never as tints. Checkable: sample any border or rule in a screenshot,
+it equals the `rule` hex; sample any meta label, it equals
+`foregroundDim`; nothing structural samples as a foreground alpha
+blend.
+
+### 1.5 Palette roles
+
+The twelve color roles, how matugen populates them
+(`shell/Theme/templates/theme.json.tmpl`), and the static Flexoki
+fallback (`shell/Theme/palette.js`):
+
+| role | meaning | matugen source | Flexoki dark | Flexoki light |
+| --- | --- | --- | --- | --- |
+| `background` | canvas | `surface` | `#100F0F` | `#FFFCF0` |
+| `backgroundAlt` | card/panel surface step | `surface_container` | `#1C1B1A` | `#F2F0E5` |
+| `foreground` | content ink | `on_surface` | `#CECDC3` | `#100F0F` |
+| `foregroundDim` | meta ink | `on_surface_variant` | `#878580` | `#6F6E69` |
+| `foregroundFaint` | faint/disabled/ornament | `outline` | `#575653` | `#9F9D96` |
+| `rule` | rules + borders | `outline_variant` | `#403E3C` | `#CECDC3` |
+| `accent` | the one loud color | `primary` | `#4385BE` | `#205EA6` |
+| `onAccent` | ink on accent fills | `on_primary` | `#100F0F` | `#FFFCF0` |
+| `urgent` | critical/error | `error` | `#D14D41` | `#AF3029` |
+| `onUrgent` | ink on urgent fills | `on_error` | `#100F0F` | `#FFFCF0` |
+| `warning` | degraded/low, second loud color | `tertiary` | `#DA702C` | `#BC5215` |
+| `onWarning` | ink on warning fills | `on_tertiary` | `#100F0F` | `#FFFCF0` |
+
+Fallback hexes are kepano/flexoki scale steps (dark faint = base 700,
+light faint = base 400, warning = orange 400/600); dark `on*` inks are
+ink-on-color (Material's own dark-scheme convention, and the higher
+measured contrast — see the 2026-08-07 revision block). The previously
+shipped mapping sent both `foregroundDim` and `rule` to matugen's
+`outline`, which flattened the ramp on every wallpaper theme; the
+re-spread above is what keeps §1.4 true under matugen. theme.json is
+the whole contract: pywal or any other engine themes the shell by
+rendering these same twelve keys (a documented pywal template ships in
+`shell/Theme/templates/`), and `palette.js`'s per-key merge keeps any
+pre-expansion theme.json valid by filling missing roles from Flexoki.
+
 ## 2. What "classic ASCII OS" means, concretely
 
 Every rule below is checkable from a screenshot or a `grep` — not a mood
@@ -203,10 +335,11 @@ adjective:
    line, not two, not blank space.
 2. **Selection = inversion, on tabular content only.** The cursor row in
    the menu, the current cell in the picker grid, and a highlighted
-   notification-center row swap foreground/background instead of using the
-   fill-alpha `selected` state. Checkable: the selected row's text color and
-   fill color are swapped foreground/background hex values, not a tinted
-   fill.
+   notification-center row invert to the accent pair (`bg: accent`,
+   `fg: onAccent`; the urgent pair on urgent-carrying rows) instead of
+   using the fill-alpha `selected` state. Checkable: the selected row's
+   fill samples as the `accent` hex and its text as `onAccent`, not a
+   tinted fill and not a foreground/background photo negative.
 3. **Uppercase, letter-spaced meta rows.** Any small caption-sized label
    that names *what a piece of content is* rather than being the content
    itself (a bar widget's tiny corner tag, a panel section header, a
@@ -217,19 +350,41 @@ adjective:
 4. **Accent as a full-bleed cell, not a tint.** Where a cell needs to read
    as "urgent" or "the active thing" at a glance (critical notification,
    focused workspace, an armed toggle) the *entire* cell fills with
-   `accent`/`urgent` and swaps to `onAccent` text — never a colored border
-   around an otherwise normal fill, never a soft accent-tinted wash.
-   Checkable: sample the cell's fill color in a screenshot; it equals the
-   accent/urgent token, not a low-alpha blend of it.
+   `accent`/`urgent`/`warning` and swaps to the matching `onAccent`/
+   `onUrgent`/`onWarning` ink — never a colored border around an
+   otherwise normal fill, never a soft accent-tinted wash. Checkable:
+   sample the cell's fill color in a screenshot; it equals the
+   accent/urgent/warning token, not a low-alpha blend of it.
 5. **Terminal-grid feel in type.** Numeric displays that must not jitter
    (clock, countdown, battery percentage, life-progress percentage) use
    `font.family` monospace with tabular-width digits (true for any
    monospace font by construction) — never a proportional fallback.
-6. **ASCII ornament stays confined to named accent surfaces.** Box-drawing
-   corner marks or ledger-style headers are permitted on the menu,
+6. **ASCII ornament stays confined to named accent surfaces.** Ledger-style
+   headers and box-drawing interior structure are permitted on the menu,
    panel-internal lists, the picker grid, and the screensaver's banner —
    never invented as decoration on a card's *outer* chrome (that chrome is
-   omarchy's plain bordered rectangle per §3).
+   omarchy's plain bordered rectangle per §3), with item 7's corner marks
+   as the single sanctioned exception.
+7. **Corner marks on floating-card chrome (2026-08-07).** Every floating
+   card (menu, panels, notification toasts and center, OSD, picker) draws
+   a small square mark at each of its four border corners — `xs`-sized
+   (3px at scale 1.0), filled `foregroundFaint`, sitting on the border
+   line, mek.gallery's card idiom (its shipped CSS uses 6px marks on 1px
+   borders; ours scale with `spacingScale` against the 2px border). One
+   shared component draws them; no surface hand-places its own.
+   Checkable: the four corner pixels of any card sample as
+   `foregroundFaint`, and exactly one QML component contains the mark
+   geometry.
+8. **Ordered dither is the period texture (2026-08-07).** Where a fill
+   needs to read as "partial" or "pending" (the unfilled remainder of a
+   track, a pending/expired notification row's backdrop, a disabled
+   toggle's field), a 2×2 ordered-dither checker of `foregroundFaint` on
+   transparent replaces the low-alpha tint — the 1-bit Macintosh/Amiga
+   texture, flat and still, radius 0, no blur. Scanline, CRT-curvature,
+   and phosphor-glow effects stay banned everywhere; they are costume,
+   not structure. Checkable: zoom any track remainder in a screenshot
+   and individual dither pixels resolve; no surface samples as a smooth
+   low-alpha gray wash where a dither is mandated.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,
@@ -242,7 +397,7 @@ floats with a margin or fuses to the screen edge.
 
 - **Bar** — a single-row strip of **discrete widget cells**, each its own
   `normal`/`hover-cursor`/`selected` control (§1.1) — `hover-cursor`
-  rendered as full fg/bg inversion rather than a tint or border, per §1.1's
+  rendered as full accent inversion rather than a tint or border, per §1.1's
   bar-cell amendment above — separated by `Theme.spacing.sm`-ish gaps in
   the omarchy style — not forced edge-to-edge adjacency. The focused
   workspace cell is a full-bleed `accent` fill
