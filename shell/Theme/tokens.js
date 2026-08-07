@@ -106,16 +106,20 @@ function motionTokens(enabled) {
 
 // --- 1.1 four interactive states --------------------------------------
 
-// fillAlpha/borderWidth/borderAlpha per state, independent of color — the
-// caller resolves color separately (a palette role or raw hex) and pairs
-// it with this appearance. `focus` is a deliberate alias of `hover-cursor`
-// (DESIGN.md: "defaults to mirroring hover-cursor"); `pressed` is a
-// transient mouse-down overlay, never a persistent state.
+// fillAlpha/borderWidth per state, independent of color — the caller
+// resolves fill color separately (a palette role or raw hex) and pairs it
+// with this appearance. Border color/alpha is no longer part of this
+// table (2026-08-07 revision, DESIGN.md §1.1/§1.4): a bordered state's
+// border always draws the `rule` token at alpha 1.0, resolved by the
+// caller (`Theme.stateStyle()`), not stored per-state here. `focus` is a
+// deliberate alias of `hover-cursor` (DESIGN.md: "defaults to mirroring
+// hover-cursor"); `pressed` is a transient mouse-down overlay, never a
+// persistent state.
 var STATE_APPEARANCE = {
-    "normal": { fillAlpha: 0.04, borderWidth: 2, borderAlpha: 0.4 },
-    "hover-cursor": { fillAlpha: 0.08, borderWidth: 2, borderAlpha: 0.25 },
-    "selected": { fillAlpha: 0.18, borderWidth: 0, borderAlpha: 1.0 },
-    "pressed": { fillAlpha: 0.22, borderWidth: 2, borderAlpha: 0.25 }
+    "normal": { fillAlpha: 0.04, borderWidth: 2 },
+    "hover-cursor": { fillAlpha: 0.08, borderWidth: 2 },
+    "selected": { fillAlpha: 0.18, borderWidth: 0 },
+    "pressed": { fillAlpha: 0.22, borderWidth: 2 }
 };
 STATE_APPEARANCE["focus"] = STATE_APPEARANCE["hover-cursor"];
 
@@ -169,11 +173,12 @@ function isUniformBorder(spec) {
 
 // --- selection inversion (§1.1 ASCII-OS override) ----------------------
 
-// { bg, fg } for the fg/bg-swap selection style: `useAccent` gives the
-// accent/onAccent pair (an urgent/accent-carrying row); otherwise the
-// plain foreground/background pair used by an ordinary selected/cursor row.
-function invertedPair(colors, useAccent) {
-    return useAccent
-        ? { bg: colors.accent, fg: colors.onAccent }
-        : { bg: colors.foreground, fg: colors.background };
+// { bg, fg } for the selection-inversion pair (DESIGN.md §2.2, 2026-08-07
+// revision): always accent-carried — `role` picks `"accent"` (default) or
+// `"urgent"` for an urgent-carrying row. The old photo-negative
+// foreground/background pair is retired shell-wide, not kept as an option.
+function invertedPair(colors, role) {
+    return role === "urgent"
+        ? { bg: colors.urgent, fg: colors.onUrgent }
+        : { bg: colors.accent, fg: colors.onAccent };
 }

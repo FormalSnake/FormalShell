@@ -43,8 +43,8 @@ QtObject {
         };
     }
 
-    function inverted(useAccent) {
-        return Tokens.invertedPair(color, !!useAccent);
+    function inverted(role) {
+        return Tokens.invertedPair(color, role);
     }
 
     function stateAppearance(state) {

@@ -133,21 +133,19 @@ TestCase {
         var a = Tokens.stateAppearance("normal");
         compare(a.fillAlpha, 0.04);
         compare(a.borderWidth, 2);
-        compare(a.borderAlpha, 0.4);
+        compare(a.borderAlpha, undefined);
     }
 
     function test_state_appearance_hover_cursor() {
         var a = Tokens.stateAppearance("hover-cursor");
         compare(a.fillAlpha, 0.08);
         compare(a.borderWidth, 2);
-        compare(a.borderAlpha, 0.25);
     }
 
     function test_state_appearance_selected_is_borderless() {
         var a = Tokens.stateAppearance("selected");
         compare(a.fillAlpha, 0.18);
         compare(a.borderWidth, 0);
-        compare(a.borderAlpha, 1.0);
     }
 
     function test_state_appearance_focus_mirrors_hover_cursor() {
@@ -218,20 +216,27 @@ TestCase {
         verify(!Tokens.isUniformBorder(spec));
     }
 
-    // selection inversion
+    // selection inversion (2026-08-07 revision: always accent-carried)
 
-    function test_inverted_pair_plain() {
-        var colors = { foreground: "#CECDC3", background: "#100F0F", accent: "#4385BE", onAccent: "#FFFCF0" };
-        var pair = Tokens.invertedPair(colors, false);
-        compare(pair.bg, colors.foreground);
-        compare(pair.fg, colors.background);
-    }
-
-    function test_inverted_pair_accent() {
-        var colors = { foreground: "#CECDC3", background: "#100F0F", accent: "#4385BE", onAccent: "#FFFCF0" };
-        var pair = Tokens.invertedPair(colors, true);
+    function test_inverted_pair_defaults_to_accent() {
+        var colors = { accent: "#4385BE", onAccent: "#FFFCF0", urgent: "#D14D41", onUrgent: "#100F0F" };
+        var pair = Tokens.invertedPair(colors);
         compare(pair.bg, colors.accent);
         compare(pair.fg, colors.onAccent);
+    }
+
+    function test_inverted_pair_accent_role_explicit() {
+        var colors = { accent: "#4385BE", onAccent: "#FFFCF0", urgent: "#D14D41", onUrgent: "#100F0F" };
+        var pair = Tokens.invertedPair(colors, "accent");
+        compare(pair.bg, colors.accent);
+        compare(pair.fg, colors.onAccent);
+    }
+
+    function test_inverted_pair_urgent_role() {
+        var colors = { accent: "#4385BE", onAccent: "#FFFCF0", urgent: "#D14D41", onUrgent: "#100F0F" };
+        var pair = Tokens.invertedPair(colors, "urgent");
+        compare(pair.bg, colors.urgent);
+        compare(pair.fg, colors.onUrgent);
     }
 
     // Regression guard (M16 Task 1): the legacy fixed Theme.spacing object

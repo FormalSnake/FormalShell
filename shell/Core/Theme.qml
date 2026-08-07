@@ -17,12 +17,12 @@ Singleton {
     readonly property int radius: 0
 
     // --- DESIGN.md §1 scale roots + state/border tokens -----------------
-    // Additive to the legacy `font`/`control()`/`inverted()` below: nothing
-    // here renames or reuses an existing key, so every surface still
-    // consuming the legacy API keeps rendering identically until its own
-    // retrofit task (M8b plan, Tasks 3-7) switches it over. The legacy
-    // fixed `spacing` object (M16 Task 1) is gone — every surface now reads
-    // the scaling `space` set above.
+    // Additive to the legacy `font`/`inverted()` below: nothing here
+    // renames or reuses an existing key, so every surface still consuming
+    // the legacy API keeps rendering identically until its own retrofit
+    // task (M8b plan, Tasks 3-7) switches it over. The legacy fixed
+    // `spacing` object (M16 Task 1) is gone — every surface now reads the
+    // scaling `space` set above.
 
     // fontBaseSize is the rem root (default 13, the shell's existing body
     // size, so fontScale is 1.0 out of the box). Retheming this one number
@@ -143,22 +143,13 @@ Singleton {
         root.color = Palette.mergeWithFallback(parsed);
     }
 
-    // { bg: <foreground>, fg: <background> } — the cursor-row/accent-cell
-    // inversion pair per DESIGN.md's "selection = inversion" rule.
-    // `useAccent` (default false, preserving every existing call site's
-    // behavior) swaps in the accent/onAccent pair for an urgent/accent-
-    // carrying row instead of the plain foreground/background pair.
-    function inverted(useAccent) {
-        return Tokens.invertedPair(color, !!useAccent);
-    }
-
-    function control(state) {
-        switch (state) {
-        case "hover":
-        case "focus":    return { fill: color.foreground, fillAlpha: 0.08, border: color.foreground, borderWidth: borderWidth, borderAlpha: 0.35 }
-        case "selected": return { fill: color.accent,     fillAlpha: 0.18, border: color.accent,     borderWidth: borderWidth, borderAlpha: 0.9 }
-        default:         return { fill: "transparent",    fillAlpha: 0.0,  border: "transparent",    borderWidth: 0,           borderAlpha: 0.0 }
-        }
+    // { bg: accent, fg: onAccent } (or the urgent pair when `role` is
+    // `"urgent"`) — the cursor-row/accent-cell inversion pair per
+    // DESIGN.md's "selection = inversion" rule. Always accent-carried
+    // since the 2026-08-07 revision; the old photo-negative
+    // foreground/background pair is retired shell-wide.
+    function inverted(role) {
+        return Tokens.invertedPair(color, role);
     }
 
     // --- DESIGN.md §1.1 four-state model, resolved against a color token -
@@ -183,14 +174,19 @@ Singleton {
     }
 
     // A named state resolved against a color token (a palette role or raw
-    // hex), in the same { fill, fillAlpha, border, borderWidth, borderAlpha }
-    // shape `control()` returns, for a drop-in swap once a surface retrofits.
-    function stateStyle(state, colorToken) {
+    // hex) for fill, in the { fill, fillAlpha, border, borderWidth,
+    // borderAlpha } shape. Border color is always `rule` at alpha 1.0
+    // (DESIGN.md §1.4's ink hierarchy — the per-state border-alpha column
+    // is retired) unless `borderToken` names a semantic exception
+    // (`urgent`, `accent`) for a surface whose own brief demands a
+    // meaning-carrying border (§1.1's exception clause); plain structural
+    // chrome never passes one.
+    function stateStyle(state, colorToken, borderToken) {
         var col = _resolveColorToken(colorToken);
         var appearance = Tokens.stateAppearance(state);
         return {
             fill: col, fillAlpha: appearance.fillAlpha,
-            border: col, borderWidth: appearance.borderWidth, borderAlpha: appearance.borderAlpha
+            border: _resolveColorToken(borderToken || "rule"), borderWidth: appearance.borderWidth, borderAlpha: 1.0
         };
     }
 
