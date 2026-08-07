@@ -143,7 +143,10 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 - **Theming** — wallpaper-driven matugen colors recolor every bar token and
   niri's window borders live, no restart required; with no wallpaper set,
   the dark/light toggle flips between bundled Flexoki palettes through the
-  same pipeline.
+  same pipeline. `theme.json`'s twelve color roles are the whole contract —
+  matugen, pywal (a documented `pywal-theme.json.tmpl` ships alongside the
+  matugen template), or a hand-written file all theme the shell identically
+  (see [Theming](docs/USAGE.md#theming) in the usage doc).
 - **Compositor-agnostic** — a formal `CompositorBackend` contract, with
   working niri and Hyprland implementations.
 

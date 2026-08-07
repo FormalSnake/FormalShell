@@ -254,6 +254,33 @@ Colors are wallpaper-derived end to end, no restart required:
    (`CompositorService.applyThemeFragment()`) so niri's window borders pick
    up the new `niri-border.kdl` immediately.
 
+`theme.json` is the entire theming contract: twelve color roles
+(`shell/Theme/palette.js`'s `COLOR_KEYS`), each with a static Flexoki
+fallback so a pre-expansion `theme.json` missing newer roles still merges
+per-key rather than falling back whole-object. Any engine that writes these
+same twelve keys themes the shell identically — matugen is the shipped
+default (`shell/Theme/templates/theme.json.tmpl`), and a documented pywal
+template (`shell/Theme/templates/pywal-theme.json.tmpl`) ships alongside it:
+drop it at `~/.config/wal/templates/pywal-theme.json`, run `wal -i
+<image>`, then point (or hook) pywal's rendered output at
+`$XDG_STATE_HOME/formalshell/theme.json` — `Theme`'s live file watch picks
+up any writer, not just `ThemeEngine`'s own matugen runs.
+
+| role | meaning |
+| --- | --- |
+| `background` | canvas |
+| `backgroundAlt` | card/panel surface step |
+| `foreground` | content ink |
+| `foregroundDim` | meta ink (uppercase captions, timestamps) |
+| `foregroundFaint` | faint/disabled/ornament ink, never content |
+| `rule` | rules and control borders |
+| `accent` | the one loud color |
+| `onAccent` | ink on accent fills |
+| `urgent` | critical/error |
+| `onUrgent` | ink on urgent fills |
+| `warning` | degraded/low, second loud color |
+| `onWarning` | ink on warning fills |
+
 Add this once to your niri config so window borders track the theme:
 
 ```kdl
