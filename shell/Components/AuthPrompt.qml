@@ -73,7 +73,7 @@ Item {
     // mass" bullet made literal: it reads as thicker, more load-bearing than
     // the frame around it.
     readonly property var _fieldBorder: Theme.uniformBorderSpec(
-        root.errorState ? "urgent" : "foreground",
+        root.errorState ? "urgent" : "rule",
         Math.round(3 * Theme.fontScale))
 
     readonly property string _displayLabel: root.checking ? "CHECKING…" : root.label

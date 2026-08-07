@@ -159,16 +159,11 @@ Panel {
             width: parent.width / 3
             selected: prevArea.containsMouse
             enabled: MediaService.canGoPrevious
-            opacity: MediaService.canGoPrevious ? 1.0 : 0.35
-
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
-            }
 
             Text {
                 anchors.centerIn: parent
                 text: "󰒮"
-                color: prevCell.foreground
+                color: MediaService.canGoPrevious ? prevCell.foreground : Theme.color.foregroundFaint
                 font.family: Theme.font.family
                 font.pixelSize: Theme.fontSize.body
             }
@@ -209,16 +204,11 @@ Panel {
             width: parent.width / 3
             selected: nextArea.containsMouse
             enabled: MediaService.canGoNext
-            opacity: MediaService.canGoNext ? 1.0 : 0.35
-
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
-            }
 
             Text {
                 anchors.centerIn: parent
                 text: "󰒭"
-                color: nextCell.foreground
+                color: MediaService.canGoNext ? nextCell.foreground : Theme.color.foregroundFaint
                 font.family: Theme.font.family
                 font.pixelSize: Theme.fontSize.body
             }

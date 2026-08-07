@@ -270,7 +270,7 @@ PanelWindow {
                         radius: Theme.radius
                         color: "transparent"
                         border.width: Math.round(3 * Theme.fontScale)
-                        border.color: root.errorState ? Theme.color.urgent : Theme.color.foreground
+                        border.color: root.errorState ? Theme.color.urgent : Theme.color.rule
                     }
 
                     MetaLabel {
