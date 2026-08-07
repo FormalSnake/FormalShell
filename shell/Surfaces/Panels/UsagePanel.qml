@@ -31,9 +31,26 @@ import "../../Usage/usage.js" as Usage
 // Code run refreshes the pair on disk, so a machine that hasn't run `claude`
 // today is still fully logged in with a token this shell can't use. That
 // renders `STALE` and points at the fix. The shell deliberately does NOT
-// perform the refresh itself: Anthropic rotates the refresh token on use, so
-// redeeming it here would invalidate the copy Claude Code still holds and log
-// the owner out of their own CLI.
+// redeem the refresh token itself: Anthropic rotates it on use, so redeeming
+// it here would invalidate the copy Claude Code still holds and log the owner
+// out of their own CLI.
+//
+// It asks the CLI to do it instead, so the leg heals without anyone opening a
+// terminal: a stale leg (and the bar cell's own click) spawns `claude auth
+// status --json`, which refreshes the pair on disk under Claude Code's own
+// ownership. That invocation was picked by proxy-tracing every host claude
+// 2.1.224 connects to: with an expired accessToken it reaches the OAuth token
+// endpoint (platform.claude.com), with a live one it opens no connection at
+// all, and neither case calls a model, so refreshing costs no usage and a
+// needless call costs nothing. Its stdout is dropped unread (it carries
+// account identity, not usage) and only the exit code picks the panel's hint,
+// via `refreshStateForExit`. Nothing about the leg's own state is taken from
+// the CLI's word: the refreshed file arrives through `credentialsFile`'s watch
+// like any other write, and the server settles the state as it always did.
+//
+// A token that expires between two polls would otherwise sit `STALE` for up to
+// `usage.intervalMs`, so `_applyCredentials` also arms a one-shot at the
+// token's own expiry to re-poll (and therefore refresh) right when it lapses.
 //
 // The local `expiresAt` is advisory — a skewed clock or a changed field
 // meaning must not be able to hide real usage numbers — so a probe fires
@@ -84,6 +101,12 @@ Panel {
     property string _claudeAccessToken: ""
     property bool _claudeHasRefreshToken: false
 
+    // How the last `claude auth status --json` run ended (see the header):
+    // "idle" (never run) | "running" | "ok" | "nocli" | "failed"
+    property string claudeRefreshState: "idle"
+    property real _lastRefreshMs: 0
+    readonly property int _refreshCooldownMs: 60000
+
     // "unknown" | "missing" | "loading" | "error" | "ok"
     property string codexState: "unknown"
     property string codexTier: ""
@@ -112,6 +135,17 @@ Panel {
         case "error": return "ERROR";
         default: return "";
         }
+    }
+
+    // The bar cell only has room for the status word, so the actionable half
+    // of the STALE state ("errors say how to fix") is rendered here, where
+    // there's width for it, and follows the refresh attempt as it runs.
+    function claudeHintText() {
+        if (root.claudeState === "unknown")
+            return "LOADING";
+        if (root.claudeState !== "stale")
+            return root.claudeStatusText();
+        return "STALE / " + Usage.refreshHint(root.claudeRefreshState);
     }
 
     function codexStatusText() {
@@ -205,6 +239,7 @@ Panel {
         root._credentialsRetries = 0;
         var parsed = Usage.parseCredentials(text);
         if (!parsed.ok || parsed.accessToken === "") {
+            claudeExpiry.stop();
             root.claudeState = "noauth";
             root._claudeAccessToken = "";
             root._claudeHasRefreshToken = false;
@@ -214,7 +249,29 @@ Panel {
         root._claudeAccessToken = parsed.accessToken;
         root._claudeHasRefreshToken = parsed.hasRefreshToken;
         root.claudeTier = Usage.tierLabel(parsed.subscriptionType, parsed.rateLimitTier);
+        root._armClaudeExpiry(parsed.expiresAtMs);
         root._probeClaudeUsage(Usage.credentialsExpired(parsed.expiresAtMs, Date.now()));
+    }
+
+    // One-shot re-poll the moment the token lapses, so the leg refreshes itself
+    // then instead of sitting STALE until the next `usage.intervalMs` tick. The
+    // 24h ceiling keeps a nonsense far-future expiry (or a clock skewed by
+    // days) out of Timer's int millisecond interval; the normal poll covers
+    // that case on its own.
+    function _armClaudeExpiry(expiresAtMs) {
+        var untilExpiry = expiresAtMs - Date.now();
+        if (expiresAtMs <= 0 || untilExpiry <= 0 || untilExpiry > 86400000) {
+            claudeExpiry.stop();
+            return;
+        }
+        claudeExpiry.interval = untilExpiry + 2000;
+        claudeExpiry.restart();
+    }
+
+    Timer {
+        id: claudeExpiry
+        repeat: false
+        onTriggered: if (root.claudeEnabled) root._poll()
     }
 
     // `expiredLocally` only picks the in-flight label (STALE reads truer than
@@ -226,6 +283,8 @@ Panel {
             return;
         }
         root.claudeState = expiredLocally ? "stale" : "loading";
+        if (expiredLocally)
+            root.refreshClaudeToken(false);
         var xhr = new XMLHttpRequest();
         xhr.open("GET", "https://api.anthropic.com/api/oauth/usage");
         xhr.setRequestHeader("Authorization", "Bearer " + root._claudeAccessToken);
@@ -237,6 +296,8 @@ Panel {
             if (xhr.status === 401 || xhr.status === 403) {
                 root.claudeState = root._claudeHasRefreshToken ? "stale" : "noauth";
                 root.claudeRows = [];
+                if (root._claudeHasRefreshToken)
+                    root.refreshClaudeToken(false);
                 return;
             }
             if (xhr.status < 200 || xhr.status >= 300) {
@@ -252,6 +313,62 @@ Panel {
             root.claudeState = "ok";
         };
         xhr.send();
+    }
+
+    // ---- Claude token refresh ----
+
+    // Hand the refresh to Claude Code (see the header). Bounded by a cooldown
+    // so a refresh that can never succeed (logged out, offline) still can't
+    // spawn a process per poll, per panel open, or per click; `force` is the
+    // bar cell's own click, an explicit ask that skips the cooldown.
+    function refreshClaudeToken(force) {
+        if (!root.claudeEnabled || refreshProc.running)
+            return;
+        var now = Date.now();
+        if (!force && root._lastRefreshMs > 0 && (now - root._lastRefreshMs) < root._refreshCooldownMs)
+            return;
+        root._lastRefreshMs = now;
+        refreshProc.running = true;
+    }
+
+    Process {
+        id: refreshProc
+        // stdout is dropped at the shell rather than parsed: it answers with
+        // account identity (email, org), never usage, and the exit code alone
+        // is what picks the hint.
+        command: ["sh", "-c", "command -v claude >/dev/null 2>&1 || exit 127; exec claude auth status --json >/dev/null 2>&1"]
+
+        onStarted: {
+            root.claudeRefreshState = "running";
+            refreshTimeout.restart();
+        }
+
+        // A refreshed file usually lands via credentialsFile's own watch before
+        // this fires; the reload covers the case where it doesn't (an atomic
+        // rename the watch missed), and costs one stat when nothing changed.
+        onExited: function (exitCode) {
+            refreshTimeout.stop();
+            if (root.claudeRefreshState === "running")
+                root.claudeRefreshState = Usage.refreshStateForExit(exitCode);
+            root._credentialsRetries = 0;
+            credentialsFile.reload();
+        }
+    }
+
+    // codexTimeout's own safety net, for the same reason: a `claude` that
+    // starts and then hangs (captive-portal network, a login prompt with
+    // nothing on the other end to answer it) must not pin the leg in
+    // REFRESHING forever.
+    Timer {
+        id: refreshTimeout
+        interval: 30000
+        repeat: false
+        onTriggered: {
+            if (root.claudeRefreshState !== "running")
+                return;
+            root.claudeRefreshState = "failed";
+            refreshProc.running = false;
+        }
     }
 
     // ---- Codex leg ----
@@ -390,18 +507,11 @@ Panel {
         MetaLabel { text: "CLAUDE" + (root.claudeTier !== "" ? " / " + root.claudeTier : "") }
     }
 
-    // The bar cell only has room for the status word, so the actionable half
-    // of the STALE state ("errors say how to fix") lives here where there's
-    // width for it.
     Cell {
         visible: root.claudeEnabled && root.claudeState !== "ok"
         width: parent.width
 
-        MetaLabel {
-            text: root.claudeState === "unknown" ? "LOADING"
-                : root.claudeState === "stale" ? "STALE / RUN CLAUDE TO REFRESH"
-                : root.claudeStatusText()
-        }
+        MetaLabel { text: root.claudeHintText() }
     }
 
     Repeater {

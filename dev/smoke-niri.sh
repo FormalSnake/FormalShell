@@ -12,15 +12,20 @@
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
 # so the screenshot proves the background/bar actually recolored.
-# With --theme-toggle (M13b Task 3, don't combine with --wallpaper: the
-# assertions require wallpaper to stay ""), drives `theme mode toggle` twice
-# with NO wallpaper set: grim the dark session (theme-dark.png), toggle,
-# assert `theme status` reports mode:"light" with wallpaper still "", grim
-# again (theme-light.png — the mode-matched Flexoki fallback theme.json
-# recoloring every consumer live, no matugen involved), toggle back, assert
-# mode:"dark". The run's own smoke.png/SMOKE_OK then shows the session dark
-# again. grim, not niri's screenshot-screen, for the usual no-toast reason:
-# the two shots exist to compare background/bar colors.
+# With --theme-toggle (M13b Task 3), drives `theme mode toggle` twice with
+# NO wallpaper set: grim the dark session (theme-dark.png), toggle, assert
+# `theme status` reports mode:"light" with wallpaper still "", grim again
+# (theme-light.png — the mode-matched Flexoki fallback theme.json recoloring
+# every consumer live, no matugen involved), toggle back, assert mode:"dark".
+# The run's own smoke.png/SMOKE_OK then shows the session dark again. grim,
+# not niri's screenshot-screen, for the usual no-toast reason: the two shots
+# exist to compare background/bar colors.
+# Combined with --wallpaper (2026-08-07), the same round trip runs WITH the
+# wallpaper set instead: the drive waits out the initial matugen run, dumps
+# the rendered theme.json before and after each toggle, and asserts every
+# dump carries matugen-derived (non-Flexoki) values with the final dump
+# byte-identical to the first — proving a mode toggle re-runs matugen
+# against the set wallpaper rather than resetting to the fallback palette.
 # With --menu, drives the real `menu` IPC target in-session: `summon` opens
 # it at root, `select` switches it into select mode (screenshot proves the
 # option list renders), then `close` cancels the pending select and the
@@ -932,6 +937,9 @@ theme_dark_png="$shot_dir/theme-dark.png"
 theme_light_png="$shot_dir/theme-light.png"
 theme_toggle_status_path="$shot_dir/theme-toggle-status.json"
 theme_toggle_status2_path="$shot_dir/theme-toggle-status-2.json"
+theme_json_dump1_path="$shot_dir/theme-json-1.json"
+theme_json_dump2_path="$shot_dir/theme-json-2.json"
+theme_json_dump3_path="$shot_dir/theme-json-3.json"
 query_path="$shot_dir/query.json"
 calc_query_path="$shot_dir/calc-query.json"
 emoji_query_path="$shot_dir/emoji-query.json"
@@ -1341,10 +1349,34 @@ fi
 # --theme-toggle's drive: the dark shot waits out shell startup (same 4s the
 # other modes' first actions allow llvmpipe), each toggle then gets 2s for
 # ThemeEngine's fallback theme.json write plus Theme.qml's FileView reload
-# before the status dump and (first leg) the light shot.
+# before the status dump and (first leg) the light shot. Combined with
+# --wallpaper, the drive instead starts past the wallpaper spawn's own
+# sleep-3 `wallpaper set` and the matugen run it triggers (the plain
+# --wallpaper screenshot at sleep 8 already shows the recolor landed), each
+# toggle gets 4s for a full matugen rerun instead of 2s for the fallback
+# write, and the rendered theme.json is dumped at each step for the
+# post-run non-Flexoki/round-trip assertions.
 if $theme_toggle_mode; then
   theme_toggle_drive_script="$shot_dir/theme-toggle-drive.sh"
-  cat > "$theme_toggle_drive_script" <<EOF
+  nested_theme_json="$iso_home/.local/state/formalshell/theme.json"
+  if $wallpaper_mode; then
+    cat > "$theme_toggle_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 9
+cat "$nested_theme_json" > "$theme_json_dump1_path" 2>&1
+"$grim_bin" "$theme_dark_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
+cat "$nested_theme_json" > "$theme_json_dump2_path" 2>&1
+"$grim_bin" "$theme_light_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
+cat "$nested_theme_json" > "$theme_json_dump3_path" 2>&1
+EOF
+  else
+    cat > "$theme_toggle_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
 "$grim_bin" "$theme_dark_png"
@@ -1356,6 +1388,7 @@ sleep 2
 sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
 EOF
+  fi
 fi
 
 # A short silent fixture track (M7 Task 1) rather than a committed binary
@@ -2710,9 +2743,15 @@ fi
   elif $theme_toggle_mode; then
     # theme-toggle-drive.sh's own final step (the back-to-dark status dump)
     # lands around its internal sleep sum plus grim/qs spawn overhead on
-    # llvmpipe (~9-13s in); this run's generic smoke.png/SMOKE_OK is taken
-    # after that, showing the session dark again after the round trip.
-    screenshot_delay=14
+    # llvmpipe (~9-13s in; ~17-19s for the --wallpaper-combined drive with
+    # its later start and matugen-sized toggle gaps); this run's generic
+    # smoke.png/SMOKE_OK is taken after that, showing the session dark
+    # again after the round trip.
+    if $wallpaper_mode; then
+      screenshot_delay=22
+    else
+      screenshot_delay=14
+    fi
   elif $osd_mode; then
     screenshot_delay=10
   elif $media_mode; then
@@ -2910,7 +2949,58 @@ if $wallpaper_mode; then
   fi
 fi
 
-if $theme_toggle_mode; then
+if $theme_toggle_mode && $wallpaper_mode; then
+  # Combined round trip WITH the wallpaper set: every leg must stay
+  # matugen-derived. Flexoki hexes only ever enter theme.json through
+  # palette.js's fallback write (uppercase, but matched -i to be safe) —
+  # any appearance of a fallback background means a toggle reset the theme
+  # instead of re-running matugen.
+  if [ ! -s "$theme_json_dump1_path" ] || ! grep -qF '"mode": "dark"' "$theme_json_dump1_path" \
+    || grep -iqF '"background": "#100f0f"' "$theme_json_dump1_path"; then
+    echo "SMOKE_FAIL: pre-toggle theme.json is missing or not matugen-derived dark" >&2
+    [ -f "$theme_json_dump1_path" ] && cat "$theme_json_dump1_path" >&2
+    exit 1
+  fi
+  if [ -s "$theme_toggle_status_path" ] \
+    && grep -qF '"wallpaper":"'"$wp_path"'"' "$theme_toggle_status_path" \
+    && grep -qF '"mode":"light"' "$theme_toggle_status_path"; then
+    cat "$theme_toggle_status_path"
+  else
+    echo "SMOKE_FAIL: theme status after toggle did not report mode:light with the wallpaper kept" >&2
+    [ -f "$theme_toggle_status_path" ] && cat "$theme_toggle_status_path" >&2
+    exit 1
+  fi
+  if [ ! -s "$theme_json_dump2_path" ] || ! grep -qF '"mode": "light"' "$theme_json_dump2_path" \
+    || grep -iqF '"background": "#fffcf0"' "$theme_json_dump2_path"; then
+    echo "SMOKE_FAIL: theme.json after dark->light toggle is not matugen-derived light (toggle reset to fallback?)" >&2
+    [ -f "$theme_json_dump2_path" ] && cat "$theme_json_dump2_path" >&2
+    exit 1
+  fi
+  if [ -s "$theme_toggle_status2_path" ] \
+    && grep -qF '"wallpaper":"'"$wp_path"'"' "$theme_toggle_status2_path" \
+    && grep -qF '"mode":"dark"' "$theme_toggle_status2_path"; then
+    cat "$theme_toggle_status2_path"
+  else
+    echo "SMOKE_FAIL: theme status after the second toggle did not report mode:dark with the wallpaper kept" >&2
+    [ -f "$theme_toggle_status2_path" ] && cat "$theme_toggle_status2_path" >&2
+    exit 1
+  fi
+  if ! cmp -s "$theme_json_dump1_path" "$theme_json_dump3_path"; then
+    echo "SMOKE_FAIL: theme.json did not round-trip byte-identical through light and back" >&2
+    diff "$theme_json_dump1_path" "$theme_json_dump3_path" >&2 || true
+    exit 1
+  fi
+  if [ ! -s "$theme_dark_png" ] || [ ! -s "$theme_light_png" ]; then
+    echo "SMOKE_FAIL: missing theme-toggle screenshot pair ($theme_dark_png / $theme_light_png)" >&2
+    exit 1
+  fi
+  echo "theme json pre-toggle: $theme_json_dump1_path"
+  cat "$theme_json_dump1_path"
+  echo "theme json after toggle to light: $theme_json_dump2_path"
+  cat "$theme_json_dump2_path"
+  echo "theme dark screenshot: $theme_dark_png"
+  echo "theme light screenshot: $theme_light_png"
+elif $theme_toggle_mode; then
   # First toggle: mode flipped to light with NO wallpaper involved — the
   # mode-matched Flexoki fallback path, not matugen.
   if [ -s "$theme_toggle_status_path" ] \

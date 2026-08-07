@@ -11,8 +11,9 @@ import qs.Components
 // "usage" in bar.layout is the opt-in to background credential reads and
 // `codex app-server` spawns; it's never part of layout.js's DEFAULT_LAYOUT)
 // and reflects its state. Click toggles the panel (AudioWidget's accent-dot
-// idiom). Hidden until at least one enabled provider (usage.claude/
-// usage.codex, both default true) has answered at all — an honest NO AUTH/
+// idiom), and on a STALE Claude leg also asks the panel to have Claude Code
+// refresh its own OAuth pair. Hidden until at least one enabled provider
+// (usage.claude/usage.codex, both default true) has answered at all — an honest NO AUTH/
 // NO CODEX cell counts as an answer; only the pre-first-poll "unknown"
 // state hides the cell, same as GithubWidget's own `shown`. Glyph from the
 // pinned nerd-fonts-jetbrains-mono cmap (nix/testvm.nix) via fonttools ttx,
@@ -74,8 +75,14 @@ Cell {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
+            if (!root.panel)
+                return;
+            // Clicking a stale cell is an explicit "fix it", so it skips the
+            // refresh cooldown (UsagePanel's own header) and the panel that
+            // opens is already showing the attempt.
+            if (root.panel.claudeState === "stale")
+                root.panel.refreshClaudeToken(true);
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
         }
     }
 }

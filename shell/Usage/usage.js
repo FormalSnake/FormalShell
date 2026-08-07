@@ -194,6 +194,37 @@ function formatReset(nowMs, resetsAtIso) {
     return "RESETS " + mins + "M";
 }
 
+// ---- Claude token refresh (`claude auth status --json`) ----
+
+// How the panel's refresh helper ended, from its exit code. 127 is the
+// `command -v claude` guard's own code (no CLI installed at all); any other
+// non-zero is the CLI itself answering that it cannot help: logged out, dead
+// refresh token, no network.
+function refreshStateForExit(exitCode) {
+    if (exitCode === 0)
+        return "ok";
+    if (exitCode === 127)
+        return "nocli";
+    return "failed";
+}
+
+// The half of the panel's STALE line that names what is left to do. "ok" lands
+// on the same text as "idle" on purpose: the helper ran clean and the token is
+// still stale, so the refresh was not the missing piece and a real `claude` run
+// is still the answer.
+function refreshHint(refreshState) {
+    switch (refreshState) {
+    case "running":
+        return "REFRESHING";
+    case "nocli":
+        return "NO CLAUDE CLI";
+    case "failed":
+        return "RUN CLAUDE AUTH LOGIN";
+    default:
+        return "RUN CLAUDE TO REFRESH";
+    }
+}
+
 // ---- Codex (`codex app-server` JSON-RPC) ----
 
 // One line of the app-server's stdout, already framed as newline-delimited

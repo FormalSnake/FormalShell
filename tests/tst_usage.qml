@@ -208,6 +208,28 @@ TestCase {
         compare(Usage.formatReset(Date.now(), ""), "");
     }
 
+    // refreshStateForExit / refreshHint
+
+    function test_refresh_state_for_exit_separates_a_missing_cli_from_a_failure() {
+        compare(Usage.refreshStateForExit(0), "ok");
+        compare(Usage.refreshStateForExit(127), "nocli");
+        compare(Usage.refreshStateForExit(1), "failed");
+        compare(Usage.refreshStateForExit(2), "failed");
+    }
+
+    function test_refresh_hint_names_the_step_left_to_the_owner() {
+        compare(Usage.refreshHint("running"), "REFRESHING");
+        compare(Usage.refreshHint("nocli"), "NO CLAUDE CLI");
+        compare(Usage.refreshHint("failed"), "RUN CLAUDE AUTH LOGIN");
+        compare(Usage.refreshHint("idle"), "RUN CLAUDE TO REFRESH");
+    }
+
+    // A clean helper run that left the token stale is not a refresh problem,
+    // so it reads as the pre-refresh ask rather than as a success.
+    function test_refresh_hint_treats_a_clean_run_that_changed_nothing_as_idle() {
+        compare(Usage.refreshHint("ok"), "RUN CLAUDE TO REFRESH");
+    }
+
     // parseCodexAccount
 
     function test_parse_codex_account_extracts_plan_type() {
