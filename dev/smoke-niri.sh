@@ -1275,7 +1275,7 @@ import qs.Core
 Text {
     text: "QML OK"
     color: Theme.color.foreground
-    font.family: Theme.font.family
+    font.family: Theme.fontFamily
     font.pixelSize: Theme.fontSize.body
 }
 EOF
