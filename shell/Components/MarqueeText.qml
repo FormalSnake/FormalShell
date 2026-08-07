@@ -63,7 +63,7 @@ Item {
         id: measureText
         visible: false
         text: root.text
-        font.family: Theme.font.family
+        font.family: Theme.fontFamily
         font.pixelSize: root.pixelSize
         onImplicitWidthChanged: root._restartMarquee()
     }
@@ -84,7 +84,7 @@ Item {
             visible: !root._marquee
             text: root.text
             color: root.color
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: root.pixelSize
             elide: Text.ElideRight
             width: viewport.width
@@ -102,14 +102,14 @@ Item {
             Text {
                 text: root.text
                 color: root.color
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: root.pixelSize
             }
             Item { width: root._gap; height: 1 }
             Text {
                 text: root.text
                 color: root.color
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: root.pixelSize
             }
         }

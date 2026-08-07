@@ -8,7 +8,7 @@ Text {
     id: root
 
     color: Theme.color.foregroundDim
-    font.family: Theme.font.family
+    font.family: Theme.fontFamily
     font.pixelSize: Theme.fontSize.caption
     font.capitalization: Font.AllUppercase
     font.letterSpacing: Theme.letterSpacing.meta

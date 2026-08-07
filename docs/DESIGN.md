@@ -239,8 +239,8 @@ Two numbers set the whole shell's size:
   | token | base px | semantic token | base px |
   | --- | --- | --- | --- |
   | `xxs` | 2 | `controlGap` | 8 |
-  | `xs` | 3 | `controlPaddingX` | 10 |
-  | `sm` | 4 | `controlPaddingY` | 6 |
+  | `xs` | 3 | `controlPaddingX` | 8 |
+  | `sm` | 4 | `controlPaddingY` | 4 |
   | `md` | 6 | `inputPaddingY` | 7 |
   | `lg` | 8 | `controlHeight` | 28 |
   | `xl` | 10 | `popupRowHeight` | 28 |
@@ -250,23 +250,46 @@ Two numbers set the whole shell's size:
   | | | `panelGap` (card-to-bar margin) | 14 |
   | | | `panelPadding` (card internal padding) | 18 |
   | | | `popupPadding` | 14 |
+  | | | `popupWidthNarrow` | 280 |
+  | | | `popupWidthDefault` | 320 |
+  | | | `popupWidthWide` | 400 |
+  | | | `popupWidthMenu` | 560 |
 
   Both scales can be overridden as a whole (one number denser/roomier) or
   per-token (a theme pins `display` to something huge for the lock clock
-  without moving `body`).
+  without moving `body`). `controlPaddingX`/`controlPaddingY` match
+  `lg`/`sm` exactly (2026-08-07 spacing-consistency pass, Task 6) — Cell.qml,
+  the one shared row primitive, resolves its own padding through these
+  rather than the bare scale steps, so the two numbers can't drift apart
+  independently again. `popupWidth{Narrow,Default,Wide,Menu}` are the four
+  steps every floating card's width snaps to (menu at 560 is its own step;
+  everything from a small popout to the picker snaps to narrow/default/wide)
+  instead of each surface picking its own literal.
+
+  **Card-gutter split (2026-08-07, Task 6):** `popupPadding` (14) insets a
+  *summoned list surface* — the menu, the notification center; `panelPadding`
+  (18) insets a *bar-anchored panel* — every widget popout (audio, network,
+  bluetooth, power, calendar, weather, media, github, usage) and the picker,
+  which reuses the panel frame. Both apply on all four sides of the card's
+  content, via the same technique: the frame draws an explicit border ring,
+  content insets by `border width + the surface's own padding token`, and an
+  eraser rectangle papers over the row content's own trailing hairline
+  (Cell's shared-rule contract) so only the frame's outer rule shows —
+  established by Panel.qml, mirrored by Menu.qml and (since this pass)
+  Center.qml.
 
 Spacing discipline (2026-08-07): every gap, padding, margin, and row
 height in shell QML resolves through `Theme.space`/`Theme.fontSize`
 tokens — a raw pixel literal for any of these is a defect, with the
 only exceptions being genuinely structural sizes a surface's own brief
-names (the lock field's 381×67, the notification image's 40×40 slot,
-screen-relative anchors). Sibling surfaces use the *same* token for the
-same structural element: one `trackThickness` for every flat track, one
-`popupRowHeight` for every ledger row, one `panelPadding` for every
-card. A gap between groups is at least twice the gap within a group, or
-the grouping reads as noise. Checkable: `grep` for numeric
-margin/padding/spacing literals, and diff any two sibling surfaces'
-row/padding tokens.
+names (the lock field's 381×67, the notification image's 40×40 slot, the
+media panel's 96×96 album-art slot, screen-relative anchors). Sibling
+surfaces use the *same* token for the same structural element: one
+`trackThickness` for every flat track, one `popupRowHeight` for every
+ledger row, one `panelPadding` for every card. A gap between groups is at
+least twice the gap within a group, or the grouping reads as noise.
+Checkable: `grep` for numeric margin/padding/spacing literals, and diff
+any two sibling surfaces' row/padding tokens.
 
 ### 1.4 Ink hierarchy
 

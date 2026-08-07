@@ -1,3 +1,4 @@
+ActionLabel ActionLabel.qml
 AuthPrompt AuthPrompt.qml
 Cell Cell.qml
 CornerMarks CornerMarks.qml
@@ -6,5 +7,6 @@ DitherFill DitherFill.qml
 MarqueeText MarqueeText.qml
 MetaLabel MetaLabel.qml
 Panel Panel.qml
+PanelOpenDot PanelOpenDot.qml
 PointerMoveGate PointerMoveGate.qml
 Tooltip Tooltip.qml

@@ -63,7 +63,7 @@ Panel {
     id: root
 
     panelTitle: "USAGE"
-    panelWidth: 300
+    panelWidth: Theme.space.popupWidthDefault
 
     // Flipped true by UsageWidget when bar.layout actually names it — see
     // GithubWidget's own header for why background polling stays opt-in.
@@ -358,7 +358,7 @@ Panel {
                 Text {
                     text: Math.round(rowCell.modelData.percent * 100) + "%"
                     color: rowCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 

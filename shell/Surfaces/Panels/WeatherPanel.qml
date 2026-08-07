@@ -42,7 +42,7 @@ Panel {
     id: root
 
     panelTitle: "WEATHER"
-    panelWidth: 260
+    panelWidth: Theme.space.popupWidthNarrow
 
     // Flipped true by WeatherWidget's Component.onCompleted, mirroring
     // GithubWidget/UsageWidget.
@@ -164,12 +164,7 @@ Panel {
 
             MetaLabel { text: "UNAVAILABLE" }
 
-            Text {
-                text: root._error.toUpperCase()
-                color: Theme.color.foregroundDim
-                font.family: Theme.font.family
-                font.pixelSize: Theme.fontSize.caption
-            }
+            MetaLabel { text: root._error }
         }
     }
 
@@ -197,14 +192,14 @@ Panel {
                 Text {
                     text: root._result ? Openmeteo.glyphForCode(root._result.current.code, root._isDay) : ""
                     color: currentCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
                 Text {
                     text: root._result ? Math.round(root._result.current.temperature) + "°" : ""
                     color: currentCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
             }
@@ -234,7 +229,7 @@ Panel {
                     id: glyphText
                     text: root._glyphFor(dayCell.modelData.code)
                     color: dayCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
@@ -242,7 +237,7 @@ Panel {
                     width: parent.width - glyphText.width - tempsText.width - parent.spacing * 2
                     text: Openmeteo.weekdayLabel(dayCell.modelData.date)
                     color: dayCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
@@ -251,7 +246,7 @@ Panel {
                     id: tempsText
                     text: Math.round(dayCell.modelData.high) + "° / " + Math.round(dayCell.modelData.low) + "°"
                     color: dayCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
             }

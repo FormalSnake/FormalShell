@@ -23,6 +23,7 @@ QtObject {
 
     readonly property int borderWidth: 2
     readonly property int radius: 0
+    readonly property real fieldBorderWidth: Math.round(3 * fontScale)
 
     readonly property real fontBaseSize: 13
     readonly property real fontScale: Tokens.fontScale(fontBaseSize)
@@ -30,7 +31,7 @@ QtObject {
     readonly property var space: Tokens.spacingTokens(fontScale)
     readonly property var letterSpacing: Tokens.letterSpacingTokens(fontScale)
 
-    readonly property var font: ({ family: "monospace", display: "monospace" })
+    readonly property string fontFamily: "monospace"
 
     readonly property bool motionEnabled: true
 

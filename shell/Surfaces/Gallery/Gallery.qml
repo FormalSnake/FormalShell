@@ -192,7 +192,7 @@ Panel {
                                 Text {
                                     text: "Aa"
                                     color: typeCell.foreground
-                                    font.family: Theme.font.family
+                                    font.family: Theme.fontFamily
                                     font.pixelSize: Theme.fontSize[typeCell.modelData]
                                 }
                             }

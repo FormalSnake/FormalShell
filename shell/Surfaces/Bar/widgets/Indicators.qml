@@ -60,7 +60,7 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             text: "󰅶"
             color: stayAwakeCell.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 
@@ -84,7 +84,7 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             text: "󱩌"
             color: nightLightCell.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 

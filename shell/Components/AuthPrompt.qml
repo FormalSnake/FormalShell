@@ -68,13 +68,16 @@ Item {
 
     // DESIGN.md §1.2: a border is a spec (color + widths), not a bare
     // scalar — this is that vocabulary's first real consumer. The field's
-    // outline is deliberately its own uniform 3px spec (not `Theme.borderWidth`,
-    // which stays the plate's own 2px framing below), the "field gains real
-    // mass" bullet made literal: it reads as thicker, more load-bearing than
-    // the frame around it.
+    // outline is deliberately its own uniform 3px-equivalent spec (not
+    // `Theme.borderWidth`, which stays the plate's own 2px framing below),
+    // the "field gains real mass" bullet made literal: it reads as thicker,
+    // more load-bearing than the frame around it. `Theme.fieldBorderWidth`
+    // is the one shared width PolkitDialog.qml's own password field also
+    // draws (audit "auth-field border parity") — previously each surface
+    // computed `Math.round(3 * fontScale)` independently.
     readonly property var _fieldBorder: Theme.uniformBorderSpec(
         root.errorState ? "urgent" : "rule",
-        Math.round(3 * Theme.fontScale))
+        Theme.fieldBorderWidth)
 
     readonly property string _displayLabel: root.checking ? "CHECKING…" : root.label
 
@@ -105,14 +108,18 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.formatTime(root.now, "hh:mm")
             color: Theme.color.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             // Typographic ambition (Task 6 bullet 2): the display slot at a
             // genuinely large multiple of the scale root, deliberate
             // letter-spacing so it reads as set type rather than a raw
             // clock widget, tabular figures for free (any monospace font,
             // by construction — DESIGN.md §2.5).
             font.pixelSize: Math.round(Theme.fontSize.displayLarge * 4)
-            font.letterSpacing: Theme.space.md
+            // A font metric, not a layout gap — `Theme.letterSpacing.display`
+            // (audit "token hygiene strays": this borrowed `Theme.space.md`
+            // for the same numeric value, three lines above the correctly
+            // fontScale-rooted `letterSpacing.wide` right below).
+            font.letterSpacing: Theme.letterSpacing.display
         }
 
         MetaLabel {
@@ -185,7 +192,7 @@ Item {
                     // depend on its own previous output.
                     FontMetrics {
                         id: dotMetrics
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
 
@@ -199,7 +206,7 @@ Item {
                         visible: !root.checking
                         horizontalAlignment: TextInput.AlignHCenter
                         color: Theme.color.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         echoMode: root.masked ? TextInput.Password : TextInput.Normal
                         passwordCharacter: "●"
@@ -261,7 +268,7 @@ Item {
                         visible: root.fingerprintEnrolled
                         text: "󰈷"
                         color: Theme.color.foregroundDim
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.title
                     }
                 }

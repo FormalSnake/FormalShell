@@ -96,7 +96,7 @@ PanelWindow {
     // card paints its own background below.
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
-    implicitWidth: 420
+    implicitWidth: Theme.space.popupWidthWide
 
     WlrLayershell.namespace: "formalshell:notifications-center"
     WlrLayershell.layer: WlrLayer.Top
@@ -124,9 +124,19 @@ PanelWindow {
             color: Theme.color.background
         }
 
-        // Outer top/left rule — Cell.qml's shared-rule contract makes every cell
-        // draw its own bottom+right rule, so the container only needs to close
-        // off the top and left of the whole grid.
+        // The card's own border ring on all four sides (DESIGN.md's omarchy
+        // card chrome, §1.3's card-gutter split): this is a summoned list
+        // surface, so rows inset by `popupPadding` — the same gutter
+        // Menu.qml's card uses, not `panelPadding` — instead of the old
+        // borderWidth-only inset that sat rows ~2px from the edge. Rows
+        // still draw their own bottom+right per Cell's shared-rule contract;
+        // the eraser rectangle below papers over the trailing right-edge
+        // hairline that would otherwise double the frame's own right rule
+        // `popupPadding` apart (same technique as Panel.qml/Menu.qml). No
+        // bottom eraser: unlike those two cards, which wrap tightly to their
+        // own content height, this surface's height is fixed to the screen,
+        // so the last row's own bottom rule essentially never lands flush
+        // with the frame's bottom rule.
         Rectangle {
             id: topRule
             anchors.top: parent.top
@@ -144,12 +154,32 @@ PanelWindow {
             color: Theme.color.rule
         }
 
-        Flickable {
-            anchors.top: topRule.bottom
+        Rectangle {
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            width: Theme.borderWidth
+            color: Theme.color.rule
+        }
+
+        Rectangle {
             anchors.left: parent.left
-            anchors.leftMargin: Theme.borderWidth
             anchors.right: parent.right
             anchors.bottom: parent.bottom
+            height: Theme.borderWidth
+            color: Theme.color.rule
+        }
+
+        Flickable {
+            id: rowsFlickable
+            anchors.top: topRule.bottom
+            anchors.topMargin: Theme.space.popupPadding
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.borderWidth + Theme.space.popupPadding
             clip: true
             contentWidth: width
             contentHeight: column.implicitHeight
@@ -167,13 +197,9 @@ PanelWindow {
                         accent: NotificationService.dnd
                         selected: dndHover.containsMouse
 
-                        Text {
+                        ActionLabel {
                             text: "DND"
                             color: dndCell.foreground
-                            font.family: Theme.font.family
-                            font.pixelSize: Theme.fontSize.body
-                            font.capitalization: Font.AllUppercase
-                            font.letterSpacing: Theme.letterSpacing.meta
                         }
 
                         MouseArea {
@@ -190,13 +216,9 @@ PanelWindow {
                         width: parent.width - dndCell.width
                         selected: clearAllHover.containsMouse
 
-                        Text {
+                        ActionLabel {
                             text: "CLEAR ALL"
                             color: clearAllCell.foreground
-                            font.family: Theme.font.family
-                            font.pixelSize: Theme.fontSize.body
-                            font.capitalization: Font.AllUppercase
-                            font.letterSpacing: Theme.letterSpacing.meta
                         }
 
                         MouseArea {
@@ -283,6 +305,19 @@ PanelWindow {
                     }
                 }
             }
+        }
+
+        // Erases the trailing hairline every row draws along its own right
+        // edge (Cell's shared-rule contract) — without this, that continuous
+        // line and the frame's own right rule above would read as two
+        // parallel borders `popupPadding` apart (same technique as
+        // Panel.qml/Menu.qml).
+        Rectangle {
+            anchors.top: rowsFlickable.top
+            anchors.right: rowsFlickable.right
+            anchors.bottom: rowsFlickable.bottom
+            width: Theme.borderWidth
+            color: Theme.color.background
         }
 
         // Corner marks (DESIGN.md §2 item 7).

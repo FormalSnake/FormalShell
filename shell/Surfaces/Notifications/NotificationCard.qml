@@ -34,7 +34,7 @@ Cell {
     urgent: root.entry.urgency === 2
     hovered: cardHover.containsMouse
     selected: root.invertOnHover && cardHover.containsMouse
-    width: 360
+    width: Theme.space.popupWidthWide
 
     signal dismiss
     signal bodyClicked
@@ -150,7 +150,7 @@ Cell {
                         width: parent.width
                         text: root.entry.summary
                         color: root.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         font.bold: true
                         wrapMode: Text.WordWrap
@@ -164,7 +164,7 @@ Cell {
                         text: root._styledBody
                         textFormat: Text.StyledText
                         color: root.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.bodySmall
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
@@ -195,7 +195,7 @@ Cell {
                     // inverted background, so only then does its own
                     // foreground apply.
                     color: dismissCell.selected ? dismissCell.foreground : root.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
@@ -236,7 +236,7 @@ Cell {
                         text: actionCell.modelData.label
                         // Same reasoning as the dismiss cell above.
                         color: actionCell.selected ? actionCell.foreground : root.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.bodySmall
                     }
 

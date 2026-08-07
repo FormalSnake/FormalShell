@@ -16,6 +16,12 @@ Singleton {
     readonly property int borderWidth: 2
     readonly property int radius: 0
 
+    // The lock/greeter password field's outline and the polkit dialog's own
+    // password field share this one 3px-equivalent width (DESIGN.md's lock
+    // brief, audit "auth-field border parity") — previously each surface
+    // computed `Math.round(3 * fontScale)` independently.
+    readonly property real fieldBorderWidth: Math.round(3 * fontScale)
+
     // --- DESIGN.md §1 scale roots + state/border tokens -----------------
     // Additive to the legacy `font`/`inverted()` below: nothing here
     // renames or reuses an existing key, so every surface still consuming
@@ -48,14 +54,12 @@ Singleton {
     // binds it.
     property real barHeight: 32
 
-    readonly property var font: ({
-        family: "monospace",
-        display: "monospace",
-        baseSize: 13,
-        caption: Math.round(13 * 0.833), bodySmall: Math.round(13 * 0.917),
-        body: 13, subtitle: Math.round(13 * 1.083),
-        title: Math.round(13 * 1.167), heading: Math.round(13 * 1.333)
-    })
+    // Always the fontconfig `monospace` alias (DESIGN.md §1.3, CLAUDE.md
+    // hard rule) — never a hardcoded family, never a second display face.
+    // Replaces the legacy `font` object (M18 Task 6): every consumer only
+    // ever read `.family`, so the stale size math (duplicating `fontSize`
+    // above under different names) is gone with it.
+    readonly property string fontFamily: "monospace"
 
     // --- DESIGN.md §4 motion tokens -----------------------------------------
     // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the

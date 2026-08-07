@@ -38,12 +38,19 @@ var SPACING_BASE = {
 // scale step) — same scaling rule as SPACING_BASE. `trackThickness` is the
 // one flat-fill-track idiom (OSD, volume/brightness/life-progress sliders)
 // — a single token so every track site renders the same thickness instead
-// of each surface picking its own literal.
+// of each surface picking its own literal. `controlPaddingX`/`Y` match
+// `lg`/`sm` exactly (2026-08-07 spacing-consistency pass) — Cell.qml's
+// implicit sizing routes through these now instead of the bare scale
+// steps, so the two numbers can't drift apart independently again.
+// `popupWidth{Narrow,Default,Wide,Menu}` are the four snap points every
+// floating card's width now picks from (DESIGN.md §1.3's popup width
+// scale) instead of each surface choosing its own literal.
 var SEMANTIC_SPACING_BASE = {
-    controlGap: 8, controlPaddingX: 10, controlPaddingY: 6, inputPaddingY: 7,
+    controlGap: 8, controlPaddingX: 8, controlPaddingY: 4, inputPaddingY: 7,
     controlHeight: 28, popupRowHeight: 28, rowGap: 8, rowPaddingX: 12,
     labelGap: 4, panelGap: 14, panelPadding: 18, popupPadding: 14,
-    trackThickness: 6
+    trackThickness: 6,
+    popupWidthNarrow: 280, popupWidthDefault: 320, popupWidthWide: 400, popupWidthMenu: 560
 };
 
 function spacingTokens(scale) {
@@ -55,10 +62,11 @@ function spacingTokens(scale) {
     return out;
 }
 
-// DESIGN.md §2.3's uppercase meta-row tracking, and the wider variant the
-// lock/greeter date label uses — a font metric, so it scales with
+// DESIGN.md §2.3's uppercase meta-row tracking, the wider variant the
+// lock/greeter date label uses, and `display`'s own wide tracking for the
+// lock clock's oversized digits — a font metric, so it scales with
 // fontScale (not spacingScale) to stay proportional to the text it tracks.
-var LETTER_SPACING_BASE = { meta: 1, wide: 2 };
+var LETTER_SPACING_BASE = { meta: 1, wide: 2, display: 6 };
 
 function letterSpacingTokens(scale) {
     var out = {};

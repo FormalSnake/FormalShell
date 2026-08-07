@@ -23,7 +23,7 @@ PanelWindow {
 
     property bool isOpen: false
     property string panelTitle: ""
-    property int panelWidth: 320
+    property int panelWidth: Theme.space.popupWidthDefault
     // Screen-relative x of the bar cell that opened this panel, computed by
     // the caller within ITS OWN window (see AudioWidget.qml) — Wayland gives
     // clients no cross-window global coordinates, so a raw Item reference

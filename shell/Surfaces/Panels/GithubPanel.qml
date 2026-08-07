@@ -28,7 +28,7 @@ Panel {
     id: root
 
     panelTitle: "GITHUB"
-    panelWidth: 380
+    panelWidth: Theme.space.popupWidthWide
 
     // Flipped true by GithubWidget when bar.layout actually names it — the
     // widget is opt-in precisely so users who never asked for it don't get
@@ -169,7 +169,7 @@ Panel {
                     width: parent.width
                     text: rowCell.modelData.title
                     color: rowCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
@@ -179,7 +179,7 @@ Panel {
                     width: parent.width
                     text: rowCell.modelData.repo
                     color: Theme.color.foregroundDim
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                     elide: Text.ElideRight
                 }

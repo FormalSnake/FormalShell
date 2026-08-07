@@ -256,7 +256,7 @@ Panel {
             Text {
                 text: root._actionKind === "up" ? "CONNECTING…" : root._actionKind === "down" ? "DISCONNECTING…" : (statusCell.selected ? "CONNECTED" : "STOPPED")
                 color: statusCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -265,7 +265,7 @@ Panel {
                 text: root._actionError
                 color: Theme.color.urgent
                 font.italic: true
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.caption
             }
         }
@@ -290,7 +290,7 @@ Panel {
             Text {
                 text: (root.status && root.status.selfName) ? root.status.selfName : "UNKNOWN"
                 color: selfCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -299,7 +299,7 @@ Panel {
                 visible: _ip !== null
                 text: _ip || ""
                 color: Theme.color.foregroundDim
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.caption
             }
         }
@@ -343,7 +343,7 @@ Panel {
                         width: parent.width - onlineText.width - parent.spacing
                         text: peerCell.modelData.name
                         color: peerCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         elide: Text.ElideRight
                     }
@@ -352,7 +352,7 @@ Panel {
                         id: onlineText
                         text: peerCell.modelData.online ? "ONLINE" : "OFFLINE"
                         color: peerCell.modelData.online ? peerCell.foreground : Theme.color.foregroundDim
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
 
                         // Gated on root.isOpen too (M16 Task 12 hidden-
@@ -374,7 +374,7 @@ Panel {
                     visible: peerCell.modelData.ip !== null
                     text: peerCell.modelData.ip || ""
                     color: Theme.color.foregroundDim
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                 }
             }

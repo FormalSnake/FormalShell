@@ -205,7 +205,7 @@ Panel {
                     id: statusText
                     text: root._phrases.length > 0 ? root._phrases[root._phraseIndex % root._phrases.length] : ""
                     color: statusCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
 
                     // Gated on root.isOpen too (M16 Task 12): this panel's
@@ -342,7 +342,7 @@ Panel {
                         width: parent.width - percentText.width - parent.spacing
                         text: brightnessCell.label
                         color: brightnessCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
 
@@ -350,7 +350,7 @@ Panel {
                         id: percentText
                         text: brightnessCell.percent + "%"
                         color: brightnessCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
                 }
@@ -410,11 +410,9 @@ Panel {
             selected: profileCell.modelData === PowerProfiles.profile
             hovered: profileCell.index === root._cursor
 
-            Text {
-                text: PowerProfile.toString(profileCell.modelData).toUpperCase()
+            ActionLabel {
+                text: PowerProfile.toString(profileCell.modelData)
                 color: profileCell.foreground
-                font.family: Theme.font.family
-                font.pixelSize: Theme.fontSize.body
             }
 
             MouseArea {

@@ -950,7 +950,7 @@ Panel {
                         width: parent.width - actionCell.width - parent.spacing
                         text: netCell.modelData.network.name || "(unnamed)"
                         color: netCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         elide: Text.ElideRight
                     }
@@ -983,7 +983,7 @@ Panel {
                     visible: typeof netCell.modelData.network.signalStrength === "number"
                     text: NetworkModel.signalBar(netCell.modelData.network.signalStrength) + "  " + Math.round(netCell.modelData.network.signalStrength * 100) + "%"
                     color: netCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                 }
             }
@@ -1054,7 +1054,7 @@ Panel {
                         Text {
                             text: NetworkModel.signalBar(wifiCell._network.signalStrength)
                             color: wifiCell.foreground
-                            font.family: Theme.font.family
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize.body
                         }
 
@@ -1066,7 +1066,7 @@ Panel {
                             visible: wifiCell._secured
                             text: "󰌾"
                             color: wifiCell.foreground
-                            font.family: Theme.font.family
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize.body
                         }
                     }
@@ -1110,7 +1110,7 @@ Panel {
                         text: wifiCell._ssid !== "" ? wifiCell._ssid : "HIDDEN"
                         color: wifiCell._ssid !== "" ? wifiCell.foreground : Theme.color.foregroundDim
                         elide: Text.ElideRight
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
 
@@ -1132,7 +1132,7 @@ Panel {
                     text: wifiCell._statusText
                     color: wifiCell._isFailed ? Theme.color.urgent : wifiCell.foreground
                     font.italic: wifiCell._isFailed
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                 }
 
@@ -1158,7 +1158,7 @@ Panel {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             color: Theme.color.foreground
-                            font.family: Theme.font.family
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize.body
                             selectByMouse: true
                             focus: wifiCell._promptOpen && wifiCell._enterprise
@@ -1189,7 +1189,7 @@ Panel {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             color: Theme.color.foreground
-                            font.family: Theme.font.family
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize.body
                             echoMode: TextInput.Password
                             passwordCharacter: "●"
@@ -1243,7 +1243,7 @@ Panel {
                 width: parent.width - wifiPowerToggle.width - parent.spacing
                 text: "WI-FI"
                 color: wifiPowerCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -1304,7 +1304,7 @@ Panel {
                 width: parent.width - qrToggle.width - parent.spacing
                 text: "SHARE"
                 color: qrShareCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -1423,7 +1423,7 @@ Panel {
                     width: parent.width - pwToggle.width - parent.spacing
                     text: "PASSWORD"
                     color: passwordCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
@@ -1456,7 +1456,7 @@ Panel {
                 width: parent.width
                 text: root._pwPhase === "shown" ? root._pwText : root._pwMask
                 color: root._pwPhase === "shown" ? passwordCell.foreground : Theme.color.foregroundDim
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
                 wrapMode: Text.WrapAnywhere
             }
@@ -1489,7 +1489,7 @@ Panel {
                 width: parent.width - runToggle.width - parent.spacing
                 text: "SPEED TEST"
                 color: speedTestCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -1540,7 +1540,7 @@ Panel {
                     width: parent.width - downloadValue.width - parent.spacing
                     text: "DOWNLOAD"
                     color: downloadCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
@@ -1548,7 +1548,7 @@ Panel {
                     id: downloadValue
                     text: SpeedTest.formatMbps(downloadCell._mbps) + " MBPS"
                     color: downloadCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
             }
@@ -1592,7 +1592,7 @@ Panel {
                     width: parent.width - uploadValue.width - parent.spacing
                     text: "UPLOAD"
                     color: uploadCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
@@ -1600,7 +1600,7 @@ Panel {
                     id: uploadValue
                     text: SpeedTest.formatMbps(uploadCell._mbps) + " MBPS"
                     color: uploadCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
             }

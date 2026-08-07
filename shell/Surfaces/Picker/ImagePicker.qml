@@ -39,7 +39,7 @@ import qs.Components
 Panel {
     id: root
 
-    panelWidth: 420
+    panelWidth: Core.Theme.space.popupWidthWide
     panelTitle: root._mode === "select" ? "SELECT IMAGE" : "WALLPAPER"
 
     readonly property int columns: 4

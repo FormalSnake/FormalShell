@@ -29,7 +29,7 @@ Cell {
         Text {
             text: Qt.formatTime(root._now, "hh:mm")
             color: root.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 
@@ -43,13 +43,9 @@ Cell {
             width: dot.width
             height: dot.height
 
-            Rectangle {
+            PanelOpenDot {
                 id: dot
                 visible: root._panelOpen
-                width: 4
-                height: 4
-                radius: Theme.radius
-                color: Theme.color.accent
                 anchors.horizontalCenter: parent.horizontalCenter
             }
         }

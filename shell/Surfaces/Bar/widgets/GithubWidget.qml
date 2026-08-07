@@ -55,7 +55,7 @@ Cell {
             anchors.verticalCenter: parent.verticalCenter
             text: ""
             color: root._state === "ok" ? root.foreground : Theme.color.foregroundDim
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 
@@ -68,12 +68,8 @@ Cell {
         }
     }
 
-    Rectangle {
+    PanelOpenDot {
         visible: root._panelOpen
-        width: 4
-        height: 4
-        radius: Theme.radius
-        color: Theme.color.accent
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
     }

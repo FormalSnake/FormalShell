@@ -387,11 +387,15 @@ PanelWindow {
         return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
+    // Uppercased at display time only (MetaLabel's own font.capitalization,
+    // the one shared uppercase/meta convention) — the JS-level
+    // `.toUpperCase()` this used to carry was pure redundancy, since
+    // `breadcrumb` has no other consumer (audit "uppercase/meta treatment").
     readonly property string breadcrumb: {
         if (root._mode === "select")
-            return "SELECT / " + root._selectPrompt.toUpperCase();
+            return "SELECT / " + root._selectPrompt;
         if (root._mode === "input")
-            return "INPUT / " + root._selectPrompt.toUpperCase();
+            return "INPUT / " + root._selectPrompt;
         var parts = [];
         var id = root.currentNodeId;
         while (id !== null && root._nodes[id]) {
@@ -975,7 +979,7 @@ PanelWindow {
     // card; card paints its own background.
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
-    implicitWidth: 560
+    implicitWidth: Core.Theme.space.popupWidthMenu
     implicitHeight: root._chrome + searchCell.height + root._rowsAreaHeight
 
     WlrLayershell.namespace: "formalshell:menu"
@@ -1072,7 +1076,7 @@ PanelWindow {
                     id: searchInput
                     width: searchColumn.width
                     color: Core.Theme.color.foreground
-                    font.family: Core.Theme.font.family
+                    font.family: Core.Theme.fontFamily
                     font.pixelSize: Core.Theme.fontSize.body
                     focus: true
                     selectByMouse: true

@@ -44,8 +44,8 @@ TestCase {
         compare(s.xxxl, 14);
         compare(s.huge, 18);
         compare(s.controlGap, 8);
-        compare(s.controlPaddingX, 10);
-        compare(s.controlPaddingY, 6);
+        compare(s.controlPaddingX, 8);
+        compare(s.controlPaddingY, 4);
         compare(s.inputPaddingY, 7);
         compare(s.controlHeight, 28);
         compare(s.popupRowHeight, 28);
@@ -56,6 +56,10 @@ TestCase {
         compare(s.panelPadding, 18);
         compare(s.popupPadding, 14);
         compare(s.trackThickness, 6);
+        compare(s.popupWidthNarrow, 280);
+        compare(s.popupWidthDefault, 320);
+        compare(s.popupWidthWide, 400);
+        compare(s.popupWidthMenu, 560);
     }
 
     function test_spacing_tokens_rescale_with_scale_factor() {
@@ -71,12 +75,14 @@ TestCase {
         var l = Tokens.letterSpacingTokens(1.0);
         compare(l.meta, 1);
         compare(l.wide, 2);
+        compare(l.display, 6);
     }
 
     function test_letter_spacing_tokens_rescale_with_font_scale() {
         var l = Tokens.letterSpacingTokens(2.0);
         compare(l.meta, 2);
         compare(l.wide, 4);
+        compare(l.display, 12);
     }
 
     // §4 motion tokens

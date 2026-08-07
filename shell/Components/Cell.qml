@@ -79,8 +79,8 @@ Item {
     // content sitting visibly high-left of the cell's true center.
     readonly property real _ruleReserve: standalone ? 0 : Theme.borderWidth
 
-    implicitWidth: root._measure(false) + Theme.space.lg * 2 + _ruleReserve
-    implicitHeight: root._measure(true) + Theme.space.sm * 2 + _ruleReserve
+    implicitWidth: root._measure(false) + Theme.space.controlPaddingX * 2 + _ruleReserve
+    implicitHeight: root._measure(true) + Theme.space.controlPaddingY * 2 + _ruleReserve
 
     // How big the content wants to be. This used to be `content`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
@@ -181,10 +181,10 @@ Item {
     Item {
         id: content
         anchors.fill: parent
-        anchors.leftMargin: Theme.space.lg
-        anchors.topMargin: Theme.space.sm
-        anchors.rightMargin: Theme.space.lg + root._ruleReserve
-        anchors.bottomMargin: Theme.space.sm + root._ruleReserve
+        anchors.leftMargin: Theme.space.controlPaddingX
+        anchors.topMargin: Theme.space.controlPaddingY
+        anchors.rightMargin: Theme.space.controlPaddingX + root._ruleReserve
+        anchors.bottomMargin: Theme.space.controlPaddingY + root._ruleReserve
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size

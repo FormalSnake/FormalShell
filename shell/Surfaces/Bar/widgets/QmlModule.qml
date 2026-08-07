@@ -34,7 +34,7 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         text: "MODULE ERROR"
         color: root.foreground
-        font.family: Theme.font.family
+        font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize.body
     }
 }

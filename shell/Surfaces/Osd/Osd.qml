@@ -100,25 +100,25 @@ PanelWindow {
         Text {
             id: _mIconVolume
             text: "󰕾"
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.title
         }
         Text {
             id: _mIconMuted
             text: "󰝟"
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.title
         }
         Text {
             id: _mIconBrightness
             text: "󰃟"
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.title
         }
         Text {
             id: _mIconMedia
             text: "󰝚"
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.title
         }
         MetaLabel { id: _mLabelVolume; text: "VOLUME" }
@@ -127,7 +127,7 @@ PanelWindow {
         Text {
             id: _mValuePercent
             text: "100%"
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
     }
@@ -214,7 +214,7 @@ PanelWindow {
                         : root.kind === "media" ? "󰝚"
                         : (AudioService.muted ? "󰝟" : "󰕾")
                     color: iconCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.title
                 }
             }
@@ -261,7 +261,7 @@ PanelWindow {
                         horizontalAlignment: Text.AlignRight
                         text: valueCell._percent + "%"
                         color: valueCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
 

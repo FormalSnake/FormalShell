@@ -48,7 +48,7 @@ TestCase {
                 id: reference
                 visible: false
                 text: wrapper.label
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
         }
@@ -90,7 +90,7 @@ TestCase {
                 Text {
                     id: primaryText
                     text: cell.appName
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     width: Math.min(implicitWidth, cell.maxWidth * 0.5)
                     elide: Text.ElideRight

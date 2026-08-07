@@ -48,7 +48,7 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
 
-    readonly property real _cardWidth: Math.round(360 * Theme.fontScale)
+    readonly property real _cardWidth: Theme.space.popupWidthWide
     readonly property bool _inputEnabled: !!(root._flow && root._flow.isResponseRequired) && !root.submitted
 
     function _identityLabel() {
@@ -232,7 +232,7 @@ PanelWindow {
                     width: parent.width
                     text: root._flow ? root._flow.message : ""
                     color: Theme.color.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
@@ -269,7 +269,11 @@ PanelWindow {
                         anchors.fill: parent
                         radius: Theme.radius
                         color: "transparent"
-                        border.width: Math.round(3 * Theme.fontScale)
+                        // Theme.fieldBorderWidth: the same 3px-equivalent
+                        // outline AuthPrompt.qml's own password field draws
+                        // (audit "auth-field border parity") — previously
+                        // computed here independently.
+                        border.width: Theme.fieldBorderWidth
                         border.color: root.errorState ? Theme.color.urgent : Theme.color.rule
                     }
 
@@ -286,7 +290,7 @@ PanelWindow {
                         horizontalAlignment: TextInput.AlignHCenter
                         verticalAlignment: TextInput.AlignVCenter
                         color: Theme.color.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         echoMode: (root._flow && root._flow.responseVisible) ? TextInput.Normal : TextInput.Password
                         passwordCharacter: "●"

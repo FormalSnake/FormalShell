@@ -483,7 +483,7 @@ Panel {
                         text: btCell._device.name || btCell._device.deviceName
                         color: btCell.foreground
                         elide: Text.ElideRight
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
 
@@ -583,7 +583,7 @@ Panel {
                         text: btCell._statusText
                         color: btCell._isFailed ? Theme.color.urgent : btCell.foreground
                         font.italic: btCell._isFailed
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
                     }
 
@@ -615,10 +615,17 @@ Panel {
 
             Text {
                 width: parent.width - powerCell.width - parent.spacing
+                // Not routed through ActionLabel/MetaLabel: the adapter's own
+                // name is real device data, not ours to force uppercase (the
+                // same reasoning Tooltip.qml's `verbatim` flag documents) —
+                // only the trailing state word gets that treatment, via its
+                // own `.toUpperCase()`. Still needs the tracking every other
+                // uppercase label carries (audit "uppercase/meta treatment").
                 text: root._adapter ? root._adapter.name + "  " + BluetoothAdapterState.toString(root._adapter.state).toUpperCase() : ""
                 color: adapterCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
+                font.letterSpacing: Theme.letterSpacing.meta
                 elide: Text.ElideRight
             }
 

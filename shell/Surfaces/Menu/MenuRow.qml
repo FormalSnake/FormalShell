@@ -39,12 +39,12 @@ Cell {
     readonly property real _thumbHeight: root._bodyHeight * 2
 
     width: ListView.view ? ListView.view.width : implicitWidth
-    height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.space.sm * 2 + Theme.borderWidth
+    height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.space.controlPaddingY * 2 + Theme.borderWidth
 
     Row {
         id: contentRow
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.sm
+        spacing: Theme.space.labelGap
 
         // Row has no per-item vertical-alignment property (verified against
         // the pinned Qt qtdeclarative plugins.qmltypes: QQuickRow exposes
@@ -95,7 +95,7 @@ Cell {
             visible: root.node.icon !== ""
             text: root.node.icon
             color: root.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 
@@ -107,7 +107,7 @@ Cell {
             // provider's NO NIX) — foregroundDim reads on both the normal
             // and the inverted cursor fill.
             color: root.node.dim === true ? Theme.color.foregroundDim : root.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 
@@ -119,19 +119,19 @@ Cell {
             visible: (root.node.desc || "") !== ""
             text: root.node.desc || ""
             color: Theme.color.foregroundDim
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
     }
 
     Text {
         anchors.right: parent.right
-        anchors.rightMargin: Theme.space.lg + Theme.borderWidth
+        anchors.rightMargin: Theme.space.controlPaddingX + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         visible: !root.confirming && (root.checkedState || root.isBranch)
         text: root.checkedState ? "✓" : "▸"
         color: root.foreground
-        font.family: Theme.font.family
+        font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize.body
     }
 
@@ -140,7 +140,7 @@ Cell {
     Rectangle {
         visible: (root.node.meta || "") !== ""
         anchors.right: parent.right
-        anchors.rightMargin: Theme.space.lg + Theme.borderWidth
+        anchors.rightMargin: Theme.space.controlPaddingX + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
         width: metaTag.implicitWidth + Theme.space.sm * 2
         height: metaTag.implicitHeight + Theme.space.xxs * 2

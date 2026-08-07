@@ -55,7 +55,7 @@ Panel {
     id: root
 
     panelTitle: "CALENDAR"
-    panelWidth: 280
+    panelWidth: Core.Theme.space.popupWidthNarrow
 
     // Set from shell.qml, the single Menu instance, needed to drive the
     // life-progress easter egg's two-step birth-year/life-expectancy prompt
@@ -378,7 +378,7 @@ Panel {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: dayCell.modelData.day
                         color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundDim
-                        font.family: Core.Theme.font.family
+                        font.family: Core.Theme.fontFamily
                         font.pixelSize: Core.Theme.fontSize.body
                     }
 
@@ -386,8 +386,8 @@ Panel {
                     // doesn't sit shorter than its row neighbours — flat
                     // accent dot, no glow, per DESIGN.md.
                     Rectangle {
-                        width: 4
-                        height: 4
+                        width: Core.Theme.space.sm
+                        height: Core.Theme.space.sm
                         anchors.horizontalCenter: parent.horizontalCenter
                         color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.accent
                         opacity: dayCell.hasEvents ? 1 : 0
@@ -433,7 +433,7 @@ Panel {
             Text {
                 text: eventCell.modelData ? eventCell.modelData.summary : "NO EVENTS"
                 color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.foregroundDim
-                font.family: Core.Theme.font.family
+                font.family: Core.Theme.fontFamily
                 font.pixelSize: Core.Theme.fontSize.body
             }
         }
@@ -454,7 +454,7 @@ Panel {
             Text {
                 text: Progress.formatPercent(root._displayFraction)
                 color: yearCell.foreground
-                font.family: Core.Theme.font.family
+                font.family: Core.Theme.fontFamily
                 font.pixelSize: Core.Theme.fontSize.body
             }
 

@@ -16,6 +16,11 @@ Panel {
 
     panelTitle: "NOW PLAYING"
 
+    // The one named image-slot size (DESIGN.md §1.3's structural-size
+    // exceptions, audit "token hygiene strays" — was three repeated bare
+    // `96`s below).
+    readonly property real _artSlotSize: 96
+
     Cell {
         visible: !MediaService.available
         width: parent.width
@@ -41,15 +46,15 @@ Panel {
 
             Item {
                 id: artSlot
-                width: 96
-                height: 96
+                width: root._artSlotSize
+                height: root._artSlotSize
                 anchors.verticalCenter: parent.verticalCenter
 
                 Image {
                     visible: MediaService.artUrl !== ""
                     source: MediaService.artUrl
-                    width: 96
-                    height: 96
+                    width: root._artSlotSize
+                    height: root._artSlotSize
                     // Decode capped near the slot size, and no pixmap cache
                     // (M16 Task 12): artUrl changes per track, so the
                     // default cache: true would accumulate full-res art
@@ -63,8 +68,8 @@ Panel {
                     // typical covers) would decode short on one axis and
                     // PreserveAspectCrop would upscale it back out. 2x
                     // covers any art up to a 2:1 aspect ratio.
-                    sourceSize.width: 192
-                    sourceSize.height: 192
+                    sourceSize.width: root._artSlotSize * 2
+                    sourceSize.height: root._artSlotSize * 2
                     cache: false
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
@@ -78,8 +83,8 @@ Panel {
                 // and the track actually playing, per the spec. Rides the
                 // art slot unchanged by this merge.
                 Loader {
-                    width: 96
-                    height: 96
+                    width: root._artSlotSize
+                    height: root._artSlotSize
                     active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
                     source: "AnimatedAlbumArt.qml"
                 }
@@ -98,7 +103,7 @@ Panel {
                     width: parent.width
                     text: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
                     color: infoCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.subtitle
                     elide: Text.ElideRight
                 }
@@ -108,7 +113,7 @@ Panel {
                     visible: MediaService.artist !== ""
                     text: MediaService.artist
                     color: Theme.color.foregroundDim
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
@@ -163,7 +168,7 @@ Panel {
                 anchors.centerIn: parent
                 text: "󰒮"
                 color: MediaService.canGoPrevious ? prevCell.foreground : Theme.color.foregroundFaint
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -185,7 +190,7 @@ Panel {
                 anchors.centerIn: parent
                 text: MediaService.isPlaying ? "󰏤" : "󰐊"
                 color: playPauseCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 
@@ -208,7 +213,7 @@ Panel {
                 anchors.centerIn: parent
                 text: "󰒭"
                 color: MediaService.canGoNext ? nextCell.foreground : Theme.color.foregroundFaint
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 

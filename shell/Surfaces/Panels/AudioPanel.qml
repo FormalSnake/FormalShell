@@ -193,7 +193,7 @@ Panel {
                 width: parent.width
                 text: deviceCell.modelData.node.description || deviceCell.modelData.node.name
                 color: deviceCell.foreground
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
                 elide: Text.ElideRight
             }
@@ -241,7 +241,7 @@ Panel {
                         width: parent.width - streamPercent.width - streamMuteCell.width - parent.spacing * 2
                         text: streamCell._label
                         color: streamCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         elide: Text.ElideRight
                     }
@@ -250,7 +250,7 @@ Panel {
                         id: streamPercent
                         text: Math.round(streamCell._volume * 100) + "%"
                         color: streamCell._muted ? Theme.color.foregroundFaint : streamCell.foreground
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
                     }
 
@@ -284,7 +284,11 @@ Panel {
                     // The 1.0 boundary, at 2/3 of the 0..1.5 track — cuts a
                     // notch through fill and empty track alike so crossing
                     // into overdrive reads as a deliberate line, not the
-                    // track simply running out of room.
+                    // track simply running out of room. Deliberately 1px, not
+                    // `Theme.borderWidth`: this isn't a border or a rule
+                    // (§1.4's ink hierarchy doesn't apply), it's a
+                    // background-colored cut through a fill — the 2/0 border
+                    // convention (audit "border widths") doesn't govern it.
                     Rectangle {
                         x: parent.width * (1 / 1.5) - width / 2
                         width: 1
@@ -343,7 +347,7 @@ Panel {
                     width: parent.width - outputMuteCell.width - parent.spacing
                     text: Math.round((root._sink && root._sink.audio ? root._sink.audio.volume : 0) * 100) + "%"
                     color: outputMasterCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
@@ -422,7 +426,7 @@ Panel {
                     width: parent.width - inputMuteCell.width - parent.spacing
                     text: Math.round((root._source && root._source.audio ? root._source.audio.volume : 0) * 100) + "%"
                     color: inputMasterCell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 

@@ -87,7 +87,7 @@ Item {
             // appId, dimmed — today's exact fallback rendering.
             text: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
             color: root.desktopEntry ? Theme.color.foreground : Theme.color.foregroundDim
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
             // Never more than half the cell: an entry name (or a raw appId
             // in the no-entry fallback) long enough to eat the whole budget

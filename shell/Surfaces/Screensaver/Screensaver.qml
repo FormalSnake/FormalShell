@@ -261,7 +261,7 @@ Item {
                     id: metric
                     visible: false
                     text: "M"
-                    font.family: Core.Theme.font.family
+                    font.family: Core.Theme.fontFamily
                     font.pixelSize: Core.Theme.fontSize.body * 2.4
                 }
 
@@ -334,7 +334,7 @@ Item {
                             var banner = root._banner;
                             if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
                                 return;
-                            ctx.font = surface._cellHeight + "px " + Core.Theme.font.family;
+                            ctx.font = surface._cellHeight + "px " + Core.Theme.fontFamily;
                             ctx.textBaseline = "top";
                             var offsetCol = Math.floor((surface._columns - banner.width) / 2);
                             var offsetRow = Math.floor((surface._rows - banner.height) / 2);

@@ -134,7 +134,7 @@ Row {
             anchors.verticalCenter: parent.verticalCenter
             text: (TrayService.drawerExpanded ? "−" : "+") + root._overflowCount
             color: overflowCell.foreground
-            font.family: Theme.font.family
+            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
 

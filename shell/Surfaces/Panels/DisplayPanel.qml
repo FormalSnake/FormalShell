@@ -187,7 +187,7 @@ Panel {
                         text: outCell.modelData.name
                         color: outCell.foreground
                         elide: Text.ElideRight
-                        font.family: Theme.font.family
+                        font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }
 
@@ -253,7 +253,7 @@ Panel {
                             id: scaleValue
                             text: Outputs.formatScale(outCell.modelData.scale)
                             color: outCell.foreground
-                            font.family: Theme.font.family
+                            font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize.caption
                         }
                     }
@@ -357,7 +357,7 @@ Panel {
                 text: root._mirrorOn ? Outputs.mirrorSource(root._outputs) : root._mirrorPlan.primary
                 color: mirrorCell.foreground
                 elide: Text.ElideRight
-                font.family: Theme.font.family
+                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
 

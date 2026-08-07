@@ -55,7 +55,7 @@ Item {
                     anchors.centerIn: parent
                     text: cell.label
                     color: cell.foreground
-                    font.family: Theme.font.family
+                    font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
