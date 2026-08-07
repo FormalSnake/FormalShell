@@ -264,11 +264,10 @@ Panel {
                     // AudioPanel's volume track has one, because every step
                     // here is a real output reconfiguration and a drag would
                     // fire dozens of them across the pointer's travel.
-                    Rectangle {
+                    DitherFill {
                         id: scaleTrack
                         width: parent.width
                         height: Theme.space.trackThickness
-                        color: Theme.color.rule
 
                         Rectangle {
                             width: parent.width * Outputs.fractionForScale(outCell.modelData.scale)

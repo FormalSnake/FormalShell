@@ -462,10 +462,9 @@ Panel {
             // AudioPanel's volume slider. Double-click is the life-progress
             // easter egg: prompts for birth year/life expectancy the first
             // time, toggles year<->life once a valid pair exists.
-            Rectangle {
+            DitherFill {
                 width: parent.width
                 height: Core.Theme.space.trackThickness
-                color: Core.Theme.color.rule
 
                 Rectangle {
                     width: parent.width * root._displayFraction

@@ -1555,10 +1555,9 @@ Panel {
 
             // Flat accent fill, no thumb, no gauge: same idiom as every
             // other slider in the shell.
-            Rectangle {
+            DitherFill {
                 width: parent.width
                 height: Theme.space.trackThickness
-                color: Theme.color.rule
 
                 Rectangle {
                     width: parent.width * SpeedTest.fillFraction(downloadCell._mbps)
@@ -1606,10 +1605,9 @@ Panel {
                 }
             }
 
-            Rectangle {
+            DitherFill {
                 width: parent.width
                 height: Theme.space.trackThickness
-                color: Theme.color.rule
 
                 Rectangle {
                     width: parent.width * SpeedTest.fillFraction(uploadCell._mbps)

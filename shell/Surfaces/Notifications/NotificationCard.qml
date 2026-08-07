@@ -25,6 +25,11 @@ Cell {
     required property var entry
     property double now: Date.now()
     property bool invertOnHover: false
+    // Still-unseen row in the notification center (Center.qml's PENDING
+    // section) — dithers per DESIGN.md §2.8 instead of the flat resting
+    // background. Toasts.qml never sets this (a popup is either showing or
+    // gone, never "pending").
+    property bool pending: false
 
     urgent: root.entry.urgency === 2
     hovered: cardHover.containsMouse
@@ -44,6 +49,14 @@ Cell {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
+    }
+
+    // Pending backdrop (DESIGN.md §2.8): dropped the instant a fuller-bleed
+    // state (urgent, hover-inverted) already owns the cell — §2.4's "no
+    // double treatment" applies to this ornament too.
+    DitherFill {
+        anchors.fill: parent
+        visible: root.pending && !root.urgent && !root.selected
     }
 
     // sanitizeBody/styledBody live once in model.js and are applied here at

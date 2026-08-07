@@ -238,6 +238,7 @@ PanelWindow {
                         now: root._now
                         width: parent.width
                         invertOnHover: true
+                        pending: true
 
                         onDismiss: NotificationService.dismissOne(pendingCard.modelData.id)
                         onBodyClicked: {
@@ -283,6 +284,9 @@ PanelWindow {
                 }
             }
         }
+
+        // Corner marks (DESIGN.md §2 item 7).
+        CornerMarks {}
     }
 
     // Multi-monitor dismiss (M16 Task 7): a click on another screen closes

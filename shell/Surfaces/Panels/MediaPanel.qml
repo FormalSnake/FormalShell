@@ -122,11 +122,10 @@ Panel {
 
         // Flat accent fill, no thumb — AudioPanel's volume-slider idiom.
         // Draggable only when the player actually supports seeking.
-        Rectangle {
+        DitherFill {
             id: progressTrack
             width: parent.width
             height: Theme.space.trackThickness
-            color: Theme.color.rule
 
             readonly property real _fraction: MediaService.length > 0
                 ? Math.max(0, Math.min(1, MediaService.position / MediaService.length))

@@ -362,10 +362,9 @@ Panel {
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                Rectangle {
+                DitherFill {
                     width: parent.width
                     height: Theme.space.trackThickness
-                    color: Theme.color.rule
 
                     Rectangle {
                         width: parent.width * Math.max(0, Math.min(1, rowCell.modelData.percent))

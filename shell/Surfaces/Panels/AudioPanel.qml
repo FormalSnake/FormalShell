@@ -270,11 +270,10 @@ Panel {
                     }
                 }
 
-                Rectangle {
+                DitherFill {
                     id: streamTrack
                     width: parent.width
                     height: Theme.space.trackThickness
-                    color: Theme.color.rule
 
                     Rectangle {
                         width: parent.width * Math.min(1, streamCell._volume / 1.5)
@@ -364,11 +363,10 @@ Panel {
                 }
             }
 
-            Rectangle {
+            DitherFill {
                 id: outputTrack
                 width: parent.width
                 height: Theme.space.trackThickness
-                color: Theme.color.rule
 
                 Rectangle {
                     width: parent.width * (root._sink && root._sink.audio ? AudioModel.clampDevice(root._sink.audio.volume) : 0)
@@ -444,11 +442,10 @@ Panel {
                 }
             }
 
-            Rectangle {
+            DitherFill {
                 id: inputTrack
                 width: parent.width
                 height: Theme.space.trackThickness
-                color: Theme.color.rule
 
                 Rectangle {
                     width: parent.width * (root._source && root._source.audio ? AudioModel.clampDevice(root._source.audio.volume) : 0)

@@ -292,6 +292,10 @@ PanelWindow {
                 height: Theme.borderWidth
                 color: Theme.color.background
             }
+
+            // Corner marks (DESIGN.md §2 item 7) — every panel popout,
+            // including the picker's own reuse of this frame.
+            CornerMarks {}
         }
     }
 

@@ -249,10 +249,9 @@ Panel {
             // Flat accent fill, no thumb, no radius — same idiom as
             // AudioPanel's volume slider and CalendarPanel's year-progress
             // bar, read-only here (no MouseArea; the level isn't settable).
-            Rectangle {
+            DitherFill {
                 width: parent.width
                 height: Theme.space.trackThickness
-                color: Theme.color.rule
 
                 Rectangle {
                     width: parent.width * Math.max(0, Math.min(1, root._percent / 100))
@@ -358,11 +357,10 @@ Panel {
 
                 // Flat accent fill, no thumb — same idiom as the battery
                 // track above and every other slider in the shell.
-                Rectangle {
+                DitherFill {
                     id: brightnessTrack
                     width: parent.width
                     height: Theme.space.trackThickness
-                    color: Theme.color.rule
 
                     Rectangle {
                         width: parent.width * Math.max(0, Math.min(1, brightnessCell.percent / 100))

@@ -267,11 +267,11 @@ PanelWindow {
 
                     // Flat accent fill, no thumb, no radius — DESIGN.md's
                     // "sliders are full-width cells whose fill level is a
-                    // flat accent block" rule, sized by fraction only.
-                    Rectangle {
+                    // flat accent block" rule, sized by fraction only. The
+                    // remainder dithers per §2.8 instead of a flat rule wash.
+                    DitherFill {
                         width: parent.width
                         height: Theme.space.trackThickness
-                        color: Theme.color.rule
 
                         Rectangle {
                             width: parent.width * Math.max(0, Math.min(1, valueCell._fraction))
@@ -282,5 +282,8 @@ PanelWindow {
                 }
             }
         }
+
+        // Corner marks (DESIGN.md §2 item 7).
+        CornerMarks {}
     }
 }

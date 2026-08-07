@@ -1188,6 +1188,9 @@ PanelWindow {
             height: Core.Theme.borderWidth
             color: Core.Theme.color.background
         }
+
+        // Corner marks (DESIGN.md §2 item 7).
+        CornerMarks {}
     }
 
     // Multi-monitor dismiss (M16 Task 7): a click on another screen closes

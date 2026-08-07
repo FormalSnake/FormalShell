@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Core
+import qs.Components
 import qs.Notifications
 
 // The popup toast stack (DESIGN.md §Notifications, M8b Task 5): top-right,
@@ -147,6 +148,10 @@ PanelWindow {
                     }
                     onActionInvoked: key => NotificationService.invokeAction(cardFrame.modelData.id, key)
                 }
+
+                // Corner marks (DESIGN.md §2 item 7) — each toast is its own
+                // small card, so each gets its own four marks.
+                CornerMarks {}
             }
         }
     }
