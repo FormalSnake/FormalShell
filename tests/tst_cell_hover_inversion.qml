@@ -7,8 +7,8 @@ import "../shell/Components"
 // a standalone (bar) cell's hover-cursor state swaps its fill and content to
 // the accent pair (`Theme.inverted()`, same pair the ledger's `selected`
 // fill uses), replacing the fill-alpha tint + border every other cell keeps.
-// Full-bleed accent/urgent cells ink with their own `on*` role (§2.4), never
-// each other's.
+// Full-bleed accent/urgent/warning cells ink with their own `on*` role
+// (§2.4), never each other's.
 //
 // Verified against a synthetic palette (init()/cleanup() below), not
 // Palette.fallback()'s real hex values: the Flexoki fallback sets
@@ -101,5 +101,12 @@ TestCase {
         verify(cell);
         settle(cell);
         verify(Qt.colorEqual(cell.foreground, Theme.color.onUrgent));
+    }
+
+    function test_warning_wins_over_hover_inversion() {
+        var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true, warning: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.foreground, Theme.color.onWarning));
     }
 }

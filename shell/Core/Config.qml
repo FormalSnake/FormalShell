@@ -73,7 +73,8 @@ import QtQuick
 // register, M16 Task 4).
 // battery.warnPercent / battery.criticalPercent (numbers, default 10 / 5 —
 // Power/model.js's warnEvent() thresholds, read by PowerPanel's own
-// hysteresis watcher and Battery.qml's urgent-cell check, M16 Task 5).
+// hysteresis watcher and Battery.qml's urgent/warning-cell checks, M16 Task
+// 5 and M18 Task 7).
 // nightlight.startOn (bool, default false — opt-in: whether
 // NightLightService starts wlsunset automatically at shell boot) and
 // nightlight.temp (number, default 4000 — the fixed low colour

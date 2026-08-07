@@ -27,6 +27,13 @@ import "../../../Power/model.js" as Power
 // give a critical toast, never a tinted border. Charging past the
 // threshold (still plugged in, recovering) drops back to normal
 // immediately — it's a live state, not a one-shot alarm.
+//
+// Low-but-not-critical battery (M18 Task 7, DESIGN.md §1.5/§2.4): the same
+// thresholds Power/model.js's warnEvent() already tri-states (ok/warn/
+// critical) drive a full-bleed `warning` cell between battery.warnPercent
+// and battery.criticalPercent while discharging — no threshold invented
+// here, just the existing warn band spending the palette's `warning` role.
+// Mutually exclusive with `_critical`: the critical band always wins.
 Cell {
     id: root
 
@@ -39,6 +46,7 @@ Cell {
     readonly property bool _discharging: root._hasBattery && root._device.state === UPowerDeviceState.Discharging
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
     readonly property bool _critical: root._discharging && root._percent <= Config.get("battery.criticalPercent", 5)
+    readonly property bool _low: root._discharging && !root._critical && root._percent <= Config.get("battery.warnPercent", 10)
     readonly property string _glyph: {
         var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
         switch (bucket) {
@@ -65,6 +73,7 @@ Cell {
     visible: root.shown
     standalone: true
     urgent: root._critical
+    warning: root._low
     hovered: hoverArea.containsMouse
 
     // What the BAT / NN% label can't say: how long that percentage is worth.

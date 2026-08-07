@@ -13,6 +13,12 @@ import qs.Core
 // full-bleed case — a critical notification — filling with `Theme.color.urgent`
 // (a distinct palette role from `accent`, both matugen-driven) instead.
 //
+// `warning` (DESIGN.md §1.5/§2.4, M18 Task 7) is the third full-bleed
+// sibling — a degraded-but-not-critical state, e.g. low (not yet critical)
+// battery — filling with `Theme.color.warning`/`onWarning`. Spent only where
+// a caller's own service layer already distinguishes a middle severity band;
+// see Battery.qml for the one consumer.
+//
 // `standalone` (DESIGN.md §3 Bar retrofit) swaps that contract for
 // omarchy's own module chrome: borderless at rest, no persistent rule at
 // all — the bar's discrete widget cells opt into this. Every fused-ledger
@@ -37,6 +43,7 @@ Item {
     property bool selected: false
     property bool accent: false
     property bool urgent: false
+    property bool warning: false
     property bool hovered: false
     property bool standalone: false
     // Dithered resting backdrop (DESIGN.md §2.8) for a still-unseen row —
@@ -70,16 +77,18 @@ Item {
     property bool tooltipVerbatim: false
 
     // Bar cells only: hovered, and not already carrying one of the other
-    // full-bleed states (selected/accent/urgent keep their own fill — no
-    // double treatment, DESIGN.md §2.4).
-    readonly property bool _hoverFillActive: root.hovered && !root.selected && !root.accent && !root.urgent
+    // full-bleed states (selected/accent/urgent/warning keep their own fill
+    // — no double treatment, DESIGN.md §2.4).
+    readonly property bool _hoverFillActive: root.hovered && !root.selected && !root.accent && !root.urgent && !root.warning
     readonly property bool _hoverInverted: root.standalone && root._hoverFillActive
 
     readonly property color foreground: urgent
         ? Theme.color.onUrgent
         : accent
             ? Theme.color.onAccent
-            : ((root._hoverInverted || selected) ? Theme.inverted().fg : Theme.color.foreground)
+            : warning
+                ? Theme.color.onWarning
+                : ((root._hoverInverted || selected) ? Theme.inverted().fg : Theme.color.foreground)
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
@@ -161,9 +170,11 @@ Item {
             ? Theme.color.urgent
             : root.accent
                 ? Theme.color.accent
-                : root.selected
-                    ? Theme.inverted().bg
-                    : "transparent"
+                : root.warning
+                    ? Theme.color.warning
+                    : root.selected
+                        ? Theme.inverted().bg
+                        : "transparent"
     }
 
     // Pending backdrop (DESIGN.md §2.8): dropped the instant a fuller-bleed
@@ -172,7 +183,7 @@ Item {
     // visibility, so the common case (pending false) never allocates one.
     Loader {
         anchors.fill: parent
-        active: root.pending && !root.urgent && !root.accent && !root.selected
+        active: root.pending && !root.urgent && !root.accent && !root.warning && !root.selected
         sourceComponent: DitherFill {
             anchors.fill: parent
         }
