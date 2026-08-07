@@ -66,9 +66,11 @@ Item {
     readonly property bool _hoverFillActive: root.hovered && !root.selected && !root.accent && !root.urgent
     readonly property bool _hoverInverted: root.standalone && root._hoverFillActive
 
-    readonly property color foreground: (accent || urgent)
-        ? Theme.color.onAccent
-        : (root._hoverInverted ? Theme.color.background : (selected ? Theme.inverted().fg : Theme.color.foreground))
+    readonly property color foreground: urgent
+        ? Theme.color.onUrgent
+        : accent
+            ? Theme.color.onAccent
+            : (root._hoverInverted ? Theme.color.background : (selected ? Theme.inverted().fg : Theme.color.foreground))
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 

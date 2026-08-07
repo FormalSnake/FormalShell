@@ -6,9 +6,16 @@ import "../shell/Components"
 // Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, M-polish
 // batch item E): a standalone (bar) cell's hover-cursor state swaps its
 // fill to `foreground` and its content to `background`, replacing the
-// fill-alpha tint + border every other cell keeps. Verified against the
-// same real Theme stub tst_cell_geometry.qml uses (Palette.fallback()'s
-// real background/foreground hex values, not invented ones).
+// fill-alpha tint + border every other cell keeps. Full-bleed accent/urgent
+// cells ink with their own `on*` role (§2.4), never each other's.
+//
+// Verified against a synthetic palette (init()/cleanup() below), not
+// Palette.fallback()'s real hex values: the Flexoki fallback sets
+// onAccent == onUrgent == background in both modes (dark ink #100F0F
+// doubles as the dark background; light paper #FFFCF0 doubles as the
+// light background), so hex-equality assertions against it can't
+// distinguish a correct role from a swapped one — every role below is
+// pairwise distinct so a wrong-role bug actually fails the assertion.
 TestCase {
     id: testCase
     name: "CellHoverInversion"
@@ -16,6 +23,32 @@ TestCase {
     height: 400
     visible: true
     when: windowShown
+
+    readonly property var sentinelColors: ({
+        background: "#010101",
+        backgroundAlt: "#020202",
+        foreground: "#eeeeee",
+        foregroundDim: "#aaaaaa",
+        foregroundFaint: "#888888",
+        rule: "#444444",
+        accent: "#1133ff",
+        onAccent: "#ffdd00",
+        urgent: "#ff2222",
+        onUrgent: "#22ff88",
+        warning: "#ffaa00",
+        onWarning: "#001122"
+    })
+
+    property var _originalColor
+
+    function init() {
+        testCase._originalColor = Theme.color;
+        Theme.color = testCase.sentinelColors;
+    }
+
+    function cleanup() {
+        Theme.color = testCase._originalColor;
+    }
 
     Component {
         id: cellComponent
@@ -66,6 +99,6 @@ TestCase {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true, urgent: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.onAccent));
+        verify(Qt.colorEqual(cell.foreground, Theme.color.onUrgent));
     }
 }

@@ -14,7 +14,12 @@ import "../../../../shell/Theme/tokens.js" as Tokens
 QtObject {
     id: root
 
-    readonly property var color: Palette.fallback()
+    // Not readonly: tst_cell_hover_inversion.qml overrides this per-test with
+    // a palette whose roles are pairwise distinct (Palette.fallback()'s own
+    // dark/light Flexoki variants coincidentally set onAccent == onUrgent ==
+    // background, which makes hex-equality assertions against it unable to
+    // tell a correct role from a swapped one).
+    property var color: Palette.fallback()
 
     readonly property int borderWidth: 2
     readonly property int radius: 0
