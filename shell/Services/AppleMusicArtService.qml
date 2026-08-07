@@ -129,8 +129,10 @@ Singleton {
         proc.exec({ command: command });
     }
 
+    // -L: music.apple.com 301s the slugless album URL to its slugged form,
+    // and --fail alone treats that 3xx as success with an empty body.
     function _curl(args, onDone) {
-        root._run(["curl", "-sS", "--fail", "--connect-timeout", "5", "--max-time", "20", "--compressed"].concat(args), onDone);
+        root._run(["curl", "-sS", "--fail", "-L", "--max-redirs", "5", "--connect-timeout", "5", "--max-time", "20", "--compressed"].concat(args), onDone);
     }
 
     function _artPath(key) {
@@ -276,7 +278,7 @@ Singleton {
                 console.warn("AppleMusicArtService: could not create cache dir");
                 return;
             }
-            root._run(["curl", "-sSf", "--connect-timeout", "5", "--max-time", "60", "-o", tmpPath, url], curlExit => {
+            root._run(["curl", "-sSf", "-L", "--max-redirs", "5", "--connect-timeout", "5", "--max-time", "60", "-o", tmpPath, url], curlExit => {
                 if (serial !== root._serial || curlExit !== 0) {
                     if (curlExit !== 0)
                         console.warn("AppleMusicArtService: artwork download failed");
