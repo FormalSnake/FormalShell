@@ -90,6 +90,21 @@ Item {
                 ? Theme.color.onWarning
                 : ((root._hoverInverted || selected) ? Theme.inverted().fg : Theme.color.foreground)
 
+    // Band-2 (meta) ink that stays legible when this cell is itself
+    // full-bleed or inverted (DESIGN.md §1.4 ink hierarchy): `foregroundDim`
+    // is the default resting color, but a dim caption drawn straight onto
+    // an accent/urgent/warning fill or the inverted cursor fill measures
+    // under 1.1:1 contrast (M18 Task 2/4 regression) — so any of those
+    // states promote a meta label to the same ink `foreground` above
+    // already resolves for content, matching the single-band-loudness
+    // model the inversion itself uses. Every meta caption bound to a
+    // Cell's own state (MenuRow's desc/dim text, MetaLabel captions on
+    // Battery/UsageWidget/NotificationCard/Osd) reads this instead of
+    // hardcoding `Theme.color.foregroundDim`.
+    readonly property color dimForeground: (urgent || accent || warning || root._hoverInverted || selected)
+        ? foreground
+        : Theme.color.foregroundDim
+
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
     // The borderWidth term reserves room for the bottom/right rules below —

@@ -229,7 +229,7 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width
                     elide: Text.ElideRight
-                    color: labelCell.foreground
+                    color: labelCell.dimForeground
                     text: root.kind === "brightness" ? "BRIGHTNESS"
                         : root.kind === "media" ? root.mediaText
                         : (AudioService.muted ? "MUTED" : "VOLUME")

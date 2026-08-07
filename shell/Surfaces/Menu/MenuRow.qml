@@ -104,9 +104,12 @@ Cell {
             y: (contentRow.height - height) / 2
             text: root.confirming ? ("CONFIRM " + root.node.label + "?") : root.node.label
             // `dim: true` marks a non-activatable honest-empty row (the nix
-            // provider's NO NIX) — foregroundDim reads on both the normal
-            // and the inverted cursor fill.
-            color: root.node.dim === true ? Theme.color.foregroundDim : root.foreground
+            // provider's NO NIX) — `dimForeground` reads as `foregroundDim`
+            // at rest but promotes to the cursor row's own onAccent ink
+            // when this row is current (Cell.qml's inversion default is
+            // accent since M18 Task 2, so a bare `foregroundDim` here would
+            // sit unreadably on the accent fill).
+            color: root.node.dim === true ? root.dimForeground : root.foreground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
@@ -114,11 +117,14 @@ Cell {
         // Dimmed trailing description (nix search rows, clipboard image
         // captured-at) — pre-truncated by the provider, same contract as
         // clipboardProvider's previewLabel, so no elision is needed here.
+        // `dimForeground` over a bare `foregroundDim` for the same reason as
+        // the label above: this text sits on the cursor row's accent fill
+        // too.
         Text {
             y: (contentRow.height - height) / 2
             visible: (root.node.desc || "") !== ""
             text: root.node.desc || ""
-            color: Theme.color.foregroundDim
+            color: root.dimForeground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }

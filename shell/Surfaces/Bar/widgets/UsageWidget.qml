@@ -58,7 +58,7 @@ Cell {
         MetaLabel {
             anchors.verticalCenter: parent.verticalCenter
             text: root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : (root.panel ? root.panel.statusLabel : "")
-            color: root._textColor
+            color: root.dimForeground
         }
     }
 

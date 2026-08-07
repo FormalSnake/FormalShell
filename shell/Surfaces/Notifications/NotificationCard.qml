@@ -129,7 +129,7 @@ Cell {
                     spacing: Theme.space.xxs
 
                     MetaLabel {
-                        color: root.foreground
+                        color: root.dimForeground
                         text: root.entry.appName + " / " + root._relTime
                     }
 

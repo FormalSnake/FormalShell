@@ -110,7 +110,7 @@ Cell {
         MetaLabel {
             anchors.verticalCenter: parent.verticalCenter
             text: "BAT / " + root._percent + "%"
-            color: root.foreground
+            color: root.dimForeground
         }
     }
 
