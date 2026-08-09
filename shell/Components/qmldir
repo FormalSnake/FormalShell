@@ -1,9 +1,9 @@
 ActionLabel ActionLabel.qml
 AuthPrompt AuthPrompt.qml
 Cell Cell.qml
-CornerMarks CornerMarks.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
+DogEar DogEar.qml
 MarqueeText MarqueeText.qml
 MetaLabel MetaLabel.qml
 Panel Panel.qml

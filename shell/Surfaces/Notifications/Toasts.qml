@@ -149,9 +149,9 @@ PanelWindow {
                     onActionInvoked: key => NotificationService.invokeAction(cardFrame.modelData.id, key)
                 }
 
-                // Corner marks (DESIGN.md §2 item 7) — each toast is its own
-                // small card, so each gets its own four marks.
-                CornerMarks {}
+                // Dog-ear fold mark (DESIGN.md §2 item 7) — each toast is
+                // its own small card, so each gets its own mark.
+                DogEar {}
             }
         }
     }

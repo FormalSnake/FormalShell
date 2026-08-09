@@ -283,7 +283,7 @@ PanelWindow {
             }
         }
 
-        // Corner marks (DESIGN.md §2 item 7).
-        CornerMarks {}
+        // Dog-ear fold mark (DESIGN.md §2 item 7).
+        DogEar {}
     }
 }
