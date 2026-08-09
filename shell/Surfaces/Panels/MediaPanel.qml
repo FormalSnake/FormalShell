@@ -54,11 +54,13 @@ Panel {
                 // capped near the slot size, no pixmap cache — M16 Task
                 // 12's artUrl-changes-per-track rationale still applies,
                 // just moved inside the shared component) and repaints the
-                // 1-bit duotone (DESIGN.md §2) whenever artUrl or the
-                // theme's role colors change.
+                // retro color dither (DESIGN.md §2 item 12) whenever
+                // artUrl changes — content imagery, so it keeps the
+                // cover's own colors rather than reducing to theme roles.
                 DitherImage {
                     visible: MediaService.artUrl !== ""
                     source: MediaService.artUrl
+                    mode: "retro"
                     width: root._artSlotSize
                     height: root._artSlotSize
                 }

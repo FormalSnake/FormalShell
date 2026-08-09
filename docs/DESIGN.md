@@ -548,42 +548,61 @@ adjective:
     committing cell's resting fill, it equals the `foreground` hex and its
     text equals `background`; sample it hovered, it equals `accent` with
     `onAccent` text.
-12. **1-bit dithered imagery on named surfaces (2026-08-09).** Photographic
-    content on a shortlist of surfaces renders as an ordered-Bayer duotone
-    — mek.gallery's own dithered-image treatment — instead of true color:
-    light pixels `Theme.color.background`, dark pixels
-    `Theme.color.foreground`, so a retheme recolors the image itself, not
-    just the chrome around it. Three named surfaces today: the media panel's
-    album art, both the static cover and the Apple Music animated cover
-    (sampled off its decoded video at ~8fps and re-dithered per frame — the
-    resulting choppy 1-bit cadence is the aesthetic, not a defect, and
-    stops the moment `motion.enabled: false`, playback pauses, or the
-    frame errors, falling back to the static dithered art); and the bar's
-    now-playing cell's mini cover (M20 Task 4b, §3 Bar), static only, no
-    bar-scale animated decode. Nothing else auto-dithers: notification
-    images, menu thumbnails, launcher icons, and the wallpaper picker's
-    grid all stay true-color. Checkable: zoom the
-    media panel's album art in a screenshot, individual dither pixels
-    resolve, and every sampled pixel equals either `Theme.color.background`
-    or `Theme.color.foreground` exactly.
+12. **Two dither treatments on named surfaces, by content vs. chrome
+    (2026-08-09, content color amended 2026-08-09).** Named imagery renders
+    through `DitherImage`'s ordered-Bayer Canvas pass instead of a plain
+    `Image`, and which of its three modes applies depends on what the
+    imagery is. Chrome-adjacent imagery, the bar tray's icons, uses
+    `mode: "mask"` (mek.gallery's own 1-bit dithered-image treatment,
+    described below): 1-bit, roles only, exactly what a retheme is
+    supposed to recolor. Content imagery, album covers and animated art,
+    uses `mode: "retro"` and keeps its own colors instead: each RGB channel
+    posterizes independently to `levels` steps (4 by default, so
+    0/85/170/255), the same 4x4 Bayer bias tipping a channel to its
+    neighboring step near a quantization boundary, so a pixel's hue
+    survives (a red cover stays in red steps, never gray). Content imagery
+    is deliberately exempt from matugen retheming, on purpose: a photo
+    doesn't retheme either, and forcing an album cover into the two chrome
+    ink roles would erase the reason for showing a color image at all.
 
-    A fourth surface, the bar tray (M20 Task 5), uses a second Canvas pass
-    instead of the duotone one above: `DitherImage`'s `mode: "mask"`
-    thresholds an icon's own alpha channel against the same 4x4 Bayer bias
-    rather than luminance, so a painted pixel becomes `Theme.color.foreground`
-    (or the cell's inverted ink on a hovered cell) and a transparent pixel
-    stays fully transparent, no `lightColor` backing since the cell's own
-    background shows through underneath. This is the sanctioned answer to
-    third-party SNI icons that render as white or light symbolic marks meant
-    for a dark bar and disappear against a light one: since only alpha
-    decides paint versus clear, every icon becomes a legible silhouette on
-    any theme, at the deliberate cost of discarding the vendor's own icon
-    colors entirely. Every tray icon also pins into one square slot sized by
-    the shared body-text token, so the SNI protocol's arbitrary 16/22/24px
-    pixmaps no longer vary the cell's padding rhythm. Checkable: zoom a tray
-    icon in a screenshot, every pixel is either `Theme.color.foreground` (or
-    the inverted ink on a hovered cell) or fully transparent, never the
-    vendor's original color.
+    Three named content surfaces today: the media panel's album art, both
+    the static cover and the Apple Music animated cover (sampled off its
+    decoded video at ~8fps and re-dithered per frame, the resulting choppy
+    cadence is the aesthetic, not a defect, and stops the moment
+    `motion.enabled: false`, playback pauses, or the frame errors, falling
+    back to the static dithered art); and the bar's now-playing cell's mini
+    cover (M20 Task 4b/5b, §3 Bar), static only, no bar-scale animated
+    decode. The mini cover keeps its colors even on a hovered (inverted)
+    cell, content ruling winning over the cell's own hover inversion, the
+    same precedent the menu's app icons already set. The bar visualizer's
+    per-bar fill colors (§4 item 8) fall under the same content ruling:
+    they come from the current cover's own palette (`ArtPalette`, a small
+    invisible Canvas that posterizes sampled pixels to the same steps and
+    frequency-counts the six most common distinct ones), never a chrome
+    ink, and don't swap on hover either. Nothing else auto-dithers:
+    notification images, menu thumbnails, launcher icons, and the
+    wallpaper picker's grid all stay true-color. Checkable: zoom the media
+    panel's album art in a screenshot, individual dither pixels resolve,
+    and every sampled pixel's channels each land on one of the posterized
+    steps of the source image's own color, never `Theme.color.background`
+    or `Theme.color.foreground`.
+
+    The tray (M20 Task 5) is the one 1-bit surface: `DitherImage`'s
+    `mode: "mask"` thresholds an icon's own alpha channel against the same
+    4x4 Bayer bias rather than luminance, so a painted pixel becomes
+    `Theme.color.foreground` (or the cell's inverted ink on a hovered cell)
+    and a transparent pixel stays fully transparent, no `lightColor`
+    backing since the cell's own background shows through underneath. This
+    is the sanctioned answer to third-party SNI icons that render as white
+    or light symbolic marks meant for a dark bar and disappear against a
+    light one: since only alpha decides paint versus clear, every icon
+    becomes a legible silhouette on any theme, at the deliberate cost of
+    discarding the vendor's own icon colors entirely. Every tray icon also
+    pins into one square slot sized by the shared body-text token, so the
+    SNI protocol's arbitrary 16/22/24px pixmaps no longer vary the cell's
+    padding rhythm. Checkable: zoom a tray icon in a screenshot, every
+    pixel is either `Theme.color.foreground` (or the inverted ink on a
+    hovered cell) or fully transparent, never the vendor's original color.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,
@@ -609,12 +628,13 @@ floats with a margin or fuses to the screen edge.
   now-playing cell's mini cover art (M20) is the fourth sanctioned
   image-icon site, after the menu's launcher rows, the bar's active-window
   cell, and notification card images: unlike those three, it renders
-  through the 1-bit duotone dither (§2 item 12) instead of true color, so
-  it stays inside the dither language and recolors with the theme like the
-  media panel's own art. Static art only, no bar-scale animated decode: the
-  panel's Apple Music video only exists while the panel itself is open, so
-  sharing it at the bar would mean a second, permanently-idle Video
-  pipeline for a slot this small.
+  through the retro color dither (§2 item 12) rather than a plain `Image`,
+  so it stays inside the dither language while keeping the cover's own
+  colors, unaffected by hover inversion or a theme retheme alike. Static
+  art only, no bar-scale animated decode: the panel's Apple Music video
+  only exists while the panel itself is open, so sharing it at the bar
+  would mean a second, permanently-idle Video pipeline for a slot this
+  small.
 - **Menu** — a floating card (omarchy chrome: bordered rectangle, `panelGap`
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),
@@ -743,16 +763,18 @@ and every rule here is checkable:
    marquee/rotation gates above but enforced on a real OS process instead
    of a `Behavior`. Six per-column dithered tracks (§2 item 8's fill+dither
    idiom) render the live spectrum, a fill rising from each column's bottom
-   to its own level. The fill's color reads that level's own energy band
-   (M20 Task 4b): a quiet bar stays `foregroundDim`, mid-energy reads
-   `foreground`, and only a bar crossing the tuned peak threshold earns
-   `accent` ink (a meaning, not a per-index palette, per §1.4's loud-color
-   law). Hover inversion still wins: every band collapses to the cell's own
-   inverted ink the instant the cell resolves hovered, the same snap rule
-   every other inversion in this document follows (§4.3). Like the marquee
-   and rotation, this DOES respect `motion.enabled: false`: a
-   disabled-motion session renders the same empty tracks (zero fill, pure
-   dither) as the not-playing state, never a live spectrum.
+   to its own level. The fill's color comes from the current cover's own
+   palette (M20 Task 5b, replacing the earlier level-energy color bands,
+   one default, not an option): bar `i` fills with the `i`-th color out of
+   `ArtPalette`'s six-step extraction over the playing track's art (§2 item
+   12), wrapping if there are fewer than six distinct steps, falling back
+   to `root.foreground` when there's no art or no player, an honest neutral
+   rather than an invented color. Content ruling: unlike every other ink on
+   this cell, these colors do NOT swap under hover inversion, the same as
+   the now-playing cell's own mini cover. Like the marquee and rotation,
+   this DOES respect `motion.enabled: false`: a disabled-motion session
+   renders the same empty tracks (zero fill, pure dither) as the
+   not-playing state, never a live spectrum.
 
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the

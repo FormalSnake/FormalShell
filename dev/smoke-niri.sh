@@ -568,7 +568,7 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode || $clipboard_mode || $media_mode; then
+if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode || $clipboard_mode || $media_mode || $visualizer_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -1400,20 +1400,29 @@ fi
 # reuses this same track (via its own ss-media-play.sh below) purely to give
 # MediaService.isPlaying a real value — it never checks the tags or the art.
 #
-# media_mode additionally embeds a real cover image (M20 Task 3): an
-# imagemagick-generated PNG muxed in as a FLAC `PICTURE` block
+# media_mode (and visualizer_mode, below) embeds a real cover image (M20
+# Task 3): an imagemagick-generated PNG muxed in as a FLAC `PICTURE` block
 # (`-disposition:v attached_pic`), so mpv's mpris.lua plugin has genuine
 # embedded art to extract into `mpris:artUrl` — the same
 # avformat_open_input + AV_DISPOSITION_ATTACHED_PIC path a real tagged
 # audio file exercises, not a synthetic MediaService override. Without
 # this, MediaPanel's DitherImage art slot never has anything to dither.
+# Six saturated, distinct-hue stripes (M20 Task 5b), not one flat color:
+# the retro dither and the visualizer's cover-derived bar colors both need
+# real color variety in the source to prove hue survives and bars land on
+# genuinely different palette steps, not just one repeated color.
+if $media_mode || $visualizer_mode; then
+  media_art_path="$shot_dir/smoke-art.png"
+  $convert_bin -size 64x64 "xc:#E03131" -size 64x64 "xc:#F08C00" -size 64x64 "xc:#FFD700" \
+    -size 64x64 "xc:#2F9E44" -size 64x64 "xc:#1971C2" -size 64x64 "xc:#9C36B5" \
+    +append -resize "64x64!" "$media_art_path"
+fi
+
 if $media_mode || $screensaver_mode; then
   media_track_path="$shot_dir/smoke-track.flac"
   media_track_title="FormalShell Smoke Track"
   media_track_artist="FormalShell Test Artist"
   if $media_mode; then
-    media_art_path="$shot_dir/smoke-art.png"
-    $convert_bin -size 64x64 xc:'#4C6EF5' "$media_art_path"
     "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -i "$media_art_path" \
       -map 0:a -map 1:0 -t 20 \
       -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
@@ -1504,13 +1513,18 @@ fi
 # assertions to hear), which would leave cava with no real signal and the
 # widget stuck on its baseline row the whole run. A fixed-frequency sine
 # tone is simple, deterministic, and gives cava's FFT real energy to bin.
+# Carries the same six-hue cover art as media_mode's track (M20 Task 5b):
+# the visualizer's bars derive their color from the playing track's own
+# cover (ArtPalette), so this leg needs real art to prove the bars land on
+# the cover's palette rather than the honest no-art fallback.
 if $visualizer_mode; then
   visualizer_track_path="$shot_dir/smoke-tone.flac"
   visualizer_track_title="FormalShell Visualizer Smoke Tone"
   visualizer_track_artist="FormalShell Test Artist"
-  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=20" -ac 2 \
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=20" -i "$media_art_path" \
+    -map 0:a -map 1:0 -ac 2 -t 20 \
     -metadata "title=$visualizer_track_title" -metadata "artist=$visualizer_track_artist" \
-    -c:a flac -y "$visualizer_track_path"
+    -c:a flac -c:v png -disposition:v attached_pic -y "$visualizer_track_path"
 
   # One ordered script (media-marquee.sh's own idiom): start mpv in the
   # background (not exec'd — this script keeps running after it to poll

@@ -16,9 +16,11 @@ import qs.Services
 // the glyph above is the no-art fallback only. Once `MediaService.artUrl`
 // resolves, a `DitherImage` takes its place at the same slot size
 // ActiveWindow.qml's own app icon uses (a body-size Text's implicitHeight),
-// radius 0, no border, its duotone bound through `root.invertedNow` so
-// hover swaps it to the accent pair with the rest of the cell's ink. Static
-// art only: the panel's animated Apple Music cover (AnimatedAlbumArt.qml)
+// radius 0, no border. M20 Task 5b: the cover renders in "retro" color
+// dither and keeps its own colors even on a hovered (inverted) cell — the
+// same content-keeps-its-colors ruling the menu's app icons already have —
+// so unlike the rest of this cell's ink, the mini cover does NOT swap on
+// hover. Static art only: the panel's animated Apple Music cover (AnimatedAlbumArt.qml)
 // only decodes while the media panel itself is open, so sharing it at the
 // bar would mean a second, permanently-idle Video pipeline for a slot this
 // small: not worth it for a 16px icon (see DESIGN.md §3 Bar).
@@ -76,17 +78,16 @@ Cell {
         }
 
         // Dithered mini cover, glyph's own slot size (`glyph.implicitHeight`
-        // still resolves while the glyph itself is hidden). Colors swap to
-        // the inverted bg/fg pair on hover, at rest background/foreground:
-        // roles only, matching every other ink on this cell.
+        // still resolves while the glyph itself is hidden). Retro color
+        // dither, content ruling: keeps the cover's own colors at rest and
+        // on hover alike, unlike every other ink on this cell.
         DitherImage {
             visible: MediaService.artUrl !== ""
             anchors.verticalCenter: parent.verticalCenter
             width: glyph.implicitHeight
             height: glyph.implicitHeight
             source: MediaService.artUrl
-            lightColor: root.invertedNow ? Theme.inverted().bg : Theme.color.background
-            darkColor: root.invertedNow ? Theme.inverted().fg : Theme.color.foreground
+            mode: "retro"
         }
 
         // M16 Task 11 (owner-requested, gated subtle), extracted to

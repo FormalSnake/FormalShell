@@ -1,4 +1,5 @@
 ActionLabel ActionLabel.qml
+ArtPalette ArtPalette.qml
 AuthPrompt AuthPrompt.qml
 CardTitleBar CardTitleBar.qml
 Cell Cell.qml

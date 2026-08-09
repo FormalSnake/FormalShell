@@ -104,32 +104,4 @@ TestCase {
         var levels = Model.frameToLevels("garbage;;;not-numbers", Model.BAR_COUNT, Model.MAX_LEVEL);
         compare(levels, Model.baselineLevels());
     }
-
-    function test_level_color_band_zero_is_dim() {
-        compare(Model.levelColorBand(0), "dim");
-    }
-
-    function test_level_color_band_just_below_dim_threshold_is_dim() {
-        compare(Model.levelColorBand(Model.LEVEL_DIM_BELOW - 0.01), "dim");
-    }
-
-    function test_level_color_band_at_dim_threshold_is_content() {
-        compare(Model.levelColorBand(Model.LEVEL_DIM_BELOW), "content");
-    }
-
-    function test_level_color_band_mid_range_is_content() {
-        compare(Model.levelColorBand(0.6), "content");
-    }
-
-    function test_level_color_band_just_below_accent_threshold_is_content() {
-        compare(Model.levelColorBand(Model.LEVEL_ACCENT_FROM - 0.01), "content");
-    }
-
-    function test_level_color_band_at_accent_threshold_is_accent() {
-        compare(Model.levelColorBand(Model.LEVEL_ACCENT_FROM), "accent");
-    }
-
-    function test_level_color_band_full_scale_is_accent() {
-        compare(Model.levelColorBand(1), "accent");
-    }
 }

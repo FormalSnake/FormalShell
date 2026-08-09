@@ -17,8 +17,10 @@ import qs.Services
 // truthed against real Wayland/Quickshell rendering in the mac VM rig —
 // the offscreen qmltestrunner path alone never exercises this) and hands
 // the grab result straight to DitherImage's `source`, which repaints its
-// own 1-bit duotone pass on every new frame. The choppy ~8fps cadence is
-// the intended aesthetic (DESIGN.md §2), not a defect.
+// own retro color-dither pass (DESIGN.md §2 item 12) on every new frame,
+// following the static art beside it into content-colored dither rather
+// than 1-bit duotone. The choppy ~8fps cadence is the intended aesthetic,
+// not a defect.
 //
 // `visible` folds in the full motion carve-out (DESIGN §4): a decoded,
 // error-free, actually-playing frame AND `Theme.motionEnabled`. Motion
@@ -44,6 +46,7 @@ Item {
     DitherImage {
         id: dither
         anchors.fill: parent
+        mode: "retro"
     }
 
     Timer {

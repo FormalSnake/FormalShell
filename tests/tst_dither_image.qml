@@ -13,6 +13,10 @@ import "../shell/Components"
 // `mode: "mask"` (M20 Task 5) swaps the threshold from luminance to alpha:
 // RGBA fixtures below cover fully opaque, fully transparent, and a uniform
 // mid-alpha source standing in for a soft anti-aliased icon edge.
+// `mode: "retro"` (M20 Task 5b) posterizes each RGB channel independently
+// instead of reducing to two role colors — the `redishSource` fixture below
+// is a mid-tone color, not a 0/255 extreme, so the Bayer bias actually has
+// a boundary to tip a channel across.
 TestCase {
     id: testCase
     name: "DitherImage"
@@ -30,6 +34,12 @@ TestCase {
     readonly property string maskOpaqueSource: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAEklEQVR42mM4oRH1HxkzkC4AANToJJGdC7PfAAAAAElFTkSuQmCC"
     readonly property string maskTransparentSource: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAEklEQVR42mM4oRHFgIwZSBcAAM7SFKH0VJcTAAAAAElFTkSuQmCC"
     readonly property string maskSoftEdgeSource: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAEklEQVR42mPgOiHXgIwZSBcAAAixFwFSLA26AAAAAElFTkSuQmCC"
+    // Mid-tone red (rgb(200,40,40)), 4x4 solid, for "retro" mode (M20 Task
+    // 5b): mid-range values are the ones a Bayer bias can actually tip
+    // across a quantization boundary, so this fixture (unlike the 0/255
+    // extremes above, which are stable under any bias) exercises real
+    // per-pixel dithering while still proving hue survives.
+    readonly property string redishSource: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAEAQMAAACTPww9AAAAA1BMVEXIKChQLvxyAAAAC0lEQVQI12NggAAAAAgAAS8g3TEAAAAASUVORK5CYII="
 
     Component {
         id: imageComponent
@@ -250,5 +260,74 @@ TestCase {
         compare(maskPixel[1], dark[1]);
         compare(maskPixel[2], dark[2]);
         compare(maskPixel[3], 255);
+    }
+
+    function test_retro_levels_defaults_to_four() {
+        var dither = createTemporaryObject(imageComponent, testCase);
+        verify(dither);
+        compare(dither.levels, 4);
+    }
+
+    function test_retro_mode_posterizes_every_pixel_to_a_palette_step() {
+        var dither = createTemporaryObject(imageComponent, testCase, { source: redishSource, mode: "retro" });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+
+        waitForPixel(canvas, 0, 0, function (px) { return px[0] > px[1] && px[0] > px[2]; });
+
+        var steps = [0, 85, 170, 255];
+        for (var y = 0; y < 4; y++) {
+            for (var x = 0; x < 4; x++) {
+                var px = _pixel(canvas, x, y);
+                verify(steps.indexOf(px[0]) !== -1);
+                verify(steps.indexOf(px[1]) !== -1);
+                verify(steps.indexOf(px[2]) !== -1);
+                compare(px[3], 255);
+            }
+        }
+    }
+
+    // The whole point of retro mode: a red source stays in red steps. Every
+    // sampled pixel's R channel must outrank both G and B, never landing on
+    // a gray step (R === G === B) the way duotone mode would collapse it.
+    function test_retro_mode_preserves_hue_never_grayscale() {
+        var dither = createTemporaryObject(imageComponent, testCase, { source: redishSource, mode: "retro" });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+
+        waitForPixel(canvas, 0, 0, function (px) { return px[0] > px[1] && px[0] > px[2]; });
+
+        for (var y = 0; y < 4; y++) {
+            for (var x = 0; x < 4; x++) {
+                var px = _pixel(canvas, x, y);
+                verify(px[0] > px[1]);
+                verify(px[0] > px[2]);
+            }
+        }
+    }
+
+    function test_mode_switch_from_retro_to_duotone_changes_output_for_the_same_source() {
+        var dither = createTemporaryObject(imageComponent, testCase, { source: whiteSource, mode: "retro" });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+
+        waitForPixel(canvas, 0, 0, function (px) { return px[3] === 255; });
+
+        dither.mode = "duotone";
+
+        var light = _rgb(testCase._lightProbe);
+        waitForPixel(canvas, 0, 0, function (px) { return px[3] === 255 && px[0] === light[0]; });
+
+        var px = _pixel(canvas, 0, 0);
+        compare(px[0], light[0]);
+        compare(px[1], light[1]);
+        compare(px[2], light[2]);
+        compare(px[3], 255);
     }
 }
