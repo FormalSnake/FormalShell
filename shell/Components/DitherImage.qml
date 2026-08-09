@@ -20,14 +20,7 @@ import qs.Core
 //
 // `mode` picks the Canvas pass: "duotone" thresholds luminance across the
 // whole image, painting every pixel light or dark (full duotone
-// coverage). "mask" (Task 5, tray icon silhouettes) thresholds alpha
-// instead, using the same Bayer bias to dither the soft anti-aliased
-// edges of an icon into a stipple: pixels whose alpha clears the
-// threshold paint `darkColor` at full opacity, everything else is left
-// (or reset back to) fully transparent — no `lightColor` backing, so the
-// cell's own background shows through. The second `ctx.reset()` in the
-// mask branch is the clear step, not `clearRect`: it stays on the same
-// proven fillRect/reset write path rather than a second untested primitive.
+// coverage).
 //
 // "retro" (Task 5b, content imagery — album art, animated cover) keeps
 // the source's own colors instead of reducing to `lightColor`/`darkColor`:
@@ -42,10 +35,9 @@ import qs.Core
 // The hidden Image can report `Ready` before its decoded pixmap is
 // actually synced for `Canvas.drawImage()` to read — a first paint can
 // land on a fully blank (all-zero) sample. Duotone reads that as "all
-// dark" (still a plausible-looking foreground fill) and mask reads it as
-// "nothing clears the threshold" (still a plausible empty icon), which is
-// why this went unnoticed until retro mode painted it literally, solid
-// black (probe-verified in-VM, M20 Task 5b). A full-buffer all-zero read
+// dark" (still a plausible-looking foreground fill), which is why this
+// went unnoticed until retro mode painted it literally, solid black
+// (probe-verified in-VM, M20 Task 5b). A full-buffer all-zero read
 // (never a legitimate image, even one with real transparent regions —
 // those still carry nonzero bytes somewhere) restarts a short one-shot
 // timer instead of publishing that blank paint, bounded so a genuinely
@@ -130,7 +122,7 @@ Item {
             ctx.reset();
             ctx.drawImage(img, 0, 0, width, height);
 
-            if (root.mode !== "duotone" && root.mode !== "mask" && root.mode !== "retro")
+            if (root.mode !== "duotone" && root.mode !== "retro")
                 return;
 
             var w = Math.round(width);
@@ -160,25 +152,6 @@ Item {
                         var rb = root._quantizeChannel(sample[ri + 2], step, retroBias);
                         ctx.fillStyle = "#" + root._hex2(rr) + root._hex2(rg) + root._hex2(rb);
                         ctx.fillRect(rx, ry, 1, 1);
-                    }
-                }
-                return;
-            }
-
-            if (root.mode === "mask") {
-                var maskDark = root.darkColor;
-                ctx.reset();
-                for (var my = 0; my < h; my++) {
-                    var maskRowBase = my * w * 4;
-                    var maskBayerRow = (my % 4) * 4;
-                    for (var mx = 0; mx < w; mx++) {
-                        var mi = maskRowBase + mx * 4;
-                        var alpha = sample[mi + 3] / 255;
-                        var maskThreshold = (root._bayer[maskBayerRow + (mx % 4)] + 0.5) / 16;
-                        if (alpha > maskThreshold) {
-                            ctx.fillStyle = maskDark;
-                            ctx.fillRect(mx, my, 1, 1);
-                        }
                     }
                 }
                 return;

@@ -146,13 +146,13 @@ Row {
     // actually changes (observed in-VM: a static 6-item tray still saw each
     // delegate destroyed and recreated 4-7 times over one run). A
     // plain-array `Repeater.model` treats every new array as a full reset,
-    // so the DitherImage icons below kept losing their Canvas mid-decode
-    // before a single frame ever painted — every pinned cell rendered
-    // blank. The live model gives Repeater real add/remove diffing instead,
-    // so a delegate (and its Canvas) survives an upstream re-notify that
-    // didn't actually add or remove anything. Collapsing to the pinned
-    // count now happens per-delegate via `index` (Row skips invisible
-    // children) rather than by slicing the model.
+    // so each icon's async load kept restarting mid-decode before a single
+    // frame ever painted, every pinned cell rendered blank. The live model
+    // gives Repeater real add/remove diffing instead, so a delegate
+    // survives an upstream re-notify that didn't actually add or remove
+    // anything. Collapsing to the pinned count now happens per-delegate via
+    // `index` (Row skips invisible children) rather than by slicing the
+    // model.
     Repeater {
         id: trayRepeater
         model: SystemTray.items
@@ -178,58 +178,29 @@ Row {
             tooltipText: itemCell.modelData.tooltipTitle || itemCell.modelData.title || itemCell.modelData.id
             tooltipVerbatim: true
 
-            // M20 Task 5 (owner: tray icons "often look invisible in light
-            // mode" — third-party SNI marks are frequently white/light
-            // symbolic glyphs drawn for a dark bar). DitherImage's alpha-mask
-            // mode reads the icon's own alpha channel instead of its RGB, so
-            // the vendor's colors are discarded and every icon becomes a 1-bit
-            // silhouette in the cell's own ink — legible against any theme.
-            // Slot pinned to `Theme.fontSize.body`, the same existing token
-            // the old IconImage used, but bound to explicit width/height
-            // rather than `implicitSize` alone: quickshell's own IconImage
-            // docs note implicitSize only seeds implicitWidth/implicitHeight,
-            // it does not itself constrain the rendered size, which is why
-            // SNI's native 16/22/24px pixmaps were varying the cell's padding
-            // rhythm.
+            // M20 Task 5 shipped an alpha-mask 1-bit silhouette here (owner:
+            // tray icons "often look invisible in light mode", third-party
+            // SNI marks are frequently white/light symbolic glyphs drawn for
+            // a dark bar). The owner ran real vendor icons in a live session
+            // and rejected the treatment ("deep fried") 2026-08-09, reverted
+            // to true color; light-mode invisibility is an open problem
+            // again (DESIGN.md §2 item 12).
             //
-            // Feeding `modelData.icon` straight into DitherImage's own hidden
-            // Image (as every other DitherImage caller does) doesn't work
-            // for SNI items that only carry an `IconPixmap` (no icon-theme
-            // name — exactly `dev/sni-stub.py`'s fixture shape, and real
-            // apps like Discord/Steam do the same): Quickshell serves those
-            // through its own `image://qspixmap/…` provider, and
-            // `Canvas.drawImage()` reads back nothing but transparent black
-            // from it even once `Image.status` is `Ready` — ground-truthed
-            // in-VM (a temporary `getImageData` probe on the paint), not a
-            // qmltestrunner guess. A plain icon-theme-name source
-            // (ActiveWindow.qml's own `Quickshell.iconPath()` path) doesn't
-            // hit this; only the SNI pixmap provider does. `rawIcon` renders
-            // the pixmap the normal way (proven correct — this is exactly
-            // the pre-Task-5 IconImage path), invisible, and `grabToImage()`
-            // (the same escape hatch
-            // AnimatedAlbumArt.qml already uses for its own unreadable-by-
-            // Canvas source, a real Video) hands DitherImage a grab result
-            // it CAN read instead.
+            // The fixed square slot stays: bound to explicit width/height
+            // rather than `implicitSize` alone, since quickshell's own
+            // IconImage docs note implicitSize only seeds
+            // implicitWidth/implicitHeight, it does not itself constrain the
+            // rendered size, which is why SNI's native 16/22/24px pixmaps
+            // were varying the cell's padding rhythm before M20 Task 5's
+            // slot normalization.
             IconImage {
-                id: rawIcon
-                anchors.verticalCenter: parent.verticalCenter
-                visible: false
-                asynchronous: true
-                implicitSize: Theme.fontSize.body
-                source: itemCell.modelData.icon
-                onStatusChanged: {
-                    if (status === Image.Ready)
-                        grabToImage(function (result) { icon.source = result.url; });
-                }
-            }
-
-            DitherImage {
                 id: icon
                 anchors.verticalCenter: parent.verticalCenter
+                asynchronous: true
+                smooth: false
                 width: Theme.fontSize.body
                 height: Theme.fontSize.body
-                mode: "mask"
-                darkColor: itemCell.invertedNow ? Theme.inverted().fg : Theme.color.foreground
+                source: itemCell.modelData.icon
             }
 
             MouseArea {

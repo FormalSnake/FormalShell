@@ -548,15 +548,11 @@ adjective:
     committing cell's resting fill, it equals the `foreground` hex and its
     text equals `background`; sample it hovered, it equals `accent` with
     `onAccent` text.
-12. **Two dither treatments on named surfaces, by content vs. chrome
-    (2026-08-09, content color amended 2026-08-09).** Named imagery renders
-    through `DitherImage`'s ordered-Bayer Canvas pass instead of a plain
-    `Image`, and which of its three modes applies depends on what the
-    imagery is. Chrome-adjacent imagery, the bar tray's icons, uses
-    `mode: "mask"` (mek.gallery's own 1-bit dithered-image treatment,
-    described below): 1-bit, roles only, exactly what a retheme is
-    supposed to recolor. Content imagery, album covers and animated art,
-    uses `mode: "retro"` and keeps its own colors instead: each RGB channel
+12. **Content imagery keeps a color dither; the tray is true color
+    (2026-08-09, content color amended 2026-08-09, tray reverted
+    2026-08-09).** Named content imagery, album covers and animated art,
+    renders through `DitherImage`'s ordered-Bayer Canvas pass instead of a
+    plain `Image`, in `mode: "retro"`, and keeps its own colors: each RGB channel
     posterizes independently to `levels` steps (4 by default, so
     0/85/170/255), the same 4x4 Bayer bias tipping a channel to its
     neighboring step near a quantization boundary, so a pixel's hue
@@ -587,22 +583,23 @@ adjective:
     steps of the source image's own color, never `Theme.color.background`
     or `Theme.color.foreground`.
 
-    The tray (M20 Task 5) is the one 1-bit surface: `DitherImage`'s
-    `mode: "mask"` thresholds an icon's own alpha channel against the same
-    4x4 Bayer bias rather than luminance, so a painted pixel becomes
-    `Theme.color.foreground` (or the cell's inverted ink on a hovered cell)
-    and a transparent pixel stays fully transparent, no `lightColor`
-    backing since the cell's own background shows through underneath. This
-    is the sanctioned answer to third-party SNI icons that render as white
-    or light symbolic marks meant for a dark bar and disappear against a
-    light one: since only alpha decides paint versus clear, every icon
-    becomes a legible silhouette on any theme, at the deliberate cost of
-    discarding the vendor's own icon colors entirely. Every tray icon also
-    pins into one square slot sized by the shared body-text token, so the
-    SNI protocol's arbitrary 16/22/24px pixmaps no longer vary the cell's
-    padding rhythm. Checkable: zoom a tray icon in a screenshot, every
-    pixel is either `Theme.color.foreground` (or the inverted ink on a
-    hovered cell) or fully transparent, never the vendor's original color.
+    The tray icons are out of the dither list. M20 Task 5 shipped a
+    `mode: "mask"` 1-bit silhouette treatment here, thresholding an icon's
+    own alpha channel instead of luminance so a painted pixel became
+    `Theme.color.foreground` (or the cell's inverted ink on a hovered
+    cell) regardless of the vendor's own colors: the sanctioned answer at
+    the time to third-party SNI icons that render as white or light
+    symbolic marks meant for a dark bar and disappear against a light
+    one. The owner ran it against real vendor icons in a live session and
+    rejected it as "deep fried" (2026-08-09); tray icons render as a
+    plain true-color `IconImage` again. The square slot sizing stays:
+    every tray icon still pins into one slot sized by the shared
+    body-text token, so the SNI protocol's arbitrary 16/22/24px pixmaps
+    don't vary the cell's padding rhythm. Open problem: the light-mode
+    invisibility the mask treatment was meant to fix is back, with no
+    shipped answer, treatment TBD with the owner. Checkable: zoom a tray
+    icon in a screenshot, pixels carry the vendor's own colors, never a
+    flattened `Theme.color.foreground` silhouette.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,
