@@ -24,13 +24,28 @@ import qs.Core
 //
 // "retro" (Task 5b, content imagery — album art, animated cover) keeps
 // the source's own colors instead of reducing to `lightColor`/`darkColor`:
-// each channel posterizes independently to `levels` steps (default 4, so
-// 0/85/170/255), the same Bayer bias nudging a channel to whichever
+// each channel posterizes independently to `levels` steps (default 3, so
+// 0/128/255), the same Bayer bias nudging a channel to whichever
 // neighboring step it lands on before rounding — classic ordered color
 // dither. A pixel's hue survives because each channel quantizes on its
 // own; only a source that was already gray comes out gray. Content is the
 // sanctioned exception to the roles-only rule above: it is deliberately
 // exempt from matugen retheming, the same way a photo doesn't retheme.
+//
+// M21 Task 3 (owner, live shell: "the album cover is dithered like i
+// asked, but the colors dont change ... it doesnt become 90s image
+// style"): 4 levels/channel was 64 colors, imperceptible on most covers,
+// and 1px dither cells at a 96px slot read as texture rather than era.
+// `chunk` (default 2) downsamples retro mode to a `width/chunk ×
+// height/chunk` grid before the posterize+Bayer pass runs, sampling the
+// source at each grid cell's center pixel (cheaper than averaging the
+// cell, and correct here — a chunk is small enough, and Image already
+// decoded at 2x sourceSize, that a center sample and a block average land
+// on the same visible color) and painting the whole cell as one
+// `chunk`-sized fillRect square instead of a single source pixel. The
+// Bayer bias is now indexed by grid-cell position, not raw pixel
+// position, so the dither pattern is visible at the enlarged scale
+// instead of drowning as 1px noise.
 //
 // The hidden Image can report `Ready` before its decoded pixmap is
 // actually synced for `Canvas.drawImage()` to read — a first paint can
@@ -49,9 +64,14 @@ Item {
     property string mode: "duotone"
     property color lightColor: Theme.color.background
     property color darkColor: Theme.color.foreground
-    // "retro" mode only: steps per RGB channel (0/85/170/255 at the
-    // default 4).
-    property int levels: 4
+    // "retro" mode only: steps per RGB channel (0/128/255 at the default
+    // 3).
+    property int levels: 3
+    // "retro" mode only: the source is downsampled to a width/chunk x
+    // height/chunk grid before quantizing, and each grid cell paints as
+    // one chunk-sized hard-edged square (never smooth-scaled). 1 is a
+    // plain per-pixel dither, same as before this property existed.
+    property int chunk: 2
 
     // 4x4 ordered Bayer matrix, values 0..15 mapped to a per-pixel threshold.
     readonly property var _bayer: [
@@ -141,17 +161,24 @@ Item {
             if (root.mode === "retro") {
                 var lv = Math.max(2, root.levels);
                 var step = 255 / (lv - 1);
-                for (var ry = 0; ry < h; ry++) {
-                    var retroRowBase = ry * w * 4;
-                    var retroBayerRow = (ry % 4) * 4;
-                    for (var rx = 0; rx < w; rx++) {
-                        var ri = retroRowBase + rx * 4;
-                        var retroBias = (root._bayer[retroBayerRow + (rx % 4)] + 0.5) / 16 - 0.5;
+                var chunk = Math.max(1, root.chunk);
+                var gw = Math.ceil(w / chunk);
+                var gh = Math.ceil(h / chunk);
+                for (var gy = 0; gy < gh; gy++) {
+                    var py = gy * chunk;
+                    var cy = Math.min(h - 1, py + Math.floor(chunk / 2));
+                    var retroRowBase = cy * w * 4;
+                    var retroBayerRow = (gy % 4) * 4;
+                    for (var gx = 0; gx < gw; gx++) {
+                        var px = gx * chunk;
+                        var cx = Math.min(w - 1, px + Math.floor(chunk / 2));
+                        var ri = retroRowBase + cx * 4;
+                        var retroBias = (root._bayer[retroBayerRow + (gx % 4)] + 0.5) / 16 - 0.5;
                         var rr = root._quantizeChannel(sample[ri], step, retroBias);
                         var rg = root._quantizeChannel(sample[ri + 1], step, retroBias);
                         var rb = root._quantizeChannel(sample[ri + 2], step, retroBias);
                         ctx.fillStyle = "#" + root._hex2(rr) + root._hex2(rg) + root._hex2(rb);
-                        ctx.fillRect(rx, ry, 1, 1);
+                        ctx.fillRect(px, py, Math.min(chunk, w - px), Math.min(chunk, h - py));
                     }
                 }
                 return;
@@ -185,4 +212,5 @@ Item {
     onLightColorChanged: canvas.requestPaint()
     onDarkColorChanged: canvas.requestPaint()
     onLevelsChanged: canvas.requestPaint()
+    onChunkChanged: canvas.requestPaint()
 }

@@ -13,7 +13,10 @@ import "../shell/Components"
 // `mode: "retro"` (M20 Task 5b) posterizes each RGB channel independently
 // instead of reducing to two role colors — the `redishSource` fixture below
 // is a mid-tone color, not a 0/255 extreme, so the Bayer bias actually has
-// a boundary to tip a channel across.
+// a boundary to tip a channel across. M21 Task 3 dropped the default
+// `levels` 4 -> 3 (steps 0/128/255) and added `chunk` (default 2): the
+// posterize+Bayer pass now runs on a width/chunk x height/chunk grid and
+// paints each grid cell as one chunk-sized hard-edged square.
 TestCase {
     id: testCase
     name: "DitherImage"
@@ -145,10 +148,16 @@ TestCase {
         compare(dither.mode, "duotone");
     }
 
-    function test_retro_levels_defaults_to_four() {
+    function test_retro_levels_defaults_to_three() {
         var dither = createTemporaryObject(imageComponent, testCase);
         verify(dither);
-        compare(dither.levels, 4);
+        compare(dither.levels, 3);
+    }
+
+    function test_retro_chunk_defaults_to_two() {
+        var dither = createTemporaryObject(imageComponent, testCase);
+        verify(dither);
+        compare(dither.chunk, 2);
     }
 
     function test_retro_mode_posterizes_every_pixel_to_a_palette_step() {
@@ -160,7 +169,7 @@ TestCase {
 
         waitForPixel(canvas, 0, 0, function (px) { return px[0] > px[1] && px[0] > px[2]; });
 
-        var steps = [0, 85, 170, 255];
+        var steps = [0, 128, 255];
         for (var y = 0; y < 4; y++) {
             for (var x = 0; x < 4; x++) {
                 var px = _pixel(canvas, x, y);
@@ -170,6 +179,40 @@ TestCase {
                 compare(px[3], 255);
             }
         }
+    }
+
+    // Chunk geometry (M21 Task 3): with the default chunk 2, a 20x20
+    // component paints a 10x10 grid of Bayer-biased cells. Every pixel in
+    // one chunk-sized square must be identical (a hard-edged block, never
+    // smooth-scaled), and adjacent chunks are free to land on different
+    // steps — the redish fixture sits close enough to the 128/255 boundary
+    // (rgb 200) that the grid's first two cells (Bayer values 0 and 8)
+    // land on opposite sides of it, proving the dither survives the chunk
+    // downsample instead of flattening to one solid block.
+    function test_retro_chunk_paints_uniform_squares_that_vary_by_cell() {
+        var dither = createTemporaryObject(imageComponent, testCase, { source: redishSource, mode: "retro" });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+
+        waitForPixel(canvas, 0, 0, function (px) { return px[3] === 255; });
+
+        function samePixel(a, b) {
+            return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+        }
+
+        var topLeft = _pixel(canvas, 0, 0);
+        verify(samePixel(_pixel(canvas, 1, 0), topLeft));
+        verify(samePixel(_pixel(canvas, 0, 1), topLeft));
+        verify(samePixel(_pixel(canvas, 1, 1), topLeft));
+
+        var nextCell = _pixel(canvas, 2, 0);
+        verify(samePixel(_pixel(canvas, 3, 0), nextCell));
+        verify(samePixel(_pixel(canvas, 2, 1), nextCell));
+        verify(samePixel(_pixel(canvas, 3, 1), nextCell));
+
+        verify(topLeft[0] !== nextCell[0]);
     }
 
     // The whole point of retro mode: a red source stays in red steps. Every

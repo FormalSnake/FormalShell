@@ -550,13 +550,22 @@ adjective:
     `onAccent` text.
 12. **Content imagery keeps a color dither; the tray is true color
     (2026-08-09, content color amended 2026-08-09, tray reverted
-    2026-08-09).** Named content imagery, album covers and animated art,
-    renders through `DitherImage`'s ordered-Bayer Canvas pass instead of a
-    plain `Image`, in `mode: "retro"`, and keeps its own colors: each RGB channel
-    posterizes independently to `levels` steps (4 by default, so
-    0/85/170/255), the same 4x4 Bayer bias tipping a channel to its
-    neighboring step near a quantization boundary, so a pixel's hue
-    survives (a red cover stays in red steps, never gray). Content imagery
+    2026-08-09, chunky palette 2026-08-09).** Named content imagery, album
+    covers and animated art, renders through `DitherImage`'s ordered-Bayer
+    Canvas pass instead of a plain `Image`, in `mode: "retro"`, and keeps
+    its own colors: each RGB channel posterizes independently to `levels`
+    steps (3 by default, so 0/128/255, 27 colors total), the same 4x4
+    Bayer bias tipping a channel to its neighboring step near a
+    quantization boundary, so a pixel's hue survives (a red cover stays in
+    red steps, never gray). The posterize+Bayer pass runs on a
+    `width/chunk x height/chunk` grid (`chunk` 2 by default) rather than
+    one pass per source pixel, and each grid cell paints as one
+    `chunk`-sized hard-edged square: at a 96px slot, 1px dither cells read
+    as texture, not as an era, so the named default is the coarser grid,
+    not the finer one (owner, live shell, 2026-08-09: "the album cover is
+    dithered like i asked, but the colors dont change, it doesnt become
+    90s image style" — 4 levels was 64 imperceptible colors, and 1px cells
+    at that slot size were noise before they were style). Content imagery
     is deliberately exempt from matugen retheming, on purpose: a photo
     doesn't retheme either, and forcing an album cover into the two chrome
     ink roles would erase the reason for showing a color image at all.
@@ -578,10 +587,10 @@ adjective:
     ink, and don't swap on hover either. Nothing else auto-dithers:
     notification images, menu thumbnails, launcher icons, and the
     wallpaper picker's grid all stay true-color. Checkable: zoom the media
-    panel's album art in a screenshot, individual dither pixels resolve,
-    and every sampled pixel's channels each land on one of the posterized
-    steps of the source image's own color, never `Theme.color.background`
-    or `Theme.color.foreground`.
+    panel's album art in a screenshot, individual chunk-sized dither cells
+    resolve as flat squares, and every sampled cell's channels each land
+    on one of the posterized steps of the source image's own color, never
+    `Theme.color.background` or `Theme.color.foreground`.
 
     The tray icons are out of the dither list. M20 Task 5 shipped a
     `mode: "mask"` 1-bit silhouette treatment here, thresholding an icon's
