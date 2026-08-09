@@ -90,3 +90,32 @@ function frameToLevels(line, barCount, maxLevel) {
         fractions[i] = levelToFraction(levels[i], maxLevel);
     return fractions;
 }
+
+// Level-color bands (M20 Task 4b, owner: "the audio visualizer can
+// potentially be colored bar per bar, keeping the ASCII style ofc"): each
+// column's own post-response-curve fraction (the same 0..1 value
+// VisualizerService.levels already carries) sorts into one of three ink
+// bands so a bar's color reads as its energy, not a per-index rainbow
+// (DESIGN.md §1.4's loud-color law rules out decoration).
+//
+// Chosen against the sqrt curve above, not the raw cava range: a quarter
+// of MAX_LEVEL already reads half-scale (0.5 fraction, see
+// test_level_to_fraction_applies_the_square_root_response_curve), so a 0.4
+// cut sits around the bottom sixth of the raw range (~16/100): silence
+// and near-silence stay dim, anything with real presence reads as content.
+// 0.85 sits high enough (~72/100 raw) that only the tuned config's own
+// measured loud-passage peaks (▄▅▅▆▇█, VisualizerService.qml's own
+// pink-noise reading) cross it, so accent stays a peak signal, spent, not
+// worn.
+var LEVEL_DIM_BELOW = 0.4;
+var LEVEL_ACCENT_FROM = 0.85;
+
+// "dim" | "content" | "accent": pure classification, no color values.
+// QML resolves each band to a Theme role/inversion pair on its own.
+function levelColorBand(level) {
+    if (level >= LEVEL_ACCENT_FROM)
+        return "accent";
+    if (level >= LEVEL_DIM_BELOW)
+        return "content";
+    return "dim";
+}

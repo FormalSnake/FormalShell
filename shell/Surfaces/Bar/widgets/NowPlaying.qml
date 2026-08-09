@@ -4,12 +4,24 @@ import qs.Components
 import qs.Services
 
 // Bar cell for MediaService's active player (DESIGN.md §Bar, spec §5, M7
-// Task 1): a static note glyph, elided title, click toggles the media panel
+// Task 1): a note glyph, elided title, click toggles the media panel
 // anchored under this cell — same panel-open accent dot idiom as every other
 // M6 widget. Hidden entirely when no MPRIS player is registered (Battery.qml's
 // own "no dead slot" rule) rather than a "nothing playing" lie. Glyph
 // codepoint taken from the pinned nerd-fonts-jetbrains-mono cmap: md-music_note
 // U+F0387.
+//
+// M20 Task 4b (owner: "the music icon can be replaced with the dithered
+// album cover ... in a layout similar to the app icon in the menu bar"):
+// the glyph above is the no-art fallback only. Once `MediaService.artUrl`
+// resolves, a `DitherImage` takes its place at the same slot size
+// ActiveWindow.qml's own app icon uses (a body-size Text's implicitHeight),
+// radius 0, no border, its duotone bound through `root.invertedNow` so
+// hover swaps it to the accent pair with the rest of the cell's ink. Static
+// art only: the panel's animated Apple Music cover (AnimatedAlbumArt.qml)
+// only decodes while the media panel itself is open, so sharing it at the
+// bar would mean a second, permanently-idle Video pipeline for a slot this
+// small: not worth it for a 16px icon (see DESIGN.md §3 Bar).
 Cell {
     id: root
 
@@ -54,11 +66,27 @@ Cell {
         spacing: Theme.space.xxs
 
         Text {
+            id: glyph
+            visible: MediaService.artUrl === ""
             anchors.verticalCenter: parent.verticalCenter
             text: "󰎇"
             color: root.foreground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
+        }
+
+        // Dithered mini cover, glyph's own slot size (`glyph.implicitHeight`
+        // still resolves while the glyph itself is hidden). Colors swap to
+        // the inverted bg/fg pair on hover, at rest background/foreground:
+        // roles only, matching every other ink on this cell.
+        DitherImage {
+            visible: MediaService.artUrl !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            width: glyph.implicitHeight
+            height: glyph.implicitHeight
+            source: MediaService.artUrl
+            lightColor: root.invertedNow ? Theme.inverted().bg : Theme.color.background
+            darkColor: root.invertedNow ? Theme.inverted().fg : Theme.color.foreground
         }
 
         // M16 Task 11 (owner-requested, gated subtle), extracted to

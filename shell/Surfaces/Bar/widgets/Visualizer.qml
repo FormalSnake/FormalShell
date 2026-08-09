@@ -2,6 +2,7 @@ import QtQuick
 import qs.Core
 import qs.Components
 import qs.Services
+import "../../../Visualizer/model.js" as Model
 
 // Bar cell for a live dithered spectrum next to NowPlaying (owner ask:
 // "next to the now playing it would be nice to have an ASCII style audio
@@ -11,10 +12,21 @@ import qs.Services
 // each the same DitherFill-plus-solid-fill idiom every other flat-fill
 // track in the shell uses (MediaPanel's progress bar, the OSD/panel
 // sliders): a faint dithered checker for the whole column height, with a
-// solid `root.foreground` fill rising from the bottom to that bar's own
-// level. Opt-in via bar.layout (never part of layout.js's DEFAULT_LAYOUT —
-// the github/usage/tailscale precedent) since it spawns a real background
+// fill rising from the bottom to that bar's own level. Opt-in via
+// bar.layout (never part of layout.js's DEFAULT_LAYOUT, the
+// github/usage/tailscale precedent) since it spawns a real background
 // process.
+//
+// Per-bar color (M20 Task 4b, owner: "the audio visualizer can potentially
+// be colored bar per bar"): each column's fill resolves through
+// `Model.levelColorBand` to its own energy band, `root.dimForeground` for
+// a quiet bar, `root.foreground` for content-level energy, `Theme.color.
+// accent` only past a genuine peak (a meaning, loudness, not a static
+// per-index palette). Hover inversion still wins: dim/content already
+// collapse to the inverted ink through `root.dimForeground`/`root.
+// foreground` (Cell.qml's own logic), and the accent band mirrors
+// PanelOpenDot's own `inverted ? onAccent : accent` precedent so a peak
+// bar never fights the cell's own accent hover fill.
 //
 // Hidden until VisualizerService's one-shot `cava` PATH probe answers
 // (same pre-first-answer hidden state GithubWidget/UsageWidget use). Once
@@ -101,14 +113,22 @@ Cell {
                 model: VisualizerService.levels.length
 
                 DitherFill {
+                    id: track
                     width: root._trackWidth
                     height: root._trackHeight
+
+                    readonly property real _level: VisualizerService.levels[index] || 0
+                    readonly property string _band: Model.levelColorBand(track._level)
 
                     Rectangle {
                         anchors.bottom: parent.bottom
                         width: parent.width
-                        height: parent.height * (VisualizerService.levels[index] || 0)
-                        color: root.foreground
+                        height: parent.height * track._level
+                        color: track._band === "accent"
+                            ? (root.invertedNow ? Theme.color.onAccent : Theme.color.accent)
+                            : track._band === "content"
+                                ? root.foreground
+                                : root.dimForeground
                     }
                 }
             }

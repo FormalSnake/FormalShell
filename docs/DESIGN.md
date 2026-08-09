@@ -553,14 +553,16 @@ adjective:
     — mek.gallery's own dithered-image treatment — instead of true color:
     light pixels `Theme.color.background`, dark pixels
     `Theme.color.foreground`, so a retheme recolors the image itself, not
-    just the chrome around it. Two named surfaces today: the media panel's
+    just the chrome around it. Three named surfaces today: the media panel's
     album art, both the static cover and the Apple Music animated cover
     (sampled off its decoded video at ~8fps and re-dithered per frame — the
     resulting choppy 1-bit cadence is the aesthetic, not a defect, and
     stops the moment `motion.enabled: false`, playback pauses, or the
-    frame errors, falling back to the static dithered art). Nothing else
-    auto-dithers: notification images, menu thumbnails, launcher icons, and
-    the wallpaper picker's grid all stay true-color. Checkable: zoom the
+    frame errors, falling back to the static dithered art); and the bar's
+    now-playing cell's mini cover (M20 Task 4b, §3 Bar), static only, no
+    bar-scale animated decode. Nothing else auto-dithers: notification
+    images, menu thumbnails, launcher icons, and the wallpaper picker's
+    grid all stay true-color. Checkable: zoom the
     media panel's album art in a screenshot, individual dither pixels
     resolve, and every sampled pixel equals either `Theme.color.background`
     or `Theme.color.foreground` exactly.
@@ -585,7 +587,16 @@ floats with a margin or fuses to the screen edge.
   desktop) rather than a border-color change, so "panel open" reads at a
   glance without relayouting the cell. Clock/battery/network cells carry an
   uppercase caption meta tag (`BAT`, `NET`) only where the value alone is
-  ambiguous; the widget's primary value is normal-weight, not uppercase.
+  ambiguous; the widget's primary value is normal-weight, not uppercase. The
+  now-playing cell's mini cover art (M20) is the fourth sanctioned
+  image-icon site, after the menu's launcher rows, the bar's active-window
+  cell, and notification card images: unlike those three, it renders
+  through the 1-bit duotone dither (§2 item 12) instead of true color, so
+  it stays inside the dither language and recolors with the theme like the
+  media panel's own art. Static art only, no bar-scale animated decode: the
+  panel's Apple Music video only exists while the panel itself is open, so
+  sharing it at the bar would mean a second, permanently-idle Video
+  pipeline for a slot this small.
 - **Menu** — a floating card (omarchy chrome: bordered rectangle, `panelGap`
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),
@@ -713,11 +724,17 @@ and every rule here is checkable:
    any one going false stops the process, zero CPU, same as the
    marquee/rotation gates above but enforced on a real OS process instead
    of a `Behavior`. Six per-column dithered tracks (§2 item 8's fill+dither
-   idiom) render the live spectrum, a solid `foreground` fill rising from
-   each column's bottom to its own level. Like the marquee and rotation,
-   this DOES respect `motion.enabled: false`: a disabled-motion session
-   renders the same empty tracks (zero fill, pure dither) as the
-   not-playing state, never a live spectrum.
+   idiom) render the live spectrum, a fill rising from each column's bottom
+   to its own level. The fill's color reads that level's own energy band
+   (M20 Task 4b): a quiet bar stays `foregroundDim`, mid-energy reads
+   `foreground`, and only a bar crossing the tuned peak threshold earns
+   `accent` ink (a meaning, not a per-index palette, per §1.4's loud-color
+   law). Hover inversion still wins: every band collapses to the cell's own
+   inverted ink the instant the cell resolves hovered, the same snap rule
+   every other inversion in this document follows (§4.3). Like the marquee
+   and rotation, this DOES respect `motion.enabled: false`: a
+   disabled-motion session renders the same empty tracks (zero fill, pure
+   dither) as the not-playing state, never a live spectrum.
 
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the
