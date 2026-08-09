@@ -1070,6 +1070,7 @@ PanelWindow {
 
                 MetaLabel {
                     text: root.breadcrumb
+                    colon: true
                 }
 
                 TextInput {

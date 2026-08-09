@@ -419,6 +419,7 @@ Panel {
             text: root._selectedIsToday
                 ? "TODAY"
                 : root._monthShort[root._selected.getMonth()] + " " + root._selected.getDate()
+            colon: true
         }
     }
 

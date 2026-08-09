@@ -312,7 +312,7 @@ Panel {
         visible: root._outputs.length > 0
         width: parent.width
 
-        MetaLabel { text: "OUTPUTS" }
+        MetaLabel { text: "OUTPUTS"; colon: true }
     }
 
     Repeater {
@@ -324,7 +324,7 @@ Panel {
         visible: root._outputs.length > 0
         width: parent.width
 
-        MetaLabel { text: "MIRROR" }
+        MetaLabel { text: "MIRROR"; colon: true }
     }
 
     Cell {

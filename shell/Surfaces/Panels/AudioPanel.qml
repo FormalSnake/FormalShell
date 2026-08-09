@@ -326,7 +326,7 @@ Panel {
         visible: root._outputs.length > 0
         width: parent.width
 
-        MetaLabel { text: "OUTPUT" }
+        MetaLabel { text: "OUTPUT"; colon: true }
     }
 
     Cell {
@@ -405,7 +405,7 @@ Panel {
         visible: root._inputs.length > 0
         width: parent.width
 
-        MetaLabel { text: "INPUT" }
+        MetaLabel { text: "INPUT"; colon: true }
     }
 
     Cell {
@@ -484,7 +484,7 @@ Panel {
         visible: root._streams.length > 0
         width: parent.width
 
-        MetaLabel { text: "APPS" }
+        MetaLabel { text: "APPS"; colon: true }
     }
 
     Repeater {

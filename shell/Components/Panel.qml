@@ -237,15 +237,14 @@ PanelWindow {
                 color: Theme.color.rule
             }
 
-            Cell {
+            CardTitleBar {
                 id: titleCell
                 anchors.top: topRule.bottom
                 anchors.topMargin: Theme.space.panelPadding
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.borderWidth + Theme.space.panelPadding
                 width: root._contentWidth
-
-                MetaLabel { text: root.panelTitle }
+                title: root.panelTitle
             }
 
             Flickable {

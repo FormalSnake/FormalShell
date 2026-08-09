@@ -294,14 +294,14 @@ Panel {
         visible: !root._hasBattery
         width: parent.width
 
-        MetaLabel { text: "AC POWER" }
+        MetaLabel { text: "AC POWER"; colon: true }
     }
 
     Cell {
         visible: BrightnessService.devices.count > 0
         width: parent.width
 
-        MetaLabel { text: "DISPLAY" }
+        MetaLabel { text: "DISPLAY"; colon: true }
     }
 
     Cell {
@@ -396,7 +396,7 @@ Panel {
     Cell {
         width: parent.width
 
-        MetaLabel { text: "PROFILE" }
+        MetaLabel { text: "PROFILE"; colon: true }
     }
 
     Component {

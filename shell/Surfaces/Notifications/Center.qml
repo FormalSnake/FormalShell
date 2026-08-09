@@ -170,10 +170,55 @@ PanelWindow {
             color: Theme.color.rule
         }
 
-        Flickable {
-            id: rowsFlickable
+        CardTitleBar {
+            id: titleCell
+            title: "NOTIFICATIONS"
             anchors.top: topRule.bottom
             anchors.topMargin: Theme.space.popupPadding
+            anchors.left: parent.left
+            anchors.leftMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.borderWidth + Theme.space.popupPadding
+
+            // Bare-label actions (DESIGN.md §1.1's 2026-08-09 amendment): no
+            // cell chrome, hover promotes ink foregroundDim -> foreground
+            // instead of a fill/inversion. DND still needs to read as armed
+            // at a glance now that it has no fill of its own to go accent —
+            // its resting ink promotes straight to `accent` while armed,
+            // the bare-label equivalent of the full-bleed accent cell this
+            // replaced.
+            MetaLabel {
+                text: "DND"
+                color: NotificationService.dnd
+                    ? Theme.color.accent
+                    : (dndHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+
+                MouseArea {
+                    id: dndHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: NotificationService.setDnd(!NotificationService.dnd)
+                }
+            }
+
+            MetaLabel {
+                text: "CLEAR ALL"
+                color: clearAllHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim
+
+                MouseArea {
+                    id: clearAllHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.clearAll()
+                }
+            }
+        }
+
+        Flickable {
+            id: rowsFlickable
+            anchors.top: titleCell.bottom
             anchors.left: parent.left
             anchors.leftMargin: Theme.borderWidth + Theme.space.popupPadding
             anchors.right: parent.right
@@ -187,49 +232,6 @@ PanelWindow {
             Column {
                 id: column
                 width: parent.width
-
-                Row {
-                    width: parent.width
-
-                    Cell {
-                        id: dndCell
-                        width: parent.width / 2
-                        accent: NotificationService.dnd
-                        selected: dndHover.containsMouse
-
-                        ActionLabel {
-                            text: "DND"
-                            color: dndCell.foreground
-                        }
-
-                        MouseArea {
-                            id: dndHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: NotificationService.setDnd(!NotificationService.dnd)
-                        }
-                    }
-
-                    Cell {
-                        id: clearAllCell
-                        width: parent.width - dndCell.width
-                        selected: clearAllHover.containsMouse
-
-                        ActionLabel {
-                            text: "CLEAR ALL"
-                            color: clearAllCell.foreground
-                        }
-
-                        MouseArea {
-                            id: clearAllHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.clearAll()
-                        }
-                    }
-                }
 
                 Cell {
                     visible: NotificationService.pending.length === 0 && NotificationService.past.length === 0
@@ -246,6 +248,7 @@ PanelWindow {
 
                     MetaLabel {
                         text: "PENDING / " + NotificationService.pending.length
+                        colon: false
                     }
                 }
 
@@ -279,6 +282,7 @@ PanelWindow {
 
                     MetaLabel {
                         text: "EARLIER / " + NotificationService.past.length
+                        colon: false
                     }
                 }
 
@@ -307,13 +311,13 @@ PanelWindow {
             }
         }
 
-        // Erases the trailing hairline every row draws along its own right
-        // edge (Cell's shared-rule contract) — without this, that continuous
-        // line and the frame's own right rule above would read as two
-        // parallel borders `popupPadding` apart (same technique as
-        // Panel.qml/Menu.qml).
+        // Erases the trailing hairline every row (and titleCell itself)
+        // draws along its own right edge (Cell's shared-rule contract) —
+        // without this, that continuous line and the frame's own right
+        // rule above would read as two parallel borders `popupPadding`
+        // apart (same technique as Panel.qml/Menu.qml).
         Rectangle {
-            anchors.top: rowsFlickable.top
+            anchors.top: titleCell.top
             anchors.right: rowsFlickable.right
             anchors.bottom: rowsFlickable.bottom
             width: Theme.borderWidth

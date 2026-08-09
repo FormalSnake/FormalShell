@@ -1222,7 +1222,7 @@ Panel {
         visible: root._wiredEntries.length > 0
         width: parent.width
 
-        MetaLabel { text: "WIRED" }
+        MetaLabel { text: "WIRED"; colon: true }
     }
 
     Repeater {
@@ -1271,7 +1271,7 @@ Panel {
         visible: root._knownRows.length > 0
         width: parent.width
 
-        MetaLabel { text: "KNOWN" }
+        MetaLabel { text: "KNOWN"; colon: true }
     }
 
     Repeater {
@@ -1283,7 +1283,7 @@ Panel {
         visible: root._availableRows.length > 0
         width: parent.width
 
-        MetaLabel { text: "AVAILABLE" }
+        MetaLabel { text: "AVAILABLE"; colon: true }
     }
 
     Repeater {

@@ -1,5 +1,6 @@
 ActionLabel ActionLabel.qml
 AuthPrompt AuthPrompt.qml
+CardTitleBar CardTitleBar.qml
 Cell Cell.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml

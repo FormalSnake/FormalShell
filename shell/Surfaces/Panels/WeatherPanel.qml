@@ -210,7 +210,7 @@ Panel {
         visible: root._result !== null
         width: parent.width
 
-        MetaLabel { text: "FORECAST" }
+        MetaLabel { text: "FORECAST"; colon: true }
     }
 
     Component {

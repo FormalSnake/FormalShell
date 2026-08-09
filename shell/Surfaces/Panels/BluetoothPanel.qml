@@ -675,7 +675,7 @@ Panel {
         visible: root._connectedRows.length > 0
         width: parent.width
 
-        MetaLabel { text: "CONNECTED" }
+        MetaLabel { text: "CONNECTED"; colon: true }
     }
 
     Repeater {
@@ -687,7 +687,7 @@ Panel {
         visible: root._pairedRows.length > 0
         width: parent.width
 
-        MetaLabel { text: "PAIRED" }
+        MetaLabel { text: "PAIRED"; colon: true }
     }
 
     Repeater {
@@ -699,7 +699,7 @@ Panel {
         visible: root._availableRows.length > 0
         width: parent.width
 
-        MetaLabel { text: "AVAILABLE" }
+        MetaLabel { text: "AVAILABLE"; colon: true }
     }
 
     Repeater {
@@ -718,6 +718,7 @@ Panel {
             MetaLabel {
                 width: parent.width - setOnlyLabel.width - parent.spacing
                 text: "AIRPODS NOISE"
+                colon: true
             }
 
             MetaLabel {
