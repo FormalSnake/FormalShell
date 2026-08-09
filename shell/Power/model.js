@@ -71,16 +71,73 @@ function formatRate(watts) {
     return Math.abs(watts).toFixed(1) + "W";
 }
 
-// Whether the static TIME TO FULL/EMPTY/RATE meta rows should render
-// (M-polish batch item D, owner-reported: they duplicated the same fields
-// the status line above already rotates through). The static rows defer
-// only while the rotation is actually going to show those fields —
-// `rotating` already requires charging/discharging AND more than one real
-// phrase — so a field that would never get a turn in rotation (motion
-// enabled but the device isn't charging/discharging) still falls back to
-// rendering statically instead of vanishing outright. With motion
-// disabled, `rotating` is irrelevant: the status line never advances past
-// phrase 0, so the static rows always carry the extra fields.
+// RAPL package power (M20 Task 5c, owner ask: "the W usage right next to
+// the W it's charging with"). `energy_uj` accumulates until it reaches
+// `max_energy_range_uj`, then the powercap driver resets it to 0 rather
+// than overflowing, so a sample pair spanning exactly one wrap needs the
+// full range added back onto the naive difference — the same one-wrap
+// assumption the kernel's own powercap consumers make (RAPL packages wrap
+// on the order of minutes on real hardware, far longer than a poll
+// interval measured in seconds).
+function raplDeltaUj(prevUj, currUj, maxRangeUj) {
+    if (currUj >= prevUj)
+        return currUj - prevUj;
+    return (maxRangeUj - prevUj) + currUj;
+}
+
+// null on a non-positive interval or a still-negative delta (a reset
+// outside the wraparound case, e.g. suspend/resume clearing the
+// counter) — never a negative or invented wattage.
+function raplWatts(prevUj, currUj, maxRangeUj, deltaMs) {
+    if (!(deltaMs > 0))
+        return null;
+    var deltaUj = raplDeltaUj(prevUj, currUj, maxRangeUj);
+    if (!(deltaUj >= 0))
+        return null;
+    return (deltaUj / 1e6) / (deltaMs / 1000);
+}
+
+// Two-line `cat energy_uj max_energy_range_uj` stdout -> {energyUj,
+// maxRangeUj}. Honest null on anything short of two parseable numbers:
+// a root-only energy_uj (PLATYPUS mitigation, user-readable only via a
+// udev rule outside this repo) or an absent powercap path both leave
+// `cat`'s stdout short a line, same shape as SpeedTest.parseStatBytes.
+function parseRaplUj(text) {
+    var lines = (text || "").split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l !== ""; });
+    if (lines.length < 2)
+        return null;
+    var energyUj = parseInt(lines[0], 10);
+    var maxRangeUj = parseInt(lines[1], 10);
+    if (!isFinite(energyUj) || !isFinite(maxRangeUj) || energyUj < 0 || maxRangeUj <= 0)
+        return null;
+    return { energyUj: energyUj, maxRangeUj: maxRangeUj };
+}
+
+// The battery section's one slash-fused wattage row (DESIGN §2 item 10:
+// meta pairs fuse with " / ", never a colon). `cpuPackageW` is null
+// whenever RAPL is unreadable or hasn't produced a second sample yet —
+// the " / CPU" half is simply absent then, never "/ CPU 0.0W" or a
+// stale figure from before the panel reopened.
+function formatWattageRow(charging, changeRateW, cpuPackageW) {
+    var head = (charging ? "CHARGING " : "DRAW ") + formatRate(changeRateW);
+    if (cpuPackageW === null || cpuPackageW === undefined)
+        return head;
+    return head + " / CPU " + formatRate(cpuPackageW);
+}
+
+// Whether the static TIME TO FULL/EMPTY meta rows should render (M-polish
+// batch item D, owner-reported: they duplicated the same fields the status
+// line above already rotates through). The static rows defer only while
+// the rotation is actually going to show those fields — `rotating` already
+// requires charging/discharging AND more than one real phrase — so a field
+// that would never get a turn in rotation (motion enabled but the device
+// isn't charging/discharging) still falls back to rendering statically
+// instead of vanishing outright. With motion disabled, `rotating` is
+// irrelevant: the status line never advances past phrase 0, so the static
+// rows always carry the extra fields. The wattage row (formatWattageRow)
+// is NOT part of this dedup group — it replaced the rotation's own RATE
+// phrase outright (see PowerPanel.qml's `_phrases`), so it renders
+// unconditionally whenever there's a real rate, independent of `rotating`.
 function staticFieldsVisible(motionEnabled, rotating) {
     return !(motionEnabled && rotating);
 }

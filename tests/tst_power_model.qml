@@ -150,4 +150,90 @@ TestCase {
     function test_static_fields_shown_when_motion_disabled_and_not_rotating() {
         compare(Power.staticFieldsVisible(false, false), true);
     }
+
+    // raplDeltaUj
+
+    function test_rapl_delta_normal_increase() {
+        compare(Power.raplDeltaUj(1000000, 1500000, 65000000), 500000);
+    }
+
+    function test_rapl_delta_wraps_at_max_range() {
+        // counter was near the top, wrapped back to a small value.
+        compare(Power.raplDeltaUj(64900000, 100000, 65000000), 200000);
+    }
+
+    // raplWatts
+
+    function test_rapl_watts_normal_sample() {
+        // 1,000,000 uJ over 1000ms = 1 W.
+        compare(Power.raplWatts(0, 1000000, 65000000, 1000), 1);
+    }
+
+    function test_rapl_watts_matches_e1504g_probe() {
+        // e1504g probe (plan header): ~8.5W package draw over a 2s interval.
+        compare(Power.raplWatts(0, 17000000, 65000000, 2000), 8.5);
+    }
+
+    function test_rapl_watts_zero_interval_is_null() {
+        compare(Power.raplWatts(0, 1000000, 65000000, 0), null);
+    }
+
+    function test_rapl_watts_negative_interval_is_null() {
+        compare(Power.raplWatts(0, 1000000, 65000000, -50), null);
+    }
+
+    function test_rapl_watts_wraparound_end_to_end() {
+        // 200,000 uJ over 500ms = 0.4 W, computed through the wrap.
+        compare(Power.raplWatts(64900000, 100000, 65000000, 500), 0.4);
+    }
+
+    // parseRaplUj
+
+    function test_parseRaplUj_normal_two_lines() {
+        var r = Power.parseRaplUj("12345678\n65000000\n");
+        compare(r.energyUj, 12345678);
+        compare(r.maxRangeUj, 65000000);
+    }
+
+    function test_parseRaplUj_permission_denied_leaves_one_line() {
+        // `cat energy_uj max_energy_range_uj` when energy_uj is root-only:
+        // stderr carries the "Permission denied" line, stdout only gets
+        // max_energy_range_uj's own content — one line, honest null.
+        compare(Power.parseRaplUj("65000000\n"), null);
+    }
+
+    function test_parseRaplUj_empty_is_null() {
+        compare(Power.parseRaplUj(""), null);
+        compare(Power.parseRaplUj(null), null);
+    }
+
+    function test_parseRaplUj_zero_max_range_is_null() {
+        compare(Power.parseRaplUj("12345\n0\n"), null);
+    }
+
+    function test_parseRaplUj_non_numeric_is_null() {
+        compare(Power.parseRaplUj("cat: Permission denied\ncat: Permission denied\n"), null);
+    }
+
+    // formatWattageRow
+
+    function test_wattage_row_charging_no_cpu() {
+        compare(Power.formatWattageRow(true, 15.5, null), "CHARGING 15.5W");
+    }
+
+    function test_wattage_row_discharging_no_cpu() {
+        compare(Power.formatWattageRow(false, -12.3, null), "DRAW 12.3W");
+    }
+
+    function test_wattage_row_charging_with_cpu() {
+        compare(Power.formatWattageRow(true, 15.5, 8.5), "CHARGING 15.5W / CPU 8.5W");
+    }
+
+    function test_wattage_row_discharging_with_cpu() {
+        compare(Power.formatWattageRow(false, -12.3, 8.5), "DRAW 12.3W / CPU 8.5W");
+    }
+
+    function test_wattage_row_cpu_undefined_omits_half() {
+        compare(Power.formatWattageRow(true, 15.5, undefined), "CHARGING 15.5W");
+    }
 }

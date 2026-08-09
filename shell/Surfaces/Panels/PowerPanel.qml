@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.Core
 import qs.Components
@@ -46,6 +47,11 @@ Panel {
     // reporting). A set with only one phrase (no time-to-X, no rate) never
     // rotates; the primary phrase is always index 0, so a closed/reopened
     // panel or a disabled-motion session both show exactly today's line.
+    // M20 Task 5c: the rate no longer gets its own rotation phrase — the
+    // new wattage row below is a persistent display, not gated by
+    // rotation, so a "RATE 15.5W" phrase here would show the same figure
+    // on screen twice at once. Dropped from this list; the CHARGING/DRAW
+    // row is its replacement.
     readonly property var _phrases: {
         if (!root._hasBattery)
             return [];
@@ -54,8 +60,6 @@ Panel {
             list.push("TIME TO FULL " + Power.formatDuration(root._timeToFull));
         if (!root._charging && root._timeToEmpty > 0)
             list.push("TIME TO EMPTY " + Power.formatDuration(root._timeToEmpty));
-        if (root._changeRate !== 0)
-            list.push("RATE " + Power.formatRate(root._changeRate));
         return list;
     }
     readonly property bool _rotating: root._hasBattery
@@ -134,7 +138,66 @@ Panel {
             root._cursor = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
             root._phraseIndex = 0;
             BrightnessService.refreshDevices();
+        } else {
+            // Drop the RAPL baseline on close (M20 Task 5c) — no
+            // background polling for a closed panel, and reopening starts
+            // a fresh pair of samples rather than computing a wattage
+            // across whatever gap the panel was closed for.
+            root._raplPrev = null;
+            root.cpuPackageW = null;
         }
+    }
+
+    // CPU package power (M20 Task 5c, owner ask: "the W usage right next
+    // to the W it's charging with"). Two `energy_uj` reads a fixed
+    // interval apart, watts = delta / interval — same idiom as
+    // NetworkPanel's speed-test sampler (`cat` straight to argv, no
+    // shell, a pure-JS reducer in Power/model.js does the math). RAPL's
+    // `energy_uj` is root-only by default (PLATYPUS mitigation); a udev
+    // rule outside this repo can make it user-readable. Either way,
+    // `cat`'s stdout on a permission-denied or absent path comes up short
+    // a line, `Power.parseRaplUj` returns null, and `cpuPackageW` stays
+    // null rather than 0 or a guess.
+    property var _raplPrev: null // {uj, maxUj, t} | null
+    property var cpuPackageW: null
+
+    readonly property string _raplEnergyPath: "/sys/class/powercap/intel-rapl:0/energy_uj"
+    readonly property string _raplMaxRangePath: "/sys/class/powercap/intel-rapl:0/max_energy_range_uj"
+    readonly property int _raplSampleIntervalMs: 2000
+
+    function _sampleRapl() {
+        if (raplProc.running)
+            return;
+        raplProc.command = ["cat", root._raplEnergyPath, root._raplMaxRangePath];
+        raplProc.running = true;
+    }
+
+    Process {
+        id: raplProc
+        stdout: StdioCollector {
+            id: raplCollector
+        }
+        onExited: exitCode => {
+            var parsed = Power.parseRaplUj(raplCollector.text);
+            if (!parsed) {
+                root._raplPrev = null;
+                root.cpuPackageW = null;
+                return;
+            }
+            var t = Date.now();
+            if (root._raplPrev)
+                root.cpuPackageW = Power.raplWatts(root._raplPrev.uj, parsed.energyUj, parsed.maxRangeUj, t - root._raplPrev.t);
+            root._raplPrev = { uj: parsed.energyUj, maxUj: parsed.maxRangeUj, t: t };
+        }
+    }
+
+    Timer {
+        id: raplTimer
+        interval: root._raplSampleIntervalMs
+        repeat: true
+        running: root.isOpen
+        triggeredOnStart: true
+        onTriggered: root._sampleRapl()
     }
 
     function _applyProfile(index) {
@@ -283,9 +346,16 @@ Panel {
                 text: "TIME TO EMPTY " + Power.formatDuration(root._timeToEmpty)
             }
 
+            // Wattage row (M20 Task 5c, owner ask): persistent, not gated
+            // by `_staticFieldsVisible` — unlike TIME TO FULL/EMPTY above,
+            // this replaces the rotation's own RATE phrase entirely (see
+            // `_phrases`' header comment), so it always renders whenever
+            // there's a real rate to show, rotating or not. Slash-fused
+            // per DESIGN §2 item 10: no colon, the CPU half only appears
+            // once RAPL has actually resolved a sample.
             MetaLabel {
-                visible: root._staticFieldsVisible && root._changeRate !== 0
-                text: "RATE " + Power.formatRate(root._changeRate)
+                visible: root._changeRate !== 0
+                text: Power.formatWattageRow(root._charging, root._changeRate, root.cpuPackageW)
             }
         }
     }
