@@ -567,6 +567,24 @@ adjective:
     resolve, and every sampled pixel equals either `Theme.color.background`
     or `Theme.color.foreground` exactly.
 
+    A fourth surface, the bar tray (M20 Task 5), uses a second Canvas pass
+    instead of the duotone one above: `DitherImage`'s `mode: "mask"`
+    thresholds an icon's own alpha channel against the same 4x4 Bayer bias
+    rather than luminance, so a painted pixel becomes `Theme.color.foreground`
+    (or the cell's inverted ink on a hovered cell) and a transparent pixel
+    stays fully transparent, no `lightColor` backing since the cell's own
+    background shows through underneath. This is the sanctioned answer to
+    third-party SNI icons that render as white or light symbolic marks meant
+    for a dark bar and disappear against a light one: since only alpha
+    decides paint versus clear, every icon becomes a legible silhouette on
+    any theme, at the deliberate cost of discarding the vendor's own icon
+    colors entirely. Every tray icon also pins into one square slot sized by
+    the shared body-text token, so the SNI protocol's arbitrary 16/22/24px
+    pixmaps no longer vary the cell's padding rhythm. Checkable: zoom a tray
+    icon in a screenshot, every pixel is either `Theme.color.foreground` (or
+    the inverted ink on a hovered cell) or fully transparent, never the
+    vendor's original color.
+
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,
 internal padding, radius 0) is always omarchy's, never mek.gallery's fused

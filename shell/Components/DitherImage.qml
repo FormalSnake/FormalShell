@@ -18,9 +18,16 @@ import qs.Core
 // raw drawImage content. `fillRect` is DitherFill.qml/DogEar.qml's own
 // established write path and reads back correctly in both environments.
 //
-// `mode` picks the Canvas pass: "duotone" (implemented) thresholds
-// luminance across the whole image. "mask" (Task 5, tray icon
-// silhouettes) will threshold on alpha instead — not yet implemented.
+// `mode` picks the Canvas pass: "duotone" thresholds luminance across the
+// whole image, painting every pixel light or dark (full duotone
+// coverage). "mask" (Task 5, tray icon silhouettes) thresholds alpha
+// instead, using the same Bayer bias to dither the soft anti-aliased
+// edges of an icon into a stipple: pixels whose alpha clears the
+// threshold paint `darkColor` at full opacity, everything else is left
+// (or reset back to) fully transparent — no `lightColor` backing, so the
+// cell's own background shows through. The second `ctx.reset()` in the
+// mask branch is the clear step, not `clearRect`: it stays on the same
+// proven fillRect/reset write path rather than a second untested primitive.
 Item {
     id: root
 
@@ -61,12 +68,32 @@ Item {
             ctx.reset();
             ctx.drawImage(img, 0, 0, width, height);
 
-            if (root.mode !== "duotone")
+            if (root.mode !== "duotone" && root.mode !== "mask")
                 return;
 
             var w = Math.round(width);
             var h = Math.round(height);
             var sample = ctx.getImageData(0, 0, w, h).data;
+
+            if (root.mode === "mask") {
+                var maskDark = root.darkColor;
+                ctx.reset();
+                for (var my = 0; my < h; my++) {
+                    var maskRowBase = my * w * 4;
+                    var maskBayerRow = (my % 4) * 4;
+                    for (var mx = 0; mx < w; mx++) {
+                        var mi = maskRowBase + mx * 4;
+                        var alpha = sample[mi + 3] / 255;
+                        var maskThreshold = (root._bayer[maskBayerRow + (mx % 4)] + 0.5) / 16;
+                        if (alpha > maskThreshold) {
+                            ctx.fillStyle = maskDark;
+                            ctx.fillRect(mx, my, 1, 1);
+                        }
+                    }
+                }
+                return;
+            }
+
             var light = root.lightColor;
             var dark = root.darkColor;
 
