@@ -50,29 +50,17 @@ Panel {
                 height: root._artSlotSize
                 anchors.verticalCenter: parent.verticalCenter
 
-                Image {
+                // DitherImage owns the hidden source Image itself (decode
+                // capped near the slot size, no pixmap cache — M16 Task
+                // 12's artUrl-changes-per-track rationale still applies,
+                // just moved inside the shared component) and repaints the
+                // 1-bit duotone (DESIGN.md §2) whenever artUrl or the
+                // theme's role colors change.
+                DitherImage {
                     visible: MediaService.artUrl !== ""
                     source: MediaService.artUrl
                     width: root._artSlotSize
                     height: root._artSlotSize
-                    // Decode capped near the slot size, and no pixmap cache
-                    // (M16 Task 12): artUrl changes per track, so the
-                    // default cache: true would accumulate full-res art
-                    // across every track played this session instead of
-                    // ever releasing the previous one.
-                    //
-                    // 2x the slot, not the slot itself: sourceSize with
-                    // both dimensions set fits the decode inside that box
-                    // (Qt's KeepAspectRatio) rather than covering it, so
-                    // non-square art (rare, but not guaranteed square like
-                    // typical covers) would decode short on one axis and
-                    // PreserveAspectCrop would upscale it back out. 2x
-                    // covers any art up to a 2:1 aspect ratio.
-                    sourceSize.width: root._artSlotSize * 2
-                    sourceSize.height: root._artSlotSize * 2
-                    cache: false
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
                 }
 
                 // Apple Music animated cover (M7 Task 2, opt-in): layered

@@ -568,7 +568,7 @@ else
   qs_bin=$(nix develop -c bash -c 'command -v qs')
 fi
 
-if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode || $clipboard_mode; then
+if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $active_window_fixture_mode || $clipboard_mode || $media_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -1398,25 +1398,47 @@ fi
 # tags are what MediaService/MediaPanel must display verbatim, and what the
 # post-run `media status` cross-check below compares against. screensaver_mode
 # reuses this same track (via its own ss-media-play.sh below) purely to give
-# MediaService.isPlaying a real value — it never checks the tags.
+# MediaService.isPlaying a real value — it never checks the tags or the art.
+#
+# media_mode additionally embeds a real cover image (M20 Task 3): an
+# imagemagick-generated PNG muxed in as a FLAC `PICTURE` block
+# (`-disposition:v attached_pic`), so mpv's mpris.lua plugin has genuine
+# embedded art to extract into `mpris:artUrl` — the same
+# avformat_open_input + AV_DISPOSITION_ATTACHED_PIC path a real tagged
+# audio file exercises, not a synthetic MediaService override. Without
+# this, MediaPanel's DitherImage art slot never has anything to dither.
 if $media_mode || $screensaver_mode; then
   media_track_path="$shot_dir/smoke-track.flac"
   media_track_title="FormalShell Smoke Track"
   media_track_artist="FormalShell Test Artist"
-  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
-    -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
-    -c:a flac -y "$media_track_path"
+  if $media_mode; then
+    media_art_path="$shot_dir/smoke-art.png"
+    $convert_bin -size 64x64 xc:'#4C6EF5' "$media_art_path"
+    "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -i "$media_art_path" \
+      -map 0:a -map 1:0 -t 20 \
+      -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
+      -c:a flac -c:v png -disposition:v attached_pic -y "$media_track_path"
+  else
+    "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
+      -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
+      -c:a flac -y "$media_track_path"
+  fi
 fi
 
 if $media_mode; then
   # Deliberately long — comfortably past NowPlaying.qml's 220px maxWidth at
   # the shell's default 13px monospace body size — so the marquee's
-  # overflow gate actually trips (M16 Task 11).
+  # overflow gate actually trips (M16 Task 11). Carries the same embedded
+  # cover art as the base track (M20 Task 3) — this is the track actually
+  # playing by the time the run's generic smoke.png is captured, so it's
+  # the one that has to have art for that screenshot to exercise the
+  # dither at all.
   media_track_long_path="$shot_dir/smoke-track-long.flac"
   media_track_title_long="FormalShell Marquee Autoscroll Verification Overflow Track"
-  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -i "$media_art_path" \
+    -map 0:a -map 1:0 -t 20 \
     -metadata "title=$media_track_title_long" -metadata "artist=$media_track_artist" \
-    -c:a flac -y "$media_track_long_path"
+    -c:a flac -c:v png -disposition:v attached_pic -y "$media_track_long_path"
 fi
 
 if $media_mode; then

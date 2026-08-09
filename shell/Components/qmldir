@@ -4,6 +4,7 @@ CardTitleBar CardTitleBar.qml
 Cell Cell.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
+DitherImage DitherImage.qml
 DogEar DogEar.qml
 MarqueeText MarqueeText.qml
 MetaLabel MetaLabel.qml

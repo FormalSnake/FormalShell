@@ -548,6 +548,22 @@ adjective:
     committing cell's resting fill, it equals the `foreground` hex and its
     text equals `background`; sample it hovered, it equals `accent` with
     `onAccent` text.
+12. **1-bit dithered imagery on named surfaces (2026-08-09).** Photographic
+    content on a shortlist of surfaces renders as an ordered-Bayer duotone
+    — mek.gallery's own dithered-image treatment — instead of true color:
+    light pixels `Theme.color.background`, dark pixels
+    `Theme.color.foreground`, so a retheme recolors the image itself, not
+    just the chrome around it. Two named surfaces today: the media panel's
+    album art, both the static cover and the Apple Music animated cover
+    (sampled off its decoded video at ~8fps and re-dithered per frame — the
+    resulting choppy 1-bit cadence is the aesthetic, not a defect, and
+    stops the moment `motion.enabled: false`, playback pauses, or the
+    frame errors, falling back to the static dithered art). Nothing else
+    auto-dithers: notification images, menu thumbnails, launcher icons, and
+    the wallpaper picker's grid all stay true-color. Checkable: zoom the
+    media panel's album art in a screenshot, individual dither pixels
+    resolve, and every sampled pixel equals either `Theme.color.background`
+    or `Theme.color.foreground` exactly.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,
