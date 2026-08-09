@@ -86,6 +86,15 @@
 # the bar's right region — see Panel.qml's own header comment), left open
 # through the run's normal screenshot so it shows in smoke.png/SMOKE_OK; it
 # has no auto-close, so no timing race with the rest of the run's triggers.
+# `--panel appmenu` is the one panel leg that keeps the default leg's foot
+# fixture window (every other mode drops it), because the app menu is about
+# the focused app: the window's app-id resolves the isolated HOME's
+# formalshell-smoke-iconic.desktop, whose two Desktop Action groups become
+# the ACTIONS rows, and the compositor's own window list becomes the
+# WINDOWS rows. A `debug dump` taken while the panel is open is asserted to
+# still carry a non-empty heldFocusedWindowId — the shell's own surface has
+# keyboard focus at that point, so a raw focused id would be gone (see
+# shell/Compositor/focus.js).
 # `--panel github` runs against the same PATH-shimmed `gh` --bar-layout
 # uses (extended with canned PR/issue node rows, M13 Task 3), so the
 # panel's on-open poll renders both sections — "PULL REQUESTS / 3" and
@@ -551,6 +560,12 @@ fi
 active_window_fixture_mode=true
 if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode; then
   active_window_fixture_mode=false
+fi
+# --panel appmenu is the one panel leg that needs the fixture window back:
+# the app menu is about the focused app, so with nothing focused its only
+# honest rendering is the NO WINDOW cell.
+if $panel_mode && [ "$panel_name" = "appmenu" ]; then
+  active_window_fixture_mode=true
 fi
 
 git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
@@ -1136,7 +1151,10 @@ EOF
 # iconic", is what the foot window below is spawned with as its Wayland
 # app-id) so DesktopEntries.heuristicLookup's exact-id path resolves it for
 # ActiveWindow.qml too, rather than standing up a second near-duplicate
-# .desktop file.
+# .desktop file. Its two Desktop Action groups are what `--panel appmenu`
+# renders as the app menu's ACTIONS rows — real groups read back through
+# the real XDG lookup, the same fixture-data-not-stubbed-code contract as
+# the calendar leg's .ics file; the other legs never read them.
 if $menu_mode || $active_window_fixture_mode; then
   cat > "$iso_home/.local/share/applications/formalshell-smoke-iconic.desktop" <<'EOF'
 [Desktop Entry]
@@ -1144,6 +1162,15 @@ Type=Application
 Name=Iconic Test App
 Exec=true
 Icon=formalshell-smoke
+Actions=new-window;preferences;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=true
+
+[Desktop Action preferences]
+Name=Preferences
+Exec=true
 EOF
   mkdir -p "$iso_home/.local/share/icons/hicolor/48x48/apps"
   $convert_bin -size 48x48 xc:'#CE5D97' "$iso_home/.local/share/icons/hicolor/48x48/apps/formalshell-smoke.png"
@@ -2711,6 +2738,9 @@ fi
     else
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
     fi
+    if [ "$panel_name" = "appmenu" ]; then
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > $dump_path 2>&1\""
+    fi
   fi
   if $gallery_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call gallery open > '$gallery_log_path' 2>&1; '$qs_bin' ipc --any-display -p '$shell_path' call gallery status >> '$gallery_log_path' 2>&1\""
@@ -3013,6 +3043,23 @@ if $dump_mode; then
     cat "$dump_path"
   else
     echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+fi
+
+if $panel_mode && [ "$panel_name" = "appmenu" ]; then
+  if [ ! -s "$dump_path" ]; then
+    echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+  # The dump is taken with the app menu already open, i.e. with one of the
+  # shell's own layer surfaces holding keyboard focus — a held id surviving
+  # that is exactly what Compositor/focus.js exists for, and what keeps the
+  # panel able to name the app it was opened from.
+  if grep -qE '"heldFocusedWindowId":"[^"]+"' "$dump_path"; then
+    cat "$dump_path"
+  else
+    echo "SMOKE_FAIL: app menu open with no held focused window" >&2
+    cat "$dump_path" >&2
+    exit 1
   fi
 fi
 

@@ -18,27 +18,26 @@ import qs.Components
 // same padding box, same hover-cursor inversion — text colors resolve
 // through `foreground`/`dimForeground` instead of hardcoded roles so the
 // hover swap covers everything.
+//
+// Clicking the cell toggles the app menu (AppMenuPanel) under it, macOS's
+// app-name menu in the same place the app name already sits. The window it
+// names is CompositorService.heldFocusedWindowId, not the raw focused id, so
+// opening that menu (or any other panel) doesn't empty the cell it was
+// opened from — see Compositor/focus.js.
 Cell {
     id: root
 
     property real maxWidth: 320
+    property var panel: null
+
+    readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     // Set from Bar.qml (`windowVisible: bar.visible`) so the title marquee
     // below can gate on the bar's own PanelWindow actually being on screen —
     // same rationale as NowPlaying.qml's own windowVisible. Defaults true so
     // any other embedding still animates.
     property bool windowVisible: true
 
-    readonly property var focusedWindow: {
-        var id = CompositorService.focusedWindowId;
-        if (id === "")
-            return null;
-        var windows = CompositorService.windows;
-        for (var i = 0; i < windows.length; i++) {
-            if (windows[i].id === id)
-                return windows[i];
-        }
-        return null;
-    }
+    readonly property var focusedWindow: CompositorService.windowById(CompositorService.heldFocusedWindowId)
 
     readonly property string appId: focusedWindow ? focusedWindow.appId : ""
     readonly property string title: focusedWindow ? focusedWindow.title : ""
@@ -131,9 +130,21 @@ Cell {
         }
     }
 
+    PanelOpenDot {
+        visible: root._panelOpen
+        inverted: root.invertedNow
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+    }
+
     MouseArea {
         id: hoverArea
         anchors.fill: parent
         hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: {
+            if (root.panel)
+                root.panel.toggle(root.mapToItem(null, 0, 0).x);
+        }
     }
 }

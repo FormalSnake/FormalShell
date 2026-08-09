@@ -150,7 +150,9 @@ plus the worst tracked rate-limit window's percent across Claude Code and
 Codex, both independently toggleable (`usage.claude`/`usage.codex` in
 `settings.json`, default `true`) and polled every `usage.intervalMs` (ms,
 default 900000). The whole cell goes full-bleed `urgent` at ≥90%
-utilization. Click toggles the usage panel (see [Panels](#panels)). Honest
+utilization. Click toggles the usage panel (see [Panels](#panels)), and on
+a `STALE` Claude leg also has Claude Code refresh its own OAuth pair before
+the panel opens. Honest
 states: a disabled provider contributes nothing, and the cell stays hidden
 until at least one enabled provider has answered at all (its own `NO AUTH`/
 `STALE`/`NO CODEX` cell counts as an answer) — never an invented percentage.
@@ -898,11 +900,29 @@ An *expired* access token is a separate state. That file's `accessToken`
 lives about 12 hours while its `refreshToken` lives about 10 days, and only
 a `claude` run refreshes the pair on disk — so a machine that hasn't run
 Claude Code today is still fully logged in with a token this shell can't
-use. That renders `STALE` in the bar cell and `STALE / RUN CLAUDE TO
-REFRESH` in the panel, never `NO AUTH`. The shell deliberately does not
-perform the OAuth refresh itself: Anthropic rotates the refresh token on
+use. That renders `STALE` in the bar cell, never `NO AUTH`.
+
+The shell never redeems that refresh token itself: Anthropic rotates it on
 use, so redeeming it here would invalidate the copy Claude Code still holds
-and log you out of your own CLI. The local `expiresAt` is advisory only —
+and log you out of your own CLI. It asks the CLI to do it instead, so the
+cell heals without you opening a terminal. A stale leg (and a click on a
+stale bar cell, which skips the once-a-minute cooldown) runs `claude auth
+status --json`, the cheapest invocation that makes Claude Code refresh its
+own pair: with an expired token it reaches the OAuth token endpoint, with a
+live one it opens no connection at all, and neither case calls a model, so
+a refresh costs no usage. Its stdout is dropped unread (it answers with
+account identity, not usage) and only the exit code picks the panel's
+second line: `STALE / REFRESHING` while it runs, `STALE / NO CLAUDE CLI`
+when `claude` isn't on `PATH` (exit 127), `STALE / RUN CLAUDE AUTH LOGIN`
+on any other failure (logged out, expired refresh token, no network), and
+`STALE / RUN CLAUDE TO REFRESH` when the helper ran clean and the token is
+still stale. The refreshed file arrives through the same watch as any other
+write, so the state still settles on the server's answer, never on what the
+CLI said. A token that lapses between two polls would otherwise sit `STALE`
+for up to `usage.intervalMs`, so a one-shot armed at the token's own expiry
+re-polls (and therefore refreshes) the moment it lapses.
+
+The local `expiresAt` is advisory only —
 a probe fires whenever a token exists at all and the server settles the
 state (`401`/`403` → `STALE` when a refresh token is present, `NO AUTH`
 when it isn't) so a skewed clock can't hide real numbers. A failed read of
@@ -941,6 +961,36 @@ tailscale widget. Honest states: `tailscale` missing from PATH or any other
 unparsable response renders a dim `NO TAILSCALE` cell (the VM smoke rig's
 own expected state — no tailscaled at all), `BackendState: "NeedsLogin"`
 renders a dim `NEEDS LOGIN` cell, `LOADING` before the first answer.
+`AppMenuPanel` is the focused app's menu, opened by clicking the bar's
+`activeWindow` cell (or `panel open appmenu`) — macOS's app-name menu, in
+the place the app name already sits. It is sourced entirely from data the
+desktop already publishes, so there is no per-app list to maintain: the
+window's app-id resolves a desktop entry through the same
+`DesktopEntries.heuristicLookup` the cell's icon and name already use, that
+entry's own `Actions=` groups become the `ACTIONS` rows (clicking one runs
+it and closes the panel), the compositor's window list filtered by the same
+app-id becomes the `WINDOWS` rows (the current window inverted, clicking
+another focuses it), and a final `Close window` row closes the current one.
+
+This is deliberately not a global menu bar. Reading an app's real File/Edit
+menus needs `org.gtk.Menus` (only GTK4 apps that set a menubar, which
+libadwaita apps do not), the DBusMenu registrar (keyed by X11 window id, so
+XWayland only), or the kde-appmenu Wayland protocol (KWin only — neither
+niri nor Hyprland implements it), and Quickshell exposes no generic D-Bus to
+QML for any of them. Launcher actions plus the window list are what can be
+sourced honestly today. Honest states: nothing focused renders `NO WINDOW`,
+an app-id with no desktop entry renders `NO DESKTOP ENTRY`, and an entry
+declaring no actions renders `NO ACTIONS`.
+
+The cell keeps naming its app while the menu is open. Both compositors drop
+their focused window the moment one of the shell's own layer surfaces takes
+keyboard focus, which used to empty the cell and reflow the bar's left
+region every time any panel opened; `shell/Compositor/focus.js` holds the
+last focused window across that gap, bounded by the focused workspace so a
+genuinely empty workspace still reads as empty. `CompositorService.focusedWindowId`
+is unchanged for everything else; the held value is
+`heldFocusedWindowId`, and `debug dump` reports both.
+
 `DisplayPanel` (M17) is the one panel with no bar cell of its own —
 `panel open display` is the only way in — and lists every connected output
 as a row: name, an `ON`/`OFF` toggle, a status meta line
@@ -980,7 +1030,7 @@ qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
 qs ipc --any-display -p <store-path>/share/formalshell call panel open display   # the display panel has no bar cell; this is its only summon path
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "display"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "appmenu" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "display"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a

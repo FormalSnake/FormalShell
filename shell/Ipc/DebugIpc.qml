@@ -48,6 +48,7 @@ IpcHandler {
             workspaces: CompositorService.workspaces,
             windows: CompositorService.windows,
             focusedWindowId: CompositorService.focusedWindowId,
+            heldFocusedWindowId: CompositorService.heldFocusedWindowId,
             focusedWorkspaceId: CompositorService.focusedWorkspaceId,
             configLoaded: Core.Config.settings,
             audio: {

@@ -31,6 +31,7 @@ import "../../Bar/layout.js" as Layout
 PanelWindow {
     id: bar
     required property var modelData
+    property var appMenuPanel: null
     property var audioPanel: null
     property var calendarPanel: null
     property var networkPanel: null
@@ -113,6 +114,7 @@ PanelWindow {
     Component {
         id: activeWindowComponent
         ActiveWindow {
+            panel: bar.appMenuPanel
             // A quarter of the bar under a hard px ceiling. The previous
             // flat 40% handed this one cell over a thousand pixels of a
             // wide display before the title's marquee engaged at all, so

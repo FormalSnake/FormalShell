@@ -39,6 +39,7 @@ ShellRoot {
 
         delegate: Component {
             Bar {
+                appMenuPanel: appMenuPanelInstance
                 audioPanel: audioPanelInstance
                 calendarPanel: calendarPanelInstance
                 networkPanel: networkPanelInstance
@@ -94,6 +95,7 @@ ShellRoot {
 
     // Same reasoning again: one instance per panel kind, opened on the
     // focused screen at summon time.
+    AppMenuPanel { id: appMenuPanelInstance }
     AudioPanel { id: audioPanelInstance }
     CalendarPanel { id: calendarPanelInstance; menu: menu }
     NetworkPanel { id: networkPanelInstance }
@@ -119,7 +121,7 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, display: displayPanelInstance }) }
+    PanelIpc { registry: ({ appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, display: displayPanelInstance }) }
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     NetworkIpc { panel: networkPanelInstance }

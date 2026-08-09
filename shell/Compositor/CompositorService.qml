@@ -4,6 +4,7 @@ import QtQuick
 
 import qs.Compositor.niri
 import qs.Compositor.hyprland
+import "focus.js" as Focus
 
 Singleton {
     id: root
@@ -43,6 +44,26 @@ Singleton {
     property string focusedWindowId: backend.focusedWindowId
     property string focusedWorkspaceId: backend.focusedWorkspaceId
     property string focusedOutputName: backend.focusedOutputName
+
+    // Last id the compositor actually reported, kept so focus.js can hold it
+    // through the stretches where the compositor reports none.
+    property string _rememberedFocusedId: ""
+    onFocusedWindowIdChanged: if (root.focusedWindowId !== "") root._rememberedFocusedId = root.focusedWindowId
+
+    // focus.js's held focus — what a bar cell naming the current app should
+    // read. Anything that needs the compositor's literal answer (Menu.qml's
+    // launch baseline) keeps reading focusedWindowId.
+    readonly property string heldFocusedWindowId: Focus.held(root.focusedWindowId, root._rememberedFocusedId, root.windows, root.focusedWorkspaceId)
+
+    function windowById(id) {
+        if (id === "")
+            return null;
+        for (var i = 0; i < root.windows.length; i++) {
+            if (root.windows[i].id === id)
+                return root.windows[i];
+        }
+        return null;
+    }
 
     signal configReloaded(bool failed)
 
