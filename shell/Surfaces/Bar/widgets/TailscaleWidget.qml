@@ -60,13 +60,14 @@ Cell {
     Text {
         anchors.verticalCenter: parent.verticalCenter
         text: "󰌘"
-        color: root._running ? root.foreground : Theme.color.foregroundDim
+        color: root._running ? root.foreground : root.dimForeground
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize.body
     }
 
     PanelOpenDot {
         visible: root._panelOpen
+        inverted: root.invertedNow
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
     }

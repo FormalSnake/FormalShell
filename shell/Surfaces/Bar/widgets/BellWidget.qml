@@ -58,6 +58,7 @@ Cell {
 
     PanelOpenDot {
         visible: root._centerOpen
+        inverted: root.invertedNow
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
     }

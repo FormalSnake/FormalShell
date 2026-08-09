@@ -71,7 +71,7 @@ Cell {
     Text {
         anchors.verticalCenter: parent.verticalCenter
         text: root._state === "missing" ? "NO CAVA" : VisualizerService.frameText
-        color: root._state === "missing" ? Theme.color.foregroundDim : root.foreground
+        color: root._state === "missing" ? root.dimForeground : root.foreground
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize.caption
         font.capitalization: root._state === "missing" ? Font.AllUppercase : Font.MixedCase

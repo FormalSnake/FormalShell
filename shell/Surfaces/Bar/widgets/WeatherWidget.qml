@@ -44,7 +44,7 @@ Cell {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: root._glyph
-            color: root._hasCurrent ? root.foreground : Theme.color.foregroundDim
+            color: root._hasCurrent ? root.foreground : root.dimForeground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
@@ -53,11 +53,13 @@ Cell {
             visible: root._hasCurrent
             anchors.verticalCenter: parent.verticalCenter
             text: root._hasCurrent ? Math.round(root.panel.currentTemp) + "°" : ""
+            color: root.dimForeground
         }
     }
 
     PanelOpenDot {
         visible: root._panelOpen
+        inverted: root.invertedNow
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
     }

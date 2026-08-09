@@ -32,7 +32,7 @@ Cell {
     // that file's own header comment.
     readonly property bool shown: root._claudeSettled || root._codexSettled
 
-    readonly property color _textColor: root._worstPercent >= 0 ? root.foreground : Theme.color.foregroundDim
+    readonly property color _textColor: root._worstPercent >= 0 ? root.foreground : root.dimForeground
 
     visible: root.shown
     standalone: true
@@ -65,6 +65,7 @@ Cell {
 
     PanelOpenDot {
         visible: root._panelOpen
+        inverted: root.invertedNow
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
     }

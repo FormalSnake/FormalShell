@@ -54,7 +54,7 @@ Cell {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: ""
-            color: root._state === "ok" ? root.foreground : Theme.color.foregroundDim
+            color: root._state === "ok" ? root.foreground : root.dimForeground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
         }
@@ -64,12 +64,13 @@ Cell {
             text: root._state === "ok"
                 ? root._prs + "/" + root._issues
                 : (root._state === "noauth" ? "NO AUTH" : "NO GH")
-            color: root._state === "ok" ? root.foreground : Theme.color.foregroundDim
+            color: root._state === "ok" ? root.foreground : root.dimForeground
         }
     }
 
     PanelOpenDot {
         visible: root._panelOpen
+        inverted: root.invertedNow
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
     }

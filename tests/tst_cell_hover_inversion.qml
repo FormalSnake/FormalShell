@@ -151,4 +151,59 @@ TestCase {
         settle(cell);
         verify(Qt.colorEqual(cell.foreground, Theme.color.onAccent));
     }
+
+    // DESIGN.md §1.1's snap rule: under hover inversion, a meta caption
+    // bound to `dimForeground` collapses into the same band as content ink
+    // instead of staying a dim variant on top of the accent fill (M20 Task
+    // 2 — MetaLabel captions like Clock's TIME / WeatherWidget's temperature
+    // used to hardcode `foregroundDim` and never invert at all).
+    function test_standalone_hover_promotes_dimForeground_to_onAccent() {
+        var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.dimForeground, Theme.inverted().fg));
+    }
+
+    function test_standalone_not_hovered_dimForeground_stays_dim() {
+        var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: false });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.dimForeground, Theme.color.foregroundDim));
+    }
+
+    function test_invertedNow_tracks_hover_inversion() {
+        var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true });
+        verify(cell);
+        settle(cell);
+        verify(cell.invertedNow);
+    }
+
+    function test_invertedNow_false_at_rest() {
+        var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: false });
+        verify(cell);
+        settle(cell);
+        verify(!cell.invertedNow);
+    }
+
+    // PanelOpenDot (DESIGN.md §1.1 amendment): stays visible against the
+    // hover-inverted accent fill by swapping to `onAccent` instead of
+    // vanishing as a plain accent dot on an accent background.
+    Component {
+        id: dotComponent
+        PanelOpenDot {}
+    }
+
+    function test_panel_open_dot_rests_at_accent() {
+        var dot = createTemporaryObject(dotComponent, testCase, { inverted: false });
+        verify(dot);
+        settle(dot);
+        verify(Qt.colorEqual(dot.color, Theme.color.accent));
+    }
+
+    function test_panel_open_dot_flips_to_onAccent_when_inverted() {
+        var dot = createTemporaryObject(dotComponent, testCase, { inverted: true });
+        verify(dot);
+        settle(dot);
+        verify(Qt.colorEqual(dot.color, Theme.color.onAccent));
+    }
 }

@@ -102,6 +102,11 @@ Item {
     // on hover, exactly the same swap — the only difference is what their
     // resting fill looked like beforehand.
     readonly property bool _hoverInverted: (root.standalone || root.ink) && root._hoverFillActive
+    // Public alias of the above for widgets that root themselves as a Cell
+    // and need the same condition outside `foreground`/`dimForeground` —
+    // PanelOpenDot's own `inverted` binding (DESIGN.md §1.1 amendment: hover
+    // inverts the whole cell, dot included) is the one consumer so far.
+    readonly property bool invertedNow: root._hoverInverted
 
     readonly property color foreground: urgent
         ? Theme.color.onUrgent

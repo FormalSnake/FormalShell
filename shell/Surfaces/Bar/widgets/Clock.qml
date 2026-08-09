@@ -24,6 +24,7 @@ Cell {
 
         MetaLabel {
             text: "TIME"
+            color: root.dimForeground
         }
 
         Text {
@@ -46,6 +47,7 @@ Cell {
             PanelOpenDot {
                 id: dot
                 visible: root._panelOpen
+                inverted: root.invertedNow
                 anchors.horizontalCenter: parent.horizontalCenter
             }
         }
