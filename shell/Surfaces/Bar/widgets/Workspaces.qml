@@ -26,7 +26,7 @@ Item {
     Row {
         id: row
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.xxs
+        spacing: Theme.space.sm
 
         Repeater {
             model: root.visibleWorkspaces

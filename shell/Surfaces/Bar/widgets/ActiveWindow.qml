@@ -12,9 +12,13 @@ import qs.Components
 // dimmed. No entry resolves → falls back to exactly today's rendering
 // (dim raw appId, foreground title, no icon). No focused window → hidden.
 // The app name elides and the title marquee-scrolls once the combined
-// label would exceed maxWidth, which the whole cell is capped to (the bar
-// sets it to a quarter of its own width under a hard ceiling).
-Item {
+// label would exceed maxWidth, which the whole pill (padding included) is
+// capped to — the bar sets it to a quarter of its own width under a hard
+// ceiling. A standalone Cell like the bar's other widgets (M20 Task 1):
+// same padding box, same hover-cursor inversion — text colors resolve
+// through `foreground`/`dimForeground` instead of hardcoded roles so the
+// hover swap covers everything.
+Cell {
     id: root
 
     property real maxWidth: 320
@@ -50,10 +54,12 @@ Item {
 
     readonly property bool shown: root.focusedWindow !== null
     visible: root.shown
+    standalone: true
+    hovered: hoverArea.containsMouse
 
-    implicitWidth: root.shown ? Math.min(row.implicitWidth, maxWidth) : 0
-    implicitHeight: row.implicitHeight
-    clip: true
+    // `maxWidth` is the whole pill's ceiling, so the row content gets it
+    // minus the cell's own control padding.
+    readonly property real _contentMaxWidth: Math.max(0, root.maxWidth - Theme.space.controlPaddingX * 2)
 
     // Focus/title changes resize this cell (window switch, title rename) —
     // animate the width instead of shoving the bar's other widgets
@@ -66,6 +72,8 @@ Item {
         id: row
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
+        width: Math.min(implicitWidth, root._contentMaxWidth)
+        clip: true
 
         // Launcher-row image-icon exception (DESIGN.md §3 Bar), glyph-cell
         // sized, radius 0 — only when the entry resolves one.
@@ -86,14 +94,15 @@ Item {
             // Entry found: its name leads in foreground. No entry: the raw
             // appId, dimmed — today's exact fallback rendering.
             text: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
-            color: root.desktopEntry ? Theme.color.foreground : Theme.color.foregroundDim
+            color: root.desktopEntry ? root.foreground : root.dimForeground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
-            // Never more than half the cell: an entry name (or a raw appId
-            // in the no-entry fallback) long enough to eat the whole budget
-            // otherwise starves the title of every pixel and gets hard-cut
-            // mid-glyph by root's own clip, since a Row won't shrink it.
-            width: Math.min(implicitWidth, root.maxWidth * 0.5)
+            // Never more than half the row's own budget: an entry name (or
+            // a raw appId in the no-entry fallback) long enough to eat the
+            // whole thing otherwise starves the title of every pixel and
+            // gets hard-cut mid-glyph by the row's own clip, since a Row
+            // won't shrink it.
+            width: Math.min(implicitWidth, root._contentMaxWidth * 0.5)
             elide: Text.ElideRight
         }
 
@@ -108,7 +117,7 @@ Item {
             text: root.title
             // Roles swap once an entry is found: the title follows dimmed
             // instead of leading foreground.
-            color: root.desktopEntry ? Theme.color.foregroundDim : Theme.color.foreground
+            color: root.desktopEntry ? root.dimForeground : root.foreground
             leftPadding: Theme.space.md
             windowVisible: root.windowVisible
             maxWidth: {
@@ -117,8 +126,14 @@ Item {
                     used += appIcon.width + row.spacing;
                 if (primaryText.visible)
                     used += primaryText.width + row.spacing;
-                return Math.max(0, root.maxWidth - used);
+                return Math.max(0, root._contentMaxWidth - used);
             }
         }
+    }
+
+    MouseArea {
+        id: hoverArea
+        anchors.fill: parent
+        hoverEnabled: true
     }
 }

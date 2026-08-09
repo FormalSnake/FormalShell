@@ -292,8 +292,11 @@ PanelWindow {
         anchors.verticalCenter: parent.verticalCenter
         // Widget gap unified with center/right (M16 Task 1) — was the
         // legacy fixed scale's 8px "md" step; tightens to match the other
-        // two regions' Theme.space.sm.
-        spacing: Theme.space.sm
+        // two regions' Theme.space.sm. Bumped to `lg` (M20 Task 1) so
+        // widget-to-widget separation stays 2x the intra-cluster gap
+        // (DESIGN.md §1.3's spacing law) now that pills within a cluster
+        // (workspaces) sit `sm` apart.
+        spacing: Theme.space.lg
         clip: true
         // A settings-driven left region can outgrow the gap before the
         // center region (custom command/qml modules have no fixed count) —
@@ -320,7 +323,7 @@ PanelWindow {
     Row {
         id: centerRegion
         anchors.centerIn: parent
-        spacing: Theme.space.sm
+        spacing: Theme.space.lg
 
         Repeater {
             id: centerRepeater
@@ -343,7 +346,7 @@ PanelWindow {
         anchors.right: parent.right
         anchors.rightMargin: Theme.space.lg
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.sm
+        spacing: Theme.space.lg
         clip: true
         // Mirror of leftRegion's cap: never draws left past centerRegion's
         // right edge, regardless of how many built-ins plus custom modules
