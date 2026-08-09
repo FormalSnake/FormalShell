@@ -70,6 +70,76 @@ Row {
         contextMenu.open();
     }
 
+    // M20 Task 5d (owner: "auto close after an interval if no cursor is on
+    // it anymore or no system tray menu is open"). `_rowHovered` is true
+    // while the pointer sits over any pinned cell, expanded cell, or the
+    // +N/-N toggle — read off the same `hovered`/containsMouse chrome each
+    // cell already drives, not a new row-spanning MouseArea: `root` here IS
+    // the Row, which manages every child's own x, so a background item
+    // covering the full row can't take `anchors.fill: parent` without
+    // fighting that layout, and hover already reaches nested MouseAreas
+    // regardless of a parent's own hover state anyway. All items are read
+    // unconditionally every evaluation (no early return) so the binding
+    // stays subscribed to every delegate's `hovered`, not just the first.
+    readonly property bool _rowHovered: {
+        var any = false;
+        for (var i = 0; i < trayRepeater.count; i++) {
+            var item = trayRepeater.itemAt(i);
+            if (item && item.hovered)
+                any = true;
+        }
+        return any || overflowCell.hovered;
+    }
+
+    TrayCollapseGate {
+        id: collapseGate
+    }
+
+    on_RowHoveredChanged: {
+        if (root._rowHovered)
+            collapseGate.rowEntered();
+        else
+            collapseGate.rowExited();
+    }
+
+    Connections {
+        target: contextMenu
+        function onVisibleChanged() {
+            if (contextMenu.visible)
+                collapseGate.menuOpened();
+            else
+                collapseGate.menuClosed();
+        }
+    }
+
+    Connections {
+        target: TrayService
+        function onDrawerExpandedChanged() {
+            if (TrayService.drawerExpanded)
+                collapseGate.freshExpansion();
+            else
+                collapseGate.collapsed();
+        }
+    }
+
+    // `interval` is `Theme.motion.rotatePeriod`, the existing ~3s pacing
+    // token PowerPanel.qml's own phrase rotation uses — but unlike that
+    // caller, `running` does NOT also gate on `Theme.motionEnabled`:
+    // auto-collapse is behavior, not animation, and tokens.js's own
+    // `motionTokens()` never zeroes `rotatePeriod` in the first place (only
+    // fast/standard/reveal shrink to 0 when motion is disabled), so the
+    // token already carries a real cadence either way. Also requires
+    // `TrayService.drawerExpanded` directly rather than trusting the gate's
+    // own reset alone, so there's no one-tick window where a just-collapsed
+    // drawer's timer could still be seen running.
+    Timer {
+        id: collapseTimer
+        interval: Theme.motion.rotatePeriod
+        running: TrayService.drawerExpanded && collapseGate.armed
+        repeat: false
+        onTriggered: TrayService.collapseDrawer()
+    }
+
     // Bound to the live ObjectModel itself, not a `.values` snapshot slice:
     // `.values` returns a fresh array on every read (Quickshell's own
     // docs), and Quickshell re-notifies it far more often than the item set
@@ -84,6 +154,7 @@ Row {
     // count now happens per-delegate via `index` (Row skips invisible
     // children) rather than by slicing the model.
     Repeater {
+        id: trayRepeater
         model: SystemTray.items
 
         delegate: Cell {
