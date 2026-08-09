@@ -1176,6 +1176,20 @@ DTSTART;VALUE=DATE:$today_ics
 END:VEVENT
 END:VCALENDAR
 EOF
+# --panel calendar's life-progress row (M20 Task 5e): pre-seeding state.json
+# with a resolved birth-year/life-expectancy pair before the shell ever
+# starts is the honest headless stand-in for a real double-click on the
+# year-progress bar — CalendarPanel.qml's `_showLifeProgress` binding
+# defaults to "on" the moment a valid pair exists, same as a user who
+# already ran the easter egg once. The panel's screenshot then proves the
+# life row renders ALONGSIDE the year row rather than replacing it, which a
+# real double-click into this nested session cannot exercise at all.
+if $panel_mode && [ "$panel_name" = "calendar" ]; then
+  mkdir -p "$iso_home/.local/state/formalshell"
+  cat > "$iso_home/.local/state/formalshell/state.json" <<EOF
+{"wallpaper": "", "mode": "dark", "dnd": false, "calendarBirthYear": 1990, "calendarLifeExpectancy": 80, "appLaunches": []}
+EOF
+fi
 # M6 Task 8: the VM/nested session has no Wi-Fi radio, so geoclue never
 # gets a fix — location.latitude/longitude here exercises the documented
 # settings.json override fallback (the actually-verifiable path) so

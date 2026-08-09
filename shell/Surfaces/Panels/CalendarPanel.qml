@@ -41,9 +41,11 @@ import "../../Calendar/progress.js" as Progress
 // + writeAdapter pattern. settings.json's calendar.birthYear/
 // calendar.lifeExpectancy declaratively override the persisted state
 // values when present (Progress.resolveOverride: settings wins, state is
-// the fallback). Once both resolve to a valid pair the bar defaults to
-// showing % of life lived instead of % of year elapsed; a further
-// double-click toggles back to year progress. Events (M6 Task 5): a small
+// the fallback). Once both resolve to a valid pair a life-progress row
+// appears alongside the year row rather than replacing it (M20 Task 5e —
+// the easter egg used to swap the bar's content entirely); a further
+// double-click hides the life row again, leaving the year row untouched
+// either way. Events (M6 Task 5): a small
 // accent dot under any in-month day that has one, sourced from
 // CalendarEventsService's local .ics reader (docs/spikes/2026-07-28-eds-
 // calendar-events.md records why EDS/GOA over D-Bus lost to that fallback);
@@ -164,13 +166,12 @@ Panel {
     readonly property var _lifeFraction: Progress.lifeFraction(root._today, root._birthYear, root._lifeExpectancy)
     readonly property bool _lifeValuesSet: root._lifeFraction !== null
 
-    // Defaults to the life view the moment a valid pair exists (a live
-    // binding until the user's own double-click below reassigns it, which
-    // QML then treats as a plain stored value — see the toggle handler).
+    // Defaults to showing the life row the moment a valid pair exists (a
+    // live binding until the user's own double-click below reassigns it,
+    // which QML then treats as a plain stored value — see the toggle
+    // handler). The year row is unconditional — this flag only ever adds or
+    // removes the life row alongside it, never swaps it out (M20 Task 5e).
     property bool _showLifeProgress: root._lifeValuesSet
-
-    readonly property real _displayFraction: root._showLifeProgress ? root._lifeFraction : root._yearFraction
-    readonly property string _displayLabel: root._showLifeProgress ? "LIFE" : "YEAR"
 
     // "birthYear" | "lifeExpectancy" | "" — which half of the two-step
     // prompt is currently outstanding, correlated against the token on each
@@ -449,11 +450,11 @@ Panel {
             spacing: Core.Theme.space.xxs
 
             MetaLabel {
-                text: root._displayLabel
+                text: "YEAR"
             }
 
             Text {
-                text: Progress.formatPercent(root._displayFraction)
+                text: Progress.formatPercent(root._yearFraction)
                 color: yearCell.foreground
                 font.family: Core.Theme.fontFamily
                 font.pixelSize: Core.Theme.fontSize.body
@@ -462,13 +463,15 @@ Panel {
             // Flat accent fill, no thumb, no radius — same idiom as
             // AudioPanel's volume slider. Double-click is the life-progress
             // easter egg: prompts for birth year/life expectancy the first
-            // time, toggles year<->life once a valid pair exists.
+            // time, then toggles the LIFE row below on/off. It never
+            // replaces this row (M20 Task 5e) — the easter egg adds, never
+            // swaps.
             DitherFill {
                 width: parent.width
                 height: Core.Theme.space.trackThickness
 
                 Rectangle {
-                    width: parent.width * root._displayFraction
+                    width: parent.width * root._yearFraction
                     height: parent.height
                     color: Core.Theme.color.accent
                 }
@@ -476,6 +479,43 @@ Panel {
                 MouseArea {
                     anchors.fill: parent
                     onDoubleClicked: root._onProgressDoubleClicked()
+                }
+            }
+        }
+    }
+
+    // The life-progress row (M6 Task 4, coexists rather than replaces as of
+    // M20 Task 5e): same track idiom and tokens as the year row above,
+    // shown only once a valid birth-year/life-expectancy pair exists and
+    // the easter egg is toggled on.
+    Cell {
+        id: lifeCell
+        width: parent.width
+        visible: root._showLifeProgress
+
+        Column {
+            width: parent.width
+            spacing: Core.Theme.space.xxs
+
+            MetaLabel {
+                text: "LIFE"
+            }
+
+            Text {
+                text: Progress.formatPercent(root._lifeFraction)
+                color: lifeCell.foreground
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
+            }
+
+            DitherFill {
+                width: parent.width
+                height: Core.Theme.space.trackThickness
+
+                Rectangle {
+                    width: parent.width * root._lifeFraction
+                    height: parent.height
+                    color: Core.Theme.color.accent
                 }
             }
         }
