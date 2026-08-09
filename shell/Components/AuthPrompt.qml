@@ -183,6 +183,10 @@ Item {
                         anchors.centerIn: parent
                         visible: input.text.length === 0
                         text: root.masked ? "Enter Password" : "Enter Username"
+                        // Faint placeholders (DESIGN.md §1.4, M19 Task 4):
+                        // one band under the field's own label above, which
+                        // stays foregroundDim.
+                        color: Theme.color.foregroundFaint
                         font.pixelSize: Theme.fontSize.body
                     }
 

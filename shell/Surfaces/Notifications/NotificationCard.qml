@@ -207,7 +207,12 @@ Cell {
             id: actionRow
             visible: root.entry.actions.length > 0
             width: parent.width
-            spacing: 0
+            // Ink cells are borderless (DESIGN.md §2 item 11) — the shared
+            // rule that used to separate adjacent action cells is gone, so
+            // this gap is what keeps them reading as distinct buttons
+            // instead of one merged fill, the same standalone-cell gap
+            // Bar.qml's own row of cells uses (DESIGN.md §3).
+            spacing: Theme.space.sm
 
             Repeater {
                 model: root.entry.actions
@@ -217,12 +222,18 @@ Cell {
                     required property var modelData
                     width: implicitWidth
                     height: implicitHeight
-                    selected: actionHover.containsMouse
+                    // The ink button (DESIGN.md §2 item 11, M19 Task 4): a
+                    // notification action commits something, so it rests as
+                    // a full-bleed foreground fill with background ink
+                    // rather than the plain hover-selected cell it used to
+                    // be. Hover still inverts to the accent pair — Cell.qml
+                    // handles that itself once `ink` is set.
+                    ink: true
+                    hovered: actionHover.containsMouse
 
                     Text {
                         text: actionCell.modelData.label
-                        // Same reasoning as the dismiss cell above.
-                        color: actionCell.selected ? actionCell.foreground : root.foreground
+                        color: actionCell.foreground
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.bodySmall
                     }

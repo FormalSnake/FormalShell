@@ -109,4 +109,46 @@ TestCase {
         settle(cell);
         verify(Qt.colorEqual(cell.foreground, Theme.color.onWarning));
     }
+
+    // The ink button (DESIGN.md §2 item 11, M19 Task 4): fill priority is
+    // urgent > accent > warning > ink > selected-inversion.
+    function test_ink_cell_rests_with_background_ink() {
+        var cell = createTemporaryObject(cellComponent, testCase, { ink: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.foreground, Theme.color.background));
+    }
+
+    function test_ink_wins_over_selected() {
+        var cell = createTemporaryObject(cellComponent, testCase, { ink: true, selected: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.foreground, Theme.color.background));
+    }
+
+    function test_warning_wins_over_ink() {
+        var cell = createTemporaryObject(cellComponent, testCase, { ink: true, warning: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.foreground, Theme.color.onWarning));
+    }
+
+    // Hover/press on an ink cell keeps the accent-pair inversion, exactly
+    // like the standalone bar-cell path — even a non-standalone (ledger)
+    // ink cell inverts on hover instead of falling back to the plain tint
+    // model non-ink ledger cells keep (test_non_standalone_hover_keeps_the_
+    // tint_model above).
+    function test_ink_hover_inverts_to_accent_pair() {
+        var cell = createTemporaryObject(cellComponent, testCase, { standalone: false, ink: true, hovered: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.foreground, Theme.inverted().fg));
+    }
+
+    function test_accent_wins_over_ink_hover_inversion() {
+        var cell = createTemporaryObject(cellComponent, testCase, { ink: true, hovered: true, accent: true });
+        verify(cell);
+        settle(cell);
+        verify(Qt.colorEqual(cell.foreground, Theme.color.onAccent));
+    }
 }

@@ -281,6 +281,10 @@ PanelWindow {
                         anchors.centerIn: parent
                         visible: passwordInput.text.length === 0
                         text: root._fieldPlaceholder()
+                        // Faint placeholders (DESIGN.md §1.4, M19 Task 4):
+                        // one band under the field's own label/status text
+                        // above, which stays foregroundDim/urgent.
+                        color: Theme.color.foregroundFaint
                     }
 
                     TextInput {

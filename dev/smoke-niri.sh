@@ -50,8 +50,10 @@
 # then the finish script's last leg summons the menu with the ':nix hello'
 # prefill route, activates row 0, and screenshots the resulting NIX RUN
 # toast (nix-toast.png) with a `notifications status` popup-count assert.
-# With --notify, fires `notify-send -u normal` then `-u critical` in-session
-# and screenshots the resulting toasts. Then flips DND on over the existing
+# With --notify, fires `notify-send -u normal` then `-u critical` then one
+# carrying two real `-A` actions (M19 Task 4: proves NotificationCard.qml's
+# action row renders as full-bleed ink-fill buttons) in-session and
+# screenshots the resulting toasts. Then flips DND on over the existing
 # `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
 # notify-sends already landed, so this can't retroactively suppress them)
 # and screenshots the bar again (indicator-dnd.png) to prove the bell cell
@@ -2599,6 +2601,14 @@ fi
   if $notify_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -u normal 'Test' 'Hello'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$notify_send_bin' -u critical 'Crit' 'Now'\""
+    # A real action-carrying notify-send (M19 Task 4's ink-button proof):
+    # neither leg above declares actions, so NotificationCard.qml's action
+    # row never rendered in this rig before. -A implies --wait, so the
+    # client blocks on the popup's own auto-expiry rather than exiting —
+    # harmless, niri's own quit at the end of this run tears it down with
+    # everything else. Two actions so the screenshot shows adjacent ink
+    # cells, not just one.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -A 'view=View' -A 'dismiss=Dismiss' 'Actions' 'Pick one'\""
     # Bell cell DND display (M13b Task 2, formerly Indicators.qml's DND
     # glyph, M10 Task 2): both notify-sends above have already fired by
     # sleep 6, so flipping DND on here can't suppress them (dnd bypass is

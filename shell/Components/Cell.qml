@@ -19,6 +19,14 @@ import qs.Core
 // a caller's own service layer already distinguishes a middle severity band;
 // see Battery.qml for the one consumer.
 //
+// `ink` (DESIGN.md §2 item 11, M19 Task 4) is the ink button: a committing
+// action's resting cell, full-bleed `Theme.color.foreground` carrying
+// `Theme.color.background` ink, borderless like `standalone`. It sits
+// between `warning` and `selected` in the fill priority (urgent > accent >
+// warning > ink > selected), and hover/press on it inverts to the accent
+// pair exactly like a standalone bar cell — a resting affordance, not a
+// second selection state.
+//
 // `standalone` (DESIGN.md §3 Bar retrofit) swaps that contract for
 // omarchy's own module chrome: borderless at rest, no persistent rule at
 // all — the bar's discrete widget cells opt into this. Every fused-ledger
@@ -44,6 +52,13 @@ Item {
     property bool accent: false
     property bool urgent: false
     property bool warning: false
+    // The ink button (DESIGN.md §2 item 11, M19 Task 4): a committing
+    // action's resting cell, full-bleed `foreground` fill carrying
+    // `background` ink — sits between `warning` and `selected` in the fill
+    // priority below. Hover/press inverts to the accent pair exactly like
+    // the standalone bar-cell case (`_hoverInverted` below), so this is a
+    // resting affordance only, never a second selection state.
+    property bool ink: false
     property bool hovered: false
     property bool standalone: false
     // Dithered resting backdrop (DESIGN.md §2.8) for a still-unseen row —
@@ -78,9 +93,15 @@ Item {
 
     // Bar cells only: hovered, and not already carrying one of the other
     // full-bleed states (selected/accent/urgent/warning keep their own fill
-    // — no double treatment, DESIGN.md §2.4).
+    // — no double treatment, DESIGN.md §2.4). `ink` is deliberately NOT in
+    // that exclusion list: its resting fill is only right at rest, so a
+    // hover still has to activate this layer to replace it with the accent
+    // pair below — the ink button's whole point (DESIGN.md §2 item 11).
     readonly property bool _hoverFillActive: root.hovered && !root.selected && !root.accent && !root.urgent && !root.warning
-    readonly property bool _hoverInverted: root.standalone && root._hoverFillActive
+    // Standalone (bar) cells and ink cells both invert to the accent pair
+    // on hover, exactly the same swap — the only difference is what their
+    // resting fill looked like beforehand.
+    readonly property bool _hoverInverted: (root.standalone || root.ink) && root._hoverFillActive
 
     readonly property color foreground: urgent
         ? Theme.color.onUrgent
@@ -88,12 +109,18 @@ Item {
             ? Theme.color.onAccent
             : warning
                 ? Theme.color.onWarning
-                : ((root._hoverInverted || selected) ? Theme.inverted().fg : Theme.color.foreground)
+                : root._hoverInverted
+                    ? Theme.inverted().fg
+                    : ink
+                        ? Theme.color.background
+                        : selected
+                            ? Theme.inverted().fg
+                            : Theme.color.foreground
 
     // Band-2 (meta) ink that stays legible when this cell is itself
     // full-bleed or inverted (DESIGN.md §1.4 ink hierarchy): `foregroundDim`
     // is the default resting color, but a dim caption drawn straight onto
-    // an accent/urgent/warning fill or the inverted cursor fill measures
+    // an accent/urgent/warning/ink fill or the inverted cursor fill measures
     // under 1.1:1 contrast (M18 Task 2/4 regression) — so any of those
     // states promote a meta label to the same ink `foreground` above
     // already resolves for content, matching the single-band-loudness
@@ -101,16 +128,18 @@ Item {
     // Cell's own state (MenuRow's desc/dim text, MetaLabel captions on
     // Battery/UsageWidget/NotificationCard/Osd) reads this instead of
     // hardcoding `Theme.color.foregroundDim`.
-    readonly property color dimForeground: (urgent || accent || warning || root._hoverInverted || selected)
+    readonly property color dimForeground: (urgent || accent || warning || ink || root._hoverInverted || selected)
         ? foreground
         : Theme.color.foregroundDim
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
     // The borderWidth term reserves room for the bottom/right rules below —
-    // a standalone cell draws neither, so reserving it anyway leaves the
-    // content sitting visibly high-left of the cell's true center.
-    readonly property real _ruleReserve: standalone ? 0 : Theme.borderWidth
+    // a standalone or ink cell draws neither (DESIGN.md §2 item 11: the ink
+    // button is borderless, same as the bar's standalone cells), so
+    // reserving it anyway leaves the content sitting visibly high-left of
+    // the cell's true center.
+    readonly property real _ruleReserve: (standalone || ink) ? 0 : Theme.borderWidth
 
     implicitWidth: root._measure(false) + Theme.space.controlPaddingX * 2 + _ruleReserve
     implicitHeight: root._measure(true) + Theme.space.controlPaddingY * 2 + _ruleReserve
@@ -187,9 +216,11 @@ Item {
                 ? Theme.color.accent
                 : root.warning
                     ? Theme.color.warning
-                    : root.selected
-                        ? Theme.inverted().bg
-                        : "transparent"
+                    : root.ink
+                        ? Theme.color.foreground
+                        : root.selected
+                            ? Theme.inverted().bg
+                            : "transparent"
     }
 
     // Pending backdrop (DESIGN.md §2.8): dropped the instant a fuller-bleed
@@ -198,7 +229,7 @@ Item {
     // visibility, so the common case (pending false) never allocates one.
     Loader {
         anchors.fill: parent
-        active: root.pending && !root.urgent && !root.accent && !root.warning && !root.selected
+        active: root.pending && !root.urgent && !root.accent && !root.warning && !root.ink && !root.selected
         sourceComponent: DitherFill {
             anchors.fill: parent
         }
@@ -209,13 +240,13 @@ Item {
     // the fade stays on this layer even for the standalone/bar case below;
     // only the swap itself (this fill's own color, and `foreground` above)
     // is instant, matching every other ledger inversion (DESIGN.md §4.3).
-    // Standalone (bar) cells get a full opaque accent fill — `Theme.inverted().bg`,
-    // the same pair the ledger's `selected` fill below uses — instead of
-    // every other cell's low-alpha tint.
+    // Standalone (bar) cells and ink cells both get a full opaque accent fill
+    // — `Theme.inverted().bg`, the same pair the ledger's `selected` fill
+    // below uses — instead of every other cell's low-alpha tint.
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
-        color: root.standalone
+        color: (root.standalone || root.ink)
             ? Theme.inverted().bg
             : Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
         opacity: root._hoverFillActive ? 1 : 0
@@ -239,7 +270,7 @@ Item {
     }
 
     Rectangle {
-        visible: !root.standalone
+        visible: !root.standalone && !root.ink
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -248,7 +279,7 @@ Item {
     }
 
     Rectangle {
-        visible: !root.standalone
+        visible: !root.standalone && !root.ink
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right

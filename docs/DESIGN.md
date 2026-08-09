@@ -388,12 +388,20 @@ to exactly one band:
 `accent`/`urgent`/`warning` sit outside the ramp: they are the loud
 exceptions (§2.4), spent only where a state genuinely demands one, and
 always as full-bleed fills or inversions carrying their `on*` ink —
-never as tints. Checkable: sample any border or rule in a screenshot,
-it equals the `rule` hex; sample any meta label, it equals
-`foregroundDim`; sample a text field's placeholder, it equals
-`foregroundFaint` while the field's own label one band above equals
-`foregroundDim`; nothing structural samples as a foreground alpha
-blend.
+never as tints. One exception: a bare label with no cell chrome of its
+own (§1.1's ink-promotion controls) may rest at `accent` ink while its
+own state is armed or current, or when it names a live destination the
+way mek spends its blue on underlined link text far more often than on
+selection (137 uses, mostly links). The notification center's DND toggle
+is the shipped case: armed, its resting ink is `accent` with no fill
+behind it. The ban stands on an accent-tinted fill, never on a bare
+label's own resting ink. Checkable: sample any border or rule in a
+screenshot, it equals the `rule` hex; sample any meta label, it equals
+`foregroundDim`, or `accent` if it is one of these armed/current/link
+labels, and never sits on a fill of its own; sample a text field's
+placeholder, it equals `foregroundFaint` while the field's own label one
+band above equals `foregroundDim`; nothing structural samples as a
+foreground alpha blend.
 
 ### 1.5 Palette roles
 
