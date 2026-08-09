@@ -189,8 +189,11 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 - matugen runs (`ThemeEngine`) need a live TTY-free color decision: an
   unprefixed `matugen image` prompts on an ambiguous/near-solid source color,
   which hangs forever under `Process` (no stdin). `ThemeEngine` always passes
-  `--prefer darkness|lightness` matched to `State.mode`. If you invoke
-  matugen by hand while debugging, do the same or pass `--fallback-color`.
+  a fixed `--prefer lightness` — the flag picks WHICH extracted candidate
+  seeds the scheme (not the scheme's lightness; `-m` does that), so matching
+  it to `State.mode` made the same wallpaper flip hue family across a mode
+  toggle (2026-08-09). If you invoke matugen by hand while debugging, pass
+  the same fixed `--prefer` or a `--fallback-color`.
 
 ## macOS verification loop (mac e2e rig)
 

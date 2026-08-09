@@ -47,8 +47,16 @@ import "palette.js" as Palette
 // against a near-solid wallpaper — a very plausible choice for this shell's
 // brutalist aesthetic — fails outright with "no preference was inputted, and
 // a terminal was not detected" (verified against a solid-swatch PNG).
-// --prefer=darkness/lightness, matched to State.mode, resolves it
-// deterministically without needing a --fallback-color.
+// The value is a FIXED "lightness", never matched to State.mode: --prefer
+// picks WHICH extracted candidate becomes the scheme's seed color ("when
+// multiple colors can be extracted from an image, this will decide which to
+// pick" — matugen's own help), while -m alone tones the scheme. The
+// original mode-matched darkness/lightness pair made the same wallpaper
+// flip hue family across a mode toggle (verified 2026-08-09 against a
+// green-foliage wallpaper: darkness seeded its blue candidate, lightness
+// its green one, in BOTH modes), so one constant keeps the palette a
+// function of the wallpaper alone and still answers the prompt that would
+// otherwise hang a TTY-less run.
 Singleton {
     id: root
 
@@ -183,7 +191,7 @@ Singleton {
                     }
                     matugenProc.command = ["matugen", "image", Core.State.wallpaper, "-m", Core.State.mode,
                         "-c", root._mergedConfigPath,
-                        "--prefer", Core.State.mode === "light" ? "lightness" : "darkness"];
+                        "--prefer", "lightness"];
                     matugenProc.running = true;
                 });
             }
