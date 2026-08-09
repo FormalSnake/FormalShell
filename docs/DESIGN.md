@@ -103,6 +103,75 @@ is 4.42:1, the best available over Flexoki red 400, large-text AA only.
 only, never content ink. No feature, IPC, or layout-structure change;
 drawn output only.
 
+## Revision 2026-08-09: the mek grammar (live-site study)
+
+Owner ask: match mek.gallery's look and feel, not just its palette. The
+live site was driven in a real browser on 2026-08-09 (the site ships a
+`darkreader-lock` opt-out, so the first naive capture was a Dark Reader
+recolor and was discarded) and measured from computed styles and pixel
+samples across home, /about, /pixel, /dev, and the PROJECTS dropdown. The
+ramp is unchanged from the 2026-08-07 capture: canvas #eee9dc, panel step
+#d9d2c1, 1px hairlines #b6b1a3, faint meta #9c9587, meta ink #636059,
+content ink #2e2e2e, one loud blue #0099ff (links only, always
+underlined, 137 uses), fill tint rgba(99,96,89,0.08). What the study adds
+is grammar this document does not yet encode, plus one correction to it:
+
+- **The dog-ear fold mark replaces the corner squares (§2 item 7,
+  rewritten).** A scan of the live DOM for 4-8px square elements returns
+  zero: the 6px corner marks the 2026-08-07 block cites are gone from the
+  site. Cards and ledger cells carry a small folded-corner triangle at
+  the top-left instead. That one point of the 2026-08-07 revision is
+  superseded, one fold mark at one corner is what ships; the rest of that
+  block stands.
+- **Card title-bar band (§2 item 9, new).** Every floating card opens
+  with a one-row band: uppercase meta label plus trailing colon at the
+  left, optional meta text or bare-label actions at the right, one shared
+  rule below. The menu's breadcrumb row and the panels' title row already
+  are this band; the notification center gains one.
+- **Trailing colon on headers, ` / ` on meta pairs (§2 item 10, new).**
+  Every section header on the live site ends in a colon, no exceptions
+  found. Inline meta pairs take no colon and fuse with a spaced slash,
+  which the shell already does (`PENDING / 2`, `appName / relTime`) and
+  this revision names as law.
+- **The ink button (§2 item 11, new).** A committing action's resting
+  cell is a full-bleed `foreground` fill carrying `background` ink, the
+  shape of mek's Submit. Hover and press keep the accent-pair inversion,
+  so this is a resting affordance, not a revival of the retired
+  photo-negative selection.
+- **Ink-promotion hover for bare labels (§1.1, new amendment).** A
+  label-only control promotes its ink one band on hover (`foregroundDim`
+  to `foreground`) and leaves its ground alone, which is mek's nav
+  behavior. Cells keep the fill-alpha and inversion model, and the
+  bar-cell accent-inversion directive stands.
+- **Faint placeholders (§1.4).** A field's placeholder ink is
+  `foregroundFaint`, one band under the field's own label.
+
+Study notes, recorded as reference with no rule and no palette role
+added: mek's announcement modal is a warm dark card, ground #33241e, with
+the paper #eee9dc as its content ink and #9c9587 as the meta ink on both
+grounds, so the ramp already survives a dark ground with its meta step
+intact. The site's own `prefers-color-scheme: dark` swaps nine tokens to
+a terminal facet (#000 canvas, #161617 surface, #fff ink, #0f0 accent)
+while the paper ramp tokens stay put: the shell's dark mode is that facet
+of the same language, not a divergence from it. The PROJECTS dropdown
+pixel-samples flat #d9d2c1 on every row, so there is no zebra striping to
+adopt (what reads as alternation is glyph density); a summoned surface
+sits one step below canvas with shared 1px rules, which is what §2 item 1
+already requires. Empty column ends carry faint asterisk-family dings
+(`✳ ❋`) from the MEK Dings faces; a faint glyph is permitted the same way
+here, as an empty-state ornament in `foregroundFaint`, never as a
+mandate.
+
+Measured and deliberately not adopted: the modal's `box-shadow: 4px 4px 0
+rgba(0,0,0,.25)` hard offset plate (the no-shadows hard rule stands),
+mek's custom bitmap faces (the fontconfig `monospace` alias hard rule
+stands), hidden scrollbars (a browser concern, not a QML one), and mek's
+sub-AA header contrast (#9c9587 on canvas measures about 2.2:1, while
+shell headers stay `foregroundDim` per the 2026-08-07 WCAG stance, a
+deliberate divergence). No feature, IPC, provider, or state-machine
+change, and no palette change: the twelve roles in §1.5 carry every rule
+above.
+
 ## 1. The token system
 
 Every value below is a **default**; nothing here freezes a magic number —
@@ -187,6 +256,19 @@ focused workspace, a critical battery) keep that fill instead — no double
 treatment. Panels, menu, and every other non-`standalone` cell are
 unaffected; the menu's cursor row already inverted on its own, so this
 change unifies the idiom rather than introducing a second one.
+
+**Amendment (bare labels hover by ink promotion, 2026-08-09).** A control
+that is only a label, with no cell chrome of its own (a card title-bar
+band's right-side actions per §2 item 9, a nav-style text action), neither
+tints nor inverts on hover. It promotes its ink one band up §1.4's
+hierarchy, `foregroundDim` to `foreground`, and its ground does not
+change. This is mek.gallery's nav behavior: labels idle at the meta ink
+and go to content ink under the pointer. It applies only where there is no
+cell to fill; anything drawn as a cell keeps the fill-alpha model above,
+including the bar-cell accent-inversion directive. Checkable: sample a
+title-bar action's background hovered and idle, both equal the card's own
+ground; sample its text, it moves from the `foregroundDim` hex to the
+`foreground` hex.
 
 ### 1.2 Border specs
 
@@ -300,7 +382,7 @@ to exactly one band:
 | --- | --- | --- |
 | 1 (loudest) | `foreground` | content: values, titles, body text, glyphs |
 | 2 | `foregroundDim` | meta: uppercase section headers, timestamps, captions (§2.3) |
-| 3 | `foregroundFaint` | faint: disabled states, placeholder ornament, dither texture, corner marks |
+| 3 | `foregroundFaint` | faint: disabled states, field placeholders, dither texture, the dog-ear fold mark (§2 item 7) |
 | 4 (quietest) | `rule` | structure: hairline rules, control borders, card borders |
 
 `accent`/`urgent`/`warning` sit outside the ramp: they are the loud
@@ -308,6 +390,8 @@ exceptions (§2.4), spent only where a state genuinely demands one, and
 always as full-bleed fills or inversions carrying their `on*` ink —
 never as tints. Checkable: sample any border or rule in a screenshot,
 it equals the `rule` hex; sample any meta label, it equals
+`foregroundDim`; sample a text field's placeholder, it equals
+`foregroundFaint` while the field's own label one band above equals
 `foregroundDim`; nothing structural samples as a foreground alpha
 blend.
 
@@ -386,18 +470,23 @@ adjective:
    headers and box-drawing interior structure are permitted on the menu,
    panel-internal lists, the picker grid, and the screensaver's banner —
    never invented as decoration on a card's *outer* chrome (that chrome is
-   omarchy's plain bordered rectangle per §3), with item 7's corner marks
-   as the single sanctioned exception.
-7. **Corner marks on floating-card chrome (2026-08-07).** Every floating
-   card (menu, panels, notification toasts and center, OSD, picker) draws
-   a small square mark at each of its four border corners — `xs`-sized
-   (3px at scale 1.0), filled `foregroundFaint`, sitting on the border
-   line, mek.gallery's card idiom (its shipped CSS uses 6px marks on 1px
-   borders; ours scale with `spacingScale` against the 2px border). One
-   shared component draws them; no surface hand-places its own.
-   Checkable: the four corner pixels of any card sample as
-   `foregroundFaint`, and exactly one QML component contains the mark
-   geometry.
+   omarchy's plain bordered rectangle per §3), with item 7's dog-ear fold
+   mark as the single sanctioned exception.
+7. **Dog-ear fold mark on floating-card chrome (2026-08-09, replacing the
+   corner squares of 2026-08-07).** Every floating card (menu, panels,
+   notification toasts and center, OSD, picker) draws one small right
+   triangle at its top-left border corner: legs `Theme.space.lg` long
+   (8px at scale 1.0) running along the top and left border edges, filled
+   `foregroundFaint`, sitting on the border ring. The other three corners
+   are plain border. This is the live site's card idiom as of the
+   2026-08-09 study; the four 6px corner squares the previous revision
+   read off the shipped CSS no longer exist anywhere in mek.gallery's DOM,
+   so they are retired here too. mek draws its fold in the hairline ink,
+   ours sits one band louder in `foregroundFaint`, the band §1.4 reserves
+   for ornament. One shared component draws it; no surface hand-places its
+   own. Checkable: a card's top-left corner samples as `foregroundFaint`
+   and its other three corners sample as `rule`, and exactly one QML
+   component contains the triangle geometry.
 8. **Ordered dither is the period texture (2026-08-07).** Where a fill
    needs to read as "partial" or "pending" (the unfilled remainder of a
    track, a pending/expired notification row's backdrop, a disabled
@@ -408,6 +497,49 @@ adjective:
    not structure. Checkable: zoom any track remainder in a screenshot
    and individual dither pixels resolve; no surface samples as a smooth
    low-alpha gray wash where a dither is mandated.
+9. **Card title-bar band (2026-08-09).** Every floating card opens with a
+   one-row band above its content: an uppercase meta label with the
+   trailing colon of item 10 at the left in `foregroundDim`, an optional
+   right side carrying meta text or bare-label actions, and one shared
+   rule under the whole band (the band draws its own bottom rule; the
+   frame's content erasers of §1.3 are unchanged). Right-side actions rest
+   in `foregroundDim` and promote to `foreground` on hover per §1.1's
+   ink-promotion amendment, never a cell fill. mek's own modal is the
+   reference: `ANNOUNCEMENT` at the left, `CLOSE X` at the right, one 1px
+   rule under both. The menu's breadcrumb row and the panels' title row
+   are this band. Checkable: a card's first row is the shared band
+   component, its label ends in `:`, and there is exactly one rule between
+   the band and the content below it.
+10. **Trailing colon on headers, ` / ` on meta pairs (2026-08-09).** A
+    label that introduces the content under it ends in a colon: the card
+    title band (`NOTIFICATIONS:`), a panel section header (`OUTPUT:`,
+    `PAIRED DEVICES:`), the menu breadcrumb. The live site does this
+    without exception (`DROP A MESSAGE:`, `DEV WORKS & PROJECTS:`, and the
+    nav's running page title `ABOUT MEK.TXT:`). A meta row that *is* the
+    content takes no colon, and neither does an empty state:
+    `PENDING / 2`, `APP NAME / 2M AGO`, `NO NOTIFICATIONS`. Fields inside
+    one meta row fuse with a spaced slash, never a bullet, pipe, or dash,
+    matching mek's `Jul 2026 / DEV` and `SANROK Studio / Exhibition &
+    Media / OBJKT`. The colon is appended when the label renders and is
+    never written into an externally sourced string. Checkable: `grep` a
+    meta label that has rows under it and it sets the colon flag; `grep` a
+    meta pair and its separator is `" / "`.
+11. **The ink button (2026-08-09).** A cell whose action commits something
+    (a notification's action row, an authentication dialog's confirm)
+    rests as a full-bleed `foreground` fill carrying `background` ink:
+    borderless, radius 0, no tint, sitting between `warning` and
+    `selected` in §1.1's fill priority. Hover and press stay the
+    accent-pair inversion every other cell uses, so the ink fill reads as
+    "this is the committing control", never as "this row is chosen". It is
+    not a revival of the photo-negative *selection* the 2026-08-07
+    revision retired: that was a state a row entered, this is how one
+    control looks at rest. `accent` still means selected/current and
+    `urgent` still means critical. A loud color is never a button fill:
+    mek spends its blue on links and selection only, and the shell spends
+    `accent` on selection and current-state only. Checkable: sample a
+    committing cell's resting fill, it equals the `foreground` hex and its
+    text equals `background`; sample it hovered, it equals `accent` with
+    `onAccent` text.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,
@@ -443,10 +575,10 @@ floats with a margin or fuses to the screen edge.
   omarchy-style card anchored under its bar cell (`panelGap` margin,
   bordered, radius 0, `panelPadding` internal padding). Inside: an uppercase
   `PanelSectionHeader`-equivalent caption introduces each group ("OUTPUT
-  DEVICE", "PAIRED DEVICES", "NOW PLAYING"), then rows share rules in the
-  ASCII-OS table style; sliders (volume, brightness) are full-width tracks
-  whose fill level is a flat `accent` block — no round thumb, no gradient
-  fill.
+  DEVICE:", "PAIRED DEVICES:", "NOW PLAYING:", colon per §2 item 10), then
+  rows share rules in the ASCII-OS table style; sliders (volume,
+  brightness) are full-width tracks whose fill level is a flat `accent`
+  block — no round thumb, no gradient fill.
 - **Notifications** — each popup toast is its own small omarchy card
   (bordered, radius 0); stacked toasts keep omarchy's card-to-card gap, not
   fused adjacency. The notification **center** (the summoned history list)
