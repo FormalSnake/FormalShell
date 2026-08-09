@@ -1,14 +1,16 @@
 .pragma library
 
-// Pure mapping for the bar's ASCII audio visualizer (owner ask: "next to
+// Pure mapping for the bar's dithered audio visualizer (owner ask: "next to
 // the now playing it would be nice to have an ASCII style audio
-// visualizer"). VisualizerService feeds this cava's own raw ASCII output
-// format one frame (one line) at a time: `BAR_COUNT` bar values 0..
-// `MAX_LEVEL`, separated by `;` (cava's bar_delimiter default, decimal 59)
-// — cava's own frame_delimiter default (decimal 10, `\n`) is what the
-// Process's SplitParser already split on to hand us one line, so a frame
-// never needs splitting on anything but `;` here. No Quickshell access, so
-// the mapping/clamping/malformed-line paths are testable head-on.
+// visualizer", M20 Task 4: "for consistency, the audio visualizer can also
+// have the dithered ASCII effect like progress bars"). VisualizerService
+// feeds this cava's own raw ASCII output format one frame (one line) at a
+// time: `BAR_COUNT` bar values 0..`MAX_LEVEL`, separated by `;` (cava's
+// bar_delimiter default, decimal 59) — cava's own frame_delimiter default
+// (decimal 10, `\n`) is what the Process's SplitParser already split on to
+// hand us one line, so a frame never needs splitting on anything but `;`
+// here. No Quickshell access, so the mapping/clamping/malformed-line paths
+// are testable head-on.
 // `BAR_COUNT`/`MAX_LEVEL` must match VisualizerService's generated
 // cava.conf (`bars` / `ascii_max_range`) — the two are kept in the same
 // place on purpose so they can't drift apart.
@@ -17,8 +19,6 @@
 // undefined line) parses to an all-zero frame rather than throwing — one
 // bad line from cava must never crash the widget or freeze it on a stale
 // render.
-
-var GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
 // 6 bars at caption size, not 10 at body — the owner wants the cell
 // DMS-compact ("less wide"), and a fixed-frequency spectrum reads fine
@@ -32,22 +32,24 @@ var MAX_LEVEL = 100;
 // threshold visible next to the curve it interacts with.
 var NOISE_FLOOR = 2;
 
-// Square root, not linear. A linear level->glyph map spends most of its
-// range on peaks a real track almost never hits, so the row sits pinned at
-// ▁▂ and barely moves; sqrt lifts the mid-levels where music actually lives.
-// This is the same perceptual curve DMS applies to its own cava values
-// (`Math.sqrt(x * 0.01)` in `Modules/DankBar/Widgets/AudioVisualization.qml`)
+// Square root, not linear. A linear level->height map spends most of its
+// range on peaks a real track almost never hits, so a bar sits pinned near
+// zero and barely moves; sqrt lifts the mid-levels where music actually
+// lives. This is the same perceptual curve DMS applies to its own cava
+// values (`Math.sqrt(x * 0.01)` in `Modules/DankBar/Widgets/AudioVisualization.qml`)
 // and is the larger half of why theirs reads livelier — the other half is
 // VisualizerService's cava tuning (fixed sensitivity, monstercat spread).
 function _response(fraction) {
     return Math.sqrt(fraction);
 }
 
-function baselineText() {
-    var s = "";
+// All-zero levels — the bar's own dithered-track baseline (DESIGN.md §4
+// item 8): empty fills, pure dither, no live spectrum.
+function baselineLevels() {
+    var levels = new Array(BAR_COUNT);
     for (var i = 0; i < BAR_COUNT; i++)
-        s += GLYPHS[0];
-    return s;
+        levels[i] = 0;
+    return levels;
 }
 
 function parseFrame(line, barCount) {
@@ -65,25 +67,26 @@ function parseFrame(line, barCount) {
     return levels;
 }
 
-// level 0..max -> glyph index through the response curve, clamped to
-// GLYPHS' own range regardless of how far out of band a malformed or
-// overshooting value lands.
-function levelToGlyph(level, maxLevel) {
+// level 0..max -> 0..1 fill fraction through the response curve, clamped
+// to 0..1 regardless of how far out of band a malformed or overshooting
+// value lands. A bar's own track height times this fraction is the solid
+// fill's height; the rest of the column stays dither.
+function levelToFraction(level, maxLevel) {
     var max = maxLevel === undefined ? MAX_LEVEL : maxLevel;
     if (max <= 0 || level < NOISE_FLOOR)
-        return GLYPHS[0];
-    var idx = Math.floor(_response(level / max) * GLYPHS.length);
-    if (idx < 0)
-        idx = 0;
-    if (idx > GLYPHS.length - 1)
-        idx = GLYPHS.length - 1;
-    return GLYPHS[idx];
+        return 0;
+    var fraction = _response(level / max);
+    if (fraction < 0)
+        fraction = 0;
+    if (fraction > 1)
+        fraction = 1;
+    return fraction;
 }
 
-function frameToText(line, barCount, maxLevel) {
+function frameToLevels(line, barCount, maxLevel) {
     var levels = parseFrame(line, barCount);
-    var chars = new Array(levels.length);
+    var fractions = new Array(levels.length);
     for (var i = 0; i < levels.length; i++)
-        chars[i] = levelToGlyph(levels[i], maxLevel);
-    return chars.join("");
+        fractions[i] = levelToFraction(levels[i], maxLevel);
+    return fractions;
 }

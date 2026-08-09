@@ -3,15 +3,18 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// Bar cell for a live ASCII spectrum next to NowPlaying (owner ask: "next
-// to the now playing it would be nice to have an ASCII style audio
-// visualizer"): VisualizerService's shared cava frame rendered as N block
-// glyphs (U+2581..U+2588, verified present in the pinned
-// nerd-fonts-jetbrains-mono cmap via fonttools ttx — they're standard
-// Unicode Block Elements, not PUA nerd-font glyphs) in ONE monospace Text,
-// no Canvas/Rectangle bars. Opt-in via bar.layout (never part of
-// layout.js's DEFAULT_LAYOUT — the github/usage/tailscale precedent)
-// since it spawns a real background process.
+// Bar cell for a live dithered spectrum next to NowPlaying (owner ask:
+// "next to the now playing it would be nice to have an ASCII style audio
+// visualizer"; M20 Task 4 follow-up: "for consistency, the audio
+// visualizer can also have the dithered ASCII effect like progress bars").
+// VisualizerService's shared cava frame renders as six per-column tracks,
+// each the same DitherFill-plus-solid-fill idiom every other flat-fill
+// track in the shell uses (MediaPanel's progress bar, the OSD/panel
+// sliders): a faint dithered checker for the whole column height, with a
+// solid `root.foreground` fill rising from the bottom to that bar's own
+// level. Opt-in via bar.layout (never part of layout.js's DEFAULT_LAYOUT —
+// the github/usage/tailscale precedent) since it spawns a real background
+// process.
 //
 // Hidden until VisualizerService's one-shot `cava` PATH probe answers
 // (same pre-first-answer hidden state GithubWidget/UsageWidget use). Once
@@ -19,11 +22,11 @@ import qs.Services
 // playback (CommandModule's honest-failure idiom — the opt-in itself is
 // what's broken, not a transient poll), while `cava` present mirrors
 // NowPlaying's own shown condition (MediaService.available) so the two
-// widgets appear and disappear together. The glyphs freeze at their
-// all-baseline (lowest) row whenever VisualizerService's process isn't
-// actually running — paused, this bar off-screen, or motion disabled —
-// since that's the shared process's own hard gate, not something this
-// cell can paint around.
+// widgets appear and disappear together. The tracks render empty (zero
+// fill, pure dither) whenever VisualizerService's process isn't actually
+// running — paused, this bar off-screen, or motion disabled — since
+// that's the shared process's own hard gate, not something this cell can
+// paint around (DESIGN.md §4 item 8's honesty rule).
 Cell {
     id: root
 
@@ -57,24 +60,58 @@ Cell {
             VisualizerService.setBarVisible(true, false);
     }
 
-    // A single Text for the whole cell, not a Text-for-bars plus a
-    // MetaLabel-for-error pair: Cell's own _measure() sizes the cell off
-    // every direct child's width regardless of that child's `visible`
-    // (see Cell.qml's header — nothing here filters on visibility), so two
-    // alternately-shown siblings would size the cell to fit BOTH, leaving
-    // the shorter one sitting in leftover space. Swapping content/color/
-    // capitalization on one Text (GithubWidget's own pattern) avoids that
-    // and keeps the bars themselves in "ONE monospace Text — no Canvas, no
-    // Rectangle bars" for every state, not just the live one. The NO CAVA
-    // state borrows MetaLabel's own tokens (`Components/MetaLabel.qml`)
-    // rather than the component itself, for the same reason.
-    Text {
+    // Column width reuses `trackThickness`, the one token every other
+    // flat-fill track in the shell sizes its cross-axis by; height matches
+    // `Theme.fontSize.body`, the same glyph size every neighboring bar
+    // widget's own Text renders at, so this cell's footprint stays
+    // consistent with the cells around it.
+    readonly property real _trackWidth: Theme.space.trackThickness
+    readonly property real _trackHeight: Theme.fontSize.body
+
+    // A Loader, not two always-present siblings: Cell's own _measure()
+    // sizes the cell off every direct child of its content slot regardless
+    // of that child's `visible` (see Cell.qml's header), and the NO CAVA
+    // caption and the live tracks are genuinely different shapes now (a
+    // Text vs a Row of columns), not swappable content on one element the
+    // way the old single-Text version was. Loading exactly one of them
+    // keeps _measure reading only the shape that's actually shown.
+    Loader {
         anchors.verticalCenter: parent.verticalCenter
-        text: root._state === "missing" ? "NO CAVA" : VisualizerService.frameText
-        color: root._state === "missing" ? root.dimForeground : root.foreground
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize.caption
-        font.capitalization: root._state === "missing" ? Font.AllUppercase : Font.MixedCase
-        font.letterSpacing: root._state === "missing" ? Theme.letterSpacing.meta : 0
+        sourceComponent: root._state === "missing" ? noCavaComponent : tracksComponent
+    }
+
+    Component {
+        id: noCavaComponent
+        Text {
+            text: "NO CAVA"
+            color: root.dimForeground
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize.caption
+            font.capitalization: Font.AllUppercase
+            font.letterSpacing: Theme.letterSpacing.meta
+        }
+    }
+
+    Component {
+        id: tracksComponent
+        Row {
+            spacing: Theme.space.xxs
+
+            Repeater {
+                model: VisualizerService.levels.length
+
+                DitherFill {
+                    width: root._trackWidth
+                    height: root._trackHeight
+
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: parent.height * (VisualizerService.levels[index] || 0)
+                        color: root.foreground
+                    }
+                }
+            }
+        }
     }
 }

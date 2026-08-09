@@ -59,10 +59,11 @@ Singleton {
 
     readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying && root._visibleBars > 0 && Theme.motionEnabled
 
-    // Rendered text for the current frame — reset to the all-baseline
-    // glyph row the instant the process isn't running, so a paused/hidden
-    // widget never shows a frozen "still playing" frame.
-    property string frameText: Model.baselineText()
+    // Rendered levels for the current frame — one 0..1 fill fraction per
+    // bar, reset to the all-zero baseline array the instant the process
+    // isn't running, so a paused/hidden widget never shows a frozen "still
+    // playing" frame.
+    property var levels: Model.baselineLevels()
 
     // Every key below is in cava 0.10.7's own example config (checked there,
     // not from memory), and every one that departs from cava's default does
@@ -165,11 +166,11 @@ Singleton {
         running: root._shouldRun
         command: ["sh", "-c", 'command -v cava >/dev/null 2>&1 || exit 127; exec cava -p "$1"', "sh", root._configPath]
         stdout: SplitParser {
-            onRead: line => root.frameText = Model.frameToText(line, Model.BAR_COUNT, Model.MAX_LEVEL)
+            onRead: line => root.levels = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL)
         }
         onRunningChanged: {
             if (!cavaProc.running)
-                root.frameText = Model.baselineText();
+                root.levels = Model.baselineLevels();
         }
     }
 }
