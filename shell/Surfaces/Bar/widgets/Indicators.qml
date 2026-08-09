@@ -47,6 +47,13 @@ Row {
 
     Cell {
         id: stayAwakeCell
+        // Same Row-only-manages-x gap Workspaces.qml/Tray.qml fix
+        // identically: `root` here IS the Row Bar.qml's regionDelegate
+        // stretches to the bar's shared content height, so binding to it
+        // (not `Theme.barHeight`, which routes back through the same
+        // implicitHeight chain Bar.qml measures this Row by) gives every
+        // glyph cell the same hover-fill extent as a directly-hosted widget.
+        height: root.height
         visible: root._stayAwakeActive
         standalone: true
         hovered: stayAwakeArea.containsMouse
@@ -75,6 +82,7 @@ Row {
 
     Cell {
         id: nightLightCell
+        height: root.height
         visible: root._nightLightActive
         standalone: true
         hovered: nightLightArea.containsMouse

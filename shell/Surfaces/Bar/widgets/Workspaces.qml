@@ -43,6 +43,19 @@ Item {
                     return w.workspaceId === cell.ws.id;
                 }).length
 
+                // Bar.qml's regionDelegate Loader forces `root.height` (this
+                // file's outer Item) to the bar's shared content height —
+                // but Row only positions children's x, never their size, so
+                // without this each pill would fall back to its own
+                // content-derived implicitHeight instead. Bound to `root`,
+                // not `Theme.barHeight`: that token is itself sourced from
+                // this same implicitHeight chain (Bar.qml's `_regionHeight`
+                // reads `implicitHeight`, and `root.implicitHeight` above is
+                // `row.implicitHeight`, computed from these very cells'
+                // `height`), so routing through it would close a binding
+                // loop. `root.height` is the already-decoupled, externally
+                // forced value the direct-widget case relies on too.
+                height: root.height
                 standalone: true
                 accent: ws.isFocused
                 hovered: hoverArea.containsMouse

@@ -167,6 +167,14 @@ Row {
             // this the shorter icon cells sit visibly high (Row permits
             // vertical anchors on children — it only manages x).
             anchors.verticalCenter: parent.verticalCenter
+            // Same Row (`root` here IS the Row Bar.qml stretches) only
+            // manages x, never size, so the cell's own icon-only content
+            // would otherwise measure shorter than the bar's shared height
+            // — see Workspaces.qml's identical fix for why this binds to
+            // `root.height` (the externally forced value) and not
+            // `Theme.barHeight` (which routes back through the same
+            // implicitHeight chain Bar.qml measures this Row by).
+            height: root.height
             visible: itemCell.index < root._pinnedCount || TrayService.drawerExpanded
             standalone: true
             hovered: itemHover.containsMouse
@@ -228,6 +236,7 @@ Row {
     Cell {
         id: overflowCell
         anchors.verticalCenter: parent.verticalCenter
+        height: root.height
         visible: root._overflowing
         standalone: true
         hovered: overflowHover.containsMouse
