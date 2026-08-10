@@ -580,11 +580,11 @@ adjective:
     decode. The mini cover keeps its colors even on a hovered (inverted)
     cell, content ruling winning over the cell's own hover inversion, the
     same precedent the menu's app icons already set. The bar visualizer's
-    per-bar fill colors (§4 item 8) fall under the same content ruling:
-    they come from the current cover's own palette (`ArtPalette`, a small
-    invisible Canvas that posterizes sampled pixels to the same steps and
-    frequency-counts the six most common distinct ones), never a chrome
-    ink, and don't swap on hover either. Nothing else auto-dithers:
+    per-bar fill colors (§4 item 8) are chrome inks, not content: they
+    read the level bands, and swap on hover like every other ink on that
+    cell. A cover-derived palette shipped here briefly and the owner
+    rejected it 2026-08-10 ("the album cover's colors are ugly"). Nothing
+    else auto-dithers:
     notification images, menu thumbnails, launcher icons, and the
     wallpaper picker's grid all stay true-color. Checkable: zoom the media
     panel's album art in a screenshot, individual chunk-sized dither cells
@@ -769,15 +769,18 @@ and every rule here is checkable:
    marquee/rotation gates above but enforced on a real OS process instead
    of a `Behavior`. Six per-column dithered tracks (§2 item 8's fill+dither
    idiom) render the live spectrum, a fill rising from each column's bottom
-   to its own level. The fill's color comes from the current cover's own
-   palette (M20 Task 5b, replacing the earlier level-energy color bands,
-   one default, not an option): bar `i` fills with the `i`-th color out of
-   `ArtPalette`'s six-step extraction over the playing track's art (§2 item
-   12), wrapping if there are fewer than six distinct steps, falling back
-   to `root.foreground` when there's no art or no player, an honest neutral
-   rather than an invented color. Content ruling: unlike every other ink on
-   this cell, these colors do NOT swap under hover inversion, the same as
-   the now-playing cell's own mini cover. Like the marquee and rotation,
+   to its own level. The fill's color is the column's own energy band
+   (`Model.levelColorBand`): `dimForeground` below 0.4, `foreground`
+   through the middle, `Theme.color.accent` only past a 0.85 peak, so the
+   color carries loudness rather than decoration. M20 Task 5b replaced
+   these bands with per-bar colors sampled from the playing track's cover
+   and the owner rejected that on the live shell 2026-08-10 ("the album
+   cover's colors are ugly just keep it like it was before") — the bands
+   are the shipped default, and the extraction component is gone. Hover
+   inversion wins here, unlike the now-playing cell's own mini cover: dim
+   and content collapse to the inverted ink on their own, and a peak bar
+   swaps to `onAccent` so it never fights the cell's accent hover fill.
+   Like the marquee and rotation,
    this DOES respect `motion.enabled: false`: a disabled-motion session
    renders the same empty tracks (zero fill, pure dither) as the
    not-playing state, never a live spectrum.

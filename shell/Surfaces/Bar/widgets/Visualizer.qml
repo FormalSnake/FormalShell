@@ -2,6 +2,7 @@ import QtQuick
 import qs.Core
 import qs.Components
 import qs.Services
+import "../../../Visualizer/model.js" as Model
 
 // Bar cell for a live dithered spectrum next to NowPlaying (owner ask:
 // "next to the now playing it would be nice to have an ASCII style audio
@@ -16,17 +17,21 @@ import qs.Services
 // github/usage/tailscale precedent) since it spawns a real background
 // process.
 //
-// Per-bar color (M20 Task 5b, owner: "i also meant that it uses the
-// dithered album cover colors ... i dont want different options just one
-// default here" — supersedes Task 4b's level-band coloring outright, not
-// as an option): each column fills with the current cover's own palette,
-// `coverPalette.colors[index % n]`, an `ArtPalette` extraction over
-// `MediaService.artUrl` posterized to the same steps DitherImage's
-// "retro" mode paints the mini cover with, so the bars read as an
-// extension of the cover sitting next to them. No art, or a palette that
-// hasn't resolved any distinct steps yet, falls back to `root.foreground`
-// — an honest neutral, not an invented color. Content ruling, same as the
-// mini cover: these colors do NOT swap under hover inversion.
+// Per-bar color (M20 Task 4b, owner: "the audio visualizer can potentially
+// be colored bar per bar"): each column's fill resolves through
+// `Model.levelColorBand` to its own energy band, `root.dimForeground` for
+// a quiet bar, `root.foreground` for content-level energy, `Theme.color.
+// accent` only past a genuine peak (a meaning, loudness, not a static
+// per-index palette). Hover inversion still wins: dim/content already
+// collapse to the inverted ink through `root.dimForeground`/`root.
+// foreground` (Cell.qml's own logic), and the accent band mirrors
+// PanelOpenDot's own `inverted ? onAccent : accent` precedent so a peak
+// bar never fights the cell's own accent hover fill.
+//
+// M20 Task 5b swapped these bands for per-bar colors sampled from the
+// playing track's cover; the owner rejected that on the live shell
+// 2026-08-10 ("the album cover's colors are ugly just keep it like it was
+// before"), so the bands are the shipped default again.
 //
 // Hidden until VisualizerService's one-shot `cava` PATH probe answers
 // (same pre-first-answer hidden state GithubWidget/UsageWidget use). Once
@@ -80,14 +85,6 @@ Cell {
     readonly property real _trackWidth: Theme.space.trackThickness
     readonly property real _trackHeight: Theme.fontSize.body
 
-    // Cover-color extraction (M20 Task 5b): left at its default 0x0 size
-    // (no `anchors.fill`) so it never factors into Cell._measure() below —
-    // it exists to populate `colors`, not to be seen.
-    ArtPalette {
-        id: coverPalette
-        source: MediaService.artUrl
-    }
-
     // A Loader, not two always-present siblings: Cell's own _measure()
     // sizes the cell off every direct child of its content slot regardless
     // of that child's `visible` (see Cell.qml's header), and the NO CAVA
@@ -126,14 +123,17 @@ Cell {
                     height: root._trackHeight
 
                     readonly property real _level: VisualizerService.levels[index] || 0
+                    readonly property string _band: Model.levelColorBand(track._level)
 
                     Rectangle {
                         anchors.bottom: parent.bottom
                         width: parent.width
                         height: parent.height * track._level
-                        color: coverPalette.colors.length > 0
-                            ? coverPalette.colors[index % coverPalette.colors.length]
-                            : root.foreground
+                        color: track._band === "accent"
+                            ? (root.invertedNow ? Theme.color.onAccent : Theme.color.accent)
+                            : track._band === "content"
+                                ? root.foreground
+                                : root.dimForeground
                     }
                 }
             }

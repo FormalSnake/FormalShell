@@ -1448,10 +1448,9 @@ fi
 # avformat_open_input + AV_DISPOSITION_ATTACHED_PIC path a real tagged
 # audio file exercises, not a synthetic MediaService override. Without
 # this, MediaPanel's DitherImage art slot never has anything to dither.
-# Six saturated, distinct-hue stripes (M20 Task 5b), not one flat color:
-# the retro dither and the visualizer's cover-derived bar colors both need
-# real color variety in the source to prove hue survives and bars land on
-# genuinely different palette steps, not just one repeated color.
+# Six saturated, distinct-hue stripes, not one flat color: the retro
+# dither needs real color variety in the source to prove hue survives the
+# posterize pass.
 if $media_mode || $visualizer_mode; then
   media_art_path="$shot_dir/smoke-art.png"
   $convert_bin -size 64x64 "xc:#E03131" -size 64x64 "xc:#F08C00" -size 64x64 "xc:#FFD700" \
@@ -1554,10 +1553,9 @@ fi
 # assertions to hear), which would leave cava with no real signal and the
 # widget stuck on its baseline row the whole run. A fixed-frequency sine
 # tone is simple, deterministic, and gives cava's FFT real energy to bin.
-# Carries the same six-hue cover art as media_mode's track (M20 Task 5b):
-# the visualizer's bars derive their color from the playing track's own
-# cover (ArtPalette), so this leg needs real art to prove the bars land on
-# the cover's palette rather than the honest no-art fallback.
+# Carries the same cover art as media_mode's track so the NowPlaying mini
+# cover in the same frame renders its real dithered art next to the bars,
+# not the no-art fallback.
 if $visualizer_mode; then
   visualizer_track_path="$shot_dir/smoke-tone.flac"
   visualizer_track_title="FormalShell Visualizer Smoke Tone"
