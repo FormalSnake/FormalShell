@@ -1157,6 +1157,16 @@ PanelWindow {
             clip: true
             model: root._displayRows
             currentIndex: root._cursorIndex
+            // ListView tracks the cursor through its (always present, even
+            // with no `highlight` component) highlight item, and the
+            // default `highlightMoveDuration: -1` moves that item at
+            // `highlightMoveVelocity` — 400px/s. Key repeat outruns it, so
+            // the view crawls behind the cursor and the tail of a long list
+            // stays off-screen for seconds after the cursor has already
+            // reached it and wrapped back to the top. 0 makes the follow a
+            // hard jump, the only thing that keeps the cursor row visible
+            // at repeat speed.
+            highlightMoveDuration: 0
 
             delegate: MenuRow {
                 current: root._cursorIndex === index
