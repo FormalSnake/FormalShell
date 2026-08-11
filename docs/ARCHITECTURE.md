@@ -39,9 +39,11 @@ living on every output); one `Lock` (its `WlSessionLock` manages its own
 per-output surfaces internally — no `Variants` loop needed here) and one
 `Screensaver` (which *does* need its own `Variants` over
 `Quickshell.screens`, since a plain overlay layer has no such auto-multi-
-output primitive); one `ImagePicker`; and the `Ipc` handlers
-(debug/theme/wallpaper/menu/notifications/osd/panel/clipboard/media/lock/
-screensaver/picker/tray).
+output primitive); one `ImagePicker`; one `RegionPicker`; a `Variants` over
+`PluginService.surfacePlugins` spawning one host per `panel`/`overlay`
+plugin; and the `Ipc` handlers (debug/theme/wallpaper/menu/notifications/
+osd/panel/calendar/clipboard/network/bluetooth/media/tray/lock/screensaver/
+picker/screenshot/capture/record/reminder/nightlight/gallery/plugins).
 
 ## Tree layout
 
@@ -64,6 +66,16 @@ shell/
   Compositor/
     BackendBase.qml           the CompositorBackend contract (base component)
     CompositorService.qml     singleton facade; picks a backend, forwards everything
+    appmatch.js               pure JS, .pragma library — matchWindows()/nextWindow()/decorateAppRows():
+                               which running windows belong to a DesktopEntry (startupClass then id,
+                               first tier wins, no fuzzy tier), backing the menu's launch-or-focus
+    keybinds.js                pure JS, .pragma library — parseNiriBinds() (a real KDL scanner:
+                               quoted braces, block/slashdash comments, raw and multi-line strings)
+                               + parseHyprlandBinds() + search()/rows(); inert "note" rows only
+    keyboard.js                pure JS, .pragma library — parseNiriLayouts()/parseHyprlandLayouts()
+                               normalized to one {available, names, currentIdx, current} shape
+    focus.js                   pure JS, .pragma library — holds the last focused window across the
+                               gap a shell layer surface taking keyboard focus opens
     qmldir
     niri/
       reducer.js               pure JS: niri EventStream -> contract state
@@ -87,8 +99,12 @@ shell/
   Menu/
     model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
     search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
-    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()
-    default-menu.jsonc           shipped default tree (apps, system/power, theme, clipboard)
+    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/wallpaperEntry()/captureEntries()
+    toggles.js                   pure JS, .pragma library — the "@state:" checked-condition allow-list
+                                  (nightlight.active/screensaver.stayAwake/notifications.dnd/theme.dark),
+                                  snapshot()/resolveState()/checkedFor(): live in-process state beats a
+                                  cached Process result, an unlisted path answers false
+    default-menu.jsonc           shipped default tree (apps, system/power, toggles, reminder, clipboard)
   Clipboard/
     history.js                   pure JS, .pragma library — add()/remove()/clear()/sanitize(), 300-entry cap, dedup-to-front
   Calendar/
@@ -98,6 +114,29 @@ shell/
     openmeteo.js                 pure JS, .pragma library — buildUrl()/parseResponse() with typed failure shapes
   Media/
     applemusic.js                 pure JS, .pragma library — URL construction, response parsing, cache-key/prune-decision logic
+  Capture/
+    model.js                      pure JS, .pragma library — the capture family's shared logic:
+                                   outputPath()/gifOutputPath()/parseGeometry()/hexFromPpmBytes()/
+                                   parseAudioSetup()/recorderArgv()/gifArgv()/elapsedLabel()/ocrOutcome().
+                                   argv builders return arrays that go straight onto Process.command,
+                                   so a path carrying a quote can never splice a shell
+  Reminders/
+    model.js                      pure JS, .pragma library — parseDuration()/parseSpec()/makeEntry()/
+                                   add()/normalize()/due()/barLabel()/countdownLabel(); the clock is
+                                   always a nowMs parameter, never Date.now()
+    ReminderService.qml           singleton — wiring only: mirrors Core.State.reminders one-directionally,
+                                   1s tick while any are pending, fires at urgency 2 (DND bypass)
+    qmldir
+  Plugins/
+    manifest.js                   pure JS, .pragma library — scanCommand()/splitScan()/validateRecord()/
+                                   resolve(): the eight-key manifest schema and its failure contract
+                                   (whole plugin dropped vs one key back to its default)
+    PluginService.qml             singleton — the only QML touching ~/.config/formalshell/plugins;
+                                   one scan Process, the surface registry, service-plugin creation
+    qmldir
+  SystemUpdate/
+    model.js                      pure JS, .pragma library — parseLock() (direct flake inputs only),
+                                   per-input-type upstream probe argv, countBehind()/summaryLabel()
   Screensaver/
     effect.js                     pure JS, .pragma library — frameState(): five converging effects (decrypt/rain/expand/slide/scatter) over a loaded ASCII banner, stepped off a frame counter
   Services/
@@ -109,6 +148,9 @@ shell/
     MediaService.qml             singleton — Quickshell.Services.Mpris active-player pick, transport verbs, honest available:false
     AppleMusicArtService.qml     singleton — opt-in (media.appleMusicArt), curl-driven iTunes Search + amp-api editorialVideo, cached MP4s
     IdleService.qml               singleton — one shared IdleMonitor (respectInhibitors:true), screensaver.timeoutSeconds
+    RecordingService.qml          singleton — one wf-recorder child (`active` IS that child, never persisted,
+                                   never pgrep'd), the transient pactl mix modules desktopmic needs, and the
+                                   two-pass ffmpeg GIF transcode
     qmldir
   Notifications/
     model.js                    pure JS, .pragma library — three-tier reducer (popups/pending/past), DND bypass rule
@@ -128,6 +170,15 @@ shell/
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
     PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/close()/status()
     TrayIpc.qml                   IpcHandler target "tray", status()/expand()/collapse() — spec addendum, same rationale as "panel"
+    CaptureIpc.qml                IpcHandler target "capture", text()/color()/cancel()/status() — a Scope,
+                                   not a bare IpcHandler: the slurp/grim/tesseract Processes need a default
+                                   property to live in. One busy flag guards both verbs
+    RecordIpc.qml                 IpcHandler target "record", start(scope,audio)/stop()/toggle(scope,audio)/
+                                   gif(path)/status() — thin, every rule lives in RecordingService
+    ReminderIpc.qml               IpcHandler target "reminder", set(duration,message)/show()/clear()/status()
+    PluginsIpc.qml                IpcHandler target "plugins", list()/status()/reload() — introspection and
+                                   lifecycle only; summoning a plugin surface stays on "panel" under its
+                                   own "plugin:<id>" name
   Bar/
     layout.js                     pure JS, .pragma library — resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings
     commandOutput.js               pure JS, .pragma library — resolve(exitCode, stdout)/errorState() for CommandModule.qml's Waybar-JSON parsing
@@ -145,9 +196,14 @@ shell/
         WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
         NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player (exposes `shown`)
         Tray.qml                   SNI tray over Quickshell.Services.SystemTray, grouped overflow drawer (exposes `shown`)
-        Indicators.qml              DND / idle-inhibit glyphs, hidden entirely when neither holds (exposes `shown`)
+        Indicators.qml              recording / reminder / stay-awake / night-light glyphs, hidden entirely when none holds (exposes `shown`)
+        MicWidget.qml               opt-in: default-source mute glyph, honest NO MIC label with no capture device
+        KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `niri msg --json keyboard-layouts` /
+                                     `hyprctl devices -j` through Compositor/keyboard.js (exposes `shown`)
+        SystemUpdateWidget.qml      opt-in: flake-inputs-behind glyph + count, full-bleed warning while behind
         CommandModule.qml           bar.modules "command" entry: polled Waybar-JSON cell, honest MODULE ERROR on failure
         QmlModule.qml                bar.modules "qml" entry: Loader-hosted user file, load-time isolation only
+        PluginBarModule.qml          kind:"bar" plugin host: Loader-hosted entry file, forwards its `shown`
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
     Menu/
@@ -162,6 +218,8 @@ shell/
       WeatherPanel.qml            current-conditions header + FORECAST ledger off LocationService + open-meteo
       MediaPanel.qml               album art + NOW PLAYING meta row + flat progress cell + hover-invert transport cells
       AnimatedAlbumArt.qml         opt-in muted looping video, active only while open and MediaService.isPlaying
+      SystemUpdatePanel.qml        flake.lock via FileView (free, no nix invocation) + one queued upstream
+                                    probe per direct input; the poll lives here, the widget only enables it
     Notifications/
       Toasts.qml                 per-screen PanelWindow, Overlay layer; top-right popup column off NotificationService.popups
       Center.qml                  single-instance PanelWindow, Top layer; right-anchored PENDING/EARLIER sections + DND cell
@@ -175,6 +233,15 @@ shell/
       Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay, Canvas-drawn matrix rain
     Picker/
       ImagePicker.qml               ledger image grid (Panel.qml subtype); wallpaper mode + generic select() mode over the same grid
+    Capture/
+      RegionPicker.qml              full-screen Overlay region picker over grim-frozen output frames;
+                                     window rectangles on Hyprland, a named-window ledger card on niri
+    Plugins/
+      PluginPanel.qml               kind:"panel" plugin host (a real Panel), registers itself in
+                                     PluginService.surfaces as "plugin:<id>"
+      PluginOverlay.qml             kind:"overlay" plugin host: summoned centered card, joins
+                                     PanelRegistry's mutual-exclusion set by hand
+      qmldir
 greeter/
   greeter.qml                  greetd entry point (Quickshell.Services.Greetd); no WlSessionLock,
                                no Core.State reference — see the file's own header comment
@@ -192,6 +259,14 @@ tests/
   tst_applemusic.qml            qmltestrunner tests for Media/applemusic.js
   tst_screensaver_effect.qml    qmltestrunner tests for Screensaver/effect.js
   tst_bar_layout.qml             qmltestrunner tests for Bar/layout.js
+  tst_capture_model.qml          qmltestrunner tests for Capture/model.js
+  tst_reminders_model.qml        qmltestrunner tests for Reminders/model.js
+  tst_plugin_manifest.qml        qmltestrunner tests for Plugins/manifest.js
+  tst_systemupdate_model.qml     qmltestrunner tests for SystemUpdate/model.js
+  tst_menu_toggles.qml           qmltestrunner tests for Menu/toggles.js, incl. the allow-list drift guard
+  tst_keybinds.qml               qmltestrunner tests for Compositor/keybinds.js
+  tst_keyboard_layout.qml        qmltestrunner tests for Compositor/keyboard.js
+  tst_app_match.qml              qmltestrunner tests for Compositor/appmatch.js
 dev/
   smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard)(+media)(+lock)(+screensaver)(+picker)(+tray)(+bar-layout) loop, dbus-run-session isolated
   smoke-hyprland.sh             same, nested Hyprland
@@ -933,6 +1008,140 @@ for the full rationale: an `IpcHandler` call is synchronous request/
 response, so the UI's eventual answer can't ride back on the call that
 opened it) — reused rather than reinvented, correlated the same way by a
 caller-supplied token.
+
+## Capture family: `screenshot` / `capture` / `record`
+
+Three IPC targets, split by what each one leaves behind rather than by which
+binary it drives: `screenshot` writes a PNG (and copies it), `capture` puts
+recognized text or a pixel's color on the clipboard and keeps no file,
+`record` owns video. All three share `shell/Capture/model.js`, which is pure:
+argv builders, `slurp` geometry parsing, the PPM byte read, the OCR
+pipeline's own exit-code meanings, and every path/label formatter.
+
+```
+Ipc/CaptureIpc.qml (target "capture", a Scope so its Processes have a home)
+  text()  -> slurp -d  -> grim -g <geom> PNG -> tesseract -> tr -d "\f" -> wl-copy
+  color() -> slurp -p -x -> grim -g <geom> -t ppm 1x1 -> od -An -tu1 (last 3 bytes)
+                                                       -> Capture.hexFromPpmBytes -> wl-copy
+    |  one _busy flag + one watchdog (capture.timeoutSeconds) across BOTH verbs
+    |  slurp exit 1 is the user declining: no toast, no lastError
+    |  OCR exit 3 is "no readable text": a real answer, no clipboard write
+    |  geometry and paths ride Process.environment, never the script text
+
+Services/RecordingService.qml   (Ipc/RecordIpc.qml forwards, holds no state)
+  start(scope, audio)
+    |  region -> slurp (same chrome, same 0</dev/null stdin trap)
+    v
+  mkdir -p recording.directory
+    v
+  _setupAudio(): one sh script, two lines out (pactl module ids, then the
+    device to record). desktopmic loads module-null-sink + two loopbacks and
+    unloads whatever it already loaded if a later step fails
+    v
+  Capture.recorderArgv() -> wf-recorder -y -f <path> [-r][-o][-g][-c][--no-dmabuf][--audio=<dev>]
+    |  -y is mandatory, not a convenience: without it wf-recorder blocks on a
+    |  getline() from a stdin pipe quickshell never closes
+    |  --audio takes an optional_argument, so the device must ride the SAME argv element
+    v
+  stop(): running = false (SIGTERM, one of wf-recorder's own graceful signals,
+    so the container is finalized) + a 5s SIGKILL escalation that reports
+    RECORDING TRUNCATED rather than a save
+    v
+  gif(path): Capture.gifArgv() two-pass ffmpeg palettegen -> paletteuse,
+    dither=bayer per DESIGN.md §2, written next to its source
+```
+
+`active` is `recProc.running` and nothing else: never persisted (a crashed
+shell would leave a stale `true` in state.json) and never derived from
+`pgrep`. `Surfaces/Bar/widgets/Indicators.qml` binds it directly, which is
+also what forces the singleton's lazy construction.
+
+## Reminder lifecycle
+
+```
+Ipc/ReminderIpc.qml (target "reminder")     Menu "Set Reminder" row
+  set(duration, message)                      @ipc:reminder.set -> Menu.openInput(token)
+    |                                           |  answer arrives on Menu's selectionResolved
+    |                                           v
+    |                                    ReminderService.resolveInput(token, value, cancelled)
+    v                                           |  Model.parseSpec("25m coffee break")
+Reminders/ReminderService.qml <-----------------+
+  Model.parseDuration / parseSpec -> Model.makeEntry -> Model.add (sorted by dueAt)
+    v
+  Core.State.setReminders(list)          <-- the ONLY writer
+    v
+  state.json `reminders`
+    |  Connections { onRemindersChanged } mirrors it back into _pending
+    |  (one-directional: nothing ever assigns _pending itself, so state.json's
+    |   async FileView load is an ordinary case rather than a special one)
+    v
+  1s Timer while _pending is non-empty -> Model.due(list, now)
+    |  fired -> NotificationService.notify(msg, urgency 2) per entry
+    |           (urgency 2 + `local` IS the DND bypass, and also forces
+    |            expiresAt 0, so the toast is sticky until dismissed)
+    |  nothing fired -> due() returns the SAME array identity, and _tick
+    |                   returns before touching Core.State, so an idle
+    |                   countdown never rewrites state.json once a second
+    v
+  barLabel (soonest countdown, or "12:30 / 3") -> Indicators.qml's reminder cell
+```
+
+An entry whose `dueAt` passed while the shell was down is treated exactly
+like one that just crossed, so it fires on the first tick after state.json
+loads. Late is honest; silently dropped is not.
+
+## Plugin loading
+
+```
+~/.config/formalshell/plugins/<id>/manifest.json
+  |  Plugins/PluginService.qml: ONE sh Process enumerates the directory and
+  |  cats every manifest in a single pass (Quickshell has no directory-listing
+  |  QML type; the same read ThemeEngine performs over matugen.d), records
+  |  separated by a boundary line rather than by a process per file
+  v
+Plugins/manifest.js#resolve(text, settings.json plugins.disabled)
+  |  splitScan -> validateRecord per plugin -> id-sorted plugins, byId, warnings
+  |  whole plugin dropped: unparsable, missing required key, wrong apiVersion,
+  |    id != dirname, unknown kind, entry escaping the directory
+  |  one key dropped to its default: unknown key, key on the wrong kind, bad
+  |    region/width/keepLoaded/name value
+  v
+PluginService.{plugins, barPlugins, surfacePlugins, servicePlugins, warnings, errors, loaded}
+  |
+  +-- bar     -> Bar/layout.js resolves a "plugin:<id>" layout name against
+  |              barPlugins ({kind:"plugin", id, plugin}); an unplaced bar
+  |              plugin is appended to its manifest's own region, id-sorted
+  |              -> Surfaces/Bar/widgets/PluginBarModule.qml (a Loader)
+  |
+  +-- panel   -> shell.qml Variants over surfacePlugins
+  +-- overlay    -> Surfaces/Plugins/PluginPanel.qml / PluginOverlay.qml
+  |                 each registers ITSELF as PluginService.surfaces["plugin:<id>"]
+  |                 on completion, because a Variants delegate cannot be named
+  |                 as an id in shell.qml the way the builtin panels are
+  |                 -> PanelIpc's registry binding merges `surfaces` with the
+  |                    static builtin map, so `panel open plugin:<id>` needs no
+  |                    branch of its own and an unknown name gets the same error
+  |
+  +-- service -> Qt.createComponent (not a Loader: a service root is any
+                 QtObject, and a failed component gives a real errorString()
+                 that Loader's status enum cannot)
+```
+
+`rescan()` closes every open plugin surface first, deliberately rather than
+as a flicker: a `Variants` may destroy and recreate its delegates when the
+model identity changes, and a surface torn down mid-open would leave
+`PanelRegistry` pointing at a dead object. Nothing watches the directory, so
+a new plugin needs `plugins reload` or a restart.
+
+The isolation is load-time only. A `Loader` (or `Qt.createComponent`) catches
+bad syntax and unresolvable imports, reported through
+`PluginService.errors` and rendered as a `PLUGIN ERROR` cell or a dim row. A
+plugin file that parses fine has the same engine access as any built-in
+widget and can wedge or crash this single-process shell. What it never gets
+is a window of its own: layer, exclusive zone and keyboard focus stay
+shell-side, because a permanently-`Exclusive` surface makes Hyprland route
+every pointer event on every output to it (`Panel.qml`'s own documented
+finding), and a third-party file getting that wrong would brick the session.
 
 ## Greeter / greetd flow
 

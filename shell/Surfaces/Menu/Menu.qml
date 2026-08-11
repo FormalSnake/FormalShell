@@ -7,11 +7,15 @@ import qs.Compositor
 import qs.Components
 import qs.Services
 import qs.Notifications
+import qs.Reminders
 import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
 import "../../Menu/providers.js" as Providers
 import "../../Menu/calc.js" as Calc
 import "../../Menu/frecency.js" as Frecency
+import "../../Menu/toggles.js" as Toggles
+import "../../Compositor/keybinds.js" as Keybinds
+import "../../Compositor/appmatch.js" as AppMatch
 
 // The unified menu (DESIGN.md §Concrete translations/Menu): a single
 // keyboard-exclusive top-layer window, centered on the focused output. Top
@@ -61,10 +65,8 @@ PanelWindow {
     // "@ipc:notifications.showHistory" (see _dispatchInternal below).
     property var center: null
 
-    readonly property string _configDir: {
-        const xdgConfig = Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config");
-        return xdgConfig + "/formalshell";
-    }
+    readonly property string _xdgConfigDir: Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")
+    readonly property string _configDir: root._xdgConfigDir + "/formalshell"
 
     FileView {
         id: defaultMenuFile
@@ -252,6 +254,91 @@ PanelWindow {
         onLoadFailed: root._clipsshAliasesText = ""
     }
 
+    // Compositor keybinds for the menu's keybinds route. The niri leg reads
+    // config.kdl off the first path that loads: the settings override,
+    // $NIRI_CONFIG, then the two standard locations. watchChanges means
+    // saving the config updates a level that is already open. Hyprland
+    // ignores all of that and answers `hyprctl binds -j`, already expanded
+    // across submaps and sourced files.
+    property string _keybindsText: ""
+    property bool _keybindsResolved: false
+    property bool _keybindsFailed: false
+    property int _keybindsPathIndex: 0
+
+    readonly property var _keybindsPaths: {
+        var candidates = [
+            Core.Config.get("keybinds.niriConfigPath", ""),
+            Quickshell.env("NIRI_CONFIG") || "",
+            root._xdgConfigDir + "/niri/config.kdl",
+            "/etc/niri/config.kdl"
+        ];
+        return candidates.filter(function (p) { return p !== ""; });
+    }
+
+    FileView {
+        id: niriConfigFile
+        printErrors: false
+        path: root._keybindsPaths[root._keybindsPathIndex] || ""
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            root._keybindsText = niriConfigFile.text();
+            root._keybindsResolved = true;
+        }
+        // One candidate at a time; running out of them is an honest NO
+        // CONFIG row, never a warning.
+        onLoadFailed: {
+            if (root._keybindsPathIndex + 1 < root._keybindsPaths.length) {
+                root._keybindsPathIndex++;
+            } else {
+                root._keybindsText = "";
+                root._keybindsResolved = true;
+            }
+        }
+    }
+
+    Process {
+        id: hyprBindsProc
+        command: ["hyprctl", "binds", "-j"]
+
+        stdout: StdioCollector {
+            id: hyprBindsCollector
+        }
+        onExited: exitCode => {
+            root._keybindsFailed = exitCode !== 0;
+            root._keybindsText = exitCode === 0 ? hyprBindsCollector.text : "";
+            root._keybindsResolved = true;
+        }
+    }
+
+    // Never spawns hyprctl in a niri session: a doomed process per summon is
+    // the trap HyprlandBackend.qml's own compositor guard exists for.
+    function _refreshKeybinds() {
+        if (CompositorService.compositor === "niri") {
+            root._keybindsPathIndex = 0;
+            niriConfigFile.reload();
+            return;
+        }
+        if (CompositorService.compositor === "hyprland" && !hyprBindsProc.running)
+            hyprBindsProc.running = true;
+    }
+
+    // Every end state of the keybinds route resolves here, the same
+    // one-function shape _nixRowsFor above uses. No SEARCHING equivalent:
+    // the load is a local file read or a sub-100ms hyprctl, so the one
+    // empty frame before it lands has nothing to explain.
+    function _keybindRowsFor(q) {
+        if (CompositorService.compositor === "unknown") return [Keybinds.unsupportedRow()];
+        if (!root._keybindsResolved) return [];
+        if (root._keybindsFailed) return [Keybinds.failedRow()];
+        if (root._keybindsText === "") return [Keybinds.noConfigRow()];
+        var binds = CompositorService.compositor === "hyprland"
+            ? Keybinds.parseHyprlandBinds(root._keybindsText)
+            : Keybinds.parseNiriBinds(root._keybindsText);
+        if (binds.length === 0) return [Keybinds.noBindsRow()];
+        return Keybinds.rows(binds, q);
+    }
+
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
     // the ternary's closed branch never reads ClipboardService.items, so
@@ -275,7 +362,7 @@ PanelWindow {
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
         var wallpaper = Providers.wallpaperEntry(Quickshell.shellDir);
-        var stayAwake = Providers.stayAwakeEntry(Quickshell.shellDir);
+        var capture = Providers.captureEntries(Quickshell.shellDir);
         // Live-while-open, unlike wallpaper/buttons above: its action
         // depends on the current newest clipboard entry, so
         // _liveClipboardItems rides this same binding for _defaultObj (and
@@ -289,7 +376,7 @@ PanelWindow {
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
         Object.keys(wallpaper).forEach(function (k) { merged[k] = wallpaper[k]; });
-        Object.keys(stayAwake).forEach(function (k) { merged[k] = stayAwake[k]; });
+        Object.keys(capture).forEach(function (k) { merged[k] = capture[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
     }
@@ -315,9 +402,9 @@ PanelWindow {
         // for a rebuild. Date.now() is read at rebuild time, so the recency
         // decay is as fresh as the tree itself.
         apps: function () {
-            return Providers.appsProvider(DesktopEntries.applications.values, function (name) {
+            return AppMatch.decorateAppRows(Providers.appsProvider(DesktopEntries.applications.values, function (name) {
                 return Quickshell.iconPath(name, true);
-            }, Core.State.appLaunches, Date.now());
+            }, Core.State.appLaunches, Date.now()), CompositorService.windows || []);
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir); },
         shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); },
@@ -360,6 +447,12 @@ PanelWindow {
         var nixQuery = Providers.nixTriggerQuery(q);
         if (root.currentNodeId === "nix" || nixQuery !== null)
             return root._nixRowsFor(nixQuery !== null ? nixQuery : q);
+        // The keybinds route is route-local for the same reason: its own
+        // tiered search, never Search.rank, so a hundred-odd chords cannot
+        // drown a root query.
+        var keysQuery = Keybinds.triggerQuery(q);
+        if (root.currentNodeId === "keybinds" || keysQuery !== null)
+            return root._keybindRowsFor(keysQuery !== null ? keysQuery : q);
         if (q.length === 0) {
             // Route-summon when-gate guard (M17 review finding, item F):
             // `open(route)` resolves a node by id directly, bypassing the
@@ -535,7 +628,11 @@ PanelWindow {
         // between opens — bluetooth power, mode toggle, device presence).
         root._condResults = {};
         root._checkedResults = {};
+        // "@state:" `checked` conditions are deliberately NOT cleared here:
+        // they are never cached, resolving from _stateSnapshot on every
+        // evaluation.
         clipsshAliasFile.reload();
+        root._refreshKeybinds();
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
         // (onTextChanged side effects included, so the debounced search
@@ -758,11 +855,20 @@ PanelWindow {
                 return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
             });
         }
+        // ":k" narrows the same way, so the smoke rig proves the route with
+        // zero keyboard delivery: `debug query ':k spawn'`.
+        var keysQuery = Keybinds.triggerQuery(q);
+        if (keysQuery !== null) {
+            root._refreshKeybinds();
+            return root._keybindRowsFor(keysQuery).map(function (n) {
+                return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
+            });
+        }
         root._evalConditions();
         // iconSource rides along so the smoke rig can assert an app row's
         // themed icon resolved (or honestly didn't) without a screenshot.
         var rows = Search.rank(root._nodes, q, root._condResults).map(function (n) {
-            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "" };
+            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "", checked: Toggles.checkedFor(n, root._stateSnapshot, root._checkedResults) };
         });
         // Same CALC prepend as _displayRows' ranked branch, so the smoke
         // rig's `debug query "2+2*3"` proves the row without keyboard input.
@@ -861,10 +967,33 @@ PanelWindow {
                 NotificationService.notify(node.notifySummary, node.notifyBody || "");
             if (node.typeText)
                 root._pendingTypeText = node.typeText;
+            // Toggle rows (default-menu.jsonc's "toggles" subtree) stay on
+            // screen so the row's own checkmark visibly flips under the
+            // cursor; every other action still closes.
+            if (node.keepOpen === true) {
+                root._confirmPendingId = "";
+                return;
+            }
             root.close();
             return;
         }
         if (node.kind === "app") {
+            // Launch-or-focus: an already-running instance is focused
+            // instead of spawning a second copy, and repeat activation
+            // cycles that app's instances. Focusing still records a
+            // frecency hit, because it is a use of the app. Reads
+            // focusedWindowId (the compositor's literal answer) rather than
+            // heldFocusedWindowId on purpose: focus.js's hold exists for the
+            // bar's active-window cell and would make the cycle skip a
+            // window while the menu itself holds focus. A miss falls through
+            // to the spawn path below, which is today's behaviour.
+            var focusTarget = AppMatch.nextWindow(AppMatch.matchWindows(node._entry, CompositorService.windows || []), CompositorService.focusedWindowId);
+            if (focusTarget !== "") {
+                CompositorService.focusWindow(focusTarget);
+                Core.State.setAppLaunches(Frecency.record(Core.State.appLaunches, node._entry.id, Date.now()));
+                root.close();
+                return;
+            }
             // Baseline first: nothing can map a window inside this same JS
             // block, so the count _beginLaunchWatch reads is genuinely the
             // "before". execute() stays exactly as it was — the entry's own
@@ -903,6 +1032,29 @@ PanelWindow {
         case "theme.toggleMode":
             Core.State.toggleMode();
             break;
+        case "nightlight.toggle":
+            NightLightService.toggle();
+            break;
+        case "screensaver.stayAwakeToggle":
+            IdleService.toggleStayAwake();
+            break;
+        case "notifications.toggleDnd":
+            NotificationService.setDnd(!NotificationService.dnd);
+            break;
+        case "reminder.set":
+            // Qt.callLater is load-bearing, not style: _runAction is reached
+            // from the activation path, which calls root.close() as soon as
+            // this returns, and that close cancels a pending select before
+            // the input field ever renders. CalendarPanel defers its second
+            // prompt for exactly the same reason.
+            Qt.callLater(function () { root.openInput("Reminder (25m coffee)", ReminderService.inputToken); });
+            break;
+        case "reminder.show":
+            ReminderService.showSummary();
+            break;
+        case "reminder.clear":
+            ReminderService.clear();
+            break;
         case "notifications.showHistory":
             if (root.center) {
                 if (root.center.isOpen)
@@ -915,6 +1067,20 @@ PanelWindow {
             console.warn("Menu: unknown internal action:", name);
         }
     }
+
+    // Live source for "@state:" `checked` conditions (toggles.js). Every read
+    // here is a plain property read, so this binding re-evaluates the instant
+    // any of the four flips and hands a fresh object to the delegate binding
+    // below, the same var-change-detection contract the _condResults merge
+    // already depends on. Not gated on isOpen the way _liveClipboardItems is:
+    // four scalars cost nothing, and the NightLightService read is a second
+    // construction site for that lazy singleton, which Indicators.qml wants.
+    readonly property var _stateSnapshot: Toggles.snapshot({
+        "nightlight.active": NightLightService.active,
+        "screensaver.stayAwake": IdleService.stayAwake,
+        "notifications.dnd": NotificationService.dnd,
+        "theme.dark": Core.State.mode === "dark"
+    })
 
     // Shell-condition batch: `when`/`checked` for EVERY node in the tree,
     // not just the current level — whole-tree search (see _displayRows) can
@@ -930,9 +1096,20 @@ PanelWindow {
     function _evalConditions() {
         Object.keys(root._nodes).forEach(function (id) {
             var n = root._nodes[id];
-            if (n.when !== undefined && root._condResults[n.id] === undefined)
-                root._runCondition(n.id, n.when, "when");
-            if (n.checked !== undefined && root._checkedResults[n.id] === undefined)
+            if (n.when !== undefined && root._condResults[n.id] === undefined) {
+                if (Toggles.isStateCondition(n.when)) {
+                    // "@state:" is a `checked` prefix only: a live `when` would
+                    // mean re-running visibleChildren over every node (apps
+                    // included) on each toggle flip, exactly the churn
+                    // _liveClipboardItems exists to avoid.
+                    console.warn("Menu: \"@state:\" is not a `when` condition, hiding", n.id);
+                    root._condResults = Toggles.withResult(root._condResults, n.id, false);
+                } else {
+                    root._runCondition(n.id, n.when, "when");
+                }
+            }
+            if (n.checked !== undefined && !Toggles.isStateCondition(n.checked)
+                && root._checkedResults[n.id] === undefined)
                 root._runCondition(n.id, n.checked, "checked");
         });
     }
@@ -954,10 +1131,8 @@ PanelWindow {
                 var ok = exitCode === 0;
                 var isWhen = _kind === "when";
                 destroy();
-                var merged = {};
                 var source = isWhen ? root._condResults : root._checkedResults;
-                for (var k in source) merged[k] = source[k];
-                merged[id] = ok;
+                var merged = Toggles.withResult(source, id, ok);
                 if (isWhen) root._condResults = merged;
                 else root._checkedResults = merged;
             }
@@ -1170,7 +1345,7 @@ PanelWindow {
 
             delegate: MenuRow {
                 current: root._cursorIndex === index
-                checkedState: node.checked !== undefined && root._checkedResults[node.id] === true
+                checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
                 confirming: root._confirmPendingId === node.id
 
                 onActivate: root._activateFromPointer(index)

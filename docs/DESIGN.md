@@ -690,14 +690,46 @@ floats with a margin or fuses to the screen edge.
 - **Screensaver** — the shell's other named continuous-motion exception
   (§2, item 6): a full-screen block-drawing ASCII banner
   (`FormalShell`, `▄ █ ▀` family, the same weight as omarchy's `logo.txt`)
-  is the subject, centered, animated by a selectable effect (`decrypt`,
-  `rain`, `expand`, `slide`, `scatter`, or `random` — the default). No
-  cells, no rules, no meta rows on this surface; its entire content *is*
-  the motion, and it exits instantly (no fade) on real input.
+  is the subject, centered, animated by a selectable effect — any of
+  ttfx's 37, or `random`, the default. No cells, no rules, no meta rows on
+  this surface; its entire content *is* the motion, and it exits instantly
+  (no fade) on real input.
+
+  This is also the one surface whose colors are **not** the shell's
+  palette. It runs ttfx (`omacom-io/ttfx`, the engine omarchy's own
+  screensaver uses) and paints the truecolor frames ttfx emits, so each
+  effect arrives in its own upstream gradient — decrypt amber, matrix
+  green, rain blue, slide purple-red-orange. Omarchy passes no gradient
+  overrides and neither do we (owner's call, 2026-08-11): a random effect
+  per cycle is what makes the color change. Only the background and the
+  fallback color for glyphs ttfx leaves uncolored come from the theme. On
+  a host with no ttfx on PATH the surface falls back to effect.js's five
+  builtin effects, which are accent-colored as before.
 - **Picker** — the ASCII-OS table surface applied to a grid instead of a
   column: image cells share hairline rules, current cell inverts (§2.2),
   keyboard-navigable. Omarchy's skewed carousel remains an explicitly later
   flourish (spec §11), not adopted here.
+- **Capture picker** — the only surface that is mostly *not* drawn: it
+  renders a grim-captured freeze of each output at 1:1 and puts chrome on
+  top of it, because that freeze is what the capture itself photographs.
+  Chrome is a scrim over everything except the selection (four plain
+  rectangles at 0.6 on `background`, never a mask or a shader — §2's no-blur
+  rule holds here as everywhere but the lock screen), an `accent` selection
+  border at `Theme.borderWidth`, and one standalone readout cell carrying
+  `W×H` plus the dim uppercase name of what is selected. A bottom-centered
+  standalone cell carries the key legend in the meta-label idiom. All chrome
+  drops for one frame before the capture fires, so none of it is baked in.
+
+  The one place a surface differs by backend. A window the compositor
+  reports a box for is **highlighted** in place; a window it reports no box
+  for is **named** instead, in a centered ledger card of title-over-dim-app-id
+  rows with the cursor row inverted (§2.2), and captured by id server-side.
+  Both are window selection, so no capability is lost either way. This is
+  niri: it fills `tile_pos_in_workspace_view` only for floating windows
+  (`src/layout/tile.rs:869` versus `floating.rs:336`), so tiled windows have
+  no rectangle to draw. The split is on the rect being null, never on a
+  compositor name, so a niri that gains tiled geometry becomes the
+  highlight case with nothing here to change.
 
 ## 4. Motion
 

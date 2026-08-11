@@ -5,7 +5,8 @@ import qs.Components
 import "../../Notifications/model.js" as Model
 
 // One notification row (DESIGN.md §Notifications, M8b Task 5, M15 Task 2):
-// meta row (app name / relative time) + summary + sanitized/styled body, an
+// meta row (app name / relative time, plus the repeat count when the row
+// stands for a group) + summary + sanitized/styled body, an
 // icon slot, a dismiss cell, and — only when the notification carries them —
 // a bottom row of action cells. Critical urgency (2) fills the whole card as
 // an urgent cell per DESIGN's §2.4 "critical severity is a full-bleed urgent
@@ -55,6 +56,12 @@ Cell {
     readonly property string _styledBody: Model.styledBody(root.entry.body, root.entry.appName, root.entry.appIcon)
     readonly property bool _singleLine: root._sanitizedBody.length === 0
     readonly property string _relTime: Model.relTime(root.now, root.entry.arrivedAt)
+
+    // `count` only exists on a row that came through Model.groupEntries; both
+    // surfaces render every row that way, but an entry handed in directly
+    // carries no such key and `undefined > 1` is false, so no default is
+    // needed. MetaLabel uppercases, so this paints as "X3".
+    readonly property string _countLabel: root.entry.count > 1 ? " / x" + root.entry.count : ""
 
     // Icon slot (DESIGN.md's third sanctioned image-icon exception, added by
     // this task): the notification's own image wins when it resolved
@@ -130,7 +137,7 @@ Cell {
 
                     MetaLabel {
                         color: root.dimForeground
-                        text: root.entry.appName + " / " + root._relTime
+                        text: root.entry.appName + " / " + root._relTime + root._countLabel
                     }
 
                     Text {

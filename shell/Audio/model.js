@@ -42,3 +42,14 @@ function clampDevice(v) {
 function clampStream(v) {
     return Math.max(0, Math.min(1.5, v));
 }
+
+// The single place the mic cell's honest-unavailable branch is decided, so
+// MicWidget carries no state logic of its own. `available` is
+// AudioService.sourceAvailable (Pipewire.defaultAudioSource's audio
+// interface being non-null); "unavailable" is a real answer on any host with
+// no capture device, never a stubbed 0%.
+function sourceState(available, muted) {
+    if (available !== true)
+        return "unavailable";
+    return muted === true ? "muted" : "live";
+}

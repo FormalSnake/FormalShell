@@ -34,12 +34,21 @@ import qs.Notifications
 Scope {
     id: root
 
+    // The RegionPicker instance, set from shell.qml.
+    property var picker: null
+
     property bool _busy: false
     property bool _cancelling: false
     property string _pendingPath: ""
     property string _lastPath: ""
     property string _lastError: ""
     property bool _lastCancelled: false
+
+    // "default" saves to disk AND clipboard then offers the editor;
+    // "copy" is clipboard only; "save" is disk only and skips the editor.
+    // Upstream's `slurp|copy|save` third argument, renamed: "slurp" named the
+    // picker it used, and this picker is not slurp.
+    property string _processing: "default"
 
     function _dir() {
         return Config.get("screenshot.directory", "")
@@ -87,6 +96,62 @@ Scope {
         return path;
     }
 
+    // Opens the region picker (M22 Task 5). `mode` is upstream's
+    // smart|region|windows|fullscreen; `processing` is default|copy|save.
+    function _pick(mode, processing) {
+        if (root._busy)
+            return "error: capture already in flight";
+        if (!root.picker)
+            return "error: picker not ready";
+        root._busy = true;
+        root._processing = processing || "default";
+        root._pendingPath = root._dir() + "/screenshot-" + root._timestamp() + ".png";
+        root._lastCancelled = false;
+        const answer = root.picker.open(mode);
+        if (answer !== "ok") {
+            root._busy = false;
+            return answer;
+        }
+        // The picker blocks on a human exactly as slurp did, so it inherits
+        // the same watchdog rather than being trusted to always be answered.
+        watchdog.interval = Config.get("screenshot.timeoutSeconds", 90) * 1000;
+        watchdog.restart();
+        return root._pendingPath;
+    }
+
+    Connections {
+        target: root.picker
+
+        // The picker is still mapped here, showing its frozen frames with the
+        // chrome hidden, so grim photographs the freeze rather than live
+        // content. picker.done() tears it down once grim has exited.
+        function onPicked(rect) {
+            watchdog.stop();
+            root._grab(Math.round(rect.x) + "," + Math.round(rect.y) + " "
+                + Math.round(rect.width) + "x" + Math.round(rect.height));
+        }
+
+        // niri crops server-side from the window's own buffer, so no rect and
+        // no freeze is involved (see RegionPicker.qml's header for why a tiled
+        // niri window has no rect to crop to in the first place). niri also
+        // puts the PNG on the clipboard itself, which is why this path never
+        // runs wl-copy.
+        function onPickedWindow(windowId) {
+            watchdog.stop();
+            root._grabNiriWindow(windowId);
+        }
+
+        function onCancelled(reason) {
+            if (!root._busy)
+                return;
+            watchdog.stop();
+            root._busy = false;
+            root._pendingPath = "";
+            root._lastCancelled = true;
+            root._lastError = "";
+        }
+    }
+
     // Paths and geometry ride the environment, not the script text, so a
     // screenshot.directory containing quotes or spaces can't splice the
     // shell command.
@@ -99,9 +164,50 @@ Scope {
         const grab = geometry !== ""
             ? 'grim -g "$FS_SHOT_GEOM" "$FS_SHOT_PATH"'
             : 'grim "$FS_SHOT_PATH"';
-        captureProc.command = ["sh", "-c",
-            'mkdir -p "$FS_SHOT_DIR" && ' + grab + ' && wl-copy --type image/png < "$FS_SHOT_PATH"'];
+        // `copy` never touches the disk at all, so there is no file for the
+        // editor action to open and none is offered.
+        const pipeline = root._processing === "copy"
+            ? grab.replace('"$FS_SHOT_PATH"', "-") + " | wl-copy --type image/png"
+            : root._processing === "save"
+                ? grab
+                : grab + ' && wl-copy --type image/png < "$FS_SHOT_PATH"';
+        captureProc.command = ["sh", "-c", 'mkdir -p "$FS_SHOT_DIR" && ' + pipeline];
         captureProc.running = true;
+    }
+
+    // `path` must be absolute or niri returns Err (niri-ipc v26.04
+    // src/lib.rs:281). It always is here: _dir() is either an absolute
+    // configured directory or $HOME/Pictures/Screenshots.
+    function _grabNiriWindow(windowId) {
+        captureProc.environment = ({
+            FS_SHOT_DIR: root._dir(),
+            FS_SHOT_PATH: root._pendingPath,
+            FS_SHOT_WINDOW: windowId
+        });
+        captureProc.command = ["sh", "-c",
+            'mkdir -p "$FS_SHOT_DIR" && exec niri msg action screenshot-window'
+            + ' --id "$FS_SHOT_WINDOW" --write-to-disk true --path "$FS_SHOT_PATH"'];
+        captureProc.running = true;
+    }
+
+    // Hands a captured PNG to the annotation editor. Default `tensaku-edit`
+    // is the wrapper nix/tensaku-package.nix installs — Tensaku takes its
+    // input as a flag rather than a positional argument, so the wrapper is
+    // what accepts the "editor <path>" convention this calls with.
+    //
+    // The capture is already on disk and on the clipboard by the time this
+    // runs, so a launch failure is its own warning and never repaints the
+    // capture as failed.
+    function edit(path) {
+        if (!path)
+            return "error: no path";
+        editorProc.environment = ({
+            FS_EDITOR: Config.get("screenshot.editor", "tensaku-edit"),
+            FS_EDIT_PATH: path
+        });
+        editorProc.command = ["sh", "-c", 'exec "$FS_EDITOR" "$FS_EDIT_PATH"'];
+        editorProc.running = true;
+        return "ok";
     }
 
     function _cancel(reason) {
@@ -113,6 +219,12 @@ Scope {
         root._cancelling = slurpProc.running || captureProc.running;
         slurpProc.running = false;
         captureProc.running = false;
+        // Tear the overlay down directly rather than through picker.close():
+        // that would fire onCancelled straight back into this function's own
+        // state, and the picker must never outlive the capture it was opened
+        // for — a full-screen surface left mapped is the worst failure here.
+        if (root.picker && root.picker.isOpen)
+            root.picker.done();
         root._busy = false;
         root._pendingPath = "";
         root._lastError = "";
@@ -134,6 +246,38 @@ Scope {
 
         function cancel(): string {
             return root._cancel("cancelled on demand");
+        }
+
+        // The picker (M22 Task 5). `mode` is smart|region|windows|fullscreen,
+        // `processing` is default|copy|save — upstream's two positional
+        // arguments, same names and same defaults.
+        function pick(mode: string, processing: string): string {
+            return root._pick(mode || "smart", processing || "default");
+        }
+
+        // Drives the picker's keyboard model headlessly for the smoke rig:
+        // return | ctrl-return | tab | shift-tab | left | right | up | down |
+        // escape. Real key handling is the feature; this is how it gets
+        // verified without depending on synthetic key delivery into an
+        // Exclusive-focus layer surface, the same split every other surface's
+        // IPC actions already use.
+        function key(name: string): string {
+            if (!root.picker)
+                return "error: picker not ready";
+            return root.picker.key(name);
+        }
+
+        function pickerStatus(): string {
+            if (!root.picker)
+                return "error: picker not ready";
+            return JSON.stringify(root.picker.status());
+        }
+
+        // Opens the last capture (or an explicit path) in the annotation
+        // editor — the same thing the SAVED notification's EDIT action does,
+        // reachable from a compositor keybind.
+        function edit(path: string): string {
+            return root.edit(path || root._lastPath);
         }
 
         function status(): string {
@@ -191,12 +335,34 @@ Scope {
     }
 
     Process {
+        id: editorProc
+
+        stderr: StdioCollector {
+            id: editorStderr
+        }
+        onExited: exitCode => {
+            if (exitCode === 0)
+                return;
+            const why = editorStderr.text.trim() || ("editor exited " + exitCode);
+            console.warn("ScreenshotIpc: editor launch failed:", why);
+            NotificationService.notify("EDITOR FAILED", why);
+        }
+    }
+
+    Process {
         id: captureProc
 
         stderr: StdioCollector {
             id: captureStderr
         }
         onExited: exitCode => {
+            // The picker is still mapped whenever it drove this capture: it
+            // held the freeze up for grim, and only now has nothing left to
+            // show. Torn down before any notification so the toast is not
+            // hidden behind a full-screen overlay.
+            if (root.picker && root.picker.isOpen)
+                root.picker.done();
+
             if (root._cancelling) {
                 root._cancelling = false;
                 return;
@@ -204,9 +370,34 @@ Scope {
             watchdog.stop();
             root._busy = false;
             if (exitCode === 0) {
-                root._lastPath = root._pendingPath;
                 root._lastError = "";
-                NotificationService.notify("SCREENSHOT SAVED", root._pendingPath);
+
+                // Clipboard-only: nothing landed on disk, so there is no path
+                // to report, none to offer the editor, and no thumbnail.
+                if (root._processing === "copy") {
+                    root._lastPath = "";
+                    NotificationService.notify("SCREENSHOT COPIED", "on the clipboard");
+                    return;
+                }
+
+                root._lastPath = root._pendingPath;
+                const saved = root._pendingPath;
+
+                // `save` is the deliberately quiet mode: straight to disk, no
+                // editor offered, matching upstream's own `save` processing.
+                if (root._processing === "save") {
+                    NotificationService.notify("SCREENSHOT SAVED", saved, 1, [], saved);
+                    return;
+                }
+                // Key "default" rather than "edit": Toasts.qml and Center.qml
+                // already route a click on the card body to the "default"
+                // action, so one entry gets both the visible EDIT cell and
+                // click-anywhere, without a second action nobody renders.
+                NotificationService.notify("SCREENSHOT SAVED", saved, 1, [{
+                    key: "default",
+                    label: "EDIT",
+                    invoke: () => root.edit(saved)
+                }], saved);
                 return;
             }
             root._lastError = captureStderr.text.trim() || ("capture exited " + exitCode);

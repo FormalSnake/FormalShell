@@ -83,6 +83,45 @@ import QtQuick
 // tailscale.intervalMs (number, default 60000 — TailscalePanel's
 // `tailscale status --json` poll cadence in ms; the widget itself is
 // opt-in via bar.layout, M16 Task 8).
+// capture.ocrLanguage (string, default "eng": the language CaptureIpc's
+// `text` verb passes to tesseract's -l) and capture.timeoutSeconds
+// (number, default 90: how long that target waits for a slurp answer
+// before auto-cancelling, M22).
+// recording.directory (string, default "" meaning $HOME/Videos: where
+// RecordingService's wf-recorder captures land, created on first run),
+// recording.framerate (number, default 30, wf-recorder -r; 0 omits the
+// flag), recording.codec (string, default "", wf-recorder -c; "" leaves
+// its own default), recording.audioBackend (string, default "",
+// wf-recorder --audio-backend: pulse or pipewire), recording.noDmabuf
+// (bool, default false, wf-recorder --no-dmabuf: required wherever there
+// is no GPU to import a dmabuf through, e.g. the llvmpipe VM),
+// recording.timeoutSeconds (number, default 90: the region-scope slurp
+// watchdog), recording.gifFps (number, default 12) and recording.gifWidth
+// (number, default 640: the two-pass ffmpeg transcode's output size, M22).
+// reminders.defaultMessage (string, default "Time's up"): the body a
+// reminder set with no message of its own fires with. ReminderService
+// fills it in at set time, so a stored entry always carries a real message
+// and the fire path needs no fallback branch of its own.
+// keybinds.niriConfigPath (string, default ""): an explicit niri
+// config.kdl for the menu's keybinds route to parse. "" walks the normal
+// chain: $NIRI_CONFIG, $XDG_CONFIG_HOME/niri/config.kdl,
+// /etc/niri/config.kdl. Hyprland ignores it, that leg reads
+// `hyprctl binds -j`.
+// plugins.disabled (array of strings, default []): ids of drop-in plugins
+// under ~/.config/formalshell/plugins/<id>/ that PluginService skips at
+// scan time, so one can be parked without deleting its directory. There is
+// deliberately no per-plugin `enabled` flag: a plugin's own manifest.json
+// belongs to whoever wrote it, and disabling belongs in the user's one
+// config file. bar.layout additionally accepts a "plugin:<id>" entry,
+// which places that plugin's bar cell explicitly; a kind:"bar" plugin
+// named in no region is appended to the region its manifest asks for.
+// systemUpdate.flakeDir (string, default "" meaning no flake is
+// configured; SystemUpdatePanel renders NO FLAKE rather than guessing
+// /etc/nixos) and systemUpdate.intervalMs (number, default 10800000 = 3h).
+// The cadence is hours rather than minutes because each poll costs one
+// network round trip per direct flake input and the unauthenticated GitHub
+// API allows 60 requests per hour per IP; the widget itself is opt-in via
+// bar.layout.
 Singleton {
     id: root
 

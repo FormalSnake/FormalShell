@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs.Core
+import qs.Plugins
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
 
@@ -16,12 +17,16 @@ import "../../Bar/layout.js" as Layout
 // change.
 // Layout entries name either a built-in widget (resolved against
 // `_builtinComponents` below, each pre-wired with the panel/screen context
-// only Bar.qml has) or a `bar.modules[]` custom module via a "custom:<id>"
+// only Bar.qml has), a `bar.modules[]` custom module via a "custom:<id>"
 // name — `command` (CommandModule.qml, Waybar-JSON-compatible polled
-// output) or `qml` (QmlModule.qml, a user-supplied file in a Loader). An
-// unknown widget name or a dangling module reference is dropped with a
-// console warning, never a crash. Every widget cell is a `standalone` Cell
-// (DESIGN.md §3): borderless at rest, hover-cursor fill+border only on
+// output) or `qml` (QmlModule.qml, a user-supplied file in a Loader), or a
+// drop-in plugin from ~/.config/formalshell/plugins via a "plugin:<id>"
+// name (PluginBarModule.qml). A kind:"bar" plugin the layout never names is
+// appended to its own manifest region by layout.js, so a plugin directory
+// is visible without a settings.json edit. An unknown widget name or a
+// dangling module/plugin reference is dropped with a console warning, never
+// a crash. Every widget cell is a `standalone` Cell (DESIGN.md §3):
+// borderless at rest, hover-cursor fill+border only on
 // mouseover, separated from its neighbor by a small gap plus its own
 // padding — omarchy's discrete-module bar, not the M1-M3 fused ledger
 // strip this surface used to be. The region-boundary rules (left|center,
@@ -42,6 +47,7 @@ PanelWindow {
     property var githubPanel: null
     property var usagePanel: null
     property var tailscalePanel: null
+    property var systemUpdatePanel: null
     // The single Center instance (shell.qml's notificationsCenter) — the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
@@ -49,7 +55,7 @@ PanelWindow {
     anchors { top: true; left: true; right: true }
 
     function _resolveLayout() {
-        var result = Layout.resolve(Config.get("bar", null));
+        var result = Layout.resolve(Config.get("bar", null), PluginService.barPlugins);
         for (var i = 0; i < result.warnings.length; i++)
             console.warn("Bar:", result.warnings[i]);
         return result;
@@ -215,6 +221,22 @@ PanelWindow {
         }
     }
     Component {
+        id: microphoneComponent
+        MicWidget {
+        }
+    }
+    Component {
+        id: keyboardLayoutComponent
+        KeyboardLayoutWidget {
+        }
+    }
+    Component {
+        id: systemUpdateComponent
+        SystemUpdateWidget {
+            panel: bar.systemUpdatePanel
+        }
+    }
+    Component {
         id: commandModuleComponent
         CommandModule {
         }
@@ -222,6 +244,11 @@ PanelWindow {
     Component {
         id: qmlModuleComponent
         QmlModule {
+        }
+    }
+    Component {
+        id: pluginModuleComponent
+        PluginBarModule {
         }
     }
 
@@ -241,7 +268,10 @@ PanelWindow {
         tailscale: tailscaleComponent,
         visualizer: visualizerComponent,
         bell: bellComponent,
-        indicators: indicatorsComponent
+        indicators: indicatorsComponent,
+        microphone: microphoneComponent,
+        keyboardLayout: keyboardLayoutComponent,
+        systemUpdate: systemUpdateComponent
     })
 
     // Shared by every region below: a builtin entry loads straight from the
@@ -274,15 +304,21 @@ PanelWindow {
             // Battery/NowPlaying) instead of `visible` itself; a widget with
             // no such property is always shown, so `true` is the safe
             // fallback rather than ever reading `.visible` here.
-            sourceComponent: entryLoader.modelData.kind === "builtin"
-                ? bar._builtinComponents[entryLoader.modelData.name]
-                : (entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent)
+            sourceComponent: {
+                switch (entryLoader.modelData.kind) {
+                case "builtin": return bar._builtinComponents[entryLoader.modelData.name];
+                case "plugin": return pluginModuleComponent;
+                }
+                return entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent;
+            }
             visible: entryLoader.item
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
                 : false
             onLoaded: {
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
+                else if (entryLoader.modelData.kind === "plugin")
+                    entryLoader.item.plugin = entryLoader.modelData.plugin;
             }
         }
     }

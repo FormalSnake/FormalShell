@@ -9,6 +9,13 @@
 // on the name after the prefix (e.g. "@ipc:theme.toggleMode" ->
 // Core.State.toggleMode()). Use this for anything that must run in the
 // shell's own process rather than as a detached command.
+//
+// Live state: a `checked` value prefixed `@state:` resolves in-process from
+// Menu.qml's `_stateSnapshot` against toggles.js's closed allow-list, never
+// through `sh -c` and never cached, so the checkmark repaints the instant the
+// underlying state flips. `@state:` is a `checked` prefix only; a `when`
+// carrying it is refused with a warning and the node hides. `"keepOpen":
+// true` on an action row leaves the menu open after activation.
 {
     "apps": { "provider": "apps", "icon": "󰀻" },
     "clipboard": { "provider": "clipboard", "icon": "󰅍" },
@@ -26,6 +33,12 @@
     // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
     // from anywhere. No nix on PATH renders a single dim NO NIX row.
     "nix": { "label": "Nix Run", "provider": "nix", "icon": "" },
+    // "keybinds" registers no provider fn either: a summonable route
+    // (`menu summon keybinds`) whose level Menu.qml fills from the parsed
+    // compositor binds (Compositor/keybinds.js); ":k <query>" reaches the
+    // same rows from anywhere. Rows are inert notes, never activatable.
+    // md-keyboard U+F030C, pinned nerd-fonts-jetbrains-mono cmap.
+    "keybinds": { "label": "Keybinds", "provider": "keybinds", "icon": "󰌌", "aliases": ["keys", "hotkeys", "shortcuts"] },
 
     "system": { "label": "System", "icon": "󰒓" },
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
@@ -43,8 +56,19 @@
         "icon": "󰂚"
     },
 
-    "theme": { "label": "Theme", "icon": "󰏘" },
-    "theme.mode-toggle": { "label": "Toggle Mode", "action": "@ipc:theme.toggleMode", "icon": "󰔎" },
+    // REMINDERS: a countdown plus a message, fired through
+    // NotificationService at urgency 2 so it bypasses DND. "Set Reminder"
+    // opens the menu's own input field (`@ipc:reminder.set` ->
+    // Menu.openInput with ReminderService's token) rather than taking an
+    // argument here. No `when` on any node: `when` runs a shell command and
+    // cannot gate on in-process state, so Clear Reminders stays visible and
+    // is a harmless no-op on an empty list. md-reminder U+F088C,
+    // md-timer_outline U+F051B, md-clock_outline U+F0150, md-close U+F0156,
+    // all four from the pinned nerd-fonts-jetbrains-mono cmap.
+    "reminder": { "label": "Reminder", "icon": "󰢌" },
+    "reminder.set": { "label": "Set Reminder", "action": "@ipc:reminder.set", "icon": "󰔛" },
+    "reminder.show": { "label": "Show Reminders", "action": "@ipc:reminder.show", "icon": "󰅐" },
+    "reminder.clear": { "label": "Clear Reminders", "action": "@ipc:reminder.clear", "icon": "󰅖" },
 
     // SHARE (M17 Task 1): present only when `localsend_app` resolves on
     // PATH (nixpkgs' pkgs.localsend package, verified against its actual
@@ -66,11 +90,52 @@
     // the current clipboard image to that host and copies the remote path
     // back. md-console_network U+F08A9, pinned nerd-fonts-jetbrains-mono
     // cmap via fonttools ttx.
-    "clipssh": { "label": "Clipssh", "provider": "clipssh", "icon": "󰢩", "when": "command -v clipssh >/dev/null 2>&1" }
+    "clipssh": { "label": "Clipssh", "provider": "clipssh", "icon": "󰢩", "when": "command -v clipssh >/dev/null 2>&1" },
 
-    // The root "wallpaper" node (opens the image picker grid) is injected at
-    // tree-build time by Menu.qml via providers.js's wallpaperEntry(): its
-    // action targets the running shell's own path, which static jsonc can't
-    // know. Override or hide it from menu.jsonc by its "wallpaper" id like
-    // any declared node.
+    // TOGGLE HUB: every row is a live in-process toggle. `checked` takes an
+    // "@state:" condition (toggles.js's allow-list, resolved from Menu.qml's
+    // _stateSnapshot, never a Process, so the checkmark flips in the same
+    // turn the toggle does), and `keepOpen` holds the surface open so that
+    // flip is actually visible. Glyphs from the pinned
+    // nerd-fonts-jetbrains-mono cmap: md-toggle_switch U+F0521,
+    // md-lightbulb_night U+F1A4C, md-coffee U+F0176, md-bell_off U+F009B,
+    // md-theme_light_dark U+F050E.
+    "toggles": { "label": "Toggles", "icon": "󰔡" },
+    "toggles.nightlight": {
+        "label": "Night Light",
+        "action": "@ipc:nightlight.toggle",
+        "checked": "@state:nightlight.active",
+        "keepOpen": true,
+        "icon": "󱩌",
+        "when": "command -v wlsunset >/dev/null 2>&1"
+    },
+    "toggles.stay-awake": {
+        "label": "Stay Awake",
+        "action": "@ipc:screensaver.stayAwakeToggle",
+        "checked": "@state:screensaver.stayAwake",
+        "keepOpen": true,
+        "icon": "󰅶"
+    },
+    "toggles.dnd": {
+        "label": "Do Not Disturb",
+        "action": "@ipc:notifications.toggleDnd",
+        "checked": "@state:notifications.dnd",
+        "keepOpen": true,
+        "icon": "󰂛"
+    },
+    "toggles.dark-mode": {
+        "label": "Dark Mode",
+        "action": "@ipc:theme.toggleMode",
+        "checked": "@state:theme.dark",
+        "keepOpen": true,
+        "icon": "󰔎"
+    }
+
+    // The root "wallpaper" node (opens the image picker grid) and the root
+    // "capture" node (OCR, colour pick, record, stop, video-to-GIF) are both
+    // injected at tree-build time by Menu.qml via providers.js's
+    // wallpaperEntry()/captureEntries(): their actions target the running
+    // shell's own path, which static jsonc can't know. Override or hide them
+    // from menu.jsonc by their "wallpaper"/"capture" ids like any declared
+    // node, and individual rows by "capture.text", "capture.record", etc.
 }

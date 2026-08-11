@@ -9,7 +9,13 @@ QtObject {
     readonly property bool available: false // backend detected its compositor and is connected
 
     property var workspaces: [] // [{ id:string, idx:int, name:string, output:string, isActive:bool, isFocused:bool, isUrgent:bool }]
-    property var windows: [] // [{ id:string, title:string, appId:string, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool }]
+    // `rect` is the window's box in LOGICAL compositor coordinates — the same
+    // space `outputs` rows use, and the space grim/slurp geometry is expressed
+    // in. It is `null`, never a zeroed box, whenever the compositor did not
+    // report a geometry for that window: a window with no box must not become
+    // a rectangle at the origin, which the capture picker would happily
+    // highlight and crop to.
+    property var windows: [] // [{ id:string, title:string, appId:string, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool, rect:{x,y,width,height}|null }]
     // Display/outputs.js's row contract — see its header for the full shape
     // and for why a disabled output reports a zero mode rather than its last
     // known one. Populated only by refreshOutputs() below; neither compositor

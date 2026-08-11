@@ -37,6 +37,11 @@
 // that matched the query exactly as well, while a stronger match tier
 // still beats any launch count outright. Empty/absent `launches` leaves
 // DesktopEntries' own order intact.
+//
+// `_entry` is read for more than execute() now: Compositor/appmatch.js reads
+// `startupClass` and `id` off it to decide whether activating a row focuses
+// a running window instead of launching a new one, so the back-reference
+// carries more weight than it used to.
 function appsProvider(entries, resolveIcon, launches, nowMs) {
     var ordered = Frecency.order(entries || [], launches, nowMs === undefined ? Date.now() : nowMs);
     return ordered.map(function (entry) {
@@ -495,20 +500,44 @@ function wallpaperEntry(selfPath) {
     };
 }
 
-// "system.stay-awake" row (M-polish batch item B), merged into the default
-// tree object exactly like wallpaperEntry() above — same reason: the
-// action needs the running shell's own path, which static jsonc can't
-// express. Dotted id auto-nests it under the already-declared "system"
-// node. Toggles via the shell's own IPC self-target rather than an
-// in-process "@ipc:" dispatch (clipboardProvider's own self-targeting
-// rationale) so the row exercises the real `screensaver` IPC target like
-// any external caller would.
-function stayAwakeEntry(selfPath) {
+// Root "capture" node, merged into the default tree object exactly like
+// wallpaperEntry() above, and for the same reason: every action needs the
+// running shell's own path, which static jsonc can't express. Routing
+// through real IPC also means a menu row and a compositor keybind exercise
+// one implementation. The parent node is declared here rather than left to
+// buildTree's ancestor synthesis so it carries a label and an icon of its
+// own.
+//
+// "Video To GIF" takes no argument on purpose: `record gif` falls back to
+// RecordingService.lastPath, so the row needs no menu.input round trip.
+function captureEntries(selfPath) {
+    var call = "qs ipc --any-display -p " + selfPath + " call ";
     return {
-        "system.stay-awake": {
-            label: "Stay Awake",
-            icon: "\u{F0176}", // md-coffee, same glyph Indicators.qml's cell uses
-            action: "qs ipc --any-display -p " + selfPath + " call screensaver stayAwakeToggle"
+        "capture": { label: "Capture", icon: "\u{F0E51}" }, // md-monitor_screenshot
+        "capture.text": {
+            label: "Copy Text From Screen",
+            icon: "\u{F113A}", // md-ocr
+            action: call + "capture text"
+        },
+        "capture.color": {
+            label: "Pick Color",
+            icon: "\u{F020B}", // md-eyedropper_variant
+            action: call + "capture color"
+        },
+        "capture.record": {
+            label: "Record Screen",
+            icon: "\u{F0567}", // md-video
+            action: call + "record toggle screen none"
+        },
+        "capture.stop": {
+            label: "Stop Recording",
+            icon: "\u{F04DB}", // md-stop
+            action: call + "record stop"
+        },
+        "capture.gif": {
+            label: "Video To GIF",
+            icon: "\u{F0D78}", // md-file_gif_box
+            action: call + "record gif"
         }
     };
 }

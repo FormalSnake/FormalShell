@@ -33,8 +33,28 @@ Scope {
         };
     })
 
+    // `at`/`size` are already logical coordinates, so they map straight onto
+    // the BackendBase `rect` contract. A hidden window (an unfocused member of
+    // a tabbed group) still carries its group's box; it is excluded rather
+    // than reported, because nothing can be captured through it and a
+    // duplicate box stalls the picker's Tab cycle on the first copy.
+    //
+    // ⚠️ This box can be STALE. Quickshell only repopulates `lastIpcObject`
+    // from `j/clients` on connect and on `configreloaded` (verified in the
+    // pinned quickshell 43d4fa9: refreshToplevels() is defined at
+    // src/wayland/hyprland/ipc/connection.cpp:705 and called only from :92
+    // and :277 — none of the movewindowv2/openwindow/fullscreen event
+    // branches refresh it). A window moved or resized since then reports
+    // where it used to be. Good enough to HINT a rectangle in the picker;
+    // never good enough to CROP from. Anything cropping must re-read
+    // `hyprctl clients -j` at capture time.
     readonly property var windows: Hyprland.toplevels.values.map(function (t) {
         var ipc = t.lastIpcObject || {};
+        var at = ipc.at;
+        var size = ipc.size;
+        var hasRect = !(ipc.hidden ?? false)
+            && Array.isArray(at) && Array.isArray(size)
+            && size[0] > 0 && size[1] > 0;
         return {
             id: t.address,
             title: t.title,
@@ -42,7 +62,8 @@ Scope {
             workspaceId: t.workspace ? String(t.workspace.id) : "",
             isFocused: t.activated,
             isFloating: ipc.floating ?? false,
-            isUrgent: t.urgent
+            isUrgent: t.urgent,
+            rect: hasRect ? { x: at[0], y: at[1], width: size[0], height: size[1] } : null
         };
     })
 

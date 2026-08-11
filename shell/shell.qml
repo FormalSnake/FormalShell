@@ -14,10 +14,14 @@ import qs.Surfaces.Osd
 import qs.Surfaces.Panels
 import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
+import qs.Surfaces.Capture
 import qs.Surfaces.Picker
+import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
 import qs.Surfaces.Gallery
 import qs.Ipc
+import qs.Plugins
+import qs.Reminders
 import qs.Services
 
 ShellRoot {
@@ -50,6 +54,7 @@ ShellRoot {
                 githubPanel: githubPanelInstance
                 usagePanel: usagePanelInstance
                 tailscalePanel: tailscalePanelInstance
+                systemUpdatePanel: systemUpdatePanelInstance
                 center: notificationsCenter
             }
         }
@@ -106,8 +111,45 @@ ShellRoot {
     GithubPanel { id: githubPanelInstance }
     UsagePanel { id: usagePanelInstance }
     TailscalePanel { id: tailscalePanelInstance }
+    SystemUpdatePanel { id: systemUpdatePanelInstance }
     DisplayPanel { id: displayPanelInstance }
     ImagePicker { id: imagePickerInstance }
+    RegionPicker { id: regionPickerInstance }
+
+    // Plugin-declared surfaces (shell/Plugins/manifest.js): created from the
+    // scanned manifests rather than named here, because nobody knows their
+    // ids at authoring time. Each host registers ITSELF with PluginService on
+    // completion, and PanelIpc's registry below merges that map in.
+    // PluginService.rescan() closes every open plugin surface before the
+    // model changes, so a reload never tears one down mid-open.
+    Variants {
+        model: PluginService.surfacePlugins.filter(p => p.kind === "panel")
+
+        delegate: Component {
+            PluginPanel {}
+        }
+    }
+
+    Variants {
+        model: PluginService.surfacePlugins.filter(p => p.kind === "overlay")
+
+        delegate: Component {
+            PluginOverlay {}
+        }
+    }
+
+    // The menu's "reminder-set" input prompt answers here: Menu emits
+    // selectionResolved for every input/select round trip. Routing it at the
+    // shell root keeps the reference one-directional, so nothing under
+    // Reminders/ ever holds a handle on the menu. resolveInput ignores every
+    // token but its own, so CalendarPanel's two-step prompt on the same
+    // signal is untouched.
+    Connections {
+        target: menu
+        function onSelectionResolved(token, value, cancelled) {
+            ReminderService.resolveInput(token, value, cancelled);
+        }
+    }
 
     // Dev surface, reachable only through `gallery open|toggle` — no bar
     // cell, no bar.layout entry, and deliberately absent from PanelIpc's
@@ -121,7 +163,20 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    PanelIpc { registry: ({ appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, display: displayPanelInstance }) }
+    // The static thirteen merged with every plugin surface that has
+    // registered itself. Plugin keys carry manifest.js's "plugin:" prefix, so
+    // a plugin can never shadow a builtin name and PanelIpc needs no
+    // reserved-id list. PluginService.surfaces is replaced wholesale on every
+    // register/unregister, so this binding re-fires.
+    PanelIpc {
+        registry: {
+            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance };
+            var surfaces = PluginService.surfaces;
+            for (var key in surfaces)
+                reg[key] = surfaces[key];
+            return reg;
+        }
+    }
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     NetworkIpc { panel: networkPanelInstance }
@@ -131,7 +186,11 @@ ShellRoot {
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
     PickerIpc { picker: imagePickerInstance }
-    ScreenshotIpc {}
+    ScreenshotIpc { picker: regionPickerInstance }
+    CaptureIpc {}
+    RecordIpc {}
+    ReminderIpc {}
     NightLightIpc {}
     GalleryIpc { gallery: galleryInstance }
+    PluginsIpc {}
 }

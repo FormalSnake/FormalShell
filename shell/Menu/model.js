@@ -150,6 +150,7 @@ function buildTree(defaultObj, userObj) {
         if (entry.checked !== undefined) node.checked = entry.checked;
         if (entry.confirm !== undefined) node.confirm = entry.confirm;
         if (entry.dim !== undefined) node.dim = entry.dim;
+        if (entry.keepOpen !== undefined) node.keepOpen = entry.keepOpen;
         nodes[id] = node;
     });
 

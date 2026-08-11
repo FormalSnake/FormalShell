@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import qs.Core
 import qs.Components
 import qs.Notifications
+import "../../Notifications/model.js" as Model
 
 // The popup toast stack (DESIGN.md §Notifications, M8b Task 5): top-right,
 // below the bar, a Column of independent omarchy-style cards — "each popup
@@ -38,7 +39,11 @@ PanelWindow {
     // stale literal Center.qml carried, fixed together in M13b Task 2).
     readonly property int _barHeight: Theme.barHeight
 
-    readonly property var _entries: NotificationService.popups
+    // Identical repeats collapse into one card carrying the group's count
+    // (Model.groupEntries): each row is a copy of the group's newest member,
+    // so `id`/`actions` still target the notification a click should act on,
+    // while `memberIds` is what hover-pause and dismiss operate over.
+    readonly property var _entries: Model.groupEntries(NotificationService.popups)
     visible: root._entries.length > 0 && !(root.center && root.center.isOpen)
     color: "transparent"
 
@@ -136,10 +141,12 @@ PanelWindow {
                     // Pause-on-hover (DESIGN.md §Notifications, M15 Task 2):
                     // NotificationService's own 1s expiry timer reads this
                     // back to hold the popup's countdown while the pointer
-                    // is over it.
-                    onHoveredChanged: NotificationService.setPopupHovered(cardFrame.modelData.id, card.hovered)
+                    // is over it. Every member's countdown is held, not just
+                    // the representative's, or a hovered group would shrink
+                    // under the pointer.
+                    onHoveredChanged: NotificationService.setPopupHovered(cardFrame.modelData.memberIds, card.hovered)
 
-                    onDismiss: NotificationService.dismissPopup(cardFrame.modelData.id)
+                    onDismiss: NotificationService.dismissPopupGroup(cardFrame.modelData.memberIds)
                     onBodyClicked: {
                         if (cardFrame.modelData.actions.some(a => a.key === "default"))
                             NotificationService.invokeAction(cardFrame.modelData.id, "default");

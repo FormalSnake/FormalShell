@@ -115,6 +115,37 @@ TestCase {
         compare(ids.join(","), "b,c,d,e");
     }
 
+    function test_add_caps_popups_at_four_groups_not_four_entries() {
+        // MAX_POPUPS caps groups, so repeats of one notification cost no
+        // unrelated toast its slot.
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "A" }), 1000, {});
+        s = M.add(s, notif("b", 1, { summary: "B" }), 1001, {});
+        s = M.add(s, notif("c", 1, { summary: "C" }), 1002, {});
+        s = M.add(s, notif("d", 1, { summary: "D" }), 1003, {});
+        s = M.add(s, notif("d2", 1, { summary: "D" }), 1004, {});
+        s = M.add(s, notif("d3", 1, { summary: "D" }), 1005, {});
+        s = M.add(s, notif("d4", 1, { summary: "D" }), 1006, {});
+        compare(s.popups.length, 7);
+        compare(M.groupEntries(s.popups).length, 4);
+        compare(s.pending.length, 0);
+    }
+
+    function test_add_overflow_evicts_the_whole_oldest_group_to_pending() {
+        var s = M.initialState();
+        s = M.add(s, notif("a1", 1, { summary: "A" }), 1000, {});
+        s = M.add(s, notif("a2", 1, { summary: "A" }), 1001, {});
+        s = M.add(s, notif("b", 1, { summary: "B" }), 1002, {});
+        s = M.add(s, notif("c", 1, { summary: "C" }), 1003, {});
+        s = M.add(s, notif("d", 1, { summary: "D" }), 1004, {});
+        compare(s.pending.length, 0);
+
+        s = M.add(s, notif("e", 1, { summary: "E" }), 1005, {});
+        compare(s.pending.map(function (p) { return p.id; }).join(","), "a1,a2");
+        compare(s.popups.map(function (p) { return p.id; }).join(","), "b,c,d,e");
+        compare(M.groupEntries(s.popups).length, 4);
+    }
+
     function test_expire_moves_timed_out_popups_to_pending_unseen() {
         var s = M.initialState();
         s = M.add(s, notif("a", 1), 1000, { timeoutMs: 500 }); // expires 1500
@@ -133,6 +164,25 @@ TestCase {
         s = M.expire(s, 999999999);
         compare(s.popups.length, 1);
         compare(s.pending.length, 0);
+    }
+
+    function test_expire_shrinks_a_group_member_by_member() {
+        // Members keep their own clocks precisely because grouping is derived
+        // at render time and never stored: a group of three shrinks to two,
+        // and the expired member lands in pending on its own.
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping" }), 1000, { timeoutMs: 500 });
+        s = M.add(s, notif("b", 1, { summary: "Ping" }), 1001, { timeoutMs: 5000 });
+        s = M.add(s, notif("c", 1, { summary: "Ping" }), 1002, { timeoutMs: 9000 });
+        compare(M.groupEntries(s.popups).length, 1);
+        compare(M.groupEntries(s.popups)[0].count, 3);
+
+        s = M.expire(s, 2000);
+        compare(s.pending.map(function (p) { return p.id; }).join(","), "a");
+        var groups = M.groupEntries(s.popups);
+        compare(groups.length, 1);
+        compare(groups[0].count, 2);
+        compare(groups[0].id, "c");
     }
 
     function test_update_patches_popup_content_in_place_without_moving_tier() {
@@ -194,6 +244,23 @@ TestCase {
         compare(s.past[0].seenAt, 5000);
     }
 
+    function test_dismiss_popup_many_archives_every_member_seen() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping" }), 1000, { timeoutMs: 500 });
+        s = M.add(s, notif("b", 1, { summary: "Ping" }), 1001, { timeoutMs: 5000 });
+        s = M.add(s, notif("c", 1, { summary: "Other" }), 1002, { timeoutMs: 9000 });
+
+        var group = M.groupEntries(s.popups).find(function (g) { return g.summary === "Ping"; });
+        s = M.dismissPopupMany(s, group.memberIds, 7000);
+        compare(s.popups.map(function (p) { return p.id; }).join(","), "c");
+        compare(s.past.map(function (p) { return p.id; }).join(","), "a,b");
+        compare(s.past[0].seenAt, 7000);
+        compare(s.past[1].seenAt, 7000);
+        compare(s.nextExpiry, 10002); // only c's own clock is left
+
+        compare(M.dismissPopupMany(s, ["nope"], 8000), s);
+    }
+
     function test_mark_all_seen_drains_pending_to_past() {
         var s = M.initialState();
         s = M.setDnd(s, true);
@@ -243,6 +310,31 @@ TestCase {
         s = M.dismissPopup(s, "a", 2000); // now in past
         s = M.dismissOne(s, "a");
         compare(s.past.length, 0);
+    }
+
+    function test_dismiss_many_drops_members_from_any_tier() {
+        var s = M.initialState();
+        s = M.setDnd(s, true);
+        s = M.add(s, notif("p", 1), 1000, {}); // pending
+        s = M.setDnd(s, false);
+        s = M.add(s, notif("q", 1), 1001, {}); // popup
+        s = M.add(s, notif("r", 1), 1002, {});
+        s = M.dismissPopup(s, "r", 2000); // past
+        compare(s.pending.length, 1);
+        compare(s.popups.length, 1);
+        compare(s.past.length, 1);
+
+        s = M.dismissMany(s, ["p", "q", "r"]);
+        compare(s.popups.length, 0);
+        compare(s.pending.length, 0);
+        compare(s.past.length, 0);
+        compare(s.nextExpiry, null);
+    }
+
+    function test_dismiss_many_unknown_ids_returns_identity() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1), 1000, {});
+        compare(M.dismissMany(s, ["nope"]), s);
     }
 
     function test_dismiss_all_clears_popups_only() {
@@ -300,6 +392,103 @@ TestCase {
         s = M.update(s, "a", { summary: "Song C" }, 3000);
         compare(s.popups.length, 1);
         compare(s.popups[0].summary, "Song C");
+    }
+
+    // groupKey / groupEntries
+
+    function test_group_key_ignores_app_name_case_and_surrounding_whitespace() {
+        compare(M.groupKey({ appName: " Slack ", summary: "X" }),
+                M.groupKey({ appName: "slack", summary: "X" }));
+    }
+
+    function test_group_key_ignores_body() {
+        // Pins what counts as identical: appName + summary, never body. The
+        // case grouping exists for is a chat app firing one summary with a
+        // different body per message, and keying on body would degenerate to
+        // no grouping at all there.
+        compare(M.groupKey({ appName: "Slack", summary: "kyan", body: "hey" }),
+                M.groupKey({ appName: "Slack", summary: "kyan", body: "you there?" }));
+    }
+
+    function test_group_key_differs_on_summary() {
+        verify(M.groupKey({ appName: "Slack", summary: "kyan" })
+            !== M.groupKey({ appName: "Slack", summary: "someone else" }));
+    }
+
+    function test_group_key_separator_prevents_field_boundary_collisions() {
+        // Concatenating the two fields without a separator that can't occur
+        // in either would fuse these into the same key.
+        verify(M.groupKey({ appName: "ab", summary: "c" })
+            !== M.groupKey({ appName: "a", summary: "bc" }));
+    }
+
+    function test_group_entries_collapses_repeats_and_counts_them() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping" }), 1000, {});
+        s = M.add(s, notif("b", 1, { summary: "Ping" }), 1001, {});
+        s = M.add(s, notif("c", 1, { summary: "Ping" }), 1002, {});
+        s = M.add(s, notif("d", 1, { summary: "Other" }), 1003, {});
+        var groups = M.groupEntries(s.popups);
+        compare(groups.length, 2);
+        compare(groups[0].summary, "Ping");
+        compare(groups[0].count, 3);
+        compare(groups[1].summary, "Other");
+        compare(groups[1].count, 1);
+    }
+
+    function test_group_entries_representative_is_the_newest_member() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping", body: "first" }), 1000, { timeoutMs: 500 });
+        s = M.add(s, notif("b", 1, { summary: "Ping", body: "second" }), 2000, { timeoutMs: 500 });
+        var g = M.groupEntries(s.popups)[0];
+        compare(g.id, "b");
+        compare(g.body, "second");
+        compare(g.arrivedAt, 2000);
+        compare(g.expiresAt, 2500);
+    }
+
+    function test_group_entries_member_ids_are_oldest_first() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping" }), 1000, {});
+        s = M.add(s, notif("b", 1, { summary: "Ping" }), 1001, {});
+        s = M.add(s, notif("c", 1, { summary: "Ping" }), 1002, {});
+        var g = M.groupEntries(s.popups)[0];
+        compare(g.count, 3);
+        compare(g.memberIds.join(","), "a,b,c");
+
+        // Center.qml feeds `past` in newest-first order; the member ids and
+        // the representative must not flip with it.
+        var reversed = M.groupEntries(s.popups.slice().reverse())[0];
+        compare(reversed.memberIds.join(","), "a,b,c");
+        compare(reversed.id, "c");
+    }
+
+    function test_group_entries_orders_groups_by_newest_member() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping" }), 1000, {});
+        s = M.add(s, notif("b", 1, { summary: "Other" }), 1001, {});
+        var order = M.groupEntries(s.popups).map(function (g) { return g.summary; });
+        compare(order.join(","), "Ping,Other");
+
+        // A repeat moves the whole group to the newest slot rather than
+        // adding a row below.
+        s = M.add(s, notif("c", 1, { summary: "Ping" }), 1002, {});
+        order = M.groupEntries(s.popups).map(function (g) { return g.summary; });
+        compare(order.join(","), "Other,Ping");
+        compare(M.groupEntries(s.popups).length, 2);
+    }
+
+    function test_group_entries_of_empty_list_is_empty() {
+        compare(M.groupEntries([]).length, 0);
+    }
+
+    function test_purity_group_entries_does_not_mutate_input() {
+        var s = M.initialState();
+        s = M.add(s, notif("a", 1, { summary: "Ping" }), 1000, {});
+        s = M.add(s, notif("b", 1, { summary: "Ping" }), 1001, {});
+        var before = JSON.stringify(s);
+        M.groupEntries(s.popups);
+        compare(JSON.stringify(s), before);
     }
 
     // isChromiumDerived / sanitizeBody / styledBody

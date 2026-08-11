@@ -2,7 +2,8 @@
 
 Per-surface reference for FormalShell's IPC targets, config keys, and
 keybind examples — theming, menu, notifications, OSD, panels, clipboard,
-calendar, now playing, lock screen, screensaver, picker, and screenshots.
+calendar, now playing, lock screen, screensaver, picker, screenshots,
+recording, reminders, and plugins.
 Product overview, screenshots, features, and install instructions live in
 [`README.md`](../README.md); the dev/verification loop lives in
 [`CLAUDE.md`](../CLAUDE.md).
@@ -17,9 +18,15 @@ Product overview, screenshots, features, and install instructions live in
 - [Calendar](#calendar)
 - [Now playing](#now-playing)
 - [Lock screen](#lock-screen)
+- [Polkit](#polkit)
+- [Night light](#night-light)
 - [Screensaver](#screensaver)
 - [Picker](#picker)
 - [Screenshots](#screenshots)
+- [Text and color capture](#text-and-color-capture)
+- [Screen recording](#screen-recording)
+- [Reminders](#reminders)
+- [Plugins](#plugins)
 - [Instance lock](#instance-lock)
 
 ## Bar
@@ -45,7 +52,8 @@ arrangement:
 
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
 `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
-`indicators`, `github`, `usage`, `tailscale`, `visualizer` (all four opt-in
+`indicators`, `github`, `usage`, `tailscale`, `visualizer`, `microphone`,
+`keyboardLayout`, `systemUpdate` (the last seven opt-in
 only — never part of the default arrangement; `bell` by contrast IS part of
 the defaults since M13b, so a config predating it that spells out its own
 `right` region won't show the bell until it's added there).
@@ -53,7 +61,23 @@ An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
 a `"custom:<id>"` entry with no matching `bar.modules[].id`, is dropped
-with a console warning — never a crash.
+with a console warning — never a crash. A `"plugin:<id>"` entry places a
+drop-in bar plugin (see [Plugins](#plugins)) in that region.
+
+Opting a widget in is one edit to the region you want it in. Naming a
+region replaces it wholesale, so spell out the builtins you still want
+alongside the new one:
+
+```jsonc
+{
+  "bar": {
+    "layout": {
+      "right": ["microphone", "keyboardLayout", "systemUpdate", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]
+    }
+  },
+  "systemUpdate": { "flakeDir": "/home/youruser/.config/nix" }
+}
+```
 
 `bar.modules[]` entries are referenced from `bar.layout` by
 `"custom:<id>"` and come in two `type`s:
@@ -107,11 +131,14 @@ one existing DND state machine (`notifications toggleDnd`'s), never a
 second one.
 
 **Indicators** — transient session-state glyphs, only while the condition
-holds; the whole slot disappears otherwise. Today that means idle-inhibit
-alone: the DND bell-off glyph this slot carried since M10 moved to the
-always-visible bell cell above, which owns both DND display and its
-toggle. Recording has no glyph yet — nothing in this shell or a reachable
-service reports screen recording as of 2026-07-29.
+holds; the whole slot disappears otherwise. Four cells, in this order: a
+live screen recording (the one full-bleed `urgent` cell here, since a
+recording is the active thing on screen; click stops it, and the elapsed
+clock rides the tooltip so a per-second label can't relayout the bar), a
+pending reminder (soonest countdown in the cell, `12:30 / 3` once more than
+one is set; click fires the summary notification), stay-awake, and night
+light. The DND bell-off glyph this slot carried since M10 moved to the
+always-visible bell cell above, which owns both DND display and its toggle.
 
 **Weather** (M15): a glyph plus rounded current temperature (`14°`) once
 `WeatherPanel`'s open-meteo poll has data, refreshed every
@@ -185,6 +212,59 @@ cymbals to show. Below level 2 a bar snaps flat, standing in for cava's
 glyph steps rather than copied, since DMS renders continuous shader bars
 that read fine at heights this row would draw as a flat stroke. None of it
 is configurable from `settings.json`.
+
+**Microphone** — opt-in via `bar.layout` (add `"microphone"` to a region);
+one glyph for the default capture source, swapping between live and muted,
+click toggles its mute. No percentage and no wheel handler: input gain is a
+panel concern and a mic reads as on or off. Honest state: no default source
+at all (the mac VM rig's own state, which has no capture device) renders a
+dim `NO MIC` label instead of a glyph, and the cell stays visible, because
+it is opt-in and hiding it would be the lie.
+
+**Keyboard layout** — opt-in via `bar.layout` (add `"keyboardLayout"` to a
+region); a glyph plus the short form of the active layout, read-only (no
+click-to-cycle: niri has the action, Hyprland's equivalent needs a device
+name and was never verified against a real Hyprland, and a control that
+silently no-ops on one backend is exactly what the honest-unavailable rule
+bans). Fewer than two layouts configured hides the cell, since a
+permanently static cell is noise. A compositor that can't be asked at all
+renders a dim `NO LAYOUT` cell rather than guessing.
+
+The layout is **polled**, once every 2 seconds, per output: `niri msg
+--json keyboard-layouts` or `hyprctl devices -j`, normalized by
+`shell/Compositor/keyboard.js`. It does not ride the compositor event
+stream, so an N-monitor session runs N timers and spawns N processes every
+interval. niri already puts `KeyboardLayoutsChanged`/
+`KeyboardLayoutSwitched` on the wire and moving that leg onto `reducer.js`
+would drop the timer entirely on that backend; it isn't wired yet. The
+Hyprland leg's field names come from the Hyprland wiki rather than from
+read source, so a wrong guess there lands on `NO LAYOUT`.
+
+**System update** — opt-in via `bar.layout` (add `"systemUpdate"` to a
+region); a glyph plus how many of a flake's direct inputs are behind
+upstream, going full-bleed `warning` while any are. Click toggles the
+system-update panel. It answers exactly one question, *are my flake inputs
+behind their upstream refs*, and not *does my running system differ from
+what a rebuild would produce*. Point it at a flake and it polls; leave
+`systemUpdate.flakeDir` unset and the cell honestly reads `NO FLAKE`
+forever rather than checking something else:
+
+```jsonc
+{
+  "systemUpdate": {
+    "flakeDir": "/home/youruser/.config/nix",
+    "intervalMs": 10800000
+  }
+}
+```
+
+The cadence is hours (3 by default) because stage 2 costs one network round
+trip per direct input: reading `flake.lock` off disk is free, but learning
+upstream's rev is a GitHub API call per github input and a `git ls-remote`
+per git-forge input. GitHub's unauthenticated limit is 60 requests per hour
+per IP, and a 403 lands in the panel's unknown bucket, never in `current`.
+An input type with no cheap probe (`path`, `tarball`, `indirect`,
+sourcehut) stays `?` forever rather than a fabricated `CURRENT`.
 
 **Tooltips** — hovering a bar cell for 400ms opens one omarchy card under
 it (`shell/Components/Tooltip.qml`, namespace `formalshell:tooltip`),
@@ -368,6 +448,21 @@ rendered as literal text in the icon slot). An icon the current theme
 can't resolve means the row simply has no leading image — never a
 broken-image box.
 
+**Launch or focus.** Enter on an app row that already has a window focuses
+that window instead of spawning a second copy, and pressing it again cycles
+through that app's windows. A row in this state carries a dim `FOCUS` note.
+Matching (`shell/Compositor/appmatch.js`) is the same comparison quickshell
+itself runs, in the same order: the desktop entry's `startupClass` exactly,
+then case-insensitively, then its id (the `.desktop` basename, which equals
+the app id for most Linux apps). The first tier that hits wins outright,
+never a union of two.
+
+There is deliberately no fuzzy third tier. Electron and wrapper-launched
+apps commonly report an app id unrelated to their `.desktop` basename, and
+chasing that tail buys the worse failure: a miss falls through to the spawn
+path, which is the old behavior, while a fuzzy hit focuses the wrong app.
+Focusing records a frecency hit, since it is a use of the app.
+
 **Launch ranking.** App rows are ordered by launch frecency — how often an
 entry gets launched, decayed by how long ago (`shell/Menu/frecency.js`, a
 14-day half-life over a per-entry count). The ledger persists to
@@ -433,6 +528,61 @@ default entry (and its whole subtree) without needing to redeclare it:
 
 Each button becomes `system.custom.<i>` in the tree; `confirm: true` requires
 a second Enter on the row before the command runs (`CONFIRM <label>?`).
+
+**Toggles.** The root `TOGGLES` node collects the four session switches that
+were previously scattered across the tree, each a live checkmark row: night
+light (`toggles.nightlight`, hidden unless `wlsunset` is on PATH), stay
+awake (`toggles.stay-awake`), do not disturb (`toggles.dnd`), and dark mode
+(`toggles.dark-mode`). Activating one flips it and leaves the menu open, so
+the checkmark visibly changes under the cursor instead of the surface
+vanishing.
+
+The checkmark is live in-process state, not a polled command. A `checked`
+value prefixed `@state:` is answered from a snapshot the menu already holds
+(`shell/Menu/toggles.js`), never through `sh -c` and never cached, so it
+repaints in the same event-loop turn the toggle does. Four paths are legal
+and the list is closed: `nightlight.active`, `screensaver.stayAwake`,
+`notifications.dnd`, `theme.dark`. A `checked` naming anything else resolves
+false rather than falling through to the command cache, so a typo shows an
+off checkmark instead of a stale one, and a hand-written `menu.jsonc` has no
+route into the QML engine through that field. `@state:` is a `checked`
+prefix only: a `when` carrying it is refused with a warning and the node
+hides.
+
+`"keepOpen": true` is available on any action row, not just these four. It
+holds the surface open after activation, which is what makes a toggle worth
+looking at.
+
+```jsonc
+// ~/.config/formalshell/menu.jsonc: a fifth toggle of your own
+{
+    "toggles.my-vpn": {
+        "label": "Work VPN",
+        "action": "sh -c 'nmcli con up work-vpn'",
+        "checked": "nmcli -t -f NAME con show --active | grep -qx work-vpn",
+        "keepOpen": true
+    }
+}
+```
+
+(That `checked` is an ordinary shell condition, resolved by one `Process` on
+menu open like every other `when`/`checked`. Only the four `@state:` paths
+above are answered in-process.)
+
+**BREAKING: the toggle node ids changed.** `theme` and `theme.mode-toggle`
+no longer exist, and neither does `system.stay-awake`. A `menu.jsonc` keyed
+on the old ids does not error, it goes inert: the override lands on a node
+nothing declares, so nothing changes and nothing warns. Rename them:
+
+| Old id | New id |
+| --- | --- |
+| `theme` | `toggles` |
+| `theme.mode-toggle` | `toggles.dark-mode` |
+| `system.stay-awake` | `toggles.stay-awake` |
+
+A compositor keybind wired to `menu summon theme` degrades the same quiet
+way: an unresolvable route opens the menu at root rather than erroring.
+`menu summon toggles` is the replacement.
 
 **Wallpaper.** The root `WALLPAPER` node opens the [Picker](#picker) grid
 over `picker.directory`: its activation spawns the same self-targeting
@@ -505,6 +655,38 @@ throwaway terminal (`ghostty -e sh -c 'nix run nixpkgs#<attr>; read'` —
 `read` holds the window open after it exits) and immediately fires a
 `NIX RUN <attr>` notification through the shell's own stack, so the launch
 is visible even while the terminal is still seconds from mapping.
+
+**Keybinds.** `menu summon keybinds` lists your compositor's own key
+bindings as a searchable ledger: the chord at content ink, padded into a
+column, with the action and its arguments dimmed behind it. From anywhere,
+the root trigger `:k <query>` narrows to the same rows (`:k screenshot`), and
+a bare `:k` browses the whole list, capped at 200 rows. Search is
+route-local (exact chord, then chord or action prefix, then word start, then
+substring, ties broken by config declaration order) rather than going
+through the whole-tree scorer, for the same reason the emoji route is
+special-cased: a hundred keybind rows in the root search would drown
+everything else.
+
+Where they come from: on niri, `~/.config/niri/config.kdl` is scanned
+directly, with a real KDL scanner that survives quoted strings holding
+braces or `//`, line and block comments, `/-` slashdash node comments, KDL
+v2 raw and multi-line strings, node properties, and a `binds` block that
+isn't the first block in the file. On Hyprland it's `hyprctl binds -j`,
+which is already JSON.
+
+**Rows are inert notes, never activatable**, and that is the point rather
+than a missing feature. A bind acts on whatever window has focus, and at
+the moment you press Enter that window is the menu, so running one from
+here would fire it at whichever window the compositor hands focus back to
+instead of the one you were looking at. This surface is for remembering a
+chord, not for pressing it.
+
+Honest states, one dim row each: `NO CONFIG` (no `~/.config/niri/config.kdl`),
+`NO BINDS` (a config with no `binds` block), `BINDS UNAVAILABLE` (`hyprctl
+binds -j` failed), and `NO BINDS / niri or hyprland only` on any other
+compositor. A half-written config yields the binds above the mistake rather
+than an empty surface, which is the honest answer for a file you are
+editing right now.
 
 **IPC.** Every route is summonable for direct compositor keybinds:
 `toggle()` (deliberately no-argument — root summon if closed, close if
@@ -581,6 +763,22 @@ notifications reading as an unreadable wall of link markup. A single-line
 entry (no body) gets tighter vertical padding than one with a body. The
 icon slot (40×40) shows the notification's own image, else the sender's
 themed app icon, hidden entirely when neither resolves.
+
+**Grouping.** Identical notifications collapse into one card carrying a
+repeat count in its meta row (`Signal / 2m ago / x4`). Identical means the
+same app name (case- and whitespace-insensitive) and the same summary. Body
+is deliberately out of the key: the case this exists for is a chat app
+firing one summary with a different body per message, and keying on body
+too would degenerate to no grouping at all exactly there. The card shows the
+newest member, and a repeat moves the whole group back to the newest slot
+rather than adding a row.
+
+The popup cap of 4 counts **groups**, not raw notifications, so five repeats
+of one thing can never evict four unrelated toasts. Grouping is derived at
+render time and never stored: every notification keeps its own server id and
+its own timeout, so each member still expires on its own clock and its
+sender is still told when it closes. Hovering a grouped card pauses every
+member's countdown, and dismissing it dismisses every member at once.
 
 **DND bypass is deliberately narrow** (Omarchy's rule, not a general
 "urgent" exception): only `urgency: critical` notifications sent by the
@@ -662,7 +860,7 @@ binds {
 
 ## Panels
 
-Eleven popouts — ten per-widget, plus the IPC-only `display` — share one
+Thirteen popouts, twelve per-widget plus the IPC-only `display`, share one
 component, `shell/Components/Panel.qml`: a ledger-table popout (header
 `MetaLabel` row, rows sharing hairline rules, `WlrLayershell` top layer,
 closes on Escape and on
@@ -702,6 +900,8 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `github`     | one `gh api graphql` poll (shared with the bar cell) | `GithubWidget.qml` |
 | `usage`      | `~/.claude/.credentials.json` + Anthropic OAuth usage endpoint, `codex app-server` JSON-RPC | `UsageWidget.qml` |
 | `tailscale`  | `tailscale status --json` poll (shared with the bar cell) | `TailscaleWidget.qml` |
+| `appmenu`    | the focused window's desktop entry + the compositor's window list | `ActiveWindow.qml` |
+| `systemupdate` | `flake.lock` + one upstream probe per direct input | `SystemUpdateWidget.qml` |
 | `display`    | the compositor backend's own output contract  | none (IPC only)      |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
@@ -991,6 +1191,20 @@ genuinely empty workspace still reads as empty. `CompositorService.focusedWindow
 is unchanged for everything else; the held value is
 `heldFocusedWindowId`, and `debug dump` reports both.
 
+`SystemUpdatePanel` lists a flake's direct inputs, one row each: the input
+name, its locked rev short-form, and whether upstream has moved. The poll
+lives in the panel rather than the widget (`GithubPanel`'s own pattern), so
+`panel open systemupdate` renders honestly even when `bar.layout` never
+names the widget. Stage 1 reads `<systemUpdate.flakeDir>/flake.lock` through
+a `FileView`, which costs nothing and re-reads for free the moment you run
+`nix flake update` yourself; stage 2 probes upstream one input at a time,
+strictly queued. Only direct inputs are walked: a nixpkgs pinned into some
+dependency by a `follows` is not something you update. Honest states, one
+dim cell each: `NO FLAKE` (no `systemUpdate.flakeDir`), `NO LOCK`, `CHECKING`
+before anyone has asked, and `NO NETWORK` when the probes cannot reach
+upstream. An input type with no cheap probe stays `?` rather than a
+fabricated `CURRENT`, and the summary counts it separately (`2 BEHIND / 1 ?`).
+
 `DisplayPanel` (M17) is the one panel with no bar cell of its own —
 `panel open display` is the only way in — and lists every connected output
 as a row: name, an `ON`/`OFF` toggle, a status meta line
@@ -1030,7 +1244,7 @@ qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
 qs ipc --any-display -p <store-path>/share/formalshell call panel open display   # the display panel has no bar cell; this is its only summon path
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "appmenu" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "display"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "appmenu" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "systemupdate" | "display" | "plugin:<id>"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a
@@ -1426,29 +1640,45 @@ already keeps the whole session non-idle with no polling of our own) behind
 controller `Item` — deciding *when* to show, off `IdleService.isIdle` crossed
 live with a media-playback guard — plus a per-monitor `Variants` overlay
 (`WlrLayer.Overlay`, `OnDemand` keyboard focus), the same "one controller,
-many surfaces" split `Lock.qml` uses. The visual (Omarchy reference:
-`bin/omarchy-screensaver`'s `tte`-driven banner, reimplemented rather than
-shelling out) loads an ASCII banner — the bundled block-character
-`FORMALSHELL` logo at `branding/screensaver.txt`, or a user-supplied file —
-and animates it converging into place on a `Canvas`, drawn in the shell's own
-mono font and `Theme.color.accent`, no spawned terminal windows.
-`shell/Screensaver/effect.js` (TDD'd first, pure functions of a frame
-counter — column/cell state, convergence, everything directly testable) owns
-five distinct convergence effects:
+many surfaces" split `Lock.qml` uses. It loads an ASCII banner — the bundled
+block-character `FORMALSHELL` logo at `branding/screensaver.txt`, or a
+user-supplied file — and animates it converging into place on a `Canvas` in
+the shell's own mono font, no spawned terminal windows.
 
-| Effect | Look |
-| --- | --- |
-| `decrypt` | every cell scrambles through random glyphs before settling on its target character |
-| `rain` | the original matrix-rain: columns of falling glyphs with a brightness-decay trail |
-| `expand` | one diamond opens outward from the banner's centre, not per-line |
-| `slide` | each line slides in from alternating edges |
-| `scatter` | every cell pops in at its own hashed frame with a brief fade-in — nothing moves |
+**The engine is `ttfx`** (`omacom-io/ttfx`, MIT), the same
+terminal-text-effect binary Omarchy's own screensaver runs, packaged at
+`nix/ttfx-package.nix` and on the shell wrapper's PATH. The shell runs it
+against a canvas measured in this screen's own cells, splits its stdout on
+the cursor-up sequence it emits between frames, and paints each frame's
+truecolor runs itself — so the animation is ttfx's, the glyph rendering is
+the shell's. That buys all 37 of its effects, and their colors: each effect
+arrives in its own upstream gradient (decrypt amber, matrix green, rain
+blue), which is exactly what Omarchy does — it passes no gradient overrides
+either, so a random effect is what makes the color change. `ttfx --help`
+lists the full set:
+
+`beams` `binarypath` `blackhole` `bouncyballs` `bubbles` `burn` `colorshift`
+`crumble` `decrypt` `errorcorrect` `expand` `fireworks` `highlight`
+`laseretch` `matrix` `middleout` `orbittingvolley` `overflow` `pour` `print`
+`rain` `randomsequence` `rings` `scattered` `slice` `slide` `smoke`
+`spotlights` `spray` `swarm` `sweep` `synthgrid` `thunderstorm` `unstable`
+`vhstape` `waves` `wipe`
+
+**Without ttfx on PATH** — a bare `qs -p shell/` dev run, or an install that
+skipped the wrapper — the surface falls back to `shell/Screensaver/effect.js`
+instead of going blank: five hand-written convergence effects (`decrypt`,
+`rain`, `expand`, `slide`, `scatter`), pure functions of a frame counter,
+drawn in `Theme.color.accent`. `screensaver frameInfo` reports which engine
+is live. This fallback is why the shell stays pure QML/JS with nothing
+installed alongside it.
 
 **Picking an effect.** `screensaver.effect` in `settings.json` is `"random"`
 by default — a fresh effect is picked every time the screensaver activates,
 seeded off the activation itself so a long idle session still cycles
-variants — or pin it to any one of the five names above (an unknown name
-falls back to random and logs a warning, never a hard error):
+variants — or pin it to any name the live engine knows (an unknown name
+falls back to random and logs a warning, never a hard error).
+`screensaver.frameRate` (default 60) is how fast ttfx is asked to produce
+frames; lower it on a machine where a full-screen canvas can't keep up:
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -1462,9 +1692,13 @@ animates again, indefinitely, until real input dismisses it —
 immediately previous one, a pinned name replays itself with a fresh
 activation seed so the run still looks different. The loop takes no idle
 inhibitor, so system suspend fires exactly as it would without it.
-`screensaver frameInfo` reports the resolved effect, its convergence
-frame, and a `cycles` counter (completed reroll count, 0 until the first
-one) so cycling is observable without screenshots.
+`screensaver frameInfo` reports the live engine, the resolved effect, its
+convergence frame, and a `cycles` counter (completed reroll count, 0 until
+the first one) so cycling is observable without screenshots. Under ttfx an
+effect converging *is* its process exiting, and the convergence frame is
+how many frames that run really produced — known only once a pinned run
+has completed, so `frameInfo` answers 0 until one has, rather than
+guessing.
 
 **Replacing the banner.** `screensaver.asciiPath` points at any UTF-8 text
 file to use instead of the bundled logo — empty (the default) keeps
@@ -1507,7 +1741,7 @@ qs ipc --any-display -p <store-path>/share/formalshell call screensaver stayAwak
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver stayAwakeOff
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver stayAwakeToggle
 qs ipc --any-display -p <store-path>/share/formalshell call screensaver status  # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…,"stayAwake":…}
-qs ipc --any-display -p <store-path>/share/formalshell call screensaver frameInfo  # {"effect":…,"convergenceFrame":…,"cycles":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screensaver frameInfo  # {"engine":…,"effect":…,"convergenceFrame":…,"cycles":…}
 ```
 
 `dev/smoke-niri.sh --screensaver` additionally accepts `SCREENSAVER_EFFECT`
@@ -1577,9 +1811,11 @@ in the 150–300MB RSS band.
 ## Screenshots
 
 `shell/Ipc/ScreenshotIpc.qml` (M12 — a spec-addendum surface, same pattern
-as `panel`/`picker`) wraps grim/slurp behind one IPC target: `full` grabs
-the whole output, `region` runs `slurp` first for an interactive rectangle.
-Either way the capture lands as
+as `panel`/`picker`) puts every capture behind one IPC target: `full` grabs
+the whole output with no interaction, `pick` opens the shell's own region
+picker (below — the one you want for a `Print` bind), and `region` runs bare
+`slurp` for an interactive rectangle, kept for anyone who prefers it.
+However the rectangle is chosen, the capture lands as
 `<screenshot.directory>/screenshot-<timestamp>.png` (`screenshot.directory`
 in `settings.json`, default `~/Pictures/Screenshots`, created on first
 capture) AND on the clipboard as `image/png` via `wl-copy`, and a
@@ -1603,23 +1839,460 @@ on user interaction indefinitely. A runtime failure (grim error, slurp
 failing to start) fires a `SCREENSHOT FAILED` notification and lands in
 `status()`'s `lastError` — loud and queryable, never a silent no-op.
 
+### The region picker
+
+`pick` opens the shell's own picker (`shell/Surfaces/Capture/RegionPicker.qml`,
+M22) instead of slurp: a full-screen Overlay surface holding exclusive
+keyboard focus. Before it maps, `grim` captures every output and the surface
+renders those frames at 1:1, so screen content cannot shift while you choose,
+and the capture then photographs that freeze with the chrome hidden for a
+frame. Nothing on screen is live, and the overlay can never appear in its own
+screenshot.
+
+Four modes, matching the names omarchy uses so a ported keybind reads the
+same: `smart` (freeform drag with window and display rectangles hinted, and a
+bare click under 20px² snapping to whatever it landed in), `region` (freeform
+only), `windows` (snap to a window or display, no freeform), and `fullscreen`
+(the focused output, no interaction and no surface).
+
+Keys, once it is open:
+
+| Key | Does |
+| --- | --- |
+| `Return` | Capture what is selected |
+| `Ctrl+Return` | Capture the whole display under it |
+| `Tab` / `Shift+Tab` | Cycle windows in reading order |
+| Arrows | Move the selection spatially |
+| `Escape`, right-click | Cancel |
+
+A second argument picks what happens with the result: the default saves to
+disk **and** the clipboard then offers the editor, `copy` is clipboard only
+(nothing touches disk, so no editor is offered), and `save` is disk only and
+stays quiet.
+
+**One difference between compositors, and it is the compositor's, not the
+shell's.** On Hyprland every window has a rectangle, so hovering or cycling
+highlights it in place. niri reports a pixel position only for *floating*
+windows: `Tile::ipc_layout_template` hardcodes
+`tile_pos_in_workspace_view: None` (`src/layout/tile.rs:869`), `floating.rs:336`
+fills it in, and the tiled layout inherits the `None`
+(`src/layout/scrolling.rs:2426`). A tiled niri window therefore has no box to
+draw. Rather than drop the capability, the picker **names** those windows
+instead, in a centered card of title over dim app id, and captures the chosen
+one by id through niri's `ScreenshotWindow` action, which crops server-side
+(niri also puts the PNG on the clipboard itself, so that path skips
+`wl-copy`). Window selection works identically on both; only the affordance
+differs. The split is on whether a rectangle exists, never on a compositor
+name, so a future niri that reports tiled geometry gets the highlight
+behaviour with no configuration.
+
+### Annotating a capture
+
+The `SCREENSHOT SAVED` notification carries an `EDIT` action, and clicking the
+card body does the same. Both hand the PNG to `screenshot.editor`
+(`settings.json`, default `tensaku-edit`), as does `screenshot edit` from a
+keybind. The default is [Tensaku](https://tensaku.dev), a Wayland annotation
+editor built and shipped by this flake (`nix/tensaku-package.nix`); it takes
+its input as a flag rather than a positional argument, which is what the
+`tensaku-edit` wrapper adapts. Any editor accepting `<editor> <path>` works
+just as well. A launch failure is its own `EDITOR FAILED` notification and
+never reports the capture as failed, since by then the PNG is already saved
+and on the clipboard.
+
 **IPC** (`target: "screenshot"`):
 
 ```bash
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot full     # replies with the destination path
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot region   # slurp rectangle, then same pipeline
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot cancel   # kill an in-flight capture, clear state
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot status   # {"capturing":…,"lastPath":…,"lastError":…,"lastCancelled":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot full            # whole output, no interaction
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot pick smart      # open the picker; 2nd arg: default|copy|save
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot region          # legacy slurp rectangle, same pipeline
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot edit            # open the last capture in the editor
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot cancel          # kill an in-flight capture, clear state
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot status          # {"capturing":…,"lastPath":…,"lastError":…,"lastCancelled":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot pickerStatus    # {"open":…,"mode":…,"drawableWindows":…,"namedWindows":…,"selection":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot key tab         # drive the picker headlessly (smoke rig)
 ```
 
-Bind both in niri, same pattern as every other target:
+`pickerStatus`'s `drawableWindows` and `namedWindows` are the honest
+capability report: zero drawable alongside a non-empty named list is the
+normal niri answer, not a failure.
+
+Bind them in niri, same pattern as every other target:
 
 ```kdl
 binds {
-    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
-    Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "region"; }
+    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart"; }
+    Ctrl+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
+    Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "edit"; }
 }
 ```
+
+Verified by `dev/smoke-niri.sh --capture`, which opens the picker over a
+session holding one real tiled window, screenshots it, cycles the selection
+with `key tab`, captures with `key ctrl-return`, checks the resulting PNG's
+real pixel dimensions against the compositor's own output geometry, and
+proves `key escape` leaves no surface behind. It asserts a non-zero named
+window count on purpose: a leg that merely found no window hints would pass
+identically against a picker that never enumerated windows at all.
+
+## Text and color capture
+
+`shell/Ipc/CaptureIpc.qml` is the third leg of the capture family, and its
+own target rather than more verbs on `screenshot`, because the split is what
+each one leaves behind:
+
+| Target | Leaves behind |
+| --- | --- |
+| `screenshot` | a PNG on disk, and on the clipboard |
+| `capture` | nothing on disk: recognized text, or one pixel's color, on the clipboard |
+| `record` | video |
+
+**`capture text`** drags a region with `slurp`, captures it with `grim`,
+runs `tesseract` over the PNG, strips the form feed tesseract ends every
+page with, and puts the result on the clipboard as `text/plain`. A
+`TEXT COPIED` notification carries the recognized text. A region that held
+nothing readable is a real answer, not a failure: `NO TEXT FOUND`, no
+clipboard write, no `lastError`. `capture.ocrLanguage` (default `eng`) picks
+tesseract's language pack.
+
+**`capture color`** picks one pixel with slurp's point mode (crosshairs on,
+so it is aimable), reads it back through `grim -t ppm`, and copies
+`#RRGGBB`. A `COLOR COPIED` notification carries the hex. The pipeline is
+grim plus coreutils rather than a compositor call on purpose: niri does have
+a native `PickColor` with a real magnifier grab, but it is niri-only, so
+adopting it would build a path Hyprland never runs and leave the smoke rig
+verifying the wrong one. `grim -t ppm` behaves identically everywhere and
+its P6 output needs no image library to read.
+
+Escape or right-click inside slurp is a decline, not an error: no toast, no
+`lastError`. `capture.timeoutSeconds` (default 90) auto-cancels a selection
+nobody answers, and `capture cancel` does the same on demand.
+
+**One capture at a time, within this target only.** `text` and `color` share
+one busy flag and one watchdog, so they can never race each other for the
+pointer. Nothing coordinates this target with `screenshot`'s own slurp,
+though: firing `screenshot region` and `capture text` at the same moment
+puts two slurp overlays on screen, and the second one gets the click.
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call capture text     # OCR a region to the clipboard
+qs ipc --any-display -p <store-path>/share/formalshell call capture color    # pick a pixel, copy its hex
+qs ipc --any-display -p <store-path>/share/formalshell call capture cancel
+qs ipc --any-display -p <store-path>/share/formalshell call capture status   # {"capturing":…,"mode":…,"lastHex":…,"lastText":…,"lastError":…,"lastCancelled":…}
+```
+
+The menu's root `CAPTURE` node carries both as rows (`COPY TEXT FROM
+SCREEN`, `PICK COLOR`) alongside the recording rows below. `tesseract` and
+`grim` both ride the package wrapper's own PATH, so neither is a host
+prerequisite.
+
+## Screen recording
+
+`shell/Services/RecordingService.qml` drives one `wf-recorder` child over
+the `record` IPC target. `wf-recorder` rather than `gpu-screen-recorder`:
+gpu-screen-recorder captures through the KMS backend, which has no meaning
+inside a nested compositor or on llvmpipe, so it could never be verified in
+the smoke rig. wf-recorder speaks `wlr-screencopy-unstable-v1`, which niri
+implements under its nested winit backend, so the code path the owner runs
+is the one the rig can exercise.
+
+Two scopes, `screen` (the focused output) and `region` (a `slurp`
+rectangle), and three audio modes:
+
+| Audio mode | Records |
+| --- | --- |
+| `none` | no audio flag at all |
+| `desktop` | the default sink's own monitor |
+| `desktopmic` | both, mixed |
+
+`desktopmic` exists because wf-recorder stores exactly one audio source and
+has no multi-device form. The shell builds a transient null sink plus two
+loopbacks with `pactl`, records that, and unloads every module it loaded on
+stop, including when a later setup step fails partway. Asking for
+`desktopmic` where the default source is itself a monitor fails loudly
+(`no microphone: the default source is a monitor`) rather than quietly
+recording desktop audio twice. `pactl` is a host binary, not one the wrapper
+bundles, so a machine without it fails the setup step rather than recording
+silence.
+
+Stopping sends SIGTERM, which is one of wf-recorder's own graceful
+termination signals, so the container is finalized rather than truncated. A
+recorder that ignores it for 5 seconds is killed, and the notification says
+so (`RECORDING TRUNCATED`) instead of reporting a save. Recordings land at
+`<recording.directory>/screenrecording-<timestamp>.mp4`, and the
+`RECORDING SAVED` notification carries a `GIF` action that transcodes it in
+place.
+
+`record gif` is a two-pass ffmpeg palettegen/paletteuse transcode, writing
+next to its source rather than into `recording.directory`: the everyday case
+is an mp4 someone sent you sitting in `~/Downloads`, and moving the result
+elsewhere is friction rather than less of it.
+
+Every setting, with its default:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `recording.directory` | `~/Videos` | where recordings land, created on first use |
+| `recording.framerate` | `30` | wf-recorder `-r` |
+| `recording.codec` | `""` | wf-recorder `-c`, empty leaves its own default |
+| `recording.audioBackend` | `""` | wf-recorder `--audio-backend`, only sent when a device is being recorded |
+| `recording.noDmabuf` | `false` | wf-recorder `--no-dmabuf`, the fallback for a driver whose dmabuf path is broken |
+| `recording.timeoutSeconds` | `90` | auto-cancel an unanswered `region` selection |
+| `recording.gifFps` | `12` | GIF frame rate |
+| `recording.gifWidth` | `640` | GIF width in pixels, height follows the aspect |
+
+```jsonc
+{
+  "recording": { "directory": "/home/youruser/Videos/screencasts", "framerate": 60 }
+}
+```
+
+**IPC** (`target: "record"`, a spec addendum in the `panel`/`nightlight`
+tradition). Every argument is required by IPC arity, so pass `""` to take a
+default rather than omitting it:
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call record start screen none
+qs ipc --any-display -p <store-path>/share/formalshell call record start region desktopmic
+qs ipc --any-display -p <store-path>/share/formalshell call record toggle screen none
+qs ipc --any-display -p <store-path>/share/formalshell call record stop            # also cancels a pending region selection
+qs ipc --any-display -p <store-path>/share/formalshell call record gif ""          # transcode the last recording
+qs ipc --any-display -p <store-path>/share/formalshell call record gif /path/to/clip.mp4
+qs ipc --any-display -p <store-path>/share/formalshell call record status          # {"active":…,"scope":…,"audio":…,"path":…,"elapsedMs":…,"transcoding":…,"lastGifPath":…,"lastError":…}
+```
+
+`start` answers with the destination path rather than a completion signal,
+the same contract `screenshot region` has: an IPC reply is synchronous while
+a region scope blocks on a human. An unknown scope or audio mode comes back
+as an error naming the accepted values, never a silent fallback to something
+you did not ask for.
+
+While a recording runs, the bar's indicators slot carries a full-bleed
+`urgent` cell; clicking it stops the recording. `active` is the live child
+process and nothing else: it is never persisted (a crashed shell would leave
+a stale `true` behind) and never derived from `pgrep`.
+
+Bind it in niri:
+
+```kdl
+binds {
+    Mod+Shift+R { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "record" "toggle" "screen" "none"; }
+}
+```
+
+**No webcam overlay.** Compositing a camera into the frame needs the camera
+window pinned floating at a fixed corner, which is a compositor window rule
+this shell does not install and cannot install portably (niri `window-rule`
+against Hyprland `windowrulev2`). Building half of it, an mpv window that
+then tiles across the recording, would be worse than not having it.
+
+**`record start window` does not exist**, on either compositor, and the
+reason is wf-recorder's own interface rather than a gap in niri's IPC:
+`wf-recorder` takes an output or a geometry, never a window id. A window
+scope would therefore be a geometry snapshot taken once, which stops being
+the window the moment it moves or resizes. `region` is the honest version of
+that.
+
+## Reminders
+
+A countdown plus a message, fired through the shell's own notification
+stack. `reminder set` takes a duration and a message, both arguments always,
+because IPC arity is an exact-equality check:
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call reminder set 25m "coffee break"
+qs ipc --any-display -p <store-path>/share/formalshell call reminder set 1h30 ""   # message falls back to reminders.defaultMessage
+qs ipc --any-display -p <store-path>/share/formalshell call reminder show          # notification listing what is pending
+qs ipc --any-display -p <store-path>/share/formalshell call reminder clear         # "ok: cleared 3"
+qs ipc --any-display -p <store-path>/share/formalshell call reminder status        # {"count":…,"reminders":[{id,message,dueAt,remainingSeconds,remaining}]}
+```
+
+`set` answers with the stored entry, including the wall-clock time it lands
+(`dueClock`). A duration that doesn't parse is an error string naming what
+was rejected, never a silent no-op.
+
+**Duration syntax.** Tokens of digits plus `h`, `m` or `s`, concatenated
+with no spaces. A token with no unit takes the next unit smaller than the
+one before it, and the first one defaults to minutes:
+
+| Written | Means |
+| --- | --- |
+| `10` | 10 minutes |
+| `45s` | 45 seconds |
+| `2h` | 2 hours |
+| `1h30` | 1 hour 30 minutes |
+| `5m30` | 5 minutes 30 seconds |
+| `1h30m15s` | 1 hour 30 minutes 15 seconds |
+
+There is deliberately no rule for a bare number after seconds, so `30s10` is
+a parse failure rather than a silent reinterpretation. Whitespace inside the
+duration is illegal too: the message has already been split off by then, so
+a space there is a typo. The ceiling is 30 days.
+
+**Menu.** `Reminder > Set Reminder` opens the menu's own input field and
+takes duration and message in one line (`25m coffee break`), the same
+grammar with the first whitespace run as the separator. `Show Reminders` and
+`Clear Reminders` are the other two rows. `Clear Reminders` has no `when`
+guard and stays visible on an empty list, where it is a harmless no-op:
+`when` runs a shell command and cannot gate on in-process state.
+
+**Firing.** A due reminder is sent at `urgency: critical` and marked as
+shell-authored, which is exactly the narrow case DND bypass exists for: you
+asked for this one. The same urgency makes its toast sticky until dismissed.
+Every fired reminder shares the summary `Reminder`, so two landing close
+together collapse into one card carrying a repeat count (see
+[Notifications](#notifications)); the newest one's message is the one shown.
+
+**Persistence.** Pending reminders live in
+`$XDG_STATE_HOME/formalshell/state.json` under `reminders`, alongside
+wallpaper, mode and DND. A reminder whose due time passed while the shell
+was down fires on the first tick after state loads. Firing late is honest;
+dropping it silently is not, and with durations running to 30 days a reboot
+mid-countdown is ordinary rather than exotic.
+
+While any reminder is pending the bar's indicators slot carries a countdown
+cell: the soonest one alone, or `12:30 / 3` once there is more than one.
+Clicking it fires the summary notification. `reminders.defaultMessage`
+(default `Time's up`) fills in an empty message at set time, so a stored
+entry always carries real text.
+
+## Plugins
+
+Drop-in QML that loads from `~/.config/formalshell/plugins/<id>/`, without
+rebuilding the shell. Each plugin is a directory holding a `manifest.json`
+and its entry file:
+
+```
+~/.config/formalshell/plugins/
+  moon-phase/
+    manifest.json
+    MoonPhase.qml
+```
+
+```json
+{
+  "apiVersion": 1,
+  "id": "moon-phase",
+  "kind": "bar",
+  "entry": "MoonPhase.qml",
+  "name": "Moon Phase",
+  "region": "right"
+}
+```
+
+Exactly eight keys are legal:
+
+| Key | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `apiVersion` | number | yes | must be `1`; anything else drops the plugin |
+| `id` | string | yes | must equal the directory name, lowercase letters, digits and dashes |
+| `kind` | string | yes | `bar`, `panel`, `overlay` or `service` |
+| `entry` | string | yes | a path inside the plugin directory, never absolute and never escaping it |
+| `name` | string | no | display name, defaults to `id` |
+| `region` | string | `bar` only | `left`, `center` or `right`, default `right` |
+| `keepLoaded` | bool | `panel`/`overlay` only | keep the content loaded while closed, default `false` |
+| `width` | string | `panel` only | `narrow`, `default`, `wide` or `menu` |
+
+`width` is an enum rather than a pixel number because every floating card in
+the shell snaps to one of those four tokens (`docs/DESIGN.md` §1.3); a raw
+literal would be the first non-token width in the card language.
+
+The entry file is ordinary shell QML. It runs in this process, so the
+shell's own imports resolve:
+
+```qml
+// ~/.config/formalshell/plugins/moon-phase/MoonPhase.qml
+import QtQuick
+import qs.Core
+import qs.Components
+
+Cell {
+    standalone: true
+    tooltipText: "MOON PHASE"
+
+    Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: "WAXING GIBBOUS"
+        color: parent.foreground
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSize.body
+    }
+}
+```
+
+A `Cell` is not required, it is only what makes a bar plugin look like the
+cells beside it. Any `Item` renders.
+
+**The four kinds, and how each is addressed:**
+
+- **`bar`** renders as one cell in a bar region. Place it explicitly with
+  `"plugin:<id>"` in `bar.layout`, exactly like a builtin name. A bar plugin
+  named in no region at all is appended to the region its own manifest asks
+  for, id-sorted, so dropping the directory in is enough to see it; an
+  explicit placement always wins, and a plugin named somewhere is never
+  appended twice.
+- **`panel`** is a bar-anchored card, opened with `panel open plugin:<id>`
+  (also `toggle`, `close`, `state`). It inherits the real `Panel`: the card
+  frame, title band, gutter, enter/exit fade, Escape, click-outside and
+  mutual exclusion with every other panel.
+- **`overlay`** is a summoned centered card, opened the same way over the
+  `panel` target.
+- **`service`** has no surface at all. It is instantiated once at load and
+  left running.
+
+The `plugin:` prefix means a plugin can never collide with a builtin panel
+name by construction, and duplicate ids are structurally impossible since
+`id` must equal a directory name.
+
+**Write the content, not the window.** A `bar`/`panel`/`overlay` entry root
+is a plain `Item` loaded into a host the shell owns. Layer, exclusive zone
+and keyboard focus stay shell-side deliberately: a permanently-exclusive
+surface makes Hyprland route every pointer event on every output to it,
+killing clicks shell-wide, and a third-party file getting that wrong would
+brick the session. A bar plugin that wants to hide itself sets `shown` on
+its own root, the same contract the builtin widgets follow.
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call plugins list     # the resolved manifests
+qs ipc --any-display -p <store-path>/share/formalshell call plugins status   # {"directory":…,"loaded":…,"count":…,"bar":…,"surface":…,"service":…,"surfaces":[…],"errors":[…],"warnings":[…]}
+qs ipc --any-display -p <store-path>/share/formalshell call plugins reload
+qs ipc --any-display -p <store-path>/share/formalshell call panel open plugin:moon-phase
+```
+
+**Nothing watches the plugins directory.** A newly dropped plugin appears
+after `plugins reload` or a shell restart, the same rescan-on-demand
+contract the picker and the calendar's ics directory already have. A reload
+closes every open plugin surface first, deliberately rather than as a
+flicker.
+
+Disable one without deleting it:
+
+```jsonc
+{ "plugins": { "disabled": ["moon-phase"] } }
+```
+
+A disabled id is skipped with no warning, since it was asked for. Changing
+that list rescans on its own, so the toggle takes effect without a reload.
+
+**Failure contract**, the same shape `bar.layout` has: nothing here is ever
+fatal. A manifest that cannot be addressed at all (unparsable JSON, a
+missing required key, the wrong `apiVersion`, an id that doesn't match its
+directory, an unknown kind, an entry path escaping the directory) drops that
+one plugin with one warning. Anything smaller drops one key back to its
+default and keeps the plugin. An absent or empty plugins directory is zero
+plugins and zero warnings, not an error.
+
+**This is not a sandbox, and the isolation is smaller than it looks.** A
+`Loader` catches load-time failures only: bad syntax, an unresolvable
+import. Those render as a `PLUGIN ERROR` cell or a dim row in the card, and
+land in `plugins status`'s `errors`. A plugin file that parses fine has the
+exact same engine access as any built-in widget (`qs.Core`, `qs.Services`,
+`Process`, `Quickshell.Io`) and can wedge or crash this single-process shell
+outright. Nothing contains what a running plugin does.
+
+`plugins status` is the only place a plugin's load outcome is readable from
+outside the process. Plugin QML lives outside the repo, so `qmllint` never
+sees it and a syntax error would otherwise exist only as an engine message
+on stderr that nothing can read back.
 
 ## Instance lock
 

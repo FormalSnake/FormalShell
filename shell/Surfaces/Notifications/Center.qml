@@ -5,6 +5,7 @@ import qs.Core
 import qs.Compositor
 import qs.Components
 import qs.Notifications
+import "../../Notifications/model.js" as Model
 
 // The notification history center (DESIGN.md §Notifications, M5 Task 5,
 // M8b Task 5): summonable, right-anchored, full height below the bar — the
@@ -16,11 +17,14 @@ import qs.Notifications
 // to (`invertOnHover: true` below opts these rows into it). Two ledger
 // sections — PENDING (unseen) then EARLIER (seen, rolling 15min TTL) —
 // share NotificationCard with Toasts.qml's popup stack; only the dismiss
-// wiring differs (dismissOne here drops outright, dismissPopup there
+// wiring differs (dismissGroup here drops outright, dismissPopupGroup there
 // archives to past — see NotificationService's own doc comment on the
-// distinction). DND is the top cell, an accent-filled block per DESIGN's
-// "active toggle cell" rule when armed (Cell's own paint priority keeps
-// that fill on top of the hover-inversion below); unarmed, hovering it
+// distinction). Both sections collapse identical repeats into one counted
+// row the same way the toast stack does, so a repeat that expired out of a
+// group re-groups here instead of reappearing as separate rows. DND is the
+// top cell, an accent-filled block per DESIGN's "active toggle cell" rule
+// when armed (Cell's own paint priority keeps that fill on top of the
+// hover-inversion below); unarmed, hovering it
 // inverts like any other row. The center never lists live popups, only what has left
 // that tier — Toasts.qml suppresses its own overlay stack for as long as
 // this surface is open, so a sticky critical popup can't sit on top of it
@@ -50,8 +54,17 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
 
-    // Newest-first: history reads top-down like everything else here.
+    // Newest-first: history reads top-down like everything else here. Left
+    // ungrouped: clearAll() below sweeps the raw tier, and Model.groupEntries
+    // preserves whichever direction it is handed, so the rows below group
+    // this list newest-first with each group sitting where its newest member
+    // was.
     readonly property var _pastNewestFirst: NotificationService.past.slice().reverse()
+
+    // Section counts stay on the raw tiers: those are the real notification
+    // counts, and each row's own trailing count names its collapse.
+    readonly property var _pendingRows: Model.groupEntries(NotificationService.pending)
+    readonly property var _pastRows: Model.groupEntries(root._pastNewestFirst)
 
     function open() {
         root.isOpen = true;
@@ -253,7 +266,7 @@ PanelWindow {
                 }
 
                 Repeater {
-                    model: NotificationService.pending
+                    model: root._pendingRows
 
                     delegate: NotificationCard {
                         id: pendingCard
@@ -265,7 +278,7 @@ PanelWindow {
                         invertOnHover: true
                         pending: true
 
-                        onDismiss: NotificationService.dismissOne(pendingCard.modelData.id)
+                        onDismiss: NotificationService.dismissGroup(pendingCard.modelData.memberIds)
                         onBodyClicked: {
                             if (pendingCard.modelData.actions.some(a => a.key === "default"))
                                 NotificationService.invokeAction(pendingCard.modelData.id, "default");
@@ -287,7 +300,7 @@ PanelWindow {
                 }
 
                 Repeater {
-                    model: root._pastNewestFirst
+                    model: root._pastRows
 
                     delegate: NotificationCard {
                         id: pastCard
@@ -298,7 +311,7 @@ PanelWindow {
                         width: parent.width
                         invertOnHover: true
 
-                        onDismiss: NotificationService.dismissOne(pastCard.modelData.id)
+                        onDismiss: NotificationService.dismissGroup(pastCard.modelData.memberIds)
                         onBodyClicked: {
                             if (pastCard.modelData.actions.some(a => a.key === "default"))
                                 NotificationService.invokeAction(pastCard.modelData.id, "default");

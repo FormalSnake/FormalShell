@@ -67,6 +67,18 @@ TestCase {
         compare(tree.nodes["a"].dim, true);
     }
 
+    // `keepOpen` (toggle hub): an action row that leaves the menu open after
+    // activation, carried by buildTree and overridable per-key like any
+    // other field.
+    function test_keep_open_passthrough() {
+        var def = { "a": { label: "A", action: "@ipc:x", keepOpen: true } };
+        var tree = M.buildTree(def, {});
+        compare(tree.nodes["a"].kind, "action");
+        compare(tree.nodes["a"].keepOpen, true);
+        var overridden = M.buildTree(def, { "a": { keepOpen: false } });
+        compare(overridden.nodes["a"].keepOpen, false);
+    }
+
     function test_user_override_of_default_label() {
         var def = { "apps": { label: "Applications", icon: "" } };
         var user = { "apps": { label: "My Apps" } };

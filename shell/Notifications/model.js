@@ -5,6 +5,8 @@
 // after 15 minutes). Every function takes state in, returns state out —
 // no Date.now(), no mutation of the input.
 
+// Caps GROUPS on screen, not raw entries: five repeats of one notification
+// must not evict four unrelated toasts.
 var MAX_POPUPS = 4;
 var DEFAULT_TIMEOUT_MS = 6000;
 var PAST_TTL_MS = 15 * 60 * 1000;
@@ -52,6 +54,64 @@ function recomputeNextExpiry(popups) {
     return next;
 }
 
+// Identical means same appName (case- and surrounding-whitespace-insensitive)
+// plus same summary. Body is deliberately out of the key: the case grouping
+// exists for is a chat app firing one summary with a different body per
+// message, and keying on body too would degenerate to no grouping at all
+// there. The NUL separator can't appear in either field, so no appName/summary
+// pair can collide with a different one.
+function groupKey(entry) {
+    return String(entry.appName || "").trim().toLowerCase() + "\u0000" + String(entry.summary || "");
+}
+
+// Collapses repeats into one row each: a copy of the group's newest member
+// carrying `count` and `memberIds` (oldest-first). Group order follows each
+// group's newest member's position in `entries`, so a repeat moves its whole
+// group to the newest slot instead of adding a row, and a newest-first input
+// (Center.qml's reversed `past`) stays newest-first on the way out.
+//
+// The newest member is the one with the strictly greatest arrivedAt; a tie
+// keeps whichever came first in `entries`.
+//
+// Grouping is DERIVED here, never stored: every entry keeps its own server id
+// and its own expiresAt, so NotificationService's three id-keyed side maps
+// (_live, _selfClosing, _hoveredPopups) keep resolving and each member still
+// times out on its own clock. Merging entries inside makeEntry/add instead
+// would orphan one of the live Notification objects: its sender would never
+// be told it closed.
+function groupEntries(entries) {
+    var groups = [];
+    var byKey = {};
+
+    entries.forEach(function (entry, index) {
+        var key = groupKey(entry);
+        var group = byKey[key];
+        if (group === undefined) {
+            group = { members: [], newest: entry, newestIndex: index };
+            byKey[key] = group;
+            groups.push(group);
+        } else if (entry.arrivedAt > group.newest.arrivedAt) {
+            group.newest = entry;
+            group.newestIndex = index;
+        }
+        group.members.push({ entry: entry, index: index });
+    });
+
+    // newestIndex is unique per group, so this sort never needs stability
+    // (the QML JS engine's own guarantee is not worth relying on).
+    groups.sort(function (a, b) { return a.newestIndex - b.newestIndex; });
+
+    return groups.map(function (group) {
+        var oldestFirst = group.members.slice().sort(function (a, b) {
+            return (a.entry.arrivedAt - b.entry.arrivedAt) || (a.index - b.index);
+        });
+        return Object.assign({}, group.newest, {
+            count: oldestFirst.length,
+            memberIds: oldestFirst.map(function (m) { return m.entry.id; })
+        });
+    });
+}
+
 function add(state, notif, now, opts) {
     opts = opts || {};
 
@@ -66,10 +126,16 @@ function add(state, notif, now, opts) {
     var popups = state.popups.concat([makeEntry(notif, now, expiresAt)]);
     var pending = state.pending;
 
-    if (popups.length > MAX_POPUPS) {
-        var overflow = popups.length - MAX_POPUPS;
-        pending = pending.concat(popups.slice(0, overflow));
-        popups = popups.slice(overflow);
+    // The whole oldest GROUP moves to pending together, order preserved in
+    // both tiers, so a repeat never costs an unrelated toast its slot.
+    var groups = groupEntries(popups);
+    if (groups.length > MAX_POPUPS) {
+        var evicted = {};
+        groups.slice(0, groups.length - MAX_POPUPS).forEach(function (g) {
+            g.memberIds.forEach(function (id) { evicted[id] = true; });
+        });
+        pending = pending.concat(popups.filter(function (p) { return evicted[p.id]; }));
+        popups = popups.filter(function (p) { return !evicted[p.id]; });
     }
 
     return Object.assign({}, state, {
@@ -146,6 +212,28 @@ function dismissPopup(state, id, now) {
     });
 }
 
+// dismissPopup for a whole group: archives every listed id from popups to
+// past in one transition, recomputing nextExpiry once. Ids not in popups are
+// skipped.
+function dismissPopupMany(state, ids, now) {
+    var wanted = {};
+    ids.forEach(function (id) { wanted[id] = true; });
+
+    var popups = [];
+    var archived = [];
+    state.popups.forEach(function (p) {
+        if (wanted[p.id]) archived.push(Object.assign({}, p, { seenAt: now }));
+        else popups.push(p);
+    });
+    if (archived.length === 0) return state;
+
+    return Object.assign({}, state, {
+        popups: popups,
+        past: state.past.concat(archived),
+        nextExpiry: recomputeNextExpiry(popups)
+    });
+}
+
 function markAllSeen(state, now) {
     if (state.pending.length === 0) return state;
     var seen = state.pending.map(function (p) { return Object.assign({}, p, { seenAt: now }); });
@@ -169,6 +257,29 @@ function dismissOne(state, id) {
     var popups = state.popups.filter(function (p) { return p.id !== id; });
     var pending = state.pending.filter(function (p) { return p.id !== id; });
     var past = state.past.filter(function (p) { return p.id !== id; });
+    if (popups.length === state.popups.length &&
+        pending.length === state.pending.length &&
+        past.length === state.past.length) {
+        return state;
+    }
+    return Object.assign({}, state, {
+        popups: popups,
+        pending: pending,
+        past: past,
+        nextExpiry: popups.length === state.popups.length ? state.nextExpiry : recomputeNextExpiry(popups)
+    });
+}
+
+// dismissOne for a whole group: the history center's per-row dismiss, where
+// one row can stand for several notifications.
+function dismissMany(state, ids) {
+    var wanted = {};
+    ids.forEach(function (id) { wanted[id] = true; });
+    function keep(p) { return !wanted[p.id]; }
+
+    var popups = state.popups.filter(keep);
+    var pending = state.pending.filter(keep);
+    var past = state.past.filter(keep);
     if (popups.length === state.popups.length &&
         pending.length === state.pending.length &&
         past.length === state.past.length) {

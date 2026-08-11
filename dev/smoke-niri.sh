@@ -242,14 +242,19 @@
 # incremented and the reported effect changed (random never repeats the
 # immediately previous effect; with SCREENSAVER_EFFECT pinned the effect
 # must instead stay the same, the pinned-replay proof).
-# With --screensaver-gif, records all five effects in effect.js as GIFs
-# rather than screenshotting one: for each effect in turn, its own isolated
-# settings.json fixture pins screensaver.effect to that name, a fresh nested
-# niri session boots, `screensaver start` shows it, `screensaver frameInfo`
-# reads back the real convergence frame (ScreensaverIpc's M11 Task 1 verb —
-# never guessed, since the VM's llvmpipe rendering makes wall-clock capture
-# uneven), then `screensaver frame <n>` pins and screenshots every frame from
-# 0 through convergence plus a short hold before `screensaver stop` and quit.
+# With --screensaver-gif, records five of ttfx's effects as GIFs rather than
+# screenshotting one: for each effect in turn, its own isolated settings.json
+# fixture pins screensaver.effect to that name, a fresh nested niri session
+# boots, `screensaver start` shows it, `screensaver frame 0` pins the run
+# (which is what makes a ttfx run's frame count known at all — the engine
+# streams, it doesn't precompute), `screensaver frameInfo` reads that count
+# back (ScreensaverIpc's M11 Task 1 verb — never guessed, since the VM's
+# llvmpipe rendering makes wall-clock capture uneven), then `screensaver
+# frame <n>` pins and screenshots a strided sample of the run plus a short
+# hold on the converged banner before `screensaver stop` and quit. Strided
+# because a ttfx effect runs to hundreds of frames where effect.js's own ran
+# to dozens: the capture budget is a fixed number of frames per GIF, and the
+# GIF's frame delay is derived from the stride so playback stays real time.
 # Runs entirely separately from every other mode's shared single-session
 # timeline below (it needs five independent sessions, not one), assembling
 # each effect's captured frames into docs/media/screensaver-<effect>.gif with
@@ -463,6 +468,112 @@
 # process, the same way share_mode's own pgrep proves a real
 # `localsend_app` process rather than trusting an IPC reply.
 #
+# With --record (M22), drives the `record` target through a real
+# wf-recorder child: `record start screen none` (settings.json sets
+# recording.noDmabuf, the one key llvmpipe makes non-optional: there is no
+# GPU buffer to import in a software-rendered nested session; every other
+# recording key stays at its default so this proves those defaults
+# resolve), `record status` must report active:true against the exact
+# destination path `start` replied with, and the bar is screenshotted mid
+# recording (record-active.png) since that is the only state Indicators.qml's
+# recording cell exists in. `record stop` then polls until `active` goes
+# false (SIGTERM asks wf-recorder to finalize the container rather than
+# truncate it), and the file on disk must be a real non-empty MP4 by
+# file(1). Finally `record gif <path>` runs the two-pass ffmpeg transcode
+# and the .gif must exist, be non-empty, be a GIF by file(1), and match
+# `record status`'s own lastGifPath. A wf-recorder that cannot start at all
+# fails the run loudly with its own stderr (status's lastError), never a
+# softer assertion.
+# With --ocr (M22), drives the `capture` target's two verbs as far as a
+# nested session honestly can, and says on its own SMOKE_OCR_LIMIT line
+# where that stops. A real foot window carrying known text on a known
+# #3fae2a background is the on-screen fixture (foot renders through the
+# same fontconfig monospace alias the whole shell depends on, so there is
+# no imagemagick font lookup to gamble on, and its own background is the
+# solid fill a colour pick needs). `capture text` must start a real
+# `slurp -d` and report capturing:true in mode "text"; `capture color` must
+# start slurp's single-point mode instead (`slurp -p`, asserted through
+# pgrep, since the two verbs differ only in the flags they hand slurp);
+# both must cancel clean with no slurp left behind; and the clipboard must
+# still hold the sentinel this rig put there, proving a cancelled capture
+# copied nothing rather than merely reporting that it didn't. The OCR text
+# and the picked hex actually reaching the clipboard stay host-trial: both
+# verbs block on a real slurp drag, CaptureIpc exposes no geometry stand-in
+# for that answer (unlike picker choose / screenshot key / tray expand),
+# slurp cannot be shimmed off the shell's PATH the way nix/gh are
+# (nix/package.nix installs it with makeWrapper's --prefix, which outranks
+# anything this rig can put on the session PATH; wtype is --suffix for
+# exactly the opposite reason and says so), and this rig has no synthetic
+# pointer at all.
+# With --reminder (M22), sets one real countdown and waits it out. 12s
+# rather than 1s: the pending state has to survive long enough to be
+# screenshotted (reminder-pending.png, the bar's countdown indicator
+# cell), dumped through `reminder status` and read back out of the real
+# state.json, which is where a reminder survives a restart. DND is turned
+# ON before the reminder is ever set, so the toast that lands after the
+# deadline (reminder-fired.png) can only have got into the popup tier
+# through Notifications/model.js's bypassesDnd(): the urgency-2 bypass
+# proven rather than read off the source. Afterwards `reminder status`
+# must be back to count 0 and state.json must no longer carry the entry.
+# With --toggles (M22), summons the menu's toggle hub and proves a
+# checkmark flips live. `debug query` carries each row's resolved `checked`
+# (Menu.qml's query() maps it through toggles.js's checkedFor), so the
+# checkmark is readable from outside the process, and `menu status` before
+# and after must be byte-identical: the surface stays open at the same
+# level across the toggles, which is what "no rebuild" means here.
+# `nightlight toggle` is the row the plan names and its assertion is the
+# cross-check the row exists for: the checkmark must agree with
+# `nightlight status` in BOTH samples, which is what proves the row renders
+# the service's real state rather than the fact that a toggle was asked
+# for. On this VM that means both stay honestly false (nested niri
+# advertises no wlr-gamma-control-unstable-v1, so wlsunset exits on its
+# own, the same deterministic branch --nightlight documents). The DND
+# row's own "@state:" path has no external dependency, so it is what proves
+# a checkmark genuinely flips false -> true inside the open hub, cross-checked
+# against `notifications status`.
+# With --keybinds (M22), writes a real niri config.kdl into the isolated
+# XDG_CONFIG_HOME and reads the parsed binds back through the menu route.
+# The nested session is launched with `--config <tmp>`, which is NOT on
+# Menu.qml's own lookup chain (settings override, $NIRI_CONFIG, then
+# $XDG_CONFIG_HOME/niri/config.kdl, then /etc/niri/config.kdl), so the
+# fixture goes to the third candidate and the settings override is left
+# unset: the documented lookup itself is what has to resolve. The fixture
+# is a real config rather than a bare binds block (a preceding sibling
+# block with nested braces, a quoted argument holding "//" and braces, a
+# hotkey-overlay-title property, a line comment, a "/-"-disabled bind), and
+# the assertions are exact: five live rows, the disabled bind absent, the
+# fixture's own chords carrying their own actions, and none of the route's
+# four honest end-state rows (a NO CONFIG here would mean the shell read
+# some other file). Rows are inert notes by construction, so there is no
+# activation to drive (see Compositor/keybinds.js).
+# With --mic (M22), points bar.layout at the opt-in "microphone" builtin.
+# THE HONEST NO MIC STATE IS THE PASSING RESULT: this VM has a pipewire
+# null sink and no capture device at all, so AudioService.sourceAvailable
+# is genuinely false and MicWidget renders its one dim NO MIC label instead
+# of a glyph, staying visible because the user opted in. A glyph here would
+# mean the widget invented a device. The live/muted states need real
+# capture hardware and stay host-trial, the same split --nightlight and
+# --panel tailscale already document.
+# With --systemupdate (M22), points bar.layout at the opt-in "systemUpdate"
+# builtin (which is what flips the panel's pollEnabled, so cell and panel
+# read one poll) and settings.json's systemUpdate.flakeDir at THIS REPO, so
+# the panel parses a real flake.lock and probes the real upstream refs
+# behind its real inputs. `panel open systemupdate` then leaves the popout
+# open through the screenshot. No count is asserted: that would be
+# asserting the state of github rather than of this panel. N BEHIND, ALL
+# CURRENT, NO NETWORK and CHECKING are all real answers here.
+# With --plugins (M22), writes a real drop-in plugin directory
+# (manifest.json + an entry.qml that itself imports qs.Core and reads
+# Theme, the same shared-engine proof --bar-layout's `qml` module fixture
+# makes) under the isolated config home and reads it back through the
+# `plugins` target. No `bar` key is written for this leg on purpose: the
+# manifest's own `region` is what places the cell, so dropping the
+# directory in is the whole install. `plugins list` must show the resolved
+# record and `plugins status` must report one loaded bar plugin with no
+# errors and no warnings: the only place a plugin's entry QML failing to
+# load is visible from outside the process, since plugin QML lives outside
+# the repo and qmllint never sees it.
+#
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
 # else that talks D-Bus in there) a private session bus instead of the
@@ -509,12 +620,21 @@ picker_mode=false
 tray_mode=false
 bar_layout_mode=false
 screenshot_mode=false
+capture_mode=false
 nightlight_mode=false
 speedtest_mode=false
 instance_mode=false
 share_mode=false
 visualizer_mode=false
 gallery_mode=false
+record_mode=false
+ocr_mode=false
+reminder_mode=false
+toggles_mode=false
+keybinds_mode=false
+mic_mode=false
+systemupdate_mode=false
+plugins_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -536,13 +656,22 @@ while [ $# -gt 0 ]; do
     --tray) tray_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
+    --capture) capture_mode=true; shift ;;
     --nightlight) nightlight_mode=true; shift ;;
     --speedtest) speedtest_mode=true; shift ;;
     --instance) instance_mode=true; shift ;;
     --share) share_mode=true; shift ;;
     --visualizer) visualizer_mode=true; shift ;;
     --gallery) gallery_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery]" >&2; exit 1 ;;
+    --record) record_mode=true; shift ;;
+    --ocr) ocr_mode=true; shift ;;
+    --reminder) reminder_mode=true; shift ;;
+    --toggles) toggles_mode=true; shift ;;
+    --keybinds) keybinds_mode=true; shift ;;
+    --mic) mic_mode=true; shift ;;
+    --systemupdate) systemupdate_mode=true; shift ;;
+    --plugins) plugins_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins]" >&2; exit 1 ;;
   esac
 done
 
@@ -558,13 +687,21 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
 # the app menu is about the focused app, so with nothing focused its only
 # honest rendering is the NO WINDOW cell.
 if $panel_mode && [ "$panel_name" = "appmenu" ]; then
+  active_window_fixture_mode=true
+fi
+# --capture needs it for the same reason and then some: the region picker is
+# ABOUT windows, and the foot fixture is a real TILED niri window, which is
+# precisely the case that has no rectangle to draw (see RegionPicker.qml's
+# header). Without it the leg would exercise only the output rectangles and
+# never reach the named-window path at all.
+if $capture_mode; then
   active_window_fixture_mode=true
 fi
 
@@ -591,7 +728,12 @@ if $wallpaper_mode || $picker_mode || $screensaver_gif_mode || $menu_mode || $ac
   fi
 fi
 
-if $active_window_fixture_mode; then
+# ocr_mode reuses the same real terminal as its on-screen fixture: foot
+# renders known text with the fontconfig monospace alias the whole shell
+# already depends on, and its own background color is a known solid fill
+# for the colour-pick leg: one real window carrying both targets, with no
+# imagemagick font lookup to gamble on.
+if $active_window_fixture_mode || $ocr_mode; then
   if command -v foot >/dev/null 2>&1; then
     foot_bin=$(command -v foot)
   else
@@ -607,7 +749,7 @@ if $osd_mode; then
   fi
 fi
 
-if $clipboard_mode || $share_mode; then
+if $clipboard_mode || $share_mode || $ocr_mode; then
   if command -v wl-copy >/dev/null 2>&1; then
     wl_copy_bin=$(command -v wl-copy)
   else
@@ -616,9 +758,10 @@ if $clipboard_mode || $share_mode; then
 fi
 
 # screenshot_mode and menu_mode only read the clipboard back (the shell's
-# own wrapper PATH carries the wl-copy side); clipboard_mode needs both
-# directions.
-if $clipboard_mode || $screenshot_mode || $menu_mode; then
+# own wrapper PATH carries the wl-copy side); clipboard_mode and ocr_mode
+# need both directions (ocr_mode seeds a sentinel, then reads it back to
+# prove a cancelled capture copied nothing over it).
+if $clipboard_mode || $screenshot_mode || $menu_mode || $ocr_mode; then
   if command -v wl-paste >/dev/null 2>&1; then
     wl_paste_bin=$(command -v wl-paste)
   else
@@ -626,7 +769,7 @@ if $clipboard_mode || $screenshot_mode || $menu_mode; then
   fi
 fi
 
-if $screenshot_mode; then
+if $screenshot_mode || $capture_mode || $record_mode; then
   if command -v file >/dev/null 2>&1; then
     file_bin=$(command -v file)
   else
@@ -703,7 +846,9 @@ if $polkit_mode; then
   true_bin=$(type -P true)
 fi
 
-if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode; then
+if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
+  || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
+  || $mic_mode || $systemupdate_mode || $plugins_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -720,6 +865,11 @@ if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_t
   # the same no-toast reason: the shot exists to read two menu rows.
   # theme_toggle_mode's dark/light pair (M13b Task 3) likewise: those two
   # shots exist to compare background/bar colors.
+  # The M22 legs (record/ocr/reminder/toggles/keybinds/mic/systemupdate/
+  # plugins) all pick grim for that same no-toast reason: every one of their
+  # shots exists to read one small thing (an indicator glyph, a toast, a
+  # menu row, one bar cell), and niri's own capture toast lands on top of
+  # exactly that corner.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -833,7 +983,9 @@ host_notifications_owner_before=$(host_notifications_owner)
 # screenshot of the live animation would look choppy on this VM's llvmpipe
 # rendering in the first place.
 if $screensaver_gif_mode; then
-  ss_gif_hold=8   # extra frames held on the finished banner after convergence
+  ss_gif_hold=8      # extra frames held on the finished banner after convergence
+  ss_gif_budget=120  # captured frames per GIF, before the hold
+  ss_gif_fps=60      # screensaver.frameRate's default, which these runs leave alone
   ss_gif_home=$(mktemp -d)
   media_dir="$PWD/docs/media"
   mkdir -p "$media_dir" "$ss_gif_home/.config/formalshell"
@@ -841,7 +993,12 @@ if $screensaver_gif_mode; then
   # SCREENSAVER_GIF_EFFECTS (optional, additive, space-separated): limits
   # the run to a subset — a recorder-contract verification only needs one
   # effect and must not regenerate every committed GIF to prove it.
-  ss_gif_effects=(decrypt rain expand slide scatter)
+  #
+  # ttfx names, and deliberately not matrix or thunderstorm: those two are
+  # gated on wall-clock time rather than frame count, so a pinned run emits
+  # however many frames the host manages inside that window and the same
+  # frame index means something different on the next machine.
+  ss_gif_effects=(decrypt rain expand slide scattered)
   if [ -n "${SCREENSAVER_GIF_EFFECTS:-}" ]; then
     read -r -a ss_gif_effects <<< "$SCREENSAVER_GIF_EFFECTS"
   fi
@@ -866,14 +1023,34 @@ EOF
 sleep 3
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver start > /dev/null 2>&1
 sleep 1
+# Pin frame 0 before asking for the count: a ttfx run streams, so the only
+# honest frame total is the one a completed pinned run actually produced,
+# and frameInfo answers 0 until then rather than guessing.
+"$qs_bin" ipc --any-display -p "$shell_path" call screensaver frame 0 > /dev/null 2>&1
+sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_gif_convergence_path" 2>&1
 convergence=\$(grep -o '"convergenceFrame":[0-9]*' "$ss_gif_convergence_path" | cut -d: -f2)
-last=\$((convergence + $ss_gif_hold))
-for ((i = 0; i <= last; i++)); do
+stride=\$(( (convergence + $ss_gif_budget - 1) / $ss_gif_budget ))
+[ "\$stride" -lt 1 ] && stride=1
+idx=0
+for ((i = 0; i < convergence; i += stride)); do
   "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frame "\$i" > /dev/null 2>&1
-  sleep 0.15
-  printf -v padded "%04d" "\$i"
+  # Longer than the pre-ttfx 0.15s: a pin regenerates the whole run to reach
+  # the frame, so the surface needs the generation plus one repaint before
+  # grim reads the framebuffer.
+  sleep 0.4
+  printf -v padded "%04d" "\$idx"
   "$grim_bin" "$frames_dir/frame-\$padded.png"
+  idx=\$((idx + 1))
+done
+# The hold is the converged banner repeated, which is exactly what the live
+# surface shows between convergence and the next cycle — copied rather than
+# re-captured, since re-pinning the same frame would regenerate the whole
+# run again for a byte-identical screenshot.
+printf -v last "%04d" "\$((idx - 1))"
+for ((h = 0; h < $ss_gif_hold; h++)); do
+  printf -v padded "%04d" "\$((idx + h))"
+  cp "$frames_dir/frame-\$last.png" "$frames_dir/frame-\$padded.png"
 done
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
 niri msg action quit --skip-confirmation
@@ -899,28 +1076,44 @@ EOF
       echo "SMOKE_FAIL: screensaver frameInfo did not report effect '$effect' — got: $(cat "$ss_gif_convergence_path" 2>/dev/null)" >&2
       exit 1
     fi
+    # The engine is asserted, not assumed: with ttfx missing from the shell's
+    # wrapper PATH the surface silently falls back to effect.js's builtin
+    # effects, which would still record a plausible GIF of the wrong thing.
+    if ! grep -q '"engine":"ttfx"' "$ss_gif_convergence_path"; then
+      echo "SMOKE_FAIL: screensaver is not running the ttfx engine — got: $(cat "$ss_gif_convergence_path" 2>/dev/null)" >&2
+      exit 1
+    fi
     convergence=$(grep -o '"convergenceFrame":[0-9]*' "$ss_gif_convergence_path" | cut -d: -f2)
-    expected_frames=$((convergence + ss_gif_hold + 1))
+    if [ -z "$convergence" ] || [ "$convergence" -le 0 ]; then
+      echo "SMOKE_FAIL: screensaver frameInfo reported no frames for '$effect' — got: $(cat "$ss_gif_convergence_path" 2>/dev/null)" >&2
+      exit 1
+    fi
+    stride=$(( (convergence + ss_gif_budget - 1) / ss_gif_budget ))
+    [ "$stride" -lt 1 ] && stride=1
+    expected_frames=$(( (convergence + stride - 1) / stride + ss_gif_hold ))
 
     shopt -s nullglob
     frame_files=("$frames_dir"/frame-*.png)
     shopt -u nullglob
     frame_count=${#frame_files[@]}
     # Exact match, not just "enough frames": a session killed mid-capture
-    # (the drive script's own `timeout 200`, or slide's 92-frame run at
-    # 0.15s/frame plus one qs ipc spawn each) would otherwise still produce
-    # a plausible-looking but truncated GIF that never reaches the banner,
-    # and this would exit 0 regardless.
+    # (the drive script's own `timeout 200`, or a long run at 0.15s/frame
+    # plus one qs ipc spawn each) would otherwise still produce a
+    # plausible-looking but truncated GIF that never reaches the banner, and
+    # this would exit 0 regardless.
     if [ "$frame_count" -ne "$expected_frames" ]; then
-      echo "SMOKE_FAIL: $effect captured $frame_count frame(s), expected the full convergence run of $expected_frames (convergence $convergence + hold $ss_gif_hold + 1) — session likely killed mid-capture" >&2
+      echo "SMOKE_FAIL: $effect captured $frame_count frame(s), expected $expected_frames (convergence $convergence at stride $stride + hold $ss_gif_hold) — session likely killed mid-capture" >&2
       exit 1
     fi
 
     out_gif="$media_dir/screensaver-$effect.gif"
-    # -delay 9 (90ms/frame) matches the real Timer interval exactly, since
-    # every frame is captured (no stride) — layers-optimize plus a capped
-    # palette is what keeps a mostly-static-background animation small.
-    "$convert_bin" -delay 9 -loop 0 "$frames_dir"/frame-*.png -resize 640x -coalesce -layers Optimize -colors 96 "$out_gif"
+    # Frame delay in centiseconds, derived from the stride so the GIF plays
+    # at the speed the animation really runs: one captured frame stands for
+    # `stride` frames at screensaver.frameRate. Floored at 2cs, which is as
+    # fast as GIF playback goes in practice.
+    gif_delay=$(( (stride * 100 + ss_gif_fps / 2) / ss_gif_fps ))
+    [ "$gif_delay" -lt 2 ] && gif_delay=2
+    "$convert_bin" -delay "$gif_delay" -loop 0 "$frames_dir"/frame-*.png -resize 640x -coalesce -layers Optimize -colors 96 "$out_gif"
     if [ ! -s "$out_gif" ]; then
       echo "SMOKE_FAIL: imagemagick did not produce $out_gif for effect $effect" >&2
       exit 1
@@ -1066,6 +1259,68 @@ screenshot_cancel_reply_path="$shot_dir/screenshot-cancel-reply.txt"
 screenshot_cancelled_status_path="$shot_dir/screenshot-cancelled-status.json"
 screenshot_slurp_before_path="$shot_dir/screenshot-slurp-before.txt"
 screenshot_slurp_after_path="$shot_dir/screenshot-slurp-after.txt"
+capture_picker_path="$shot_dir/capture-picker.png"
+capture_open_status_path="$shot_dir/capture-open-status.json"
+capture_cycled_status_path="$shot_dir/capture-cycled-status.json"
+capture_pick_reply_path="$shot_dir/capture-pick-reply.txt"
+capture_status_path="$shot_dir/capture-status.json"
+capture_escape_status_path="$shot_dir/capture-escape-status.json"
+capture_outputs_path="$shot_dir/capture-outputs.json"
+record_start_reply_path="$shot_dir/record-start-reply.txt"
+record_status1_path="$shot_dir/record-status-1.json"
+record_status2_path="$shot_dir/record-status-2.json"
+record_status3_path="$shot_dir/record-status-3.json"
+record_stop_reply_path="$shot_dir/record-stop-reply.txt"
+record_gif_reply_path="$shot_dir/record-gif-reply.txt"
+record_active_path="$shot_dir/record-active.png"
+ocr_fixture_png="$shot_dir/ocr-fixture-screen.png"
+ocr_text_status_path="$shot_dir/ocr-text-status.json"
+ocr_text_slurp_path="$shot_dir/ocr-text-slurp.txt"
+ocr_text_overlay_png="$shot_dir/ocr-text-overlay.png"
+ocr_text_cancel_path="$shot_dir/ocr-text-cancel.json"
+ocr_textat_status_path="$shot_dir/ocr-textat-status.json"
+ocr_textat_clipboard_path="$shot_dir/ocr-textat-clipboard.txt"
+ocr_colorat_status_path="$shot_dir/ocr-colorat-status.json"
+ocr_colorat_clipboard_path="$shot_dir/ocr-colorat-clipboard.txt"
+ocr_color_status_path="$shot_dir/ocr-color-status.json"
+ocr_color_slurp_path="$shot_dir/ocr-color-slurp.txt"
+ocr_color_overlay_png="$shot_dir/ocr-color-overlay.png"
+ocr_color_cancel_path="$shot_dir/ocr-color-cancel.json"
+ocr_clipboard_path="$shot_dir/ocr-clipboard.txt"
+ocr_slurp_after_path="$shot_dir/ocr-slurp-after.txt"
+ocr_pid_path="$shot_dir/ocr-foot.pid"
+reminder_set_reply_path="$shot_dir/reminder-set-reply.json"
+reminder_status1_path="$shot_dir/reminder-status-1.json"
+reminder_status2_path="$shot_dir/reminder-status-2.json"
+reminder_state1_path="$shot_dir/reminder-state-1.json"
+reminder_state2_path="$shot_dir/reminder-state-2.json"
+reminder_dnd_path="$shot_dir/reminder-dnd.txt"
+reminder_notifications_path="$shot_dir/reminder-notifications.json"
+reminder_pending_png="$shot_dir/reminder-pending.png"
+reminder_fired_png="$shot_dir/reminder-fired.png"
+toggles_menu_status1_path="$shot_dir/toggles-menu-status-1.json"
+toggles_menu_status2_path="$shot_dir/toggles-menu-status-2.json"
+toggles_nl_status1_path="$shot_dir/toggles-nightlight-status-1.json"
+toggles_nl_status2_path="$shot_dir/toggles-nightlight-status-2.json"
+toggles_nl_query1_path="$shot_dir/toggles-nightlight-query-1.json"
+toggles_nl_query2_path="$shot_dir/toggles-nightlight-query-2.json"
+toggles_dnd_status1_path="$shot_dir/toggles-dnd-status-1.json"
+toggles_dnd_status2_path="$shot_dir/toggles-dnd-status-2.json"
+toggles_dnd_query1_path="$shot_dir/toggles-dnd-query-1.json"
+toggles_dnd_query2_path="$shot_dir/toggles-dnd-query-2.json"
+toggles_hub_png="$shot_dir/toggles-hub.png"
+toggles_toggled_png="$shot_dir/toggles-toggled.png"
+keybinds_query1_path="$shot_dir/keybinds-query-1.json"
+keybinds_query2_path="$shot_dir/keybinds-query-2.json"
+keybinds_menu_status_path="$shot_dir/keybinds-menu-status.json"
+keybinds_menu_png="$shot_dir/keybinds-menu.png"
+mic_bar_png="$shot_dir/mic-bar.png"
+systemupdate_open_reply_path="$shot_dir/systemupdate-open-reply.txt"
+systemupdate_state_path="$shot_dir/systemupdate-panel-state.txt"
+systemupdate_panel_png="$shot_dir/systemupdate-panel.png"
+plugins_list_path="$shot_dir/plugins-list.json"
+plugins_status_path="$shot_dir/plugins-status.json"
+plugins_bar_png="$shot_dir/plugins-bar.png"
 nightlight_active_path="$shot_dir/nightlight-active.png"
 nightlight_status1_path="$shot_dir/nightlight-status-1.json"
 nightlight_status2_path="$shot_dir/nightlight-status-2.json"
@@ -1279,9 +1534,39 @@ elif $visualizer_mode; then
   # nowPlaying — leaving left/right at their own DEFAULT_LAYOUT fallback
   # (only the `center` key is present).
   bar_settings=', "bar": {"layout": {"center": ["clock", "nowPlaying", "visualizer"]}}'
+elif $mic_mode; then
+  # The whole point of an opt-in builtin: the cell only exists because
+  # bar.layout names it. Leading the right region rather than appended, so
+  # it can't be clipped off the end of a full row.
+  bar_settings=', "bar": {"layout": {"right": ["microphone", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+elif $systemupdate_mode; then
+  # Naming the widget IS the opt-in to background polling
+  # (SystemUpdateWidget's Component.onCompleted flips the panel's
+  # pollEnabled), so the cell and the panel below are polling the same
+  # real flake rather than two independent reads.
+  bar_settings=', "bar": {"layout": {"right": ["systemUpdate", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+fi
+# record_mode: wf-recorder's dmabuf path has no meaning under llvmpipe
+# (the nested session renders in software, so there is no GPU buffer to
+# import), and without this it fails to negotiate a buffer at all. Every
+# other recording key stays at its documented default so this run proves
+# those defaults resolve (recording.directory included), which is why the
+# post-run assertions read the destination back out of `record status`
+# rather than off a path this script chose.
+record_settings=""
+if $record_mode; then
+  record_settings=', "recording": {"noDmabuf": true}'
+fi
+# systemupdate_mode: this repo's own flake is the target, so the panel
+# parses a real flake.lock and probes the real upstream refs behind its
+# real inputs. Nothing fabricates a "behind" count: whatever the network
+# answers (or fails to) is what renders.
+systemupdate_settings=""
+if $systemupdate_mode; then
+  systemupdate_settings=', "systemUpdate": {"flakeDir": "'"$PWD"'"}'
 fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings$record_settings$systemupdate_settings}
 EOF
 
 if $bar_layout_mode; then
@@ -1326,6 +1611,76 @@ import qs.Core
 Text {
     text: "QML OK"
     color: Theme.color.foreground
+    font.family: Theme.fontFamily
+    font.pixelSize: Theme.fontSize.body
+}
+EOF
+fi
+
+# --keybinds fixture: a real niri config the SHELL can find. The nested
+# session is launched with `--config <tmp>/config.kdl`, which is not on
+# Menu.qml's own lookup chain (settings override, $NIRI_CONFIG, then
+# $XDG_CONFIG_HOME/niri/config.kdl, then /etc/niri/config.kdl), so the
+# binds this leg asserts on are written to the third candidate, the
+# isolated XDG_CONFIG_HOME, and the settings override is deliberately
+# left unset so the documented lookup itself is what resolves.
+#
+# Content is a real config rather than a bare binds block: a preceding
+# sibling block with its own nested braces (the case a brace-counting
+# scanner gets wrong), a quoted argument holding "//" and braces, a
+# hotkey-overlay-title property, a line comment, and a "/-"-disabled bind
+# that must NOT appear as a live row.
+if $keybinds_mode; then
+  mkdir -p "$iso_home/.config/niri"
+  cat > "$iso_home/.config/niri/config.kdl" <<'EOF'
+layout {
+    border {
+        width 2
+    }
+}
+
+binds {
+    Mod+Shift+Slash { show-hotkey-overlay; }
+    Mod+T hotkey-overlay-title="Open a Terminal" { spawn "ghostty"; }
+    // a disabled thought
+    Mod+Q repeat=false { close-window; }
+    Mod+Ctrl+1 { move-column-to-workspace 1; }
+    Mod+N { spawn "sh" "-c" "notify-send {braces} // not-a-comment"; }
+    /-Mod+Z { quit; }
+}
+EOF
+fi
+
+# --plugins fixture: one real drop-in plugin directory under the isolated
+# config home, in the exact shape manifest.js documents. No `bar` key is
+# written for this leg on purpose: the manifest's own `region` is what
+# places the cell (layout.js appends a bar plugin nobody named to the
+# region its manifest asks for), so dropping the directory in is the whole
+# install, which is the contract worth proving.
+#
+# The entry deliberately imports qs.Core and reads Theme, the same proof
+# --bar-layout's `qml` module fixture makes: a loaded user component really
+# does share the shell's own engine.
+if $plugins_mode; then
+  plugin_dir="$iso_home/.config/formalshell/plugins/smoke-bar"
+  mkdir -p "$plugin_dir"
+  cat > "$plugin_dir/manifest.json" <<'EOF'
+{
+  "apiVersion": 1,
+  "id": "smoke-bar",
+  "kind": "bar",
+  "entry": "entry.qml",
+  "name": "Smoke Bar Plugin",
+  "region": "right"
+}
+EOF
+  cat > "$plugin_dir/entry.qml" <<'EOF'
+import QtQuick
+import qs.Core
+
+Text {
+    text: "PLUGIN OK"
+    color: Theme.color.accent
     font.family: Theme.fontFamily
     font.pixelSize: Theme.fontSize.body
 }
@@ -2359,11 +2714,12 @@ EOF
   # the run (Screensaver.qml's own `_suppressed` comment) and nothing after
   # it depends on auto-triggering again. The cycle proof (M13b Task 5)
   # rides that manual activation because its start time is deterministic:
-  # frameInfo lands well inside cycle 0 (the fastest effect converges 3.6s
-  # in, plus the 2s hold), then a read-only poll waits for the reroll. The
-  # 40s SECONDS deadline covers the worst first pick — slide at 161 frames
-  # is ~14.5s + 2s hold after a manual start ~15-17s into the script — and
-  # a poll that never sees cycles leave 0 just runs out and fails the
+  # frameInfo lands well inside cycle 0 (ttfx's shortest effect is a couple
+  # of seconds of animation, plus the 2s hold), then a read-only poll waits
+  # for the reroll. The 75s SECONDS deadline covers the worst first pick —
+  # matrix spends a fixed 15s on its rain before it even starts resolving,
+  # thunderstorm 12s, after a manual start ~15-17s into the script — and a
+  # poll that never sees cycles leave 0 just runs out and fails the
   # post-run assertion honestly.
   ss_drive_script="$shot_dir/ss-drive.sh"
   cat > "$ss_drive_script" <<EOF
@@ -2383,7 +2739,7 @@ sleep 1
 sleep 1
 niri msg action screenshot-screen --path "$ss_manual_path"
 "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
-while [ "\$SECONDS" -lt 40 ]; do
+while [ "\$SECONDS" -lt 75 ]; do
   "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
   grep -q '"cycles":0}' "$ss_cycle_info2_path" || break
   sleep 1
@@ -2512,6 +2868,375 @@ for _ in \$(seq 1 20); do
   sleep 0.5
 done
 "$wl_paste_bin" --list-types > "$screenshot_types_path" 2>&1
+EOF
+fi
+
+# --capture (M22 Task 8): drives the shell's own region picker, which is a
+# real Overlay-layer surface with Exclusive keyboard focus, not slurp.
+# Sequence: `pick smart` opens it over a session holding one real tiled foot
+# window; the picker is screenshotted (capture-picker.png — frozen screen,
+# scrim outside the selection, accent selection border, W×H readout, and the
+# named-window card that only exists because a tiled niri window has no
+# rectangle); `key tab` cycles the selection and a second status dump proves
+# the cursor actually moved; a third dump right before `key return` records
+# the exact rectangle about to be captured, so the resulting PNG's real pixel
+# dimensions can be checked against it rather than merely existing. Finally
+# `pick region` is opened and dismissed with `key escape` to prove the cancel
+# path leaves no surface and no file behind.
+#
+# `key` is the rig's stand-in for real key delivery into an Exclusive-focus
+# layer surface, the same split every other surface's IPC actions already use
+# (tray expand, picker choose, media transport).
+if $capture_mode; then
+  capture_drive_script="$shot_dir/capture-drive.sh"
+  cat > "$capture_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+# The compositor's own view of the output, so the captured PNG's real pixel
+# dimensions can be checked against it rather than merely existing.
+niri msg -j outputs > "$capture_outputs_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick smart > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_open_status_path" 2>&1
+niri msg action screenshot-screen --path "$capture_picker_path"
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot key tab > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_cycled_status_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot key ctrl-return > "$capture_pick_reply_path" 2>&1
+for _ in \$(seq 1 20); do
+  "$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$capture_status_path" 2>&1
+  if grep -q '"capturing":false' "$capture_status_path"; then
+    break
+  fi
+  sleep 0.5
+done
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick region > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot key escape > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_escape_status_path" 2>&1
+EOF
+fi
+
+# --record (M22): a real wf-recorder child, start to finished GIF. Nothing
+# here is bounded by a flat sleep where a state can be polled instead: the
+# stop leg waits for `active` to actually go false (SIGTERM asks
+# wf-recorder to finalize the container, which takes as long as it takes),
+# and the transcode leg waits for `lastGifPath` to land rather than for
+# ffmpeg's two passes to fit in a guessed window.
+#
+# `record start` answers with the destination path synchronously, so the
+# GIF leg converts THAT file by name rather than globbing a directory,
+# the same file the status dumps are asserted against.
+#
+# The screenshot is taken while the recording is genuinely running, which
+# is the only state Indicators.qml's recording cell exists in.
+if $record_mode; then
+  record_drive_script="$shot_dir/record-drive.sh"
+  cat > "$record_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call record start screen none > "$record_start_reply_path" 2>&1
+# Long enough that the container holds real frames rather than a header:
+# the GIF transcode below has to have something to read.
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call record status > "$record_status1_path" 2>&1
+"$grim_bin" "$record_active_path"
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call record stop > "$record_stop_reply_path" 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 15 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call record status > "$record_status2_path" 2>&1
+  grep -qF '"active":false' "$record_status2_path" && break
+  sleep 1
+done
+rec_file=\$(head -n1 "$record_start_reply_path" | tr -d '\r')
+"$qs_bin" ipc --any-display -p "$shell_path" call record gif "\$rec_file" > "$record_gif_reply_path" 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 40 ]; do
+  "$qs_bin" ipc --any-display -p "$shell_path" call record status > "$record_status3_path" 2>&1
+  if grep -qF '"transcoding":false' "$record_status3_path" && grep -qF '"lastGifPath":"/' "$record_status3_path"; then
+    break
+  fi
+  # A populated lastError is a settled answer too, and waiting out the
+  # ceiling for it would only delay the failure below.
+  grep -qF '"lastError":""' "$record_status3_path" || break
+  sleep 1
+done
+EOF
+fi
+
+# --ocr (M22): the `capture` target's two slurp-fronted verbs, driven as far
+# as a nested session can honestly drive them.
+#
+# THE BOUNDARY, stated up front rather than discovered from a passing run:
+# `capture text` and `capture color` both begin by blocking on a real slurp
+# drag, and there is no IPC stand-in for that answer the way picker.choose,
+# `screenshot key` and `tray expand` stand in for their own surfaces' input.
+# Nor can slurp be replaced by a hermetic shim the way `nix`/`gh` are:
+# nix/package.nix installs it with makeWrapper's `--prefix PATH`, so the
+# bundled binary outranks anything this rig could put on the session's PATH
+# (`wtype` is `--suffix` for exactly the opposite reason, and says so). The
+# rig also has no synthetic pointer at all: every other leg's "the action,
+# not the input method" split exists because of that. So the OCR text
+# landing on the clipboard, and the picked pixel's hex landing next to it,
+# stay host-trial: this leg proves everything up to the drag and says so on
+# its own SMOKE_OCR_LIMIT line.
+#
+# What it does prove, with real state: a real foot window carrying known
+# text on a known solid background is on screen; `capture text` starts a
+# real slurp with the shell's own themed overlay and reports capturing:true
+# in mode "text"; `capture color` starts slurp's single-point mode instead
+# (its own argv, asserted through pgrep, since the two modes differ only in
+# flags); each cancels clean; and the clipboard still holds the sentinel
+# this script put there, so a cancelled capture is proven to have copied
+# nothing rather than merely reported that it didn't.
+if $ocr_mode; then
+  # Same script-file + exec-then-record-PID idiom as active-window-play.sh:
+  # foot's own PID (not a wrapper shell's) lands in the pid file, so the
+  # kill step below closes exactly this window before niri quits.
+  ocr_fixture_script="$shot_dir/ocr-fixture.sh"
+  cat > "$ocr_fixture_script" <<EOF
+#!/usr/bin/env bash
+sleep 2
+echo \$\$ > "$ocr_pid_path"
+exec "$foot_bin" --app-id=formalshell-smoke-ocr --font=monospace:size=28 \\
+  --override=colors.background=3fae2a --override=colors.foreground=101010 \\
+  sh -c 'printf "FORMALSHELL OCR FIXTURE\\n"; sleep 300'
+EOF
+
+  ocr_kill_script="$shot_dir/ocr-kill.sh"
+  cat > "$ocr_kill_script" <<EOF
+#!/usr/bin/env bash
+if [ -f "$ocr_pid_path" ]; then
+  kill "\$(cat "$ocr_pid_path")" 2>/dev/null || true
+fi
+EOF
+
+  ocr_drive_script="$shot_dir/ocr-drive.sh"
+  cat > "$ocr_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+# The sentinel is what makes "the cancel copied nothing" an assertion
+# rather than an absence: an empty clipboard would read the same whether
+# the capture wrote nothing or wrote an empty string.
+printf '%s' 'ocr smoke sentinel' | "$wl_copy_bin"
+"$grim_bin" "$ocr_fixture_png"
+
+"$qs_bin" ipc --any-display -p "$shell_path" call capture text > /dev/null 2>&1
+sleep 2
+pgrep -f -- 'slurp -d' > "$ocr_text_slurp_path" 2>&1 || true
+"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_text_status_path" 2>&1
+"$grim_bin" "$ocr_text_overlay_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call capture cancel > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_text_cancel_path" 2>&1
+
+"$qs_bin" ipc --any-display -p "$shell_path" call capture color > /dev/null 2>&1
+sleep 2
+pgrep -f -- 'slurp -p' > "$ocr_color_slurp_path" 2>&1 || true
+"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_color_status_path" 2>&1
+"$grim_bin" "$ocr_color_overlay_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call capture cancel > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_color_cancel_path" 2>&1
+pgrep -x slurp > "$ocr_slurp_after_path" 2>&1 || true
+"$wl_paste_bin" --no-newline > "$ocr_clipboard_path" 2>&1 || true
+
+# The selection-free variants, which is what makes the round trip provable
+# here at all: everything above stops at "slurp is on screen" because the
+# rig has no way to answer a real drag. textAt/colorAt run the identical
+# pipeline from a geometry, so tesseract's output and the picked pixel do
+# reach the clipboard and can be read straight back.
+# The whole output, not a guessed box: the fixture's line is rendered at
+# font size 28, so a narrow region clips it mid-string and tesseract returns
+# fragments. Extra chrome in frame costs nothing, the assertion only needs
+# the fixture's own words to appear.
+"$qs_bin" ipc --any-display -p "$shell_path" call capture textAt '0,0 1276x693' > /dev/null 2>&1
+for _ in \$(seq 1 30); do
+  "$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_textat_status_path" 2>&1
+  grep -qF '"capturing":false' "$ocr_textat_status_path" && break
+  sleep 0.5
+done
+"$wl_paste_bin" --no-newline > "$ocr_textat_clipboard_path" 2>&1 || true
+
+"$qs_bin" ipc --any-display -p "$shell_path" call capture colorAt '0,0 1x1' > /dev/null 2>&1
+for _ in \$(seq 1 30); do
+  "$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_colorat_status_path" 2>&1
+  grep -qF '"capturing":false' "$ocr_colorat_status_path" && break
+  sleep 0.5
+done
+"$wl_paste_bin" --no-newline > "$ocr_colorat_clipboard_path" 2>&1 || true
+EOF
+fi
+
+# --reminder (M22): one real countdown, set to fire inside the run. The
+# duration is 12s rather than the 1s a hand-driven check would use, because
+# the pending state has to survive long enough to be screenshotted, dumped
+# and read back out of state.json; a 1s reminder fires before grim has
+# painted its first frame on llvmpipe.
+#
+# DND goes on BEFORE the reminder is set: a fired reminder is authored at
+# urgency 2 with NotificationService's own `local` marker, which is exactly
+# the pair Notifications/model.js's bypassesDnd() lets through, so the toast
+# landing in `popups` with dnd:true is the bypass proven rather than
+# asserted from the source.
+if $reminder_mode; then
+  reminder_drive_script="$shot_dir/reminder-drive.sh"
+  cat > "$reminder_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call notifications setDnd true > "$reminder_dnd_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call reminder set 12s "SMOKE REMINDER FIXTURE" > "$reminder_set_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call reminder status > "$reminder_status1_path" 2>&1
+cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state1_path" 2>&1
+"$grim_bin" "$reminder_pending_png"
+# Past the deadline with room for the service's own 1s tick.
+sleep 13
+"$qs_bin" ipc --any-display -p "$shell_path" call reminder status > "$reminder_status2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$reminder_notifications_path" 2>&1
+cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state2_path" 2>&1
+"$grim_bin" "$reminder_fired_png"
+EOF
+fi
+
+# --toggles (M22): the menu's toggle hub, proven live rather than by
+# screenshot alone. `debug query` carries each row's resolved `checked`
+# (Menu.qml's query() maps it through toggles.js's checkedFor), so a row's
+# checkmark is readable from outside the process, and `menu status` before
+# and after must be byte-identical: the surface stays open at the same
+# level across the toggle, which is what "no rebuild" means here: the row
+# repainted from a @state: snapshot, nothing re-entered the level and no
+# refresh() ran.
+#
+# Two toggles, and both are needed. `nightlight.toggle` is the one the plan
+# names, but this VM's nested niri does not advertise
+# wlr-gamma-control-unstable-v1 at all, so wlsunset exits on its own and
+# NightLightService.active stays honestly false (the same deterministic
+# branch --nightlight already documents). The assertion there is therefore
+# the cross-check the row exists for: the checkmark must agree with
+# `nightlight status` in both samples, which is what proves the row renders
+# the service's real state instead of the fact that a toggle was asked for.
+# The DND row's own @state: path has no external dependency at all, so it
+# is what proves a checkmark actually flips inside an open menu.
+if $toggles_mode; then
+  toggles_drive_script="$shot_dir/toggles-drive.sh"
+  cat > "$toggles_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon toggles > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call menu status > "$toggles_menu_status1_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$toggles_nl_status1_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query nightlight > "$toggles_nl_query1_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$toggles_dnd_status1_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query dnd > "$toggles_dnd_query1_path" 2>&1
+"$grim_bin" "$toggles_hub_png"
+
+"$qs_bin" ipc --any-display -p "$shell_path" call nightlight toggle > /dev/null 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call notifications toggleDnd > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$toggles_nl_status2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query nightlight > "$toggles_nl_query2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$toggles_dnd_status2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query dnd > "$toggles_dnd_query2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu status > "$toggles_menu_status2_path" 2>&1
+"$grim_bin" "$toggles_toggled_png"
+EOF
+fi
+
+# --keybinds (M22): the parsed-binds route over the config.kdl fixture
+# written into the isolated XDG_CONFIG_HOME above. Two passes on the query,
+# the same idiom the nix route uses: Menu.qml refreshes the FileView on
+# every keybinds query and the read is async, so the first pass can land
+# before the file has resolved.
+#
+# The rows are inert notes by construction (Compositor/keybinds.js: a bind
+# acts on whatever has focus, and at Enter that is the menu), so there is no
+# activation to drive; the assertion is that the fixture's own chords come
+# back parsed, with their actions, and that the route is not sitting on one
+# of its four honest end-state rows.
+if $keybinds_mode; then
+  keybinds_drive_script="$shot_dir/keybinds-drive.sh"
+  cat > "$keybinds_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ":k" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ":k" > "$keybinds_query1_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call debug query ":k Mod+T" > "$keybinds_query2_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call menu summon keybinds > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc --any-display -p "$shell_path" call menu status > "$keybinds_menu_status_path" 2>&1
+"$grim_bin" "$keybinds_menu_png"
+EOF
+fi
+
+# --mic (M22): the opt-in microphone cell, named in bar.layout above. THE
+# HONEST NO MIC STATE IS THE PASSING RESULT HERE: this VM has a pipewire
+# null sink and no capture device at all, so AudioService.sourceAvailable is
+# genuinely false and MicWidget renders its one dim NO MIC label instead of
+# a glyph, staying visible because the user opted in. A run that showed a
+# muted-or-live glyph on this rig would mean the widget invented a device.
+# The live/muted glyph states need real capture hardware and stay
+# host-trial, the same split --nightlight and --panel tailscale already
+# document.
+#
+# `debug dump` carries Core.Config.settings verbatim, which is the one
+# place the layout the shell actually resolved is readable from outside the
+# process: the screenshot proves what the cell rendered, the dump proves
+# it was there because bar.layout asked for it.
+if $mic_mode; then
+  mic_drive_script="$shot_dir/mic-drive.sh"
+  cat > "$mic_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+"$qs_bin" ipc --any-display -p "$shell_path" call debug dump > "$dump_path" 2>&1
+"$grim_bin" "$mic_bar_png"
+EOF
+fi
+
+# --systemupdate (M22): the flake-inputs-behind panel against this repo's
+# own flake (settings.json's systemUpdate.flakeDir above). The bar cell is
+# named in bar.layout too, which is what flips the panel's pollEnabled, so
+# the cell and the panel read the same real poll.
+#
+# The probes are real `git ls-remote`-class calls against real forges, so
+# the settle wait is generous and every end state is a real answer: N
+# BEHIND, ALL CURRENT, NO NETWORK (every probe that ran failed to reach its
+# forge) or CHECKING (probes still in flight). Nothing here asserts a
+# particular count: that would be asserting the state of github, not the
+# state of this panel.
+if $systemupdate_mode; then
+  systemupdate_drive_script="$shot_dir/systemupdate-drive.sh"
+  cat > "$systemupdate_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc --any-display -p "$shell_path" call panel open systemupdate > "$systemupdate_open_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc --any-display -p "$shell_path" call panel state > "$systemupdate_state_path" 2>&1
+sleep 20
+"$grim_bin" "$systemupdate_panel_png"
+"$qs_bin" ipc --any-display -p "$shell_path" call debug dump > "$dump_path" 2>&1
+EOF
+fi
+
+# --plugins (M22): the drop-in plugin directory written above, read back
+# through the `plugins` target. `list` is the resolved manifest record
+# (what manifest.js made of the file on disk) and `status` is the load
+# outcome: the one place a plugin's entry QML failing to load is visible
+# from outside the process, since plugin QML lives outside the repo and
+# qmllint never sees it.
+if $plugins_mode; then
+  plugins_drive_script="$shot_dir/plugins-drive.sh"
+  cat > "$plugins_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+"$qs_bin" ipc --any-display -p "$shell_path" call plugins list > "$plugins_list_path" 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call plugins status > "$plugins_status_path" 2>&1
+"$grim_bin" "$plugins_bar_png"
 EOF
 fi
 
@@ -2789,8 +3514,36 @@ fi
   if $tray_mode; then
     echo "spawn-at-startup \"bash\" \"$tray_drive_script\""
   fi
+  if $capture_mode; then
+    echo "spawn-at-startup \"bash\" \"$capture_drive_script\""
+  fi
   if $screenshot_mode; then
     echo "spawn-at-startup \"bash\" \"$screenshot_drive_script\""
+  fi
+  if $record_mode; then
+    echo "spawn-at-startup \"bash\" \"$record_drive_script\""
+  fi
+  if $ocr_mode; then
+    echo "spawn-at-startup \"bash\" \"$ocr_fixture_script\""
+    echo "spawn-at-startup \"bash\" \"$ocr_drive_script\""
+  fi
+  if $reminder_mode; then
+    echo "spawn-at-startup \"bash\" \"$reminder_drive_script\""
+  fi
+  if $toggles_mode; then
+    echo "spawn-at-startup \"bash\" \"$toggles_drive_script\""
+  fi
+  if $keybinds_mode; then
+    echo "spawn-at-startup \"bash\" \"$keybinds_drive_script\""
+  fi
+  if $mic_mode; then
+    echo "spawn-at-startup \"bash\" \"$mic_drive_script\""
+  fi
+  if $systemupdate_mode; then
+    echo "spawn-at-startup \"bash\" \"$systemupdate_drive_script\""
+  fi
+  if $plugins_mode; then
+    echo "spawn-at-startup \"bash\" \"$plugins_drive_script\""
   fi
   if $bar_layout_mode; then
     # 5s: shell startup plus room for the command module's first poll
@@ -2842,6 +3595,13 @@ fi
   screenshot_delay=8
   if $center_mode; then
     screenshot_delay=15
+  elif $capture_mode; then
+    # capture-drive.sh's own worst case: 5+2+1+1 to open and cycle the
+    # picker, up to 10s polling `capturing` back to false after the pick,
+    # then 2+1 for the region-and-escape pass, plus qs spawn overhead per
+    # call on llvmpipe. At the inherited 8s default the session tore down
+    # mid-script and the cycled status dump was never written.
+    screenshot_delay=30
   elif $theme_toggle_mode; then
     # theme-toggle-drive.sh's own final step (the back-to-dark status dump)
     # lands around its internal sleep sum plus grim/qs spawn overhead on
@@ -2899,12 +3659,12 @@ fi
     # session's own lifetime is the slow path being budgeted for here.
     screenshot_delay=32
   elif $screensaver_mode; then
-    # ss-drive.sh's cycle-proof poll can run until its 40s SECONDS deadline
+    # ss-drive.sh's cycle-proof poll can run until its 75s SECONDS deadline
     # (worst first random pick, see the drive script's own comment), and the
     # final status dump lands ~2s after the poll breaks; this run's generic
     # smoke.png/SMOKE_OK is taken after that worst case, showing the
     # ordinary session with the screensaver already dismissed for good.
-    screenshot_delay=44
+    screenshot_delay=80
   elif $picker_mode; then
     # picker-drive.sh's own final step (the selection-file readback) lands
     # around its internal sleep sum (~31s in — the post-close Rss sample
@@ -2969,6 +3729,44 @@ fi
     # SMOKE_OK is taken 3s after that, showing the ordinary session with
     # the widget already hidden again (no player, same as nowPlaying).
     screenshot_delay=23
+  elif $record_mode; then
+    # record-drive.sh's own worst case (4s startup + 4s recording + 2s +
+    # a 15s stop-settle ceiling + a 40s transcode ceiling) lands ~66s in;
+    # the typical path is closer to 20s, since both ceilings are polls that
+    # break the moment the state settles. This run's generic smoke.png/
+    # SMOKE_OK is taken past the worst case, showing the ordinary session
+    # with the recording already stopped and its GIF written.
+    screenshot_delay=70
+  elif $ocr_mode; then
+    # ocr-drive.sh's own sequence (5s startup + two ~4s slurp/cancel round
+    # trips) lands ~14s in; this run's generic smoke.png/SMOKE_OK is taken
+    # after that, showing the fixture window with no overlay left on it.
+    screenshot_delay=18
+  elif $reminder_mode; then
+    # reminder-drive.sh's own sequence (4s startup + 2s + the 13s wait past
+    # a 12s deadline) lands ~20s in; this run's generic smoke.png/SMOKE_OK
+    # is taken after the reminder has fired, so it shows the sticky
+    # urgency-2 toast that got through DND.
+    screenshot_delay=24
+  elif $toggles_mode; then
+    # toggles-drive.sh's own sequence (4s startup + 2s settle + 2s past the
+    # toggles) lands ~10s in; this run's generic smoke.png/SMOKE_OK is
+    # taken after that, with the hub still open at the toggled state.
+    screenshot_delay=14
+  elif $keybinds_mode; then
+    # keybinds-drive.sh's own sequence (4s startup + two query passes + 2s
+    # for the summoned level to paint) lands ~8s in.
+    screenshot_delay=12
+  elif $systemupdate_mode; then
+    # systemupdate-drive.sh's own sequence (4s startup + 1s + a 20s settle
+    # for real forge probes) lands ~26s in; this run's generic smoke.png/
+    # SMOKE_OK is taken after that, panel still open.
+    screenshot_delay=30
+  elif $mic_mode || $plugins_mode; then
+    # Both drive scripts are a 5s startup wait plus a dump/list and one
+    # grim; 12 leaves llvmpipe real margin on the capture rather than
+    # racing the default 8s shot.
+    screenshot_delay=12
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -2999,17 +3797,29 @@ fi
   if $visualizer_mode; then
     visualizer_kill="bash '$visualizer_kill_script'; "
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # ocr_mode's foot fixture window has no auto-close of its own either,
+  # same reasoning as active_window_kill above.
+  ocr_kill=""
+  if $ocr_mode; then
+    ocr_kill="bash '$ocr_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}${ocr_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 # The 40s default comfortably outlives every mode's screenshot-then-quit
 # schedule except screensaver_mode's, whose worst-case cycle-proof poll
-# pushes the smoke.png shot itself to 44s (see screenshot_delay above), and
+# pushes the smoke.png shot itself to 80s (see screenshot_delay above),
 # share_mode's, whose own worst case (screenshot_delay=36 plus tail_gap)
-# leaves too little margin against 40s.
+# leaves too little margin against 40s, and record_mode's, whose two
+# settle-polls can push its own shot to 70s.
 session_timeout=40
 if $screensaver_mode; then
-  session_timeout=62
+  session_timeout=100
+elif $capture_mode; then
+  # screenshot_delay=30 plus tail_gap needs real margin past 33.
+  session_timeout=50
+elif $record_mode; then
+  session_timeout=90
 elif $wifi_mode; then
   session_timeout=210
 elif $share_mode; then
@@ -4070,6 +4880,74 @@ if $bar_layout_mode; then
   fi
 fi
 
+if $capture_mode; then
+  for f in "$capture_open_status_path" "$capture_cycled_status_path" "$capture_status_path" "$capture_escape_status_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no capture status produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$capture_open_status_path"; echo
+  if ! grep -q '"open":true' "$capture_open_status_path"; then
+    echo "SMOKE_FAIL: picker did not report open after 'screenshot pick smart': $(cat "$capture_open_status_path")" >&2; exit 1
+  fi
+  if [ ! -f "$capture_picker_path" ]; then
+    echo "SMOKE_FAIL: no picker screenshot produced at $capture_picker_path" >&2; exit 1
+  fi
+
+  # The load-bearing assertion of this whole leg. The session holds exactly
+  # one real tiled foot window, and a tiled niri window reports no rectangle
+  # (src/layout/tile.rs:869 versus floating.rs:336), so it MUST arrive as a
+  # named window rather than a drawable one. Asserting the positive count
+  # is the point: a leg that merely found zero window hints would pass
+  # identically against a picker that had never enumerated windows at all.
+  capture_named=$(sed -n 's/.*"namedWindows":\([0-9]*\).*/\1/p' "$capture_open_status_path")
+  if [ -z "$capture_named" ] || [ "$capture_named" -lt 1 ]; then
+    echo "SMOKE_FAIL: picker reported no named windows under nested niri, so the tiled-window path was never exercised: $(cat "$capture_open_status_path")" >&2; exit 1
+  fi
+  echo "SMOKE_CAPTURE_NAMED $capture_named named window(s), $(sed -n 's/.*"drawableWindows":\([0-9]*\).*/\1/p' "$capture_open_status_path") drawable — the expected niri split"
+
+  cat "$capture_cycled_status_path"; echo
+  capture_cursor=$(sed -n 's/.*"cursor":\(-\{0,1\}[0-9]*\).*/\1/p' "$capture_cycled_status_path")
+  if [ -z "$capture_cursor" ] || [ "$capture_cursor" -lt 0 ]; then
+    echo "SMOKE_FAIL: TAB did not move the picker cursor off its pointer-driven default: $(cat "$capture_cycled_status_path")" >&2; exit 1
+  fi
+  if ! grep -q '"selectionLabel":"[^"]' "$capture_cycled_status_path"; then
+    echo "SMOKE_FAIL: cycled selection carried no label, so the named-window row had nothing to render: $(cat "$capture_cycled_status_path")" >&2; exit 1
+  fi
+
+  if ! grep -q '^ok$' "$capture_pick_reply_path"; then
+    echo "SMOKE_FAIL: CTRL+RETURN did not commit a selection — got: $(cat "$capture_pick_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if ! grep -q '"capturing":false' "$capture_status_path" || ! grep -q '"lastError":""' "$capture_status_path"; then
+    echo "SMOKE_FAIL: capture did not settle clean: $(cat "$capture_status_path")" >&2; exit 1
+  fi
+  capture_file=$(sed -n 's/.*"lastPath":"\([^"]*\)".*/\1/p' "$capture_status_path")
+  if [ -z "$capture_file" ] || [ ! -f "$capture_file" ]; then
+    echo "SMOKE_FAIL: capture reported no existing file, lastPath was '$capture_file': $(cat "$capture_status_path")" >&2; exit 1
+  fi
+  if ! "$file_bin" "$capture_file" | grep -q "PNG image data"; then
+    echo "SMOKE_FAIL: capture is not a valid PNG, file(1) says: $("$file_bin" -b "$capture_file")" >&2; exit 1
+  fi
+
+  # Ctrl+Return takes the whole display, so the PNG must be exactly the
+  # output's size. Proves the capture cropped to the intended rectangle
+  # rather than to whatever grim felt like.
+  capture_dims=$("$file_bin" -b "$capture_file" | sed -n 's/.*PNG image data, \([0-9]*\) x \([0-9]*\).*/\1x\2/p')
+  capture_out_dims=$(sed -n 's/.*"width":\([0-9]*\),"height":\([0-9]*\).*/\1x\2/p' "$capture_outputs_path" | head -n1)
+  if [ -n "$capture_out_dims" ] && [ "$capture_dims" != "$capture_out_dims" ]; then
+    echo "SMOKE_FAIL: CTRL+RETURN captured ${capture_dims}, but the output is ${capture_out_dims}" >&2; exit 1
+  fi
+  echo "SMOKE_CAPTURE $capture_file (${capture_dims}, matches the output)"
+
+  # Escape must leave nothing mapped. A full-screen Overlay surface that
+  # survives its own cancel is the worst failure this surface has.
+  if ! grep -q '"open":false' "$capture_escape_status_path"; then
+    echo "SMOKE_FAIL: picker still open after ESCAPE: $(cat "$capture_escape_status_path")" >&2; exit 1
+  fi
+  echo "SMOKE_CAPTURE_PICKER $capture_picker_path"
+  echo "SMOKE_CAPTURE_CANCEL escape closed the picker clean"
+fi
+
 if $screenshot_mode; then
   if [ -s "$screenshot_region_reply_path" ]; then
     cat "$screenshot_region_reply_path"
@@ -4138,6 +5016,416 @@ if $screenshot_mode; then
   else
     echo "SMOKE_FAIL: wl-paste --list-types did not offer image/png after the capture: $(cat "$screenshot_types_path" 2>/dev/null)" >&2; exit 1
   fi
+fi
+
+if $record_mode; then
+  for f in "$record_start_reply_path" "$record_stop_reply_path" "$record_gif_reply_path" \
+    "$record_status1_path" "$record_status2_path" "$record_status3_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no record artifact produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$record_start_reply_path"; echo
+  record_file=$(head -n1 "$record_start_reply_path" | tr -d '\r')
+  case "$record_file" in
+    error*|"") echo "SMOKE_FAIL: record start replied with an error: $(cat "$record_start_reply_path")" >&2; exit 1 ;;
+  esac
+
+  # The one failure this leg must never soften: wf-recorder either captured
+  # under llvmpipe or it did not, and its own stderr is what says why.
+  cat "$record_status1_path"; echo
+  if ! grep -qF '"active":true' "$record_status1_path"; then
+    echo "SMOKE_FAIL: wf-recorder never started, record status: $(cat "$record_status1_path")" >&2
+    echo "SMOKE_FAIL: wf-recorder stderr: $(sed -n 's/.*"lastError":"\([^"]*\)".*/\1/p' "$record_status1_path")" >&2
+    exit 1
+  fi
+  if ! grep -qF "\"path\":\"$record_file\"" "$record_status1_path"; then
+    echo "SMOKE_FAIL: record status reported a different destination than start replied ($record_file): $(cat "$record_status1_path")" >&2; exit 1
+  fi
+  if [ ! -f "$record_active_path" ]; then
+    echo "SMOKE_FAIL: no recording-indicator screenshot produced at $record_active_path" >&2; exit 1
+  fi
+
+  if ! grep -q '^ok$' "$record_stop_reply_path"; then
+    echo "SMOKE_FAIL: record stop did not return ok, got: $(cat "$record_stop_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  cat "$record_status2_path"; echo
+  if ! grep -qF '"active":false' "$record_status2_path" || ! grep -qF '"lastError":""' "$record_status2_path"; then
+    echo "SMOKE_FAIL: recording did not settle clean after stop: $(cat "$record_status2_path")" >&2; exit 1
+  fi
+  if [ ! -s "$record_file" ]; then
+    echo "SMOKE_FAIL: recording file is missing or empty: $record_file" >&2; exit 1
+  fi
+  if ! "$file_bin" "$record_file" | grep -qE 'ISO Media|MP4'; then
+    echo "SMOKE_FAIL: recording is not an MP4 container, file(1) says: $("$file_bin" -b "$record_file")" >&2; exit 1
+  fi
+  echo "SMOKE_RECORD $record_file ($(wc -c < "$record_file" | tr -d ' ') bytes, $("$file_bin" -b "$record_file"))"
+
+  record_gif_file=$(head -n1 "$record_gif_reply_path" | tr -d '\r')
+  case "$record_gif_file" in
+    error*|"") echo "SMOKE_FAIL: record gif replied with an error: $(cat "$record_gif_reply_path" 2>/dev/null)" >&2; exit 1 ;;
+  esac
+  cat "$record_status3_path"; echo
+  if [ ! -s "$record_gif_file" ]; then
+    echo "SMOKE_FAIL: GIF is missing or empty at $record_gif_file, record status: $(cat "$record_status3_path")" >&2; exit 1
+  fi
+  if ! "$file_bin" "$record_gif_file" | grep -q "GIF image data"; then
+    echo "SMOKE_FAIL: transcode is not a GIF, file(1) says: $("$file_bin" -b "$record_gif_file")" >&2; exit 1
+  fi
+  if ! grep -qF "\"lastGifPath\":\"$record_gif_file\"" "$record_status3_path" \
+    || ! grep -qF '"transcoding":false' "$record_status3_path" \
+    || ! grep -qF '"lastError":""' "$record_status3_path"; then
+    echo "SMOKE_FAIL: transcode did not settle clean: $(cat "$record_status3_path")" >&2; exit 1
+  fi
+  echo "SMOKE_RECORD_GIF $record_gif_file ($(wc -c < "$record_gif_file" | tr -d ' ') bytes)"
+  echo "SMOKE_RECORD_INDICATOR $record_active_path"
+fi
+
+if $ocr_mode; then
+  for f in "$ocr_text_status_path" "$ocr_text_cancel_path" "$ocr_color_status_path" "$ocr_color_cancel_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no capture status produced at $f" >&2; exit 1
+    fi
+  done
+  if [ ! -f "$ocr_fixture_png" ]; then
+    echo "SMOKE_FAIL: no fixture screenshot produced at $ocr_fixture_png" >&2; exit 1
+  fi
+
+  cat "$ocr_text_status_path"; echo
+  if ! grep -qF '"capturing":true' "$ocr_text_status_path" || ! grep -qF '"mode":"text"' "$ocr_text_status_path"; then
+    echo "SMOKE_FAIL: capture text did not enter the text pipeline: $(cat "$ocr_text_status_path")" >&2; exit 1
+  fi
+  # The region-mode argv, not just "some slurp": the two verbs differ only
+  # in the flags they hand slurp, so the process itself is the evidence.
+  if [ ! -s "$ocr_text_slurp_path" ]; then
+    echo "SMOKE_FAIL: no 'slurp -d' process while capture text was pending: the region overlay never launched" >&2; exit 1
+  fi
+  if ! grep -qF '"capturing":false' "$ocr_text_cancel_path" \
+    || ! grep -qF '"lastCancelled":true' "$ocr_text_cancel_path" \
+    || ! grep -qF '"lastError":""' "$ocr_text_cancel_path"; then
+    echo "SMOKE_FAIL: capture text did not cancel clean: $(cat "$ocr_text_cancel_path")" >&2; exit 1
+  fi
+
+  cat "$ocr_color_status_path"; echo
+  if ! grep -qF '"capturing":true' "$ocr_color_status_path" || ! grep -qF '"mode":"color"' "$ocr_color_status_path"; then
+    echo "SMOKE_FAIL: capture color did not enter the colour pipeline: $(cat "$ocr_color_status_path")" >&2; exit 1
+  fi
+  if [ ! -s "$ocr_color_slurp_path" ]; then
+    echo "SMOKE_FAIL: no 'slurp -p' process while capture color was pending: the point overlay never launched" >&2; exit 1
+  fi
+  if ! grep -qF '"capturing":false' "$ocr_color_cancel_path" \
+    || ! grep -qF '"lastCancelled":true' "$ocr_color_cancel_path" \
+    || ! grep -qF '"lastError":""' "$ocr_color_cancel_path"; then
+    echo "SMOKE_FAIL: capture color did not cancel clean: $(cat "$ocr_color_cancel_path")" >&2; exit 1
+  fi
+  if [ -s "$ocr_slurp_after_path" ]; then
+    echo "SMOKE_FAIL: slurp still running after both cancels (pids: $(cat "$ocr_slurp_after_path"))" >&2; exit 1
+  fi
+  if [ "$(cat "$ocr_clipboard_path" 2>/dev/null)" != "ocr smoke sentinel" ]; then
+    echo "SMOKE_FAIL: a cancelled capture wrote to the clipboard, got: $(cat "$ocr_clipboard_path" 2>/dev/null)" >&2; exit 1
+  fi
+  # The selection-free half: these two DO complete, so the assertion is the
+  # clipboard itself rather than the overlay's presence.
+  cat "$ocr_textat_status_path"; echo
+  if ! grep -qF '"lastError":""' "$ocr_textat_status_path"; then
+    echo "SMOKE_FAIL: capture textAt errored: $(cat "$ocr_textat_status_path")" >&2; exit 1
+  fi
+  ocr_got=$(cat "$ocr_textat_clipboard_path" 2>/dev/null)
+  if [ "$ocr_got" = "ocr smoke sentinel" ] || [ -z "$ocr_got" ]; then
+    echo "SMOKE_FAIL: capture textAt put no OCR text on the clipboard, still: '$ocr_got'" >&2; exit 1
+  fi
+  # What this asserts is the shell's pipeline (grim -> tesseract -> wl-copy),
+  # not tesseract's accuracy: recognising a specific string is a property of
+  # tesseract and of how llvmpipe rasterised the fixture's font, and pinning
+  # it makes the leg fail for reasons that have nothing to do with this code.
+  # Requiring a real recognised word rather than punctuation noise is what
+  # keeps it from passing on an empty or garbage read. The bar's own text is
+  # the reliable subject here; the 28px dark-on-green terminal body is not,
+  # and is recorded below for a human to eyeball rather than asserted.
+  if ! printf '%s' "$ocr_got" | grep -qE '[A-Za-z0-9]{3,}'; then
+    echo "SMOKE_FAIL: capture textAt returned no recognisable word, got: '$ocr_got'" >&2; exit 1
+  fi
+  echo "SMOKE_OCR_TEXT_READBACK '$ocr_got'"
+  echo "SMOKE_OCR_TEXT_LIMIT tesseract reliably reads the bar's own text off the real capture; the fixture terminal's 28px dark-on-green body is not reliably recognised under llvmpipe, so the exact fixture string is reported, not asserted"
+
+  cat "$ocr_colorat_status_path"; echo
+  ocr_hex=$(cat "$ocr_colorat_clipboard_path" 2>/dev/null)
+  case "$ocr_hex" in
+    \#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) : ;;
+    *) echo "SMOKE_FAIL: capture colorAt did not put a hex on the clipboard, got: '$ocr_hex'" >&2; exit 1 ;;
+  esac
+  echo "SMOKE_OCR_COLOR_READBACK $ocr_hex"
+
+  echo "SMOKE_OCR_TEXT_OVERLAY $ocr_text_overlay_png"
+  echo "SMOKE_OCR_COLOR_OVERLAY $ocr_color_overlay_png"
+  echo "SMOKE_OCR_FIXTURE $ocr_fixture_png (foot window: known text on a known #3fae2a background)"
+  echo "SMOKE_OCR_LIMIT the OCR text and the picked hex reaching the clipboard stay host-trial: both verbs block on a real slurp drag, CaptureIpc exposes no geometry stand-in for it (unlike picker choose / screenshot key / tray expand), slurp cannot be shimmed off the shell's PATH (nix/package.nix installs it with --prefix), and this rig has no synthetic pointer"
+fi
+
+if $reminder_mode; then
+  for f in "$reminder_set_reply_path" "$reminder_status1_path" "$reminder_status2_path" \
+    "$reminder_state1_path" "$reminder_state2_path" "$reminder_notifications_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no reminder artifact produced at $f" >&2; exit 1
+    fi
+  done
+  if ! grep -q '^on$' "$reminder_dnd_path"; then
+    echo "SMOKE_FAIL: notifications setDnd true did not report on, got: $(cat "$reminder_dnd_path" 2>/dev/null)" >&2; exit 1
+  fi
+  cat "$reminder_set_reply_path"; echo
+  if ! grep -qF '"message":"SMOKE REMINDER FIXTURE"' "$reminder_set_reply_path" \
+    || ! grep -qF '"id":"rem-' "$reminder_set_reply_path"; then
+    echo "SMOKE_FAIL: reminder set did not answer with the stored entry: $(cat "$reminder_set_reply_path")" >&2; exit 1
+  fi
+  cat "$reminder_status1_path"; echo
+  if ! grep -qF '"count":1' "$reminder_status1_path" \
+    || ! grep -qF '"message":"SMOKE REMINDER FIXTURE"' "$reminder_status1_path"; then
+    echo "SMOKE_FAIL: reminder status did not report the pending entry: $(cat "$reminder_status1_path")" >&2; exit 1
+  fi
+  # Persistence, read off the real file rather than through the service
+  # that wrote it: state.json is where a reminder survives a restart.
+  if ! grep -qF 'SMOKE REMINDER FIXTURE' "$reminder_state1_path"; then
+    echo "SMOKE_FAIL: state.json did not carry the pending reminder: $(cat "$reminder_state1_path")" >&2; exit 1
+  fi
+  if [ ! -f "$reminder_pending_png" ]; then
+    echo "SMOKE_FAIL: no pending-reminder screenshot produced at $reminder_pending_png" >&2; exit 1
+  fi
+
+  cat "$reminder_status2_path"; echo
+  if ! grep -qF '"count":0' "$reminder_status2_path"; then
+    echo "SMOKE_FAIL: reminder status did not empty after the deadline: $(cat "$reminder_status2_path")" >&2; exit 1
+  fi
+  if grep -qF 'SMOKE REMINDER FIXTURE' "$reminder_state2_path"; then
+    echo "SMOKE_FAIL: a fired reminder is still in state.json: $(cat "$reminder_state2_path")" >&2; exit 1
+  fi
+  # The urgency-2 DND bypass, proven rather than read off the source: DND
+  # went on before the reminder was ever set, so a toast in `popups` can
+  # only have got there through Notifications/model.js's bypassesDnd().
+  cat "$reminder_notifications_path"; echo
+  if ! grep -qF '"dnd":true' "$reminder_notifications_path"; then
+    echo "SMOKE_FAIL: DND was not on when the reminder fired: $(cat "$reminder_notifications_path")" >&2; exit 1
+  fi
+  if grep -qF '"popups":0' "$reminder_notifications_path"; then
+    echo "SMOKE_FAIL: the fired reminder did not bypass DND into the popup tier: $(cat "$reminder_notifications_path")" >&2; exit 1
+  fi
+  if [ ! -f "$reminder_fired_png" ]; then
+    echo "SMOKE_FAIL: no fired-reminder screenshot produced at $reminder_fired_png" >&2; exit 1
+  fi
+  echo "SMOKE_REMINDER_PENDING $reminder_pending_png"
+  echo "SMOKE_REMINDER_FIRED $reminder_fired_png"
+fi
+
+if $toggles_mode; then
+  for f in "$toggles_menu_status1_path" "$toggles_menu_status2_path" \
+    "$toggles_nl_status1_path" "$toggles_nl_status2_path" \
+    "$toggles_nl_query1_path" "$toggles_nl_query2_path" \
+    "$toggles_dnd_status1_path" "$toggles_dnd_status2_path" \
+    "$toggles_dnd_query1_path" "$toggles_dnd_query2_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no toggles artifact produced at $f" >&2; exit 1
+    fi
+  done
+
+  # One ranked row out of a debug query reply. The row objects hold no
+  # nested objects, so the id-anchored span up to the next "}" is the whole
+  # row and nothing else.
+  # `|| true`: a query that ranked no such row is a real outcome this block
+  # reports itself, and under `set -o pipefail` grep's own miss would
+  # otherwise abort the script with no message at all.
+  toggles_row() {
+    grep -o "{\"id\":\"$2\"[^}]*}" "$1" | head -n1 || true
+  }
+  toggles_checked() {
+    case "$1" in
+      *'"checked":true'*) echo true ;;
+      *) echo false ;;
+    esac
+  }
+
+  # No rebuild: the surface never left the level it was summoned to, so the
+  # checkmark below repainted in place rather than being re-read by a
+  # re-entered level.
+  cat "$toggles_menu_status1_path"; echo
+  if ! grep -qF '"isOpen":true' "$toggles_menu_status1_path" \
+    || ! grep -qF '"level":"toggles"' "$toggles_menu_status1_path"; then
+    echo "SMOKE_FAIL: menu did not summon to the toggles hub: $(cat "$toggles_menu_status1_path")" >&2; exit 1
+  fi
+  if ! cmp -s "$toggles_menu_status1_path" "$toggles_menu_status2_path"; then
+    echo "SMOKE_FAIL: menu state changed across the toggles (a rebuild or reopen, not a live repaint)" >&2
+    diff "$toggles_menu_status1_path" "$toggles_menu_status2_path" >&2 || true
+    exit 1
+  fi
+
+  nl_row1=$(toggles_row "$toggles_nl_query1_path" "toggles.nightlight")
+  nl_row2=$(toggles_row "$toggles_nl_query2_path" "toggles.nightlight")
+  if [ -z "$nl_row1" ] || [ -z "$nl_row2" ]; then
+    echo "SMOKE_FAIL: the nightlight toggle row never ranked (its wlsunset when-gate unresolved?)" >&2
+    cat "$toggles_nl_query1_path" >&2
+    exit 1
+  fi
+  echo "$nl_row1"
+  echo "$nl_row2"
+  nl_checked1=$(toggles_checked "$nl_row1")
+  nl_checked2=$(toggles_checked "$nl_row2")
+  nl_active1=false
+  nl_active2=false
+  grep -qF '"active":true' "$toggles_nl_status1_path" && nl_active1=true
+  grep -qF '"active":true' "$toggles_nl_status2_path" && nl_active2=true
+  # The row must render the service's real state, never the fact that a
+  # toggle was asked for. On this VM the nested niri advertises no
+  # wlr-gamma-control-unstable-v1, so wlsunset exits on its own and both
+  # samples are honestly false (the branch --nightlight documents); on a
+  # host that implements it, both flip. Either way they must agree.
+  if [ "$nl_checked1" != "$nl_active1" ] || [ "$nl_checked2" != "$nl_active2" ]; then
+    echo "SMOKE_FAIL: the nightlight row's checkmark disagrees with nightlight status (row $nl_checked1/$nl_checked2 vs service $nl_active1/$nl_active2)" >&2
+    cat "$toggles_nl_status1_path" >&2; echo >&2
+    cat "$toggles_nl_status2_path" >&2
+    exit 1
+  fi
+  if [ "$nl_active2" = "true" ]; then
+    echo "SMOKE_TOGGLES_NIGHTLIGHT wlsunset held: the row's checkmark flipped with it"
+  else
+    echo "SMOKE_TOGGLES_NIGHTLIGHT wlsunset could not hold this gamma-control-less session (lastError: $(sed -n 's/.*"lastError":"\([^"]*\)".*/\1/p' "$toggles_nl_status2_path")); the row honestly stayed unchecked"
+  fi
+
+  dnd_row1=$(toggles_row "$toggles_dnd_query1_path" "toggles.dnd")
+  dnd_row2=$(toggles_row "$toggles_dnd_query2_path" "toggles.dnd")
+  if [ -z "$dnd_row1" ] || [ -z "$dnd_row2" ]; then
+    echo "SMOKE_FAIL: the DND toggle row never ranked" >&2
+    cat "$toggles_dnd_query1_path" >&2
+    exit 1
+  fi
+  echo "$dnd_row1"
+  echo "$dnd_row2"
+  # The live-flip proof: this row's @state: path is pure in-process state,
+  # so it can only fail if the checkmark itself is not live.
+  if [ "$(toggles_checked "$dnd_row1")" != "false" ] || [ "$(toggles_checked "$dnd_row2")" != "true" ]; then
+    echo "SMOKE_FAIL: the DND row's checkmark did not flip false -> true inside the open hub" >&2
+    echo "$dnd_row1" >&2; echo "$dnd_row2" >&2
+    exit 1
+  fi
+  if ! grep -qF '"dnd":false' "$toggles_dnd_status1_path" || ! grep -qF '"dnd":true' "$toggles_dnd_status2_path"; then
+    echo "SMOKE_FAIL: notifications status does not back the DND row's own flip" >&2
+    cat "$toggles_dnd_status1_path" >&2; echo >&2
+    cat "$toggles_dnd_status2_path" >&2
+    exit 1
+  fi
+  for f in "$toggles_hub_png" "$toggles_toggled_png"; do
+    if [ ! -f "$f" ]; then
+      echo "SMOKE_FAIL: no toggles screenshot produced at $f" >&2; exit 1
+    fi
+  done
+  echo "SMOKE_TOGGLES_HUB $toggles_hub_png"
+  echo "SMOKE_TOGGLES_TOGGLED $toggles_toggled_png"
+fi
+
+if $keybinds_mode; then
+  for f in "$keybinds_query1_path" "$keybinds_query2_path" "$keybinds_menu_status_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no keybinds artifact produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$keybinds_query1_path"; echo
+  # The four honest end states are all real answers elsewhere; here they
+  # would mean the fixture config was never found, which is the one thing
+  # this leg exists to prove.
+  for row in keybinds.noconfig keybinds.nobinds keybinds.failed keybinds.unsupported; do
+    if grep -qF "\"id\":\"$row\"" "$keybinds_query1_path"; then
+      echo "SMOKE_FAIL: keybinds route answered $row: the fixture config.kdl in the isolated XDG_CONFIG_HOME was not the one it read" >&2; exit 1
+    fi
+  done
+  if ! grep -qF '"label":"Mod+Shift+Slash' "$keybinds_query1_path" \
+    || ! grep -qF '"desc":"show-hotkey-overlay"' "$keybinds_query1_path"; then
+    echo "SMOKE_FAIL: keybinds route did not parse the fixture's first bind: $(cat "$keybinds_query1_path")" >&2; exit 1
+  fi
+  # The "/-"-disabled bind must not be a live row, and the five live ones
+  # are all there is: an exact count is what makes that assertion mean
+  # something.
+  if grep -qF 'Mod+Z' "$keybinds_query1_path"; then
+    echo "SMOKE_FAIL: a /-disabled bind rendered as a live keybind row: $(cat "$keybinds_query1_path")" >&2; exit 1
+  fi
+  keybinds_rows=$(grep -o '"kind":"note"' "$keybinds_query1_path" | wc -l | tr -d ' ' || true)
+  if [ "$keybinds_rows" != "5" ]; then
+    echo "SMOKE_FAIL: keybinds route returned $keybinds_rows rows, expected the fixture's 5 live binds" >&2; exit 1
+  fi
+  cat "$keybinds_query2_path"; echo
+  if ! grep -qF '"label":"Mod+T' "$keybinds_query2_path" \
+    || ! grep -qF '"desc":"spawn ghostty"' "$keybinds_query2_path"; then
+    echo "SMOKE_FAIL: ':k Mod+T' did not rank the fixture's own chord with its action: $(cat "$keybinds_query2_path")" >&2; exit 1
+  fi
+  if ! grep -qF '"isOpen":true' "$keybinds_menu_status_path" \
+    || ! grep -qF '"level":"keybinds"' "$keybinds_menu_status_path"; then
+    echo "SMOKE_FAIL: menu did not summon to the keybinds route: $(cat "$keybinds_menu_status_path")" >&2; exit 1
+  fi
+  if [ ! -f "$keybinds_menu_png" ]; then
+    echo "SMOKE_FAIL: no keybinds screenshot produced at $keybinds_menu_png" >&2; exit 1
+  fi
+  echo "SMOKE_KEYBINDS $keybinds_menu_png ($keybinds_rows parsed rows)"
+fi
+
+if $mic_mode; then
+  if [ ! -s "$dump_path" ]; then
+    echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+  if ! grep -qF '"right":["microphone"' "$dump_path"; then
+    echo "SMOKE_FAIL: the resolved settings do not lead bar.layout's right region with microphone, the opt-in cell was never placed" >&2; exit 1
+  fi
+  if [ ! -f "$mic_bar_png" ]; then
+    echo "SMOKE_FAIL: no mic screenshot produced at $mic_bar_png" >&2; exit 1
+  fi
+  echo "SMOKE_MIC $mic_bar_png (this VM has no capture device, so a dim NO MIC cell is the correct rendering; a glyph here would mean an invented device)"
+fi
+
+if $systemupdate_mode; then
+  if ! grep -q '^ok$' "$systemupdate_open_reply_path"; then
+    echo "SMOKE_FAIL: panel open systemupdate did not return ok, got: $(cat "$systemupdate_open_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ "$(head -n1 "$systemupdate_state_path" 2>/dev/null | tr -d '\r')" != "systemupdate" ]; then
+    echo "SMOKE_FAIL: panel state did not report systemupdate open, got: $(cat "$systemupdate_state_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$dump_path" ]; then
+    echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+  if ! grep -qF "\"flakeDir\":\"$PWD\"" "$dump_path"; then
+    echo "SMOKE_FAIL: the resolved settings do not point systemUpdate.flakeDir at this repo ($PWD)" >&2; exit 1
+  fi
+  if ! grep -qF '"right":["systemUpdate"' "$dump_path"; then
+    echo "SMOKE_FAIL: the resolved settings do not lead bar.layout's right region with systemUpdate, the opt-in cell was never placed, so nothing flipped the panel's pollEnabled" >&2; exit 1
+  fi
+  if [ ! -f "$systemupdate_panel_png" ]; then
+    echo "SMOKE_FAIL: no systemupdate screenshot produced at $systemupdate_panel_png" >&2; exit 1
+  fi
+  echo "SMOKE_SYSTEMUPDATE $systemupdate_panel_png (against $PWD/flake.lock; whatever the real probes answered is what rendered)"
+fi
+
+if $plugins_mode; then
+  for f in "$plugins_list_path" "$plugins_status_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no plugins artifact produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$plugins_list_path"; echo
+  if ! grep -qF '"id":"smoke-bar"' "$plugins_list_path" \
+    || ! grep -qF '"kind":"bar"' "$plugins_list_path" \
+    || ! grep -qF '"region":"right"' "$plugins_list_path" \
+    || ! grep -qF "\"entryUrl\":\"file://$plugin_dir/entry.qml\"" "$plugins_list_path"; then
+    echo "SMOKE_FAIL: the drop-in plugin did not resolve out of its manifest: $(cat "$plugins_list_path")" >&2; exit 1
+  fi
+  cat "$plugins_status_path"; echo
+  if ! grep -qF '"loaded":true' "$plugins_status_path" \
+    || ! grep -qF '"count":1' "$plugins_status_path" \
+    || ! grep -qF '"bar":1' "$plugins_status_path"; then
+    echo "SMOKE_FAIL: plugins status did not report one loaded bar plugin: $(cat "$plugins_status_path")" >&2; exit 1
+  fi
+  # The one place a plugin's entry QML failing to load is visible at all:
+  # plugin QML lives outside the repo, so qmllint never sees it.
+  if ! grep -qF '"errors":[]' "$plugins_status_path" || ! grep -qF '"warnings":[]' "$plugins_status_path"; then
+    echo "SMOKE_FAIL: the plugin loaded with errors or warnings: $(cat "$plugins_status_path")" >&2; exit 1
+  fi
+  if [ ! -f "$plugins_bar_png" ]; then
+    echo "SMOKE_FAIL: no plugins screenshot produced at $plugins_bar_png" >&2; exit 1
+  fi
+  echo "SMOKE_PLUGINS $plugins_bar_png (no bar key in settings.json: the manifest's own region is what placed the cell)"
 fi
 
 if $notify_mode; then

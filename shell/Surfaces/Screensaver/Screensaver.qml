@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Core as Core
 import qs.Services
 import "../../Screensaver/effect.js" as Effect
+import "../../Screensaver/ttfx.js" as Ttfx
 
 // Idle-driven screensaver (DESIGN.md's terminal-text-effect exception, spec
 // §10, M7 Task 5): one controller (this Item) decides WHEN to show — the
@@ -72,31 +73,72 @@ Item {
         }
     }
 
+    // ---- engine (ttfx, with effect.js as the no-binary fallback) -----------
+    // ttfx is on PATH in every real install (nix/package.nix prefixes it onto
+    // the wrapper), so `builtin` is what a bare `qs -p shell/` dev run — or an
+    // install that skipped the wrapper — falls back to, rather than a blank
+    // overlay. Probed once at shell startup, long before any activation, the
+    // same way VisualizerService probes cava.
+
+    property string _ttfxState: "unknown"
+    readonly property string engine: root._ttfxState === "available" ? "ttfx" : "builtin"
+
+    Process {
+        id: ttfxProbe
+        running: true
+        command: ["sh", "-c", "command -v ttfx >/dev/null 2>&1"]
+        onExited: exitCode => root._ttfxState = exitCode === 0 ? "available" : "missing"
+    }
+
     // ---- effect selection (spec: "screensaver.effect accepts a name or
     // 'random' — the default; each activation picks fresh") -----------------
+    // Which pool "random" draws from follows the engine: ttfx's 37 effects,
+    // or effect.js's five. A `screensaver.effect` naming an effect the active
+    // engine doesn't have falls back to that engine's random pick, so a
+    // config pinning `beams` still animates on a host with no ttfx.
 
     readonly property string _requestedEffect: Core.Config.get("screensaver.effect", "random")
+    readonly property int frameRate: Core.Config.get("screensaver.frameRate", 60)
     property int _activationSeed: 0
     property bool _loggedUnknownEffect: false
     property string _previousEffect: ""
-    readonly property string _effectiveEffect: Effect.rerollEffectName(root._requestedEffect, root._previousEffect, root._activationSeed)
+    readonly property string _effectiveEffect: root.engine === "ttfx"
+        ? Ttfx.rerollEffectName(root._requestedEffect, root._previousEffect, root._activationSeed)
+        : Effect.rerollEffectName(root._requestedEffect, root._previousEffect, root._activationSeed)
 
     // ---- continuous cycling (M13b Task 5): once an effect converges the
     // surfaces hold the finished banner for holdSeconds, then _reroll()
     // picks the next cycle ("random" never repeats the effect it just
     // showed; a pinned effect replays with a fresh frame counter) and every
     // surface restarts from frame 0, indefinitely until the screensaver
-    // stops. The loop is driven by the same per-surface auto timer that
-    // animates frames, so a `frame(n)` pin (which stops that timer) also
-    // suspends cycling — the M11 recorder keeps capturing one single,
-    // deterministic effect. No idle inhibitor is taken anywhere here, so
-    // system suspend fires exactly as it would over a static banner. ------
+    // stops. Under ttfx an effect converging IS its process exiting, so the
+    // hold runs off holdTimer below; under the builtin engine it's the same
+    // per-surface auto timer that animates frames reaching _rerollAtFrame.
+    // Either way a `frame(n)` pin suspends cycling — the M11 recorder keeps
+    // capturing one single, deterministic effect. No idle inhibitor is taken
+    // anywhere here, so system suspend fires exactly as it would over a
+    // static banner. --------------------------------------------------------
 
     readonly property real holdSeconds: Core.Config.get("screensaver.holdSeconds", 6)
     readonly property int frameIntervalMs: 90
     property int cycles: 0
     readonly property int _rerollAtFrame: root.convergenceFrame() + Effect.holdFrames(root.holdSeconds, root.frameIntervalMs)
     signal cycleRestarted()
+
+    // Called by a surface whose ttfx run ended. Restart, not start: several
+    // outputs each end their own run a few milliseconds apart, and the hold
+    // is one shared window before the next effect, not one per screen.
+    function noteConverged() {
+        if (root.active && root.engine === "ttfx" && root._pinnedFrame < 0)
+            holdTimer.restart();
+    }
+
+    Timer {
+        id: holdTimer
+        interval: Math.max(1, root.holdSeconds * 1000)
+        repeat: false
+        onTriggered: root._reroll()
+    }
 
     function _reroll() {
         root._previousEffect = root._effectiveEffect;
@@ -115,13 +157,27 @@ Item {
 
     property int _pinnedFrame: -1
 
+    // Frames counted in the last completed pinned ttfx run — 0 until one has
+    // finished, which is why a recorder pins frame 0 first and reads
+    // frameInfo after. Under ttfx there is no closed-form convergence frame
+    // to compute the way effect.js has one: the only honest answer is how
+    // many frames the effect actually produced, capped at
+    // Ttfx.PIN_FRAME_CAP.
+    property int _ttfxFrameCount: 0
+
     readonly property string effectName: root._effectiveEffect
 
     function convergenceFrame() {
+        if (root.engine === "ttfx")
+            return root._ttfxFrameCount;
         return Effect.convergenceFrame(root._effectiveEffect, root._banner);
     }
 
     function pinFrame(n) {
+        // A hold already counting down when the recorder pins would reroll
+        // mid-capture, swapping the effect (and the seed) halfway through a
+        // GIF. Pinning ends the cycle loop until the pin is released.
+        holdTimer.stop();
         root._pinnedFrame = n;
     }
 
@@ -169,8 +225,10 @@ Item {
             // activation starts an unconstrained cycle 0.
             root._previousEffect = "";
             root.cycles = 0;
+            root._ttfxFrameCount = 0;
             root._activationSeed = Date.now();
-            if (root._requestedEffect !== "random" && !Effect.isKnownEffect(root._requestedEffect) && !root._loggedUnknownEffect) {
+            var known = root.engine === "ttfx" ? Ttfx.isKnownEffect(root._requestedEffect) : Effect.isKnownEffect(root._requestedEffect);
+            if (root._requestedEffect !== "random" && !known && !root._loggedUnknownEffect) {
                 console.warn("Screensaver: unknown screensaver.effect '" + root._requestedEffect + "', falling back to random");
                 root._loggedUnknownEffect = true;
             }
@@ -227,6 +285,7 @@ Item {
                         // would just show the static finished banner on
                         // the very next activation instead of animating.
                         surface._autoFrame = 0;
+                        surface._startRun();
                         Qt.callLater(function () { dismissArea.forceActiveFocus(); });
                         // Becoming visible/mapped underneath an already-
                         // stationary cursor fires MouseArea's own first
@@ -248,27 +307,173 @@ Item {
                         content.opacity = 1;
                     } else {
                         content.opacity = 0;
+                        // Through _startRun, not a bare `running = false`, so
+                        // the stop is accounted for the same way a restart is
+                        // and the exit it produces can't read as convergence.
+                        surface._startRun();
                     }
                 }
 
-                // Off-screen glyph measured once at the live mono font so
-                // the banner's cell size reflects real metrics rather than
-                // a guessed constant — same technique Osd.qml's own
-                // calibration Text items use. Scaled well past body size:
-                // the banner is the entire subject of this surface (spec),
-                // not a line of text within it.
+                // Off-screen glyphs measured at the live mono font so the
+                // banner's cell size reflects real metrics rather than a
+                // guessed constant — same technique Osd.qml's own calibration
+                // Text items use. Ten cells, not one, so per-glyph side
+                // bearing amortizes into a true advance: every run this
+                // surface paints is positioned at col * _cellWidth, and a
+                // fraction of a pixel of error per cell would smear a
+                // 96-column canvas by tens of pixels.
                 Text {
                     id: metric
                     visible: false
-                    text: "M"
+                    text: "MMMMMMMMMM"
                     font.family: Core.Theme.fontFamily
-                    font.pixelSize: Core.Theme.fontSize.body * 2.4
+                    font.pixelSize: 100
                 }
 
-                readonly property int _cellWidth: Math.max(1, Math.ceil(metric.implicitWidth))
-                readonly property int _cellHeight: Math.max(1, Math.ceil(metric.implicitHeight * 1.15))
+                readonly property real _advanceRatio: metric.implicitWidth / 1000
+                readonly property real _lineRatio: metric.implicitHeight / 100
+
+                // The banner is the entire subject of this surface (spec), so
+                // it is scaled well past body size — but never past the point
+                // where it stops fitting the screen. Before this clamp a
+                // 1276px-wide session rendered the bundled 64-column banner as
+                // "ORMALSHEL" (docs/screenshots/screensaver-niri.png, pre-M22),
+                // and ttfx would truncate its canvas identically. +4 columns
+                // keeps a little air at both edges.
+                readonly property real _fitFontSize: (root._banner.width > 0 && surface._advanceRatio > 0)
+                    ? surface.width / ((root._banner.width + 4) * surface._advanceRatio)
+                    : Core.Theme.fontSize.body * 2.4
+                readonly property real _fontSize: Math.max(8, Math.min(Core.Theme.fontSize.body * 2.4, surface._fitFontSize))
+                readonly property real _cellWidth: Math.max(1, surface._fontSize * surface._advanceRatio)
+                readonly property real _cellHeight: Math.max(1, surface._fontSize * surface._lineRatio * 1.15)
                 readonly property int _columns: surface.visible ? Math.max(1, Math.floor(width / surface._cellWidth)) : 0
                 readonly property int _rows: surface.visible ? Math.max(1, Math.floor(height / surface._cellHeight)) : 0
+
+                // ---- ttfx engine ---------------------------------------
+                // One process per output, not one shared: the canvas ttfx
+                // animates is measured in this screen's own cells, so two
+                // differently-sized outputs are two different canvases. The
+                // effect name, seed and cycle counter all come from root, so
+                // every screen still animates the same effect at the same
+                // time.
+
+                property var _grid: []          // parsed rows of the frame on screen
+                property int _chunks: 0         // stdout segments seen this run
+                property int _runFrames: 0      // animation frames seen this run
+
+                // Terminating a Process to restart it is asynchronous: the
+                // old QProcess is still alive when `running` goes back to
+                // true, so quickshell defers the new run until it reaps the
+                // old one (Process::onFinished -> startProcessIfReady). One
+                // stale `exited` — and one stale stdout flush before it —
+                // therefore arrives per restart, and neither belongs to the
+                // run now on screen. Counted rather than flagged: two
+                // restarts in the same tick owe two stale exits.
+                property int _staleExits: 0
+
+                // Becoming visible changes visibility, columns and rows in
+                // the same turn, and each of those wants the run restarted —
+                // Qt.callLater collapses them into the single start that
+                // actually happens, instead of spawning ttfx three times and
+                // killing two of them.
+                function _startRun() {
+                    Qt.callLater(surface._applyRun);
+                }
+
+                function _applyRun() {
+                    if (ttfxProc.running)
+                        surface._staleExits += 1;
+                    ttfxProc.running = false;
+                    surface._chunks = 0;
+                    surface._runFrames = 0;
+                    if (root.engine !== "ttfx" || !surface.visible || surface._columns <= 0 || surface._rows <= 0)
+                        return;
+                    // A pinned run regenerates the effect from frame 0 and
+                    // races to the requested frame with pacing disabled —
+                    // ttfx is deterministic under a fixed seed, so stepping
+                    // by re-running costs a few tens of milliseconds and
+                    // needs no frame buffer at all.
+                    var pinned = root._pinnedFrame >= 0;
+                    ttfxProc.command = Ttfx.command({
+                        bannerPath: root._asciiPath,
+                        columns: surface._columns,
+                        rows: surface._rows,
+                        effect: root._effectiveEffect,
+                        frameRate: pinned ? 0 : root.frameRate,
+                        background: String(Core.Theme.color.background),
+                        seed: root._activationSeed + root.cycles
+                    });
+                    frameParser.splitMarker = Ttfx.frameDelimiter(surface._rows);
+                    ttfxProc.running = true;
+                }
+
+                function _onChunk(chunk) {
+                    if (surface._staleExits > 0)
+                        return;
+                    // The first segment is ttfx's canvas prep (hide cursor,
+                    // then the blank canvas it will animate over), not a
+                    // frame — painting it would just clear the surface, which
+                    // it already is.
+                    var index = surface._chunks;
+                    surface._chunks += 1;
+                    if (index === 0)
+                        return;
+                    surface._runFrames = index;
+
+                    if (root._pinnedFrame >= 0) {
+                        if (index - 1 === root._pinnedFrame) {
+                            surface._grid = Ttfx.parseFrame(chunk);
+                            canvas.requestPaint();
+                        }
+                        if (index >= Ttfx.PIN_FRAME_CAP) {
+                            // Capped, not ended: record what was counted and
+                            // own the exit this kill produces, so it can't
+                            // read as the run finishing on its own.
+                            root._ttfxFrameCount = surface._runFrames;
+                            surface._staleExits += 1;
+                            ttfxProc.running = false;
+                        }
+                        return;
+                    }
+                    surface._grid = Ttfx.parseFrame(chunk);
+                    canvas.requestPaint();
+                }
+
+                Process {
+                    id: ttfxProc
+                    stdout: SplitParser {
+                        id: frameParser
+                        onRead: chunk => surface._onChunk(chunk)
+                    }
+                    onExited: exitCode => {
+                        if (surface._staleExits > 0) {
+                            surface._staleExits -= 1;
+                            return;
+                        }
+                        if (exitCode !== 0) {
+                            // 127 is ttfx gone from PATH since the startup
+                            // probe; anything else is a run this shell asked
+                            // for and ttfx refused. Either way, fall back to
+                            // the builtin engine rather than leave the
+                            // surface blank — and rather than respawn, which
+                            // for a rejected argv would spin.
+                            console.warn("Screensaver: ttfx exited " + exitCode + ", falling back to the builtin effects");
+                            root._ttfxState = "missing";
+                            return;
+                        }
+                        if (root._pinnedFrame >= 0) {
+                            root._ttfxFrameCount = surface._runFrames;
+                            return;
+                        }
+                        root.noteConverged();
+                    }
+                }
+
+                // A resize (this screen's mode, or a font-size change)
+                // re-measures the canvas, which ttfx can only be told about
+                // by restarting it.
+                on_ColumnsChanged: surface._startRun()
+                on_RowsChanged: surface._startRun()
 
                 // Free-running counter for the ordinary, non-pinned path —
                 // untouched by frame stepping. _renderFrame is what
@@ -280,7 +485,7 @@ Item {
 
                 Timer {
                     interval: root.frameIntervalMs
-                    running: Effect.autoTimerShouldRun(surface.visible, root._pinnedFrame)
+                    running: root.engine === "builtin" && Effect.autoTimerShouldRun(surface.visible, root._pinnedFrame)
                     repeat: true
                     onTriggered: {
                         surface._autoFrame += 1;
@@ -300,6 +505,18 @@ Item {
                     target: root
                     function onCycleRestarted() {
                         surface._autoFrame = 0;
+                        surface._grid = [];
+                        surface._startRun();
+                    }
+                    // Frame stepping restarts the ttfx run from frame 0 and
+                    // races to the requested frame; the builtin engine just
+                    // renders _renderFrame straight out of effect.js.
+                    function on_PinnedFrameChanged() {
+                        if (root.engine === "ttfx")
+                            surface._startRun();
+                    }
+                    function onEngineChanged() {
+                        surface._startRun();
                     }
                 }
 
@@ -334,8 +551,27 @@ Item {
                             var banner = root._banner;
                             if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
                                 return;
-                            ctx.font = surface._cellHeight + "px " + Core.Theme.fontFamily;
+                            ctx.font = surface._fontSize + "px " + Core.Theme.fontFamily;
                             ctx.textBaseline = "top";
+
+                            // ttfx owns the whole canvas, colors included:
+                            // each effect paints in its own upstream gradient
+                            // (omarchy passes no gradient overrides either),
+                            // and anything it leaves uncolored falls back to
+                            // the theme's foreground rather than a guess.
+                            if (root.engine === "ttfx") {
+                                var rows = surface._grid;
+                                for (var gr = 0; gr < rows.length; gr++) {
+                                    var runs = rows[gr];
+                                    for (var i = 0; i < runs.length; i++) {
+                                        var run = runs[i];
+                                        ctx.fillStyle = run.color.length > 0 ? run.color : Core.Theme.color.foreground;
+                                        ctx.fillText(run.text, run.col * surface._cellWidth, gr * surface._cellHeight);
+                                    }
+                                }
+                                return;
+                            }
+
                             var offsetCol = Math.floor((surface._columns - banner.width) / 2);
                             var offsetRow = Math.floor((surface._rows - banner.height) / 2);
                             var grid = Effect.frameState(root._effectiveEffect, surface._renderFrame, banner);

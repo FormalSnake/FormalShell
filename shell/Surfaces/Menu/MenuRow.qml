@@ -6,7 +6,9 @@ import qs.Components
 // label (or a "CONFIRM <label>?" swap while a confirm-gated action awaits its
 // second Enter), and a trailing indicator: "▸" for anything that descends
 // (submenu/link/provider), "✓" when the node's `checked` condition resolved
-// true, or a full-bleed accent tag when the node carries `meta` (the CALC
+// true (either a shell command's exit code or a live "@state:" read;
+// Menu.qml decides which), or a full-bleed accent tag when the node
+// carries `meta` (the CALC
 // result row). Menu.qml owns cursor/condition state; this row only paints it
 // and reports intent back via signals.
 Cell {

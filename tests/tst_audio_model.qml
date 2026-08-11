@@ -108,4 +108,22 @@ TestCase {
     function test_clamp_stream_floors_at_zero() {
         compare(AudioModel.clampStream(-0.5), 0);
     }
+
+    // sourceState
+
+    function test_source_state_unavailable_without_input_device() {
+        // A host with no capture device reports unavailable regardless of the
+        // last-known mute flag, so the mic cell can never render a stale
+        // muted/live answer for hardware that isn't there.
+        compare(AudioModel.sourceState(false, false), "unavailable");
+        compare(AudioModel.sourceState(false, true), "unavailable");
+    }
+
+    function test_source_state_muted_when_available_and_muted() {
+        compare(AudioModel.sourceState(true, true), "muted");
+    }
+
+    function test_source_state_live_when_available_and_unmuted() {
+        compare(AudioModel.sourceState(true, false), "live");
+    }
 }

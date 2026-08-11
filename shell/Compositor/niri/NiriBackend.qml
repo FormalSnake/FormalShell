@@ -19,7 +19,10 @@ Scope {
 
     readonly property bool available: eventSocket.connected && requestSocket.connected
     property var workspaces: state.workspaces
-    property var windows: state.windows
+    // Re-derived when `outputs` lands as well as on every event: niri reports
+    // window boxes relative to the workspace view, and only the output origin
+    // turns those into the absolute logical coordinates `rect` promises.
+    property var windows: Reducer.withAbsoluteRects(state.windows, state.workspaces, root.outputs)
     // Not reducer-derived, unlike everything else here: niri's event stream
     // carries no output event at all (niri-ipc's `Event` enum, lib.rs:1571),
     // so outputs only ever arrive as replies to an explicit Outputs request.

@@ -1,7 +1,9 @@
 import QtQuick
 import qs.Core
 import qs.Components
+import qs.Reminders
 import qs.Services
+import "../../../Capture/model.js" as Capture
 
 // Bar region for transient session-state glyphs (DESIGN.md §3 Bar's
 // "indicators slot", spec §Surfaces-1, M10 Task 2): a stay-awake glyph
@@ -18,13 +20,28 @@ import qs.Services
 // always visible and owns both DND display and its toggle, so a second
 // DND glyph here would just double up. Each glyph is its own standalone
 // Cell, shown only while its condition holds; the whole row disappears
-// when none does — never an empty box. Glyph codepoints taken from the
-// pinned nerd-fonts-jetbrains-mono cmap (nix/testvm.nix) via fonttools
-// ttx, not memory: md-coffee U+F0176, md-lightbulb_night U+F1A4C — both
-// audited for optical centering (fonttools glyf bbox: xMin 0/xMax 600
-// exactly filling the 600-unit advance width, ink vertically centered on
-// the font's own ascent/descent midpoint for both) — no asymmetry found,
-// the cell's own symmetric Theme.space.lg/sm padding already centers them.
+// when none does — never an empty box.
+//
+// Two more cells joined the row and both carry more weight than a passive
+// session flag, so they lead it, loudest first: a live screen recording
+// (M22, the only urgent cell here: a recording is the active thing on
+// screen, so it takes the full-bleed urgent fill; Cell.qml already excludes
+// an urgent cell from the hover-tint path, so the fill holds under the
+// pointer) and a pending reminder (countdown in the cell, message in the
+// tooltip; DESIGN.md §2 item 5 names countdown as a numeric display that
+// must not jitter, which only means anything if it is on screen). The
+// recording cell's own elapsed clock stays in its tooltip: a per-second
+// label on a glyph-only cell would relayout the bar every tick.
+//
+// Glyph codepoints taken from the pinned nerd-fonts-jetbrains-mono cmap
+// (nix/testvm.nix) by reading the font's own format-12 subtable, not
+// memory: md-coffee U+F0176, md-lightbulb_night U+F1A4C, md-record_circle
+// U+F0EC2, md-reminder U+F088C, all audited for optical centering (ink
+// vertically centered on the font's own ascent/descent midpoint), so the
+// cell's own symmetric Theme.space.lg/sm padding already centers them.
+// md-record_circle rather than the solid md-record U+F044A: md-record's ink
+// spans far less of the 600-unit advance than the glyphs beside it, so it
+// would read visibly smaller in the same row.
 // This `Row` is also what wakes NightLightService up at shell startup (a
 // live binding on a QML singleton is what forces its lazy construction —
 // see PolkitDialog.qml's own `PolkitService.flow` binding for the
@@ -36,14 +53,88 @@ Row {
 
     readonly property bool _stayAwakeActive: IdleService.stayAwake
     readonly property bool _nightLightActive: NightLightService.active
+    // Live bindings on two more lazily-constructed singletons, same
+    // construction-site mechanism the header documents for NightLightService.
+    readonly property bool _recordingActive: RecordingService.active
+    readonly property bool _reminderPending: ReminderService.count > 0
     // Read by Bar.qml's regionDelegate instead of `visible` directly — see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
-    readonly property bool shown: root._stayAwakeActive || root._nightLightActive
+    readonly property bool shown: root._recordingActive || root._reminderPending || root._stayAwakeActive || root._nightLightActive
 
     spacing: Theme.space.sm
     visible: root.shown
+
+    Cell {
+        id: recordingCell
+        height: root.height
+        visible: root._recordingActive
+        standalone: true
+        urgent: true
+        hovered: recordingArea.containsMouse
+        tooltipText: "RECORDING " + Capture.elapsedLabel(RecordingService.elapsedMs)
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰻂"
+            color: recordingCell.foreground
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize.body
+        }
+
+        MouseArea {
+            id: recordingArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: RecordingService.stop()
+        }
+    }
+
+    Cell {
+        id: reminderCell
+        height: root.height
+        visible: root._reminderPending
+        standalone: true
+        hovered: reminderArea.containsMouse
+        // The message is the user's own typed words, so it goes through
+        // verbatim rather than Tooltip's uppercasing (Tray.qml sets the same
+        // flag for foreign strings).
+        tooltipVerbatim: true
+        tooltipText: ReminderService.count > 0
+            ? ReminderService.pending[0].message + " / " + ReminderService.barLabel
+            : ""
+
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.space.xxs
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰢌"
+                color: reminderCell.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+            }
+
+            MetaLabel {
+                anchors.verticalCenter: parent.verticalCenter
+                text: ReminderService.barLabel
+                color: reminderCell.dimForeground
+            }
+        }
+
+        // Clearing deliberately lives in the menu and `reminder clear`, not
+        // on an 18px cell with no confirm.
+        MouseArea {
+            id: reminderArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: ReminderService.showSummary()
+        }
+    }
 
     Cell {
         id: stayAwakeCell
@@ -57,10 +148,10 @@ Row {
         visible: root._stayAwakeActive
         standalone: true
         hovered: stayAwakeArea.containsMouse
-        // These two cells are the shell's only glyph-and-nothing-else bar
-        // cells, and both appear out of nowhere the moment their state
-        // turns on — exactly the case a tooltip earns its place on. Both
-        // read "ON" because neither cell exists in the off state at all.
+        // This cell and the night-light one below say nothing but their
+        // glyph, and both appear out of nowhere the moment their state turns
+        // on, exactly the case a tooltip earns its place on. Both read "ON"
+        // because neither cell exists in the off state at all.
         tooltipText: "STAY AWAKE ON"
 
         Text {

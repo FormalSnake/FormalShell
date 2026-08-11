@@ -112,6 +112,36 @@ TestCase {
         verify(names(d.regions.right).indexOf("visualizer") < 0);
     }
 
+    function test_microphone_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["microphone"] } });
+        compare(names(r.regions.right), "microphone");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("microphone") < 0);
+        verify(names(d.regions.center).indexOf("microphone") < 0);
+        verify(names(d.regions.right).indexOf("microphone") < 0);
+    }
+
+    function test_keyboard_layout_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["keyboardLayout"] } });
+        compare(names(r.regions.right), "keyboardLayout");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("keyboardLayout") < 0);
+        verify(names(d.regions.center).indexOf("keyboardLayout") < 0);
+        verify(names(d.regions.right).indexOf("keyboardLayout") < 0);
+    }
+
+    function test_system_update_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["systemUpdate"] } });
+        compare(names(r.regions.right), "systemUpdate");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("systemUpdate") < 0);
+        verify(names(d.regions.center).indexOf("systemUpdate") < 0);
+        verify(names(d.regions.right).indexOf("systemUpdate") < 0);
+    }
+
     function test_bell_is_a_default_builtin_before_indicators() {
         var r = Layout.resolve(undefined);
         var right = names(r.regions.right).split(",");
@@ -126,5 +156,57 @@ TestCase {
         compare(r.regions.center.length, 2);
         compare(r.regions.center[0].kind, "builtin");
         compare(r.regions.center[1].kind, "module");
+    }
+
+    // A resolved record exactly as shell/Plugins/manifest.js emits one: every
+    // optional key already defaulted, keys with no meaning for the kind null.
+    function barPlugin(id, region) {
+        return {
+            id: id, kind: "bar", entry: "E.qml", dir: "/p/" + id, name: id,
+            region: region, keepLoaded: null, width: null,
+            entryUrl: "file:///p/" + id + "/E.qml"
+        };
+    }
+
+    function test_plugin_resolves_to_its_manifest() {
+        var p = barPlugin("diskwatch", "right");
+        var r = Layout.resolve({ layout: { right: ["plugin:diskwatch"] } }, [p]);
+        compare(r.regions.right.length, 1);
+        compare(r.regions.right[0].kind, "plugin");
+        compare(r.regions.right[0].id, "diskwatch");
+        compare(r.regions.right[0].plugin, p);
+        compare(r.warnings.length, 0);
+    }
+
+    function test_unknown_plugin_reference_is_skipped_with_warning() {
+        var r = Layout.resolve({ layout: { right: ["plugin:missing"] } }, []);
+        compare(r.regions.right.length, 0);
+        compare(r.warnings.length, 1);
+        verify(r.warnings[0].indexOf("missing") >= 0);
+    }
+
+    function test_plugin_id_never_collides_with_builtin_name() {
+        var p = barPlugin("clock", "center");
+        var r = Layout.resolve({ layout: { center: ["clock", "plugin:clock"] } }, [p]);
+        compare(r.regions.center.length, 2);
+        compare(r.regions.center[0].kind, "builtin");
+        compare(r.regions.center[1].kind, "plugin");
+    }
+
+    function test_unnamed_bar_plugin_auto_appends_to_its_region() {
+        var p = barPlugin("diskwatch", "left");
+        var r = Layout.resolve(undefined, [p]);
+        compare(r.regions.left.length, 3);
+        compare(r.regions.left[2].kind, "plugin");
+        compare(r.regions.left[2].id, "diskwatch");
+        compare(r.warnings.length, 0);
+    }
+
+    function test_explicitly_placed_plugin_is_not_also_appended() {
+        var p = barPlugin("diskwatch", "left");
+        var r = Layout.resolve({ layout: { right: ["plugin:diskwatch"] } }, [p]);
+        compare(r.regions.left.length, 2);
+        compare(r.regions.right.length, 1);
+        compare(r.regions.right[0].id, "diskwatch");
     }
 }

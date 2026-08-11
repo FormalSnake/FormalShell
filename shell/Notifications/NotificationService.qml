@@ -63,11 +63,19 @@ Singleton {
         return Math.min(root._maxPopupDurationMs, Math.max(floor, requested));
     }
 
-    function setPopupHovered(id, hovered) {
-        if (hovered)
-            root._hoveredPopups[id] = true;
-        else
-            delete root._hoveredPopups[id];
+    // Takes the group's whole `memberIds` array, not one id: identical
+    // notifications collapse into a single card (Model.groupEntries), so the
+    // pointer sits over every member at once and each one's expiry has to be
+    // held. A bare id here would stringify the array into a key that matches
+    // nothing, leaving a hovered group counting down.
+    function setPopupHovered(memberIds, hovered) {
+        var ids = memberIds ?? [];
+        for (var i = 0; i < ids.length; i++) {
+            if (hovered)
+                root._hoveredPopups[ids[i]] = true;
+            else
+                delete root._hoveredPopups[ids[i]];
+        }
     }
 
     // Written by the single Center instance (Surfaces/Notifications/Center.qml)
@@ -244,7 +252,26 @@ Singleton {
         }
     }
 
+    // Dismissing one grouped card must close every notification behind it,
+    // including each sender's own live server object, or the members that
+    // were not the group's representative survive into the next tick and the
+    // card reappears with a smaller count.
+    function dismissPopupGroup(memberIds) {
+        var ids = memberIds ?? [];
+        for (var i = 0; i < ids.length; i++)
+            root.dismissPopup(ids[i]);
+    }
+
     function invokeAction(id, key) {
+        // Shell-authored entries have no live server object to invoke through
+        // (see notify() below), so their callbacks are held here and routed
+        // first. One entry point for both origins: the toast and the center
+        // must not need to know which kind of notification they are showing.
+        var local = root._localActions[id];
+        if (local && local[key]) {
+            local[key]();
+            return;
+        }
         var notif = root._live[id];
         if (!notif)
             return;
@@ -282,6 +309,15 @@ Singleton {
         root._state = Model.dismissOne(root._state, id);
     }
 
+    // The center's counterpart to dismissPopupGroup: drops every member
+    // outright rather than archiving it, matching dismissOne's own contract
+    // for a row the user closed from the history surface.
+    function dismissGroup(memberIds) {
+        var ids = memberIds ?? [];
+        for (var i = 0; i < ids.length; i++)
+            root._state = Model.dismissOne(root._state, ids[i]);
+    }
+
     function dismissAll() {
         root._state = Model.dismissAll(root._state);
     }
@@ -308,27 +344,65 @@ Singleton {
     // guards.
     property int _localSerial: 0
 
+    // Callbacks for shell-authored actions, keyed by local id then action key.
+    // The reducer only ever stores the serializable {key, label} pair, so the
+    // functions cannot ride along in the state object.
+    property var _localActions: ({})
+
     // urgency defaults to normal (1); pass 2 for a critical local warning
     // (M16 Task 5's low-battery path) — Model.add() already makes those
     // sticky and model.js's bypassesDnd() already lets a `local` entry
     // through DND on its own honest marker, same as a real notify-send
     // critical.
-    function notify(summary, body, urgency) {
+    //
+    // `actions` is an optional [{ key, label, invoke }]; `image` an optional
+    // path rendered as the entry's thumbnail (the capture flow's saved PNG).
+    function notify(summary, body, urgency, actions, image) {
         urgency = urgency === undefined ? 1 : urgency;
         root._localSerial += 1;
+        var id = "local-" + root._localSerial;
+        var list = actions ?? [];
+
+        if (list.length > 0) {
+            var callbacks = {};
+            list.forEach(function (a) { callbacks[a.key] = a.invoke; });
+            root._localActions[id] = callbacks;
+        }
+
         root._state = Model.add(root._state, {
-            id: "local-" + root._localSerial,
+            id: id,
             appName: "formalshell",
             appIcon: "",
             summary: summary,
             body: body,
             urgency: urgency,
-            actions: [],
-            image: "",
+            actions: list.map(a => ({ key: a.key, label: a.label })),
+            image: image ?? "",
             senderIsNotifySend: false,
             local: true
         }, Date.now(), {});
     }
+
+    // Callbacks outlive the reducer entry otherwise: a long session firing
+    // capture notifications would accumulate one closure per shot, each
+    // pinning the path string it captured. Pruned against all three tiers
+    // rather than on dismiss, because an entry archived to `past` is still
+    // in the center with its action still live.
+    function _pruneLocalActions() {
+        var ids = root._localActions;
+        if (Object.keys(ids).length === 0)
+            return;
+        var alive = {};
+        [root._state.popups, root._state.pending, root._state.past].forEach(function (tier) {
+            tier.forEach(function (entry) { alive[entry.id] = true; });
+        });
+        Object.keys(ids).forEach(function (id) {
+            if (!alive[id])
+                delete ids[id];
+        });
+    }
+
+    on_StateChanged: root._pruneLocalActions()
 
     // Fires the most recent popup-or-pending entry's default action if it
     // has one, then dismisses it either way: a popup is archived to past

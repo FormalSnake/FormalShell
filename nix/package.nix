@@ -1,4 +1,6 @@
-{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds }:
+{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
+, matugen, qrencode, cava, ddcutil, tensaku, ttfx
+, wf-recorder, tesseract, ffmpeg-headless, git }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -17,10 +19,27 @@ stdenvNoCC.mkDerivation {
     # one — the smoke rig substitutes an argv-logging shim to prove the
     # spawn (real typing into a refocused window is host-trial territory),
     # and any real wtype is equivalent for the typing itself.
+    # ttfx animates the screensaver banner (the shell parses its ANSI frame
+    # stream); without it on PATH the screensaver falls back to effect.js's
+    # five builtin effects rather than going blank.
+    # matugen/qrencode/cava/ddcutil back shipped features (theming, the Wi-Fi
+    # QR share, the visualizer widget, external-monitor brightness) and were
+    # only ever on PATH because nix/testvm.nix lists them in
+    # environment.systemPackages — a real install through the home-manager
+    # module got none of them. Daemon-paired CLIs stay out on purpose:
+    # nmcli and bluetoothctl must match the NetworkManager/bluez the system
+    # is actually running, and their callers already guard with `command -v`.
+    # wf-recorder/tesseract/ffmpeg-headless back the capture suite
+    # (RecordingService's screen recording, the `capture text` OCR verb, and
+    # the two-pass GIF transcode). wf-recorder rather than
+    # gpu-screen-recorder: it captures through wlr-screencopy, which a nested
+    # compositor implements, so recording is reachable by the smoke rig
+    # instead of needing real KMS. git is read-only here, probing the locked
+    # revision of a flake input for the system-update widget.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds ]} \
-      --suffix PATH : ${lib.makeBinPath [ wtype ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless git ]} \
+      --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \

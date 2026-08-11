@@ -75,19 +75,27 @@ IpcHandler {
         return "ok";
     }
 
-    // The effect the current (or next) activation resolved to, the frame at
-    // which it's guaranteed fully converged (Effect.convergenceFrame) — so a
-    // recorder knows how many frames to capture rather than guessing
-    // per-effect constants of its own — and the activation's completed
-    // cycle count (M13b Task 5): 0 until the first effect has converged,
-    // held, and rerolled, so the rig can observe continuous cycling from
-    // two read-only calls instead of screenshots. cycles is deliberately
-    // the last key: the smoke rig greps '"cycles":0}' as an exact
-    // zero-baseline match.
+    // The engine actually animating (`ttfx`, or `builtin` on a host with no
+    // ttfx on PATH), the effect the current (or next) activation resolved
+    // to, the frame at which it's fully converged — so a recorder knows how
+    // many frames to capture rather than guessing per-effect constants of
+    // its own — and the activation's completed cycle count (M13b Task 5): 0
+    // until the first effect has converged, held, and rerolled, so the rig
+    // can observe continuous cycling from two read-only calls instead of
+    // screenshots. cycles is deliberately the last key: the smoke rig greps
+    // '"cycles":0}' as an exact zero-baseline match.
+    //
+    // Under ttfx, convergenceFrame is how many frames the effect really
+    // produced, which is only known once one pinned run has completed — so
+    // a recorder calls `frame 0` first and reads this after, rather than the
+    // other way round. It reads 0 until then, never a guess. The builtin
+    // engine still answers straight from Effect.convergenceFrame with no
+    // pin needed.
     function frameInfo(): string {
         if (!screensaver)
             return "error: screensaver not ready";
         return JSON.stringify({
+            engine: screensaver.engine,
             effect: screensaver.effectName,
             convergenceFrame: screensaver.convergenceFrame(),
             cycles: screensaver.cycles

@@ -30,6 +30,39 @@ function normalizeWorkspace(ws) {
     };
 }
 
+// niri reports a window's box relative to its WORKSPACE VIEW, not to the
+// output. `window_size` is the window proper; `tile_size` is the tile around
+// it, and is the fallback when only the tile was reported.
+// `window_offset_in_tile` positions the window inside that tile.
+//
+// ⚠️ On niri v26.04 only FLOATING windows carry a position. Verified against
+// the pinned source: `Tile::ipc_layout_template` hardcodes
+// `tile_pos_in_workspace_view: None` (src/layout/tile.rs:869), floating.rs
+// fills it in (:336), and the scrolling (tiled) layout overrides only
+// `pos_in_scrolling_layout` (src/layout/scrolling.rs:2426), inheriting the
+// None. `pos_in_scrolling_layout` is a 1-based (column, row) index pair, not
+// pixels, so it cannot be converted into one.
+//
+// So a tiled niri window — which is nearly all of them — has NO rectangle,
+// and this returns null for it. That is the compositor's limit, not a gap
+// here: anything wanting to capture a niri window works by window id through
+// the `ScreenshotWindow` action (niri crops server-side), never by rect.
+function windowViewRect(layout) {
+    if (!layout)
+        return null;
+    var pos = layout.tile_pos_in_workspace_view;
+    var size = layout.window_size || layout.tile_size;
+    if (!Array.isArray(pos) || !Array.isArray(size) || !(size[0] > 0) || !(size[1] > 0))
+        return null;
+    var offset = Array.isArray(layout.window_offset_in_tile) ? layout.window_offset_in_tile : [0, 0];
+    return {
+        x: pos[0] + offset[0],
+        y: pos[1] + offset[1],
+        width: size[0],
+        height: size[1]
+    };
+}
+
 function normalizeWindow(win) {
     return {
         id: String(win.id),
@@ -38,8 +71,36 @@ function normalizeWindow(win) {
         workspaceId: String(win.workspace_id),
         isFocused: win.is_focused,
         isFloating: win.is_floating,
-        isUrgent: win.is_urgent
+        isUrgent: win.is_urgent,
+        viewRect: windowViewRect(win.layout)
     };
+}
+
+// View-relative boxes -> the absolute logical coordinates BackendBase's `rect`
+// contract promises, by way of each window's workspace and that workspace's
+// output origin. Outputs arrive from a separate request than the event stream
+// (see NiriBackend), so until they land every `rect` is honestly null rather
+// than a box at the origin.
+function withAbsoluteRects(windows, workspaces, outputs) {
+    var outputByName = {};
+    (outputs || []).forEach(function (out) { outputByName[out.name] = out; });
+
+    var outputByWorkspace = {};
+    (workspaces || []).forEach(function (ws) { outputByWorkspace[ws.id] = ws.output; });
+
+    return (windows || []).map(function (win) {
+        var out = outputByName[outputByWorkspace[win.workspaceId]];
+        if (!win.viewRect || !out)
+            return Object.assign({}, win, { rect: null });
+        return Object.assign({}, win, {
+            rect: {
+                x: out.x + win.viewRect.x,
+                y: out.y + win.viewRect.y,
+                width: win.viewRect.width,
+                height: win.viewRect.height
+            }
+        });
+    });
 }
 
 function withWorkspaces(state, workspaces) {

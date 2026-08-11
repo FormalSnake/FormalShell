@@ -16,6 +16,7 @@ Singleton {
     property alias calendarBirthYear: adapter.calendarBirthYear
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
     property alias appLaunches: adapter.appLaunches
+    property alias reminders: adapter.reminders
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -56,6 +57,15 @@ Singleton {
         stateFile.writeAdapter();
     }
 
+    // Pending reminders: [{ id, message, setAt, dueAt }], the shape
+    // shell/Reminders/model.js owns end to end. Same contract as
+    // setAppLaunches above: the caller passes the already-computed array and
+    // this file only stores it.
+    function setReminders(entries) {
+        adapter.reminders = entries;
+        stateFile.writeAdapter();
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -80,6 +90,7 @@ Singleton {
             property int calendarBirthYear: 0
             property int calendarLifeExpectancy: 0
             property var appLaunches: []
+            property var reminders: []
         }
     }
 }
