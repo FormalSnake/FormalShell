@@ -2895,7 +2895,7 @@ sleep 5
 # The compositor's own view of the output, so the captured PNG's real pixel
 # dimensions can be checked against it rather than merely existing.
 niri msg -j outputs > "$capture_outputs_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick smart > /dev/null 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick smart default > /dev/null 2>&1
 sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_open_status_path" 2>&1
 niri msg action screenshot-screen --path "$capture_picker_path"
@@ -2911,7 +2911,7 @@ for _ in \$(seq 1 20); do
   fi
   sleep 0.5
 done
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick region > /dev/null 2>&1
+"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick region default > /dev/null 2>&1
 sleep 2
 "$qs_bin" ipc --any-display -p "$shell_path" call screenshot key escape > /dev/null 2>&1
 sleep 1
@@ -5159,7 +5159,7 @@ if $ocr_mode; then
   echo "SMOKE_OCR_TEXT_OVERLAY $ocr_text_overlay_png"
   echo "SMOKE_OCR_COLOR_OVERLAY $ocr_color_overlay_png"
   echo "SMOKE_OCR_FIXTURE $ocr_fixture_png (foot window: known text on a known #3fae2a background)"
-  echo "SMOKE_OCR_LIMIT the OCR text and the picked hex reaching the clipboard stay host-trial: both verbs block on a real slurp drag, CaptureIpc exposes no geometry stand-in for it (unlike picker choose / screenshot key / tray expand), slurp cannot be shimmed off the shell's PATH (nix/package.nix installs it with --prefix), and this rig has no synthetic pointer"
+  echo "SMOKE_OCR_LIMIT what stays host-trial is the SELECTION, not the pipeline: bare 'capture text'/'capture color' block on a real slurp drag this rig cannot answer (no synthetic pointer, and slurp cannot be shimmed off the shell's PATH since nix/package.nix installs it with --prefix), so those two legs assert only that the right overlay launched and cancelled clean. textAt/colorAt run the identical pipeline from a geometry, which is what proves grim -> tesseract -> wl-copy and grim -> od -> hex -> wl-copy end to end above"
 fi
 
 if $reminder_mode; then

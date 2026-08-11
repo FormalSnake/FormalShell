@@ -60,6 +60,9 @@ Scope {
 
     property var _frames: ({})        // output name -> frozen PNG path
     property int _pendingFreezes: 0
+    // grim's own words from the last failed freeze. A surface that declines
+    // to map has to be able to say why without a log the caller cannot read.
+    property string _lastFreezeError: ""
     property bool _capturing: false   // chrome hidden, ready to be grimmed
     property var _dragRect: null
     property var _hoverRect: null
@@ -188,7 +191,16 @@ Scope {
             cursor: root._cursor,
             selection: root._current ? root._current.rect : null,
             selectionLabel: root._current ? root._current.label : "",
-            capturing: root._capturing
+            capturing: root._capturing,
+            // The freeze is the only thing between open() and a mapped
+            // surface, and it is asynchronous, so its progress has to be
+            // observable or a picker that never opens is indistinguishable
+            // from one that never tried.
+            pendingFreezes: root._pendingFreezes,
+            frames: Object.keys(root._frames).length,
+            screens: Quickshell.screens.length,
+            runtimeDir: root._runtimeDir,
+            lastFreezeError: root._lastFreezeError
         };
     }
 
@@ -225,6 +237,8 @@ Scope {
     }
 
     function _freezeDone(outputName, framePath, ok, why) {
+        if (!ok)
+            root._lastFreezeError = outputName + ": " + (why || "grim produced nothing");
         // A NEW object, not a mutation of the existing one: QML only re-
         // evaluates bindings on a `var` property when the reference changes,
         // so mutating in place would leave every surface's Image source stale.
