@@ -512,6 +512,10 @@ default entry (and its whole subtree) without needing to redeclare it:
 }
 ```
 
+**If your `menu.jsonc` predates the `TOGGLES` node, read the rename table
+under Toggles below first.** Three ids changed, and an override still keyed on
+an old one goes inert without warning.
+
 **Custom power buttons.** `~/.config/formalshell/settings.json`'s
 `menu.customPowerButtons` array is the first-class way to add entries under
 `System` — no `menu.jsonc` needed for the common case:
@@ -667,12 +671,16 @@ through the whole-tree scorer, for the same reason the emoji route is
 special-cased: a hundred keybind rows in the root search would drown
 everything else.
 
-Where they come from: on niri, `~/.config/niri/config.kdl` is scanned
-directly, with a real KDL scanner that survives quoted strings holding
-braces or `//`, line and block comments, `/-` slashdash node comments, KDL
-v2 raw and multi-line strings, node properties, and a `binds` block that
-isn't the first block in the file. On Hyprland it's `hyprctl binds -j`,
-which is already JSON.
+Where they come from: on niri the config file is scanned directly, with a
+real KDL scanner that survives quoted strings holding braces or `//`, line
+and block comments, `/-` slashdash node comments, KDL v2 raw and multi-line
+strings, node properties, and a `binds` block that isn't the first block in
+the file. The menu tries four paths in order and takes the first one it can
+read: `keybinds.niriConfigPath` from `settings.json` (default `""`, which
+skips the candidate entirely), `$NIRI_CONFIG`,
+`$XDG_CONFIG_HOME/niri/config.kdl`, then `/etc/niri/config.kdl`. On Hyprland
+it's `hyprctl binds -j`, which is already JSON; `keybinds.niriConfigPath`
+does nothing on that backend.
 
 **Rows are inert notes, never activatable**, and that is the point rather
 than a missing feature. A bind acts on whatever window has focus, and at
@@ -681,7 +689,8 @@ here would fire it at whichever window the compositor hands focus back to
 instead of the one you were looking at. This surface is for remembering a
 chord, not for pressing it.
 
-Honest states, one dim row each: `NO CONFIG` (no `~/.config/niri/config.kdl`),
+Honest states, one dim row each: `NO CONFIG` (nothing readable on any of those
+candidate paths; the row names the conventional one),
 `NO BINDS` (a config with no `binds` block), `BINDS UNAVAILABLE` (`hyprctl
 binds -j` failed), and `NO BINDS / niri or hyprland only` on any other
 compositor. A half-written config yields the binds above the mistake rather
@@ -1865,15 +1874,21 @@ Keys, once it is open:
 | Arrows | Move the selection spatially |
 | `Escape`, right-click | Cancel |
 
-A second argument picks what happens with the result: the default saves to
-disk **and** the clipboard then offers the editor, `copy` is clipboard only
-(nothing touches disk, so no editor is offered), and `save` is disk only and
-stays quiet.
+A second argument picks what happens with the result: `default` saves to disk
+**and** the clipboard then offers the editor, `copy` is clipboard only
+(nothing touches disk, so no editor is offered), and `save` writes the file
+and stops there, no clipboard and no editor.
+
+**Both arguments are required.** IPC arity is an exact-equality check
+(quickshell's `ipccomm.cpp`), so `screenshot pick smart` gets rejected before
+the handler ever runs. A keybind written that way silently does nothing.
+Spell the processing out even when you want the default:
+`screenshot pick smart default`.
 
 **One difference between compositors, and it is the compositor's, not the
 shell's.** On Hyprland every window has a rectangle, so hovering or cycling
 highlights it in place. niri reports a pixel position only for *floating*
-windows: `Tile::ipc_layout_template` hardcodes
+windows: in niri v26.04, `Tile::ipc_layout_template` hardcodes
 `tile_pos_in_workspace_view: None` (`src/layout/tile.rs:869`), `floating.rs:336`
 fills it in, and the tiled layout inherits the `None`
 (`src/layout/scrolling.rs:2426`). A tiled niri window therefore has no box to
@@ -1885,6 +1900,11 @@ one by id through niri's `ScreenshotWindow` action, which crops server-side
 differs. The split is on whether a rectangle exists, never on a compositor
 name, so a future niri that reports tiled geometry gets the highlight
 behaviour with no configuration.
+
+`processing` does not reach that one path. `ScreenshotWindow` always writes
+the file and always copies it, so a named niri window taken with `copy` still
+lands in `screenshot.directory`, and one taken with `save` still lands on the
+clipboard. Only the notification follows what you asked for.
 
 ### Annotating a capture
 
@@ -1902,14 +1922,15 @@ and on the clipboard.
 **IPC** (`target: "screenshot"`):
 
 ```bash
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot full            # whole output, no interaction
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot pick smart      # open the picker; 2nd arg: default|copy|save
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot region          # legacy slurp rectangle, same pipeline
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot edit            # open the last capture in the editor
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot cancel          # kill an in-flight capture, clear state
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot status          # {"capturing":…,"lastPath":…,"lastError":…,"lastCancelled":…}
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot pickerStatus    # {"open":…,"mode":…,"drawableWindows":…,"namedWindows":…,"selection":…}
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot key tab         # drive the picker headlessly (smoke rig)
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot full                  # whole output, no interaction
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot pick smart default    # mode then processing, both required
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot pick windows copy     # snap to a window, clipboard only
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot region                # legacy slurp rectangle, same pipeline
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot edit ""               # "" opens the last capture; a path opens that file
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot cancel                # kill an in-flight capture, clear state
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot status                # {"capturing":…,"lastPath":…,"lastError":…,"lastCancelled":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot pickerStatus          # {"open":…,"mode":…,"drawableWindows":…,"namedWindows":…,"selection":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot key tab               # drive the picker headlessly (smoke rig)
 ```
 
 `pickerStatus`'s `drawableWindows` and `namedWindows` are the honest
@@ -1920,9 +1941,10 @@ Bind them in niri, same pattern as every other target:
 
 ```kdl
 binds {
-    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart"; }
+    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; }
+    Shift+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "region" "copy"; }
     Ctrl+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
-    Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "edit"; }
+    Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "edit" ""; }
 }
 ```
 
@@ -1967,6 +1989,19 @@ Escape or right-click inside slurp is a decline, not an error: no toast, no
 `lastError`. `capture.timeoutSeconds` (default 90) auto-cancels a selection
 nobody answers, and `capture cancel` does the same on demand.
 
+**`textAt` and `colorAt`** run those same two pipelines against a rectangle
+you already have, skipping the selection. The argument is slurp's own output
+format, `X,Y WxH`, quoted because of the space:
+`capture textAt "0,0 1276x693"`. `colorAt` reads the rectangle's top-left
+pixel, so `"640,360 1x1"` is how you ask for one. They are separate verbs rather than an optional argument on
+`text`/`color` because IPC arity is an exact-equality check, and a defaulted
+parameter would break the bare `capture text` a keybind actually calls.
+
+Everything after the selection is the same code either way, which is why
+`dev/smoke-niri.sh --ocr` drives these two rather than the interactive pair.
+The rig has no pointer to answer a real slurp drag with, but it can hand over
+a geometry and watch grim, tesseract and `wl-copy` run for real.
+
 **One capture at a time, within this target only.** `text` and `color` share
 one busy flag and one watchdog, so they can never race each other for the
 pointer. Nothing coordinates this target with `screenshot`'s own slurp,
@@ -1974,10 +2009,12 @@ though: firing `screenshot region` and `capture text` at the same moment
 puts two slurp overlays on screen, and the second one gets the click.
 
 ```bash
-qs ipc --any-display -p <store-path>/share/formalshell call capture text     # OCR a region to the clipboard
-qs ipc --any-display -p <store-path>/share/formalshell call capture color    # pick a pixel, copy its hex
+qs ipc --any-display -p <store-path>/share/formalshell call capture text                    # OCR a region to the clipboard
+qs ipc --any-display -p <store-path>/share/formalshell call capture color                   # pick a pixel, copy its hex
+qs ipc --any-display -p <store-path>/share/formalshell call capture textAt "0,0 1276x693"   # same OCR pipeline, no selection
+qs ipc --any-display -p <store-path>/share/formalshell call capture colorAt "640,360 1x1"   # top-left pixel of that rectangle
 qs ipc --any-display -p <store-path>/share/formalshell call capture cancel
-qs ipc --any-display -p <store-path>/share/formalshell call capture status   # {"capturing":…,"mode":…,"lastHex":…,"lastText":…,"lastError":…,"lastCancelled":…}
+qs ipc --any-display -p <store-path>/share/formalshell call capture status                  # {"capturing":…,"mode":…,"lastHex":…,"lastText":…,"lastError":…,"lastCancelled":…}
 ```
 
 The menu's root `CAPTURE` node carries both as rows (`COPY TEXT FROM

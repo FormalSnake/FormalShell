@@ -12,16 +12,16 @@ modules so a consuming config needs almost no glue.
 
 ![FormalShell bar on niri](docs/screenshots/bar-niri.png)
 
-**Status:** pre-alpha. M1 through M15 (walking skeleton through the greeter
+**Status:** pre-alpha. M1 through M22 (walking skeleton through the greeter
 and NixOS modules, bar completeness, screensaver effect gifs, DMS parity
 gaps + EDS/GOA calendar events, quattro behavior parity for the network/
-Bluetooth/usage/clipboard/active-window surfaces, and three rounds of
-e1504g daily-drive trial feedback — most recently a live bar weather cell,
-denser sanitized notification cards, and an omarchy-style audio mixer) are
-complete, behind CI (qmllint + headless
-qml-tests) and nested-compositor smoke loops for every change. See
-`docs/SWITCHOVER.md` for the current hardware-vs-VM verification parity
-table before switching a real machine over, and
+Bluetooth/usage/clipboard/active-window surfaces, three rounds of e1504g
+daily-drive trial feedback, the mek ink ramp and bar consistency passes, and
+most recently the capture suite: a region picker with an annotation handoff,
+region OCR, a color picker, and screen recording) are complete, behind CI
+(qmllint + headless qml-tests) and nested-compositor smoke loops for every
+change. See `docs/SWITCHOVER.md` for the current hardware-vs-VM verification
+parity table before switching a real machine over, and
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
 design.
 
@@ -76,8 +76,13 @@ session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
 screenshot in the dev sandbox, so no `bar-hyprland.png` is published until
 that's fixed.
 
-The screensaver's five convergence effects, frame-stepped and captured as
-GIFs (`dev/smoke-niri.sh --screensaver-gif`, `CLAUDE.md`):
+Nothing from M22 is in the table yet. `dev/smoke-niri.sh --capture`
+screenshots the region picker on every run, but none of those frames are
+committed here.
+
+The five builtin screensaver effects, frame-stepped and captured as GIFs
+before ttfx landed (`dev/smoke-niri.sh --screensaver-gif`, `CLAUDE.md`, which
+now records ttfx's own effects):
 
 | | | | | |
 | :---: | :---: | :---: | :---: | :---: |
@@ -92,28 +97,46 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   empty ones hidden), active window, an SNI tray with a grouped overflow
   drawer and click-through to item activation and DBus menus, a
   notification bell (pending count, click opens the center, right click
-  flips DND), an idle-inhibit indicator, clock, battery, audio,
-  network/Bluetooth, weather, now playing, an opt-in GitHub PR/issue
-  counter — fully reorderable from `settings.json`, plus custom `command`
-  and `qml` widget modules. Hovering a cell opens a tooltip card naming
-  what it is and what it currently reads, including honest states like
-  `BLUETOOTH / NO ADAPTER`.
+  flips DND), an indicators slot that shows up only while something is on
+  (a live recording, a pending reminder countdown, stay-awake, night
+  light), clock, battery, audio, network/Bluetooth, weather, now playing,
+  and four opt-in cells (GitHub PR/issue counter, microphone mute, keyboard
+  layout, how many of a flake's inputs are behind upstream): fully
+  reorderable from `settings.json`, plus custom `command` and `qml` widget
+  modules. Hovering a cell opens a tooltip card naming what it is and what
+  it currently reads, including honest states like `BLUETOOTH / NO ADAPTER`.
 - **Menu** — one fuzzy-searchable, keyboard-driven surface doubling as app
   launcher (rows carry each app's themed desktop icon), system/power menu,
   and a `select`/`input` dmenu replacement — with an inline calculator row,
   an emoji picker (`:e`) that copies AND auto-types the pick, a nixpkgs
   package runner (`:nix`, with honest searching/failed/empty states and a
   launch toast), and a wallpaper entry opening the picker grid built in as
-  routes. App rows rank by launch frecency (persisted to `state.json`), and
-  a launch that puts nothing on screen within two seconds gets a
-  `LAUNCHING` notification instead of a claim it worked.
+  routes. A `TOGGLES` node collects night light, stay-awake, DND and dark
+  mode as live checkmark rows; activating one flips it and leaves the menu
+  open, so the tick changes under the cursor (the ids moved, so a
+  `menu.jsonc` keyed on `theme.mode-toggle` or `system.stay-awake` now goes
+  inert rather than erroring, see [Menu](docs/USAGE.md#menu)). `:k` searches
+  your compositor's own keybinds, read from niri's `config.kdl` or from
+  `hyprctl binds -j` and listed as inert notes. App rows rank by launch
+  frecency (persisted to `state.json`), an app that already has a window
+  gets raised instead of started a second time, and a launch that puts
+  nothing on screen within two seconds gets a `LAUNCHING` notification
+  instead of a claim it worked.
 - **Notifications** — a mako-replacement stack: freedesktop server,
   independent card toasts, a summonable history center, a narrow DND bypass.
+  Identical notifications (same app, same summary) collapse into one card
+  carrying a repeat count instead of stacking.
+- **Reminders** are a duration plus a message (`reminder set 25m "coffee"`),
+  fired through the shell's own notification stack at critical urgency so one
+  still arrives with DND on. A pending reminder shows as a countdown cell in
+  the bar's indicators slot, and persists to `state.json`: one whose time
+  passed while the shell was down fires late rather than silently.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
   media.
-- **Panels** — eleven popouts (audio, calendar, network, bluetooth, power,
-  weather, media, github, usage, tailscale, display) sharing one component
-  and one IPC target, each taking keyboard focus as it opens so a panel
+- **Panels**: thirteen popouts (appmenu, audio, calendar, network,
+  bluetooth, power, weather, media, github, usage, tailscale, systemupdate,
+  display) sharing one component and one IPC target, plus any plugin panel
+  under `plugin:<id>`, each taking keyboard focus as it opens so a panel
   summoned from a keybind is usable immediately. Network adds a Wi-Fi QR
   share (optional `qrencode`) and a saved-password reveal; Bluetooth adds
   per-device trust; display lists every connected output with on/off,
@@ -127,14 +150,27 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   Music animated album art.
 - **Lock screen** — a real `WlSessionLock` + PAM, with the design's one
   sanctioned blur exception.
-- **Screensaver** — an idle-driven terminal-effect banner with five
-  convergence effects, rerolling to a fresh one indefinitely until real
-  input dismisses it.
+- **Screensaver**: an idle-driven terminal-effect banner, animated by
+  ttfx (bundled) across its 37 effects, rerolling to a fresh one
+  indefinitely until real input dismisses it. Without ttfx on PATH it falls
+  back to five convergence effects written in JS.
 - **Picker** — a ledger-grid wallpaper/image selector, also usable as a
   generic image-select IPC surface.
-- **Screenshots** — a `screenshot full`/`region`/`cancel` IPC target
-  wrapping grim/slurp: file, clipboard, and a notification in one call,
-  with a themed selection overlay and a stuck-selection watchdog.
+- **Capture**: `screenshot full` grabs an output with no interaction, and
+  `screenshot pick` opens the shell's own region picker over a frozen grab of
+  every output, in `smart`, `region`, `windows` or `fullscreen` mode, with a
+  second argument choosing disk plus clipboard (the default), clipboard only,
+  or disk only. The `SCREENSHOT SAVED` notification carries an `EDIT` action
+  handing the PNG to `screenshot.editor`, default
+  [Tensaku](https://tensaku.dev), which this flake packages. `capture text`
+  OCRs a dragged region to the clipboard through tesseract, `capture color`
+  copies one pixel as `#RRGGBB`, and `record` drives wf-recorder for screen or
+  region video with optional desktop and microphone audio, transcodable to a
+  GIF from its own saved notification. The slurp-based selections auto-cancel
+  after 90 seconds instead of sitting invisible and stuck. One asymmetry, and
+  it is the compositor's: niri reports no position for tiled windows, so the
+  picker names them in a card rather than highlighting them, and captures the
+  chosen one through niri's own server-side crop.
 - **Motion** — fast, subtle, interruptible transitions (90-140ms, opacity
   plus a small translate, one ease-out curve), off entirely with
   `motion.enabled: false`.
@@ -147,6 +183,13 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   matugen, pywal (a documented `pywal-theme.json.tmpl` ships alongside the
   matugen template), or a hand-written file all theme the shell identically
   (see [Theming](docs/USAGE.md#theming) in the usage doc).
+- **Plugins** are drop-in QML loaded from
+  `~/.config/formalshell/plugins/<id>/` behind a `manifest.json`, as a bar
+  cell, a panel, an overlay, or a headless service. A manifest that can't be
+  read drops that one plugin with a warning and leaves the bar standing.
+  There is no sandbox past load time: a plugin file that parses gets the same
+  engine access as any builtin widget, and can take this single process down
+  with it.
 - **Compositor-agnostic** — a formal `CompositorBackend` contract, with
   working niri and Hyprland implementations.
 
@@ -228,6 +271,14 @@ normal login never touches them — see `nix/nixos-greeter-module.nix`.
 `programs.formalshell.settings` (JSON) is written once to
 `~/.config/formalshell/settings.json` and only ever read by the shell — see
 `nix/hm-module.nix`.
+
+The package wraps its own PATH, so the binaries it invokes (matugen, grim,
+slurp, wl-clipboard, wf-recorder, tesseract, ffmpeg, ttfx, cava, ddcutil,
+qrencode, brightnessctl, wtype) ride along and don't have to be installed on
+the host. Left out on purpose are the CLIs that have to match something
+already running on the system: `nmcli`, `bluetoothctl`, `pactl` (only for
+`desktopmic` recording), `wlsunset` and `localsend_app`. Each caller either
+hides its feature when the binary is missing or fails loudly.
 
 ### Minimal working `flake.nix`
 

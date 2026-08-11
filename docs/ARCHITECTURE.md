@@ -15,6 +15,22 @@ companion binary and nothing runs under Node/npm/bun: all logic is QML/JS,
 including the niri IPC client, which talks to niri's Unix sockets directly
 via `Quickshell.Io.Socket`.
 
+The third-party CLIs the shell shells out to are not companion binaries, they
+are runtime dependencies wired onto that wrapper's PATH in `nix/package.nix`:
+`brightnessctl`, `wl-clipboard`, `curl`, `grim`, `slurp`, `matugen`,
+`qrencode`, `cava`, `ddcutil`, `ttfx`, `wf-recorder`, `tesseract`,
+`ffmpeg-headless`, `git` and `formalshell-eds` are prefixed, `wtype` and
+`tensaku` suffixed so an environment copy can shadow them. Anything missing
+from that list only resolves when the host happens to install it separately,
+which has already gone wrong once: `matugen`, `qrencode`, `cava` and
+`ddcutil` were absent until 2026-08-11 and worked only because
+`nix/testvm.nix` lists them in `environment.systemPackages`, so
+theming, the Wi-Fi QR share, the visualizer and external-monitor brightness
+were all broken in a plain home-manager install while every smoke run passed.
+Daemon-paired CLIs (`nmcli`, `bluetoothctl`) stay off the list on purpose:
+they have to match the NetworkManager and bluez the system is running, and
+their callers already guard with `command -v`.
+
 A second, separate entry point (`greeter/greeter.qml`, wrapped as the
 `formalshell-greeter` binary — `nix/greeter-package.nix`) runs before any
 user session exists, launched by greetd as its `default_session` instead of
@@ -138,7 +154,12 @@ shell/
     model.js                      pure JS, .pragma library — parseLock() (direct flake inputs only),
                                    per-input-type upstream probe argv, countBehind()/summaryLabel()
   Screensaver/
-    effect.js                     pure JS, .pragma library — frameState(): five converging effects (decrypt/rain/expand/slide/scatter) over a loaded ASCII banner, stepped off a frame counter
+    effect.js                     pure JS, .pragma library: frameState(): five converging effects (decrypt/rain/expand/slide/scatter) over a loaded ASCII banner, stepped off a frame counter; the engine an install with no ttfx on PATH falls back to
+    ttfx.js                       pure JS, .pragma library: the ttfx wire protocol. command()/args()
+                                   build the argv the surface spawns, parseFrame() reads the ANSI stream
+                                   back, isKnownEffect()/rerollEffectName() own the 37 effect names, and
+                                   isTimedEffect() names the two (matrix/thunderstorm) that are wall-clock
+                                   gated and so never frame-stepped
   Services/
     AudioService.qml            singleton — Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
     BrightnessService.qml       singleton — brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
@@ -170,9 +191,13 @@ shell/
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
     PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/close()/status()
     TrayIpc.qml                   IpcHandler target "tray", status()/expand()/collapse() — spec addendum, same rationale as "panel"
-    CaptureIpc.qml                IpcHandler target "capture", text()/color()/cancel()/status() — a Scope,
+    ScreenshotIpc.qml             IpcHandler target "screenshot", full()/region()/pick(mode,processing)/
+                                   key(name)/pickerStatus()/edit(path)/cancel()/status(); pick() drives
+                                   Surfaces/Capture/RegionPicker.qml, edit() hands a PNG to screenshot.editor
+    CaptureIpc.qml                IpcHandler target "capture", text()/color()/textAt(geom)/colorAt(geom)/
+                                   cancel()/status(): a Scope,
                                    not a bare IpcHandler: the slurp/grim/tesseract Processes need a default
-                                   property to live in. One busy flag guards both verbs
+                                   property to live in. One busy flag guards all four verbs
     RecordIpc.qml                 IpcHandler target "record", start(scope,audio)/stop()/toggle(scope,audio)/
                                    gif(path)/status() — thin, every rule lives in RecordingService
     ReminderIpc.qml               IpcHandler target "reminder", set(duration,message)/show()/clear()/status()
@@ -230,7 +255,7 @@ shell/
       Lock.qml                    WlSessionLock wrapper + both PamContexts (password, parallel fingerprint) + idle-blank/resume-guard state
       LockSurface.qml              per-output Component WlSessionLock instantiates itself; blurred-wallpaper backdrop, oversized clock, one input cell
     Screensaver/
-      Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay, Canvas-drawn matrix rain
+      Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay; a Canvas drawing the banner off ttfx, or off effect.js with no ttfx on PATH
     Picker/
       ImagePicker.qml               ledger image grid (Panel.qml subtype); wallpaper mode + generic select() mode over the same grid
     Capture/
@@ -258,6 +283,7 @@ tests/
   tst_openmeteo.qml             qmltestrunner tests for Weather/openmeteo.js
   tst_applemusic.qml            qmltestrunner tests for Media/applemusic.js
   tst_screensaver_effect.qml    qmltestrunner tests for Screensaver/effect.js
+  tst_screensaver_ttfx.qml      qmltestrunner tests for Screensaver/ttfx.js
   tst_bar_layout.qml             qmltestrunner tests for Bar/layout.js
   tst_capture_model.qml          qmltestrunner tests for Capture/model.js
   tst_reminders_model.qml        qmltestrunner tests for Reminders/model.js
@@ -268,12 +294,21 @@ tests/
   tst_keyboard_layout.qml        qmltestrunner tests for Compositor/keyboard.js
   tst_app_match.qml              qmltestrunner tests for Compositor/appmatch.js
 dev/
-  smoke-niri.sh                 nested-niri build+screenshot(+debug dump)(+wallpaper)(+menu)(+notify)(+center)(+osd)(+panel <name>)(+clipboard)(+media)(+lock)(+screensaver)(+picker)(+tray)(+bar-layout) loop, dbus-run-session isolated
+  smoke-niri.sh                 nested-niri build+screenshot loop, dbus-run-session isolated; one mode
+                                 flag per surface (--wallpaper, --menu, --notify, --osd, --panel <name>,
+                                 --lock, --screensaver, --picker, --tray, --bar-layout, --screenshot,
+                                 --capture, --record, --ocr, --reminder, --toggles, --keybinds, --mic,
+                                 --systemupdate, --plugins, …), each documented in the script's own
+                                 header block, which is the authoritative list
   smoke-hyprland.sh             same, nested Hyprland
   sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items — registers for real on the session bus, never faked
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
-                                 the exit-0-always wrapper around `qs ipc call lock lock`
+                                 the exit-0-always wrapper around `qs ipc call lock lock`, and carries the
+                                 runtime CLI PATH (Process model, above)
+  ttfx-package.nix               the screensaver's frame source (MIT), prefixed onto that PATH
+  tensaku-package.nix            the annotation editor `screenshot edit` launches (MPL-2.0), suffixed onto
+                                 it; a separate executable, never linked in, so the shell stays MIT
   greeter-package.nix            stdenvNoCC derivation wrapping `qs -p` at greeter/greeter.qml; copies
                                  shell/ verbatim and layers greeter.qml on top, no lock-before-sleep companion
   hm-module.nix                 home-manager module (programs.formalshell); wires formalshell-lock-before-sleep
@@ -289,6 +324,34 @@ nix/
 Every widget under `Surfaces/` reads only `Theme` and `CompositorService` —
 never a backend directly, and never a raw compositor socket. That boundary is
 what lets `Bar.qml` and its widgets be identical on niri and Hyprland.
+
+**Pure model, thin QML wiring.** Most feature directories at the top of
+`shell/` are one `.pragma library` JS module holding all of the domain's
+logic, paired with a QML singleton or surface that does nothing but side
+effects. `Capture/model.js` builds argv arrays and parses geometry and PPM
+bytes while `Services/RecordingService.qml` owns the `Process` that runs
+them; `Reminders/model.js` parses specs and decides what is due while
+`ReminderService.qml` mirrors `Core.State` and fires notifications;
+`Plugins/manifest.js` holds the manifest schema and its failure contract
+while `PluginService.qml` reads the directory and creates components;
+`SystemUpdate/model.js` parses `flake.lock` and counts inputs behind while
+`SystemUpdatePanel.qml` runs the probes. `Menu/toggles.js`,
+`Compositor/{keybinds,appmatch,keyboard}.js`, `Bar/layout.js`,
+`Notifications/model.js` and `Screensaver/{effect,ttfx}.js` are the same
+shape without a service of their own, called straight from the surface that
+needs them.
+
+The split is what makes the logic testable: `qmltestrunner` reaches a
+`.pragma library` module head-on, so every one of these has a `tests/tst_*`
+file, while a QML singleton needs a live engine, a compositor, or a D-Bus
+name to say anything. That only holds while the models stay honest about
+their inputs. The clock is always a
+parameter (`nowMs`, `now`), never `Date.now()` inside the model. Argv
+builders return arrays that go straight onto `Process.command`, so a path
+containing a quote can never splice a shell. And anything the model cannot
+know, it takes as an argument rather than reaching for a singleton, which is
+why `toggles.js` is handed a state snapshot instead of importing
+`NightLightService`.
 
 ## The CompositorBackend contract
 
@@ -460,6 +523,10 @@ Model.parseJsonc() -> defaultObj              Model.parseJsonc() -> userObj
                        |  on open()/level-descend only (never per-keystroke):
                        v
               one Process per when/checked condition -> _condResults cache
+                       |  except a `checked` of the form "@state:<path>", which
+                       |  Menu/toggles.js answers from Menu.qml's _stateSnapshot
+                       |  in-process: no Process, never cached, so the checkmark
+                       |  repaints in the same event-loop turn the state flips
                        |
         +--------------+---------------------------+
         v                                           v
@@ -472,6 +539,44 @@ Model.visibleChildren(nodes, id, condResults)   Search.rank(nodes, query, condRe
               Surfaces/Menu/MenuRow.qml  (a Cell: icon+label, ▸/✓ trailing
                                            indicator, confirm-gate swap)
 ```
+
+**Toggle rows (`Menu/toggles.js`).** The `toggles` subtree's rows carry a
+`checked` of `"@state:<path>"` against a closed allow-list of four paths:
+`nightlight.active`, `screensaver.stayAwake`, `notifications.dnd`,
+`theme.dark`. Membership is tested by list lookup, never by resolving the
+string against anything, so a path outside the list answers `false` and a
+hand-written `menu.jsonc` has no route into the QML engine through this
+field. Adding a path means editing both `PATHS` and `Menu.qml`'s
+`_stateSnapshot` literal; `tests/tst_menu_toggles.qml` fails when the two
+disagree. `"@state:"` is a `checked` prefix only: a node carrying it in
+`when` is hidden with a warning rather than evaluated, because a live `when`
+would rebuild the tree under the cursor. Toggle rows also set
+`keepOpen: true`, which returns from the activation path before
+`root.close()`, so the surface stays at the same level and the row's own
+checkmark flips in place. Every other action row still closes.
+
+**Route-local rows.** Two routes build their rows outside the
+`buildTree`/`applyProviders` pipeline above, because their content is a
+parse of something the compositor owns. The `keybinds` route (`menu summon
+keybinds`, or `:k <query>` from anywhere) reads niri's `config.kdl` through
+a documented lookup chain (`keybinds.niriConfigPath` in settings, then
+`$NIRI_CONFIG`, then `$XDG_CONFIG_HOME/niri/config.kdl`, then
+`/etc/niri/config.kdl`) or Hyprland's `hyprctl binds -j`, and hands it to
+`Compositor/keybinds.js`, whose niri leg is a real KDL scanner (quoted
+braces, block and slashdash comments, raw and multi-line strings) rather
+than a line regex. Its rows are inert notes, so there is no activation path
+to get wrong, and every dead end is a named row rather than an empty list:
+`NO CONFIG`, `NO BINDS`, `BINDS UNAVAILABLE`.
+
+**Launch-or-focus.** `Compositor/appmatch.js` decorates each `kind:"app"`
+row with the windows already running for that desktop entry
+(`decorateAppRows`), matching on `startupClass` first and the entry id
+second, first tier wins, no fuzzy tier. Activating a row with a match calls
+`CompositorService.focusWindow()` on `nextWindow()`'s pick instead of
+spawning a second copy, and repeat activation cycles that app's windows; a
+miss falls through to the same `execute()` spawn path as before, which is
+the only path that honors the entry's own `Exec` field codes. Focusing
+records a frecency hit, since it is a use of the app.
 
 **Cell shared-rule contract.** `Components/Cell.qml` draws only its own
 bottom and right hairline rule (`Theme.color.rule`, `Theme.borderWidth`
@@ -521,6 +626,21 @@ with tests on both sides (`tests/tst_notifications_model.qml`):
 `senderIsNotifySend` is set by `NotificationService` from the sender's literal
 app name (`notification.appName === "notify-send"`), never inferred from
 urgency alone — a chat app marking its own messages critical does not bypass.
+
+**Repeats collapse into one card.** `Model.groupEntries()` keys on the
+sender's app name (trimmed, case-folded) plus the summary, deliberately not
+the body: the case this exists for is a chat app firing one summary with a
+different body per message, and keying on body too would degenerate to no
+grouping at all. Each row is a copy of the group's newest member carrying
+`count` and `memberIds`, rendered as a repeat count in the meta row, and
+group order follows each group's newest member, so a repeat moves its group
+to the top instead of adding a row. `MAX_POPUPS` caps groups rather than raw
+entries, so five repeats of one notification cannot evict four unrelated
+toasts. Grouping is derived at render time in all three tiers (`Toasts.qml`
+over popups, `Center.qml` over pending and past) and never stored: every
+entry keeps its own
+server id and its own `expiresAt`, so the id-keyed side maps below keep
+resolving and each member still times out on its own clock.
 
 `NotificationService` keeps live `Notification` objects OUT of the reducer
 state (which is plain JS data, safe to keep around after the server destroys
@@ -678,14 +798,19 @@ regardless of which screen's bar owns the click. `dev/sni-stub.py` is the
 VM's real StatusNotifierItem producer (PyGObject, registers on the session
 bus for real — never faked inside the shell).
 
-**Indicators** (`Indicators.qml`): stay-awake off the explicit
-`IdleService.stayAwake` toggle (click the glyph to turn it off; the media
-guard that also holds the idle chain no longer shows a glyph of its own)
-and night light off `NightLightService.active`. DND has its own
+**Indicators** (`Indicators.qml`): four glyph cells, each shown only while
+its own condition holds, the whole row hidden when none does. Loudest
+first: a live screen recording off `RecordingService.active` (the one
+urgent cell here, full-bleed accent fill, click to stop, elapsed clock in
+its tooltip rather than in the cell, since a per-second label would
+relayout the bar every tick), then a pending reminder off
+`ReminderService.count` (its `barLabel` countdown in the cell, the message
+in the tooltip), then stay-awake off the
+explicit `IdleService.stayAwake` toggle (click the glyph to turn it off;
+the media guard that also holds the idle chain shows no glyph of its own),
+then night light off `NightLightService.active`. DND has its own
 always-visible cell in `BellWidget.qml` instead — no second DND state
-machine. Recording has no glyph: nothing in this shell or a reachable
-service reports screen recording (no screencast portal, no compositor IPC
-surfaces it) as of 2026-07-29 — not wired rather than invented.
+machine.
 
 **Custom modules** (`CommandModule.qml`, `QmlModule.qml`,
 `shell/Bar/commandOutput.js`): a `"command"` module polls
@@ -933,13 +1058,22 @@ Surfaces/Screensaver/Screensaver.qml  (one controller Item)
     (WlrLayer.Overlay, keyboardFocus OnDemand while visible)
     |  a FileView loads branding/screensaver.txt (or screensaver.asciiPath,
     |    falling back to the bundled banner on failure) into a banner grid
-    |  Canvas, repainted every 90ms off Screensaver/effect.js#frameState(name,
-    |    frame, banner) — resolveEffectName() picks one of five effects
-    |    (decrypt/rain/expand/slide/scatter) off screensaver.effect, "random"
-    |    (default) reseeded fresh per activation; pure: frame counter + banner
-    |    in, {char, opacity} grid out — TDD'd first, tests/tst_screensaver_effect.qml
-    |  drawn in Theme.font.family + Theme.color.accent — no spawned terminal
-    |    windows, a themed banner-convergence effect on a plain Canvas
+    |  Canvas, repainted off whichever frame source is live:
+    |    ttfx (Screensaver/ttfx.js, one process per output, argv built by
+    |      command(), its ANSI stream read back by parseFrame() at
+    |      screensaver.frameRate, default 60) whenever `command -v ttfx`
+    |      succeeds: 37 effects, each painting in its own upstream gradient
+    |    Screensaver/effect.js#frameState(name, frame, banner) otherwise:
+    |      five effects (decrypt/rain/expand/slide/scatter) in
+    |      Theme.color.accent, pure: frame counter + banner in, {char,
+    |      opacity} grid out, tests/tst_screensaver_effect.qml
+    |    `engine` (and so `screensaver frameInfo`) reports which one is live;
+    |      "random" draws from the active engine's own pool, and a
+    |      screensaver.effect naming an effect that engine doesn't have falls
+    |      back to its random pick rather than going blank
+    |  the shell's own Canvas draws every glyph in Theme.font.family either
+    |    way. No terminal window is spawned; what ttfx moved out of QML is
+    |    the frame math (spec addendum, see CLAUDE.md)
     |  any real key or pointer movement -> stop() (a MouseArea baseline
     |    swallows the single spurious positionChanged Qt fires the instant
     |    the surface becomes visible under an already-stationary cursor —
@@ -1019,11 +1153,35 @@ argv builders, `slurp` geometry parsing, the PPM byte read, the OCR
 pipeline's own exit-code meanings, and every path/label formatter.
 
 ```
+Ipc/ScreenshotIpc.qml (target "screenshot", a Scope so its Processes have a home)
+  full()/region()          -> grim (slurp supplies region's geometry)
+  pick(mode, processing)   -> Surfaces/Capture/RegionPicker.qml
+    |  mode: smart|region|windows|fullscreen; processing: default|copy|save
+    |  BOTH arguments are required: IpcHandler dispatches on exact arity, so
+    |  a one-argument `pick` finds no method rather than defaulting the second
+    v
+  picked(rect)        -> grim -g against the still-mapped freeze, chrome hidden
+  pickedWindow(id)    -> niri's ScreenshotWindow action, cropped server-side
+                         (niri puts the PNG on the clipboard itself, so this
+                          path never runs wl-copy)
+  cancelled(reason)   -> SCREENSHOT CANCELLED, the shared watchdog stopped
+    |
+    +-- key(name)/pickerStatus(): the picker's keyboard model driven from
+    |     outside the process, for a rig with no synthetic pointer or key
+    |     delivery into an Exclusive-focus layer surface
+    +-- edit(path): sh -c '"$FS_EDITOR" "$FS_EDIT_PATH"' (screenshot.editor,
+          default tensaku-edit), the same call the SAVED notification's
+          EDIT action makes, reachable from a compositor keybind. The PNG is
+          already saved and copied by then, so a failed launch warns and
+          never repaints the capture as failed
+
 Ipc/CaptureIpc.qml (target "capture", a Scope so its Processes have a home)
   text()  -> slurp -d  -> grim -g <geom> PNG -> tesseract -> tr -d "\f" -> wl-copy
   color() -> slurp -p -x -> grim -g <geom> -t ppm 1x1 -> od -An -tu1 (last 3 bytes)
                                                        -> Capture.hexFromPpmBytes -> wl-copy
-    |  one _busy flag + one watchdog (capture.timeoutSeconds) across BOTH verbs
+  textAt(geom)/colorAt(geom): the identical pipelines from a caller-supplied
+    "X,Y WxH", skipping the selection entirely
+    |  one _busy flag + one watchdog (capture.timeoutSeconds) across ALL FOUR verbs
     |  slurp exit 1 is the user declining: no toast, no lastError
     |  OCR exit 3 is "no readable text": a real answer, no clipboard write
     |  geometry and paths ride Process.environment, never the script text
@@ -1051,10 +1209,40 @@ Services/RecordingService.qml   (Ipc/RecordIpc.qml forwards, holds no state)
     dither=bayer per DESIGN.md §2, written next to its source
 ```
 
+**The region picker is the shell's own surface** (`Surfaces/Capture/
+RegionPicker.qml`), a full-screen `WlrLayer.Overlay` window rather than a
+themed slurp. It freezes first: `grim` captures every output before the
+surface maps, the surface renders those frames 1:1, and the capture then
+grims the surface itself with the chrome hidden for one frame, so content
+cannot shift mid-pick and the overlay cannot photograph its own scrim. No
+`ScreencopyView` is involved (see `LockSurface.qml`'s header for why).
+Owning its own highlight state is what makes one code path work on both
+backends: omarchy's upstream picker moves the selection by warping the
+cursor so slurp's hover highlight follows, and binds its keys from Hyprland
+Lua, neither of which niri offers.
+
+**The one deliberate asymmetry between backends is here.** niri reports a
+pixel box only for floating windows: `Tile::ipc_layout_template` hardcodes
+`tile_pos_in_workspace_view: None` (niri v26.04, `src/layout/tile.rs:869`),
+`floating.rs:336` fills it in, and the scrolling layout overrides only
+`pos_in_scrolling_layout` and inherits that `None`. So a tiled niri window
+has no rectangle to draw, while every Hyprland window has one. Window
+*selection* works on both; only the affordance differs. A window with a rect
+is highlighted on screen, a window without one is named in a labelled ledger
+card (title over dim app id) and captured by id through niri's
+`ScreenshotWindow` action, which crops server-side. **The branch is on
+`rect === null`, never on a compositor name**, so a future niri that starts
+reporting tiled geometry turns into the Hyprland behavior with no redesign.
+
 `active` is `recProc.running` and nothing else: never persisted (a crashed
 shell would leave a stale `true` in state.json) and never derived from
 `pgrep`. `Surfaces/Bar/widgets/Indicators.qml` binds it directly, which is
-also what forces the singleton's lazy construction.
+also what forces the singleton's lazy construction. The recording scope
+vocabulary is `screen` and `region`, with no window scope at all: wf-recorder
+takes an output or a geometry, and on niri a tiled window supplies neither.
+There is no webcam overlay: compositing a camera into the frame needs the
+camera window pinned to a corner by a compositor window rule, which this
+shell neither installs nor can install portably across niri and Hyprland.
 
 ## Reminder lifecycle
 

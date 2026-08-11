@@ -150,7 +150,7 @@ hardware.
 | Bar | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/plain.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/plain.png` (`docs/screenshots/bar-niri.png`) — real BAT/Wi-Fi/Bluetooth cells the VM cannot produce, and confirms the `ca56dfc` padding fix (symmetric insets, no left/top-only gutter) on real hardware |
 | Bar: workspaces order + hide-empty | VM-only | M13 (3c7d6fd): cells sort by the backend's per-output `idx` ordinal and a workspace renders only when occupied or active/focused (`shell/Bar/workspaces.js`, unit-covered in `tests/tst_workspaces_model.qml` over fake workspace+window models). Every plain VM smoke screenshot shows the nested session's occupied/focused workspaces only; the shaping host context — nine persistent named niri workspaces, which DMS hid when empty — is exactly what the e1504g trial itself verifies |
 | Bar: SNI tray | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --tray`, `docs/screenshots/tray-niri.png` (recaptured 2026-07-30 with M13's vertically centered cells) — six real `dev/sni-stub.py` StatusNotifierItems collapse to three pinned cells plus a "+3" overflow drawer, which expands to "−3" over the same `tray expand` IPC call the overflow cell's own click takes. M13 (783275d) added item interactions: the `--tray` drive calls `tray activate` and asserts the stub's `--activate-file` recorded a real `Activate(x, y)` over the session bus; DBusMenu *open* on a real click renders a platform QMenu no headless run can dismiss, so that leg — and any real application's menu contents — is host-trial territory. Not yet re-swept on a real host |
-| Bar: indicators slot | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --notify` — the DND bell-off glyph appeared after `notifications setDnd true` over IPC. M13b (55e1ba4) moved DND display to the bell widget (row below), leaving this slot idle-inhibit only; idle-inhibit shares the same reactivity fix but has no dedicated smoke screenshot yet; not yet re-swept on a real host |
+| Bar: indicators slot | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --notify`: the DND bell-off glyph appeared after `notifications setDnd true` over IPC. M13b (55e1ba4) moved DND display to the bell widget (row below), leaving this slot idle-inhibit only; idle-inhibit shares the same reactivity fix but has no dedicated smoke screenshot yet; not yet re-swept on a real host. M22 (afa4e34) gave the slot four cells, loudest first: a live screen recording, a pending reminder, stay-awake, night light. Only the reminder cell has ever rendered here (`--reminder`, `reminder-pending.png`); night light has only ever rendered as absent in this VM (see the night-light row below) and the recording cell has never rendered anywhere at all, since `--record` cannot start wf-recorder in this rig (see the recording row below) |
 | Bar: notification bell | VM-only | M13b (55e1ba4): `bell` joins the default right region (the one owner-requested default-layout change; every no-config smoke screenshot now shows the cell). `dev/smoke-niri.sh --notify` flips DND over IPC and screenshots the bell-off swap (`docs/screenshots/indicators-niri.png`, recaptured 2026-07-30 — the bell cell crossed out with three toast cards up); `--center` asserts `notifications status` (new verb) through pending:3 → centerOpen:true → pending:0 across a showHistory toggle, the same center.open()/close() the cell's own left click calls. A real pointer click on the cell is host-trial territory (no synthetic pointer exists in the rig) |
 | Notifications: card density + sanitize | VM-only | M15 (3052df0), `dev/smoke-niri.sh --notify --center` with a dense Chromium-shaped fixture (app name `Google Chrome`, a `github.com` link prefix glued to a long PR-title line plus five more body lines): `docs/screenshots/indicators-niri.png` (recaptured, toast stack) and the new `docs/screenshots/notifications-center-niri.png` (center open) both show the leading URL-as-link prefix stripped, the 2-line summary / 3-line body clamp with an ellipsis, and the `CLEAR ALL` cell beside `DND`. Hover-pause on a popup's countdown and the sender's own `expire_timeout` hint honoring the low/normal/cap duration bands have no dedicated screenshot (nothing visual distinguishes a paused timer from a running one) — proven instead by `NotificationService.qml`'s hover-pause logic and its own timer math, unit-adjacent to the model tests |
 | Bar: settings-driven layout + custom modules | VM-only | mac VM rig @ bd20ef6, `dev/smoke-niri.sh --bar-layout` — a reordered left region led by six `bar.modules` entries: one happy-path `command` module (`CMD 42`), four exercising each of `CommandModule.qml`'s failure paths (all render the honest `MODULE ERROR` cell), and one `qml` module (`QML OK`); every other smoke mode's own screenshot, carrying no `bar` config, keeps proving the no-config fallback renders today's exact default arrangement; not yet re-swept on a real host. `docs/screenshots/bar-layout-niri.png` was recaptured 2026-07-30 with the M12 `github` cell heading the region, which pushes the `qml` module past the visible clip at the VM's 1276px width — its rendering stays proven by the bd20ef6 capture and `tests/tst_bar_layout.qml` |
@@ -189,6 +189,17 @@ hardware.
 | Polkit agent | VM-only | M16 Task 4, `dev/smoke-niri.sh --polkit` — a real `pkexec true` request routes to `PolkitService.qml`'s registered `PolkitAgent`: `polkit-active.png` shows the centered `AUTHENTICATION REQUIRED` card, `polkit-error.png` shows the urgent-italic `WRONG PASSWORD` retry state after a real `wtype`d wrong password, and the run asserts the backgrounded `pkexec`'s own exit code is 0 once the VM's real test password resolves the same `AuthFlow`. Needed `security.polkit.enablePkexecWrapper = true` in `nix/testvm.nix`: on this pinned nixpkgs rev, `security.polkit.enable` alone no longer installs the setuid `pkexec` wrapper (a recent hardening split) — reproduced directly (`pkexec must be setuid root`, exit 127) before adding it. Never run on real hardware — see §2's one-agent-per-session gap below |
 | Tailscale widget + panel | VM-only, honest-unavailable path proven | M16 Task 8, `dev/smoke-niri.sh --panel tailscale` — the VM carries no `tailscale`/`tailscaled` binary at all, so `TailscalePanel.qml`'s poll exits 127 and the screenshot shows the dim `NO TAILSCALE` cell, the correct deterministic result. `Tailscale/model.js`'s `parseStatus()`/`selfIp()` (running/stopped/needs-login/no-daemon fixtures, peer sort, honest nulls) are unit-covered in `tests/tst_tailscale_model.qml`. **Never run against a real tailscaled:** the STATUS toggle's real `tailscale up`/`down` round trip, a real `NEEDS LOGIN` state, real peer rows, and the `NOT OPERATOR` permission-denied path are all real-host-trial territory — see §2's tailscale-operator gap below |
 | Night light | VM-only, honest-failure path proven | M16 Task 6, `dev/smoke-niri.sh --nightlight` — `nightlight enable` drives a real `wlsunset` process and `nightlight status` is polled to a settled state. Every VM run so far lands on the honest failure branch: this VM's nested niri (winit backend) does not advertise `wlr-gamma-control-unstable-v1` at all — confirmed independently outside the shell (`wlsunset` alone against the same nested session prints `compositor doesn't support wlr-gamma-control-unstable-v1` and exits within milliseconds of connecting, before any signal is even sent) — so `active:false` with `lastError` populated is the correct, deterministic result here, not flakiness. `nightlight-active.png` shows the bar with the indicator slot correctly empty (idle-inhibit and night-light both false, so the whole `Indicators.qml` row hides, per its own "never an empty box" contract). The `md-lightbulb_night` glyph (U+F1A4C, verified against the pinned cmap) and the `active:true` bar state have never rendered anywhere — real hardware with a compositor that implements gamma control (or a nested backend that does) is what switchover needs to prove the glyph itself |
+
+| Capture: region picker (`screenshot pick`) | VM-only | M22 (afa4e34, arity fix 9c40127), `dev/smoke-niri.sh --capture` against a session holding one real tiled foot window: `pick smart` opens the shell's own Overlay-layer picker (not slurp), `pickerStatus` reports the named-window / drawable-rectangle split niri forces, `key tab` moves the cursor and a second dump proves it moved, a third dump records the exact rectangle about to be captured so the resulting PNG's real pixel dimensions are checked against `niri msg -j outputs` rather than merely existing, and a following `pick region` dismissed with `key escape` proves the cancel path leaves no surface and no file behind (`capture-picker.png` shows the frozen screen, the scrim, the selection border and the named-window card). Two halves stay untested: a real pointer drag and real key delivery into an Exclusive-focus surface (the rig has no synthetic pointer, so `screenshot key` stands in, the same split `tray expand` and `picker choose` already use), and the whole Hyprland affordance, since window rectangles exist only there and no Hyprland run has ever happened on real hardware |
+| Capture: OCR and color pick (`capture`) | VM-only, pipeline proven, selection not | M22 (afa4e34), `dev/smoke-niri.sh --ocr` against a real foot window carrying known text on a known `#3fae2a` background. `capture text` starts a real `slurp -d` and `capture color` slurp's single-point mode instead (asserted by pgrep, since the two verbs differ only in the flags they hand slurp), both cancel clean with no slurp left behind, and the clipboard still holds the rig's own sentinel, which proves a cancelled capture copied nothing rather than merely reporting that it didn't. `textAt`/`colorAt` then run the identical pipelines from a supplied geometry, and that is what proves grim to tesseract to wl-copy, and grim to od to hex to wl-copy, end to end. The selection itself is host-trial: both bare verbs block on a real slurp drag, and slurp cannot be shimmed off the shell's PATH the way `nix`/`gh` can (`nix/package.nix` installs it with `--prefix`, which outranks anything the rig prepends). OCR accuracy is reported, never asserted: tesseract reads the bar's own text off a real capture reliably, but the fixture terminal's 28px dark-on-green body is not reliably recognized under llvmpipe |
+| Recording (`record`) | **Unverified, environment-blocked** | M22 (afa4e34) ships `Services/RecordingService.qml` and a `dev/smoke-niri.sh --record` leg that cannot pass in this rig, for a reason outside the shell: nested niri under llvmpipe advertises `zwp_linux_dmabuf_v1` at version 3 (`failed building default dmabuf feedback, falling back to v3`) and wf-recorder 0.6.0 binds version 4 unconditionally, so the registry bind is rejected before any recording key matters. Nothing about screen recording has therefore run anywhere: not the wf-recorder child, not the desktop or desktop+mic audio mixing, not the two-pass GIF transcode, and not the bar's recording cell, which exists only while a recording is live. This needs a real GPU, which makes it the largest single thing switchover would be the first to test |
+| Reminders (`reminder`) | VM-only | M22 (afa4e34), `dev/smoke-niri.sh --reminder`: one real 12s countdown, long enough for the pending state to be screenshotted on the bar (`reminder-pending.png`), dumped through `reminder status`, and read back out of the real `state.json`, which is where a reminder survives a shell restart. DND is switched on before the reminder is ever set, so the toast that lands after the deadline (`reminder-fired.png`) can only have reached the popup tier through `Notifications/model.js`'s urgency-2 bypass: the bypass proven rather than read off the source. Afterwards `reminder status` is back to 0 and `state.json` no longer carries the entry |
+| Menu: toggle hub | VM-only | M22 (afa4e34), `dev/smoke-niri.sh --toggles`: `debug query` carries each row's resolved `checked`, so the checkmark is readable from outside the process, and `menu status` is byte-identical before and after a toggle, which is what "the hub stays open" means here. The DND row is what proves a checkmark flipping false to true inside the open hub, cross-checked against `notifications status`. The night-light row is the cross-check that a checkmark tracks the service rather than the request: on this VM both stay honestly false, because wlsunset cannot hold a session with no gamma control (see the night-light row below) |
+| Menu: keybinds route | VM-only | M22 (afa4e34), `dev/smoke-niri.sh --keybinds`: a real `config.kdl` written into the isolated `XDG_CONFIG_HOME`, with the nested session deliberately launched from a different config path so the documented lookup chain is what has to resolve rather than an override. The fixture is a real config, not a bare binds block (a preceding sibling block with nested braces, a quoted argument holding `//` and braces, a hotkey-overlay-title property, a line comment, a slashdash-disabled bind), and the assertions are exact: five live rows, the disabled bind absent, each fixture chord carrying its own action, and none of the route's four honest end-state rows. The Hyprland leg (`hyprctl binds -j`) has no equivalent run anywhere |
+| Plugins | VM-only, `bar` kind only | M22 (afa4e34), `dev/smoke-niri.sh --plugins`: a real drop-in directory (`manifest.json` plus an `entry.qml` that itself imports `qs.Core` and reads `Theme`) under the isolated config home, read back through the `plugins` target. No `bar` key is written for this leg on purpose, since the manifest's own `region` is what places the cell, so dropping the directory in is the whole install. `plugins status` reporting one loaded bar plugin with no errors and no warnings is the only place a plugin's entry QML failing to load is visible from outside the process, because plugin QML lives outside this repo and qmllint never sees it. The `panel`, `overlay` and `service` kinds are covered at the manifest level only (`tests/tst_plugin_manifest.qml`) and have never been loaded from a real directory in a running session |
+| Bar: opt-in microphone, keyboard layout, system update | VM-only | M22 (afa4e34), all three absent from the default layout, which every other smoke screenshot keeps proving. `--mic` points `bar.layout` at the `microphone` builtin and the honest `NO MIC` label is the passing result: this VM has a pipewire null sink and no capture device, so a glyph here would mean the widget invented one, and the live and muted states need real capture hardware. `--systemupdate` points `systemUpdate.flakeDir` at this repo, so the panel parses a real `flake.lock` and probes the real upstream refs behind its real inputs; no count is asserted, since that would be asserting the state of GitHub rather than of the panel. `keyboardLayout` has no smoke flag at all: the nested session carries one layout, so `Compositor/keyboard.js` is unit-covered (`tests/tst_keyboard_layout.qml`) and the widget has never rendered a real layout switch |
+| Menu: launch-or-focus on app rows | VM-only, unit tests only | M22 (afa4e34): activating an app row whose window is already open raises it instead of spawning a second copy, and repeat activation cycles that app's windows. `Compositor/appmatch.js` (`startupClass` then entry id, first tier wins, no fuzzy tier) is unit-covered in `tests/tst_app_match.qml`; no smoke leg drives it, because the nested session has no second instance of a real desktop entry to raise. This is the behavior change a daily driver meets first, on every launcher use |
+| Notifications: repeat collapse | VM-only, unit tests only | M22 (afa4e34): identical notifications (same app name, same summary; body deliberately out of the key) collapse into one card carrying a repeat count, and `MAX_POPUPS` caps groups rather than raw entries so five repeats cannot evict four unrelated toasts. `tests/tst_notifications_model.qml` covers the grouping; no smoke leg fires a repeat, so the collapsed card has never been screenshotted. The case it exists for is a chat app firing one summary per message, which is a real-host phenomenon |
 
 Everything marked hardware-verified above is the **niri** backend only. The
 Hyprland backend has never run on either Linux host — it exists only as
@@ -288,7 +299,25 @@ Hyprland backend has never run on either Linux host — it exists only as
   the panel's `DISPLAY` section just shows the backlight-only rows it
   already shows in the VM, no error surfaced anywhere. Neither Linux host's
   i2c/DDC state has been checked yet; this is what switchover needs to
-  confirm before external-monitor brightness can work at all.
+  confirm before external-monitor brightness can work at all. Until
+  2026-08-11 there was a second and simpler reason it could not work:
+  `ddcutil` was not on the shell's own PATH (next bullet), so a plain
+  home-manager install never reached the i2c question in the first place.
+- **Resolved 2026-08-11 (M22): the shell's own wrapper was missing four
+  runtime CLIs.** `nix/package.nix` did not put `matugen`,
+  `qrencode`, `cava` or `ddcutil` on the wrapped `qs`'s PATH. They resolved
+  in the smoke rig only because `nix/testvm.nix` lists them in
+  `environment.systemPackages`, and on a real host only if something else
+  installed them, so a plain `programs.formalshell.enable` install had no
+  theming, no Wi-Fi QR share, no visualizer and no external-monitor
+  brightness while every smoke run passed. All four are prefixed onto the
+  wrapper now, along with `wf-recorder`, `tesseract`, `ffmpeg-headless` and
+  `git` for the capture suite. Worth knowing why no sweep caught it: a host
+  already running DMS carries matugen for DMS's own theming, so the
+  hardware-verified theming rows above were leaning on the host's system
+  packages, not on anything this repo installs. Daemon-paired CLIs (`nmcli`,
+  `bluetoothctl`) stay off the wrapper on purpose, since they have to match
+  the NetworkManager and bluez the system is actually running.
 - **Polkit agent needs a host's existing agent dropped first — only one can
   register per session.** M16 Task 4's `PolkitService.qml` never fights
   over the D-Bus registration: if another agent already owns it,
@@ -343,6 +372,37 @@ Hyprland backend has never run on either Linux host — it exists only as
   running `sudo tailscale set --operator=$USER` once per host before the
   toggle can ever succeed from this shell — read-only status polling needs
   no such grant. Neither Linux host's operator state has been checked yet.
+- **Screen recording is the one shipped surface with no evidence of any
+  kind.** The rig cannot reach it: nested niri under llvmpipe advertises
+  `zwp_linux_dmabuf_v1` at version 3 and wf-recorder 0.6.0 binds version 4
+  unconditionally, so the bind is rejected before a recording starts. That
+  is an environment limit rather than a defect, and it has no software
+  workaround inside this repo, so the wf-recorder child, both audio modes,
+  the GIF transcode and the bar's recording cell all reach a real host
+  unproven (parity table). Switchover is the first test of every one of
+  them.
+- **Window-mode capture looks different on niri than on Hyprland, and that
+  is permanent for now.** niri reports a pixel box only for floating
+  windows (`Tile::ipc_layout_template` hardcodes
+  `tile_pos_in_workspace_view: None`, niri v26.04 `src/layout/tile.rs:869`),
+  so a tiled window has no rectangle for the picker to highlight. Selecting
+  a window works on both backends; on niri the candidates are named in a
+  ledger card instead of outlined on screen, and the capture goes through
+  niri's own `ScreenshotWindow` action, which crops server-side. The
+  branch is on `rect === null`, never on a compositor name, so a niri that
+  starts reporting tiled geometry gets the Hyprland affordance for free.
+  Both Linux hosts run niri, so the named-card path is the one switchover
+  actually gets.
+- **A user `menu.jsonc` keyed on the old toggle ids goes inert silently.**
+  M22 moved the toggle rows into their own subtree: `theme` and
+  `theme.mode-toggle` are now `toggles` and `toggles.dark-mode`, and
+  `system.stay-awake` is now `toggles.stay-awake`. `Model.buildTree()`
+  merges a user file over the default tree by dotted id, so an override
+  naming an id that no longer exists is not an error, it simply matches
+  nothing: the customization disappears and the default row renders instead.
+  Neither Linux host is known to carry a `~/.config/formalshell/menu.jsonc`
+  today, but anyone who wrote one before 2026-08-11 has to rename those
+  three ids by hand.
 
 ## 3. The exact install path
 
@@ -391,8 +451,18 @@ reserved with no widget-layout or custom-module keys implemented, and there
 is no tray code anywhere in `shell/` (`rg -il
 'systemtray|statusnotifier' shell/` matches nothing; `git log -S SystemTray
 -- shell/` is empty). **This in turn is now itself historical — M10 closed
-it 2026-07-29, see §2's resolved bullet and item 1 below.** A defined bar
-for the g815 switchover means:
+it 2026-07-29, see §2's resolved bullet and item 1 below.**
+
+**The non-goals list quoted above has since been overtaken on three of its
+six entries**, so it is no longer a shortcut for "what FormalShell does not
+do": the polkit agent shipped in M16, screenshot tooling in M12 and the rest
+of the capture suite (region picker, OCR, color pick, screen recording) in
+M22, and the plugin system in M22. Only the settings GUI, the dock and the
+sway/river backends are still genuinely out of scope. Each addition widens
+the switchover surface: every one of their parity rows reads VM-only, and
+recording's reads worse.
+
+A defined bar for the g815 switchover means:
 
 1. ~~The tray, indicators slot, and settings-driven bar layout/custom
    modules get built~~ — **done 2026-07-29 (M10)**: all three exist and are
@@ -405,7 +475,11 @@ for the g815 switchover means:
    settings-driven bar layout M10 added, and now M12's six rows — EDS/GOA
    calendar events (including the never-run GOA OAuth leg), RRULE
    expansion, the calculator/emoji/nix menu routes, the github widget, and
-   the screenshot target.
+   the screenshot target. M22 adds ten more: the region picker, the OCR and
+   color-pick verbs, reminders, the toggle hub, the keybinds route,
+   plugins, the three opt-in bar widgets, launch-or-focus, notification
+   repeat collapse, and screen recording, which starts one step further
+   back than the rest since it has no VM evidence at all.
 3. ~~The two fixed-but-unconfirmed defects (audio panel, Bluetooth panel)
    get a real re-sweep~~ — **done 2026-07-29**: the g815 HEAD resweep hit a
    real long device name and a real Bluetooth adapter, closing the loop the
