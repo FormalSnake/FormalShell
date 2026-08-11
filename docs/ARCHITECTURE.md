@@ -445,7 +445,7 @@ event stream or JSON parsing to test in isolation.
 `JSON.stringify({ compositor, available, workspaces, windows, focusedWindowId, focusedWorkspaceId, configLoaded, audio: {volume, muted, available}, brightness: {available, percent} })`
 read straight off `CompositorService`/`Core.Config`/`AudioService`/
 `BrightnessService`. This is the textual
-verification hook used by both smoke scripts (`qs ipc --any-display -p <path>
+verification hook used by both smoke scripts (`qs ipc -p <path>
 call debug dump`) and by hand during backend development — it's the fastest
 way to confirm a backend is wired correctly without reading a screenshot.
 `function query(q: string): string` ranks `q` against the live menu tree
@@ -847,7 +847,7 @@ $XDG_STATE_HOME/formalshell/clipboard.json      (FileView + JsonAdapter, same
   +-- Ipc/ClipboardIpc.qml (target "clipboard"): list()/copy(id)/remove(id)/clear()
   |
   +-- Menu/providers.js#clipboardProvider(): one menu row per entry, newest
-        first; selecting a row runs `qs ipc --any-display -p <selfPath> call
+        first; selecting a row runs `qs ipc -p <selfPath> call
         clipboard copy <id>` — the exact same self-targeting invocation a
         CLI caller would use, so the menu row is the IPC verb, not a second
         code path

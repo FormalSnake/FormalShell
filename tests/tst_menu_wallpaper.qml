@@ -16,7 +16,7 @@ TestCase {
         verify(node);
         compare(node.label, "Wallpaper");
         verify(node.icon.length > 0);
-        compare(node.action, "qs ipc --any-display -p /store/share/formalshell call picker summon");
+        compare(node.action, "qs ipc -p /store/share/formalshell call picker summon");
     }
 
     function test_merged_entry_builds_a_root_action_node() {

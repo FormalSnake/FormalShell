@@ -267,7 +267,7 @@
 # newest one (dedup proof: the reducer must move it to front, not insert a
 # duplicate), dumps `clipboard list` again (clip-list-2.json — item count
 # must stay 3), then activates the SECOND entry via the exact self-targeting
-# `qs ipc --any-display -p <shellDir> call clipboard copy <id>` invocation
+# `qs ipc -p <shellDir> call clipboard copy <id>` invocation
 # Menu/providers.js's clipboardProvider builds (clip-copy.txt — must read
 # "ok", not "No running instances"; a wrong `-p` target fails silently there)
 # and reads the system clipboard back (clip-paste.txt — must have flipped to
@@ -597,6 +597,21 @@
 # two itself: InstanceLock.qml's lock socket is per-WAYLAND_DISPLAY for exactly
 # that reason (see its header), since a fixed name had the nested shell sending
 # the owner's real bar a takeover request and quitting it on every run.
+#
+# quickshell's own IPC instance registry is one more thing keyed off
+# XDG_RUNTIME_DIR: `by-path/<md5(configFilePath)>`, so a formalshell in the
+# owner's live session built from the same store path shares the bucket this
+# run's shell registers in. WAYLAND_DISPLAY is quickshell's only discriminator
+# between them (QsPaths::collectInstances skips a mismatched
+# `info.instance.display`), and multiple matches are not an error: selectInstance
+# sorts oldest-first and takes instances.value(0). So NEVER pass --any-display
+# on a call here, which is exactly the flag that drops that filter: the owner's
+# older bar would answer while grim keeps photographing the nested session, and
+# a leg would read as "the IPC state says X, the screenshot says not-X" with
+# both halves honest about different processes (observed on g815 2026-08-11, the
+# --record leg's missing bar indicator). Every call below runs inside the nested
+# session (spawn-at-startup drive scripts), so it already carries the nested
+# WAYLAND_DISPLAY and the filter selects this run's shell exactly.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -1021,20 +1036,20 @@ EOF
     cat > "$ss_gif_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver start > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver start > /dev/null 2>&1
 sleep 1
 # Pin frame 0 before asking for the count: a ttfx run streams, so the only
 # honest frame total is the one a completed pinned run actually produced,
 # and frameInfo answers 0 until then rather than guessing.
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver frame 0 > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver frame 0 > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_gif_convergence_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_gif_convergence_path" 2>&1
 convergence=\$(grep -o '"convergenceFrame":[0-9]*' "$ss_gif_convergence_path" | cut -d: -f2)
 stride=\$(( (convergence + $ss_gif_budget - 1) / $ss_gif_budget ))
 [ "\$stride" -lt 1 ] && stride=1
 idx=0
 for ((i = 0; i < convergence; i += stride)); do
-  "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frame "\$i" > /dev/null 2>&1
+  "$qs_bin" ipc -p "$shell_path" call screensaver frame "\$i" > /dev/null 2>&1
   # Longer than the pre-ttfx 0.15s: a pin regenerates the whole run to reach
   # the frame, so the surface needs the generation plus one repaint before
   # grim reads the framebuffer.
@@ -1052,7 +1067,7 @@ for ((h = 0; h < $ss_gif_hold; h++)); do
   printf -v padded "%04d" "\$((idx + h))"
   cp "$frames_dir/frame-\$last.png" "$frames_dir/frame-\$padded.png"
 done
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 niri msg action quit --skip-confirmation
 EOF
 
@@ -1763,14 +1778,14 @@ if $theme_toggle_mode; then
 sleep 9
 cat "$nested_theme_json" > "$theme_json_dump1_path" 2>&1
 "$grim_bin" "$theme_dark_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme mode toggle > /dev/null 2>&1
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
 cat "$nested_theme_json" > "$theme_json_dump2_path" 2>&1
 "$grim_bin" "$theme_light_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme mode toggle > /dev/null 2>&1
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
 cat "$nested_theme_json" > "$theme_json_dump3_path" 2>&1
 EOF
   else
@@ -1778,13 +1793,13 @@ EOF
 #!/usr/bin/env bash
 sleep 4
 "$grim_bin" "$theme_dark_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme mode toggle > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
 "$grim_bin" "$theme_light_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme mode toggle > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
 EOF
   fi
 fi
@@ -1894,7 +1909,7 @@ sleep 1
 echo \$! > "$media_pid_path"
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call media status > "$media_status_long_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call media status > "$media_status_long_path" 2>&1
   grep -qF "\"title\":\"$media_track_title_long\"" "$media_status_long_path" && break
   sleep 1
 done
@@ -2002,7 +2017,7 @@ if $menu_mode; then
   cat > "$menu_open_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon ""
+"$qs_bin" ipc -p "$shell_path" call menu summon ""
 EOF
 
   # `qs ipc call`'s CLI11 arg parser auto-splits any positional argument that
@@ -2015,7 +2030,7 @@ EOF
   cat > "$menu_select_script" <<EOF
 #!/usr/bin/env bash
 sleep 6
-"$qs_bin" ipc --any-display -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
 
   # The trailing no-arg `menu toggle` round trip (M13 Task 5: the win+space
@@ -2027,13 +2042,13 @@ EOF
   cat > "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
 sleep 9
-"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 {
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu toggle
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu status
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu toggle
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu status
+  "$qs_bin" ipc -p "$shell_path" call menu toggle
+  "$qs_bin" ipc -p "$shell_path" call menu status
+  "$qs_bin" ipc -p "$shell_path" call menu toggle
+  "$qs_bin" ipc -p "$shell_path" call menu status
 } > "$toggle_path" 2>&1
 EOF
 
@@ -2049,8 +2064,8 @@ EOF
   # slow rig; real typing into a refocused window is host-trial territory.
   cat >> "$menu_finish_script" <<EOF
 {
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu summon emoji
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0
+  "$qs_bin" ipc -p "$shell_path" call menu summon emoji
+  "$qs_bin" ipc -p "$shell_path" call menu activate 0
 } > "$emoji_drive_path" 2>&1
 sleep 2
 "$wl_paste_bin" --no-newline > "$emoji_paste_path" 2>&1 || true
@@ -2065,11 +2080,11 @@ EOF
   # without needing the screenshot. tail_gap below is stretched to cover
   # this trailing leg before niri quits.
   cat >> "$menu_finish_script" <<EOF
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon apps > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$menu_apps_png" 2>/dev/null || true
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query "test app" > "$apps_query_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query "test app" > "$apps_query_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 EOF
 
   # Launch feedback (M13b Task 4), the trailing leg: summon with the
@@ -2085,13 +2100,13 @@ EOF
   cat >> "$menu_finish_script" <<EOF
 until [ -f "$nix_states_done_path" ]; do sleep 0.5; done
 {
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu summon ':nix hello'
+  "$qs_bin" ipc -p "$shell_path" call menu summon ':nix hello'
   sleep 2
-  "$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0
+  "$qs_bin" ipc -p "$shell_path" call menu activate 0
 } > "$nix_run_drive_path" 2>&1
 sleep 1
 "$grim_bin" "$nix_toast_png" 2>/dev/null || true
-"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$nix_toast_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$nix_toast_status_path" 2>&1
 EOF
 
   # Card-top freeze (M16 Task 2), the final leg: from the closed state the
@@ -2107,13 +2122,13 @@ EOF
   # the second one.
   cat >> "$menu_finish_script" <<EOF
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon "" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$menu_top_before_png" 2>/dev/null || true
 "$wtype_bin" "wall"
 sleep 1
 "$grim_bin" "$menu_top_after_png" 2>/dev/null || true
-"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 # Literal last action: releases share_drive_script's own wait gate (see
 # its own comment) when --share runs alongside --menu.
 touch "$menu_done_path"
@@ -2163,18 +2178,18 @@ EOF
   cat > "$nix_states_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_arm_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_arm_path" 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_path" 2>&1
 touch "$nix_gate_path"
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix slowblock' > "$nix_released_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix failplease' > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix slowblock' > "$nix_released_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix failplease' > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix failplease' > "$nix_failed_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix emptyplease' > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix failplease' > "$nix_failed_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix emptyplease' > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ':nix emptyplease' > "$nix_empty_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ':nix emptyplease' > "$nix_empty_path" 2>&1
 touch "$nix_states_done_path"
 EOF
 
@@ -2230,11 +2245,11 @@ if $clipboard_mode; then
 for _ in \$(seq 1 10); do
   "$wl_copy_bin" "clipboard smoke warmup"
   sleep 1
-  if "$qs_bin" ipc --any-display -p "$shell_path" call clipboard list 2>/dev/null | grep -qF warmup; then
+  if "$qs_bin" ipc -p "$shell_path" call clipboard list 2>/dev/null | grep -qF warmup; then
     break
   fi
 done
-"$qs_bin" ipc --any-display -p "$shell_path" call clipboard clear > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call clipboard clear > /dev/null 2>&1
 sleep 1
 "$wl_copy_bin" "clipboard smoke one"
 sleep 1
@@ -2242,27 +2257,27 @@ sleep 1
 sleep 1
 "$wl_copy_bin" "clipboard smoke three"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list1_path" 2>&1
 sleep 1
 "$wl_copy_bin" "clipboard smoke three"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list2_path" 2>&1
 sleep 1
 copy_id=\$(grep -o '"id":"[^"]*"' "$clip_list2_path" | sed -n '2p' | cut -d'"' -f4)
-"$qs_bin" ipc --any-display -p "$shell_path" call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
 sleep 1
 "$wl_paste_bin" --no-newline > "$clip_paste_path" 2>&1
 sleep 1
 "$wl_copy_bin" --type image/png < "$clip_image_fixture_path"
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call clipboard list > "$clip_list3_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list3_path" 2>&1
 sleep 1
 image_id=\$(grep -o '"id":"[^"]*","kind":"image"' "$clip_list3_path" | head -n1 | cut -d'"' -f4)
-"$qs_bin" ipc --any-display -p "$shell_path" call clipboard copy "\$image_id" > "$clip_image_copy_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call clipboard copy "\$image_id" > "$clip_image_copy_path" 2>&1
 sleep 1
 "$wl_paste_bin" --type image/png --no-newline | sha256sum > "$clip_image_paste_sha_path" 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
 EOF
 fi
 
@@ -2298,10 +2313,10 @@ $share_menu_wait
 sleep 2
 "$wl_copy_bin" "share smoke fixture"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_query1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query "share" > "$share_query1_path" 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_query2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon share > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query "share" > "$share_query2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon share > /dev/null 2>&1
 sleep 1
 niri msg action screenshot-screen --path "$share_menu_path"
 # niri's own screenshot action puts the image on the Wayland clipboard too
@@ -2318,10 +2333,10 @@ niri msg action screenshot-screen --path "$share_menu_path"
 for _i in 1 2 3 4 5 6; do
   "$wl_copy_bin" "share smoke fixture"
   sleep 1
-  clip_kind=\$("$qs_bin" ipc --any-display -p "$shell_path" call clipboard list 2>/dev/null | grep -o '"kind":"[^"]*"' | head -n1 | cut -d'"' -f4)
+  clip_kind=\$("$qs_bin" ipc -p "$shell_path" call clipboard list 2>/dev/null | grep -o '"kind":"[^"]*"' | head -n1 | cut -d'"' -f4)
   [ "\$clip_kind" = "text" ] && break
 done
-"$qs_bin" ipc --any-display -p "$shell_path" call menu activate 0 > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 6 ]; do
   pgrep -f -- "localsend_app" > "$share_pgrep_path" 2>&1 || true
@@ -2335,7 +2350,7 @@ if [ -n "\$share_pid" ]; then
   [ -f "\$share_tmp_arg" ] && cat "\$share_tmp_arg" > "$share_tmpfile_path" 2>&1
   kill "\$share_pid" 2>/dev/null || true
 fi
-"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 sleep 1
 # Same argv[1]=="-p" idiom instance_drive_script's own find_daemon_pids
 # uses to tell the real daemon apart from this script's own "qs ipc ...
@@ -2364,13 +2379,13 @@ survivor=\$(find_daemon_pids | head -n1)
 printf '{"oldPid":%s,"newPid":%s,"survivorPid":%s,"waitedMs":%s,"finalCount":%s}\n' \
   "\${old_pid:-null}" "\${new_pid:-null}" "\${survivor:-null}" "\$waited" "\${count:-0}" \
   > "$share_instance_status_path"
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_absent_query1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query "share" > "$share_absent_query1_path" 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query "share" > "$share_absent_query2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon "" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query "share" > "$share_absent_query2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
 sleep 1
 niri msg action screenshot-screen --path "$share_menu_absent_path"
-"$qs_bin" ipc --any-display -p "$shell_path" call menu close > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 EOF
 fi
 
@@ -2386,18 +2401,18 @@ if $nightlight_mode; then
   cat > "$nightlight_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc --any-display -p "$shell_path" call nightlight enable > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call nightlight enable > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$nightlight_status1_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call nightlight status > "$nightlight_status1_path" 2>&1
   grep -qF '"active":true' "$nightlight_status1_path" && break
   grep -qF '"lastError":""' "$nightlight_status1_path" || break
   sleep 1
 done
 niri msg action screenshot-screen --path "$nightlight_active_path"
-"$qs_bin" ipc --any-display -p "$shell_path" call nightlight disable > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call nightlight disable > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$nightlight_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call nightlight status > "$nightlight_status2_path" 2>&1
 EOF
 fi
 
@@ -2412,12 +2427,12 @@ if $speedtest_mode; then
   cat > "$speedtest_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc --any-display -p "$shell_path" call panel open network > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel open network > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call network speedtest > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call network speedtest > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network speedstatus > "$speedtest_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network speedstatus > "$speedtest_status_path" 2>&1
   grep -qF '"phase":"done"' "$speedtest_status_path" && break
   sleep 1
 done
@@ -2455,7 +2470,7 @@ sleep 3
 sudo systemctl restart wpa_supplicant-wlan0.service
 sleep 2
 
-"$qs_bin" ipc --any-display -p "$shell_path" call panel open network > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel open network > /dev/null 2>&1
 
 # Self-heal before anything else (part 2): NetworkManager's system-connections dir
 # survives across runs (it's not part of the isolated per-run HOME), so a
@@ -2470,12 +2485,12 @@ sleep 2
 # from the IPC: harmless, no action gets armed) and wait for it to settle
 # before the scripted sequence below drives a real action.
 for ssid in FORMALTEST FORMALTEST-EAP; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
   if grep -qF "\"name\":\"\$ssid\",\"known\":true" "$wifi_reset_status_path"; then
-    "$qs_bin" ipc --any-display -p "$shell_path" call network forget "\$ssid" > /dev/null 2>&1
+    "$qs_bin" ipc -p "$shell_path" call network forget "\$ssid" > /dev/null 2>&1
     SECONDS=0
     while [ "\$SECONDS" -lt 15 ]; do
-      "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
+      "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
       if grep -qE "\"name\":\"\$ssid\",\"known\":false,\"connected\":false,\"stateChanging\":false" "$wifi_reset_status_path"; then
         break
       fi
@@ -2486,14 +2501,14 @@ done
 
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_scan_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_scan_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST"' "$wifi_scan_status_path" && grep -qF '"name":"FORMALTEST-EAP"' "$wifi_scan_status_path"; then
     break
   fi
   sleep 1
 done
 
-"$qs_bin" ipc --any-display -p "$shell_path" call network connect FORMALTEST wrong-formaltest-psk > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call network connect FORMALTEST wrong-formaltest-psk > /dev/null 2>&1
 # connect() replies as soon as the IPC call returns, well before NM's own
 # ActiveConnection object exists — polling for the settled state right away
 # would see the identical pre-attempt idle snapshot (connected:false,
@@ -2504,7 +2519,7 @@ done
 # Waiting for stateChanging:true first proves NM actually started.
 SECONDS=0
 while [ "\$SECONDS" -lt 10 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST","known":(true|false),"connected":(true|false),"stateChanging":true' "$wifi_wrong_status_path"; then
     break
   fi
@@ -2512,7 +2527,7 @@ while [ "\$SECONDS" -lt 10 ]; do
 done
 SECONDS=0
 while [ "\$SECONDS" -lt 45 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST","known":(true|false),"connected":false,"stateChanging":false' "$wifi_wrong_status_path"; then
     break
   fi
@@ -2520,10 +2535,10 @@ while [ "\$SECONDS" -lt 45 ]; do
 done
 niri msg action screenshot-screen --path "$wifi_wrong_path"
 
-"$qs_bin" ipc --any-display -p "$shell_path" call network connect FORMALTEST formaltest-psk > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call network connect FORMALTEST formaltest-psk > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_connected_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_connected_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST","known":true,"connected":true' "$wifi_connected_status_path"; then
     break
   fi
@@ -2531,7 +2546,7 @@ while [ "\$SECONDS" -lt 25 ]; do
 done
 niri msg action screenshot-screen --path "$wifi_connected_path"
 
-"$qs_bin" ipc --any-display -p "$shell_path" call network forget FORMALTEST > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call network forget FORMALTEST > /dev/null 2>&1
 # known:false alone isn't enough to move on: NetworkPanel.qml's own
 # _actionKind only clears once BOTH !known and !stateChanging (its
 # _checkActionCompletion), and NetworkIpc.qml's connect/connectEap now
@@ -2544,17 +2559,17 @@ niri msg action screenshot-screen --path "$wifi_connected_path"
 # wifi-eap-connected.png.
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_forget_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_forget_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST","known":false,"connected":false,"stateChanging":false' "$wifi_forget_status_path"; then
     break
   fi
   sleep 1
 done
 
-"$qs_bin" ipc --any-display -p "$shell_path" call network connectEap FORMALTEST-EAP formaltest formaltest-eap-pw > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call network connectEap FORMALTEST-EAP formaltest formaltest-eap-pw > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 35 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_eap_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_eap_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST-EAP","known":true,"connected":true' "$wifi_eap_status_path"; then
     break
   fi
@@ -2566,10 +2581,10 @@ niri msg action screenshot-screen --path "$wifi_eap_connected_path"
 # leaving this out is exactly how a prior run corrupted the VM's persistent
 # NetworkManager state and broke every scan afterward (see the self-heal
 # block at the top of this script).
-"$qs_bin" ipc --any-display -p "$shell_path" call network forget FORMALTEST-EAP > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call network forget FORMALTEST-EAP > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call network status > "$wifi_eap_forget_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_eap_forget_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST-EAP","known":false,"connected":false,"stateChanging":false' "$wifi_eap_forget_status_path"; then
     break
   fi
@@ -2599,10 +2614,10 @@ sleep 3
 echo "rc=\$?" >> "$eds_seed_path"
 "$eds_bin" seed "EDS TOMORROW EVENT" "\$(date -d tomorrow +%F)" > "$eds_seed2_path" 2>&1
 echo "rc=\$?" >> "$eds_seed2_path"
-"$qs_bin" ipc --any-display -p "$shell_path" call panel open calendar
+"$qs_bin" ipc -p "$shell_path" call panel open calendar
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call calendar select "\$(date -d tomorrow +%F)" > "$calendar_select_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call calendar status > "$calendar_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call calendar select "\$(date -d tomorrow +%F)" > "$calendar_select_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call calendar status > "$calendar_status_path" 2>&1
 EOF
 fi
 
@@ -2617,10 +2632,10 @@ if $lock_mode; then
   cat > "$lock_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc --any-display -p "$shell_path" call lock lock > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call lock lock > /dev/null 2>&1
 echo \$? > "$lock_call_rc_path"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call lock isLocked > "$lock_islocked1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked1_path" 2>&1
 sleep 3
 "$grim_bin" "$lock_locked_path"
 sleep 2
@@ -2643,8 +2658,8 @@ sleep 2
 sleep 3
 "$grim_bin" "$lock_unlocked_path"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call lock isLocked > "$lock_islocked2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call lock status > "$lock_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call lock status > "$lock_status_path" 2>&1
 EOF
 fi
 
@@ -2725,28 +2740,28 @@ EOF
   cat > "$ss_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 8
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_guard_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_guard_status_path" 2>&1
 if [ -f "$ss_pid_path" ]; then
   kill "\$(cat "$ss_pid_path")" 2>/dev/null || true
 fi
 sleep 5
 niri msg action screenshot-screen --path "$ss_auto_path"
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_dismiss_status_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver start > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_dismiss_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver start > /dev/null 2>&1
 sleep 1
 niri msg action screenshot-screen --path "$ss_manual_path"
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
 while [ "\$SECONDS" -lt 75 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
   grep -q '"cycles":0}' "$ss_cycle_info2_path" || break
   sleep 1
 done
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver stop > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
 EOF
 fi
 
@@ -2795,13 +2810,13 @@ _smaps() {
   fi
 }
 pre_open=\$(_smaps)
-"$qs_bin" ipc --any-display -p "$shell_path" call picker summon > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
 sleep 2
 niri msg action screenshot-screen --path "$picker_grid_path"
 open_state=\$(_smaps)
 # Close without choosing — isolates ImagePicker.close()'s own _images free
 # from setWallpaper()'s retheme/crossfade (see header comment above).
-"$qs_bin" ipc --any-display -p "$shell_path" call picker close > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker close > /dev/null 2>&1
 # 20s, not a couple: QML's V4 engine reclaims a destroyed Repeater's JS-side
 # heap (delegate objects, property-binding closures) on its own idle-driven
 # GC schedule, not synchronously on model-clear. Measured on this rig
@@ -2812,15 +2827,15 @@ sleep 20
 post_close=\$(_smaps)
 # Reopen for the real choose()/theme/select() round trip the assertions
 # below need — deliberately outside the memory bracket above.
-"$qs_bin" ipc --any-display -p "$shell_path" call picker summon > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
 printf '{"shellPid":"%s","preOpenRss":%s,"openRss":%s,"postCloseRss":%s}\n' "\$shell_pid" "\$pre_open" "\$open_state" "\$post_close" > "$picker_mem_path"
@@ -2851,17 +2866,17 @@ if $screenshot_mode; then
   cat > "$screenshot_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot region > "$screenshot_region_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot region > "$screenshot_region_reply_path" 2>&1
 sleep 1
 pgrep -x slurp > "$screenshot_slurp_before_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_region_status_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot cancel > "$screenshot_cancel_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot status > "$screenshot_region_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot cancel > "$screenshot_cancel_reply_path" 2>&1
 sleep 1
 pgrep -x slurp > "$screenshot_slurp_after_path" 2>&1 || true
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_cancelled_status_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot full > "$screenshot_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot status > "$screenshot_cancelled_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot full > "$screenshot_reply_path" 2>&1
 for _ in \$(seq 1 20); do
-  "$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$screenshot_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call screenshot status > "$screenshot_status_path" 2>&1
   if grep -q '"capturing":false' "$screenshot_status_path"; then
     break
   fi
@@ -2895,27 +2910,27 @@ sleep 5
 # The compositor's own view of the output, so the captured PNG's real pixel
 # dimensions can be checked against it rather than merely existing.
 niri msg -j outputs > "$capture_outputs_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick smart default > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot pick smart default > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_open_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_open_status_path" 2>&1
 niri msg action screenshot-screen --path "$capture_picker_path"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot key tab > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot key tab > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_cycled_status_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot key ctrl-return > "$capture_pick_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_cycled_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot key ctrl-return > "$capture_pick_reply_path" 2>&1
 for _ in \$(seq 1 20); do
-  "$qs_bin" ipc --any-display -p "$shell_path" call screenshot status > "$capture_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call screenshot status > "$capture_status_path" 2>&1
   if grep -q '"capturing":false' "$capture_status_path"; then
     break
   fi
   sleep 0.5
 done
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pick region default > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot pick region default > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot key escape > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot key escape > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call screenshot pickerStatus > "$capture_escape_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_escape_status_path" 2>&1
 EOF
 fi
 
@@ -2937,25 +2952,25 @@ if $record_mode; then
   cat > "$record_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call record start screen none > "$record_start_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call record start screen none > "$record_start_reply_path" 2>&1
 # Long enough that the container holds real frames rather than a header:
 # the GIF transcode below has to have something to read.
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call record status > "$record_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call record status > "$record_status1_path" 2>&1
 "$grim_bin" "$record_active_path"
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call record stop > "$record_stop_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call record stop > "$record_stop_reply_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call record status > "$record_status2_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call record status > "$record_status2_path" 2>&1
   grep -qF '"active":false' "$record_status2_path" && break
   sleep 1
 done
 rec_file=\$(head -n1 "$record_start_reply_path" | tr -d '\r')
-"$qs_bin" ipc --any-display -p "$shell_path" call record gif "\$rec_file" > "$record_gif_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call record gif "\$rec_file" > "$record_gif_reply_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 40 ]; do
-  "$qs_bin" ipc --any-display -p "$shell_path" call record status > "$record_status3_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call record status > "$record_status3_path" 2>&1
   if grep -qF '"transcoding":false' "$record_status3_path" && grep -qF '"lastGifPath":"/' "$record_status3_path"; then
     break
   fi
@@ -3024,23 +3039,23 @@ sleep 5
 printf '%s' 'ocr smoke sentinel' | "$wl_copy_bin"
 "$grim_bin" "$ocr_fixture_png"
 
-"$qs_bin" ipc --any-display -p "$shell_path" call capture text > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture text > /dev/null 2>&1
 sleep 2
 pgrep -f -- 'slurp -d' > "$ocr_text_slurp_path" 2>&1 || true
-"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_text_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_text_status_path" 2>&1
 "$grim_bin" "$ocr_text_overlay_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call capture cancel > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture cancel > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_text_cancel_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_text_cancel_path" 2>&1
 
-"$qs_bin" ipc --any-display -p "$shell_path" call capture color > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture color > /dev/null 2>&1
 sleep 2
 pgrep -f -- 'slurp -p' > "$ocr_color_slurp_path" 2>&1 || true
-"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_color_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_color_status_path" 2>&1
 "$grim_bin" "$ocr_color_overlay_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call capture cancel > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture cancel > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_color_cancel_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_color_cancel_path" 2>&1
 pgrep -x slurp > "$ocr_slurp_after_path" 2>&1 || true
 "$wl_paste_bin" --no-newline > "$ocr_clipboard_path" 2>&1 || true
 
@@ -3053,17 +3068,17 @@ pgrep -x slurp > "$ocr_slurp_after_path" 2>&1 || true
 # font size 28, so a narrow region clips it mid-string and tesseract returns
 # fragments. Extra chrome in frame costs nothing, the assertion only needs
 # the fixture's own words to appear.
-"$qs_bin" ipc --any-display -p "$shell_path" call capture textAt '0,0 1276x693' > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture textAt '0,0 1276x693' > /dev/null 2>&1
 for _ in \$(seq 1 30); do
-  "$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_textat_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_textat_status_path" 2>&1
   grep -qF '"capturing":false' "$ocr_textat_status_path" && break
   sleep 0.5
 done
 "$wl_paste_bin" --no-newline > "$ocr_textat_clipboard_path" 2>&1 || true
 
-"$qs_bin" ipc --any-display -p "$shell_path" call capture colorAt '0,0 1x1' > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call capture colorAt '0,0 1x1' > /dev/null 2>&1
 for _ in \$(seq 1 30); do
-  "$qs_bin" ipc --any-display -p "$shell_path" call capture status > "$ocr_colorat_status_path" 2>&1
+  "$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_colorat_status_path" 2>&1
   grep -qF '"capturing":false' "$ocr_colorat_status_path" && break
   sleep 0.5
 done
@@ -3087,16 +3102,16 @@ if $reminder_mode; then
   cat > "$reminder_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call notifications setDnd true > "$reminder_dnd_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call reminder set 12s "SMOKE REMINDER FIXTURE" > "$reminder_set_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications setDnd true > "$reminder_dnd_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call reminder set 12s "SMOKE REMINDER FIXTURE" > "$reminder_set_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call reminder status > "$reminder_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call reminder status > "$reminder_status1_path" 2>&1
 cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state1_path" 2>&1
 "$grim_bin" "$reminder_pending_png"
 # Past the deadline with room for the service's own 1s tick.
 sleep 13
-"$qs_bin" ipc --any-display -p "$shell_path" call reminder status > "$reminder_status2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$reminder_notifications_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call reminder status > "$reminder_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$reminder_notifications_path" 2>&1
 cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state2_path" 2>&1
 "$grim_bin" "$reminder_fired_png"
 EOF
@@ -3126,23 +3141,23 @@ if $toggles_mode; then
   cat > "$toggles_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon toggles > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon toggles > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call menu status > "$toggles_menu_status1_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$toggles_nl_status1_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query nightlight > "$toggles_nl_query1_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$toggles_dnd_status1_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query dnd > "$toggles_dnd_query1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$toggles_menu_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call nightlight status > "$toggles_nl_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query nightlight > "$toggles_nl_query1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$toggles_dnd_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query dnd > "$toggles_dnd_query1_path" 2>&1
 "$grim_bin" "$toggles_hub_png"
 
-"$qs_bin" ipc --any-display -p "$shell_path" call nightlight toggle > /dev/null 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call notifications toggleDnd > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call nightlight toggle > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications toggleDnd > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call nightlight status > "$toggles_nl_status2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query nightlight > "$toggles_nl_query2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call notifications status > "$toggles_dnd_status2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query dnd > "$toggles_dnd_query2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu status > "$toggles_menu_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call nightlight status > "$toggles_nl_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query nightlight > "$toggles_nl_query2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$toggles_dnd_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query dnd > "$toggles_dnd_query2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$toggles_menu_status2_path" 2>&1
 "$grim_bin" "$toggles_toggled_png"
 EOF
 fi
@@ -3163,13 +3178,13 @@ if $keybinds_mode; then
   cat > "$keybinds_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ":k" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ":k" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ":k" > "$keybinds_query1_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call debug query ":k Mod+T" > "$keybinds_query2_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call menu summon keybinds > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ":k" > "$keybinds_query1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug query ":k Mod+T" > "$keybinds_query2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon keybinds > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc --any-display -p "$shell_path" call menu status > "$keybinds_menu_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$keybinds_menu_status_path" 2>&1
 "$grim_bin" "$keybinds_menu_png"
 EOF
 fi
@@ -3193,7 +3208,7 @@ if $mic_mode; then
   cat > "$mic_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 5
-"$qs_bin" ipc --any-display -p "$shell_path" call debug dump > "$dump_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
 "$grim_bin" "$mic_bar_png"
 EOF
 fi
@@ -3214,12 +3229,12 @@ if $systemupdate_mode; then
   cat > "$systemupdate_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc --any-display -p "$shell_path" call panel open systemupdate > "$systemupdate_open_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel open systemupdate > "$systemupdate_open_reply_path" 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call panel state > "$systemupdate_state_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel state > "$systemupdate_state_path" 2>&1
 sleep 20
 "$grim_bin" "$systemupdate_panel_png"
-"$qs_bin" ipc --any-display -p "$shell_path" call debug dump > "$dump_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
 EOF
 fi
 
@@ -3234,8 +3249,8 @@ if $plugins_mode; then
   cat > "$plugins_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 5
-"$qs_bin" ipc --any-display -p "$shell_path" call plugins list > "$plugins_list_path" 2>&1
-"$qs_bin" ipc --any-display -p "$shell_path" call plugins status > "$plugins_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call plugins list > "$plugins_list_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call plugins status > "$plugins_status_path" 2>&1
 "$grim_bin" "$plugins_bar_png"
 EOF
 fi
@@ -3259,15 +3274,15 @@ sleep 1
 "$python3_bin" "$sni_stub_path" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 "$python3_bin" "$sni_stub_path" --id tray-fixture-6 --title "Tray Fixture 6" --color 16a085 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 sleep 6
-"$qs_bin" ipc --any-display -p "$shell_path" call tray status > "$tray_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status1_path" 2>&1
 sleep 1
 niri msg action screenshot-screen --path "$tray_collapsed_path"
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call tray expand > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray expand > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call tray status > "$tray_status2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status2_path" 2>&1
 sleep 1
-"$qs_bin" ipc --any-display -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
 EOF
 
   tray_kill_script="$shot_dir/tray-kill.sh"
@@ -3371,21 +3386,21 @@ fi
     echo "spawn-at-startup \"bash\" \"$active_window_play_script\""
   fi
   if $dump_mode; then
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > $dump_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc -p '$shell_path' call debug dump > $dump_path 2>&1\""
   fi
   if $wallpaper_mode; then
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call wallpaper set '$wp_path'\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call theme status > $status_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp_path'\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call theme status > $status_path 2>&1\""
   fi
   if $theme_toggle_mode; then
     echo "spawn-at-startup \"bash\" \"$theme_toggle_drive_script\""
   fi
   if $menu_mode; then
     echo "spawn-at-startup \"bash\" \"$menu_open_script\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug query 'wall' > $wall_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query 'wall' > $wall_query_path 2>&1\""
     # The nix end-state drive (M13b Task 4) replaced M12's plain two-pass
     # ':nix hello' one-liners: the gated slowblock release covers the same
     # debounce -> shim -> parse -> rows proof, plus SEARCHING while blocked
@@ -3416,7 +3431,7 @@ fi
     # right after the toggle to prove it actually flipped, then the bar is
     # screenshotted a second later to show BellWidget.qml swap to its
     # bell-off glyph.
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications setDnd true > $dnd_status_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call notifications setDnd true > $dnd_status_path 2>&1\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $dnd_indicator_path\""
   fi
   if $center_mode; then
@@ -3432,11 +3447,11 @@ fi
     # sleep-15 screenshot, closed again after a second showHistory at 16 —
     # the IPC stand-in for the bell cell's own left click, which calls the
     # exact same center.open()/close().
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 12 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications status > $center_status_before_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications showHistory\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications status > $center_status_open_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 16 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications showHistory\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 17 && '$qs_bin' ipc --any-display -p '$shell_path' call notifications status > $center_status_closed_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 12 && '$qs_bin' ipc -p '$shell_path' call notifications status > $center_status_before_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc -p '$shell_path' call notifications showHistory\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && '$qs_bin' ipc -p '$shell_path' call notifications status > $center_status_open_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 16 && '$qs_bin' ipc -p '$shell_path' call notifications showHistory\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 17 && '$qs_bin' ipc -p '$shell_path' call notifications status > $center_status_closed_path 2>&1\""
   fi
   if $osd_mode; then
     # Manual trigger, screenshotted 1s later (well inside the 1.6s auto-hide
@@ -3449,24 +3464,24 @@ fi
     # the VM (no backlight device), so this only proves the surface itself
     # renders that kind correctly (BRIGHTNESS label, 0% + empty bar), not
     # that a real device exists.
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call osd volume\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc -p '$shell_path' call osd volume\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && niri msg action screenshot-screen --path $osd_manual_path\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 9 && '$wpctl_bin' set-volume @DEFAULT_AUDIO_SINK@ 30%\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc --any-display -p '$shell_path' call osd brightness\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc -p '$shell_path' call osd brightness\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 14 && niri msg action screenshot-screen --path $osd_brightness_path\""
   fi
   if $panel_mode; then
     if [ "$panel_name" = "calendar" ]; then
       echo "spawn-at-startup \"bash\" \"$eds_drive_script\""
     else
-      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open '$panel_name'\""
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call panel open '$panel_name'\""
     fi
     if [ "$panel_name" = "appmenu" ]; then
-      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > $dump_path 2>&1\""
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug dump > $dump_path 2>&1\""
     fi
   fi
   if $gallery_mode; then
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc --any-display -p '$shell_path' call gallery open > '$gallery_log_path' 2>&1; '$qs_bin' ipc --any-display -p '$shell_path' call gallery status >> '$gallery_log_path' 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call gallery open > '$gallery_log_path' 2>&1; '$qs_bin' ipc -p '$shell_path' call gallery status >> '$gallery_log_path' 2>&1\""
   fi
   if $clipboard_mode; then
     echo "spawn-at-startup \"bash\" \"$clipboard_drive_script\""
@@ -3482,8 +3497,8 @@ fi
   fi
   if $media_mode; then
     echo "spawn-at-startup \"bash\" \"$media_play_script\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open media\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call media status > $media_status_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call panel open media\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call media status > $media_status_path 2>&1\""
     echo "spawn-at-startup \"bash\" \"$media_marquee_script\""
     # --media --panel audio: the generic panel_mode open above (sleep 3)
     # and this leg's own "panel open media" (sleep 5) both go through
@@ -3491,7 +3506,7 @@ fi
     # that race. Reopen audio afterward so it (with mpv's now-registered
     # Pipewire stream under APPS) is what the screenshot below shows.
     if $panel_mode && [ "$panel_name" = "audio" ]; then
-      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc --any-display -p '$shell_path' call panel open audio\""
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call panel open audio\""
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $audio_panel_path\""
     fi
   fi
@@ -5029,6 +5044,15 @@ if $record_mode; then
   record_file=$(head -n1 "$record_start_reply_path" | tr -d '\r')
   case "$record_file" in
     error*|"") echo "SMOKE_FAIL: record start replied with an error: $(cat "$record_start_reply_path")" >&2; exit 1 ;;
+  esac
+
+  # RecordingService builds the destination from the answering instance's own
+  # $HOME (recording.directory is left at its default here), so a path outside
+  # this run's isolated HOME names a different formalshell on this machine and
+  # record-active.png is a photo of a session that was never asked to record.
+  case "$record_file" in
+    "$iso_home"/*) ;;
+    *) echo "SMOKE_FAIL: record start was answered by an instance outside this run: $record_file is not under $iso_home" >&2; exit 1 ;;
   esac
 
   # The one failure this leg must never soften: wf-recorder either captured

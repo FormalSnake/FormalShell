@@ -88,13 +88,21 @@ function applyProviders(tree, providerFns) {
 // bespoke node kind (and no `_entry`-style back-reference) is needed here.
 //
 // `selfPath` is the running shell's own config root (`Quickshell.shellDir`,
-// e.g. `<store-path>/share/formalshell`) — without `--any-display -p
-// <selfPath>` on the call, `qs ipc`'s instance lookup falls back to the
-// default XDG quickshell config dir (command.cpp's locateConfigFile()/
-// selectInstance()), which formalshell doesn't register under, so the copy
-// would silently hit "No running instances" instead of this shell. Every
-// other documented IPC call (README) passes the same two flags for the same
-// reason.
+// e.g. `<store-path>/share/formalshell`) — without `-p <selfPath>` on the
+// call, `qs ipc`'s instance lookup falls back to the default XDG quickshell
+// config dir (command.cpp's locateConfigFile()/selectInstance()), which
+// formalshell doesn't register under, so the copy would silently hit "No
+// running instances" instead of this shell.
+//
+// No `--any-display` alongside it, unlike the keybind form USAGE.md documents
+// for callers that may have no WAYLAND_DISPLAY at all. A row's command is
+// spawned by this shell, so it already carries this shell's display, and that
+// display is quickshell's only discriminator between two instances sharing one
+// `by-path/<md5(configFilePath)>` registry entry (selectInstance() takes the
+// oldest match and reports no ambiguity). A nested smoke session and the
+// owner's live bar share XDG_RUNTIME_DIR, so they share that entry whenever
+// they were built from the same store path, and the flag would let this
+// shell's own menu row write the other one's clipboard.
 //
 // Image entries (M14 Task 1, history.js's `kind: "image"`) get a fixed
 // "IMAGE" label instead of a text preview, a dimmed capture time in the
@@ -131,7 +139,7 @@ function clipboardProvider(items, selfPath, mode) {
             kind: "action",
             action: mode === "share"
                 ? shareEntryCommand(entry)
-                : "qs ipc --any-display -p " + selfPath + " call clipboard copy " + entry.id,
+                : "qs ipc -p " + selfPath + " call clipboard copy " + entry.id,
             childIds: []
         };
     });
@@ -495,7 +503,7 @@ function wallpaperEntry(selfPath) {
         "wallpaper": {
             label: "Wallpaper",
             icon: "\u{F0E09}", // nf-md-wallpaper
-            action: "qs ipc --any-display -p " + selfPath + " call picker summon"
+            action: "qs ipc -p " + selfPath + " call picker summon"
         }
     };
 }
@@ -511,7 +519,7 @@ function wallpaperEntry(selfPath) {
 // "Video To GIF" takes no argument on purpose: `record gif` falls back to
 // RecordingService.lastPath, so the row needs no menu.input round trip.
 function captureEntries(selfPath) {
-    var call = "qs ipc --any-display -p " + selfPath + " call ";
+    var call = "qs ipc -p " + selfPath + " call ";
     return {
         "capture": { label: "Capture", icon: "\u{F0E51}" }, // md-monitor_screenshot
         "capture.text": {

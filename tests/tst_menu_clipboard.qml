@@ -20,7 +20,7 @@ TestCase {
         compare(nodes[0].kind, "action");
         compare(nodes[0].desc, "");
         compare(nodes[0].thumbSource, "");
-        compare(nodes[0].action, "qs ipc --any-display -p /store/share/formalshell call clipboard copy a");
+        compare(nodes[0].action, "qs ipc -p /store/share/formalshell call clipboard copy a");
     }
 
     function test_legacy_text_entry_without_kind_still_maps_as_text() {
@@ -40,7 +40,7 @@ TestCase {
         compare(nodes[0].label, "IMAGE");
         compare(nodes[0].desc, "09:05");
         compare(nodes[0].thumbSource, "/state/clipboard-images/abc.png");
-        compare(nodes[0].action, "qs ipc --any-display -p /store/share/formalshell call clipboard copy b");
+        compare(nodes[0].action, "qs ipc -p /store/share/formalshell call clipboard copy b");
     }
 
     function test_mixed_entries_preserve_order() {

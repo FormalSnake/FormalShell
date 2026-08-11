@@ -94,7 +94,7 @@ cfg=$(mktemp -d)/hyprland.conf
 iso_home=$(mktemp -d)
 {
   echo "exec-once = $PWD/result/bin/formalshell"
-  echo "exec-once = sh -c \"sleep 4 && '$qs_bin' ipc --any-display -p '$shell_path' call debug dump > '$dump_path' 2>&1\""
+  echo "exec-once = sh -c \"sleep 4 && '$qs_bin' ipc -p '$shell_path' call debug dump > '$dump_path' 2>&1\""
   echo "exec-once = sh -c \"sleep 6 && '$grim_bin' '$shot_dir/smoke.png' > '$shot_dir/grim.log' 2>&1; sleep 1 && '$hyprctl_bin' dispatch exit\""
 } > "$cfg"
 

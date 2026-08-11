@@ -100,7 +100,7 @@ TestCase {
     function test_default_copy_mode_is_unaffected_by_the_new_parameter() {
         var nodes = Providers.clipboardProvider([{ id: "a", text: "hello" }], "/store/share/formalshell");
         compare(nodes[0].id, "clipboard.a");
-        compare(nodes[0].action, "qs ipc --any-display -p /store/share/formalshell call clipboard copy a");
+        compare(nodes[0].action, "qs ipc -p /store/share/formalshell call clipboard copy a");
     }
 
     // The presence-gate itself (default-menu.jsonc's "share" node): the
