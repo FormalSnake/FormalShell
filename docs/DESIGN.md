@@ -550,31 +550,64 @@ adjective:
     `onAccent` text.
 12. **Content imagery keeps a color dither; the tray is true color
     (2026-08-09, content color amended 2026-08-09, tray reverted
-    2026-08-09, chunky palette 2026-08-09).** Named content imagery, album
-    covers and animated art, renders through `DitherImage`'s ordered-Bayer
-    Canvas pass instead of a plain `Image`, in `mode: "retro"`, and keeps
-    its own colors: each RGB channel posterizes independently to `levels`
-    steps (3 by default, so 0/128/255, 27 colors total), the same 4x4
-    Bayer bias tipping a channel to its neighboring step near a
-    quantization boundary, so a pixel's hue survives (a red cover stays in
-    red steps, never gray). The posterize+Bayer pass runs on a
-    `width/chunk x height/chunk` grid (`chunk` 2 by default) rather than
-    one pass per source pixel, and each grid cell paints as one
-    `chunk`-sized hard-edged square: at a 96px slot, 1px dither cells read
-    as texture, not as an era, so the named default is the coarser grid,
-    not the finer one (owner, live shell, 2026-08-09: "the album cover is
-    dithered like i asked, but the colors dont change, it doesnt become
-    90s image style" — 4 levels was 64 imperceptible colors, and 1px cells
-    at that slot size were noise before they were style). Content imagery
-    is deliberately exempt from matugen retheming, on purpose: a photo
-    doesn't retheme either, and forcing an album cover into the two chrome
-    ink roles would erase the reason for showing a color image at all.
+    2026-08-09, chunky palette 2026-08-09, image-derived palette
+    2026-08-12).** Named content imagery, album covers and animated art and
+    the wallpaper, renders through `DitherImage`'s ordered-Bayer Canvas pass
+    instead of a plain `Image`, in `mode: "retro"`, and keeps its own
+    colors. The pass runs on a `width/chunk x height/chunk` grid (`chunk` 2
+    by default) rather than one pass per source pixel, and each grid cell
+    paints as one `chunk`-sized hard-edged square: at a 96px slot, 1px
+    dither cells read as texture, not as an era, so the named default is
+    the coarser grid, not the finer one (owner, live shell, 2026-08-09:
+    "the album cover is dithered like i asked, but the colors dont change,
+    it doesnt become 90s image style"). Content imagery is deliberately
+    exempt from matugen retheming, on purpose: a photo doesn't retheme
+    either, and forcing an album cover into the two chrome ink roles would
+    erase the reason for showing a color image at all.
 
-    **The wallpaper joins the list (2026-08-12).** Owner: "it would be
-    cool for the rendered wallpaper to also be dithered, as an optional but
-    on by default thing ... similar to album covers." It is the same retro
-    pass at the same 3 levels, on by default, off with `wallpaper.dither:
-    false` in settings.json, and it is content in exactly the sense above:
+    **The palette is derived from the image, not from a fixed grid of steps
+    (2026-08-12).** Owner, live shell: "the dithering looks cool for the
+    wallpaper, but its too intense and it adds dots to monotone wallpapers
+    ... I want the dithering engine to make images look like 90s
+    wallpapers/ascii pixelart", with a limited-palette pixel-art night scene
+    as the reference. Both halves of that report follow from what the pass
+    used to do — posterize each RGB channel onto `levels` evenly-spaced
+    steps (3, so 0/128/255) and Bayer-bias a channel across a step
+    boundary:
+
+    - A flat region sitting anywhere near a step boundary dithered forever,
+      up to a 50/50 checker, because the boundary belonged to the grid and
+      not to the image. A monotone wallpaper is one such region the size of
+      the screen.
+    - The two colors being mixed were a full step apart, 128 per channel,
+      so every dot was maximum contrast.
+
+    So `shell/Components/dither.js` derives up to `paletteSize` colors (6 by
+    default) from the image itself by **median cut**, and each cell takes its
+    nearest entry, ordered-dithered against only its second nearest, in
+    proportion to how far between the two it actually sits. A solid source's
+    own color is its whole palette, so it paints perfectly flat; everything
+    else mixes neighbors the image itself put next to each other, so dense
+    regions read as shading rather than as noise. Hue survives more strongly
+    than under per-channel posterizing, because every entry is an average of
+    the source's own colors and nothing is forced onto an axis. `paletteSize`
+    is also the intensity knob: more colors means less quantization error,
+    so less of the image patterns at all. Runs of same-index cells paint as
+    one `fillRect`, which is what keeps a full-screen pass affordable now
+    that flat regions genuinely stay flat.
+
+    The dither is display-side only. Nothing derived here is ever written to
+    disk, and matugen reads the untouched wallpaper FILE
+    (`ThemeEngine.qml`), so a dithered rendering cannot seed the color
+    scheme — a blue wallpaper cannot become an orange scheme by way of its
+    dots.
+
+    **The wallpaper is one of the content surfaces (2026-08-12).** Owner:
+    "it would be cool for the rendered wallpaper to also be dithered, as an
+    optional but on by default thing ... similar to album covers." Same
+    retro pass, on by default, off with `wallpaper.dither: false` in
+    settings.json, palette size overridable with
+    `wallpaper.ditherColors`, and it is content in exactly the sense above:
     exempt from matugen retheming, keeping the photograph's own hues while
     the chrome over it recolors from that same photograph.
 
@@ -585,14 +618,19 @@ adjective:
     the same screen, a 4K display gets larger cells rather than four times
     as many of them (a finer grid at a higher resolution would read as
     noise, and cost four times the paint), and the source is cover-cropped
-    to the screen before the pass runs, so cells stay square whatever the
-    file's aspect ratio. Both crossfade layers dither, and the fade waits
-    on the incoming layer's canvas rather than on its decode, so a
-    wallpaper change never shows an undithered frame or a blank one.
-    Checkable: `dev/smoke-niri.sh --wallpaper` sets a second wallpaper,
-    crossfades to it, and samples a 64x64 patch of the result — every
-    channel must land on a posterized step, the source's own solid color
-    must be absent, and at least two colors must be present.
+    to the screen before the pass runs — nearest-neighbor, so the scale
+    never hands the quantizer a color the file didn't contain — so cells
+    stay square whatever the file's aspect ratio. Both crossfade layers
+    dither, and the fade waits on the incoming layer's canvas rather than on
+    its decode, so a wallpaper change never shows an undithered frame or a
+    blank one.
+
+    Checkable, and the two halves need two samples: `dev/smoke-niri.sh
+    --wallpaper` screenshots a SOLID wallpaper before the crossfade and a
+    64x64 patch of it must be that exact color end to end (a monotone source
+    keeps no dots at all), then crossfades to a GRADIENT and a full-width
+    strip of the result must carry at least three colors and no more than
+    `wallpaper.ditherColors` of them (it quantized, and it dithered).
 
     Three named content surfaces before it: the media panel's album art, both
     the static cover and the Apple Music animated cover (sampled off its

@@ -59,6 +59,11 @@ PanelWindow {
     property string _queuedUrl: ""
 
     readonly property bool _dither: Core.Config.get("wallpaper.dither", true)
+    // Upper bound on colors DitherImage derives from the wallpaper, and the
+    // one knob for how much dithering there is: a bigger palette quantizes
+    // the photograph more finely, so fewer cells sit between two entries and
+    // fewer of them pattern at all. 6 is the era being referenced.
+    readonly property int _ditherColors: Core.Config.get("wallpaper.ditherColors", 6)
     // Dither cell size in SCREEN pixels, so the grid is a property of the
     // display and never of the wallpaper file: a 4000px photo and a 1200px
     // one land on the same grid on the same screen, and a 4K screen gets
@@ -180,6 +185,7 @@ PanelWindow {
         sourceItem: bottomImage
         mode: "retro"
         chunk: background._ditherChunk
+        paletteSize: background._ditherColors
         onPaintedChanged: background._tryPromote()
     }
 
@@ -220,6 +226,7 @@ PanelWindow {
         sourceItem: topImage
         mode: "retro"
         chunk: background._ditherChunk
+        paletteSize: background._ditherColors
         onPaintedChanged: background._tryStartFade()
     }
 }

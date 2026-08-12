@@ -157,7 +157,11 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   indefinitely until real input dismisses it. Without ttfx on PATH it falls
   back to five convergence effects written in JS.
 - **Picker** — a ledger-grid wallpaper/image selector living inside the menu
-  as its own route, also usable as a generic image-select IPC surface.
+  as its own route, also usable as a generic image-select IPC surface. A
+  `Dark`/`Light` subdirectory pair in the wallpaper directory splits the grid
+  in two, switched with `Tab` or the route's own `DARK | LIGHT` cells and
+  entered on the theme's current mode; a directory without them is listed
+  flat.
 - **Capture**: `screenshot full` grabs an output with no interaction, and
   `screenshot pick` opens the shell's own region picker over a frozen grab of
   every output, in `smart`, `region`, `windows` or `fullscreen` mode, with a
@@ -181,7 +185,10 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 - **Greeter** — a greetd session rendering as the lock screen's visual twin,
   with real PAM authentication.
 - **Theming** — wallpaper-driven matugen colors recolor every bar token and
-  niri's window borders live, no restart required; with no wallpaper set,
+  niri's window borders live, no restart required; the wallpaper itself
+  renders through a 90s-era dither, a palette of six colors derived from that
+  image by median cut with an ordered dither only between neighbors, so flat
+  regions stay flat (`wallpaper.dither`, `wallpaper.ditherColors`); with no wallpaper set,
   the dark/light toggle flips between bundled Flexoki palettes through the
   same pipeline. `theme.json`'s twelve color roles are the whole contract —
   matugen, pywal (a documented `pywal-theme.json.tmpl` ships alongside the

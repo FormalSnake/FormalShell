@@ -22,8 +22,11 @@ var KEY_ENTER = "⏎";
 var KEY_UPDOWN = "↑↓";
 var KEY_GRID = "←→↑↓";
 var KEY_ESC = "ESC";
+// The word, for the same reason Escape is: U+21E5 ⇥ is absent from the pinned
+// nerd-fonts-jetbrains-mono cmap and would render as tofu.
+var KEY_TAB = "TAB";
 
-// `ctx`: { mode, node, atRoot, grid, pickerSelect, confirming }.
+// `ctx`: { mode, node, atRoot, grid, pickerSelect, variantSwitch, confirming }.
 function primaryAction(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
@@ -56,14 +59,22 @@ function primaryAction(ctx) {
 // there is a level to pop and CLOSE at the root, because those are two
 // genuinely different outcomes and guessing wrong is the whole reason a
 // hint bar exists.
+//
+// `variantSwitch` is the wallpaper route's other variant ("dark"/"light")
+// when its Dark/Light switcher is up, and null everywhere else — the hint
+// names the set Tab would show rather than the key's mechanism, so it reads
+// as the outcome the way every other label here does.
 function hints(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
         return [{ key: KEY_ESC, label: "Cancel" }];
     var move = { key: c.grid ? KEY_GRID : KEY_UPDOWN, label: "Move" };
+    var out = [move];
+    if (c.variantSwitch === "dark" || c.variantSwitch === "light")
+        out.push({ key: KEY_TAB, label: c.variantSwitch === "light" ? "Show Light" : "Show Dark" });
     if (c.mode === "select")
-        return [move, { key: KEY_ESC, label: "Cancel" }];
-    return [move, { key: KEY_ESC, label: c.atRoot ? "Close" : "Back" }];
+        return out.concat([{ key: KEY_ESC, label: "Cancel" }]);
+    return out.concat([{ key: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);
 }
 
 function actionBar(ctx) {

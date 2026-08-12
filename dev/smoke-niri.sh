@@ -17,9 +17,15 @@
 # run, which is the only way this rig covers the dithered path's fade gate:
 # with wallpaper.dither on, the incoming layer only starts fading once its
 # Canvas has painted. `wallpaper get` is dumped afterwards, and the run's
-# own smoke.png is sampled directly — a 64x64 patch of bare wallpaper must
-# carry no pixel of the second wallpaper's own solid color and at least two
-# distinct colors, every one of them on a posterized dither step.
+# own smoke.png is sampled directly. Both halves of the dither contract get
+# their own sample (2026-08-12, image-derived palette): the FIRST wallpaper is
+# solid, screenshotted on its own (wallpaper-solid.png) before the crossfade,
+# and a 64x64 patch of it must be exactly that solid color end to end — a
+# monotone source has its own color in its own derived palette, so it must
+# paint perfectly flat with no dither dots anywhere. The second is a gradient,
+# and a full-width strip of the settled crossfade must carry at least three
+# distinct colors (it quantized AND dithered) and no more than
+# wallpaper.ditherColors of them (it quantized to the palette).
 # With --theme-toggle (M13b Task 3), drives `theme mode toggle` twice with
 # NO wallpaper set: grim the dark session (theme-dark.png), toggle, assert
 # `theme status` reports mode:"light" with wallpaper still "", grim again
@@ -338,6 +344,19 @@
 # picker-selection.txt is read back (picker-selection.txt) to prove the
 # request/answer handshake — MenuIpc's select()/input() pattern, reused
 # rather than reinvented.
+#
+# Dark/Light variants (2026-08-12) close the same run. Every leg above runs
+# against a FLAT directory, which is the no-variant listing every existing
+# setup has (picker-status-flat.json: hasVariants false, all 20 images);
+# staged `Dark` (5 fixtures) and `Light` (3) subdirectories are then moved
+# into place mid-run and the route re-summoned, which also proves the scan
+# genuinely re-runs per entry. picker-status-dark.json must report
+# hasVariants with the entry variant taken from the theme's own mode and only
+# the dark set listed; `picker variant light` (the switcher's own action over
+# IPC, same division as `choose` above) must answer ok, the grid is
+# screenshotted there (picker-variant.png — the DARK | LIGHT cells with LIGHT
+# inverted), and picker-status-light.json must report the light set's own
+# count.
 #
 # With --bar-layout, points settings.json's bar.layout at a left region led
 # by the opt-in github builtin (M12 Task 8, against a PATH-shimmed `gh`
@@ -1167,6 +1186,7 @@ shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 wallpaper_get_path="$shot_dir/wallpaper-get.txt"
+wallpaper_solid_path="$shot_dir/wallpaper-solid.png"
 theme_dark_png="$shot_dir/theme-dark.png"
 theme_light_png="$shot_dir/theme-light.png"
 theme_toggle_status_path="$shot_dir/theme-toggle-status.json"
@@ -1264,6 +1284,11 @@ picker_grid_path="$shot_dir/picker-grid.png"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
 picker_selection_path="$shot_dir/picker-selection.txt"
 picker_mem_path="$shot_dir/picker-memory.json"
+picker_flat_status_path="$shot_dir/picker-status-flat.json"
+picker_dark_status_path="$shot_dir/picker-status-dark.json"
+picker_light_status_path="$shot_dir/picker-status-light.json"
+picker_variant_reply_path="$shot_dir/picker-variant-reply.txt"
+picker_variant_path="$shot_dir/picker-variant.png"
 tray_status1_path="$shot_dir/tray-status-1.json"
 tray_status2_path="$shot_dir/tray-status-2.json"
 tray_collapsed_path="$shot_dir/tray-collapsed.png"
@@ -1753,6 +1778,26 @@ if $picker_mode; then
   for i in "${!picker_colors[@]}"; do
     $convert_bin -size 1920x1080 "xc:#${picker_colors[$i]}" "$picker_dir/img-$i.png"
   done
+  # The Dark/Light variant sets (2026-08-12), STAGED rather than in place:
+  # every leg of the drive above them runs against the flat listing, which is
+  # what a directory with no variant pair does, and the drive moves these in
+  # mid-run to cover the other half. `.stage` is not one of the scan's
+  # starting points, so nothing here is visible until it is moved.
+  #
+  # 960x540, unlike the 20 above: those are sized to prove the grid's decode
+  # cap and to give the Rss bracket a real signal, neither of which is this
+  # set's job — it exists to be counted and switched between. Deliberately
+  # different counts per variant, so a status dump reporting the wrong set is
+  # unambiguous rather than a coincidence.
+  picker_dark_colors=(1b2a4a 24344f 2f3f5c 3a4a68 111c33)
+  picker_light_colors=(f5efe0 e8dcc3 fbf7ee)
+  mkdir -p "$picker_dir/.stage/Dark" "$picker_dir/.stage/Light"
+  for i in "${!picker_dark_colors[@]}"; do
+    $convert_bin -size 960x540 "xc:#${picker_dark_colors[$i]}" "$picker_dir/.stage/Dark/dark-$i.png"
+  done
+  for i in "${!picker_light_colors[@]}"; do
+    $convert_bin -size 960x540 "xc:#${picker_light_colors[$i]}" "$picker_dir/.stage/Light/light-$i.png"
+  done
 fi
 
 # --clipboard's image leg fixture: a tiny solid-color PNG, hashed up front
@@ -1777,11 +1822,16 @@ if $wallpaper_mode; then
   # That matters most with the dither on (wallpaper.dither, default true):
   # the fade only starts once the incoming layer's Canvas has actually
   # painted, and that gate is the one part of the surface a first-paint-only
-  # run never touches. Its color is deliberately #7a3fb0's channels rotated,
-  # so the two wallpapers posterize onto visibly different step sets and the
-  # screenshot assertion below can tell which one it is looking at.
+  # run never touches.
+  #
+  # A left-to-right GRADIENT, not a second solid (2026-08-12): the dither
+  # pass derives its palette from the image, so a solid source is proof of
+  # flatness (that is what wp.png above is for) and can never be proof that
+  # anything dithered. Generated portrait and rotated, so the ramp runs along
+  # the axis a full-width sample crosses; the two ends are far enough apart in
+  # luminance that the palette genuinely needs every entry it is allowed.
   wp2_path="$shot_dir/wp2.png"
-  $convert_bin -size 1920x1080 xc:'#3fb07a' "$wp2_path"
+  $convert_bin -size 1080x1920 gradient:'#3fb07a-#0b2d20' -rotate 90 "$wp2_path"
 fi
 
 # --theme-toggle's drive: the dark shot waits out shell startup (same 4s the
@@ -2873,6 +2923,9 @@ post_close=\$(_smaps)
 # below need — deliberately outside the memory bracket above.
 "$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
 sleep 1
+# The flat listing, while it is open: no Dark/Light pair exists yet, so this
+# is the no-variant path every existing setup takes.
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_flat_status_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
@@ -2883,6 +2936,22 @@ sleep 2
 sleep 1
 cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
 printf '{"shellPid":"%s","preOpenRss":%s,"openRss":%s,"postCloseRss":%s}\n' "\$shell_pid" "\$pre_open" "\$open_state" "\$post_close" > "$picker_mem_path"
+# The Dark/Light legs. Moving the staged sets in while the shell is already
+# running is deliberate: the route re-scans on every entry, so the next summon
+# has to pick up a directory that changed under it — a scan cached at startup
+# would still report the flat listing here and fail the assertions below.
+mv "$picker_dir/.stage/Dark" "$picker_dir/Dark"
+mv "$picker_dir/.stage/Light" "$picker_dir/Light"
+"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_dark_status_path" 2>&1
+# The switcher's own action over IPC — the DARK | LIGHT cells and Tab both
+# drive this same function in a live session.
+"$qs_bin" ipc -p "$shell_path" call picker variant light > "$picker_variant_reply_path" 2>&1
+sleep 2
+niri msg action screenshot-screen --path "$picker_variant_path"
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_light_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker close > /dev/null 2>&1
 EOF
 fi
 
@@ -3485,6 +3554,10 @@ fi
     # whose own drive script owns the timeline from sleep 9 on and whose
     # assertions all compare against the first wallpaper's path.
     if ! $theme_toggle_mode; then
+      # The solid wallpaper's own shot, taken while it is still the only one
+      # on screen: the monotone-flatness assertion needs a frame that predates
+      # the gradient (see the wp2 fixture comment).
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $wallpaper_solid_path\""
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 9 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp2_path'\""
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc -p '$shell_path' call wallpaper get > $wallpaper_get_path 2>&1\""
     fi
@@ -3778,13 +3851,14 @@ fi
     # ordinary session with the screensaver already dismissed for good.
     screenshot_delay=80
   elif $picker_mode; then
-    # picker-drive.sh's own final step (the selection-file readback) lands
-    # around its internal sleep sum (~31s in — the post-close Rss sample
-    # alone waits 20s for the QML engine's own GC cycle to actually run, see
-    # its own comment); this run's generic smoke.png/SMOKE_OK is taken 4s
-    # after that, showing the ordinary session with the picker already
+    # picker-drive.sh's own final step (the light-variant status dump) lands
+    # around its internal sleep sum (~31s in for the selection readback — the
+    # post-close Rss sample alone waits 20s for the QML engine's own GC cycle
+    # to actually run, see its own comment — then ~8s more for the two
+    # variant legs and their grim); this run's generic smoke.png/SMOKE_OK is
+    # taken past that, showing the ordinary session with the picker already
     # closed again.
-    screenshot_delay=35
+    screenshot_delay=46
   elif $tray_mode; then
     # tray-drive.sh's own final step (the activate call on fixture 2) lands
     # around its internal sleep sum (~11s in); this run's generic
@@ -3929,11 +4003,16 @@ fi
 # schedule except screensaver_mode's, whose worst-case cycle-proof poll
 # pushes the smoke.png shot itself to 80s (see screenshot_delay above),
 # share_mode's, whose own worst case (screenshot_delay=36 plus tail_gap)
-# leaves too little margin against 40s, and record_mode's, whose two
-# settle-polls can push its own shot to 70s.
+# leaves too little margin against 40s, picker_mode's, whose Dark/Light legs
+# run past the 20s GC settle window its Rss bracket already needs, and
+# record_mode's, whose two settle-polls can push its own shot to 70s.
 session_timeout=40
 if $screensaver_mode; then
   session_timeout=100
+elif $picker_mode; then
+  # screenshot_delay=46 plus tail_gap: the session was being SIGTERMed at 40s,
+  # before its own final shot, the moment the variant legs were added.
+  session_timeout=60
 elif $capture_mode; then
   # screenshot_delay=30 plus tail_gap needs real margin past 33.
   session_timeout=50
@@ -4006,37 +4085,57 @@ if $wallpaper_mode && ! $theme_toggle_mode; then
     echo "SMOKE_FAIL: wallpaper get did not report the second wallpaper — got: $(cat "$wallpaper_get_path" 2>/dev/null)" >&2
     exit 1
   fi
-  # A 64x64 patch of bare wallpaper, well clear of the bar. wp2 is solid
-  # #3fb07a (63,176,122), so with wallpaper.dither on every pixel here is
-  # one of DitherImage's posterized steps: R in {0,128}, G in {128,255},
-  # B in {0,128}, and never the source color itself. An undithered render
-  # would report 3fb07a everywhere; a render that quantized without
-  # dithering would report exactly one color.
-  wallpaper_patch_path="$shot_dir/wallpaper-patch.txt"
-  $convert_bin "$shot_dir/smoke.png" -crop 64x64+100+500 +repage txt:- > "$wallpaper_patch_path" 2>&1
-  if grep -qi '#3FB07A' "$wallpaper_patch_path"; then
-    echo "SMOKE_FAIL: the wallpaper patch still carries the undithered source color 3fb07a" >&2
-    exit 1
-  fi
+  # Half one: the SOLID wallpaper, sampled off its own pre-crossfade frame.
+  # A monotone source's color is its whole derived palette, so every cell
+  # matches an entry exactly and nothing has a second-nearest to dither
+  # against — a 64x64 patch of bare wallpaper (well clear of the bar) must be
+  # #7a3fb0 (122,63,176) and nothing else. This is the owner's own 2026-08-12
+  # report as an assertion: the old fixed posterize grid speckled exactly here.
+  #
   # The trailing [,)] tolerates an alpha component, which grim's PNG may or
   # may not carry; a pattern anchored on ")" would silently parse nothing.
+  wallpaper_solid_patch_path="$shot_dir/wallpaper-solid-patch.txt"
+  if [ ! -f "$wallpaper_solid_path" ]; then
+    echo "SMOKE_FAIL: no pre-crossfade solid-wallpaper screenshot produced" >&2
+    exit 1
+  fi
+  $convert_bin "$wallpaper_solid_path" -crop 64x64+100+500 +repage txt:- > "$wallpaper_solid_patch_path" 2>&1
+  wallpaper_solid_pixels=$(sed -n 's/^[0-9]*,[0-9]*: (\([0-9]*\),\([0-9]*\),\([0-9]*\)[,)].*/\1 \2 \3/p' "$wallpaper_solid_patch_path")
+  if [ -z "$wallpaper_solid_pixels" ]; then
+    echo "SMOKE_FAIL: could not read any pixel out of the solid-wallpaper patch — head: $(head -n3 "$wallpaper_solid_patch_path")" >&2
+    exit 1
+  fi
+  wallpaper_solid_off=$(printf '%s\n' "$wallpaper_solid_pixels" \
+    | awk '{ if ($1 != 122 || $2 != 63 || $3 != 176) { print; exit } }')
+  if [ -n "$wallpaper_solid_off" ]; then
+    echo "SMOKE_FAIL: monotone wallpaper pixel ($wallpaper_solid_off) is not the source color 7a3fb0 — the dither is speckling a flat source" >&2
+    exit 1
+  fi
+  echo "SMOKE_WALLPAPER_FLAT 64x64 patch of the monotone wallpaper is 7a3fb0 end to end, no dither dots"
+  echo "SMOKE_WALLPAPER_SOLID $wallpaper_solid_path"
+  # Half two: the GRADIENT wallpaper, off the settled crossfade. A full-width
+  # strip crosses the whole ramp, so it must show more than a couple of colors
+  # (the pass quantized AND dithered) and no more than the palette is allowed
+  # (it quantized to a derived palette rather than passing the source through).
+  # Read as whole rows because the strip spans every column of the gradient;
+  # a small square could legitimately sit inside one flat palette cell.
+  wallpaper_patch_path="$shot_dir/wallpaper-patch.txt"
+  $convert_bin "$shot_dir/smoke.png" -crop 1920x40+0+500 +repage txt:- > "$wallpaper_patch_path" 2>&1
   wallpaper_patch_pixels=$(sed -n 's/^[0-9]*,[0-9]*: (\([0-9]*\),\([0-9]*\),\([0-9]*\)[,)].*/\1 \2 \3/p' "$wallpaper_patch_path")
   if [ -z "$wallpaper_patch_pixels" ]; then
     echo "SMOKE_FAIL: could not read any pixel out of the wallpaper patch — head: $(head -n3 "$wallpaper_patch_path")" >&2
     exit 1
   fi
-  wallpaper_bad_step=$(printf '%s\n' "$wallpaper_patch_pixels" \
-    | awk '{ if (($1 != 0 && $1 != 128) || ($2 != 128 && $2 != 255) || ($3 != 0 && $3 != 128)) { print; exit } }')
-  if [ -n "$wallpaper_bad_step" ]; then
-    echo "SMOKE_FAIL: wallpaper pixel ($wallpaper_bad_step) is not on a posterized dither step" >&2
-    exit 1
-  fi
   wallpaper_patch_colors=$(printf '%s\n' "$wallpaper_patch_pixels" | sort -u | wc -l | tr -d ' ')
-  if [ "${wallpaper_patch_colors:-0}" -lt 2 ]; then
-    echo "SMOKE_FAIL: the wallpaper patch is a single flat color, so nothing dithered" >&2
+  if [ "${wallpaper_patch_colors:-0}" -lt 3 ]; then
+    echo "SMOKE_FAIL: the gradient wallpaper strip carries only $wallpaper_patch_colors color(s), so nothing dithered" >&2
     exit 1
   fi
-  echo "SMOKE_WALLPAPER_DITHER $wallpaper_patch_colors distinct posterized colors in a 64x64 patch, source 3fb07a absent"
+  if [ "$wallpaper_patch_colors" -gt 6 ]; then
+    echo "SMOKE_FAIL: the gradient wallpaper strip carries $wallpaper_patch_colors colors, more than the 6-entry derived palette allows — the pass didn't quantize" >&2
+    exit 1
+  fi
+  echo "SMOKE_WALLPAPER_DITHER $wallpaper_patch_colors distinct palette colors across a 1920x40 strip of the gradient wallpaper"
 fi
 
 if $theme_toggle_mode && $wallpaper_mode; then
@@ -4893,6 +4992,48 @@ if $picker_mode; then
   # (proves it actually came back down, not just down-from-peak) — 40MB
   # against an observed ~6.5MB steady-state gap is slack for GC-timing
   # jitter, not for a real leak.
+  # Dark/Light variants. The flat dump first: with no subdirectory pair, the
+  # route lists the directory itself and raises no switcher — every setup that
+  # doesn't use variants must keep behaving exactly this way.
+  if [ ! -s "$picker_flat_status_path" ]; then
+    echo "SMOKE_FAIL: no flat picker status produced" >&2; exit 1
+  fi
+  cat "$picker_flat_status_path"
+  if ! grep -q '"hasVariants":false' "$picker_flat_status_path" \
+    || ! grep -q '"variant":"none"' "$picker_flat_status_path" \
+    || ! grep -q '"count":20' "$picker_flat_status_path"; then
+    echo "SMOKE_FAIL: the flat listing did not report all 20 images with no variants — got: $(cat "$picker_flat_status_path")" >&2; exit 1
+  fi
+  # Then the same directory with the pair moved in underneath the running
+  # shell: hasVariants, entered on the theme's own mode (dark in this
+  # session), listing only that set.
+  if [ ! -s "$picker_dark_status_path" ]; then
+    echo "SMOKE_FAIL: no dark-variant picker status produced" >&2; exit 1
+  fi
+  cat "$picker_dark_status_path"
+  if ! grep -q '"hasVariants":true' "$picker_dark_status_path" \
+    || ! grep -q '"variant":"dark"' "$picker_dark_status_path" \
+    || ! grep -q '"darkCount":5' "$picker_dark_status_path" \
+    || ! grep -q '"lightCount":3' "$picker_dark_status_path" \
+    || ! grep -q '"count":5' "$picker_dark_status_path"; then
+    echo "SMOKE_FAIL: the variant listing did not report the dark set on entry — got: $(cat "$picker_dark_status_path")" >&2; exit 1
+  fi
+  if ! grep -qx 'ok' "$picker_variant_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: picker variant light was refused — got: $(cat "$picker_variant_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$picker_light_status_path" ]; then
+    echo "SMOKE_FAIL: no light-variant picker status produced" >&2; exit 1
+  fi
+  cat "$picker_light_status_path"
+  if ! grep -q '"variant":"light"' "$picker_light_status_path" \
+    || ! grep -q '"count":3' "$picker_light_status_path"; then
+    echo "SMOKE_FAIL: the switcher did not swap the listing to the light set — got: $(cat "$picker_light_status_path")" >&2; exit 1
+  fi
+  if [ -f "$picker_variant_path" ]; then
+    echo "SMOKE_PICKER_VARIANT $picker_variant_path"
+  else
+    echo "SMOKE_FAIL: no picker-variant screenshot produced" >&2; exit 1
+  fi
   if [ -s "$picker_mem_path" ]; then
     echo "SMOKE_PICKER_MEM $picker_mem_path"
     cat "$picker_mem_path"

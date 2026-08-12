@@ -380,25 +380,34 @@ qs ipc --any-display -p <store-path>/share/formalshell call theme mode toggle   
 qs ipc --any-display -p <store-path>/share/formalshell call theme status         # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
 ```
 
-**Wallpaper dither.** The wallpaper renders through the same ordered-Bayer
-retro pass the album covers use (`docs/DESIGN.md` §2 item 12): each RGB
-channel posterizes to three steps, a 4×4 Bayer bias tipping a channel to
-its neighbour near a boundary, so the image keeps its own hue and comes
-out 27-color rather than gray. Content, not chrome, so it is exempt from
-matugen retheming the way a photo is.
+**Wallpaper dither.** The wallpaper renders through the same retro pass the
+album covers use (`docs/DESIGN.md` §2 item 12), a 90s limited-palette
+conversion: six colors are derived from that image by median cut, each cell
+takes its nearest one, and an ordered 4×4 Bayer dither only mixes it with its
+second nearest, in proportion to how far between the two it sits. So the
+image keeps its own hue, a photo comes out as flat bands with dithered
+transitions, and a solid or near-solid wallpaper stays perfectly flat — its
+own color is in its own palette, so there is nothing to mix it with and no
+dots anywhere. Content, not chrome, so it is exempt from matugen retheming
+the way a photo is; matugen also reads the wallpaper file itself, never this
+rendering, so the dither cannot influence the color scheme.
 
 The grid is sized in **screen** pixels, never source pixels: cells are the
 screen's long edge over 480, floored at 2px, so a 4000px photo and a
 1200px one land on the same grid on the same display, and a 4K screen gets
 larger cells instead of four times as many. The image is cover-cropped to
-the screen first, so the dither is square on screen whatever the source's
+the screen first (nearest-neighbor, so the scale never introduces a color the
+file didn't have), so the dither is square on screen whatever the source's
 aspect ratio.
 
-It is on by default. Turn it off for a true-color wallpaper:
+It is on by default. Turn it off for a true-color wallpaper, or raise the
+palette for a subtler pass — more colors means less quantization error, so
+less of the image dithers at all:
 
 ```jsonc
 // ~/.config/formalshell/settings.json
 { "wallpaper": { "dither": false } }
+{ "wallpaper": { "ditherColors": 12 } }
 ```
 
 **Motion.** Transitions across the shell run off `Theme.motion` tokens
@@ -632,7 +641,9 @@ way: an unresolvable route opens the menu at root rather than erroring.
 **Wallpaper.** The root `WALLPAPER` node is a level like any other, except
 that the menu draws it as the [Picker](#picker) grid instead of a row list:
 descending into it lists `picker.directory` as image cells, the search field
-filters them by filename, and Enter sets the wallpaper. It is a plain
+filters them by filename, and Enter sets the wallpaper. A `Dark`/`Light`
+subdirectory pair there splits the grid into two variants with a `Tab`-able
+switcher (see [Picker](#picker)). It is a plain
 `provider` entry in `default-menu.jsonc`, so overrides address it by its
 `"wallpaper"` id like any declared node, including `"hidden": true`. There
 is no separate picker surface any more — `picker summon` and `menu summon
@@ -1818,6 +1829,15 @@ route (Quickshell has no directory-listing QML type, the same technique
 a directory edited between visits is picked up and a visit's decoded
 thumbnails do not outlive it. An empty or unset directory is an empty grid.
 
+**Dark/Light variants.** The scan also looks one level down, into `Dark` and
+`Light` subdirectories (either name, any case). If either exists, the grid
+shows one variant at a time and a `DARK | LIGHT` switcher sits between the
+search field and the grid, the live one inverted; `Tab` (or a click on either
+cell) swaps it, and the route always opens on the variant matching the
+theme's current mode. Files sitting directly in the directory are not listed
+in that case. A directory with neither subdirectory is listed flat and shows
+no switcher at all, so nothing changes for a setup that doesn't use them.
+
 The route doubles as two things:
 
 - **Wallpaper mode** (the menu row, `menu summon wallpaper`, `picker
@@ -1846,8 +1866,9 @@ uses it, and `menu`'s own `select()`/`input()` mean something different:
 qs ipc --any-display -p <store-path>/share/formalshell call picker summon                       # open in wallpaper mode
 qs ipc --any-display -p <store-path>/share/formalshell call picker select /path/to/dir tok1      # open in select mode, correlated by token
 qs ipc --any-display -p <store-path>/share/formalshell call picker choose /path/to/dir/img.png   # same action Enter/click on a cell takes
+qs ipc --any-display -p <store-path>/share/formalshell call picker variant light                 # same action Tab and the DARK | LIGHT cells take
 qs ipc --any-display -p <store-path>/share/formalshell call picker close
-qs ipc --any-display -p <store-path>/share/formalshell call picker status   # {"open":…,"mode":…,"directory":…,"count":…,"cursor":…}
+qs ipc --any-display -p <store-path>/share/formalshell call picker status   # {"open":…,"mode":…,"directory":…,"count":…,"variant":…,"hasVariants":…,"darkCount":…,"lightCount":…,"cursor":…}
 
 # poll/read a select() answer, same convention as menu-selection.txt:
 cat $XDG_STATE_HOME/formalshell/picker-selection.txt

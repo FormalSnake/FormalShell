@@ -111,11 +111,16 @@ shell/
                                   password/username field (shrink-to-fit dot masking, CHECKING state,
                                   fingerprint glyph); LockSurface.qml and greeter/greeter.qml both
                                   instantiate it unchanged
+    DitherImage.qml               content imagery's Canvas pass (DESIGN.md §2 item 12): duotone role-color
+                                  1-bit, or "retro" — an image-derived palette on a chunk grid
+    dither.js                    pure JS, .pragma library — palette() (median cut, up to paletteSize
+                                  colors from the image itself), quantize() (nearest entry, ordered-
+                                  dithered against the second nearest only), BAYER/hex/hexPalette
     qmldir
   Menu/
     model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
     search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
-    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/imageRows()/captureEntries()
+    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/imageRows()/wallpaperVariants()/wallpaperListing()/captureEntries()
     actions.js                   pure JS, .pragma library — actionBar(): the bottom action bar's primary verb + key hints
     toggles.js                   pure JS, .pragma library — the "@state:" checked-condition allow-list
                                   (nightlight.active/screensaver.stayAwake/notifications.dnd/theme.dark),
@@ -190,7 +195,7 @@ shell/
     MediaIpc.qml                  IpcHandler target "media", playPause()/next()/previous()/status()
     LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status() — no unlock(), see its own header comment
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
-    PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/close()/status()
+    PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/variant(dark|light)/close()/status()
     TrayIpc.qml                   IpcHandler target "tray", status()/expand()/collapse() — spec addendum, same rationale as "panel"
     ScreenshotIpc.qml             IpcHandler target "screenshot", full()/region()/pick(mode,processing)/
                                    key(name)/pickerStatus()/edit(path)/cancel()/status(); pick() drives
@@ -231,10 +236,12 @@ shell/
         QmlModule.qml                bar.modules "qml" entry: Loader-hosted user file, load-time isolation only
         PluginBarModule.qml          kind:"bar" plugin host: Loader-hosted entry file, forwards its `shown`
     Background/
-      Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
+      Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper,
+                                 dithered through DitherImage's retro pass (wallpaper.dither/ditherColors)
     Menu/
       Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells.
-                                 Two views over one row set: a ListView, or a GridView on the "wallpaper" route (the picker)
+                                 Two views over one row set: a ListView, or a GridView on the "wallpaper" route (the picker),
+                                 plus that route's DARK | LIGHT variant switcher when the directory has the subdirectory pair
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
       MenuActionBar.qml          Cell subtype: the card's bottom row — primary verb behind an accent key cap, key hints right
     Panels/
@@ -1094,6 +1101,8 @@ Ipc/PickerIpc.qml (target "picker")
   summon()              -> menu.openWallpaperPicker()
   select(dir, token)    -> menu.openImageSelect(dir, token)
   choose(path)           -> menu.chooseImage(path)  (same action Enter/click use)
+  variant(dark|light)    -> menu.setPickerVariant(name)  (same action the DARK | LIGHT
+                            cells and Tab use; refused where the listing has no variants)
   close()                -> menu.close()
   status()               -> JSON.stringify(menu.pickerStatus())
     |

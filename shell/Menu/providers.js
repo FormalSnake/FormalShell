@@ -505,6 +505,59 @@ function imageBasename(path) {
     return cut >= 0 ? p.slice(cut + 1) : p;
 }
 
+// Dark/Light variant split (owner, 2026-08-12: "for wallpapers, i want them
+// to read the Dark/Light folders if they exist in the wallpaper folders, if
+// not read just the root wallpaper folders"). The scan hands over everything
+// it found directly under the picker directory AND directly under its
+// `Dark`/`Light` subdirectories (either case) in one listing; this decides
+// which of the three each path belongs to, from its position relative to
+// `baseDir` rather than from its parent directory's name alone — a picker
+// directory itself called `Dark` must not turn its own root listing into a
+// variant.
+//
+// `hasVariants` is what the route keys its switcher off: neither
+// subdirectory means one flat listing and no switcher at all, which is every
+// existing setup and every `picker select` caller passing an arbitrary
+// directory. One of the two present is still variant mode, with the other
+// variant simply empty — an empty grid under a LIGHT header reads honestly,
+// where silently falling back to the root listing would look like the
+// switcher did nothing.
+function wallpaperVariants(paths, baseDir) {
+    var base = String(baseDir || "").replace(/\/+$/, "");
+    var out = { hasVariants: false, dark: [], light: [], root: [] };
+    (paths || []).forEach(function (p) {
+        var variant = _pathVariant(String(p), base);
+        if (variant === "dark")
+            out.dark.push(p);
+        else if (variant === "light")
+            out.light.push(p);
+        else
+            out.root.push(p);
+    });
+    out.hasVariants = out.dark.length > 0 || out.light.length > 0;
+    return out;
+}
+
+function _pathVariant(path, base) {
+    if (base !== "" && path.indexOf(base + "/") !== 0)
+        return "";
+    var rest = base !== "" ? path.slice(base.length + 1) : path;
+    var cut = rest.indexOf("/");
+    if (cut < 0)
+        return "";
+    var segment = rest.slice(0, cut).toLowerCase();
+    return segment === "dark" || segment === "light" ? segment : "";
+}
+
+// The listing one variant shows. The single entry point for it, so the grid,
+// `picker choose`'s membership check and `picker status`'s count can never
+// disagree about what is currently on screen.
+function wallpaperListing(variants, variant) {
+    if (!variants || !variants.hasVariants)
+        return variants ? variants.root : [];
+    return variant === "light" ? variants.light : variants.dark;
+}
+
 function imageRows(paths, query) {
     var q = String(query || "").trim().toLowerCase();
     return (paths || []).filter(function (p) {

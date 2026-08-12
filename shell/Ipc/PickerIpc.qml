@@ -1,6 +1,6 @@
 import Quickshell.Io
 
-// `qs ipc call picker summon|select|choose|close|status` — spec §11's image/
+// `qs ipc call picker summon|select|choose|variant|close|status` — spec §11's image/
 // wallpaper picker. summon() opens it in wallpaper mode over the configured
 // picker.directory; choosing an image there sets the wallpaper exactly like
 // `wallpaper set` (Core.State.setWallpaper — see Menu.qml's picker block,
@@ -45,6 +45,22 @@ IpcHandler {
         if (!picker)
             return "error: picker not ready";
         return picker.chooseImage(path) ? "ok" : "error: not on the picker route, or path not in the current listing";
+    }
+
+    // The DARK | LIGHT switcher's own action, for the same reason choose()
+    // exists: the cells and Tab both work in a live session, and neither is
+    // reachable from a headless rig that has no proven pointer or keyboard
+    // delivery into an OnDemand-focus layer surface. Refuses rather than
+    // silently doing nothing when the current listing has no variants to
+    // switch between.
+    function variant(name: string): string {
+        if (!picker)
+            return "error: picker not ready";
+        if (name !== "dark" && name !== "light")
+            return "error: variant must be dark or light";
+        return picker.setPickerVariant(name)
+            ? "ok"
+            : "error: not on the picker route, or the listing has no Dark/Light variants";
     }
 
     function close(): string {

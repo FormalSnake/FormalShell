@@ -365,6 +365,13 @@ PanelWindow {
     //   stays separate from the menu's own menu-selection.txt: they are two
     //   documented request channels with different callers, and merging
     //   them would let one answer the other's poll.
+    //
+    // A `Dark`/`Light` subdirectory pair inside the scanned directory splits
+    // the listing in two (Providers.wallpaperVariants) and raises the DARK |
+    // LIGHT switcher above the grid; a directory with neither is listed flat
+    // and shows no switcher, so nothing changes for a setup that doesn't use
+    // them. The variant a route entry lands on is the theme's own current
+    // mode, which is the one the owner is looking at.
     readonly property string _pickerRouteId: "wallpaper"
     readonly property bool _isPickerRoute: root._mode === "menu" && root.currentNodeId === root._pickerRouteId
     readonly property int pickerColumns: 4
@@ -372,7 +379,13 @@ PanelWindow {
     property string _pickerMode: "wallpaper"   // "wallpaper" | "select"
     property string _pickerDir: ""
     property string _pickerToken: ""
-    property var _pickerImages: []
+    // Everything the scan found, both variant subdirectories and the root
+    // directory in one listing; the split below is what the grid reads.
+    property var _pickerScanned: []
+    property string _pickerVariant: "dark"     // "dark" | "light"
+    readonly property var _pickerVariants: Providers.wallpaperVariants(root._pickerScanned, root._pickerDir)
+    readonly property bool _pickerHasVariants: root._pickerVariants.hasVariants
+    readonly property var _pickerImages: Providers.wallpaperListing(root._pickerVariants, root._pickerVariant)
     // Set by openImageSelect() so the level entry it triggers keeps that
     // caller's directory and token — every other way of reaching this level
     // (the menu row, `menu summon wallpaper`, `picker summon`) is a plain
@@ -382,12 +395,23 @@ PanelWindow {
     // Quickshell has no directory-listing QML type (same rationale as
     // CalendarEventsService's own `find`-backed read) — re-scanned on every
     // entry into the route, so a directory edited between opens is picked up.
+    // Both variant subdirectories are named as starting points alongside the
+    // directory itself: `find` reports a missing one on stderr (swallowed)
+    // and carries on with the rest, so one invocation covers every layout,
+    // and `-maxdepth 1` per starting point is what keeps an unrelated
+    // subdirectory of wallpapers out of the listing. `sort -u` because a
+    // case-insensitive filesystem answers both `Dark` and `dark` with the
+    // same directory.
     function _scanPickerDir() {
         if (root._pickerDir === "") {
-            root._pickerImages = [];
+            root._pickerScanned = [];
             return;
         }
-        pickerScanProc.command = ["sh", "-c", 'find "$1" -maxdepth 1 -type f \\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.bmp" \\) 2>/dev/null | sort', "sh", root._pickerDir];
+        pickerScanProc.command = ["sh", "-c",
+            'find "$1" "$1/Dark" "$1/dark" "$1/Light" "$1/light" -maxdepth 1 -type f'
+            + ' \\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.bmp" \\)'
+            + ' 2>/dev/null | sort -u',
+            "sh", root._pickerDir];
         pickerScanProc.running = true;
     }
 
@@ -395,7 +419,7 @@ PanelWindow {
         id: pickerScanProc
 
         stdout: StdioCollector {
-            onStreamFinished: root._pickerImages = text.split("\n").filter(function (l) { return l.length > 0; })
+            onStreamFinished: root._pickerScanned = text.split("\n").filter(function (l) { return l.length > 0; })
         }
     }
 
@@ -407,16 +431,38 @@ PanelWindow {
             root._pickerToken = "";
         }
         root._pickerRequestPending = false;
+        // The variant the theme is currently in, every entry — a switch is a
+        // deliberate act of browsing the other set, not a preference the
+        // route carries over from last time.
+        root._pickerVariant = Core.State.mode === "light" ? "light" : "dark";
         root._scanPickerDir();
     }
 
-    // Dropping _pickerImages destroys every decoded thumbnail with the grid
+    // Dropping the listing destroys every decoded thumbnail with the grid
     // delegates that held them — the whole point of the old panel's close()
     // override (M16 Task 12), kept. Re-entering re-scans and re-decodes,
     // which is cheap; the decodes were the cost.
     function _leavePickerRoute() {
         root._abandonPendingPicker();
-        root._pickerImages = [];
+        root._pickerScanned = [];
+    }
+
+    // The DARK | LIGHT switcher's one entry point: the cells, Tab, and
+    // `picker variant` over IPC all land here. Same-variant calls are a
+    // no-op rather than a failure — a caller asking for the variant already
+    // showing got what it asked for.
+    function setPickerVariant(variant) {
+        if (!root.isOpen || !root._isPickerRoute || !root._pickerHasVariants)
+            return false;
+        var next = variant === "light" ? "light" : "dark";
+        if (root._pickerVariant !== next) {
+            root._pickerVariant = next;
+            // The other variant is a different listing of a different length:
+            // the old index would land on an unrelated image, or past the end.
+            root._cursorIndex = 0;
+            pointerGate.reset();
+        }
+        return true;
     }
 
     function _abandonPendingPicker() {
@@ -464,7 +510,12 @@ PanelWindow {
             open: root.isOpen && root._isPickerRoute,
             mode: root._pickerMode,
             directory: root._pickerDir,
+            // The listing actually on screen, so this tracks the variant.
             count: root._pickerImages.length,
+            variant: root._pickerHasVariants ? root._pickerVariant : "none",
+            hasVariants: root._pickerHasVariants,
+            darkCount: root._pickerVariants.dark.length,
+            lightCount: root._pickerVariants.light.length,
             cursor: root._cursorIndex
         };
     }
@@ -625,6 +676,10 @@ PanelWindow {
         atRoot: root.currentNodeId === null,
         grid: root._isPickerRoute,
         pickerSelect: root._pickerMode === "select",
+        // The variant Tab would switch TO, null wherever Tab does nothing.
+        variantSwitch: root._isPickerRoute && root._pickerHasVariants
+            ? (root._pickerVariant === "dark" ? "light" : "dark")
+            : null,
         confirming: root._confirmPendingId !== "" && !!root._cursorNode
             && root._cursorNode.id === root._confirmPendingId
     })
@@ -671,7 +726,7 @@ PanelWindow {
     // row list everywhere else. The idle one is emptied rather than merely
     // hidden (see their `model` bindings), so its contentHeight is 0.
     readonly property real _viewContentHeight: root._isPickerRoute ? gridView.contentHeight : rowsView.contentHeight
-    readonly property real _rowsAreaHeight: Math.min(root._viewContentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - actionBar.height))
+    readonly property real _rowsAreaHeight: Math.min(root._viewContentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - variantRow.height - actionBar.height))
 
     // Card-top freeze (omarchy parity, M16 Task 2): a filter keystroke pins
     // the top margin at whatever it currently resolves to, so every
@@ -1353,7 +1408,7 @@ PanelWindow {
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
     implicitWidth: Core.Theme.space.popupWidthMenu
-    implicitHeight: root._chrome + searchCell.height + root._rowsAreaHeight + actionBar.height
+    implicitHeight: root._chrome + searchCell.height + variantRow.height + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -1536,7 +1591,67 @@ PanelWindow {
                                 event.accepted = true;
                             }
                             break;
+                        // Two variants, so Tab and Shift+Tab are the same
+                        // switch. Claimed only where the switcher is actually
+                        // up, so Tab keeps whatever it does everywhere else.
+                        case Qt.Key_Tab:
+                        case Qt.Key_Backtab:
+                            if (root._isPickerRoute && root._pickerHasVariants) {
+                                root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
+                                event.accepted = true;
+                            }
+                            break;
                         }
+                    }
+                }
+            }
+        }
+
+        // The wallpaper route's DARK | LIGHT switcher — two ledger cells
+        // sharing the grid's own width, the live one carrying `selected`
+        // (§2.2's fg/bg inversion, the same thing that marks the cursor row),
+        // so which set is on screen is stated rather than remembered. Absent
+        // entirely — zero height, no reserved gutter — for a directory with no
+        // Dark/Light pair, and on every other route.
+        //
+        // Both views below anchor to this rather than to searchCell, so the
+        // switcher pushes the grid down without either of them knowing
+        // whether it is there.
+        Row {
+            id: variantRow
+            anchors.top: searchCell.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            width: root._contentWidth
+            height: visible ? implicitHeight : 0
+            visible: root._isPickerRoute && root._pickerHasVariants
+
+            Repeater {
+                model: [
+                    { variant: "dark", label: "DARK" },
+                    { variant: "light", label: "LIGHT" }
+                ]
+
+                delegate: Cell {
+                    id: variantCell
+                    required property var modelData
+
+                    width: variantRow.width / 2
+                    selected: root._pickerVariant === variantCell.modelData.variant
+                    hovered: variantMouse.containsMouse
+
+                    MetaLabel {
+                        anchors.centerIn: parent
+                        text: variantCell.modelData.label
+                        color: variantCell.foreground
+                    }
+
+                    MouseArea {
+                        id: variantMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.setPickerVariant(variantCell.modelData.variant)
                     }
                 }
             }
@@ -1544,7 +1659,7 @@ PanelWindow {
 
         ListView {
             id: rowsView
-            anchors.top: searchCell.bottom
+            anchors.top: variantRow.bottom
             anchors.left: parent.left
             anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
             width: root._contentWidth
@@ -1588,7 +1703,7 @@ PanelWindow {
         // anchor to whichever of the two is live without knowing which.
         GridView {
             id: gridView
-            anchors.top: searchCell.bottom
+            anchors.top: variantRow.bottom
             anchors.left: parent.left
             anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
             width: root._contentWidth
