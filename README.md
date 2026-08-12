@@ -80,13 +80,15 @@ Nothing from M22 is in the table yet. `dev/smoke-niri.sh --capture`
 screenshots the region picker on every run, but none of those frames are
 committed here.
 
-The five builtin screensaver effects, frame-stepped and captured as GIFs
-before ttfx landed (`dev/smoke-niri.sh --screensaver-gif`, `CLAUDE.md`, which
-now records ttfx's own effects):
+Five of ttfx's screensaver effects, recorded by `dev/smoke-niri.sh
+--screensaver-gif` — one nested session per effect, stepped by frame index
+rather than wall clock so the pacing survives a slower machine. `matrix` and
+`thunderstorm` are deliberately absent: both are gated on wall-clock time, so
+the same frame index means something different on the next host.
 
 | | | | | |
 | :---: | :---: | :---: | :---: | :---: |
-| <img src="docs/media/screensaver-decrypt.gif" width="140"><br>**decrypt** | <img src="docs/media/screensaver-rain.gif" width="140"><br>**rain** | <img src="docs/media/screensaver-expand.gif" width="140"><br>**expand** | <img src="docs/media/screensaver-slide.gif" width="140"><br>**slide** | <img src="docs/media/screensaver-scatter.gif" width="140"><br>**scatter** |
+| <img src="docs/media/screensaver-decrypt.gif" width="140"><br>**decrypt** | <img src="docs/media/screensaver-rain.gif" width="140"><br>**rain** | <img src="docs/media/screensaver-expand.gif" width="140"><br>**expand** | <img src="docs/media/screensaver-slide.gif" width="140"><br>**slide** | <img src="docs/media/screensaver-scattered.gif" width="140"><br>**scattered** |
 
 ## Features
 
@@ -155,7 +157,12 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
 - **Screensaver**: an idle-driven terminal-effect banner, animated by
   ttfx (bundled) across its 37 effects, rerolling to a fresh one
   indefinitely until real input dismisses it. Without ttfx on PATH it falls
-  back to five convergence effects written in JS.
+  back to five convergence effects written in JS. Both ends fade at 400ms.
+- **Hot corners** — throw the pointer into a screen corner to show the
+  screensaver (bottom-left) or lock (bottom-right). Each corner is a 4px
+  layer surface with a 400ms dwell; corners, size, dwell and the whole
+  feature are `hotCorners.*` keys in `settings.json`, and both top corners
+  are off by default because the bar owns that edge.
 - **Picker** — a ledger-grid wallpaper/image selector living inside the menu
   as its own route, also usable as a generic image-select IPC surface. A
   `Dark`/`Light` subdirectory pair in the wallpaper directory splits the grid
