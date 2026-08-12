@@ -48,8 +48,10 @@ Singleton {
     readonly property bool active: recProc.running
     readonly property bool transcoding: paletteProc.running || gifProc.running
 
-    // "screen" | "region", and "none" | "desktop" | "desktopmic": what the
-    // current (or most recent) run was asked for.
+    // "screen" | "region" | "window", and "none" | "desktop" | "desktopmic":
+    // what the current (or most recent) run was asked for. "window" only ever
+    // arrives through startAt() — a window is a rectangle to wf-recorder, so
+    // it is a scope label for `record status`, never a different pipeline.
     property string scope: "screen"
     property string audioMode: "none"
 
@@ -73,6 +75,9 @@ Singleton {
 
     property string _pendingPath: ""
     property string _pendingGeometry: ""
+    // The output a caller-supplied geometry sits on. Empty means "the focused
+    // one", which is every path that resolves its own rectangle.
+    property string _pendingOutput: ""
     property string _pendingGifPath: ""
     property var _pendingGifPass2: []
     property var _audioModules: []
@@ -107,6 +112,7 @@ Singleton {
         root.audioMode = wantAudio;
         root.lastError = "";
         root._pendingGeometry = "";
+        root._pendingOutput = "";
         root._pendingPath = Capture.outputPath(root._dir(), "screenrecording", "mp4", new Date());
 
         if (wantScope === "region") {
@@ -129,6 +135,47 @@ Singleton {
             return root._pendingPath;
         }
 
+        root._prepareDirectory();
+        return root._pendingPath;
+    }
+
+    // Start against a rectangle the caller already resolved, skipping the
+    // selection entirely. `opts`:
+    //   geometry  "X,Y WxH" in logical compositor coordinates (required)
+    //   output    the output that rectangle sits on; empty means the focused
+    //             one, and wf-recorder is always pinned to exactly one
+    //   scope     what `record status` reports: screen|region|window
+    //   audio     none|desktop|desktopmic
+    //
+    // This is how the capture picker's RECORD tools start a run (its toolbar
+    // has already resolved the window or display box, and slurp has no part in
+    // it), and how the smoke rig drives a region recording without a pointer
+    // to answer slurp with — the same split `capture textAt` and `picker
+    // choose` already use. An object rather than four positional arguments
+    // because only the IPC boundary needs scalars.
+    function startAt(opts) {
+        if (recProc.running)
+            return "error: already recording";
+        if (slurpProc.running || mkdirProc.running || audioProc.running)
+            return "error: a recording start is already in flight";
+
+        const asked = (opts && opts.geometry) || "";
+        const geometry = Capture.parseGeometry(asked);
+        if (geometry === "")
+            return "error: not a geometry: \"" + asked + "\" (expected \"X,Y WxH\")";
+        const wantScope = (opts && opts.scope) || "region";
+        if (["screen", "region", "window"].indexOf(wantScope) < 0)
+            return "error: unknown scope \"" + wantScope + "\" (screen|region|window)";
+        const wantAudio = (opts && opts.audio) || "none";
+        if (["none", "desktop", "desktopmic"].indexOf(wantAudio) < 0)
+            return "error: unknown audio mode \"" + wantAudio + "\" (none|desktop|desktopmic)";
+
+        root.scope = wantScope;
+        root.audioMode = wantAudio;
+        root.lastError = "";
+        root._pendingGeometry = geometry;
+        root._pendingOutput = (opts && opts.output) || "";
+        root._pendingPath = Capture.outputPath(root._dir(), "screenrecording", "mp4", new Date());
         root._prepareDirectory();
         return root._pendingPath;
     }
@@ -221,11 +268,13 @@ Singleton {
     function _launch(device) {
         // Never omit -o: on a multi-output host wf-recorder would pick one
         // itself, and inside a nested session the nested output is the only
-        // correct answer. Taken at call time, never cached.
+        // correct answer. Taken at call time, never cached. A caller-supplied
+        // rectangle brings its own output (startAt), since the rectangle it
+        // picked need not be on the focused one.
         recProc.command = Capture.recorderArgv({
             path: root._pendingPath,
             framerate: Core.Config.get("recording.framerate", 30),
-            output: CompositorService.focusedOutputName,
+            output: root._pendingOutput || CompositorService.focusedOutputName,
             geometry: root._pendingGeometry,
             codec: Core.Config.get("recording.codec", ""),
             noDmabuf: Core.Config.get("recording.noDmabuf", false) === true,
@@ -255,6 +304,7 @@ Singleton {
         regionWatchdog.stop();
         root._pendingPath = "";
         root._pendingGeometry = "";
+        root._pendingOutput = "";
         root.lastError = why;
         root._releaseAudio();
         console.warn("RecordingService:", why);
@@ -397,6 +447,7 @@ Singleton {
             const saved = root._pendingPath;
             root._pendingPath = "";
             root._pendingGeometry = "";
+            root._pendingOutput = "";
             const wasStopping = root._stopping;
             root._stopping = false;
             if (root._killed) {

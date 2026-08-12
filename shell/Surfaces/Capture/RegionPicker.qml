@@ -42,6 +42,20 @@ import qs.Compositor
 // shift mid-pick, and the overlay cannot photograph its own scrim. No
 // ScreencopyView is involved anywhere (LockSurface.qml's header: it crashes
 // the shell outright).
+//
+// THE TOOLBAR (owner ask, 2026-08-12: "when you do win+shift+s i want a macos
+// style toolbar"). macOS's Cmd+Shift+5 panel is one row of mode buttons plus a
+// commit button, and the picker is already the surface every one of those
+// modes lives on, so the toolbar is chrome on this surface rather than a
+// second one. Six cells: three shot targets and three record targets, screen /
+// window / region each. `action` is what the commit does, `mode` is what it
+// does it to — orthogonal, so RECORD REGION needs no mode of its own.
+//
+// Recording is why `action` exists at all. A recording is not a crop of the
+// freeze: wf-recorder records LIVE content, so the record path unmaps this
+// surface first and hands RecordingService a rectangle, where the shot path
+// keeps the surface up so grim photographs the frozen frames. Same selection
+// model, opposite teardown order — see _finish() versus _finishRecord().
 Scope {
     id: root
 
@@ -49,12 +63,50 @@ Scope {
     // hinted and whether a freeform drag is allowed, matching upstream's mode
     // names so a keybind ported from omarchy reads the same.
     property string mode: "smart"
+    // "shot" | "record" — what Return (and the toolbar's commit cell) does
+    // with the current selection.
+    property string action: "shot"
     property bool isOpen: false
 
     // Resolved by the caller (ScreenshotIpc) into a real capture.
     signal picked(var rect)
     signal pickedWindow(string windowId)
+    // The surface is already unmapped when this fires (see _finishRecord).
+    // `outputName` rides along because wf-recorder is always pinned to one
+    // output and the picker is the only thing that knows which output the
+    // picked rectangle lives on.
+    signal pickedRecord(var rect, string outputName)
     signal cancelled(string reason)
+
+    // The toolbar, left to right. `key` is both the digit that selects the
+    // cell and its 1-based position, so the legend, the Keys handler and the
+    // headless `key` verb all read the same number.
+    readonly property var _tools: [
+        { key: 1, action: "shot",   mode: "fullscreen", glyph: "󰍹", label: "SCREEN" },
+        { key: 2, action: "shot",   mode: "windows",    glyph: "󰖯", label: "WINDOW" },
+        { key: 3, action: "shot",   mode: "smart",      glyph: "󰆞", label: "REGION" },
+        { key: 4, action: "record", mode: "fullscreen", glyph: "󰍹", label: "SCREEN" },
+        { key: 5, action: "record", mode: "windows",    glyph: "󰖯", label: "WINDOW" },
+        { key: 6, action: "record", mode: "smart",      glyph: "󰆞", label: "REGION" }
+    ]
+
+    // Which toolbar cell the current action/mode pair lights. `region` (pure
+    // freeform, no hints, reachable only from the IPC verb) is the same intent
+    // as `smart`, so it lights the same cell rather than leaving the toolbar
+    // showing nothing selected at all.
+    readonly property int _toolIndex: {
+        const mode = root.mode === "region" ? "smart" : root.mode;
+        for (var i = 0; i < root._tools.length; i++) {
+            if (root._tools[i].action === root.action && root._tools[i].mode === mode)
+                return i;
+        }
+        return -1;
+    }
+
+    readonly property bool _recording: root.action === "record"
+
+    readonly property var _shotTools: root._tools.filter(function (t) { return t.action === "shot"; })
+    readonly property var _recordTools: root._tools.filter(function (t) { return t.action === "record"; })
 
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
 
@@ -122,16 +174,41 @@ Scope {
         if (root.mode === "region")
             return [];
         if (root.mode === "windows")
-            return root._outputRects.concat(root._windowEntries.withRect);
+            return root._windowEntries.withRect;
+        if (root.mode === "fullscreen")
+            return root._outputRects;
         return root._outputRects.concat(root._windowEntries.withRect);
     }
 
+    // Windows the picker can name but the recorder cannot take: wf-recorder
+    // crops with `-g` and nothing else, so a window the compositor reports no
+    // box for has nothing to record. niri's server-side ScreenshotWindow has
+    // no video counterpart, and there is no third mechanism to fall back on.
+    // They stay on screen, dimmed and refused, rather than quietly vanishing
+    // from a mode that still lists their neighbours.
+    readonly property var _selectableNamed: root._recording ? [] : root._unboxedWindows
+
     // What Tab and the arrows walk: drawable windows first in reading order,
     // then the named-only ones, then whole outputs last (capturing a display
-    // is the coarser intent, so it should not sit between two windows).
-    readonly property var _selectable: root._windowEntries.withRect
-        .concat(root._unboxedWindows)
-        .concat(root._outputRects)
+    // is the coarser intent, so it should not sit between two windows). The
+    // toolbar narrows this to the mode's own candidates, so SCREEN never
+    // cycles through windows and REGION cycles nothing at all.
+    readonly property var _selectable: {
+        if (root.mode === "region")
+            return [];
+        if (root.mode === "fullscreen")
+            return root._outputRects;
+        if (root.mode === "windows")
+            return root._windowEntries.withRect.concat(root._selectableNamed);
+        return root._windowEntries.withRect
+            .concat(root._selectableNamed)
+            .concat(root._outputRects);
+    }
+
+    // The named-window card is window selection's affordance, so it follows
+    // the modes that actually select windows.
+    readonly property bool _namedShown: root._unboxedWindows.length > 0
+        && (root.mode === "windows" || root.mode === "smart")
 
     readonly property var _current: {
         if (root._dragRect)
@@ -149,6 +226,7 @@ Scope {
         if (root.isOpen)
             return "error: picker already open";
         root.mode = newMode || "smart";
+        root.action = "shot";
         root._dragRect = null;
         root._hoverRect = null;
         root._cursor = -1;
@@ -156,7 +234,9 @@ Scope {
         root._frames = ({});
 
         // No interaction at all: the focused output is the answer, and no
-        // surface ever maps.
+        // surface ever maps. This is the keybind form of "whole display" —
+        // the toolbar's own SCREEN cell is the interactive one, and reaches
+        // the same rectangle through setTool() with the surface already up.
         if (root.mode === "fullscreen") {
             const out = root._focusedOutputRect();
             if (!out)
@@ -172,6 +252,11 @@ Scope {
     function close(reason) {
         if (!root.isOpen && root._pendingFreezes === 0)
             return "error: picker not open";
+        // Both settles are stopped before anything else: a cancel that landed
+        // inside one of their windows would otherwise fire a commit signal
+        // into a caller that has already torn its own capture state down.
+        settleTimer.stop();
+        recordSettle.stop();
         root.isOpen = false;
         root._capturing = false;
         root._pendingFreezes = 0;
@@ -179,10 +264,43 @@ Scope {
         return "ok";
     }
 
+    // Selects a toolbar cell — what a click on one does, and what the digit
+    // keys and the headless `key` verb both route through.
+    function setTool(index) {
+        if (!root.isOpen)
+            return "error: picker not open";
+        if (index < 0 || index >= root._tools.length)
+            return "error: unknown tool " + index;
+        const tool = root._tools[index];
+        root.action = tool.action;
+        root.mode = tool.mode;
+        root._dragRect = null;
+        root._hoverRect = null;
+
+        // A switch that left nothing highlighted would leave the commit cell
+        // with nothing to act on until the pointer moved. The two modes whose
+        // candidate set is knowable up front preselect: the focused output for
+        // SCREEN, the first window in reading order for WINDOW. REGION stays
+        // pointer-driven, since the drag is its whole affordance.
+        root._cursor = -1;
+        if (tool.mode === "fullscreen") {
+            const focused = root._focusedOutputRect();
+            const at = focused ? root._selectable.findIndex(function (e) {
+                return e.label === focused.label;
+            }) : -1;
+            root._cursor = at >= 0 ? at : 0;
+        } else if (tool.mode === "windows" && root._selectable.length > 0) {
+            root._cursor = 0;
+        }
+        return "ok";
+    }
+
     function status() {
         return {
             open: root.isOpen,
             mode: root.mode,
+            action: root.action,
+            tool: root._toolIndex,
             // The honest capability report: how many windows the picker can
             // draw versus only name. Zero drawable with a non-empty named
             // list is the normal niri answer, not a failure.
@@ -414,7 +532,22 @@ Scope {
             const out = anchor || root._focusedOutputRect();
             if (!out)
                 return "error: no output under the selection";
+            if (root._recording) {
+                root._finishRecord(out.rect);
+                return "ok";
+            }
             root._finish(out.rect, "");
+            return "ok";
+        }
+
+        // The one thing recording cannot do (see _selectableNamed): no box,
+        // no `-g`, no recording. Refused by name so the answer says which
+        // window and why, rather than reporting a recorder that failed to
+        // start.
+        if (root._recording) {
+            if (!sel.rect)
+                return "error: no geometry to record for \"" + sel.label + "\"";
+            root._finishRecord(sel.rect);
             return "ok";
         }
 
@@ -429,6 +562,43 @@ Scope {
 
         root._finish(sel.rect, sel.windowId);
         return "ok";
+    }
+
+    // Which output a rectangle sits on, by its centre. wf-recorder is always
+    // pinned to one output (see RecordingService._launch), and the picker is
+    // the only thing that knows where the picked rectangle landed.
+    function _outputNameForRect(rect) {
+        const cx = rect.x + rect.width / 2;
+        const cy = rect.y + rect.height / 2;
+        const hit = root._outputRects.find(function (o) {
+            return cx >= o.rect.x && cx < o.rect.x + o.rect.width
+                && cy >= o.rect.y && cy < o.rect.y + o.rect.height;
+        });
+        return hit ? hit.label : "";
+    }
+
+    // The mirror image of _finish(): a recording is of LIVE content, so this
+    // surface has to be GONE before wf-recorder starts or the first frames are
+    // of the scrim and the frozen frame under it. Unmap first, settle for a
+    // frame, then hand the rectangle over.
+    function _finishRecord(rect) {
+        root.isOpen = false;
+        root._capturing = false;
+        recordSettle.pendingRect = rect;
+        recordSettle.restart();
+    }
+
+    Timer {
+        id: recordSettle
+        // Same order of magnitude as settleTimer's: one frame for the
+        // compositor to drop the layer surface it was just told to unmap.
+        interval: 120
+        property var pendingRect: null
+        onTriggered: {
+            const rect = recordSettle.pendingRect;
+            recordSettle.pendingRect = null;
+            root.pickedRecord(rect, root._outputNameForRect(rect));
+        }
     }
 
     // The overlay is showing the frozen frames, so grim pointed at this
@@ -464,6 +634,7 @@ Scope {
     // must not fire the cancelled signal.
     function done() {
         settleTimer.stop();
+        recordSettle.stop();
         root.isOpen = false;
         root._capturing = false;
         return "ok";
@@ -487,6 +658,9 @@ Scope {
         case "up":
         case "down":         root._moveSpatial(name); return "ok";
         case "escape":       return root.close("cancelled from the picker");
+        case "1": case "2": case "3":
+        case "4": case "5": case "6":
+            return root.setTool(Number(name) - 1);
         default:             return "error: unknown key " + name;
         }
     }
@@ -599,7 +773,11 @@ Scope {
                     width: selectionChrome.sel ? selectionChrome.sel.width : 0
                     height: selectionChrome.sel ? selectionChrome.sel.height : 0
                     color: "transparent"
-                    border.color: Core.Theme.color.accent
+                    // The record action borrows the recording indicator's own
+                    // `urgent` role, the same swap the slurp-driven record
+                    // selection already made (RecordingService's FS_SLURP_
+                    // BORDER) — one look for "this is about to record".
+                    border.color: root._recording ? Core.Theme.color.urgent : Core.Theme.color.accent
                     border.width: Core.Theme.borderWidth
                     radius: 0
                 }
@@ -641,7 +819,7 @@ Scope {
             // niri that starts reporting tiled geometry.
             Rectangle {
                 id: nameList
-                visible: !root._capturing && root._unboxedWindows.length > 0
+                visible: !root._capturing && root._namedShown
                 color: Core.Theme.color.background
                 border.color: Core.Theme.color.rule
                 border.width: Core.Theme.borderWidth
@@ -658,7 +836,11 @@ Scope {
                     width: parent.width - Core.Theme.space.popupPadding * 2
 
                     MetaLabel {
-                        text: "SELECT WINDOW"
+                        // These windows are selectable for a shot and refused
+                        // for a recording, so the header says which it is
+                        // rather than making the dimmed rows carry the whole
+                        // explanation on their own.
+                        text: root._recording ? "CANNOT RECORD: NO COMPOSITOR GEOMETRY" : "SELECT WINDOW"
                         color: Core.Theme.color.foregroundDim
                     }
 
@@ -671,8 +853,11 @@ Scope {
                             required property var modelData
                             width: listColumn.width
                             // The cursor walks _selectable, whose named-only
-                            // entries start after the drawable ones.
-                            selected: root._cursor === root._windowEntries.withRect.length + windowRow.index
+                            // entries start after the drawable ones — and are
+                            // absent entirely while recording, where that same
+                            // index is an output instead.
+                            selected: !root._recording
+                                && root._cursor === root._windowEntries.withRect.length + windowRow.index
 
                             Column {
                                 width: parent.width
@@ -681,14 +866,14 @@ Scope {
                                     width: parent.width
                                     elide: Text.ElideRight
                                     text: windowRow.modelData.label
-                                    color: windowRow.foreground
+                                    color: root._recording ? Core.Theme.color.foregroundFaint : windowRow.foreground
                                     font.family: Core.Theme.fontFamily
                                     font.pixelSize: Core.Theme.fontSize.body
                                 }
                                 MetaLabel {
                                     visible: windowRow.modelData.sublabel.length > 0
                                     text: windowRow.modelData.sublabel.toUpperCase()
-                                    color: windowRow.dimForeground
+                                    color: root._recording ? Core.Theme.color.foregroundFaint : windowRow.dimForeground
                                 }
                             }
                         }
@@ -696,17 +881,19 @@ Scope {
                 }
             }
 
-            // Key legend. Named windows change what Return means, so the hint
-            // follows the selection rather than stating one fixed contract.
+            // Key legend, sitting just above the toolbar. Named windows and
+            // the record action both change what Return means, so the hint
+            // follows the current tool rather than stating one fixed contract.
             Cell {
                 id: legend
                 standalone: true
                 visible: !root._capturing
                 x: Math.round((parent.width - width) / 2)
-                y: parent.height - height - Core.Theme.space.xl
+                y: toolbar.y - height - Core.Theme.space.md
 
                 MetaLabel {
-                    text: "RETURN CAPTURE  ·  CTRL+RETURN DISPLAY  ·  TAB CYCLE  ·  ESC CANCEL"
+                    text: "RETURN " + (root._recording ? "RECORD" : "CAPTURE")
+                        + "  ·  CTRL+RETURN DISPLAY  ·  TAB CYCLE  ·  1-6 TOOL  ·  ESC CANCEL"
                     color: legend.dimForeground
                 }
             }
@@ -744,7 +931,11 @@ Scope {
                     }
                     pressX = mouse.x;
                     pressY = mouse.y;
-                    if (root.mode !== "windows")
+                    // Freeform is REGION's affordance and smart's fallback.
+                    // WINDOW and SCREEN snap to what they hint, so a drag
+                    // there would silently produce a rectangle the mode never
+                    // offered.
+                    if (root.mode === "smart" || root.mode === "region")
                         root._dragRect = { x: surface.toGlobalX(mouse.x), y: surface.toGlobalY(mouse.y), width: 0, height: 0 };
                 }
 
@@ -760,7 +951,149 @@ Scope {
                             root.commit(false);
                         return;
                     }
+                    if (root._recording) {
+                        root._finishRecord(drag);
+                        return;
+                    }
                     root._finish(drag, "");
+                }
+            }
+
+            // The toolbar (owner ask, see the file header): the surface's whole
+            // mode set as one row of cells over a bordered card, in the bar's
+            // standalone-cell idiom (borderless at rest, full inversion on
+            // hover, current tool inverted) rather than the fused ledger — six
+            // discrete buttons is what the bar's own chrome is for. Declared
+            // after the drag MouseArea so it sits on top of it and takes its
+            // own clicks.
+            Rectangle {
+                id: toolbar
+                visible: !root._capturing
+                color: Core.Theme.color.background
+                border.color: Core.Theme.color.rule
+                border.width: Core.Theme.borderWidth
+                radius: 0
+                width: toolbarRow.width + Core.Theme.space.popupPadding * 2
+                height: toolbarRow.height + Core.Theme.space.popupPadding * 2
+                x: Math.round((parent.width - width) / 2)
+                y: parent.height - height - Core.Theme.space.xl
+
+                // Absorbs everything landing on the card: a click on its chrome
+                // must never reach the drag area underneath, and a pointer
+                // crossing it must never re-resolve the selection out from
+                // under the cell being aimed at.
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.AllButtons
+                }
+
+                Component {
+                    id: toolCellComponent
+
+                    Cell {
+                        id: toolCell
+                        required property var modelData
+                        standalone: true
+                        selected: root._toolIndex === toolCell.modelData.key - 1
+                        hovered: toolArea.containsMouse
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Core.Theme.space.sm
+
+                            Text {
+                                text: toolCell.modelData.glyph
+                                color: toolCell.foreground
+                                font.family: Core.Theme.fontFamily
+                                font.pixelSize: Core.Theme.fontSize.body
+                            }
+                            MetaLabel {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: toolCell.modelData.label
+                                color: toolCell.dimForeground
+                            }
+                        }
+
+                        MouseArea {
+                            id: toolArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.setTool(toolCell.modelData.key - 1)
+                        }
+                    }
+                }
+
+                Row {
+                    id: toolbarRow
+                    x: Core.Theme.space.popupPadding
+                    y: Core.Theme.space.popupPadding
+                    spacing: Core.Theme.space.md
+
+                    MetaLabel {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "SHOT"
+                        color: Core.Theme.color.foregroundDim
+                    }
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Repeater {
+                            model: root._shotTools
+                            delegate: toolCellComponent
+                        }
+                    }
+
+                    MetaLabel {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "REC"
+                        color: Core.Theme.color.foregroundDim
+                    }
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Repeater {
+                            model: root._recordTools
+                            delegate: toolCellComponent
+                        }
+                    }
+
+                    // The ink button (DESIGN.md §2 item 11): the one committing
+                    // action on the surface, and the same thing Return fires.
+                    Cell {
+                        id: commitCell
+                        anchors.verticalCenter: parent.verticalCenter
+                        ink: true
+                        hovered: commitArea.containsMouse
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Core.Theme.space.sm
+
+                            Text {
+                                text: root._recording ? "󰑊" : "󰄀"
+                                color: commitCell.foreground
+                                font.family: Core.Theme.fontFamily
+                                font.pixelSize: Core.Theme.fontSize.body
+                            }
+                            MetaLabel {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: root._recording ? "RECORD" : "CAPTURE"
+                                color: commitCell.dimForeground
+                            }
+                        }
+
+                        MouseArea {
+                            id: commitArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.commit(false)
+                        }
+                    }
                 }
             }
 
@@ -796,6 +1129,16 @@ Scope {
                         break;
                     case Qt.Key_Down:
                         root._moveSpatial("down");
+                        break;
+                    case Qt.Key_1:
+                    case Qt.Key_2:
+                    case Qt.Key_3:
+                    case Qt.Key_4:
+                    case Qt.Key_5:
+                    case Qt.Key_6:
+                        // Contiguous by definition (Qt.Key_1 is 0x31), so the
+                        // digit is the offset — no per-key branch.
+                        root.setTool(event.key - Qt.Key_1);
                         break;
                     default:
                         // Shift is free here: upstream had to avoid it because

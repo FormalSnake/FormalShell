@@ -160,13 +160,15 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   `screenshot pick` opens the shell's own region picker over a frozen grab of
   every output, in `smart`, `region`, `windows` or `fullscreen` mode, with a
   second argument choosing disk plus clipboard (the default), clipboard only,
-  or disk only. The `SCREENSHOT SAVED` notification carries an `EDIT` action
+  or disk only. The picker carries a macOS-style toolbar — screen, window or
+  region, shot or recorded, then commit — so one bind (`Mod+Shift+S`) reaches
+  every capture the shell can take. The `SCREENSHOT SAVED` notification carries an `EDIT` action
   handing the PNG to `screenshot.editor`, default
   [Tensaku](https://tensaku.dev), which this flake packages. `capture text`
   OCRs a dragged region to the clipboard through tesseract, `capture color`
-  copies one pixel as `#RRGGBB`, and `record` drives wf-recorder for screen or
-  region video with optional desktop and microphone audio, transcodable to a
-  GIF from its own saved notification. The slurp-based selections auto-cancel
+  copies one pixel as `#RRGGBB`, and `record` drives wf-recorder for screen,
+  window or region video with optional desktop and microphone audio,
+  transcodable to a GIF from its own saved notification. The slurp-based selections auto-cancel
   after 90 seconds instead of sitting invisible and stuck. One asymmetry, and
   it is the compositor's: niri reports no position for tiled windows, so the
   picker names them in a card rather than highlighting them, and captures the

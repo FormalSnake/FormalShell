@@ -4,6 +4,7 @@ import QtQuick
 
 import qs.Core
 import qs.Notifications
+import qs.Services
 
 // `qs ipc call screenshot full|region|cancel|status` (M12 Task 9, M13 Task 7):
 // grim writes <screenshot.directory>/screenshot-<timestamp>.png (slurp
@@ -139,6 +140,38 @@ Scope {
         function onPickedWindow(windowId) {
             watchdog.stop();
             root._grabNiriWindow(windowId);
+        }
+
+        // The picker's toolbar can turn a pick into a recording, so this
+        // target sees an outcome it takes no screenshot for. It handles it
+        // anyway rather than giving the picker a second driver: one
+        // full-screen surface with two owners is how it ends up opened twice,
+        // or torn down by one while the other still thinks it is up. Nothing
+        // of the recording itself lives here — RecordingService owns the path,
+        // the audio, the notification and the child.
+        //
+        // The surface is already unmapped by the time this fires (wf-recorder
+        // records live content, so the overlay had to be gone first);
+        // picker.done() only settles the state it left behind.
+        function onPickedRecord(rect, outputName) {
+            watchdog.stop();
+            root._busy = false;
+            root._pendingPath = "";
+            root._lastError = "";
+            if (root.picker)
+                root.picker.done();
+            const answer = RecordingService.startAt({
+                geometry: Math.round(rect.x) + "," + Math.round(rect.y) + " "
+                    + Math.round(rect.width) + "x" + Math.round(rect.height),
+                output: outputName,
+                scope: "region",
+                audio: Config.get("recording.audio", "none")
+            });
+            if (answer.indexOf("error:") !== 0)
+                return;
+            root._lastError = answer;
+            console.warn("ScreenshotIpc:", answer);
+            NotificationService.notify("RECORDING FAILED", answer);
         }
 
         function onCancelled(reason) {
