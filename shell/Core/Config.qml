@@ -27,6 +27,17 @@ import QtQuick
 // converged banner holds before the screensaver rerolls its effect and
 // animates again, indefinitely; "random" never repeats the immediately
 // previous effect, a pinned name replays itself, M13b Task 5).
+// hotCorners.topLeft / topRight / bottomLeft / bottomRight (strings, one of
+// "none" | "screensaver" | "lock"; defaults "none" / "none" / "screensaver"
+// / "lock" — both top corners stay inert because the bar owns the top edge
+// and a corner there would take pixels out of its input region),
+// hotCorners.enabled (bool, default true — false creates no corner surface
+// at all), hotCorners.size (number, default 4, clamped 1..64 — the trigger
+// square's side in pixels; those pixels stop reaching the window under
+// them, Wayland having no hover-only input region) and hotCorners.delayMs
+// (number, default 400, clamped 0..10000 — how long the pointer must dwell
+// in the corner before the action fires; a click fires immediately
+// regardless). Resolved by shell/HotCorners/corners.js.
 // wallpaper.dither (bool, default true — Background.qml renders the
 // wallpaper through the same image-derived-palette retro pass the album
 // covers use (DESIGN.md §2 item 12), on a grid sized in screen pixels rather

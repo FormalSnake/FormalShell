@@ -14,6 +14,7 @@ import qs.Surfaces.Osd
 import qs.Surfaces.Panels
 import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
+import qs.Surfaces.HotCorners
 import qs.Surfaces.Capture
 import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
@@ -91,6 +92,13 @@ ShellRoot {
     // comment) — one instance here, its internal Variants loop covers every
     // output.
     Screensaver { id: screensaver; lockScreen: lock }
+
+    // Corner triggers for the two surfaces above. Same split again — one
+    // controller here, its own Variants loop covering every output — and it
+    // takes handles on both rather than going through their IPC targets, so
+    // a corner behaves identically to `lock lock` / `screensaver start`
+    // without a round trip through the socket.
+    HotCorners { lockScreen: lock; screensaver: screensaver }
 
     // Same "one controller, shown on the focused screen at trigger time"
     // reasoning as Osd — but this one's trigger is a real polkit

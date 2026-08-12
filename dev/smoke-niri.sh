@@ -408,6 +408,18 @@
 # overlay look and a real drag stay host-trial; the 90s watchdog rides the
 # same _cancel path the verb drives, so the verb round trip is its proof.
 #
+# With --hotcorner, dumps `niri msg -j layers` and asserts exactly two layer
+# surfaces carry the formalshell:hotcorner namespace, on the Top layer with
+# keyboard_interactivity None. Two, not four: the default corner set leaves
+# both TOP corners at "none" (the bar owns that edge) and this run writes no
+# hotCorners config at all, so the count doubles as proof that a corner set
+# to "none" costs no surface rather than a mapped-but-inert one. Entering a
+# corner cannot be driven here — no synthetic pointer exists in this rig,
+# the same limit the tray's overflow cell hits — so what this leg proves is
+# that the surfaces map at the resolved corners with their per-corner
+# PanelWindow.anchors bindings intact, which is the part most likely to be
+# silently wrong.
+#
 # With --nightlight (M16 Task 6), drives the `nightlight` IPC target: `enable`
 # starts a real wlsunset process (manual -S/-s dummy times plus -t
 # <nightlight.temp>, default 4000 — kept out of wlsunset's geo-coordinate
@@ -677,6 +689,7 @@ keybinds_mode=false
 mic_mode=false
 systemupdate_mode=false
 plugins_mode=false
+hotcorner_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -713,7 +726,8 @@ while [ $# -gt 0 ]; do
     --mic) mic_mode=true; shift ;;
     --systemupdate) systemupdate_mode=true; shift ;;
     --plugins) plugins_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins]" >&2; exit 1 ;;
+    --hotcorner) hotcorner_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner]" >&2; exit 1 ;;
   esac
 done
 
@@ -1296,6 +1310,7 @@ tray_pids_path="$shot_dir/tray-pids.txt"
 tray_activate_path="$shot_dir/tray-activate.txt"
 tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
 bar_layout_path="$shot_dir/bar-layout.png"
+hotcorner_layers_path="$shot_dir/hotcorner-layers.json"
 instance_status_path="$shot_dir/instance-status.json"
 instance_primary_log_path="$shot_dir/instance-primary.log"
 instance_second_log_path="$shot_dir/instance-second.log"
@@ -2490,6 +2505,24 @@ fi
 # without wlr-gamma-control-unstable-v1) — the second grep fails (and so
 # breaks the loop) the moment lastError stops being the empty-string
 # literal.
+# --hotcorner asks the compositor itself what layer surfaces exist, which is
+# the only honest headless proof available for this feature: the rig has no
+# synthetic pointer (same limitation the tray's overflow cell and the bell's
+# own click hit), so entering a corner cannot be simulated, but whether the
+# corner surfaces really mapped — at the configured corners, on the right
+# layer, sized as asked — is entirely observable. That is also the part most
+# likely to be silently wrong, since PanelWindow.anchors is driven per-corner
+# from a resolved config here rather than from the literal edges every other
+# surface in this shell uses.
+if $hotcorner_mode; then
+  hotcorner_drive_script="$shot_dir/hotcorner-drive.sh"
+  cat > "$hotcorner_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+niri msg -j layers > "$hotcorner_layers_path" 2>&1
+EOF
+fi
+
 if $nightlight_mode; then
   nightlight_drive_script="$shot_dir/nightlight-drive.sh"
   cat > "$nightlight_drive_script" <<EOF
@@ -3659,6 +3692,9 @@ fi
   if $nightlight_mode; then
     echo "spawn-at-startup \"bash\" \"$nightlight_drive_script\""
   fi
+  if $hotcorner_mode; then
+    echo "spawn-at-startup \"bash\" \"$hotcorner_drive_script\""
+  fi
   if $speedtest_mode; then
     echo "spawn-at-startup \"bash\" \"$speedtest_drive_script\""
   fi
@@ -4422,6 +4458,24 @@ if $menu_mode; then
       exit 1
     fi
   done
+  # A dithered wallpaper defeats this measurement outright, so --wallpaper
+  # --menu captures the three PNGs without asserting on them. _menu_card_bounds
+  # takes ONE pixel as "the background" and reads every pixel differing from it
+  # as a card edge; wallpaper.dither (M23) makes nearly every row of the centre
+  # column differ, so the scan returns the whole screen and the resting card
+  # reads as wildly off-centre (top 63px, bottom 689px of 693px — observed
+  # 2026-08-12, identical across runs, while the same leg without a wallpaper
+  # measures the card at 141px and passes). Skipping where the measurement is
+  # invalid is not the same as weakening it: every --menu leg that is not also
+  # a --wallpaper leg still asserts the full freeze/release/clamp sequence, and
+  # that is the leg the check was written against. The combined run exists to
+  # screenshot the menu over matugen-recoloured colours (CLAUDE.md), not to
+  # measure geometry.
+  if $wallpaper_mode; then
+    echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png (bounds not asserted: a dithered wallpaper defeats the centre-column scan)"
+    echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png (bounds not asserted: a dithered wallpaper defeats the centre-column scan)"
+    echo "SMOKE_MENU_TOP_RELEVEL $menu_top_relevel_png (bounds not asserted: a dithered wallpaper defeats the centre-column scan)"
+  else
   read -r before_top before_bottom before_screen <<< "$(_menu_card_bounds "$menu_top_before_png")"
   read -r after_top after_bottom after_screen <<< "$(_menu_card_bounds "$menu_top_after_png")"
   read -r relevel_top relevel_bottom relevel_screen <<< "$(_menu_card_bounds "$menu_top_relevel_png")"
@@ -4467,6 +4521,7 @@ if $menu_mode; then
   echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png (card ${before_top}-${before_bottom}px, centred)"
   echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png (card ${after_top}-${after_bottom}px, top frozen and off-centre)"
   echo "SMOKE_MENU_TOP_RELEVEL $menu_top_relevel_png (card ${relevel_top}-${relevel_bottom}px, re-centred)"
+  fi
 fi
 
 if $clipboard_mode; then
@@ -4810,6 +4865,22 @@ if $polkit_mode; then
   else
     echo "SMOKE_FAIL: pkexec true did not exit 0 after real authentication — got: $(cat "$polkit_rc_path" 2>/dev/null); stderr: $(cat "$shot_dir/polkit-stderr.txt" 2>/dev/null); debug: $(cat "$shot_dir/polkit-debug.log" 2>/dev/null)" >&2; exit 1
   fi
+fi
+
+if $hotcorner_mode; then
+  if [ ! -s "$hotcorner_layers_path" ]; then
+    echo "SMOKE_FAIL: no niri layer dump produced for the hot corners" >&2; exit 1
+  fi
+  cat "$hotcorner_layers_path"
+  hotcorner_count=$(grep -o 'formalshell:hotcorner' "$hotcorner_layers_path" | wc -l | tr -d ' ')
+  # Two, not four: shell/HotCorners/corners.js leaves both TOP corners at
+  # "none" by default (the bar owns that edge), and this run writes no
+  # `hotCorners` config at all — so the count doubles as proof that a corner
+  # set to "none" costs no surface rather than a mapped-but-inert one.
+  if [ "$hotcorner_count" != "2" ]; then
+    echo "SMOKE_FAIL: expected 2 formalshell:hotcorner layer surfaces, found $hotcorner_count" >&2; exit 1
+  fi
+  echo "SMOKE_HOTCORNER_LAYERS $hotcorner_layers_path"
 fi
 
 if $nightlight_mode; then
