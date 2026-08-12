@@ -859,14 +859,22 @@ and every rule here is checkable:
    every transition collapses to today's instant state swap, pixels
    untouched. This is the shell's reduced-motion switch; Wayland has no
    `prefers-reduced-motion` to inherit.
-6. **Sanctioned-instant surfaces.** Lock/greeter enter and exit, and the
-   screensaver's own exit, stay deliberately unanimated — a security
-   surface snapping shut/open is intentional (CLAUDE.md), and dismissing
-   the screensaver must read as regaining control immediately, not
-   waiting out a fade. The screensaver's *entrance* is the one exception
-   inside this carve-out that does fade, opacity only at
-   `Theme.motion.standard` (no slide — a full-screen surface has no edge
-   to slide in from).
+6. **Sanctioned-instant surfaces.** Lock/greeter enter and exit stay
+   deliberately unanimated — a security surface snapping shut/open is
+   intentional (CLAUDE.md). The screensaver left this carve-out on
+   2026-08-12 (owner: "make the screensaver fade in/out too, currently
+   it's instant"), superseding the earlier reading that dismissal had to
+   read as regaining control instantly. It now fades **both ways**,
+   opacity only (no slide — a full-screen surface has no edge to slide in
+   from), at `Theme.motion.reveal` rather than `Theme.motion.standard`:
+   the same 400ms band the wallpaper crossfade already uses, because a
+   full-screen swap paced at 130ms reads as a flash rather than a fade.
+   `motion.enabled: false` zeroes `reveal`, so a reduced-motion session
+   keeps the old hard cut in both directions. Checkable: the surface stays
+   mapped until its opacity reaches 0 (`Screensaver.qml`'s `visible:
+   root.active || content.opacity > 0`, the same hold Panel.qml uses), and
+   the animation freezes at the start of the exit fade instead of running
+   on behind it.
 7. **Marquee-on-overflow and status rotation** (owner-requested, M16 Task
    11) are the fourth and fifth continuous-motion carve-outs, each with a
    real gate — never a decoration running for its own sake. The bar's

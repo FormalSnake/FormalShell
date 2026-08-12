@@ -273,9 +273,12 @@ function resolveRenderFrame(pinnedFrame, autoFrame) {
     return pinnedFrame >= 0 ? pinnedFrame : autoFrame;
 }
 
-// The free-run Timer only ticks while nothing is pinned.
-function autoTimerShouldRun(visible, pinnedFrame) {
-    return visible && pinnedFrame < 0;
+// The free-run Timer only ticks while nothing is pinned. `active` is the
+// screensaver's own activation, not its surface's mapped state: the surface
+// outlives deactivation by one exit fade, and the animation freezes at the
+// start of that fade rather than running on behind it.
+function autoTimerShouldRun(active, pinnedFrame) {
+    return active && pinnedFrame < 0;
 }
 
 // Any deactivation releases a stale pin so the very next activation always

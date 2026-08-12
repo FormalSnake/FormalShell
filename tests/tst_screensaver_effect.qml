@@ -307,7 +307,7 @@ TestCase {
         compare(Effect.resolveRenderFrame(-1, 3), 3);
     }
 
-    function test_auto_timer_runs_only_while_visible_and_unpinned() {
+    function test_auto_timer_runs_only_while_active_and_unpinned() {
         verify(Effect.autoTimerShouldRun(true, -1));
         verify(!Effect.autoTimerShouldRun(true, 0));
         verify(!Effect.autoTimerShouldRun(false, -1));

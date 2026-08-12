@@ -217,6 +217,14 @@ Item {
     }
 
     onActiveChanged: {
+        // Either direction cancels a hold in flight. A hold is the gap
+        // between one converged effect and the next, and it belongs to the
+        // activation that started it: left running across a stop, it fires
+        // inside the NEXT activation and rerolls an effect that has barely
+        // begun — with the fresh activation's own `cycles: 0` already
+        // counted past. Observed as a smoke failure (frameInfo reporting
+        // cycles:1 one second after a manual start, 2026-08-12).
+        holdTimer.stop();
         if (root.active) {
             // A fresh seed per activation is what makes "random" (the
             // default) actually vary across activations instead of picking
@@ -267,52 +275,22 @@ Item {
                 id: surface
                 required property var modelData
                 screen: modelData
-                visible: root.active
+                // Held mapped through the exit fade (DESIGN.md §4 rule 6),
+                // same as Panel.qml's frame: `active` drops, content's
+                // opacity Behavior runs to 0, and only then does the window
+                // unmap. Everything below therefore keys off `root.active`
+                // rather than `surface.visible` — for the length of the fade
+                // the two disagree, and activation is the one that means
+                // "this screensaver is running".
+                visible: root.active || content.opacity > 0
                 color: Core.Theme.color.background
 
                 WlrLayershell.namespace: "formalshell:screensaver"
                 WlrLayershell.layer: WlrLayer.Overlay
                 WlrLayershell.exclusiveZone: -1
-                WlrLayershell.keyboardFocus: surface.visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+                WlrLayershell.keyboardFocus: root.active ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
                 anchors { top: true; bottom: true; left: true; right: true }
-
-                onVisibleChanged: {
-                    if (surface.visible) {
-                        // Every activation replays its effect from scratch
-                        // — without this a long-idle session that already
-                        // ran the animation past its convergence frame
-                        // would just show the static finished banner on
-                        // the very next activation instead of animating.
-                        surface._autoFrame = 0;
-                        surface._startRun();
-                        Qt.callLater(function () { dismissArea.forceActiveFocus(); });
-                        // Becoming visible/mapped underneath an already-
-                        // stationary cursor fires MouseArea's own first
-                        // positionChanged with no real movement behind it
-                        // (reproduced on the mac VM rig, 2026-07-28: the
-                        // very first auto-activation dismissed itself
-                        // instantly this way) — dropping any baseline here
-                        // makes dismissArea treat that first report as a
-                        // reference point instead of real activity.
-                        dismissArea._hasBaseline = false;
-                        // Imperative, not `opacity: surface.visible ? 1 : 0`
-                        // with a `Behavior … { enabled: surface.visible }`
-                        // guard: QML evaluates that opacity binding before
-                        // the Behavior's own `enabled` binding reacts to the
-                        // same `visible` change, so the guard is still false
-                        // when the write lands and the fade never runs.
-                        // Driving opacity from here sidesteps the ordering
-                        // race — the Behavior stays unconditionally enabled.
-                        content.opacity = 1;
-                    } else {
-                        content.opacity = 0;
-                        // Through _startRun, not a bare `running = false`, so
-                        // the stop is accounted for the same way a restart is
-                        // and the exit it produces can't read as convergence.
-                        surface._startRun();
-                    }
-                }
 
                 // Off-screen glyphs measured at the live mono font so the
                 // banner's cell size reflects real metrics rather than a
@@ -386,7 +364,7 @@ Item {
                     ttfxProc.running = false;
                     surface._chunks = 0;
                     surface._runFrames = 0;
-                    if (root.engine !== "ttfx" || !surface.visible || surface._columns <= 0 || surface._rows <= 0)
+                    if (root.engine !== "ttfx" || !root.active || surface._columns <= 0 || surface._rows <= 0)
                         return;
                     // A pinned run regenerates the effect from frame 0 and
                     // races to the requested frame with pacing disabled —
@@ -485,7 +463,7 @@ Item {
 
                 Timer {
                     interval: root.frameIntervalMs
-                    running: root.engine === "builtin" && Effect.autoTimerShouldRun(surface.visible, root._pinnedFrame)
+                    running: root.engine === "builtin" && Effect.autoTimerShouldRun(root.active, root._pinnedFrame)
                     repeat: true
                     onTriggered: {
                         surface._autoFrame += 1;
@@ -503,6 +481,39 @@ Item {
 
                 Connections {
                     target: root
+                    // Activation, not mapping, starts and stops a run: the
+                    // window stays mapped through the exit fade below, and a
+                    // run left animating behind a fading surface would hold a
+                    // ttfx process per output open for the length of it.
+                    function onActiveChanged() {
+                        if (root.active) {
+                            // Every activation replays its effect from
+                            // scratch — without this a long-idle session that
+                            // already ran the animation past its convergence
+                            // frame would just show the static finished
+                            // banner on the very next activation instead of
+                            // animating. The grid goes with it, so the fade
+                            // in starts on an empty canvas rather than on the
+                            // last frame of the previous activation.
+                            surface._autoFrame = 0;
+                            surface._grid = [];
+                            canvas.requestPaint();
+                            Qt.callLater(function () { dismissArea.forceActiveFocus(); });
+                            // Becoming visible/mapped underneath an already-
+                            // stationary cursor fires MouseArea's own first
+                            // positionChanged with no real movement behind it
+                            // (reproduced on the mac VM rig, 2026-07-28: the
+                            // very first auto-activation dismissed itself
+                            // instantly this way) — dropping any baseline
+                            // here makes dismissArea treat that first report
+                            // as a reference point instead of real activity.
+                            dismissArea._hasBaseline = false;
+                        }
+                        // Through _startRun, not a bare `running = false`, so
+                        // a stop is accounted for the same way a restart is
+                        // and the exit it produces can't read as convergence.
+                        surface._startRun();
+                    }
                     function onCycleRestarted() {
                         surface._autoFrame = 0;
                         surface._grid = [];
@@ -520,23 +531,25 @@ Item {
                     }
                 }
 
-                // Enter fades in (DESIGN.md §4/§3), opacity only — a
-                // full-screen surface has no edge to slide in from; exit
-                // reads as instant regardless, since `surface.visible`
-                // above unmaps the whole window the moment it drops.
-                // Driven imperatively from `onVisibleChanged` above, not a
-                // `surface.visible ? 1 : 0` binding — see that handler's
-                // comment for why. Lives on an inner Item, not `surface`
-                // itself — PanelWindow has no Item-style `opacity` of its
-                // own (Panel.qml/Menu.qml's frame/card carry their own
-                // fades the same way).
+                // Fades both ways (DESIGN.md §4 rule 6, owner's call
+                // 2026-08-12), opacity only — a full-screen surface has no
+                // edge to slide in from. At `reveal` rather than `standard`,
+                // the same 400ms the wallpaper crossfade already uses: a
+                // full-screen swap paced at 130ms reads as a flash, not a
+                // fade. `motion.enabled: false` zeroes `reveal` too, so a
+                // reduced-motion session still gets the old hard cut in both
+                // directions. Lives on an inner Item, not `surface` itself —
+                // PanelWindow has no Item-style `opacity` of its own
+                // (Panel.qml/Menu.qml's frame/card carry their own fades the
+                // same way), and `surface.visible` above holds the window
+                // mapped until this reaches 0.
                 Item {
                     id: content
                     anchors.fill: parent
-                    opacity: 0
+                    opacity: root.active ? 1 : 0
 
                     Behavior on opacity {
-                        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
+                        NumberAnimation { duration: Core.Theme.motion.reveal; easing.type: Core.Theme.motion.easing }
                     }
 
                     Canvas {
