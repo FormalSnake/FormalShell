@@ -11,7 +11,15 @@
 # With --dump, also calls the `debug` IPC target and cats the JSON reply.
 # With --wallpaper, generates a solid-color test PNG, drives it through
 # `wallpaper set` + `theme status` over IPC in-session before screenshotting,
-# so the screenshot proves the background/bar actually recolored.
+# so the screenshot proves the background/bar actually recolored. On its own
+# (not combined with --theme-toggle, which owns the timeline from sleep 9
+# on) it then sets a SECOND wallpaper and lets Background.qml's crossfade
+# run, which is the only way this rig covers the dithered path's fade gate:
+# with wallpaper.dither on, the incoming layer only starts fading once its
+# Canvas has painted. `wallpaper get` is dumped afterwards, and the run's
+# own smoke.png is sampled directly — a 64x64 patch of bare wallpaper must
+# carry no pixel of the second wallpaper's own solid color and at least two
+# distinct colors, every one of them on a posterized dither step.
 # With --theme-toggle (M13b Task 3), drives `theme mode toggle` twice with
 # NO wallpaper set: grim the dark session (theme-dark.png), toggle, assert
 # `theme status` reports mode:"light" with wallpaper still "", grim again
@@ -1158,6 +1166,7 @@ fi
 shot_dir=$(mktemp -d)
 dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
+wallpaper_get_path="$shot_dir/wallpaper-get.txt"
 theme_dark_png="$shot_dir/theme-dark.png"
 theme_light_png="$shot_dir/theme-light.png"
 theme_toggle_status_path="$shot_dir/theme-toggle-status.json"
@@ -1183,6 +1192,7 @@ apps_query_path="$shot_dir/apps-query.json"
 menu_apps_png="$shot_dir/menu-apps.png"
 menu_top_before_png="$shot_dir/menu-top-before.png"
 menu_top_after_png="$shot_dir/menu-top-after.png"
+menu_top_cleared_png="$shot_dir/menu-top-cleared.png"
 toggle_path="$shot_dir/menu-toggle.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
@@ -1281,6 +1291,11 @@ capture_pick_reply_path="$shot_dir/capture-pick-reply.txt"
 capture_status_path="$shot_dir/capture-status.json"
 capture_escape_status_path="$shot_dir/capture-escape-status.json"
 capture_outputs_path="$shot_dir/capture-outputs.json"
+capture_toolbar_path="$shot_dir/capture-toolbar-record.png"
+capture_tool_status_path="$shot_dir/capture-tool-status.json"
+capture_rec_reply_path="$shot_dir/capture-rec-reply.txt"
+capture_rec_status_path="$shot_dir/capture-rec-status.json"
+capture_rec_stopped_path="$shot_dir/capture-rec-stopped.json"
 record_start_reply_path="$shot_dir/record-start-reply.txt"
 record_status1_path="$shot_dir/record-status-1.json"
 record_status2_path="$shot_dir/record-status-2.json"
@@ -1757,6 +1772,16 @@ if $wallpaper_mode; then
   # down, never up, so a source already below the cap just decodes native)
   # — a fixture has to exceed the screen to prove the cap actually engages.
   $convert_bin -size 1920x1080 xc:'#7a3fb0' "$wp_path"
+  # A second wallpaper, set once the first has settled, so the run covers
+  # Background.qml's crossfade path and not just its first-paint shortcut.
+  # That matters most with the dither on (wallpaper.dither, default true):
+  # the fade only starts once the incoming layer's Canvas has actually
+  # painted, and that gate is the one part of the surface a first-paint-only
+  # run never touches. Its color is deliberately #7a3fb0's channels rotated,
+  # so the two wallpapers posterize onto visibly different step sets and the
+  # screenshot assertion below can tell which one it is looking at.
+  wp2_path="$shot_dir/wp2.png"
+  $convert_bin -size 1920x1080 xc:'#3fb07a' "$wp2_path"
 fi
 
 # --theme-toggle's drive: the dark shot waits out shell startup (same 4s the
@@ -2109,17 +2134,25 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$nix_toast_status_path" 2>&1
 EOF
 
-  # Card-top freeze (M16 Task 2), the final leg: from the closed state the
-  # nix/toast leg above leaves behind, summon root fresh (the ~8 top-level
-  # rows, unfiltered) and grim its resting top edge, then wtype real
-  # keystrokes — not another IPC `menu select`/`activate`, this is
-  # specifically proving the real TextInput.onTextChanged path — spelling
+  # Card-top freeze and release (M16 Task 2, M23), the final leg: from the
+  # closed state the nix/toast leg above leaves behind, summon root fresh
+  # (the ~12 top-level rows, unfiltered) and grim its resting top edge, then
+  # wtype real keystrokes — not another IPC `menu select`/`activate`, this
+  # is specifically proving the real TextInput.onTextChanged path — spelling
   # "wall", the same deterministic single-row-match query the debug-query
-  # leg above already relies on (wall_query_path), so the row count is
-  # known to drop from ~8 to 1. A second grim afterward is the pair Menu.qml's
-  # top-freeze is asserted against: the card's top edge must read identical
-  # pixel position in both PNGs even though the card is visibly shorter in
-  # the second one.
+  # leg above already relies on (wall_query_path), so the row count is known
+  # to drop from ~12 to 1. The second grim is the pair Menu.qml's top-freeze
+  # is asserted against: the card's top edge must read identical pixel
+  # position in both PNGs even though the card is visibly shorter in the
+  # second one.
+  #
+  # Then four real BackSpaces empty the field again, and a third grim
+  # proves the other half (M23, owner: "a long list moves it up, then it
+  # never goes back to center"): an empty query is a resting row set, the
+  # freeze releases, and the card re-centers — so this PNG must come back
+  # pixel-identical to the pre-filter one over the card's own region. A
+  # freeze that latched for the whole session would leave the card sitting
+  # wherever the one-row query had shrunk it to.
   cat >> "$menu_finish_script" <<EOF
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
@@ -2128,6 +2161,9 @@ sleep 2
 "$wtype_bin" "wall"
 sleep 1
 "$grim_bin" "$menu_top_after_png" 2>/dev/null || true
+"$wtype_bin" -k BackSpace -k BackSpace -k BackSpace -k BackSpace
+sleep 1
+"$grim_bin" "$menu_top_cleared_png" 2>/dev/null || true
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 # Literal last action: releases share_drive_script's own wait gate (see
 # its own comment) when --share runs alongside --menu.
@@ -2814,7 +2850,7 @@ pre_open=\$(_smaps)
 sleep 2
 niri msg action screenshot-screen --path "$picker_grid_path"
 open_state=\$(_smaps)
-# Close without choosing — isolates ImagePicker.close()'s own _images free
+# Close without choosing — isolates the menu's own _pickerImages free
 # from setWallpaper()'s retheme/crossfade (see header comment above).
 "$qs_bin" ipc -p "$shell_path" call picker close > /dev/null 2>&1
 # 20s, not a couple: QML's V4 engine reclaims a destroyed Repeater's JS-side
@@ -2899,9 +2935,22 @@ fi
 # `pick region` is opened and dismissed with `key escape` to prove the cancel
 # path leaves no surface and no file behind.
 #
+# The toolbar (2026-08-12) adds a second half to the same leg: `key 4` selects
+# the REC SCREEN cell, the picker is screenshotted in that state
+# (capture-toolbar-record.png — the toolbar with a record tool lit, the
+# selection border swapped to `urgent`), and Return commits it into a real
+# wf-recorder child. That path shares nothing with `record start`: the picker
+# resolves the rectangle and the output itself and hands both to
+# RecordingService.startAt(). wf-recorder cannot actually capture in this rig
+# (the dmabuf bind block --record already hits), so the assertions below take
+# the strong form when it runs and the named-and-explained blocked form when
+# it dies — never a quiet pass either way.
+#
 # `key` is the rig's stand-in for real key delivery into an Exclusive-focus
 # layer surface, the same split every other surface's IPC actions already use
-# (tray expand, picker choose, media transport).
+# (tray expand, picker choose, media transport). `key 4` in particular routes
+# through the same setTool() a click on the toolbar cell calls, so driving it
+# here is driving the toolbar, not a parallel path built for the rig.
 if $capture_mode; then
   capture_drive_script="$shot_dir/capture-drive.sh"
   cat > "$capture_drive_script" <<EOF
@@ -2925,6 +2974,39 @@ for _ in \$(seq 1 20); do
     break
   fi
   sleep 0.5
+done
+# The toolbar's record half. \`key 4\` is exactly what a click on the REC
+# SCREEN cell does (both route through setTool), so this drives the real
+# toolbar rather than a parallel code path — the rig has no synthetic pointer,
+# the same split \`key\` itself already stands in for. The screenshot lands
+# with the picker in that state, so it carries the toolbar with a record tool
+# lit and the selection border swapped to \`urgent\`.
+#
+# The wait is for a \`--record\` run in the same session: every drive script is
+# spawned at startup, so the two would otherwise race for the one wf-recorder
+# child and this leg would fail on "already recording" rather than on anything
+# it is testing.
+SECONDS=0
+while [ "\$SECONDS" -lt 45 ]; do
+  "$qs_bin" ipc -p "$shell_path" call record status 2>&1 | grep -qF '"active":false' && break
+  sleep 1
+done
+"$qs_bin" ipc -p "$shell_path" call screenshot pick smart default > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call screenshot key 4 > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_tool_status_path" 2>&1
+niri msg action screenshot-screen --path "$capture_toolbar_path"
+"$qs_bin" ipc -p "$shell_path" call screenshot key return > "$capture_rec_reply_path" 2>&1
+# Long enough that the container holds real frames rather than just a header.
+sleep 6
+"$qs_bin" ipc -p "$shell_path" call record status > "$capture_rec_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call record stop > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 20 ]; do
+  "$qs_bin" ipc -p "$shell_path" call record status > "$capture_rec_stopped_path" 2>&1
+  grep -qF '"active":false' "$capture_rec_stopped_path" && break
+  sleep 1
 done
 "$qs_bin" ipc -p "$shell_path" call screenshot pick region default > /dev/null 2>&1
 sleep 2
@@ -3391,6 +3473,13 @@ fi
   if $wallpaper_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp_path'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call theme status > $status_path 2>&1\""
+    # The crossfade leg. Held back from the --theme-toggle combination,
+    # whose own drive script owns the timeline from sleep 9 on and whose
+    # assertions all compare against the first wallpaper's path.
+    if ! $theme_toggle_mode; then
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 9 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp2_path'\""
+      echo "spawn-at-startup \"sh\" \"-c\" \"sleep 13 && '$qs_bin' ipc -p '$shell_path' call wallpaper get > $wallpaper_get_path 2>&1\""
+    fi
   fi
   if $theme_toggle_mode; then
     echo "spawn-at-startup \"bash\" \"$theme_toggle_drive_script\""
@@ -3782,6 +3871,13 @@ fi
     # grim; 12 leaves llvmpipe real margin on the capture rather than
     # racing the default 8s shot.
     screenshot_delay=12
+  elif $wallpaper_mode; then
+    # Last in the chain on purpose: --wallpaper is a modifier other modes
+    # combine with, and each of those owns its own timeline. On its own it
+    # needs the second wallpaper (sleep 9), its crossfade, and the sleep-13
+    # `wallpaper get` to have landed, so the shot shows the session settled
+    # on the second wallpaper rather than mid-fade.
+    screenshot_delay=16
   fi
   # media_mode's mpv is killed by PID (media-kill.sh, written above) right
   # after the screenshot, before quit — it has no auto-close of its own and
@@ -3894,6 +3990,47 @@ if $wallpaper_mode; then
   fi
 fi
 
+# The crossfade plus the dither pass, proven off the rendered pixels rather
+# than off the shell's own account of itself. Skipped in the --theme-toggle
+# combination, which never sets the second wallpaper (see the spawn block).
+if $wallpaper_mode && ! $theme_toggle_mode; then
+  if [ ! -s "$wallpaper_get_path" ] || ! grep -qF "$wp2_path" "$wallpaper_get_path"; then
+    echo "SMOKE_FAIL: wallpaper get did not report the second wallpaper — got: $(cat "$wallpaper_get_path" 2>/dev/null)" >&2
+    exit 1
+  fi
+  # A 64x64 patch of bare wallpaper, well clear of the bar. wp2 is solid
+  # #3fb07a (63,176,122), so with wallpaper.dither on every pixel here is
+  # one of DitherImage's posterized steps: R in {0,128}, G in {128,255},
+  # B in {0,128}, and never the source color itself. An undithered render
+  # would report 3fb07a everywhere; a render that quantized without
+  # dithering would report exactly one color.
+  wallpaper_patch_path="$shot_dir/wallpaper-patch.txt"
+  $convert_bin "$shot_dir/smoke.png" -crop 64x64+100+500 +repage txt:- > "$wallpaper_patch_path" 2>&1
+  if grep -qi '#3FB07A' "$wallpaper_patch_path"; then
+    echo "SMOKE_FAIL: the wallpaper patch still carries the undithered source color 3fb07a" >&2
+    exit 1
+  fi
+  # The trailing [,)] tolerates an alpha component, which grim's PNG may or
+  # may not carry; a pattern anchored on ")" would silently parse nothing.
+  wallpaper_patch_pixels=$(sed -n 's/^[0-9]*,[0-9]*: (\([0-9]*\),\([0-9]*\),\([0-9]*\)[,)].*/\1 \2 \3/p' "$wallpaper_patch_path")
+  if [ -z "$wallpaper_patch_pixels" ]; then
+    echo "SMOKE_FAIL: could not read any pixel out of the wallpaper patch — head: $(head -n3 "$wallpaper_patch_path")" >&2
+    exit 1
+  fi
+  wallpaper_bad_step=$(printf '%s\n' "$wallpaper_patch_pixels" \
+    | awk '{ if (($1 != 0 && $1 != 128) || ($2 != 128 && $2 != 255) || ($3 != 0 && $3 != 128)) { print; exit } }')
+  if [ -n "$wallpaper_bad_step" ]; then
+    echo "SMOKE_FAIL: wallpaper pixel ($wallpaper_bad_step) is not on a posterized dither step" >&2
+    exit 1
+  fi
+  wallpaper_patch_colors=$(printf '%s\n' "$wallpaper_patch_pixels" | sort -u | wc -l | tr -d ' ')
+  if [ "${wallpaper_patch_colors:-0}" -lt 2 ]; then
+    echo "SMOKE_FAIL: the wallpaper patch is a single flat color, so nothing dithered" >&2
+    exit 1
+  fi
+  echo "SMOKE_WALLPAPER_DITHER $wallpaper_patch_colors distinct posterized colors in a 64x64 patch, source 3fb07a absent"
+fi
+
 if $theme_toggle_mode && $wallpaper_mode; then
   # Combined round trip WITH the wallpaper set: every leg must stay
   # matugen-derived. Flexoki hexes only ever enter theme.json through
@@ -4004,9 +4141,9 @@ if $menu_mode; then
   else
     echo "SMOKE_FAIL: menu query ':e thumbs' did not return the thumbs-up emoji row" >&2; exit 1
   fi
-  # Wallpaper root node (M13 Task 5): ranking "wall" must surface the
-  # injected wallpaper action row (providers.wallpaperEntry, merged at
-  # tree-build time).
+  # Wallpaper root node (M13 Task 5; a declared provider route since M23,
+  # when the picker grid moved inside the menu): ranking "wall" must surface
+  # it from default-menu.jsonc like any other declared node.
   if [ -s "$wall_query_path" ] && grep -qF '"id":"wallpaper"' "$wall_query_path" && grep -qF '"label":"Wallpaper"' "$wall_query_path"; then
     cat "$wall_query_path"
   else
@@ -4131,22 +4268,66 @@ if $menu_mode; then
     [ -f "$emoji_type_path" ] && cat "$emoji_type_path" >&2
     exit 1
   fi
-  # Card-top freeze (M16 Task 2): both PNGs must exist — the row-count
-  # drop between them (root's ~8 rows -> the "wall" query's single
-  # wallpaper match, same deterministic query wall_query_path already
-  # proves) is the visual evidence the top edge held still while the card
-  # shrank. SMOKE_-tagged (not the plain "menu apps screenshot:" style
-  # above) so dev/vm.sh's own scp-back grep actually pulls both to the mac.
-  if [ ! -s "$menu_top_before_png" ]; then
-    echo "SMOKE_FAIL: no pre-filter menu screenshot produced at $menu_top_before_png" >&2
+  # Card-top freeze and release (M16 Task 2, M23): three PNGs, taken across
+  # a row-count drop (root's ~12 rows -> the "wall" query's single wallpaper
+  # match, the same deterministic query wall_query_path already proves) and
+  # back again. SMOKE_-tagged (not the plain "menu apps screenshot:" style
+  # above) so dev/vm.sh's own scp-back grep pulls all three to the mac.
+  #
+  # The card's top edge is read out of each PNG rather than eyeballed: scan
+  # down the screen's centre column, starting below the bar, for the first
+  # pixel that stops being the page background. The menu card is centred
+  # horizontally, so that column always crosses it, and nothing else is
+  # drawn there — which keeps this free of hardcoded card geometry, so it
+  # survives a different output size or a card that changes height (the
+  # action bar did exactly that).
+  # The awk reads from a here-string rather than a pipe on purpose: it exits
+  # at the first non-background row, and closing a pipe under the script's
+  # own `set -o pipefail` turns imagemagick's resulting SIGPIPE into a
+  # 141 that aborts the whole run.
+  _menu_card_top() {
+    local png=$1 w h column
+    w=$($convert_bin "$png" -format "%[fx:w]" info:)
+    h=$($convert_bin "$png" -format "%[fx:h]" info:)
+    column=$($convert_bin "$png" -crop "1x$((h - 60))+$((w / 2))+60" +repage txt:- 2>/dev/null)
+    awk -F'[:#]' '
+      NR == 2 { bg = substr($3, 1, 6); next }
+      NR > 2 && substr($3, 1, 6) != bg { split($1, p, ","); print p[2] + 60; exit }' <<< "$column"
+  }
+  for _png in "$menu_top_before_png" "$menu_top_after_png" "$menu_top_cleared_png"; do
+    if [ ! -s "$_png" ]; then
+      echo "SMOKE_FAIL: no menu card-top screenshot produced at $_png" >&2
+      exit 1
+    fi
+  done
+  menu_top_before_y=$(_menu_card_top "$menu_top_before_png")
+  menu_top_after_y=$(_menu_card_top "$menu_top_after_png")
+  menu_top_cleared_y=$(_menu_card_top "$menu_top_cleared_png")
+  if [ -z "$menu_top_before_y" ] || [ -z "$menu_top_after_y" ] || [ -z "$menu_top_cleared_y" ]; then
+    echo "SMOKE_FAIL: could not read the menu card's top edge out of one of the three PNGs (before=$menu_top_before_y after=$menu_top_after_y cleared=$menu_top_cleared_y)" >&2
     exit 1
   fi
-  echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png"
-  if [ ! -s "$menu_top_after_png" ]; then
-    echo "SMOKE_FAIL: no post-filter menu screenshot produced at $menu_top_after_png" >&2
+  # Frozen: filtering twelve rows down to one must not move the top edge.
+  if [ "$menu_top_after_y" -ne "$menu_top_before_y" ]; then
+    echo "SMOKE_FAIL: the card's top moved while filtering (before ${menu_top_before_y}px, after ${menu_top_after_y}px) — the top freeze isn't holding" >&2
     exit 1
   fi
-  echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png"
+  # Released: clearing the query is a resting row set again, so the card
+  # must be back where it started rather than stranded where the one-row
+  # query left it.
+  if [ "$menu_top_cleared_y" -ne "$menu_top_before_y" ]; then
+    echo "SMOKE_FAIL: the card did not re-centre after the query was cleared (before ${menu_top_before_y}px, cleared ${menu_top_cleared_y}px) — the top freeze latched instead of releasing" >&2
+    exit 1
+  fi
+  # On screen: the top edge alone can't prove the bottom fits, but a card
+  # whose top has been pushed under the bar is already the bad state.
+  if [ "$menu_top_before_y" -le 45 ]; then
+    echo "SMOKE_FAIL: the card's top edge sits at ${menu_top_before_y}px, under the bar — the on-screen clamp isn't holding" >&2
+    exit 1
+  fi
+  echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png (card top ${menu_top_before_y}px)"
+  echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png (card top ${menu_top_after_y}px, frozen)"
+  echo "SMOKE_MENU_TOP_CLEARED $menu_top_cleared_png (card top ${menu_top_cleared_y}px, re-centred)"
 fi
 
 if $clipboard_mode; then
@@ -4685,7 +4866,7 @@ if $picker_mode; then
       echo "SMOKE_FAIL: picker open-state Rss ($picker_rss_open KB) didn't grow over pre-open ($picker_rss_pre KB) — fixtures too small to prove a decode happened" >&2; exit 1
     fi
     if [ "$picker_rss_close" -ge "$picker_rss_open" ]; then
-      echo "SMOKE_FAIL: picker post-close Rss ($picker_rss_close KB) did not drop below open-state Rss ($picker_rss_open KB) — ImagePicker.close() isn't freeing the grid's decodes" >&2; exit 1
+      echo "SMOKE_FAIL: picker post-close Rss ($picker_rss_close KB) did not drop below open-state Rss ($picker_rss_open KB) — the menu's _leavePickerRoute() isn't freeing the grid's decodes" >&2; exit 1
     fi
     if [ $((picker_rss_close - picker_rss_pre)) -gt 40000 ]; then
       echo "SMOKE_FAIL: picker post-close Rss ($picker_rss_close KB) is more than 40MB above pre-open ($picker_rss_pre KB) even after the GC settle window — looks like a real leak, not GC timing" >&2; exit 1
@@ -4953,6 +5134,87 @@ if $capture_mode; then
     echo "SMOKE_FAIL: CTRL+RETURN captured ${capture_dims}, but the output is ${capture_out_dims}" >&2; exit 1
   fi
   echo "SMOKE_CAPTURE $capture_file (${capture_dims}, matches the output)"
+
+  # The toolbar's record half, end to end: `key 4` selects the REC SCREEN cell
+  # (setTool, the exact function a click on it calls), Return commits it, and
+  # what comes out the far side is a real wf-recorder child writing a real mp4.
+  for f in "$capture_tool_status_path" "$capture_rec_reply_path" \
+    "$capture_rec_status_path" "$capture_rec_stopped_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no capture toolbar artifact produced at $f" >&2; exit 1
+    fi
+  done
+  cat "$capture_tool_status_path"; echo
+  if ! grep -qF '"action":"record"' "$capture_tool_status_path" \
+    || ! grep -qF '"tool":3' "$capture_tool_status_path" \
+    || ! grep -qF '"mode":"fullscreen"' "$capture_tool_status_path"; then
+    echo "SMOKE_FAIL: the REC SCREEN toolbar cell did not take: $(cat "$capture_tool_status_path")" >&2; exit 1
+  fi
+  # SCREEN preselects the focused output, so the commit has something to act on
+  # with no pointer anywhere near the surface. A -1 cursor here means the
+  # toolbar switched mode and left nothing selected.
+  capture_tool_cursor=$(sed -n 's/.*"cursor":\(-\{0,1\}[0-9]*\).*/\1/p' "$capture_tool_status_path")
+  if [ -z "$capture_tool_cursor" ] || [ "$capture_tool_cursor" -lt 0 ]; then
+    echo "SMOKE_FAIL: REC SCREEN left nothing selected: $(cat "$capture_tool_status_path")" >&2; exit 1
+  fi
+  if [ ! -f "$capture_toolbar_path" ]; then
+    echo "SMOKE_FAIL: no toolbar screenshot produced at $capture_toolbar_path" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$capture_rec_reply_path"; then
+    echo "SMOKE_FAIL: RETURN did not commit the record tool — got: $(cat "$capture_rec_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+
+  echo "SMOKE_CAPTURE_TOOLBAR $capture_toolbar_path"
+
+  # Where this leg stops is where the environment stops, and it says which.
+  # wf-recorder cannot run in this rig at all: nested niri under llvmpipe
+  # advertises zwp_linux_dmabuf_v1 at version 3 and wf-recorder 0.6.0 binds
+  # version 4 unconditionally, so the registry bind is rejected before any
+  # recording option matters — `recording.noDmabuf` disables the capture path,
+  # not the bind. docs/SWITCHOVER.md records the same block against the
+  # --record leg.
+  #
+  # Everything the SHELL owns is still proven either way: the toolbar switched
+  # tools, the commit was accepted, and a wf-recorder child was spawned
+  # carrying this run's own output name on its argv (which is why its stderr
+  # names that output). A blocked run therefore has to show a real recorder
+  # error — an empty lastError would mean nothing was ever launched, which is a
+  # failure of the handoff and is treated as one.
+  cat "$capture_rec_status_path"; echo
+  if grep -qF '"active":true' "$capture_rec_status_path"; then
+    cat "$capture_rec_stopped_path"; echo
+    if ! grep -qF '"active":false' "$capture_rec_stopped_path" || ! grep -qF '"lastError":""' "$capture_rec_stopped_path"; then
+      echo "SMOKE_FAIL: the picker's recording did not settle clean: $(cat "$capture_rec_stopped_path")" >&2; exit 1
+    fi
+    capture_rec_file=$(sed -n 's/.*"path":"\([^"]*\)".*/\1/p' "$capture_rec_stopped_path")
+    # Same reasoning as the --record leg's own check: the path is built from
+    # the answering instance's $HOME, so one outside this run's isolated HOME
+    # names a different formalshell on this machine.
+    case "$capture_rec_file" in
+      "$iso_home"/*) ;;
+      *) echo "SMOKE_FAIL: the picker's recording was answered by an instance outside this run: $capture_rec_file is not under $iso_home" >&2; exit 1 ;;
+    esac
+    if [ ! -s "$capture_rec_file" ]; then
+      echo "SMOKE_FAIL: the picker's recording left no file at $capture_rec_file" >&2; exit 1
+    fi
+    if ! "$file_bin" -b "$capture_rec_file" | grep -qi "ISO Media"; then
+      echo "SMOKE_FAIL: the picker's recording is not an MP4 container, file(1) says: $("$file_bin" -b "$capture_rec_file")" >&2; exit 1
+    fi
+    echo "SMOKE_CAPTURE_RECORD $capture_rec_file ($("$file_bin" -b "$capture_rec_file"))"
+  else
+    capture_rec_err=$(sed -n 's/.*"lastError":"\([^"]*\)".*/\1/p' "$capture_rec_status_path")
+    if [ -z "$capture_rec_err" ]; then
+      echo "SMOKE_FAIL: the picker's record commit launched nothing at all — no recorder ran and no error was reported: $(cat "$capture_rec_status_path")" >&2; exit 1
+    fi
+    case "$capture_rec_err" in
+      *dmabuf*)
+        echo "SMOKE_CAPTURE_RECORD_BLOCKED wf-recorder spawned and died on the known nested-llvmpipe dmabuf bind: $capture_rec_err"
+        echo "SMOKE_CAPTURE_RECORD_BLOCKED the shell's half of the path is verified; the recorder itself needs a real GPU (docs/SWITCHOVER.md)"
+        ;;
+      *)
+        echo "SMOKE_FAIL: the picker's recording failed for a reason that is not the known environment block: $capture_rec_err" >&2; exit 1 ;;
+    esac
+  fi
 
   # Escape must leave nothing mapped. A full-screen Overlay surface that
   # survives its own cancel is the worst failure this surface has.

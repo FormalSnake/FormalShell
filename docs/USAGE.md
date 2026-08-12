@@ -380,6 +380,27 @@ qs ipc --any-display -p <store-path>/share/formalshell call theme mode toggle   
 qs ipc --any-display -p <store-path>/share/formalshell call theme status         # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
 ```
 
+**Wallpaper dither.** The wallpaper renders through the same ordered-Bayer
+retro pass the album covers use (`docs/DESIGN.md` §2 item 12): each RGB
+channel posterizes to three steps, a 4×4 Bayer bias tipping a channel to
+its neighbour near a boundary, so the image keeps its own hue and comes
+out 27-color rather than gray. Content, not chrome, so it is exempt from
+matugen retheming the way a photo is.
+
+The grid is sized in **screen** pixels, never source pixels: cells are the
+screen's long edge over 480, floored at 2px, so a 4000px photo and a
+1200px one land on the same grid on the same display, and a 4K screen gets
+larger cells instead of four times as many. The image is cover-cropped to
+the screen first, so the dither is square on screen whatever the source's
+aspect ratio.
+
+It is on by default. Turn it off for a true-color wallpaper:
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "wallpaper": { "dither": false } }
+```
+
 **Motion.** Transitions across the shell run off `Theme.motion` tokens
 (`docs/DESIGN.md` §4): 100ms for hover fills, 130ms for surface
 enter/exit, one ease-out curve, opacity plus a 6px translate only — no
@@ -500,6 +521,26 @@ pointer movement takes the cursor straight back. A click is the pointer
 acting, so the level it opens does hand the cursor to whatever row lands
 under the still-parked pointer.
 
+**The action bar.** The card's bottom row names what `Enter` will do to the
+row under the cursor — `OPEN` for an app, `RUN` for an action, `ENTER` for a
+level, `SET WALLPAPER` in the picker grid, `COPY AND TYPE` for an emoji,
+`CONFIRM <label>` while a confirm-gated row waits for its second `Enter` —
+followed by the keys that always apply: `MOVE` (`↑↓`, or `←→↑↓` in the
+grid) and `ESC`, which reads `BACK` wherever there is a level to pop and
+`CLOSE` at the root. Clicking the primary does exactly what pressing `Enter`
+does; the key legends on the right are legends, not buttons. A row that
+can't be activated (an honest-empty `NO NIX`-style note) leaves the left
+half blank rather than offering a verb that would do nothing.
+
+**Where the card sits.** Centered on the focused output, and it stays fully
+on screen: whatever the row count does to the card's height, the top margin
+is clamped so the card never runs off the bottom or hugs the top edge. While
+a filter query stands, the top is frozen at wherever it was when you started
+typing, so the card grows and shrinks downward instead of jumping on every
+keystroke. Clearing the query, entering or popping a level, and a fresh
+summon all release that freeze, so the card re-centers for the resting row
+set rather than staying wherever the last long search left it.
+
 **User overrides.** `~/.config/formalshell/menu.jsonc` merges **per-key over**
 the default tree — user wins field-by-field, and `"hidden": true` removes a
 default entry (and its whole subtree) without needing to redeclare it:
@@ -588,14 +629,14 @@ A compositor keybind wired to `menu summon theme` degrades the same quiet
 way: an unresolvable route opens the menu at root rather than erroring.
 `menu summon toggles` is the replacement.
 
-**Wallpaper.** The root `WALLPAPER` node opens the [Picker](#picker) grid
-over `picker.directory`: its activation spawns the same self-targeting
-`qs ipc call picker summon` invocation the clipboard rows use, so the
-picker opens only after the menu surface has closed and never fights its
-keyboard-exclusive focus. The node is injected at tree-build time
-(`providers.js`'s `wallpaperEntry()` — static jsonc can't know the running
-shell's own path), but overrides address it by its `"wallpaper"` id like
-any declared node, including `"hidden": true`.
+**Wallpaper.** The root `WALLPAPER` node is a level like any other, except
+that the menu draws it as the [Picker](#picker) grid instead of a row list:
+descending into it lists `picker.directory` as image cells, the search field
+filters them by filename, and Enter sets the wallpaper. It is a plain
+`provider` entry in `default-menu.jsonc`, so overrides address it by its
+`"wallpaper"` id like any declared node, including `"hidden": true`. There
+is no separate picker surface any more — `picker summon` and `menu summon
+wallpaper` land on this same level.
 
 **Share (LocalSend).** The root `SHARE` submenu exists only when
 `localsend_app` resolves on PATH (`command -v localsend_app`, a live `when`
@@ -1760,33 +1801,46 @@ script's own header comment.
 
 ## Picker
 
-`shell/Surfaces/Picker/ImagePicker.qml` is a ledger grid of image cells
-(`Components/Cell.qml`, sharing hairline rules — a grid first, Omarchy's
-skewed carousel is explicitly a later flourish), keyboard-navigable in 2D
-(arrows move the cursor cell, which `Cell`'s own inversion marks; Enter
-confirms), scanned via a `find`-backed `Process` from a configured directory
-(Quickshell has no directory-listing QML type, same technique
-`CalendarEventsService` already uses) — an empty/unset directory renders an
-honest `NO IMAGES` cell rather than nothing.
+The picker is a **route inside the menu**, not a surface of its own. The
+`WALLPAPER` row (or `menu summon wallpaper`, or `picker summon`) descends
+into a level whose rows are the images in a directory, and the menu renders
+that one level as a ledger grid of image cells (`Components/Cell.qml`,
+sharing hairline rules — a grid first, Omarchy's skewed carousel is
+explicitly a later flourish) instead of as a row list. Everything else is
+the menu's: the search field filters the grid by filename, arrows move the
+cursor cell in 2D (Left/Right by one, Up/Down by a row) with `Cell`'s own
+inversion marking it, Enter confirms, Escape and backspace-on-empty pop back
+out to the level above, and the action bar names what Enter will do.
 
-It doubles as two things over the same grid:
+The listing is scanned by a `find`-backed `Process` on every entry into the
+route (Quickshell has no directory-listing QML type, the same technique
+`CalendarEventsService` already uses), and dropped again on the way out, so
+a directory edited between visits is picked up and a visit's decoded
+thumbnails do not outlive it. An empty or unset directory is an empty grid.
 
-- **Wallpaper mode** (`summon()`, scans `picker.directory` from
-  `settings.json`): choosing an image calls `Core.State.setWallpaper()`
-  directly — the exact call `wallpaper set` makes, so `ThemeEngine`'s
-  retheme pipeline runs through the one trigger path, never duplicated.
-- **Generic image-selector mode** (`select(directory, token)`, spec §11):
-  scans an arbitrary caller-supplied directory; the chosen path (or a
-  cancel on close/Escape/click-outside) lands in
+The route doubles as two things:
+
+- **Wallpaper mode** (the menu row, `menu summon wallpaper`, `picker
+  summon`; scans `picker.directory` from `settings.json`): choosing an
+  image calls `Core.State.setWallpaper()` directly — the exact call
+  `wallpaper set` makes, so `ThemeEngine`'s retheme pipeline runs through
+  the one trigger path, never duplicated.
+- **Generic image-selector mode** (`picker select <directory> <token>`,
+  spec §11): scans an arbitrary caller-supplied directory; the chosen path
+  (or a cancel from Escape, a level pop, or the menu closing) lands in
   `$XDG_STATE_HOME/formalshell/picker-selection.txt` as `{token, value}` /
   `{token, cancelled: true}` JSON — the same request/answer handshake
   `MenuIpc`'s `select()`/`input()` already established, reused rather than
-  reinvented.
+  reinvented. It stays a file of its own, distinct from
+  `menu-selection.txt`: two documented channels with different callers, and
+  merging them would let one answer the other's poll.
 
 **IPC** (`target: "picker"` — a documented spec addendum, same rationale as
 `panel`: the spec's own §IPC list predates this surface and doesn't name it,
 but per-widget-style popouts otherwise have no summon path for compositor
-keybinds or headless verification):
+keybinds or headless verification). The target keeps its own name and verbs
+even though the menu is what answers them: every existing bind and caller
+uses it, and `menu`'s own `select()`/`input()` mean something different:
 
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call picker summon                       # open in wallpaper mode
@@ -1802,9 +1856,10 @@ cat $XDG_STATE_HOME/formalshell/picker-selection.txt
 **Memory**: each cell decodes at its own on-screen size (`sourceSize` capped
 to the cell's rendered dimensions × `devicePixelRatio`), not the source
 file's native resolution — a directory of 6000×4000 photos costs kilobytes
-per cell, not tens of megabytes. `close()` (Escape, click-outside, another
-panel taking over) drops the whole decoded set; reopening re-scans and
-re-decodes, which is cheap. To confirm on the host, compare
+per cell, not tens of megabytes. Leaving the route (Escape, a level pop, the
+menu closing) drops the whole decoded set; re-entering re-scans and
+re-decodes, which is cheap. The grid is a `GridView`, so a listing taller
+than the card only ever decodes the cells actually on screen. To confirm on the host, compare
 `/proc/$(pgrep -f quickshell)/smaps_rollup` before and after opening/closing
 the picker:
 
@@ -1861,17 +1916,49 @@ screenshot.
 Four modes, matching the names omarchy uses so a ported keybind reads the
 same: `smart` (freeform drag with window and display rectangles hinted, and a
 bare click under 20px² snapping to whatever it landed in), `region` (freeform
-only), `windows` (snap to a window or display, no freeform), and `fullscreen`
-(the focused output, no interaction and no surface).
+only), `windows` (snap to a window, no freeform), and `fullscreen` (the focused
+output, no interaction and no surface).
+
+#### The toolbar
+
+The picker carries a toolbar along its bottom edge, the shell's answer to
+macOS's Cmd+Shift+5 panel — bind it to `Mod+Shift+S` and you get the same
+thing: one surface where you choose what to capture, whether to shoot or
+record it, and then commit.
+
+Six cells, in two groups of three, plus the commit button:
+
+| Cell | Key | Selects |
+| --- | --- | --- |
+| SHOT SCREEN | `1` | The display under the pointer, preselected to the focused one |
+| SHOT WINDOW | `2` | A window, highlighted or named (see the compositor split below) |
+| SHOT REGION | `3` | Freeform drag, snapping to a window or display on a bare click |
+| REC SCREEN | `4` | The same display, recorded instead of shot |
+| REC WINDOW | `5` | The same window, recorded instead of shot |
+| REC REGION | `6` | The same rectangle, recorded instead of shot |
+
+The two halves are orthogonal: the group picks *what* the selection is, the
+row picks whether `Return` shoots or records it. A record tool swaps the
+selection border to the `urgent` role and the commit cell to RECORD, so the
+surface never looks the same in the two states.
+
+Recording starts through `RecordingService` exactly as `record start` does —
+same wf-recorder child, same destination, same `RECORDING SAVED` notification
+with its `GIF` action. It picks up audio from `recording.audio` in
+`settings.json` (`none` by default, or `desktop` / `desktopmic`); every other
+recording setting applies unchanged. Unlike a shot, the picker **unmaps
+itself** before the recorder starts: wf-recorder records live content, so an
+overlay still on screen would be the first thing in the file.
 
 Keys, once it is open:
 
 | Key | Does |
 | --- | --- |
-| `Return` | Capture what is selected |
+| `Return` | Capture (or record) what is selected |
 | `Ctrl+Return` | Capture the whole display under it |
 | `Tab` / `Shift+Tab` | Cycle windows in reading order |
 | Arrows | Move the selection spatially |
+| `1`–`6` | Select a toolbar cell |
 | `Escape`, right-click | Cancel |
 
 A second argument picks what happens with the result: `default` saves to disk
@@ -1901,6 +1988,14 @@ differs. The split is on whether a rectangle exists, never on a compositor
 name, so a future niri that reports tiled geometry gets the highlight
 behaviour with no configuration.
 
+That split costs REC WINDOW something a shot does not pay. wf-recorder crops
+with `-g` and nothing else, and niri's server-side `ScreenshotWindow` has no
+video counterpart, so a window with no rectangle cannot be recorded at all.
+Under REC WINDOW those windows stay listed, dimmed, under a
+`CANNOT RECORD: NO COMPOSITOR GEOMETRY` header, and `Return` refuses them by
+name. On Hyprland, and for floating niri windows, REC WINDOW records the
+window's box like any other rectangle.
+
 `processing` does not reach that one path. `ScreenshotWindow` always writes
 the file and always copies it, so a named niri window taken with `copy` still
 lands in `screenshot.directory`, and one taken with `save` still lands on the
@@ -1929,8 +2024,9 @@ qs ipc --any-display -p <store-path>/share/formalshell call screenshot region   
 qs ipc --any-display -p <store-path>/share/formalshell call screenshot edit ""               # "" opens the last capture; a path opens that file
 qs ipc --any-display -p <store-path>/share/formalshell call screenshot cancel                # kill an in-flight capture, clear state
 qs ipc --any-display -p <store-path>/share/formalshell call screenshot status                # {"capturing":…,"lastPath":…,"lastError":…,"lastCancelled":…}
-qs ipc --any-display -p <store-path>/share/formalshell call screenshot pickerStatus          # {"open":…,"mode":…,"drawableWindows":…,"namedWindows":…,"selection":…}
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot pickerStatus          # {"open":…,"mode":…,"action":…,"tool":…,"drawableWindows":…,"namedWindows":…,"selection":…}
 qs ipc --any-display -p <store-path>/share/formalshell call screenshot key tab               # drive the picker headlessly (smoke rig)
+qs ipc --any-display -p <store-path>/share/formalshell call screenshot key 4                 # select a toolbar cell, same as clicking it
 ```
 
 `pickerStatus`'s `drawableWindows` and `namedWindows` are the honest
@@ -1942,6 +2038,7 @@ Bind them in niri, same pattern as every other target:
 ```kdl
 binds {
     Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; }
+    Mod+Shift+S { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; }
     Shift+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "region" "copy"; }
     Ctrl+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
     Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "edit" ""; }
@@ -1951,10 +2048,12 @@ binds {
 Verified by `dev/smoke-niri.sh --capture`, which opens the picker over a
 session holding one real tiled window, screenshots it, cycles the selection
 with `key tab`, captures with `key ctrl-return`, checks the resulting PNG's
-real pixel dimensions against the compositor's own output geometry, and
-proves `key escape` leaves no surface behind. It asserts a non-zero named
-window count on purpose: a leg that merely found no window hints would pass
-identically against a picker that never enumerated windows at all.
+real pixel dimensions against the compositor's own output geometry, drives the
+toolbar's REC SCREEN cell with `key 4` into a real wf-recorder child and
+checks the mp4 it leaves behind, and proves `key escape` leaves no surface
+behind. It asserts a non-zero named window count on purpose: a leg that merely
+found no window hints would pass identically against a picker that never
+enumerated windows at all.
 
 ## Text and color capture
 
@@ -2074,6 +2173,7 @@ Every setting, with its default:
 | `recording.audioBackend` | `""` | wf-recorder `--audio-backend`, only sent when a device is being recorded |
 | `recording.noDmabuf` | `false` | wf-recorder `--no-dmabuf`, the fallback for a driver whose dmabuf path is broken |
 | `recording.timeoutSeconds` | `90` | auto-cancel an unanswered `region` selection |
+| `recording.audio` | `"none"` | audio mode the capture picker's REC tools start with; `record start` takes its own argument instead |
 | `recording.gifFps` | `12` | GIF frame rate |
 | `recording.gifWidth` | `640` | GIF width in pixels, height follows the aspect |
 
@@ -2090,6 +2190,7 @@ default rather than omitting it:
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call record start screen none
 qs ipc --any-display -p <store-path>/share/formalshell call record start region desktopmic
+qs ipc --any-display -p <store-path>/share/formalshell call record startAt "0,0 1280x720" none   # a rectangle you already have, no selection
 qs ipc --any-display -p <store-path>/share/formalshell call record toggle screen none
 qs ipc --any-display -p <store-path>/share/formalshell call record stop            # also cancels a pending region selection
 qs ipc --any-display -p <store-path>/share/formalshell call record gif ""          # transcode the last recording
@@ -2122,12 +2223,19 @@ this shell does not install and cannot install portably (niri `window-rule`
 against Hyprland `windowrulev2`). Building half of it, an mpv window that
 then tiles across the recording, would be worse than not having it.
 
-**`record start window` does not exist**, on either compositor, and the
-reason is wf-recorder's own interface rather than a gap in niri's IPC:
-`wf-recorder` takes an output or a geometry, never a window id. A window
-scope would therefore be a geometry snapshot taken once, which stops being
-the window the moment it moves or resizes. `region` is the honest version of
-that.
+**`record start window` does not exist**, and the reason is wf-recorder's own
+interface rather than a gap in niri's IPC: `wf-recorder` takes an output or a
+geometry, never a window id. There is nothing to bind to a window that would
+follow it.
+
+Recording a window is reachable anyway, through the capture picker's REC
+WINDOW tool: it resolves the window's box and hands that rectangle to
+`startAt`. Know what that is, though — a geometry snapshot taken once. Move or
+resize the window mid-recording and the frame stays where the window was.
+A window the compositor reports no box for (every tiled niri window) cannot be
+recorded at all, and the picker says so rather than recording the wrong
+rectangle. `startAt` is the same entry point exposed over IPC, for a caller
+that already has a rectangle and does not want a selection.
 
 ## Reminders
 
