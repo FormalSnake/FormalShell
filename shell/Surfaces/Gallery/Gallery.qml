@@ -21,8 +21,8 @@ import qs.Components
 // rather than a claim: the frame rules, the title meta row, the content
 // gutter and its edge erasers, the enter/exit fade, Escape and
 // click-outside, and the DismissTwins catchers the SURFACES section counts
-// are all this surface's own, straight out of Panel.qml. ImagePicker.qml
-// takes the same route for the same reason.
+// are all this surface's own, straight out of Panel.qml. Every other
+// popout takes the same route for the same reason.
 //
 // The one component this surface cannot paint is Tooltip: Tooltip.qml
 // hides itself for as long as `PanelRegistry.current` is non-null (its own

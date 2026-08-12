@@ -55,7 +55,7 @@ living on every output); one `Lock` (its `WlSessionLock` manages its own
 per-output surfaces internally — no `Variants` loop needed here) and one
 `Screensaver` (which *does* need its own `Variants` over
 `Quickshell.screens`, since a plain overlay layer has no such auto-multi-
-output primitive); one `ImagePicker`; one `RegionPicker`; a `Variants` over
+output primitive); one `RegionPicker`; a `Variants` over
 `PluginService.surfacePlugins` spawning one host per `panel`/`overlay`
 plugin; and the `Ipc` handlers (debug/theme/wallpaper/menu/notifications/
 osd/panel/calendar/clipboard/network/bluetooth/media/tray/lock/screensaver/
@@ -115,7 +115,8 @@ shell/
   Menu/
     model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
     search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
-    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/wallpaperEntry()/captureEntries()
+    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/imageRows()/captureEntries()
+    actions.js                   pure JS, .pragma library — actionBar(): the bottom action bar's primary verb + key hints
     toggles.js                   pure JS, .pragma library — the "@state:" checked-condition allow-list
                                   (nightlight.active/screensaver.stayAwake/notifications.dnd/theme.dark),
                                   snapshot()/resolveState()/checkedFor(): live in-process state beats a
@@ -232,8 +233,10 @@ shell/
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper
     Menu/
-      Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells
+      Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells.
+                                 Two views over one row set: a ListView, or a GridView on the "wallpaper" route (the picker)
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
+      MenuActionBar.qml          Cell subtype: the card's bottom row — primary verb behind an accent key cap, key hints right
     Panels/
       AudioPanel.qml             Pipewire output/input node sliders (PwObjectTracker), MUTE toggle cells
       CalendarPanel.qml          month grid + year/life-progress bar + TODAY events section
@@ -256,8 +259,6 @@ shell/
       LockSurface.qml              per-output Component WlSessionLock instantiates itself; blurred-wallpaper backdrop, oversized clock, one input cell
     Screensaver/
       Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay; a Canvas drawing the banner off ttfx, or off effect.js with no ttfx on PATH
-    Picker/
-      ImagePicker.qml               ledger image grid (Panel.qml subtype); wallpaper mode + generic select() mode over the same grid
     Capture/
       RegionPicker.qml              full-screen Overlay region picker over grim-frozen output frames;
                                      window rectangles on Hyprland, a named-window ledger card on niri
@@ -1090,50 +1091,58 @@ Surfaces/Screensaver/Screensaver.qml  (one controller Item)
 
 ```
 Ipc/PickerIpc.qml (target "picker")
-  summon()              -> picker.openWallpaper()
-  select(dir, token)    -> picker.openSelect(dir, token)
-  choose(path)           -> picker.choose(path)   (same action Enter/click use)
-  close()                -> picker.close()
-  status()               -> JSON.stringify(picker.status())
+  summon()              -> menu.openWallpaperPicker()
+  select(dir, token)    -> menu.openImageSelect(dir, token)
+  choose(path)           -> menu.chooseImage(path)  (same action Enter/click use)
+  close()                -> menu.close()
+  status()               -> JSON.stringify(menu.pickerStatus())
     |
     v
-Surfaces/Picker/ImagePicker.qml  (a Panel.qml subtype — reuses the shared
-                                   ledger popout, no bar cell of its own,
-                                   anchorX:-1 falls back to the bar's right
-                                   region same as every other IPC-only panel)
-  openWallpaper(): _mode = "wallpaper"; _directory = picker.directory setting
-  openSelect(dir, token): _mode = "select"; _directory = dir (or the
-    setting, if dir is empty); _selectToken = token
+Surfaces/Menu/Menu.qml, the "wallpaper" ROUTE  (M23 — the picker has no
+                                   surface of its own; it is one level of
+                                   the menu that draws as a grid, so the
+                                   card, search field, cursor, pointer gate,
+                                   activate(index) and every close path are
+                                   the menu's, not a second copy)
+  open("wallpaper") -> _enterLevel("wallpaper") -> _enterPickerRoute():
+    _pickerMode = "wallpaper"; _pickerDir = picker.directory setting
+  openImageSelect(dir, token): _pickerMode = "select"; _pickerDir = dir (or
+    the setting, if dir is empty); _pickerToken = token; the one-shot
+    _pickerRequestPending flag stops the level entry resetting either
     |
     v
-  _scan(): `find <_directory> -maxdepth 1 -type f \( -iname *.png -o ... \)`
-    over a Process (Quickshell has no directory-listing QML type, same
-    technique CalendarEventsService already uses) -> _images[]
+  _scanPickerDir(): `find <_pickerDir> -maxdepth 1 -type f \( -iname *.png
+    -o ... \)` over a Process (Quickshell has no directory-listing QML type,
+    same technique CalendarEventsService already uses) -> _pickerImages[]
     |
     v
-  Grid of Cell delegates, one per image, `selected: index === _cursor`;
-  Left/Right/Up/Down move _cursor in 2D through Panel's shared keyPressed
-  hook, Enter/click both call choose(path)
+  _displayRows -> Providers.imageRows(_pickerImages, query): kind "image"
+    rows, filtered by basename; a GridView of Cell delegates renders them,
+    `selected: index === _cursorIndex`. Left/Right move the cursor by one
+    and Up/Down by a row through the menu's own key handling; Enter/click
+    both reach chooseImage(path)
     |
     v
-  choose(path):
+  chooseImage(path):
     mode "wallpaper" -> Core.State.setWallpaper(path)   (the exact call
                          WallpaperIpc's set() makes — ThemeEngine's retheme
                          pipeline runs through the one trigger path, never
                          duplicated here)
-    mode "select"    -> _writeSelectionFile({ token, value: path })
+    mode "select"    -> _writeSelectionFile(_pickerSelectionPath,
+                         { token, value: path })
     root.close()
     |
     v (mode "select" only, and only if a request was actually pending)
   $XDG_STATE_HOME/formalshell/picker-selection.txt
     written via a Process (never FileView.setText(), which silently skips
     both the write and its saved() signal when the new text is
-    byte-identical to what's already on disk)
+    byte-identical to what's already on disk). Kept distinct from
+    menu-selection.txt: two documented channels, different callers
     |
-    +-- onIsOpenChanged: closing without ever choosing (Escape,
-          click-outside, or PanelRegistry preempting this panel for
-          another one) still resolves the caller's poll loop, writing
-          { token, cancelled: true } instead
+    +-- _leavePickerRoute(): leaving the level (Escape, backspace-on-empty,
+          the menu closing) still resolves the caller's poll loop, writing
+          { token, cancelled: true } instead — and drops _pickerImages,
+          which destroys the grid delegates holding the decoded thumbnails
 ```
 
 This is the exact request/answer handshake `Menu/MenuIpc.qml`'s

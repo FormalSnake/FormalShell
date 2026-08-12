@@ -5,7 +5,7 @@ import "../shell/Menu/providers.js" as Providers
 
 // The SHARE route's pure logic (M17 Task 1, LocalSend integration):
 // shareEntryCommand's text/image split, shareClipboardEntry's dynamic root
-// injection (wallpaperEntry()'s own pattern) including its honest empty
+// injection (captureEntries()'s own pattern) including its honest empty
 // state, and clipboardProvider's "share" mode reusing today's "copy" rows
 // byte-identical. Menu.qml's tree wiring/activation is out of scope — same
 // split as tst_menu_clipboard.qml/tst_menu_wallpaper.qml.

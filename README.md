@@ -110,8 +110,10 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   and a `select`/`input` dmenu replacement — with an inline calculator row,
   an emoji picker (`:e`) that copies AND auto-types the pick, a nixpkgs
   package runner (`:nix`, with honest searching/failed/empty states and a
-  launch toast), and a wallpaper entry opening the picker grid built in as
-  routes. A `TOGGLES` node collects night light, stay-awake, DND and dark
+  launch toast), and a wallpaper route that draws the same card as a grid of
+  image cells, all built in as routes. A bottom action bar names what Enter
+  will do to the row under the cursor alongside the keys that always apply.
+  A `TOGGLES` node collects night light, stay-awake, DND and dark
   mode as live checkmark rows; activating one flips it and leaves the menu
   open, so the tick changes under the cursor (the ids moved, so a
   `menu.jsonc` keyed on `theme.mode-toggle` or `system.stay-awake` now goes
@@ -154,8 +156,8 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   ttfx (bundled) across its 37 effects, rerolling to a fresh one
   indefinitely until real input dismisses it. Without ttfx on PATH it falls
   back to five convergence effects written in JS.
-- **Picker** — a ledger-grid wallpaper/image selector, also usable as a
-  generic image-select IPC surface.
+- **Picker** — a ledger-grid wallpaper/image selector living inside the menu
+  as its own route, also usable as a generic image-select IPC surface.
 - **Capture**: `screenshot full` grabs an output with no interaction, and
   `screenshot pick` opens the shell's own region picker over a frozen grab of
   every output, in `smart`, `region`, `windows` or `fullscreen` mode, with a

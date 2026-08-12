@@ -15,7 +15,6 @@ import qs.Surfaces.Panels
 import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
 import qs.Surfaces.Capture
-import qs.Surfaces.Picker
 import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
 import qs.Surfaces.Gallery
@@ -113,7 +112,6 @@ ShellRoot {
     TailscalePanel { id: tailscalePanelInstance }
     SystemUpdatePanel { id: systemUpdatePanelInstance }
     DisplayPanel { id: displayPanelInstance }
-    ImagePicker { id: imagePickerInstance }
     RegionPicker { id: regionPickerInstance }
 
     // Plugin-declared surfaces (shell/Plugins/manifest.js): created from the
@@ -185,7 +183,10 @@ ShellRoot {
     TrayIpc {}
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
-    PickerIpc { picker: imagePickerInstance }
+    // The image/wallpaper picker is the menu's "wallpaper" route (M23), not
+    // a surface of its own — see PickerIpc.qml's header for why the target
+    // keeps its own name and selection file regardless.
+    PickerIpc { picker: menu }
     ScreenshotIpc { picker: regionPickerInstance }
     CaptureIpc {}
     RecordIpc {}

@@ -27,10 +27,16 @@ import QtQuick
 // converged banner holds before the screensaver rerolls its effect and
 // animates again, indefinitely; "random" never repeats the immediately
 // previous effect, a pinned name replays itself, M13b Task 5).
+// wallpaper.dither (bool, default true — Background.qml renders the
+// wallpaper through the same ordered-Bayer retro pass the album covers use
+// (DESIGN.md §2 item 12), on a grid sized in screen pixels rather than
+// source pixels; false puts the plain undithered Images back on screen,
+// M23).
 // picker.directory (string,
-// default "" — ImagePicker's configured wallpaper directory, scanned by its
-// summon()/wallpaper mode; select()'s generic-image-selector mode takes an
-// arbitrary directory as an IPC argument instead, M7 Task 6).
+// default "" — the wallpaper directory the menu's "wallpaper" route scans
+// in wallpaper mode (`picker summon`); `picker select`'s generic
+// image-selector mode takes an arbitrary directory as an IPC argument
+// instead, M7 Task 6, folded into the menu in M23).
 // greeter.sessionCommand (array of strings, default ["niri"] — greeter.qml's
 // Greetd.launch() argv once a login succeeds; the `greeter` system user has
 // no real settings.json of its own, so this is really just this key's

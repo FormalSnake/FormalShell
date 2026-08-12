@@ -184,7 +184,7 @@ function shareEntryCommand(entry) {
 }
 
 // Root "share.clipboard" leaf (Task 1), injected the same way
-// wallpaperEntry() is: its action depends on the CURRENT newest clipboard
+// captureEntries() is: its action depends on the CURRENT newest clipboard
 // entry (items[0]), which static jsonc can't express. default-menu.jsonc
 // still declares a "share.clipboard" placeholder so this fragment's key
 // overwrites an already-present entry rather than appending a new one —
@@ -490,26 +490,42 @@ function customPowerButtonEntries(buttons) {
     return out;
 }
 
-// Root "wallpaper" node (M13 Task 5), merged into the default tree object
-// before Model.buildTree() exactly like customPowerButtonEntries above —
-// it can't live in default-menu.jsonc because the action needs the running
-// shell's own path (clipboardProvider's selfPath rationale). Activation
-// spawns the self-targeting `qs ipc call picker summon` rather than opening
-// the picker in-process: the spawned call lands after the menu surface has
-// already closed, so the picker never fights the menu's keyboard-exclusive
-// focus.
-function wallpaperEntry(selfPath) {
-    return {
-        "wallpaper": {
-            label: "Wallpaper",
-            icon: "\u{F0E09}", // nf-md-wallpaper
-            action: "qs ipc -p " + selfPath + " call picker summon"
-        }
-    };
+// Image rows for the menu's "wallpaper" route (M23): the picker's grid
+// moved inside the menu, so its cells are ordinary display rows — kind
+// "image", carrying the absolute path — and every piece of machinery the
+// menu already has (cursor wrap, the hover gate, `activate(index)` over
+// IPC, the confirm/close paths) applies to them unchanged. Menu.qml lays
+// them out in a GridView instead of the row ListView; that is the whole
+// difference. `query` filters on the basename only: a path's directory
+// component is identical for every row in a listing, so matching it would
+// make every query match everything.
+function imageBasename(path) {
+    var p = String(path || "");
+    var cut = p.lastIndexOf("/");
+    return cut >= 0 ? p.slice(cut + 1) : p;
 }
 
-// Root "capture" node, merged into the default tree object exactly like
-// wallpaperEntry() above, and for the same reason: every action needs the
+function imageRows(paths, query) {
+    var q = String(query || "").trim().toLowerCase();
+    return (paths || []).filter(function (p) {
+        return q === "" || imageBasename(p).toLowerCase().indexOf(q) >= 0;
+    }).map(function (p) {
+        return {
+            id: "wallpaper." + p,
+            parentId: "wallpaper",
+            label: imageBasename(p),
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "image",
+            path: p,
+            childIds: []
+        };
+    });
+}
+
+// Root "capture" node, merged into the default tree object like
+// customPowerButtonEntries above, and for the same reason: every action needs the
 // running shell's own path, which static jsonc can't express. Routing
 // through real IPC also means a menu row and a compositor keybind exercise
 // one implementation. The parent node is declared here rather than left to

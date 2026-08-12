@@ -1192,7 +1192,7 @@ apps_query_path="$shot_dir/apps-query.json"
 menu_apps_png="$shot_dir/menu-apps.png"
 menu_top_before_png="$shot_dir/menu-top-before.png"
 menu_top_after_png="$shot_dir/menu-top-after.png"
-menu_top_cleared_png="$shot_dir/menu-top-cleared.png"
+menu_top_relevel_png="$shot_dir/menu-top-relevel.png"
 toggle_path="$shot_dir/menu-toggle.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
@@ -2146,13 +2146,21 @@ EOF
   # position in both PNGs even though the card is visibly shorter in the
   # second one.
   #
-  # Then four real BackSpaces empty the field again, and a third grim
-  # proves the other half (M23, owner: "a long list moves it up, then it
-  # never goes back to center"): an empty query is a resting row set, the
-  # freeze releases, and the card re-centers — so this PNG must come back
-  # pixel-identical to the pre-filter one over the card's own region. A
-  # freeze that latched for the whole session would leave the card sitting
-  # wherever the one-row query had shrunk it to.
+  # Then a real Return activates that single WALLPAPER match, descending
+  # into the picker grid, and a third grim proves the other half (M23,
+  # owner: "a long list moves it up, then it never goes back to center"):
+  # a level change is a resting row set, the freeze releases, and the card
+  # re-centers for the new level's own height.
+  #
+  # The level change is what makes this discriminating, and the obvious
+  # alternative does not. Backspacing the query away instead lands back on
+  # the SAME twelve rows the card was centred for when the freeze was
+  # captured — so a freeze that correctly released and one that latched for
+  # the whole session both put the card on the identical pixel, and the
+  # assertion would pass against the bug it exists to catch. Hence the
+  # centred-ness checks below rather than a bare top-edge comparison: the
+  # card must be genuinely centred for whatever it is now showing, which a
+  # latched freeze cannot be once the row count has moved.
   cat >> "$menu_finish_script" <<EOF
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
@@ -2161,9 +2169,9 @@ sleep 2
 "$wtype_bin" "wall"
 sleep 1
 "$grim_bin" "$menu_top_after_png" 2>/dev/null || true
-"$wtype_bin" -k BackSpace -k BackSpace -k BackSpace -k BackSpace
+"$wtype_bin" -k Return
 sleep 1
-"$grim_bin" "$menu_top_cleared_png" 2>/dev/null || true
+"$grim_bin" "$menu_top_relevel_png" 2>/dev/null || true
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 # Literal last action: releases share_drive_script's own wait gate (see
 # its own comment) when --share runs alongside --menu.
@@ -4268,66 +4276,98 @@ if $menu_mode; then
     [ -f "$emoji_type_path" ] && cat "$emoji_type_path" >&2
     exit 1
   fi
-  # Card-top freeze and release (M16 Task 2, M23): three PNGs, taken across
-  # a row-count drop (root's ~12 rows -> the "wall" query's single wallpaper
-  # match, the same deterministic query wall_query_path already proves) and
-  # back again. SMOKE_-tagged (not the plain "menu apps screenshot:" style
-  # above) so dev/vm.sh's own scp-back grep pulls all three to the mac.
+  # Card-top freeze and release (M16 Task 2, M23): three PNGs, taken at rest,
+  # filtered down to one row, and then a level deeper. SMOKE_-tagged (not
+  # the plain "menu apps screenshot:" style above) so dev/vm.sh's own
+  # scp-back grep pulls all three to the mac.
   #
-  # The card's top edge is read out of each PNG rather than eyeballed: scan
-  # down the screen's centre column, starting below the bar, for the first
-  # pixel that stops being the page background. The menu card is centred
+  # The card's own edges are read out of each PNG rather than eyeballed:
+  # scan the screen's centre column, starting below the bar, for the first
+  # and last pixel that aren't the page background. The card is centred
   # horizontally, so that column always crosses it, and nothing else is
   # drawn there — which keeps this free of hardcoded card geometry, so it
   # survives a different output size or a card that changes height (the
   # action bar did exactly that).
-  # The awk reads from a here-string rather than a pipe on purpose: it exits
-  # at the first non-background row, and closing a pipe under the script's
-  # own `set -o pipefail` turns imagemagick's resulting SIGPIPE into a
-  # 141 that aborts the whole run.
-  _menu_card_top() {
+  #
+  # The awk reads from a here-string rather than a pipe on purpose: closing
+  # a pipe early under the script's own `set -o pipefail` turns
+  # imagemagick's resulting SIGPIPE into a 141 that aborts the whole run.
+  _menu_card_bounds() {
     local png=$1 w h column
     w=$($convert_bin "$png" -format "%[fx:w]" info:)
     h=$($convert_bin "$png" -format "%[fx:h]" info:)
     column=$($convert_bin "$png" -crop "1x$((h - 60))+$((w / 2))+60" +repage txt:- 2>/dev/null)
-    awk -F'[:#]' '
+    awk -F'[:#]' -v off=60 -v screen="$h" '
       NR == 2 { bg = substr($3, 1, 6); next }
-      NR > 2 && substr($3, 1, 6) != bg { split($1, p, ","); print p[2] + 60; exit }' <<< "$column"
+      NR > 2 && substr($3, 1, 6) != bg {
+        split($1, p, ",")
+        if (top == "") top = p[2] + off
+        bottom = p[2] + off
+      }
+      END { if (top == "") exit 1; print top, bottom, screen }' <<< "$column"
   }
-  for _png in "$menu_top_before_png" "$menu_top_after_png" "$menu_top_cleared_png"; do
+  # Centred to within a pixel of rounding: the gap above the card equals the
+  # gap below it. This is the assertion that actually discriminates, because
+  # it is a property of where the card sits RIGHT NOW rather than a
+  # comparison against an earlier frame — a top frozen for one row count
+  # cannot stay centred once the row count moves.
+  _menu_card_centred() {
+    local top=$1 bottom=$2 screen=$3 above below
+    above=$top
+    below=$((screen - 1 - bottom))
+    [ $(( above > below ? above - below : below - above )) -le 2 ]
+  }
+  for _png in "$menu_top_before_png" "$menu_top_after_png" "$menu_top_relevel_png"; do
     if [ ! -s "$_png" ]; then
       echo "SMOKE_FAIL: no menu card-top screenshot produced at $_png" >&2
       exit 1
     fi
   done
-  menu_top_before_y=$(_menu_card_top "$menu_top_before_png")
-  menu_top_after_y=$(_menu_card_top "$menu_top_after_png")
-  menu_top_cleared_y=$(_menu_card_top "$menu_top_cleared_png")
-  if [ -z "$menu_top_before_y" ] || [ -z "$menu_top_after_y" ] || [ -z "$menu_top_cleared_y" ]; then
-    echo "SMOKE_FAIL: could not read the menu card's top edge out of one of the three PNGs (before=$menu_top_before_y after=$menu_top_after_y cleared=$menu_top_cleared_y)" >&2
+  read -r before_top before_bottom before_screen <<< "$(_menu_card_bounds "$menu_top_before_png")"
+  read -r after_top after_bottom after_screen <<< "$(_menu_card_bounds "$menu_top_after_png")"
+  read -r relevel_top relevel_bottom relevel_screen <<< "$(_menu_card_bounds "$menu_top_relevel_png")"
+  if [ -z "$before_top" ] || [ -z "$after_top" ] || [ -z "$relevel_top" ]; then
+    echo "SMOKE_FAIL: could not read the menu card's edges out of one of the three PNGs (before=$before_top after=$after_top relevel=$relevel_top)" >&2
     exit 1
   fi
-  # Frozen: filtering twelve rows down to one must not move the top edge.
-  if [ "$menu_top_after_y" -ne "$menu_top_before_y" ]; then
-    echo "SMOKE_FAIL: the card's top moved while filtering (before ${menu_top_before_y}px, after ${menu_top_after_y}px) — the top freeze isn't holding" >&2
+  # At rest: centred on the output.
+  if ! _menu_card_centred "$before_top" "$before_bottom" "$before_screen"; then
+    echo "SMOKE_FAIL: the resting card isn't centred (top ${before_top}px, bottom ${before_bottom}px of ${before_screen}px)" >&2
     exit 1
   fi
-  # Released: clearing the query is a resting row set again, so the card
-  # must be back where it started rather than stranded where the one-row
-  # query left it.
-  if [ "$menu_top_cleared_y" -ne "$menu_top_before_y" ]; then
-    echo "SMOKE_FAIL: the card did not re-centre after the query was cleared (before ${menu_top_before_y}px, cleared ${menu_top_cleared_y}px) — the top freeze latched instead of releasing" >&2
+  # Frozen: filtering twelve rows down to one must not move the top edge,
+  # which also means the card is deliberately NOT centred in this frame.
+  if [ "$after_top" -ne "$before_top" ]; then
+    echo "SMOKE_FAIL: the card's top moved while filtering (before ${before_top}px, after ${after_top}px) — the top freeze isn't holding" >&2
     exit 1
   fi
-  # On screen: the top edge alone can't prove the bottom fits, but a card
-  # whose top has been pushed under the bar is already the bad state.
-  if [ "$menu_top_before_y" -le 45 ]; then
-    echo "SMOKE_FAIL: the card's top edge sits at ${menu_top_before_y}px, under the bar — the on-screen clamp isn't holding" >&2
+  if _menu_card_centred "$after_top" "$after_bottom" "$after_screen"; then
+    echo "SMOKE_FAIL: the filtered card is still centred (top ${after_top}px, bottom ${after_bottom}px) — the row count dropped to one, so this frame can only be centred if the freeze never engaged and this leg is proving nothing" >&2
     exit 1
   fi
-  echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png (card top ${menu_top_before_y}px)"
-  echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png (card top ${menu_top_after_y}px, frozen)"
-  echo "SMOKE_MENU_TOP_CLEARED $menu_top_cleared_png (card top ${menu_top_cleared_y}px, re-centred)"
+  # Released: descending a level is a resting row set again, so the card
+  # must be centred for the level it is now showing rather than stranded on
+  # the top the one-row query froze it at.
+  if [ "$relevel_top" -eq "$before_top" ]; then
+    echo "SMOKE_FAIL: the card's top is unchanged at ${relevel_top}px after descending into WALLPAPER — the freeze latched instead of releasing" >&2
+    exit 1
+  fi
+  if ! _menu_card_centred "$relevel_top" "$relevel_bottom" "$relevel_screen"; then
+    echo "SMOKE_FAIL: the card didn't re-centre after descending into WALLPAPER (top ${relevel_top}px, bottom ${relevel_bottom}px of ${relevel_screen}px)" >&2
+    exit 1
+  fi
+  # On screen: a card whose top has been pushed under the bar, or whose
+  # bottom has run off the output, is the exact state the clamp exists for.
+  for _bounds in "$before_top $before_bottom $before_screen" "$after_top $after_bottom $after_screen" "$relevel_top $relevel_bottom $relevel_screen"; do
+    read -r _t _b _s <<< "$_bounds"
+    if [ "$_t" -le 45 ] || [ "$_b" -ge "$_s" ]; then
+      echo "SMOKE_FAIL: the card ran off the output (top ${_t}px, bottom ${_b}px of ${_s}px) — the on-screen clamp isn't holding" >&2
+      exit 1
+    fi
+  done
+  echo "SMOKE_MENU_TOP_BEFORE $menu_top_before_png (card ${before_top}-${before_bottom}px, centred)"
+  echo "SMOKE_MENU_TOP_AFTER $menu_top_after_png (card ${after_top}-${after_bottom}px, top frozen and off-centre)"
+  echo "SMOKE_MENU_TOP_RELEVEL $menu_top_relevel_png (card ${relevel_top}-${relevel_bottom}px, re-centred)"
 fi
 
 if $clipboard_mode; then

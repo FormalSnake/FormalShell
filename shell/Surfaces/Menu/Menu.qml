@@ -14,6 +14,7 @@ import "../../Menu/providers.js" as Providers
 import "../../Menu/calc.js" as Calc
 import "../../Menu/frecency.js" as Frecency
 import "../../Menu/toggles.js" as Toggles
+import "../../Menu/actions.js" as Actions
 import "../../Compositor/keybinds.js" as Keybinds
 import "../../Compositor/appmatch.js" as AppMatch
 
@@ -339,6 +340,135 @@ PanelWindow {
         return Keybinds.rows(binds, q);
     }
 
+    // --- Wallpaper / image picker (M23) ---------------------------------
+    //
+    // The picker used to be a Panel popout of its own
+    // (Surfaces/Picker/ImagePicker.qml, now deleted). It is a menu ROUTE:
+    // "wallpaper" is an ordinary provider node in default-menu.jsonc, its
+    // level renders as a grid instead of rows, and its cells are ordinary
+    // _displayRows entries (Providers.imageRows) — so the cursor, the
+    // pointer gate, `activate(index)` over IPC, and every close path are
+    // the menu's own rather than a second implementation of each.
+    //
+    // Two modes, both driving the same grid, unchanged from the panel:
+    // - "wallpaper" (PickerIpc's summon(), the WALLPAPER menu row, `menu
+    //   summon wallpaper`): scans picker.directory from settings.json;
+    //   choosing calls Core.State.setWallpaper() — the exact call
+    //   WallpaperIpc's set() makes, so ThemeEngine's retheme fires through
+    //   one trigger path and is never duplicated here.
+    // - "select" (openImageSelect(), PickerIpc's select() — spec §11's
+    //   "doubles as a generic image-selector"): scans an arbitrary
+    //   directory and writes {token, value: path} to picker-selection.txt
+    //   instead of touching the wallpaper. Leaving the route without
+    //   choosing resolves the caller's poll loop with {token,
+    //   cancelled: true}, mirroring _abandonPendingSelect below. That file
+    //   stays separate from the menu's own menu-selection.txt: they are two
+    //   documented request channels with different callers, and merging
+    //   them would let one answer the other's poll.
+    readonly property string _pickerRouteId: "wallpaper"
+    readonly property bool _isPickerRoute: root._mode === "menu" && root.currentNodeId === root._pickerRouteId
+    readonly property int pickerColumns: 4
+
+    property string _pickerMode: "wallpaper"   // "wallpaper" | "select"
+    property string _pickerDir: ""
+    property string _pickerToken: ""
+    property var _pickerImages: []
+    // Set by openImageSelect() so the level entry it triggers keeps that
+    // caller's directory and token — every other way of reaching this level
+    // (the menu row, `menu summon wallpaper`, `picker summon`) is a plain
+    // wallpaper-mode open and resets both.
+    property bool _pickerRequestPending: false
+
+    // Quickshell has no directory-listing QML type (same rationale as
+    // CalendarEventsService's own `find`-backed read) — re-scanned on every
+    // entry into the route, so a directory edited between opens is picked up.
+    function _scanPickerDir() {
+        if (root._pickerDir === "") {
+            root._pickerImages = [];
+            return;
+        }
+        pickerScanProc.command = ["sh", "-c", 'find "$1" -maxdepth 1 -type f \\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.bmp" \\) 2>/dev/null | sort', "sh", root._pickerDir];
+        pickerScanProc.running = true;
+    }
+
+    Process {
+        id: pickerScanProc
+
+        stdout: StdioCollector {
+            onStreamFinished: root._pickerImages = text.split("\n").filter(function (l) { return l.length > 0; })
+        }
+    }
+
+    function _enterPickerRoute() {
+        if (!root._pickerRequestPending) {
+            root._abandonPendingPicker();
+            root._pickerMode = "wallpaper";
+            root._pickerDir = Core.Config.get("picker.directory", "");
+            root._pickerToken = "";
+        }
+        root._pickerRequestPending = false;
+        root._scanPickerDir();
+    }
+
+    // Dropping _pickerImages destroys every decoded thumbnail with the grid
+    // delegates that held them — the whole point of the old panel's close()
+    // override (M16 Task 12), kept. Re-entering re-scans and re-decodes,
+    // which is cheap; the decodes were the cost.
+    function _leavePickerRoute() {
+        root._abandonPendingPicker();
+        root._pickerImages = [];
+    }
+
+    function _abandonPendingPicker() {
+        if (root._pickerMode === "select" && root._pickerToken !== "") {
+            root._writeSelectionFile(root._pickerSelectionPath, JSON.stringify({ token: root._pickerToken, cancelled: true }));
+            root._pickerToken = "";
+        }
+    }
+
+    // PickerIpc's summon() — the wallpaper-mode open. Everything it needs to
+    // reset happens in _enterPickerRoute() off the level entry, so a menu row
+    // and this call reach an identical state by construction.
+    function openWallpaperPicker() {
+        root.open(root._pickerRouteId);
+    }
+
+    function openImageSelect(directory, token) {
+        root._abandonPendingPicker();
+        root._pickerMode = "select";
+        root._pickerDir = (directory && directory.length > 0) ? directory : Core.Config.get("picker.directory", "");
+        root._pickerToken = token;
+        root._pickerRequestPending = true;
+        root.open(root._pickerRouteId);
+    }
+
+    // Callable over IPC (PickerIpc's choose()) as well as from Enter/click
+    // on a cell — the one function that resolves a pick, so both paths stay
+    // in sync by construction. Refuses a path outside the current listing
+    // rather than trusting an arbitrary caller-supplied one.
+    function chooseImage(path) {
+        if (!root.isOpen || !root._isPickerRoute || root._pickerImages.indexOf(path) < 0)
+            return false;
+        if (root._pickerMode === "select") {
+            root._writeSelectionFile(root._pickerSelectionPath, JSON.stringify({ token: root._pickerToken, value: path }));
+            root._pickerToken = "";
+        } else {
+            Core.State.setWallpaper(path);
+        }
+        root.close();
+        return true;
+    }
+
+    function pickerStatus() {
+        return {
+            open: root.isOpen && root._isPickerRoute,
+            mode: root._pickerMode,
+            directory: root._pickerDir,
+            count: root._pickerImages.length,
+            cursor: root._cursorIndex
+        };
+    }
+
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
     // the ternary's closed branch never reads ClipboardService.items, so
@@ -361,7 +491,6 @@ PanelWindow {
             return {};
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
-        var wallpaper = Providers.wallpaperEntry(Quickshell.shellDir);
         var capture = Providers.captureEntries(Quickshell.shellDir);
         // Live-while-open, unlike wallpaper/buttons above: its action
         // depends on the current newest clipboard entry, so
@@ -375,7 +504,6 @@ PanelWindow {
         var merged = {};
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
-        Object.keys(wallpaper).forEach(function (k) { merged[k] = wallpaper[k]; });
         Object.keys(capture).forEach(function (k) { merged[k] = capture[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
@@ -431,6 +559,12 @@ PanelWindow {
         if (root._mode === "input")
             return [];
         var q = searchInput.text;
+        // The wallpaper route is the picker's grid (M23): route-local rows
+        // built from the scanned directory and filtered by filename, never
+        // whole-tree ranking — a wallpapers directory would drown a root
+        // query exactly the way the emoji dataset would.
+        if (root._isPickerRoute)
+            return Providers.imageRows(root._pickerImages, q);
         // The emoji route searches the vendored dataset exclusively (an
         // empty query browses its head, Providers.emojiSearch), and the
         // ":e " trigger narrows to the same rows from any level (M12
@@ -480,6 +614,21 @@ PanelWindow {
         return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
+    readonly property var _cursorNode: root._displayRows[root._cursorIndex] || null
+
+    // What the bottom action bar says right now (Menu/actions.js). Bound
+    // rather than pushed, so it tracks the cursor, the mode and the pending
+    // confirm without a single imperative update.
+    readonly property var _actionBar: Actions.actionBar({
+        mode: root._mode,
+        node: root._cursorNode,
+        atRoot: root.currentNodeId === null,
+        grid: root._isPickerRoute,
+        pickerSelect: root._pickerMode === "select",
+        confirming: root._confirmPendingId !== "" && !!root._cursorNode
+            && root._cursorNode.id === root._confirmPendingId
+    })
+
     // Uppercased at display time only (MetaLabel's own font.capitalization,
     // the one shared uppercase/meta convention) — the JS-level
     // `.toUpperCase()` this used to carry was pure redundancy, since
@@ -518,20 +667,54 @@ PanelWindow {
     // on every edge (same technique as Panel.qml's `_contentWidth`).
     readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.popupPadding * 2
     readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.popupPadding * 2
-    readonly property real _rowsAreaHeight: Math.min(rowsView.contentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height))
+    // Whichever view owns the level: the grid on the wallpaper route, the
+    // row list everywhere else. The idle one is emptied rather than merely
+    // hidden (see their `model` bindings), so its contentHeight is 0.
+    readonly property real _viewContentHeight: root._isPickerRoute ? gridView.contentHeight : rowsView.contentHeight
+    readonly property real _rowsAreaHeight: Math.min(root._viewContentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - actionBar.height))
 
-    // Card-top freeze (omarchy parity, M16 Task 2): the first filter
-    // keystroke or submenu move in a session pins the top margin at
-    // whatever it currently resolves to, so every row-count change after
-    // that grows/shrinks the card downward instead of re-centering it.
-    // null means "not frozen yet" — margins.top below falls back to the
-    // live centered formula. Released on every open()/openSelect()/
-    // openInput()/close() so a fresh summon always starts re-centered.
+    // Card-top freeze (omarchy parity, M16 Task 2): a filter keystroke pins
+    // the top margin at whatever it currently resolves to, so every
+    // row-count change while that query stands grows/shrinks the card
+    // downward instead of re-centering it on each keystroke. null means
+    // "not frozen" — margins.top below falls back to the live centered
+    // formula.
+    //
+    // The freeze is released the moment the card is back at a RESTING row
+    // set: the query cleared, a level entered or popped, a fresh summon.
+    // It used to latch for the whole session, which is what left the card
+    // stranded (owner, live shell: "a long list moves it up, then it never
+    // goes back to center — sometimes it stays at the bottom of the screen
+    // or at the top"). Releasing costs nothing visually, because the value
+    // being released to is the same centered position the freeze was
+    // captured from.
     property var _frozenTop: null
+
+    readonly property real _topInset: Core.Theme.space.panelGap
+    readonly property real _centeredTop: root._screen ? (root._screen.height - root.implicitHeight) / 2 : 0
+
+    // Whatever the freeze or the centered formula produces, the card is
+    // always fully on screen with a `panelGap` margin. Without this, the
+    // freeze itself is what pushes it off: pin the top for a three-row
+    // level, then filter to forty rows, and the card grows straight past
+    // the bottom edge (and, filtering the other way from a long list, ends
+    // up hugging the top).
+    function _clampTop(top) {
+        if (!root._screen)
+            return 0;
+        var maxTop = root._screen.height - root.implicitHeight - root._topInset;
+        // Taller than the screen can hold even with no margin at all: center
+        // the overflow instead of returning a negative top, which would push
+        // the search field off the top edge. _maxTotalHeight caps the rows
+        // area at 60% of the screen, so this is a guard, not a normal path.
+        if (maxTop < root._topInset)
+            return Math.max(0, Math.round(root._centeredTop));
+        return Math.round(Math.max(root._topInset, Math.min(top, maxTop)));
+    }
 
     function _freezeTop() {
         if (root._frozenTop === null && root._screen)
-            root._frozenTop = Math.round((root._screen.height - root.implicitHeight) / 2);
+            root._frozenTop = root._clampTop(root._centeredTop);
     }
 
     function _releaseTopFreeze() {
@@ -544,6 +727,7 @@ PanelWindow {
     }
 
     readonly property string _selectionPath: root._stateDir + "/menu-selection.txt"
+    readonly property string _pickerSelectionPath: root._stateDir + "/picker-selection.txt"
 
     // Write-only: select()/input() answers land here as `{token, value}` /
     // `{token, cancelled: true}` JSON. Every write goes through a Process
@@ -555,9 +739,9 @@ PanelWindow {
     // against its own cached text, not what's actually on disk). Callers
     // poll/read the file themselves — see MenuIpc.qml's header comment for
     // the full contract.
-    function _writeSelectionFile(content) {
+    function _writeSelectionFile(path, content) {
         var proc = _selectionFileProcComponent.createObject(root, {});
-        proc.command = ["sh", "-c", 'printf \'%s\' "$2" > "$1"', "sh", root._selectionPath, content];
+        proc.command = ["sh", "-c", 'printf \'%s\' "$2" > "$1"', "sh", path, content];
         proc.running = true;
     }
 
@@ -583,7 +767,7 @@ PanelWindow {
     }
 
     function _writeSelection(payload) {
-        root._writeSelectionFile(JSON.stringify(payload));
+        root._writeSelectionFile(root._selectionPath, JSON.stringify(payload));
         root.selectionResolved(payload.token, payload.value !== undefined ? payload.value : null, !!payload.cancelled);
     }
 
@@ -686,6 +870,7 @@ PanelWindow {
 
     function close() {
         root._abandonPendingSelect();
+        root._leavePickerRoute();
         root.isOpen = false;
         root._confirmPendingId = "";
         root._releaseTopFreeze();
@@ -889,18 +1074,22 @@ PanelWindow {
     }
 
     function _enterLevel(id) {
+        var leavingPicker = root.currentNodeId === root._pickerRouteId && id !== root._pickerRouteId;
         root.currentNodeId = id;
         root._cursorIndex = 0;
         root._confirmPendingId = "";
         searchInput.text = "";
         // A whole new row set arrives under an unmoved pointer, in or out.
         pointerGate.reset();
+        if (leavingPicker)
+            root._leavePickerRoute();
+        if (id === root._pickerRouteId)
+            root._enterPickerRoute();
         root._evalConditions();
-        // Only a real submenu move (drilling in via _activateRow, popping
-        // via _pop) freezes the card's top — open()'s own initial level
-        // entry runs before isOpen flips true, so it's exempt.
-        if (root.isOpen)
-            root._freezeTop();
+        // A level change is a resting row set, so the card re-centers for
+        // it rather than keeping whatever top the previous level's
+        // filtering froze (see margins.top below for the whole rule).
+        root._releaseTopFreeze();
     }
 
     function _pop() {
@@ -922,10 +1111,15 @@ PanelWindow {
         id: pointerGate
     }
 
+    // `delta` is ±1 for the row list and ±`pickerColumns` for the grid's
+    // vertical moves, so the wrap has to survive a step larger than the row
+    // count itself — the old `(i + delta + n) % n` only ever saw ±1 and
+    // returns a negative index the moment |delta| > n.
     function _moveCursor(delta) {
         var n = root._displayRows.length;
         if (n === 0) return;
-        root._cursorIndex = (root._cursorIndex + delta + n) % n;
+        var next = (root._cursorIndex + delta) % n;
+        root._cursorIndex = next < 0 ? next + n : next;
         root._confirmPendingId = "";
         pointerGate.reset();
     }
@@ -952,6 +1146,10 @@ PanelWindow {
         var node = rows[index];
         if (node.kind === "option") {
             root._completeSelect(node.label);
+            return;
+        }
+        if (node.kind === "image") {
+            root.chooseImage(node.path);
             return;
         }
         if (node.kind === "action") {
@@ -1155,7 +1353,7 @@ PanelWindow {
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
     implicitWidth: Core.Theme.space.popupWidthMenu
-    implicitHeight: root._chrome + searchCell.height + root._rowsAreaHeight
+    implicitHeight: root._chrome + searchCell.height + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -1165,10 +1363,10 @@ PanelWindow {
     anchors { top: true; left: true }
     margins {
         left: root._screen ? Math.round((root._screen.width - root.implicitWidth) / 2) : 0
-        // Frozen once a session's first filter keystroke/submenu move
-        // fires (_freezeTop): every row-count change from there on grows
-        // or shrinks the card downward instead of re-centering it.
-        top: root._frozenTop !== null ? root._frozenTop : (root._screen ? Math.round((root._screen.height - root.implicitHeight) / 2) : 0)
+        // Frozen while a filter query stands (_freezeTop), centered
+        // otherwise, clamped on screen either way — see the _frozenTop
+        // block above for the whole rule.
+        top: root._clampTop(root._frozenTop !== null ? root._frozenTop : root._centeredTop)
     }
 
     // Enter/exit (DESIGN.md §4): the whole card fades and slides down into
@@ -1264,12 +1462,19 @@ PanelWindow {
                         // Typing re-ranks the rows under a pointer that hasn't
                         // moved — the churn the gate exists for.
                         pointerGate.reset();
-                        // Real filter keystrokes freeze the card's top the
-                        // same as a submenu move; open()'s own prefill/reset
-                        // writes land before isOpen flips true, so they're
-                        // exempt (see _enterLevel's matching guard).
-                        if (root.isOpen)
-                            root._freezeTop();
+                        // A standing filter query freezes the card's top; an
+                        // empty one is a resting row set again and releases
+                        // it, so backspacing out of a long search re-centers
+                        // the card instead of leaving it stranded wherever
+                        // that search's height put it. open()'s own
+                        // prefill/reset writes land before isOpen flips
+                        // true, so they're exempt either way.
+                        if (root.isOpen) {
+                            if (searchInput.text.length === 0)
+                                root._releaseTopFreeze();
+                            else
+                                root._freezeTop();
+                        }
                         // Arm the debounced nix search from the event, never
                         // from the _displayRows binding (side effect).
                         if (root._mode === "menu") {
@@ -1284,12 +1489,27 @@ PanelWindow {
                     Keys.onPressed: event => {
                         switch (event.key) {
                         case Qt.Key_Up:
-                            root._moveCursor(-1);
+                            root._moveCursor(root._isPickerRoute ? -root.pickerColumns : -1);
                             event.accepted = true;
                             break;
                         case Qt.Key_Down:
-                            root._moveCursor(1);
+                            root._moveCursor(root._isPickerRoute ? root.pickerColumns : 1);
                             event.accepted = true;
+                            break;
+                        // Left/Right belong to the search field's own text
+                        // cursor everywhere except the grid, so they're
+                        // claimed only there — never accepted otherwise.
+                        case Qt.Key_Left:
+                            if (root._isPickerRoute) {
+                                root._moveCursor(-1);
+                                event.accepted = true;
+                            }
+                            break;
+                        case Qt.Key_Right:
+                            if (root._isPickerRoute) {
+                                root._moveCursor(1);
+                                event.accepted = true;
+                            }
                             break;
                         case Qt.Key_Return:
                         case Qt.Key_Enter:
@@ -1329,8 +1549,12 @@ PanelWindow {
             anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
             width: root._contentWidth
             height: root._rowsAreaHeight
+            visible: !root._isPickerRoute
             clip: true
-            model: root._displayRows
+            // Emptied, not merely hidden, on the grid's route: an unread
+            // model keeps its delegates alive, and _viewContentHeight above
+            // needs the idle view to measure 0.
+            model: root._isPickerRoute ? [] : root._displayRows
             currentIndex: root._cursorIndex
             // ListView tracks the cursor through its (always present, even
             // with no `highlight` component) highlight item, and the
@@ -1356,25 +1580,118 @@ PanelWindow {
             }
         }
 
+        // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
+        // of image cells sharing hairline rules", spec §11) — the picker's
+        // own surface, now one of the menu's two views over the same
+        // _displayRows/_cursorIndex state rather than a panel of its own.
+        // Shares rowsView's geometry exactly, so the action bar below can
+        // anchor to whichever of the two is live without knowing which.
+        GridView {
+            id: gridView
+            anchors.top: searchCell.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            width: root._contentWidth
+            height: root._rowsAreaHeight
+            visible: root._isPickerRoute
+            clip: true
+            model: root._isPickerRoute ? root._displayRows : []
+            cellWidth: root._contentWidth / root.pickerColumns
+            cellHeight: gridView.cellWidth
+            currentIndex: root._cursorIndex
+            // Same hard-jump follow as rowsView, for the same reason: held
+            // arrow keys outrun the default animated highlight move and the
+            // cursor cell ends up off-viewport.
+            highlightMoveDuration: 0
+
+            delegate: Cell {
+                id: imageCell
+                required property int index
+                required property var modelData
+
+                width: gridView.cellWidth
+                height: gridView.cellHeight
+                selected: imageCell.index === root._cursorIndex
+                hovered: imageHover.containsMouse
+
+                // Decode capped at the cell's own on-screen size (M16 Task
+                // 12): without this, a 6000×4000 source decodes at full
+                // resolution into a ~130px cell — ~96MB of resident RGBA
+                // per thumbnail, times every file in the directory.
+                //
+                // The 2x factor matters: sourceSize with both dimensions set
+                // decodes to FIT INSIDE that box (Qt's KeepAspectRatio), not
+                // to cover it, so a non-square source into this square cell
+                // would decode short on one axis and PreserveAspectCrop
+                // would upscale it back out — visibly blurrier than an
+                // uncapped decode. A box 2x the cell's side keeps the
+                // fit-inside decode covering the cell for any source up to
+                // 2:1 either way, comfortably past 16:9, while still capping
+                // memory to a small multiple of the cell.
+                Image {
+                    anchors.fill: parent
+                    source: "file://" + imageCell.modelData.path
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: false
+                    sourceSize.width: imageCell.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.height: imageCell.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                }
+
+                MouseArea {
+                    id: imageHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    // Same gate as the row list: filtering re-renders cells
+                    // under a parked pointer, and Qt delivers that as a
+                    // hover move indistinguishable from a real one.
+                    onPositionChanged: event => {
+                        if (pointerGate.moved(imageHover, event.x, event.y))
+                            root._setCursor(imageCell.index);
+                    }
+                    onClicked: root._activateFromPointer(imageCell.index)
+                }
+            }
+        }
+
+        // The Raycast-style action bar (M23): what Enter does to the row
+        // under the cursor, plus the keys that always apply. Menu/actions.js
+        // owns the wording; this is the card's last element, so the two
+        // eraser rectangles below close over it rather than over the views.
+        MenuActionBar {
+            id: actionBar
+            anchors.top: rowsView.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            width: root._contentWidth
+            primary: root._actionBar.primary
+            hints: root._actionBar.hints
+
+            // Clicking the primary is the pointer acting, exactly like
+            // clicking the row itself — same path, same gate re-arm.
+            onPrimaryActivated: root._activateFromPointer(root._cursorIndex)
+        }
+
         // Erases the trailing hairline searchCell and every row draw along
         // their own right edge (Cell's shared-rule contract) — without this,
         // that continuous line and the frame's own right rule above would read
         // as two parallel borders `popupPadding` apart.
         Rectangle {
             anchors.top: searchCell.top
-            anchors.right: rowsView.right
-            anchors.bottom: rowsView.bottom
+            anchors.right: actionBar.right
+            anchors.bottom: actionBar.bottom
             width: Core.Theme.borderWidth
             color: Core.Theme.color.background
         }
 
-        // Same erasure for the bottom: the last row's own bottom rule sits
-        // flush with rowsView's own bottom edge whenever the rows fit without
-        // scrolling, which would otherwise double the frame's own bottom rule.
+        // Same erasure for the bottom: the action bar's own bottom rule sits
+        // flush with the card's content bottom, which would otherwise double
+        // the frame's own bottom rule.
         Rectangle {
-            anchors.left: rowsView.left
-            anchors.right: rowsView.right
-            anchors.bottom: rowsView.bottom
+            anchors.left: actionBar.left
+            anchors.right: actionBar.right
+            anchors.bottom: actionBar.bottom
             height: Core.Theme.borderWidth
             color: Core.Theme.color.background
         }

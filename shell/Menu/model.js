@@ -73,7 +73,7 @@ function inferKind(entry) {
     // the other four fields can't express, e.g. "note" (nix's own
     // non-activatable NO NIX/SEARCHING rows): those are hand-built Node
     // fragments from a provider fn today, bypassing buildTree entirely, but
-    // a dynamically-injected root entry (providers.js's wallpaperEntry()
+    // a dynamically-injected root entry (providers.js's captureEntries()
     // pattern) still goes through here and has no other way to ask for it.
     if (entry.kind !== undefined) return entry.kind;
     if (entry.action !== undefined) return "action";

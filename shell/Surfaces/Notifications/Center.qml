@@ -102,6 +102,8 @@ PanelWindow {
         onTriggered: root._now = Date.now()
     }
 
+    readonly property int cardWidth: Theme.space.popupWidthWide
+
     screen: root._screen
     // Held visible through the exit fade (DESIGN.md §4): close() drops
     // isOpen, card's opacity Behavior runs to 0, then the window unmaps.
@@ -109,22 +111,37 @@ PanelWindow {
     // card paints its own background below.
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
-    implicitWidth: Theme.space.popupWidthWide
 
     WlrLayershell.namespace: "formalshell:notifications-center"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
-    anchors { top: true; right: true; bottom: true }
-    margins.top: root._barHeight
+    // Spans the whole screen, not just the card's own right-hand column, for
+    // the same reason Panel.qml does: a click landing anywhere outside the
+    // card has to close this surface, and a window only as wide as the card
+    // never receives that click at all — it goes straight to whatever
+    // application is underneath, leaving the center open until the bell cell
+    // is found again. DismissTwins below only ever covered the OTHER
+    // outputs; this is the missing same-output half.
+    anchors { top: true; left: true; right: true; bottom: true }
+
+    MouseArea {
+        id: backdrop
+        anchors.fill: parent
+        enabled: root.isOpen
+        onClicked: root.close()
+    }
 
     // Enter/exit (DESIGN.md §4): the whole card fades and slides in from
     // the right edge (this surface is right-anchored), one animated scalar
     // so a reopen mid-exit reverses in place.
     Item {
         id: card
-        anchors.fill: parent
+        x: parent.width - root.cardWidth
+        y: root._barHeight
+        width: root.cardWidth
+        height: parent.height - root._barHeight
         opacity: root.isOpen ? 1 : 0
         transform: Translate { x: (1 - card.opacity) * Theme.motion.slide }
 
@@ -135,6 +152,15 @@ PanelWindow {
         Rectangle {
             anchors.fill: parent
             color: Theme.color.background
+        }
+
+        // Swallows clicks anywhere inside the card (including the padding
+        // between rows) before they reach the backdrop above — ordinary
+        // nested-MouseArea priority, no manual event plumbing, same as
+        // Panel.qml's own frame.
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {}
         }
 
         // The card's own border ring on all four sides (DESIGN.md's omarchy

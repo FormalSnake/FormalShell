@@ -570,7 +570,31 @@ adjective:
     doesn't retheme either, and forcing an album cover into the two chrome
     ink roles would erase the reason for showing a color image at all.
 
-    Three named content surfaces today: the media panel's album art, both
+    **The wallpaper joins the list (2026-08-12).** Owner: "it would be
+    cool for the rendered wallpaper to also be dithered, as an optional but
+    on by default thing ... similar to album covers." It is the same retro
+    pass at the same 3 levels, on by default, off with `wallpaper.dither:
+    false` in settings.json, and it is content in exactly the sense above:
+    exempt from matugen retheming, keeping the photograph's own hues while
+    the chrome over it recolors from that same photograph.
+
+    Its grid is sized in **screen** pixels, not source pixels: the cell is
+    the screen's long edge over 480, floored at 2px, so the texture is a
+    property of the display rather than of whichever file is loaded. Two
+    wallpapers of wildly different pixel dimensions dither identically on
+    the same screen, a 4K display gets larger cells rather than four times
+    as many of them (a finer grid at a higher resolution would read as
+    noise, and cost four times the paint), and the source is cover-cropped
+    to the screen before the pass runs, so cells stay square whatever the
+    file's aspect ratio. Both crossfade layers dither, and the fade waits
+    on the incoming layer's canvas rather than on its decode, so a
+    wallpaper change never shows an undithered frame or a blank one.
+    Checkable: `dev/smoke-niri.sh --wallpaper` sets a second wallpaper,
+    crossfades to it, and samples a 64x64 patch of the result — every
+    channel must land on a posterized step, the source's own solid color
+    must be absent, and at least two colors must be present.
+
+    Three named content surfaces before it: the media panel's album art, both
     the static cover and the Apple Music animated cover (sampled off its
     decoded video at ~8fps and re-dithered per frame, the resulting choppy
     cadence is the aesthetic, not a defect, and stops the moment
@@ -586,7 +610,11 @@ adjective:
     rejected it 2026-08-10 ("the album cover's colors are ugly"). Nothing
     else auto-dithers:
     notification images, menu thumbnails, launcher icons, and the
-    wallpaper picker's grid all stay true-color. Checkable: zoom the media
+    wallpaper picker's grid all stay true-color — the picker in particular
+    shows candidates as they are, since the point of that grid is choosing
+    a photograph, not previewing the texture it will be shown through. The
+    lock screen's blurred wallpaper backdrop stays undithered for the same
+    reason a blur and a dither cancel each other out. Checkable: zoom the media
     panel's album art in a screenshot, individual chunk-sized dither cells
     resolve as flat squares, and every sampled cell's channels each land
     on one of the posterized steps of the source image's own color, never
@@ -644,12 +672,25 @@ floats with a margin or fuses to the screen edge.
 - **Menu** — a floating card (omarchy chrome: bordered rectangle, `panelGap`
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),
-  search field as the top row, breadcrumb as an uppercase meta row (§2.3).
-  Launcher app rows — and the bar's active-window cell (M14) — are the
-  sanctioned image-icon exception: the desktop entry's icon-theme image
-  renders at the glyph cell's size, radius 0, no border — like the
-  DMS/omarchy launchers — while every other icon in the shell stays a Nerd
-  Font glyph.
+  search field as the top row, breadcrumb as an uppercase meta row (§2.3),
+  and an action bar as the bottom row. Launcher app rows — and the bar's
+  active-window cell (M14) — are the sanctioned image-icon exception: the
+  desktop entry's icon-theme image renders at the glyph cell's size, radius
+  0, no border — like the DMS/omarchy launchers — while every other icon in
+  the shell stays a Nerd Font glyph.
+  The **action bar** is Raycast's footer read through this language rather
+  than copied from it: one ledger cell, the primary verb for the cursor row
+  on the left behind a full-bleed accent key cap (§2.4 — the one loud thing
+  in the row, because it is the one thing `Enter` will do), the
+  always-applicable keys on the right as bordered caps carrying band-2 dim
+  ink (§1.4). Key caps are literal characters checked against the pinned
+  nerd-fonts cmap, never names: U+23CE ⏎ is present in it, the more obvious
+  U+21B5 ↵ is not.
+  One level draws as a **grid** instead of rows — the wallpaper/image picker
+  (§Concrete translations' "grid of image cells sharing hairline rules") —
+  keeping the same card, search field, cursor and action bar. It is a view
+  swap over one level, not a second surface: the picker has no window of its
+  own.
 - **Panels** (audio/network/bluetooth/power/calendar/weather/media) — each is one
   omarchy-style card anchored under its bar cell (`panelGap` margin,
   bordered, radius 0, `panelPadding` internal padding). Inside: an uppercase
@@ -719,6 +760,23 @@ floats with a margin or fuses to the screen edge.
   `W×H` plus the dim uppercase name of what is selected. A bottom-centered
   standalone cell carries the key legend in the meta-label idiom. All chrome
   drops for one frame before the capture fires, so none of it is baked in.
+
+  **The toolbar** sits along the bottom edge, under the legend: a bordered
+  card (`background` fill, `rule` border at `Theme.borderWidth`, radius 0,
+  `popupPadding` inset) holding one row of cells. They are the bar's
+  `standalone` cells, not the fused ledger — six discrete buttons is exactly
+  what that chrome is for, and it brings the bar's own hover inversion
+  (§1.1/§3) with it. The current tool is `selected`, so it stays inverted
+  under the pointer without a second treatment (§2.4). Two dim uppercase
+  `MetaLabel` group headers (`SHOT`, `REC`) separate the two halves in the
+  mek meta-row idiom, and the trailing commit button is the ink cell (§2
+  item 11) — the one committing action on the surface.
+
+  The record tools swap two things and nothing else: the selection border
+  moves from `accent` to `urgent` (the same role the bar's recording
+  indicator and the old slurp-driven record selection already carry), and the
+  ink cell's glyph and label change. One palette role does the whole job of
+  saying "this is about to record", with no second color and no motion.
 
   The one place a surface differs by backend. A window the compositor
   reports a box for is **highlighted** in place; a window it reports no box

@@ -27,8 +27,8 @@ Variants {
 
             screen: modelData
             // The twin for the surface's own output stays unmapped — that
-            // output already has the surface's real backdrop (or, for
-            // Menu/Center, the surface itself) to handle local dismissal.
+            // output already has the surface's real backdrop (or, for the
+            // keyboard-exclusive Menu, Escape) to handle local dismissal.
             visible: root.active && !!root.ownScreen && modelData.name !== root.ownScreen.name
             color: "transparent"
             exclusionMode: ExclusionMode.Ignore

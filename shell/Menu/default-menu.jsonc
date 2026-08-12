@@ -26,8 +26,9 @@
     // "emoji" registers no provider fn either: a summonable route
     // (`menu summon emoji`) whose level Menu.qml points at the vendored
     // emoji dataset (emoji.json) instead of the tree; ":e <query>" reaches
-    // the same rows from anywhere.
-    "emoji": { "label": "Emoji", "provider": "emoji", "icon": "" },
+    // the same rows from anywhere. md-emoticon U+F0C68, pinned
+    // nerd-fonts-jetbrains-mono cmap.
+    "emoji": { "label": "Emoji", "provider": "emoji", "icon": "󰱨" },
     // "nix" registers no provider fn either: a summonable route
     // (`menu summon nix`) whose level Menu.qml fills from the debounced
     // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
@@ -39,6 +40,13 @@
     // same rows from anywhere. Rows are inert notes, never activatable.
     // md-keyboard U+F030C, pinned nerd-fonts-jetbrains-mono cmap.
     "keybinds": { "label": "Keybinds", "provider": "keybinds", "icon": "󰌌", "aliases": ["keys", "hotkeys", "shortcuts"] },
+    // "wallpaper" registers no provider fn either: a summonable route
+    // (`menu summon wallpaper`, and the whole `picker` IPC target) whose
+    // level Menu.qml renders as an image GRID over `picker.directory`
+    // rather than as rows — the wallpaper picker lives inside the menu now
+    // instead of being a popout of its own. The search field filters it by
+    // filename like any other level. md-wallpaper U+F0E09.
+    "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "icon": "󰸉", "aliases": ["picker", "background"] },
 
     "system": { "label": "System", "icon": "󰒓" },
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
@@ -131,11 +139,10 @@
         "icon": "󰔎"
     }
 
-    // The root "wallpaper" node (opens the image picker grid) and the root
-    // "capture" node (OCR, colour pick, record, stop, video-to-GIF) are both
-    // injected at tree-build time by Menu.qml via providers.js's
-    // wallpaperEntry()/captureEntries(): their actions target the running
-    // shell's own path, which static jsonc can't know. Override or hide them
-    // from menu.jsonc by their "wallpaper"/"capture" ids like any declared
-    // node, and individual rows by "capture.text", "capture.record", etc.
+    // The root "capture" node (OCR, colour pick, record, stop, video-to-GIF)
+    // is injected at tree-build time by Menu.qml via providers.js's
+    // captureEntries(): its actions target the running shell's own path,
+    // which static jsonc can't know. Override or hide it from menu.jsonc by
+    // its "capture" id like any declared node, and individual rows by
+    // "capture.text", "capture.record", etc.
 }
