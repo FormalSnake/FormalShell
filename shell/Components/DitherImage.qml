@@ -57,10 +57,32 @@ import qs.Core
 // those still carry nonzero bytes somewhere) restarts a short one-shot
 // timer instead of publishing that blank paint, bounded so a genuinely
 // broken source still settles rather than retrying forever.
+//
+// `sourceItem` is the alternative input to `source` (M23, the dithered
+// wallpaper): an Image item the caller already owns and keeps loaded,
+// sampled in place of this component's own hidden one so a full-screen
+// source is decoded once rather than twice. `source` is ignored while it
+// is set.
+//
+// The source is drawn cover-cropped, never stretched. `Canvas.drawImage`
+// reads the decoded pixmap and ignores the source item's own fillMode, so
+// the crop is computed here from `implicitWidth`/`implicitHeight` (the
+// decoded size, any sourceSize cap already applied) and the overflow is
+// left to the canvas to clip. Before this the draw stretched to the
+// component's box, invisible for as long as every caller was a square
+// slot holding a square cover.
+//
+// `painted` reports whether the current source has actually reached the
+// canvas. A caller crossfading between two of these needs it: nothing is
+// shown at all until the first paint lands, so a fade started on the
+// source Image's own `Ready` would fade in a blank layer.
 Item {
     id: root
 
     property url source: ""
+    // An externally-owned Image item to sample instead of the hidden one
+    // below. Takes precedence over `source`.
+    property Item sourceItem: null
     property string mode: "duotone"
     property color lightColor: Theme.color.background
     property color darkColor: Theme.color.foreground
@@ -73,6 +95,16 @@ Item {
     // plain per-pixel dither, same as before this property existed.
     property int chunk: 2
 
+    // Whether the current source has reached the canvas. False again the
+    // moment the source starts changing, so a caller can gate a crossfade
+    // on it rather than on the source Image's own status.
+    readonly property bool painted: root._painted
+
+    // Whichever Image is supplying pixels this frame.
+    readonly property Item _src: root.sourceItem !== null ? root.sourceItem : img
+
+    property bool _painted: false
+
     // 4x4 ordered Bayer matrix, values 0..15 mapped to a per-pixel threshold.
     readonly property var _bayer: [
         0, 8, 2, 10,
@@ -81,15 +113,33 @@ Item {
         15, 7, 13, 5
     ]
 
-    // Posterizes one channel value to the nearest of `levels` evenly-spaced
-    // steps, nudged by `bias` (the Bayer cell's own -0.5..0.5 offset, scaled
-    // to the step size) before rounding — the offset only tips a channel
-    // over to its neighboring step near a quantization boundary, so a
-    // channel already at a step (0 or 255 included) is stable regardless
-    // of position.
-    function _quantizeChannel(value, step, bias) {
-        var q = Math.round((value + bias * step) / step) * step;
-        return Math.max(0, Math.min(255, Math.round(q)));
+    // Posterizes one channel value onto the nearest of `levels`
+    // evenly-spaced steps, returning that step's index for `_palette`
+    // rather than its value, nudged by `bias` (the Bayer cell's own
+    // -0.5..0.5 offset, scaled to the step size) before rounding — the
+    // offset only tips a channel over to its neighboring step near a
+    // quantization boundary, so a channel already at a step (0 or 255
+    // included) is stable regardless of position.
+    function _stepIndex(value, step, bias, top) {
+        var q = Math.round((value + bias * step) / step);
+        return q < 0 ? 0 : (q > top ? top : q);
+    }
+
+    // Retro mode can only ever paint `levels ^ 3` distinct colors, so the
+    // strings are built once per `levels` change and indexed per cell.
+    // Formatting a fresh hex string and assigning it as `fillStyle` per
+    // cell instead was measured at 491ms against 198ms for this lookup
+    // (mac VM rig, 1920x1080, chunk 4); a full-screen source is the first
+    // caller where that difference is a visible stall rather than noise.
+    readonly property var _palette: {
+        var lv = Math.max(2, root.levels);
+        var step = 255 / (lv - 1);
+        var out = [];
+        for (var i = 0; i < lv * lv * lv; i++)
+            out.push("#" + root._hex2(Math.round(Math.floor(i / (lv * lv)) * step))
+                + root._hex2(Math.round(Math.floor(i / lv) % lv * step))
+                + root._hex2(Math.round((i % lv) * step)));
+        return out;
     }
 
     function _hex2(n) {
@@ -111,18 +161,29 @@ Item {
         id: img
         anchors.fill: parent
         visible: false
-        source: root.source
+        // Loads nothing at all while an external sourceItem is supplying
+        // the pixels, so that caller's decode is the only one.
+        source: root.sourceItem !== null ? "" : root.source
         asynchronous: true
         cache: false
         smooth: false
         fillMode: Image.PreserveAspectCrop
         sourceSize.width: root.width * 2
         sourceSize.height: root.height * 2
-        onStatusChanged: {
-            if (status === Image.Ready) {
+    }
+
+    // Whichever Image `_src` currently resolves to drives the repaints.
+    Connections {
+        target: root._src
+        function onStatusChanged() {
+            root._painted = false;
+            if (root._src.status === Image.Ready) {
                 root._retryAttempts = 0;
                 canvas.requestPaint();
             }
+        }
+        function onSourceChanged() {
+            root._painted = false;
         }
     }
 
@@ -136,17 +197,35 @@ Item {
         id: canvas
         anchors.fill: parent
         onPaint: {
-            if (img.status !== Image.Ready || width <= 0 || height <= 0)
+            var src = root._src;
+            if (src.status !== Image.Ready || width <= 0 || height <= 0)
                 return;
             var ctx = getContext("2d");
             ctx.reset();
-            ctx.drawImage(img, 0, 0, width, height);
-
-            if (root.mode !== "duotone" && root.mode !== "retro")
-                return;
 
             var w = Math.round(width);
             var h = Math.round(height);
+
+            // Cover-crop: scale by the larger of the two axis ratios and
+            // let the canvas clip whichever axis overflows, centered. A
+            // source that has not reported its natural size yet falls back
+            // to the old stretch rather than dividing by zero.
+            var iw = src.implicitWidth;
+            var ih = src.implicitHeight;
+            if (iw > 0 && ih > 0) {
+                var cover = Math.max(w / iw, h / ih);
+                var dw = iw * cover;
+                var dh = ih * cover;
+                ctx.drawImage(src, (w - dw) / 2, (h - dh) / 2, dw, dh);
+            } else {
+                ctx.drawImage(src, 0, 0, w, h);
+            }
+
+            if (root.mode !== "duotone" && root.mode !== "retro") {
+                root._painted = true;
+                return;
+            }
+
             var sample = ctx.getImageData(0, 0, w, h).data;
 
             if (root._isBlankRead(sample)) {
@@ -161,6 +240,8 @@ Item {
             if (root.mode === "retro") {
                 var lv = Math.max(2, root.levels);
                 var step = 255 / (lv - 1);
+                var top = lv - 1;
+                var palette = root._palette;
                 var chunk = Math.max(1, root.chunk);
                 var gw = Math.ceil(w / chunk);
                 var gh = Math.ceil(h / chunk);
@@ -174,13 +255,13 @@ Item {
                         var cx = Math.min(w - 1, px + Math.floor(chunk / 2));
                         var ri = retroRowBase + cx * 4;
                         var retroBias = (root._bayer[retroBayerRow + (gx % 4)] + 0.5) / 16 - 0.5;
-                        var rr = root._quantizeChannel(sample[ri], step, retroBias);
-                        var rg = root._quantizeChannel(sample[ri + 1], step, retroBias);
-                        var rb = root._quantizeChannel(sample[ri + 2], step, retroBias);
-                        ctx.fillStyle = "#" + root._hex2(rr) + root._hex2(rg) + root._hex2(rb);
+                        ctx.fillStyle = palette[root._stepIndex(sample[ri], step, retroBias, top) * lv * lv
+                            + root._stepIndex(sample[ri + 1], step, retroBias, top) * lv
+                            + root._stepIndex(sample[ri + 2], step, retroBias, top)];
                         ctx.fillRect(px, py, Math.min(chunk, w - px), Math.min(chunk, h - py));
                     }
                 }
+                root._painted = true;
                 return;
             }
 
@@ -198,6 +279,7 @@ Item {
                     ctx.fillRect(x, y, 1, 1);
                 }
             }
+            root._painted = true;
         }
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
@@ -205,7 +287,14 @@ Item {
 
     onSourceChanged: {
         root._retryAttempts = 0;
-        if (img.status === Image.Ready)
+        root._painted = false;
+        if (root._src.status === Image.Ready)
+            canvas.requestPaint();
+    }
+    onSourceItemChanged: {
+        root._retryAttempts = 0;
+        root._painted = false;
+        if (root._src.status === Image.Ready)
             canvas.requestPaint();
     }
     onModeChanged: canvas.requestPaint()
@@ -213,4 +302,11 @@ Item {
     onDarkColorChanged: canvas.requestPaint()
     onLevelsChanged: canvas.requestPaint()
     onChunkChanged: canvas.requestPaint()
+    // A Canvas does not paint while it is not visible, so a component that
+    // was hidden through a source change has stale (or no) content the
+    // moment it comes back.
+    onVisibleChanged: {
+        if (root.visible)
+            canvas.requestPaint();
+    }
 }

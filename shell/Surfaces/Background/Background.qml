@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import qs.Components
 import qs.Core as Core
 
 // Per-screen wallpaper surface, pinned to the wlr-layer-shell Background
@@ -26,6 +27,22 @@ import qs.Core as Core
 // would never run — topImage stuck at opacity 1 for the rest of the
 // session. The queued request replaces any earlier one and is applied the
 // moment the in-flight promote actually lands.
+//
+// Dithered by default (M23, owner: "it would be cool for the rendered
+// wallpaper to also be dithered ... similar to album covers"): both
+// crossfade layers render through the same `DitherImage` retro pass the
+// album covers use (DESIGN.md §2 item 12), sampling the two Images above
+// rather than decoding the file a second time each. `wallpaper.dither:
+// false` in settings.json puts the plain Images back on screen; the
+// crossfade and its promote bookkeeping are identical either way, the
+// dither layers just take over what is visible and add themselves to the
+// two gates below.
+//
+// Both gates exist because a DitherImage shows nothing at all until its
+// canvas has painted. Starting the fade on the source Image's own `Ready`
+// would fade in a blank layer for the length of the dither pass, and
+// dropping topImage before the bottom layer had repainted would flash the
+// bare background color, so each waits on `painted` as well.
 PanelWindow {
     id: background
     required property var modelData
@@ -40,6 +57,18 @@ PanelWindow {
     property bool _suppressTopFade: false
     property bool _hasQueued: false
     property string _queuedUrl: ""
+
+    readonly property bool _dither: Core.Config.get("wallpaper.dither", true)
+    // Dither cell size in SCREEN pixels, so the grid is a property of the
+    // display and never of the wallpaper file: a 4000px photo and a 1200px
+    // one land on the same grid on the same screen, and a 4K screen gets
+    // proportionally larger cells rather than four times as many of them
+    // (which would also be four times the paint cost, for a texture that
+    // reads finer the further the pixels are apart). ~480 cells across the
+    // long edge at any resolution, the coarse end of the era being
+    // referenced; the floor of 2 keeps a very small screen from landing on
+    // a 1px grid, which reads as noise rather than as dither.
+    readonly property int _ditherChunk: Math.max(2, Math.round(Math.max(background.width, background.height) / 480))
 
     function _wallpaperUrl(path) {
         return path !== "" ? "file://" + path : "";
@@ -75,6 +104,29 @@ PanelWindow {
         topImage.source = url;
     }
 
+    // Called from both the source Image's status and its dither layer's
+    // paint, whichever settles last.
+    function _tryStartFade() {
+        if (!topImage._pendingFade || topImage.status !== Image.Ready)
+            return;
+        if (background._dither && !topDither.painted)
+            return;
+        topImage._pendingFade = false;
+        topImage.opacity = 1;
+    }
+
+    function _tryPromote() {
+        if (bottomImage.status !== Image.Ready || topImage.opacity !== 1 || bottomImage.source !== topImage.source)
+            return;
+        if (background._dither && !bottomDither.painted)
+            return;
+        background._suppressTopFade = true;
+        topImage.opacity = 0;
+        topImage.source = "";
+        background._suppressTopFade = false;
+        background._startQueued();
+    }
+
     Component.onCompleted: background._applyWallpaper(Core.State.wallpaper)
 
     Connections {
@@ -87,7 +139,7 @@ PanelWindow {
     Image {
         id: bottomImage
         anchors.fill: parent
-        visible: source !== ""
+        visible: !background._dither && source !== ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false
@@ -98,15 +150,7 @@ PanelWindow {
         // bug this split guards against). Clearing topImage.source here
         // (not just its opacity) is what keeps the crossfade from holding
         // two full-size decodes of the same wallpaper resident forever.
-        onStatusChanged: {
-            if (status === Image.Ready && topImage.opacity === 1 && source === topImage.source) {
-                background._suppressTopFade = true;
-                topImage.opacity = 0;
-                topImage.source = "";
-                background._suppressTopFade = false;
-                background._startQueued();
-            }
-        }
+        onStatusChanged: background._tryPromote()
         // Decode capped near the screen's own size (M16 Task 12), at a
         // fraction of the resident memory a native-resolution decode would
         // take. sourceSize with both dimensions set fits the decode INSIDE
@@ -124,21 +168,31 @@ PanelWindow {
         sourceSize.height: Math.max(background.width, background.height)
     }
 
+    // Stays visible (not just opaque) whenever dithering is on, even with
+    // no wallpaper set: a Canvas only paints while its item is visible, and
+    // this one has to be free to paint before anything puts it on screen.
+    // Its opacity is another matter, and 0 is no obstacle to painting
+    // (probed in the mac VM rig, not assumed).
+    DitherImage {
+        id: bottomDither
+        anchors.fill: parent
+        visible: background._dither
+        sourceItem: bottomImage
+        mode: "retro"
+        chunk: background._ditherChunk
+        onPaintedChanged: background._tryPromote()
+    }
+
     Image {
         id: topImage
         property bool _pendingFade: false
         anchors.fill: parent
-        visible: opacity > 0
+        visible: !background._dither && opacity > 0
         opacity: 0
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         cache: false
-        onStatusChanged: {
-            if (status === Image.Ready && _pendingFade) {
-                _pendingFade = false;
-                opacity = 1;
-            }
-        }
+        onStatusChanged: background._tryStartFade()
         // Same cover-vs-fit rationale as bottomImage's sourceSize above.
         sourceSize.width: Math.max(background.width, background.height)
         sourceSize.height: Math.max(background.width, background.height)
@@ -154,5 +208,18 @@ PanelWindow {
             enabled: !background._suppressTopFade
             NumberAnimation { duration: Core.Theme.motion.reveal; easing.type: Core.Theme.motion.revealEasing }
         }
+    }
+
+    // The visible top layer while dithering, riding topImage's animated
+    // opacity so the crossfade above is untouched by any of this.
+    DitherImage {
+        id: topDither
+        anchors.fill: parent
+        visible: background._dither
+        opacity: topImage.opacity
+        sourceItem: topImage
+        mode: "retro"
+        chunk: background._ditherChunk
+        onPaintedChanged: background._tryStartFade()
     }
 }

@@ -33,6 +33,21 @@ TestCase {
     // extremes above, which are stable under any bias) exercises real
     // per-pixel dithering while still proving hue survives.
     readonly property string redishSource: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAEAQMAAACTPww9AAAAA1BMVEXIKChQLvxyAAAAC0lEQVQI12NggAAAAAgAAS8g3TEAAAAASUVORK5CYII="
+    // 4x2, four full-height columns: red, green, blue, white. Non-square on
+    // purpose, and structured along the axis a cover fit crops, so a
+    // stretched draw and a cropped one disagree about every column. Every
+    // channel is already 0 or 255, i.e. exactly on a posterize step, so the
+    // Bayer bias (+/-0.46875 of a step) cannot tip one and the expected
+    // colors are exact.
+    readonly property string columnsSource: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAGUlEQVQI12P4z8DA8J+BgeH/////mRiQAABryAX9tXK4NwAAAABJRU5ErkJggg=="
+
+    // A source Image the test owns, for the `sourceItem` path.
+    Image {
+        id: externalImage
+        source: testCase.whiteSource
+        visible: false
+        cache: false
+    }
 
     Component {
         id: imageComponent
@@ -233,6 +248,89 @@ TestCase {
                 verify(px[0] > px[1]);
                 verify(px[0] > px[2]);
             }
+        }
+    }
+
+    // `painted` is what Background.qml's crossfade gates on: a DitherImage
+    // shows nothing at all until its canvas has run, so a fade started on
+    // the source Image's own `Ready` would fade in a blank layer.
+    function test_painted_reports_whether_the_canvas_has_the_current_source() {
+        var dither = createTemporaryObject(imageComponent, testCase);
+        verify(dither);
+        compare(dither.painted, false);
+        settle(dither);
+
+        dither.source = whiteSource;
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+        var light = _rgb(testCase._lightProbe);
+        waitForPixel(canvas, 0, 0, function (px) { return px[3] === 255 && px[0] === light[0]; });
+        compare(dither.painted, true);
+
+        // Synchronous, so this is observable before the new decode lands.
+        dither.source = blackSource;
+        compare(dither.painted, false);
+    }
+
+    // `sourceItem` takes over from `source` entirely: the wallpaper hands
+    // over the Image its own crossfade already keeps loaded rather than
+    // paying for a second full-screen decode per layer.
+    function test_source_item_supplies_the_pixels_and_source_is_ignored() {
+        tryVerify(function () { return externalImage.status === Image.Ready; }, 2000);
+
+        var dither = createTemporaryObject(imageComponent, testCase, {
+            source: blackSource,
+            sourceItem: externalImage
+        });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+
+        // externalImage is the white fixture, so the light role wins; the
+        // black `source` would have produced the dark role instead.
+        var light = _rgb(testCase._lightProbe);
+        waitForPixel(canvas, 0, 0, function (px) { return px[3] === 255 && px[0] === light[0]; });
+
+        var px = _pixel(canvas, 10, 10);
+        compare(px[0], light[0]);
+        compare(px[1], light[1]);
+        compare(px[2], light[2]);
+    }
+
+    // Canvas.drawImage reads the decoded pixmap and ignores the source
+    // item's fillMode, so the cover crop is computed in the paint pass. The
+    // 4x2 fixture scaled to cover a 20x20 box is 40x20, centered, leaving
+    // only its two middle columns (green, blue) on screen. A stretched draw
+    // would show all four columns at 5px each, putting red at x=2 and white
+    // at x=17.
+    function test_non_square_source_is_cover_cropped_never_stretched() {
+        var dither = createTemporaryObject(imageComponent, testCase, {
+            source: columnsSource,
+            mode: "retro"
+        });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+
+        waitForPixel(canvas, 2, 10, function (px) { return px[3] === 255 && px[1] === 255; });
+
+        var left = _pixel(canvas, 2, 10);
+        compare(left[0], 0);
+        compare(left[1], 255);
+        compare(left[2], 0);
+
+        var right = _pixel(canvas, 14, 10);
+        compare(right[0], 0);
+        compare(right[1], 0);
+        compare(right[2], 255);
+
+        // Neither cropped-away column may appear anywhere along the row.
+        for (var x = 0; x < 20; x++) {
+            var px = _pixel(canvas, x, 10);
+            verify(!(px[0] === 255 && px[1] === 0 && px[2] === 0));
+            verify(!(px[0] === 255 && px[1] === 255 && px[2] === 255));
         }
     }
 
