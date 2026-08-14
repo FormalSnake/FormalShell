@@ -34,10 +34,19 @@ Cell {
 
     readonly property color _textColor: root._worstPercent >= 0 ? root.foreground : root.dimForeground
 
+    // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
+    // keep their reading unless a user who added the widget opts back out.
+    readonly property bool _showLabel: Config.get("bar.widgets.usage.showLabel", true)
+
     visible: root.shown
     standalone: true
     hovered: hoverArea.containsMouse
     urgent: root._worstPercent >= 0.9
+
+    // No prior tooltip existed since the label was always on; now that the
+    // label can be hidden per-widget, this carries the same percent/status
+    // reading so hiding it never deletes information.
+    tooltipText: "USAGE / " + (root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : (root.panel ? root.panel.statusLabel : "UNAVAILABLE"))
 
     Component.onCompleted: {
         if (root.panel)
@@ -57,6 +66,7 @@ Cell {
         }
 
         MetaLabel {
+            visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : (root.panel ? root.panel.statusLabel : "")
             color: root.dimForeground

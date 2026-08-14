@@ -49,6 +49,10 @@ Cell {
     // that file's own header comment.
     readonly property bool shown: root._answered && (!root.layout.available || Keyboard.hasChoice(root.layout))
 
+    // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
+    // keep their reading unless a user who added the widget opts back out.
+    readonly property bool _showLabel: Config.get("bar.widgets.keyboardLayout.showLabel", true)
+
     visible: root.shown
     standalone: true
     hovered: hoverArea.containsMouse
@@ -109,6 +113,7 @@ Cell {
         }
 
         MetaLabel {
+            visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root.layout.available ? Keyboard.shortLabel(root.layout.current) : "NO LAYOUT"
             color: root.dimForeground

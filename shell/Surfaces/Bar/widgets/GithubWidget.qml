@@ -29,6 +29,10 @@ Cell {
     readonly property int _issues: root.panel ? root.panel.issueCount : 0
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
 
+    // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
+    // keep their reading unless a user who added the widget opts back out.
+    readonly property bool _showLabel: Config.get("bar.widgets.github.showLabel", true)
+
     // Read by Bar.qml's regionDelegate instead of `visible` directly — see
     // that file's own header comment.
     readonly property bool shown: root._state !== "unknown" && root._state !== "missing"
@@ -60,6 +64,7 @@ Cell {
         }
 
         MetaLabel {
+            visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root._state === "ok"
                 ? root._prs + "/" + root._issues

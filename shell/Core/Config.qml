@@ -73,6 +73,27 @@ import QtQuick
 // (CommandModule.qml); "qml" loads a `source` file into a Loader
 // (QmlModule.qml)). An unknown widget name or a dangling module reference
 // is dropped with a console warning, never a crash.
+// bar.widgets.<name>.showLabel (bool, per widget, M23): weather and audio
+// default false since their glyph already carries the value the label
+// would repeat (condition and mute/level state), with the suppressed
+// value moved into the cell's own tooltipText instead of lost; battery,
+// bell, github, usage, keyboardLayout and systemUpdate default true,
+// unchanged from today until a user opts one out. <name> is the widget's
+// own name from shell/Bar/layout.js's BUILTIN_WIDGETS, resolved
+// independently of bar.layout, so placing a widget and labeling it are
+// two separate keys.
+// bar.tray.pinned / bar.tray.hidden (arrays of SNI item ids, both absent by
+// default): the tray's Bartender buckets. A pinned id is always on the bar
+// regardless of the 4-cell budget, a hidden id is drawn nowhere at all, and
+// every other id keeps the existing "first N are visible, the rest behind
+// the chevron" ordering, so a settings.json naming neither key renders
+// exactly what it rendered before the buckets existed. Declaring EITHER key
+// makes the pair read-only at runtime (`tray status`'s bucketsLocked): the
+// chevron's manage popup then renders SET IN SETTINGS instead of its
+// PIN/HIDE actions, since the shell never writes settings.json. With both
+// absent, that popup and `tray pin|unpin|hide|show` persist to state.json
+// instead. A key present but null counts as absent, matching every other
+// settings-over-state pair. Resolved by shell/Tray/model.js, M23 Task 3.
 // github.intervalMs (number, default 300000 — GithubWidget's `gh api`
 // poll cadence in ms; the widget itself is opt-in via bar.layout,
 // M12 Task 8).

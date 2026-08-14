@@ -17,6 +17,8 @@ Singleton {
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
     property alias appLaunches: adapter.appLaunches
     property alias reminders: adapter.reminders
+    property alias trayPinned: adapter.trayPinned
+    property alias trayHidden: adapter.trayHidden
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -66,6 +68,18 @@ Singleton {
         stateFile.writeAdapter();
     }
 
+    // The tray's Bartender buckets: two arrays of SNI ids, the shape
+    // shell/Tray/model.js owns end to end. Both land in one write for the
+    // same reason setCalendarLifeProgress does: every action the manage
+    // popup offers moves an id between the two at once (pinning clears a
+    // hide and vice versa; TrayService keeps them mutually exclusive), so a
+    // half-written pair would persist a state no action can produce.
+    function setTrayBuckets(pinned, hidden) {
+        adapter.trayPinned = pinned;
+        adapter.trayHidden = hidden;
+        stateFile.writeAdapter();
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -91,6 +105,8 @@ Singleton {
             property int calendarLifeExpectancy: 0
             property var appLaunches: []
             property var reminders: []
+            property var trayPinned: []
+            property var trayHidden: []
         }
     }
 }

@@ -70,6 +70,10 @@ Cell {
     // future reactivity.
     readonly property bool shown: root._hasBattery
 
+    // Visible by default (owner's explicit instruction, M23): unlike
+    // weather/audio the percentage is content, not a repeat of the glyph.
+    readonly property bool _showLabel: Config.get("bar.widgets.battery.showLabel", true)
+
     visible: root.shown
     standalone: true
     urgent: root._critical
@@ -108,6 +112,7 @@ Cell {
         }
 
         MetaLabel {
+            visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: "BAT / " + root._percent + "%"
             color: root.dimForeground

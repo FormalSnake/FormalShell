@@ -24,13 +24,22 @@ Cell {
     readonly property bool _hasCurrent: root.panel ? root.panel.hasCurrent : false
     readonly property string _glyph: Openmeteo.glyphForCode(root.panel ? root.panel.currentCode : -1, root.panel ? root.panel.currentIsDay : true)
 
+    // Icon-only by default (M23, owner named weather directly): the glyph
+    // carries the condition, and with the label suppressed the temperature
+    // it used to show moves into tooltipText below instead of disappearing.
+    readonly property bool _showLabel: Config.get("bar.widgets.weather.showLabel", false)
+
     standalone: true
     hovered: hoverArea.containsMouse
 
     // The glyph carries the condition and the label the temperature, but a
     // glyph is a guess until it's named. "UNAVAILABLE" is WeatherPanel.qml's
-    // own honest-empty string for a forecast that hasn't resolved.
-    tooltipText: "WEATHER / " + (root._hasCurrent ? Openmeteo.conditionLabel(root.panel.currentCode) : "UNAVAILABLE")
+    // own honest-empty string for a forecast that hasn't resolved. Carries
+    // the temperature too now that the label defaults off, so hiding it
+    // never deletes information.
+    tooltipText: root._hasCurrent
+        ? "WEATHER / " + Openmeteo.conditionLabel(root.panel.currentCode) + " / " + Math.round(root.panel.currentTemp) + "°"
+        : "WEATHER / UNAVAILABLE"
 
     Component.onCompleted: {
         if (root.panel)
@@ -50,7 +59,7 @@ Cell {
         }
 
         MetaLabel {
-            visible: root._hasCurrent
+            visible: root._showLabel && root._hasCurrent
             anchors.verticalCenter: parent.verticalCenter
             text: root._hasCurrent ? Math.round(root.panel.currentTemp) + "°" : ""
             color: root.dimForeground

@@ -24,6 +24,11 @@ Cell {
     readonly property int _pending: NotificationService.pending.length
     readonly property bool _centerOpen: root.center ? root.center.isOpen : false
 
+    // Visible by default (M23): the pending count is this cell's only
+    // content, not a repeat of the glyph, so unlike weather/audio it stays
+    // on unless a user opts out.
+    readonly property bool _showLabel: Config.get("bar.widgets.bell.showLabel", true)
+
     standalone: true
     hovered: hoverArea.containsMouse
 
@@ -49,7 +54,7 @@ Cell {
         }
 
         MetaLabel {
-            visible: root._pending > 0
+            visible: root._showLabel && root._pending > 0
             anchors.verticalCenter: parent.verticalCenter
             text: String(root._pending)
             color: root.foreground

@@ -1309,6 +1309,11 @@ tray_collapsed_path="$shot_dir/tray-collapsed.png"
 tray_pids_path="$shot_dir/tray-pids.txt"
 tray_activate_path="$shot_dir/tray-activate.txt"
 tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
+tray_status_pinned_path="$shot_dir/tray-status-pinned.json"
+tray_status_hidden_path="$shot_dir/tray-status-hidden.json"
+tray_pin_reply_path="$shot_dir/tray-pin-reply.txt"
+tray_hide_reply_path="$shot_dir/tray-hide-reply.txt"
+tray_manage_path="$shot_dir/tray-manage.png"
 bar_layout_path="$shot_dir/bar-layout.png"
 hotcorner_layers_path="$shot_dir/hotcorner-layers.json"
 instance_status_path="$shot_dir/instance-status.json"
@@ -3475,6 +3480,20 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status2_path" 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray pin tray-fixture-5 > "$tray_pin_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status_pinned_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray hide tray-fixture-1 > "$tray_hide_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status_hidden_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray manage open > /dev/null 2>&1
+sleep 2
+niri msg action screenshot-screen --path "$tray_manage_path"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray manage close > /dev/null 2>&1
 EOF
 
   tray_kill_script="$shot_dir/tray-kill.sh"
@@ -3896,11 +3915,16 @@ fi
     # closed again.
     screenshot_delay=46
   elif $tray_mode; then
-    # tray-drive.sh's own final step (the activate call on fixture 2) lands
-    # around its internal sleep sum (~11s in); this run's generic
-    # smoke.png/SMOKE_OK is taken 2s after that, showing every registered
-    # item as its own cell with the drawer already expanded.
-    screenshot_delay=13
+    # tray-drive.sh's own final step (closing the bucket manager) lands
+    # around its internal sleep sum (~20s in: ~12s to the activate call,
+    # then the pin/hide/manage legs at roughly a second apiece plus 2s for
+    # the manager to paint before its own screenshot). This run's generic
+    # smoke.png/SMOKE_OK is taken 4s after that, past the manager's close,
+    # so it shows the ordinary bar with fixture-5 pinned and fixture-1
+    # hidden. Getting this wrong is not a slow test, it is a false failure:
+    # the kill script takes the stubs down before niri quits, so a drive
+    # step that lands after this delay reads an empty item list.
+    screenshot_delay=24
   elif $panel_mode && [ "$panel_name" = "calendar" ]; then
     # eds-drive.sh opens the panel only after its two seed writes return
     # (~4-7s in when this run's private bus has to cold-activate EDS
@@ -5177,6 +5201,53 @@ if $tray_mode; then
   if [ "$tray_activate_lines" != "1" ]; then
     echo "SMOKE_FAIL: expected exactly one activate record (got $tray_activate_lines) — activate hit more than the targeted item" >&2; exit 1
   fi
+  # Bartender buckets (M23). Six fixtures against a 4-cell budget puts
+  # fixtures 1-3 in `visible` (the fourth slot is the chevron's own) and
+  # 4-6 in `drawer`, so pinning fixture-5 is the one move that proves a
+  # pin beats the positional fallback rather than agreeing with it.
+  if ! grep -q '^ok$' "$tray_pin_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: tray pin was refused — got: $(cat "$tray_pin_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$tray_status_pinned_path" ]; then
+    echo "SMOKE_FAIL: no tray status (post-pin) produced" >&2; exit 1
+  fi
+  cat "$tray_status_pinned_path"
+  if ! grep -q '"pinned":\[[^]]*"tray-fixture-5"' "$tray_status_pinned_path" \
+    || ! grep -q '"visible":\[[^]]*"tray-fixture-5"' "$tray_status_pinned_path"; then
+    echo "SMOKE_FAIL: tray pin did not move tray-fixture-5 out of the drawer and onto the bar — got: $(cat "$tray_status_pinned_path")" >&2; exit 1
+  fi
+  if grep -q '"drawer":\[[^]]*"tray-fixture-5"' "$tray_status_pinned_path"; then
+    echo "SMOKE_FAIL: tray-fixture-5 is pinned and still in the drawer — got: $(cat "$tray_status_pinned_path")" >&2; exit 1
+  fi
+  # Hiding is the stronger claim: the id must leave BOTH render buckets,
+  # not just move between them, which is what separates hidden from drawer.
+  if ! grep -q '^ok$' "$tray_hide_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: tray hide was refused — got: $(cat "$tray_hide_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$tray_status_hidden_path" ]; then
+    echo "SMOKE_FAIL: no tray status (post-hide) produced" >&2; exit 1
+  fi
+  cat "$tray_status_hidden_path"
+  if ! grep -q '"hidden":\[[^]]*"tray-fixture-1"' "$tray_status_hidden_path"; then
+    echo "SMOKE_FAIL: tray hide did not record tray-fixture-1 as hidden — got: $(cat "$tray_status_hidden_path")" >&2; exit 1
+  fi
+  if grep -q '"visible":\[[^]]*"tray-fixture-1"' "$tray_status_hidden_path" \
+    || grep -q '"drawer":\[[^]]*"tray-fixture-1"' "$tray_status_hidden_path"; then
+    echo "SMOKE_FAIL: a hidden tray item is still being rendered — got: $(cat "$tray_status_hidden_path")" >&2; exit 1
+  fi
+  # The item itself must still be registered: hidden is a render decision,
+  # never an unregistration, so the SNI stub count cannot have moved.
+  tray_count_hidden=$(grep -o '"id":' "$tray_status_hidden_path" | wc -l | tr -d ' ')
+  if [ "$tray_count_hidden" != "$tray_count1" ]; then
+    echo "SMOKE_FAIL: hiding an item changed the registered count ($tray_count1 -> $tray_count_hidden) — hide must not unregister" >&2; exit 1
+  fi
+  if [ ! -s "$tray_manage_path" ]; then
+    echo "SMOKE_FAIL: no tray-manage screenshot produced" >&2; exit 1
+  fi
+  # Named-artifact marker, the same convention SMOKE_TRAY_COLLAPSED uses:
+  # dev/vm.sh pulls every "SMOKE_<NAME> <path>.png" line back to the mac,
+  # and without one the shot only ever exists inside the VM.
+  echo "SMOKE_TRAY_MANAGE $tray_manage_path"
 fi
 
 if $instance_mode; then

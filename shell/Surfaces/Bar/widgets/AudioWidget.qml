@@ -15,13 +15,21 @@ Cell {
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
 
+    // Icon-only by default (M23): matches omarchy, which never labels this
+    // cell either. The glyph alone already distinguishes muted from a live
+    // level, so the percentage the label used to show moves into
+    // tooltipText below.
+    readonly property bool _showLabel: Config.get("bar.widgets.audio.showLabel", false)
+
     standalone: true
     hovered: hoverArea.containsMouse
 
     // Muted keeps showing the pre-mute percentage (Osd.qml makes the same
-    // call — it's still the level you'll get back), which leaves the mute
-    // state resting entirely on one glyph. This names it.
-    tooltipText: AudioService.muted ? "OUTPUT MUTED" : "OUTPUT VOLUME"
+    // call, it's still the level you'll get back), which leaves the mute
+    // state resting entirely on one glyph. This names it, and now that the
+    // label defaults off, carries the percentage too so hiding it never
+    // deletes information.
+    tooltipText: (AudioService.muted ? "OUTPUT MUTED" : "OUTPUT VOLUME") + " / " + Math.round(AudioService.volume * 100) + "%"
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
@@ -36,6 +44,7 @@ Cell {
         }
 
         Text {
+            visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: Math.round(AudioService.volume * 100) + "%"
             color: root.foreground

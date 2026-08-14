@@ -696,8 +696,22 @@ floats with a margin or fuses to the screen edge.
   desktop) rather than a border-color change, so "panel open" reads at a
   glance without relayouting the cell. Clock/battery/network cells carry an
   uppercase caption meta tag (`BAT`, `NET`) only where the value alone is
-  ambiguous; the widget's primary value is normal-weight, not uppercase. The
-  now-playing cell's mini cover art (M20) is the fourth sanctioned
+  ambiguous; the widget's primary value is normal-weight, not uppercase. A
+  cell whose glyph already carries the value suppresses that label outright
+  (M23): weather and audio ship label-off, since the condition glyph and the
+  mute/level glyph say exactly what the label would repeat, and the
+  suppressed value moves into the cell's own `tooltipText` rather than
+  disappearing. Battery keeps its label, since a charge percentage is
+  content the glyph only brackets to the nearest 10%.
+  `bar.widgets.<name>.showLabel` flips any cell either way per install. The
+  clock carries no meta tag at all under the same rule: `19:31` is never
+  ambiguous, and as the one two-line cell it was setting the whole bar's
+  height to say so. The tray's chevron cell is this bar's one Bartender
+  affordance: every registered item is `pinned` (always on the bar),
+  `drawer` (behind the chevron) or `hidden` (drawn nowhere at all), managed
+  from a right-click popup on that chevron and persisted to `state.json`,
+  with `bar.tray.pinned`/`bar.tray.hidden` declaratively overriding both.
+  The now-playing cell's mini cover art (M20) is the fourth sanctioned
   image-icon site, after the menu's launcher rows, the bar's active-window
   cell, and notification card images: unlike those three, it renders
   through the retro color dither (§2 item 12) rather than a plain `Image`,

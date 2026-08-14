@@ -4,7 +4,9 @@ import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import qs.Core
 import qs.Components
+import qs.Compositor
 import qs.Services
+import "../../../Tray/model.js" as TrayModel
 
 // Bar region for the SNI tray (DESIGN.md §Bar, spec §Surfaces-1, M10 Task 1).
 // Quickshell.Services.SystemTray both hosts and watches
@@ -30,21 +32,38 @@ import qs.Services
 // synthesize the pointer click that would otherwise be the only trigger.
 // Hidden entirely (Row.implicitWidth is naturally 0 with an empty Repeater
 // and no overflow cell) when nothing has registered — never an empty box.
+//
+// Which item lands where is the M23 Task 3 bucket split (shell/Tray/model.js,
+// TrayService's own resolved arrays): a pinned id is always on the bar, a
+// hidden id is drawn nowhere at all, and everything else keeps the
+// positional "first N are visible" ordering described above. The chevron
+// cell is drawn for any registered item now, not only for an overflowing
+// one, because right-clicking it is the manage popup's only affordance; it
+// still carries the +N/-N count whenever the drawer holds anything.
 Row {
     id: root
 
-    // `.values` (used only for its length here, never as a model — see the
-    // Repeater below) is a fresh JS array snapshot on every read, per
-    // Quickshell's own ObjectModel docs.
-    readonly property int _count: SystemTray.items.values.length
-    readonly property int _visibleLimit: 4
-    readonly property bool _overflowing: root._count > root._visibleLimit
-    readonly property int _pinnedCount: root._overflowing ? root._visibleLimit - 1 : root._count
-    readonly property int _overflowCount: root._count - root._pinnedCount
+    // `.values` (read here for the ids and the count, never used as a
+    // model, see the Repeater below) is a fresh JS array snapshot on every
+    // read, per Quickshell's own ObjectModel docs.
+    readonly property var _ids: SystemTray.items.values.map(function (item) { return item.id; })
+    readonly property int _count: root._ids.length
+    // The pinned/drawer/hidden split (M23 Task 3). Every ordering rule,
+    // the chevron's own reserved slot included, lives in the pure module
+    // rather than in arithmetic here, and with both override arrays empty
+    // it reproduces the _pinnedCount/_overflowCount arithmetic this block
+    // used to carry inline, so an unconfigured tray renders exactly as it
+    // did before the buckets existed.
+    readonly property var _buckets: TrayModel.buckets(root._ids, TrayService.pinned, TrayService.hidden, TrayService.visibleLimit)
+    readonly property int _drawerCount: root._buckets.drawer.length
     // Read by Bar.qml's regionDelegate instead of `visible` directly — see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
+    //
+    // Counts every registered item, hidden ones included: a tray whose items
+    // are all hidden still renders its chevron, because right-clicking that
+    // chevron is the only way back to the popup that hid them.
     readonly property bool shown: root._count > 0
 
     spacing: Theme.space.sm
@@ -120,6 +139,9 @@ Row {
             else
                 collapseGate.collapsed();
         }
+        function onManageOpenChanged() {
+            root._syncManagePanel();
+        }
     }
 
     // `interval` is `Theme.motion.rotatePeriod`, the existing ~3s pacing
@@ -138,6 +160,62 @@ Row {
         running: TrayService.drawerExpanded && collapseGate.armed
         repeat: false
         onTriggered: TrayService.collapseDrawer()
+    }
+
+    // The bucket manager (M23 Task 3), reached by right-clicking the chevron
+    // below. One Components/Panel per bar rather than the single shell.qml
+    // instance every other popout gets, since the tray owns no file outside
+    // this one. It costs nothing until it opens: a Panel leaves its window
+    // unmapped for as long as `isOpen` is false.
+    TrayManagePanel {
+        id: managePanel
+    }
+
+    // Only the bar on the focused output answers a summon. TrayService.
+    // manageOpen is one shared flag for every screen's Tray (the same reason
+    // drawerExpanded is shared: `qs ipc call tray manage open` has no
+    // per-screen instance to reach), and Panel.qml puts its surface on the
+    // focused output regardless of which bar asked, so without this gate a
+    // second monitor's copy would map an identical layer surface on top of
+    // the first, and each would close the other back down through
+    // PanelRegistry's mutual exclusion.
+    readonly property bool _onFocusedOutput: {
+        var window = root.QsWindow.window;
+        if (!window || !window.screen)
+            return false;
+        // Resolved exactly the way Panel.qml resolves its own `screen`,
+        // fallback included: the output the compositor names as focused, or
+        // the first screen when it names one we don't have. The fallback is
+        // load-bearing, not defensive: a session that has focused nothing
+        // yet reports no output name at all (a fresh nested compositor with
+        // no windows in it, which is precisely what the smoke rig boots), and
+        // a bare name comparison would then match no bar and open nothing.
+        var screens = Quickshell.screens;
+        var target = screens.length > 0 ? screens[0] : null;
+        for (var i = 0; i < screens.length; i++) {
+            if (screens[i].name === CompositorService.focusedOutputName)
+                target = screens[i];
+        }
+        return target !== null && target.name === window.screen.name;
+    }
+
+    function _syncManagePanel() {
+        if (TrayService.manageOpen && root._onFocusedOutput)
+            managePanel.open(overflowCell.mapToItem(null, 0, 0).x);
+        else if (managePanel.isOpen)
+            managePanel.close();
+    }
+
+    // Escape, a click outside, and another popout taking the registry slot
+    // all close the Panel directly, so the shared flag has to follow it back
+    // down, or the next summon would write a value that never changed and
+    // nothing would react to it.
+    Connections {
+        target: managePanel
+        function onIsOpenChanged() {
+            if (!managePanel.isOpen && TrayService.manageOpen)
+                TrayService.closeManage();
+        }
     }
 
     // Bound to the live ObjectModel itself, not a `.values` snapshot slice:
@@ -160,7 +238,16 @@ Row {
         delegate: Cell {
             id: itemCell
             required property var modelData
-            required property int index
+
+            // Where this item renders, keyed by its own id rather than by
+            // `index`, now that the split is an override on top of the
+            // ordering rather than the ordering itself: a hidden item stays
+            // hidden even while the drawer is expanded, which no positional
+            // test can express. Two items publishing the same SNI id share
+            // one bucket and therefore one answer here; see Tray/model.js's
+            // header for why that identity is the one available.
+            readonly property bool _inVisible: root._buckets.visible.indexOf(itemCell.modelData.id) >= 0
+            readonly property bool _inDrawer: root._buckets.drawer.indexOf(itemCell.modelData.id) >= 0
 
             // Bar.qml's region delegate stretches this Row to the bar's
             // shared cell height; the Row top-aligns children, so without
@@ -175,7 +262,7 @@ Row {
             // `Theme.barHeight` (which routes back through the same
             // implicitHeight chain Bar.qml measures this Row by).
             height: root.height
-            visible: itemCell.index < root._pinnedCount || TrayService.drawerExpanded
+            visible: itemCell._inVisible || (itemCell._inDrawer && TrayService.drawerExpanded)
             standalone: true
             hovered: itemHover.containsMouse
             // The item's own words, in the SNI's own order of preference:
@@ -237,16 +324,28 @@ Row {
         id: overflowCell
         anchors.verticalCenter: parent.verticalCenter
         height: root.height
-        visible: root._overflowing
+        // Shown for any registered item, not only for an overflowing one:
+        // the chevron is the manage popup's only affordance, so a tray that
+        // fits (or one whose items are all hidden) still needs it.
+        visible: root.shown
         standalone: true
         hovered: overflowHover.containsMouse
-        tooltipText: TrayService.drawerExpanded
-            ? "TRAY / HIDE " + root._overflowCount
-            : "TRAY / SHOW " + root._overflowCount + " MORE"
+        tooltipText: root._drawerCount === 0
+            ? "TRAY / MANAGE"
+            : TrayService.drawerExpanded
+                ? "TRAY / HIDE " + root._drawerCount
+                : "TRAY / SHOW " + root._drawerCount + " MORE"
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: (TrayService.drawerExpanded ? "−" : "+") + root._overflowCount
+            // A bare chevron (U+F0140, nf-md-chevron_down, checked against
+            // the pinned Nerd Font's own cmap per DESIGN.md's literal-
+            // character rule) when the drawer holds nothing: the cell is
+            // still here for the manage popup a right-click opens, and "+0"
+            // would be a count of nothing.
+            text: root._drawerCount === 0
+                ? "󰅀"
+                : (TrayService.drawerExpanded ? "−" : "+") + root._drawerCount
             color: overflowCell.foreground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
@@ -256,8 +355,20 @@ Row {
             id: overflowHover
             anchors.fill: parent
             hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             cursorShape: Qt.PointingHandCursor
-            onClicked: TrayService.toggleDrawer()
+            // Right-click opens the bucket manager, the same split omarchy's
+            // own chevron uses. Left-click stays the drawer toggle it has
+            // always been, so nothing a user already knows changed meaning.
+            // With an empty drawer there is nothing to toggle, and a cell
+            // that renders a cursor but answers no click reads as broken, so
+            // that one case falls through to the manager instead.
+            onClicked: mouse => {
+                if (mouse.button === Qt.RightButton || root._drawerCount === 0)
+                    TrayService.toggleManage();
+                else
+                    TrayService.toggleDrawer();
+            }
         }
     }
 }

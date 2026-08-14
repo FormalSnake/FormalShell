@@ -49,10 +49,13 @@ Singleton {
 
     // Live bar height, reported by Bar.qml's own content-derived
     // _cellHeight (a fixed literal here would drift the moment any bar cell
-    // grows taller than the rest, per Bar.qml's own header comment). The 32
+    // grows taller than the rest, per Bar.qml's own header comment). The 21
     // default only covers the brief window before the first Bar instance
-    // binds it.
-    property real barHeight: 32
+    // binds it: fontSize.body (13) + space.controlPaddingY (4) * 2, the
+    // same single-line-cell arithmetic Cell.qml's own implicitHeight uses,
+    // now that Clock.qml collapsed to one line and no cell sets the bar
+    // any taller (M23).
+    property real barHeight: 21
 
     // Always the fontconfig `monospace` alias (DESIGN.md §1.3, CLAUDE.md
     // hard rule) — never a hardcoded family, never a second display face.

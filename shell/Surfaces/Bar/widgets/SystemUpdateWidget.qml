@@ -31,6 +31,10 @@ Cell {
     readonly property int _behind: root.panel ? root.panel.counts.behind : 0
     readonly property string _summary: root.panel ? root.panel.summary : "CHECKING"
 
+    // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
+    // keep their reading unless a user who added the widget opts back out.
+    readonly property bool _showLabel: Config.get("bar.widgets.systemUpdate.showLabel", true)
+
     standalone: true
     warning: root._behind > 0
     hovered: hoverArea.containsMouse
@@ -57,6 +61,7 @@ Cell {
         }
 
         MetaLabel {
+            visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root._summary
             color: root.dimForeground
