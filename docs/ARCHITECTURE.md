@@ -196,7 +196,11 @@ shell/
     LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status() — no unlock(), see its own header comment
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
     PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/variant(dark|light)/close()/status()
-    TrayIpc.qml                   IpcHandler target "tray", status()/expand()/collapse() — spec addendum, same rationale as "panel"
+    TrayIpc.qml                   IpcHandler target "tray", status()/activate(id) — spec addendum, same rationale as "panel"
+    BarIpc.qml                    IpcHandler target "bar", chevron(action)/chevronAt(action,region): the bar's
+                                   collapse boundary (M24). Two verbs, not one with an optional region, because
+                                   quickshell dispatches IPC on exact arity; chevron() infers the region when
+                                   exactly one exists and refuses to guess otherwise
     ScreenshotIpc.qml             IpcHandler target "screenshot", full()/region()/pick(mode,processing)/
                                    key(name)/pickerStatus()/edit(path)/cancel()/status(); pick() drives
                                    Surfaces/Capture/RegionPicker.qml, edit() hands a PNG to screenshot.editor
@@ -211,7 +215,8 @@ shell/
                                    lifecycle only; summoning a plugin surface stays on "panel" under its
                                    own "plugin:<id>" name
   Bar/
-    layout.js                     pure JS, .pragma library — resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings
+    layout.js                     pure JS, .pragma library — resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings.
+                                   Also annotates every entry with its region and a `collapsible` flag (true past a "chevron" in the same region), and drops a chevron that is duplicated or has nothing after it. collapsedNames()/hasChevron() read that back
     commandOutput.js               pure JS, .pragma library — resolve(exitCode, stdout)/errorState() for CommandModule.qml's Waybar-JSON parsing
   Surfaces/
     Bar/
@@ -226,7 +231,7 @@ shell/
         BluetoothWidget.qml       adapter-state glyph, panel-open accent dot
         WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
         NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player (exposes `shown`)
-        Tray.qml                   SNI tray over Quickshell.Services.SystemTray, grouped overflow drawer (exposes `shown`)
+        Tray.qml                   SNI tray over Quickshell.Services.SystemTray, a plain strip since M24 (exposes `shown`)
         Indicators.qml              recording / reminder / stay-awake / night-light glyphs, hidden entirely when none holds (exposes `shown`)
         MicWidget.qml               opt-in: default-source mute glyph, honest NO MIC label with no capture device
         KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `niri msg --json keyboard-layouts` /
@@ -234,6 +239,7 @@ shell/
         SystemUpdateWidget.qml      opt-in: flake-inputs-behind glyph + count, full-bleed warning while behind
         CommandModule.qml           bar.modules "command" entry: polled Waybar-JSON cell, honest MODULE ERROR on failure
         QmlModule.qml                bar.modules "qml" entry: Loader-hosted user file, load-time isolation only
+        ChevronWidget.qml            opt-in: the collapse boundary. Its bar.layout position is its whole config; click toggles State.barCollapsed[region]
         PluginBarModule.qml          kind:"bar" plugin host: Loader-hosted entry file, forwards its `shown`
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper,
@@ -794,17 +800,28 @@ kind of reason: a `Loader` with no explicit size mirrors its item's actual
 size, so reading `Loader.implicitHeight` directly would close a cycle back
 through the very property computing it.
 
-**Tray** (`Tray.qml`, `TrayService.qml`, `shell/Ipc/TrayIpc.qml`):
+**Tray** (`Tray.qml`, `shell/Ipc/TrayIpc.qml`):
 referencing `Quickshell.Services.SystemTray` makes quickshell host and
 watch `org.kde.StatusNotifierWatcher`, so every real StatusNotifierItem
 registered on the session bus appears in `.items` with no extra wiring.
-Past `_visibleLimit` (4) items collapse into one more cell (`+N`) that
-expands the row to reveal them all — the spec's "grouped drawer" — expand
-state lives in the shared `TrayService` singleton (not per-`Tray.qml`
-instance) so `qs ipc call tray expand/collapse` has one thing to act on
-regardless of which screen's bar owns the click. `dev/sni-stub.py` is the
-VM's real StatusNotifierItem producer (PyGObject, registers on the session
-bus for real — never faked inside the shell).
+Every item is its own cell, with no visible limit and no drawer: M24 moved
+bounding a long strip up one altitude to the bar chevron below, which is a
+spec deviation (§Surfaces-1 says "grouped drawer") recorded in `Tray.qml`'s
+own header. `dev/sni-stub.py` is the VM's real StatusNotifierItem producer
+(PyGObject, registers on the session bus for real, never faked inside the
+shell).
+
+**Chevron** (`ChevronWidget.qml`, `shell/Ipc/BarIpc.qml`, `Bar/layout.js`):
+macOS Hidden Bar / Bartender as a bar widget. `chevron` is an ordinary
+`bar.layout` name and its position is its entire configuration: `layout.js`
+annotates every later entry in the same region `collapsible: true`, and
+`Bar.qml`'s region delegate ANDs that with `State.barCollapsed[region]` as
+an extra term on the `Loader`'s own `visible`. That last part is not a
+style choice: reading a `Loader`-hosted item's built-in `visible` from
+outside permanently detaches the item's own binding (see `Bar.qml`'s
+delegate comment), which is why widgets expose `shown` and why the gate
+lives on the `Loader` rather than being written into either property.
+Collapsed is the default, per region, in `state.json`.
 
 **Indicators** (`Indicators.qml`): four glyph cells, each shown only while
 its own condition holds, the whole row hidden when none does. Loudest

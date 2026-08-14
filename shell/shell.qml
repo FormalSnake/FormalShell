@@ -189,6 +189,7 @@ ShellRoot {
     BluetoothIpc {}
     MediaIpc {}
     TrayIpc {}
+    BarIpc {}
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
     // The image/wallpaper picker is the menu's "wallpaper" route (M23), not

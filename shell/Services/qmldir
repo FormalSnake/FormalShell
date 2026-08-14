@@ -12,5 +12,4 @@ singleton MediaService MediaService.qml
 singleton NightLightService NightLightService.qml
 singleton PolkitService PolkitService.qml
 singleton RecordingService RecordingService.qml
-singleton TrayService TrayService.qml
 singleton VisualizerService VisualizerService.qml

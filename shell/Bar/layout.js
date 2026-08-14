@@ -16,6 +16,14 @@
 // `bar.layout` falls back to DEFAULT_LAYOUT for that region alone (today's
 // exact arrangement); a region present but empty (`[]`) stays empty.
 
+// "chevron" (M24) is placed like any other builtin, and its POSITION is its
+// entire configuration: every entry after it in the same region is annotated
+// `collapsible: true`, which is what Bar.qml's region delegate gates on. Two
+// rules keep it from being a control that does nothing, both enforced here
+// rather than in the widget: only the first chevron in a region survives,
+// and a chevron with nothing after it is dropped outright. Each drop carries
+// its own warning string, same as an unknown widget name.
+//
 // Drop-in plugins (shell/Plugins/manifest.js) are placed by the same
 // mechanism under their own disjoint prefix: a `plugin:<id>` name resolves
 // to { kind: "plugin", id, plugin } against the resolved-manifest array
@@ -26,11 +34,12 @@
 // plugin named anywhere is never appended twice.
 
 // "github", "usage", "tailscale", "visualizer", "microphone",
-// "keyboardLayout" and "systemUpdate" are deliberately absent from
-// DEFAULT_LAYOUT below: all seven are opt-in builtins (M12 Task 8, M14
-// Task 7, M16 Task 8, the ASCII visualizer's own owner-ask task, and the
-// cheap-wins trio), so the no-config bar stays byte-identical.
-var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate"];
+// "keyboardLayout", "systemUpdate" and "chevron" are deliberately absent
+// from DEFAULT_LAYOUT below: all eight are opt-in builtins (M12 Task 8, M14
+// Task 7, M16 Task 8, the ASCII visualizer's own owner-ask task, the
+// cheap-wins trio, and M24's collapse boundary), so the no-config bar stays
+// byte-identical.
+var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron"];
 
 var MODULE_TYPES = ["command", "qml"];
 
@@ -110,6 +119,81 @@ function _resolveRegion(names, region, moduleById, pluginById, warnings) {
     return resolved;
 }
 
+function _isChevron(entry) {
+    return entry.kind === "builtin" && entry.name === "chevron";
+}
+
+// Two passes, in this order, because the second depends on what the first
+// leaves behind: ["clock", "chevron", "chevron"] loses its trailing chevron
+// as a duplicate, which makes the surviving one trailing in turn, and a
+// chevron that collapses nothing is exactly the dead control the rule
+// exists to prevent. Both passes warn per drop.
+function _dropDeadChevrons(entries, region, warnings) {
+    var deduped = [];
+    var seen = false;
+    var i;
+    for (i = 0; i < entries.length; i++) {
+        if (_isChevron(entries[i])) {
+            if (seen) {
+                warnings.push("bar.layout." + region + ": only one chevron per region");
+                continue;
+            }
+            seen = true;
+        }
+        deduped.push(entries[i]);
+    }
+    if (deduped.length > 0 && _isChevron(deduped[deduped.length - 1])) {
+        warnings.push("bar.layout." + region + ": chevron has nothing after it");
+        deduped.pop();
+    }
+    return deduped;
+}
+
+// `region` is carried on the entry so a consumer holding one entry (Bar.qml's
+// region delegate gets exactly that, via `modelData`) can name the region
+// whose collapse state it answers to, without the delegate having to know
+// which Repeater it was instantiated from.
+function _annotate(entries, region) {
+    var collapsible = false;
+    for (var i = 0; i < entries.length; i++) {
+        entries[i].region = region;
+        entries[i].collapsible = collapsible;
+        if (_isChevron(entries[i]))
+            collapsible = true;
+    }
+}
+
+// How an entry is written in bar.layout, which is the only name a user ever
+// typed for it and therefore the only one `bar chevron status` or a tooltip
+// can honestly report back.
+function entryName(entry) {
+    switch (entry.kind) {
+    case "builtin": return entry.name;
+    case "module": return CUSTOM_PREFIX + entry.id;
+    }
+    return PLUGIN_PREFIX + entry.id;
+}
+
+// The names a region's chevron governs, in layout order. Empty for a region
+// with no chevron; never empty for a region that has one, since a chevron
+// with nothing after it was already dropped above.
+function collapsedNames(entries) {
+    var out = [];
+    for (var i = 0; i < entries.length; i++) {
+        if (entries[i].collapsible)
+            out.push(entryName(entries[i]));
+    }
+    return out;
+}
+
+function hasChevron(entries) {
+    for (var i = 0; i < entries.length; i++) {
+        if (_isChevron(entries[i]))
+            return true;
+    }
+    return false;
+}
+
 // `bar` is the raw settings.json `bar` object — may be undefined, null, or
 // missing either `layout` or `modules`. `barPlugins` is manifest.js's
 // kind === "bar" array, already id-sorted; undefined or null means none, so
@@ -143,6 +227,15 @@ function resolve(bar, barPlugins) {
             placed = _isPlaced(regions[REGIONS[r]], plugin.id);
         if (!placed)
             regions[plugin.region].push({ kind: "plugin", id: plugin.id, plugin: plugin });
+    }
+
+    // After the auto-append, never inside _resolveRegion: an unnamed plugin
+    // lands past everything bar.layout listed, so a chevron the user wrote
+    // last is only genuinely last once that pass has run.
+    for (i = 0; i < REGIONS.length; i++) {
+        region = REGIONS[i];
+        regions[region] = _dropDeadChevrons(regions[region], region, warnings);
+        _annotate(regions[region], region);
     }
 
     return { regions: regions, warnings: warnings };

@@ -209,4 +209,108 @@ TestCase {
         compare(r.regions.right.length, 1);
         compare(r.regions.right[0].id, "diskwatch");
     }
+
+    // M24: the chevron is a collapse boundary, its position is its whole
+    // configuration, and every rule that keeps it from being a dead control
+    // lives in the resolver rather than in the widget.
+    function collapsible(entries) {
+        return entries.map(function (e) { return e.collapsible ? "1" : "0"; }).join("");
+    }
+
+    function test_chevron_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["chevron", "tray"] } });
+        compare(names(r.regions.right), "chevron,tray");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("chevron") < 0);
+        verify(names(d.regions.center).indexOf("chevron") < 0);
+        verify(names(d.regions.right).indexOf("chevron") < 0);
+    }
+
+    function test_no_chevron_leaves_every_entry_uncollapsible() {
+        var r = Layout.resolve(undefined);
+        compare(collapsible(r.regions.left), "00");
+        compare(collapsible(r.regions.center), "00");
+        compare(collapsible(r.regions.right), "00000000");
+    }
+
+    function test_mid_region_chevron_marks_only_what_follows_it() {
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron", "weather", "tray"] } });
+        compare(names(r.regions.right), "battery,chevron,weather,tray");
+        compare(collapsible(r.regions.right), "0011");
+        compare(r.warnings.length, 0);
+    }
+
+    function test_every_entry_carries_its_own_region() {
+        var r = Layout.resolve({ layout: { left: ["clock"], center: ["chevron", "clock"] } });
+        compare(r.regions.left[0].region, "left");
+        compare(r.regions.center[0].region, "center");
+        compare(r.regions.center[1].region, "center");
+        compare(r.regions.right[0].region, "right");
+    }
+
+    function test_trailing_chevron_is_dropped_with_a_warning() {
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron"] } });
+        compare(names(r.regions.right), "battery");
+        compare(r.warnings.length, 1);
+        verify(r.warnings[0].indexOf("nothing after it") >= 0);
+        verify(r.warnings[0].indexOf("bar.layout.right") >= 0);
+    }
+
+    function test_lone_chevron_in_a_region_is_dropped_with_a_warning() {
+        var r = Layout.resolve({ layout: { center: ["chevron"] } });
+        compare(r.regions.center.length, 0);
+        compare(r.warnings.length, 1);
+        verify(r.warnings[0].indexOf("nothing after it") >= 0);
+    }
+
+    function test_second_chevron_in_a_region_is_dropped_with_a_warning() {
+        var r = Layout.resolve({ layout: { right: ["chevron", "battery", "chevron", "tray"] } });
+        compare(names(r.regions.right), "chevron,battery,tray");
+        compare(collapsible(r.regions.right), "011");
+        compare(r.warnings.length, 1);
+        verify(r.warnings[0].indexOf("only one chevron per region") >= 0);
+    }
+
+    // The dedupe pass runs first, so the survivor can itself end up trailing
+    // and has to be dropped by the second pass with its own warning.
+    function test_duplicate_chevron_that_leaves_a_trailing_survivor_drops_both() {
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron", "chevron"] } });
+        compare(names(r.regions.right), "battery");
+        compare(r.warnings.length, 2);
+        verify(r.warnings[0].indexOf("only one chevron per region") >= 0);
+        verify(r.warnings[1].indexOf("nothing after it") >= 0);
+    }
+
+    function test_chevron_in_one_region_does_not_mark_another() {
+        var r = Layout.resolve({ layout: { left: ["chevron", "workspaces", "activeWindow"] } });
+        compare(collapsible(r.regions.left), "011");
+        compare(collapsible(r.regions.center), "00");
+        compare(collapsible(r.regions.right), "00000000");
+    }
+
+    // An unnamed bar plugin is appended after everything bar.layout listed,
+    // so a chevron written last is only genuinely last once that pass is done.
+    function test_auto_appended_plugin_saves_an_otherwise_trailing_chevron() {
+        var p = barPlugin("diskwatch", "right");
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron"] } }, [p]);
+        compare(r.warnings.length, 0);
+        compare(r.regions.right.length, 3);
+        compare(collapsible(r.regions.right), "001");
+    }
+
+    function test_collapsed_names_reports_layout_names_in_order() {
+        var mod = { id: "disk", type: "command", command: ["echo", "hi"] };
+        var p = barPlugin("diskwatch", "right");
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron", "tray", "custom:disk", "plugin:diskwatch"] }, modules: [mod] }, [p]);
+        compare(Layout.collapsedNames(r.regions.right).join(","), "tray,custom:disk,plugin:diskwatch");
+        compare(Layout.collapsedNames(r.regions.left).length, 0);
+    }
+
+    function test_has_chevron_answers_per_region() {
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron", "tray"] } });
+        verify(Layout.hasChevron(r.regions.right));
+        verify(!Layout.hasChevron(r.regions.left));
+        verify(!Layout.hasChevron(r.regions.center));
+    }
 }

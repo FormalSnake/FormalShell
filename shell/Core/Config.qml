@@ -82,18 +82,15 @@ import QtQuick
 // own name from shell/Bar/layout.js's BUILTIN_WIDGETS, resolved
 // independently of bar.layout, so placing a widget and labeling it are
 // two separate keys.
-// bar.tray.pinned / bar.tray.hidden (arrays of SNI item ids, both absent by
-// default): the tray's Bartender buckets. A pinned id is always on the bar
-// regardless of the 4-cell budget, a hidden id is drawn nowhere at all, and
-// every other id keeps the existing "first N are visible, the rest behind
-// the chevron" ordering, so a settings.json naming neither key renders
-// exactly what it rendered before the buckets existed. Declaring EITHER key
-// makes the pair read-only at runtime (`tray status`'s bucketsLocked): the
-// chevron's manage popup then renders SET IN SETTINGS instead of its
-// PIN/HIDE actions, since the shell never writes settings.json. With both
-// absent, that popup and `tray pin|unpin|hide|show` persist to state.json
-// instead. A key present but null counts as absent, matching every other
-// settings-over-state pair. Resolved by shell/Tray/model.js, M23 Task 3.
+// "chevron" (M24) is a bar.layout entry name like any other builtin, absent
+// from the default arrangement. Its POSITION is the whole configuration:
+// everything after it in its own region collapses behind it, and moving it
+// is the only control there is: no per-widget key says whether a widget
+// hides. One chevron per region; a second, or one placed last with nothing
+// after it, is dropped with a warning (shell/Bar/layout.js). Whether a
+// region is currently collapsed is runtime state, not settings: it lives in
+// state.json's `barCollapsed`, defaults collapsed, and is written by the
+// cell's own click or by `bar chevron toggle|expand|collapse [region]`.
 // github.intervalMs (number, default 300000 — GithubWidget's `gh api`
 // poll cadence in ms; the widget itself is opt-in via bar.layout,
 // M12 Task 8).

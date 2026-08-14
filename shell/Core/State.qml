@@ -17,8 +17,7 @@ Singleton {
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
     property alias appLaunches: adapter.appLaunches
     property alias reminders: adapter.reminders
-    property alias trayPinned: adapter.trayPinned
-    property alias trayHidden: adapter.trayHidden
+    property alias barCollapsed: adapter.barCollapsed
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -68,15 +67,22 @@ Singleton {
         stateFile.writeAdapter();
     }
 
-    // The tray's Bartender buckets: two arrays of SNI ids, the shape
-    // shell/Tray/model.js owns end to end. Both land in one write for the
-    // same reason setCalendarLifeProgress does: every action the manage
-    // popup offers moves an id between the two at once (pinning clears a
-    // hide and vice versa; TrayService keeps them mutually exclusive), so a
-    // half-written pair would persist a state no action can produce.
-    function setTrayBuckets(pinned, hidden) {
-        adapter.trayPinned = pinned;
-        adapter.trayHidden = hidden;
+    // Whether each bar region's chevron is currently collapsed (M24), keyed
+    // by region name. Written by the chevron cell's own click and by `bar
+    // chevron`, read by Bar.qml's region delegate. A region with no chevron
+    // in bar.layout keeps a value here that nothing reads, which is what
+    // makes adding the chevron back mid-session resume where it left off.
+    // The object is replaced wholesale rather than mutated in place: a
+    // JsonAdapter var property only notifies on assignment, so writing one
+    // key of the existing object would persist without ever re-evaluating a
+    // binding.
+    function setBarCollapsed(region, collapsed) {
+        var next = {};
+        var current = adapter.barCollapsed;
+        for (var key in current)
+            next[key] = current[key];
+        next[region] = collapsed;
+        adapter.barCollapsed = next;
         stateFile.writeAdapter();
     }
 
@@ -105,8 +111,10 @@ Singleton {
             property int calendarLifeExpectancy: 0
             property var appLaunches: []
             property var reminders: []
-            property var trayPinned: []
-            property var trayHidden: []
+            // Collapsed is the default for every region, matching Hidden Bar
+            // and Bartender: adding `chevron` to bar.layout has to visibly do
+            // something on first run, or the widget reads as inert.
+            property var barCollapsed: ({ left: true, center: true, right: true })
         }
     }
 }

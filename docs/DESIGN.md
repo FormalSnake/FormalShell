@@ -270,6 +270,18 @@ title-bar action's background hovered and idle, both equal the card's own
 ground; sample its text, it moves from the `foregroundDim` hex to the
 `foreground` hex.
 
+**Amendment (the lit area is the hit area, 2026-08-14).** Whatever a state
+fill covers is what the pointer has to be able to reach. A control whose
+target is smaller than its own fill reads as clickable across a band that
+answers nothing, and on the bar that band includes the row of pixels against
+the screen edge, the easiest pixel on the display to hit. `Cell.qml` carries
+a `hit` slot spanning the whole cell for exactly this reason; a pointer
+target put in the default slot instead lands in the padded content box and
+is short by the control padding (§1.3) on every side, which is a defect
+rather than a density choice. Checkable: hover a bar cell one pixel below
+the screen's top edge, inside its leading gutter, and both the fill and a
+click have to land.
+
 ### 1.2 Border specs
 
 A border is a small object, not a scalar width:
@@ -706,11 +718,18 @@ floats with a margin or fuses to the screen edge.
   `bar.widgets.<name>.showLabel` flips any cell either way per install. The
   clock carries no meta tag at all under the same rule: `19:31` is never
   ambiguous, and as the one two-line cell it was setting the whole bar's
-  height to say so. The tray's chevron cell is this bar's one Bartender
-  affordance: every registered item is `pinned` (always on the bar),
-  `drawer` (behind the chevron) or `hidden` (drawn nowhere at all), managed
-  from a right-click popup on that chevron and persisted to `state.json`,
-  with `bar.tray.pinned`/`bar.tray.hidden` declaratively overriding both.
+  height to say so. This bar's one Bartender affordance is a widget rather
+  than a tray feature (M24): `chevron` is an ordinary `bar.layout` entry, and
+  everything placed after it in its own region collapses behind it. Its
+  position is the entire configuration, so which cells hide is a question of
+  where the boundary sits, not of a per-widget flag, and moving it one slot
+  changes the answer. Collapsed is the default, persisted per region to
+  `state.json`. One chevron per region, and one with nothing after it hides
+  nothing and is dropped rather than drawn as a control that answers no
+  click. The tray sits under that rule like any other widget, with no drawer,
+  no visible limit and no per-icon buckets of its own: M23 shipped those and
+  M24 replaced them, because two chevrons on one bar made the affordance
+  ambiguous about what it governed.
   The now-playing cell's mini cover art (M20) is the fourth sanctioned
   image-icon site, after the menu's launcher rows, the bar's active-window
   cell, and notification card images: unlike those three, it renders

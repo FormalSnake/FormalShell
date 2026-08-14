@@ -2,6 +2,13 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs.Core
+// Aliased alongside the unqualified import above, the idiom CalendarPanel.qml
+// documents: QtQuick exports its own type named State (the property-binding
+// one), so a bare `State.barCollapsed` in the collapse gate below reads back
+// undefined at runtime and every governed cell stays hidden forever, with no
+// binding ever re-evaluating. Theme/Config carry no such collision and stay
+// unqualified.
+import qs.Core as Core
 import qs.Plugins
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
@@ -25,7 +32,13 @@ import "../../Bar/layout.js" as Layout
 // appended to its own manifest region by layout.js, so a plugin directory
 // is visible without a settings.json edit. An unknown widget name or a
 // dangling module/plugin reference is dropped with a console warning, never
-// a crash. Every widget cell is a `standalone` Cell (DESIGN.md §3):
+// a crash.
+// One of those names, "chevron" (M24, ChevronWidget.qml), is a collapse
+// boundary rather than a readout: every entry after it in the same region
+// hides behind it, which layout.js hands over as a per-entry `collapsible`
+// flag and the region delegate below gates on. Its position in bar.layout is
+// the whole of its configuration.
+// Every widget cell is a `standalone` Cell (DESIGN.md §3):
 // borderless at rest, hover-cursor fill+border only on
 // mouseover, separated from its neighbor by a small gap plus its own
 // padding — omarchy's discrete-module bar, not the M1-M3 fused ledger
@@ -237,6 +250,11 @@ PanelWindow {
         }
     }
     Component {
+        id: chevronComponent
+        ChevronWidget {
+        }
+    }
+    Component {
         id: commandModuleComponent
         CommandModule {
         }
@@ -271,7 +289,8 @@ PanelWindow {
         indicators: indicatorsComponent,
         microphone: microphoneComponent,
         keyboardLayout: keyboardLayoutComponent,
-        systemUpdate: systemUpdateComponent
+        systemUpdate: systemUpdateComponent,
+        chevron: chevronComponent
     })
 
     // Shared by every region below: a builtin entry loads straight from the
@@ -311,14 +330,32 @@ PanelWindow {
                 }
                 return entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent;
             }
-            visible: entryLoader.item
+            // M24's collapse gate, an extra term on the Loader's OWN visible
+            // rather than a second thing routed through `shown`: `shown` is
+            // the widget's statement about itself (a Battery with no battery),
+            // and writing into it from here would put two authors on one
+            // property. `collapsible` is layout.js's per-entry annotation
+            // (true for every entry after a chevron in the same region), so a
+            // layout with no chevron leaves this term false everywhere and
+            // the binding reads exactly as it did before.
+            readonly property bool _collapsedAway: {
+                if (!entryLoader.modelData.collapsible)
+                    return false;
+                var stored = Core.State.barCollapsed;
+                return !stored || stored[entryLoader.modelData.region] !== false;
+            }
+            visible: !entryLoader._collapsedAway && (entryLoader.item
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
-                : false
+                : false)
             onLoaded: {
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
                 else if (entryLoader.modelData.kind === "plugin")
                     entryLoader.item.plugin = entryLoader.modelData.plugin;
+                else if (entryLoader.modelData.name === "chevron") {
+                    entryLoader.item.region = entryLoader.modelData.region;
+                    entryLoader.item.regionEntries = bar._layout.regions[entryLoader.modelData.region];
+                }
             }
         }
     }

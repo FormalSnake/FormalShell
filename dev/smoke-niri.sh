@@ -302,22 +302,34 @@
 # With --tray, launches six dev/sni-stub.py processes (a minimal Python/GLib
 # StatusNotifierItem producer — see its own header comment) that each
 # register a real item on the isolated session bus, giving
-# Quickshell.Services.SystemTray genuine items to track. Tray.qml's visible
-# limit is 4, so 6 items means 3 pinned cells plus one "+3" overflow cell —
-# `tray status` is dumped (tray-status-1.json, proves the real item count
-# and expanded:false) before a screenshot (tray-collapsed.png) shows the
-# collapsed state, then `tray expand` (the smoke rig's stand-in for the
-# overflow cell's own click — no synthetic pointer exists here) is called
-# and `tray status` dumped again (tray-status-2.json, proves expanded:true
-# with the same item count); then `tray activate tray-fixture-2` drives the
-# exact Activate() call Tray.qml's own left-click handler makes, and the
-# stub's --activate-file (tray-activate.txt) is asserted afterward, proving
-# the D-Bus Activate round trip reached the item. Opening an item's DBusMenu
-# stays host-trial territory (a platform QMenu with no pointer to dismiss it
-# would wedge a headless run — see TrayIpc.qml). This run's generic
-# smoke.png/SMOKE_OK is taken after the expand call, so it shows every item
-# as its own cell, drawer open. The stub processes are killed by PID
-# (tray-pids.txt, same pattern as --media's mpv) right before niri quits.
+# Quickshell.Services.SystemTray genuine items to track. The tray is a plain
+# strip since M24: no drawer, no visible limit, no per-item buckets, since
+# bounding a long strip is the bar chevron's job now (--chevron below, and
+# Tray.qml's own header for the spec deviation that records). So `tray
+# status` is dumped (tray-status.json, proves all six registered) and a
+# screenshot (tray-strip.png) shows all six as their own cells, then
+# `tray activate tray-fixture-2` drives the exact Activate() call Tray.qml's
+# own left-click handler makes, and the stub's --activate-file
+# (tray-activate.txt) is asserted afterward, proving the D-Bus Activate round
+# trip reached the item and reached only that item. Opening an item's
+# DBusMenu stays host-trial territory (a platform QMenu with no pointer to
+# dismiss it would wedge a headless run, see TrayIpc.qml). The stub
+# processes are killed by PID (tray-pids.txt, same pattern as --media's mpv)
+# right before niri quits.
+# With --chevron, writes a settings.json fixture putting `chevron` mid
+# right-region (after battery/audio/network, before bluetooth/weather/tray/
+# bell/indicators) and drives the `bar` IPC target across the collapse
+# boundary it creates. `bar chevron status` is dumped collapsed
+# (chevron-status-collapsed.json; collapsed is the shipped default, so this
+# is the state the bar boots into), screenshotted (chevron-collapsed.png),
+# then `bar chevron expand` (the rig's stand-in for a click on the chevron
+# cell, since no synthetic pointer exists here) is called, dumped again
+# (chevron-status-expanded.json) and screenshotted (chevron-expanded.png).
+# Both dumps are asserted, not just captured: the collapsed one must list
+# every name after the chevron under `hidden`, and the expanded one must
+# report the same names still under `collapses` with `hidden` empty. The
+# region is inferred rather than named, which is itself the proof that a
+# single-chevron layout needs no argument.
 # With --picker, generates 20 fixture PNGs (imagemagick, solid colors at
 # 1920x1080 — bigger than the grid cell's decode cap and the VM's own
 # screen, so both actually downscale rather than passing an already-smaller
@@ -672,6 +684,7 @@ screensaver_mode=false
 screensaver_gif_mode=false
 picker_mode=false
 tray_mode=false
+chevron_mode=false
 bar_layout_mode=false
 screenshot_mode=false
 capture_mode=false
@@ -709,6 +722,7 @@ while [ $# -gt 0 ]; do
     --screensaver-gif) screensaver_gif_mode=true; shift ;;
     --picker) picker_mode=true; shift ;;
     --tray) tray_mode=true; shift ;;
+    --chevron) chevron_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
     --capture) capture_mode=true; shift ;;
@@ -727,7 +741,7 @@ while [ $# -gt 0 ]; do
     --systemupdate) systemupdate_mode=true; shift ;;
     --plugins) plugins_mode=true; shift ;;
     --hotcorner) hotcorner_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner]" >&2; exit 1 ;;
   esac
 done
 
@@ -743,7 +757,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
@@ -904,7 +918,7 @@ fi
 
 if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
-  || $mic_mode || $systemupdate_mode || $plugins_mode; then
+  || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -925,7 +939,9 @@ if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_t
   # plugins) all pick grim for that same no-toast reason: every one of their
   # shots exists to read one small thing (an indicator glyph, a toast, a
   # menu row, one bar cell), and niri's own capture toast lands on top of
-  # exactly that corner.
+  # exactly that corner. chevron_mode is the sharpest case of it: its whole
+  # claim is which cells the bar's RIGHT region is drawing, which is
+  # precisely where that toast lands.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -1303,17 +1319,16 @@ picker_dark_status_path="$shot_dir/picker-status-dark.json"
 picker_light_status_path="$shot_dir/picker-status-light.json"
 picker_variant_reply_path="$shot_dir/picker-variant-reply.txt"
 picker_variant_path="$shot_dir/picker-variant.png"
-tray_status1_path="$shot_dir/tray-status-1.json"
-tray_status2_path="$shot_dir/tray-status-2.json"
-tray_collapsed_path="$shot_dir/tray-collapsed.png"
+tray_status_path="$shot_dir/tray-status.json"
+tray_strip_path="$shot_dir/tray-strip.png"
 tray_pids_path="$shot_dir/tray-pids.txt"
 tray_activate_path="$shot_dir/tray-activate.txt"
 tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
-tray_status_pinned_path="$shot_dir/tray-status-pinned.json"
-tray_status_hidden_path="$shot_dir/tray-status-hidden.json"
-tray_pin_reply_path="$shot_dir/tray-pin-reply.txt"
-tray_hide_reply_path="$shot_dir/tray-hide-reply.txt"
-tray_manage_path="$shot_dir/tray-manage.png"
+chevron_status_collapsed_path="$shot_dir/chevron-status-collapsed.json"
+chevron_status_expanded_path="$shot_dir/chevron-status-expanded.json"
+chevron_expand_reply_path="$shot_dir/chevron-expand-reply.txt"
+chevron_collapsed_path="$shot_dir/chevron-collapsed.png"
+chevron_expanded_path="$shot_dir/chevron-expanded.png"
 bar_layout_path="$shot_dir/bar-layout.png"
 hotcorner_layers_path="$shot_dir/hotcorner-layers.json"
 instance_status_path="$shot_dir/instance-status.json"
@@ -1614,6 +1629,14 @@ elif $mic_mode; then
   # bar.layout names it. Leading the right region rather than appended, so
   # it can't be clipped off the end of a full row.
   bar_settings=', "bar": {"layout": {"right": ["microphone", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+elif $chevron_mode; then
+  # M24: the chevron's POSITION is its whole configuration, so the fixture is
+  # today's exact default right region with one name inserted mid-way. That
+  # keeps the collapsed/expanded pair directly comparable to bar-niri.png,
+  # and it means the five names after it (bluetooth, weather, tray, bell,
+  # indicators) are the hidden set the status dumps below assert on, while
+  # the three before it prove the boundary only ever looks forward.
+  bar_settings=', "bar": {"layout": {"right": ["battery", "audio", "network", "chevron", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
 elif $systemupdate_mode; then
   # Naming the widget IS the opt-in to background polling
   # (SystemUpdateWidget's Component.onCompleted flips the panel's
@@ -3468,12 +3491,11 @@ EOF
 fi
 
 # --tray: launches six real SNI producers in the background (PIDs recorded
-# for the kill step below), then proves the collapsed state (status dump +
-# screenshot) before driving the same expand() the overflow cell's own click
-# calls and proving the expanded state (status dump), then drives the same
-# activate() the item cells' own left click calls and lets the stub's
-# --activate-file prove the D-Bus round trip; this run's generic
-# smoke.png/SMOKE_OK, taken later, shows the drawer already expanded.
+# for the kill step below), dumps `tray status` and screenshots the whole
+# strip, then drives the same activate() the item cells' own left click calls
+# and lets the stub's --activate-file prove the D-Bus round trip. Six
+# fixtures against no visible limit at all is the point since M24: every one
+# of them is its own cell, and nothing here collapses anything.
 if $tray_mode; then
   tray_drive_script="$shot_dir/tray-drive.sh"
   cat > "$tray_drive_script" <<EOF
@@ -3486,29 +3508,11 @@ sleep 1
 "$python3_bin" "$sni_stub_path" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 "$python3_bin" "$sni_stub_path" --id tray-fixture-6 --title "Tray Fixture 6" --color 16a085 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status1_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status_path" 2>&1
 sleep 1
-niri msg action screenshot-screen --path "$tray_collapsed_path"
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray expand > /dev/null 2>&1
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status2_path" 2>&1
+niri msg action screenshot-screen --path "$tray_strip_path"
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray pin tray-fixture-5 > "$tray_pin_reply_path" 2>&1
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status_pinned_path" 2>&1
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray hide tray-fixture-1 > "$tray_hide_reply_path" 2>&1
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status_hidden_path" 2>&1
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray manage open > /dev/null 2>&1
-sleep 2
-niri msg action screenshot-screen --path "$tray_manage_path"
-sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray manage close > /dev/null 2>&1
 EOF
 
   tray_kill_script="$shot_dir/tray-kill.sh"
@@ -3519,6 +3523,29 @@ if [ -f "$tray_pids_path" ]; then
     kill "\$pid" 2>/dev/null || true
   done < "$tray_pids_path"
 fi
+EOF
+fi
+
+# --chevron: the bar boots collapsed (State.barCollapsed's own default), so
+# the first dump and shot need no setup at all beyond the settings.json
+# fixture above. That IS the claim: adding `chevron` to bar.layout
+# visibly does something on first run. `bar chevron expand` then stands in
+# for a click on the cell, with no region argument, since a layout carrying
+# exactly one chevron is meant to infer it.
+if $chevron_mode; then
+  chevron_drive_script="$shot_dir/chevron-drive.sh"
+  cat > "$chevron_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_collapsed_path" 2>&1
+sleep 1
+"$grim_bin" "$chevron_collapsed_path"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call bar chevron expand > "$chevron_expand_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_expanded_path" 2>&1
+sleep 1
+"$grim_bin" "$chevron_expanded_path"
 EOF
 fi
 
@@ -3769,6 +3796,9 @@ fi
   if $tray_mode; then
     echo "spawn-at-startup \"bash\" \"$tray_drive_script\""
   fi
+  if $chevron_mode; then
+    echo "spawn-at-startup \"bash\" \"$chevron_drive_script\""
+  fi
   if $capture_mode; then
     echo "spawn-at-startup \"bash\" \"$capture_drive_script\""
   fi
@@ -3930,16 +3960,23 @@ fi
     # closed again.
     screenshot_delay=46
   elif $tray_mode; then
-    # tray-drive.sh's own final step (closing the bucket manager) lands
-    # around its internal sleep sum (~20s in: ~12s to the activate call,
-    # then the pin/hide/manage legs at roughly a second apiece plus 2s for
-    # the manager to paint before its own screenshot). This run's generic
-    # smoke.png/SMOKE_OK is taken 4s after that, past the manager's close,
-    # so it shows the ordinary bar with fixture-5 pinned and fixture-1
-    # hidden. Getting this wrong is not a slow test, it is a false failure:
-    # the kill script takes the stubs down before niri quits, so a drive
-    # step that lands after this delay reads an empty item list.
-    screenshot_delay=24
+    # tray-drive.sh's own final step (the activate call) lands around its
+    # internal sleep sum (~11s in: 1s before the six stubs launch, 6s for
+    # them to register, then the status/screenshot/activate legs at roughly
+    # a second apiece plus qs spawn overhead on llvmpipe). This run's generic
+    # smoke.png/SMOKE_OK is taken 5s after that, so it shows the ordinary bar
+    # with all six items as their own cells. Getting this wrong is not a slow
+    # test, it is a false failure: the kill script takes the stubs down before
+    # niri quits, so a drive step that lands after this delay reads an empty
+    # item list.
+    screenshot_delay=16
+  elif $chevron_mode; then
+    # chevron-drive.sh's own final step (the expanded grim) lands around its
+    # internal sleep sum (~10s in: 5s for the bar to settle, then the two
+    # dump/shot pairs and the expand call at a second or two apiece). This
+    # run's generic smoke.png/SMOKE_OK is taken 4s after that, so it shows
+    # the bar left expanded, matching chevron-expanded.png.
+    screenshot_delay=14
   elif $panel_mode && [ "$panel_name" = "calendar" ]; then
     # eds-drive.sh opens the panel only after its two seed writes return
     # (~4-7s in when this run's private bus has to cold-activate EDS
@@ -5168,34 +5205,24 @@ if $picker_mode; then
 fi
 
 if $tray_mode; then
-  if [ -s "$tray_status1_path" ]; then
-    cat "$tray_status1_path"
+  if [ -s "$tray_status_path" ]; then
+    cat "$tray_status_path"
   else
-    echo "SMOKE_FAIL: no tray status (pre-expand) produced" >&2; exit 1
+    echo "SMOKE_FAIL: no tray status produced" >&2; exit 1
   fi
-  tray_count1=$(grep -o '"id":' "$tray_status1_path" | wc -l | tr -d ' ')
-  if [ "$tray_count1" != "6" ]; then
-    echo "SMOKE_FAIL: tray status did not report all 6 fixture items before expand (got $tray_count1) — stub registration likely failed" >&2; exit 1
+  tray_count=$(grep -o '"id":' "$tray_status_path" | wc -l | tr -d ' ')
+  if [ "$tray_count" != "6" ]; then
+    echo "SMOKE_FAIL: tray status did not report all 6 fixture items (got $tray_count). Stub registration likely failed" >&2; exit 1
   fi
-  if ! grep -q '"expanded":false' "$tray_status1_path"; then
-    echo "SMOKE_FAIL: tray status did not report expanded:false before the expand call — got: $(cat "$tray_status1_path")" >&2; exit 1
+  # M24: no drawer, so nothing here may report one. A `drawer`/`expanded` key
+  # coming back would mean a stale build, not a passing run.
+  if grep -qE '"(drawer|expanded|pinned|bucket)":' "$tray_status_path"; then
+    echo "SMOKE_FAIL: tray status still reports drawer/bucket state. Got: $(cat "$tray_status_path")" >&2; exit 1
   fi
-  if [ -f "$tray_collapsed_path" ]; then
-    echo "SMOKE_TRAY_COLLAPSED $tray_collapsed_path"
+  if [ -f "$tray_strip_path" ]; then
+    echo "SMOKE_TRAY_STRIP $tray_strip_path"
   else
-    echo "SMOKE_FAIL: no tray-collapsed screenshot produced" >&2; exit 1
-  fi
-  if [ -s "$tray_status2_path" ]; then
-    cat "$tray_status2_path"
-  else
-    echo "SMOKE_FAIL: no tray status (post-expand) produced" >&2; exit 1
-  fi
-  if ! grep -q '"expanded":true' "$tray_status2_path"; then
-    echo "SMOKE_FAIL: tray expand IPC call did not flip expanded to true — got: $(cat "$tray_status2_path")" >&2; exit 1
-  fi
-  tray_count2=$(grep -o '"id":' "$tray_status2_path" | wc -l | tr -d ' ')
-  if [ "$tray_count2" != "$tray_count1" ]; then
-    echo "SMOKE_FAIL: tray item count changed across expand ($tray_count1 -> $tray_count2)" >&2; exit 1
+    echo "SMOKE_FAIL: no tray-strip screenshot produced" >&2; exit 1
   fi
   if [ -s "$tray_activate_reply_path" ]; then
     cat "$tray_activate_reply_path"
@@ -5216,53 +5243,56 @@ if $tray_mode; then
   if [ "$tray_activate_lines" != "1" ]; then
     echo "SMOKE_FAIL: expected exactly one activate record (got $tray_activate_lines) — activate hit more than the targeted item" >&2; exit 1
   fi
-  # Bartender buckets (M23). Six fixtures against a 4-cell budget puts
-  # fixtures 1-3 in `visible` (the fourth slot is the chevron's own) and
-  # 4-6 in `drawer`, so pinning fixture-5 is the one move that proves a
-  # pin beats the positional fallback rather than agreeing with it.
-  if ! grep -q '^ok$' "$tray_pin_reply_path" 2>/dev/null; then
-    echo "SMOKE_FAIL: tray pin was refused — got: $(cat "$tray_pin_reply_path" 2>/dev/null)" >&2; exit 1
+fi
+
+if $chevron_mode; then
+  # The five names bar_settings above put after the chevron. Order matters:
+  # `collapses` reports them in layout order, so one grep can assert the
+  # whole boundary rather than five independent membership checks.
+  chevron_hidden_names='"bluetooth","weather","tray","bell","indicators"'
+  if [ -s "$chevron_status_collapsed_path" ]; then
+    cat "$chevron_status_collapsed_path"
+  else
+    echo "SMOKE_FAIL: no bar chevron status (collapsed) produced" >&2; exit 1
   fi
-  if [ ! -s "$tray_status_pinned_path" ]; then
-    echo "SMOKE_FAIL: no tray status (post-pin) produced" >&2; exit 1
+  if ! grep -q '"chevronRegions":\["right"\]' "$chevron_status_collapsed_path"; then
+    echo "SMOKE_FAIL: bar chevron status did not resolve exactly one chevron, in the right region. Got: $(cat "$chevron_status_collapsed_path")" >&2; exit 1
   fi
-  cat "$tray_status_pinned_path"
-  if ! grep -q '"pinned":\[[^]]*"tray-fixture-5"' "$tray_status_pinned_path" \
-    || ! grep -q '"visible":\[[^]]*"tray-fixture-5"' "$tray_status_pinned_path"; then
-    echo "SMOKE_FAIL: tray pin did not move tray-fixture-5 out of the drawer and onto the bar — got: $(cat "$tray_status_pinned_path")" >&2; exit 1
+  if ! grep -q "\"collapses\":\[$chevron_hidden_names\]" "$chevron_status_collapsed_path"; then
+    echo "SMOKE_FAIL: bar chevron status does not govern the five names placed after it. Got: $(cat "$chevron_status_collapsed_path")" >&2; exit 1
   fi
-  if grep -q '"drawer":\[[^]]*"tray-fixture-5"' "$tray_status_pinned_path"; then
-    echo "SMOKE_FAIL: tray-fixture-5 is pinned and still in the drawer — got: $(cat "$tray_status_pinned_path")" >&2; exit 1
+  # The claim the screenshot alone cannot make: collapsed means those exact
+  # names are hidden right now, not merely that the chevron knows about them.
+  if ! grep -q "\"collapsed\":true,\"collapses\":\[$chevron_hidden_names\],\"hidden\":\[$chevron_hidden_names\]" "$chevron_status_collapsed_path"; then
+    echo "SMOKE_FAIL: bar chevron status did not report the governed names as hidden while collapsed. Got: $(cat "$chevron_status_collapsed_path")" >&2; exit 1
   fi
-  # Hiding is the stronger claim: the id must leave BOTH render buckets,
-  # not just move between them, which is what separates hidden from drawer.
-  if ! grep -q '^ok$' "$tray_hide_reply_path" 2>/dev/null; then
-    echo "SMOKE_FAIL: tray hide was refused — got: $(cat "$tray_hide_reply_path" 2>/dev/null)" >&2; exit 1
+  if [ -f "$chevron_collapsed_path" ]; then
+    # Named-artifact marker: dev/vm.sh pulls every "SMOKE_<NAME> <path>.png"
+    # line back to the mac, and without one the shot only ever exists inside
+    # the VM.
+    echo "SMOKE_CHEVRON_COLLAPSED $chevron_collapsed_path"
+  else
+    echo "SMOKE_FAIL: no chevron-collapsed screenshot produced" >&2; exit 1
   fi
-  if [ ! -s "$tray_status_hidden_path" ]; then
-    echo "SMOKE_FAIL: no tray status (post-hide) produced" >&2; exit 1
+  if ! grep -q '^ok$' "$chevron_expand_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: bar chevron expand was refused. Got: $(cat "$chevron_expand_reply_path" 2>/dev/null)" >&2; exit 1
   fi
-  cat "$tray_status_hidden_path"
-  if ! grep -q '"hidden":\[[^]]*"tray-fixture-1"' "$tray_status_hidden_path"; then
-    echo "SMOKE_FAIL: tray hide did not record tray-fixture-1 as hidden — got: $(cat "$tray_status_hidden_path")" >&2; exit 1
+  if [ -s "$chevron_status_expanded_path" ]; then
+    cat "$chevron_status_expanded_path"
+  else
+    echo "SMOKE_FAIL: no bar chevron status (expanded) produced" >&2; exit 1
   fi
-  if grep -q '"visible":\[[^]]*"tray-fixture-1"' "$tray_status_hidden_path" \
-    || grep -q '"drawer":\[[^]]*"tray-fixture-1"' "$tray_status_hidden_path"; then
-    echo "SMOKE_FAIL: a hidden tray item is still being rendered — got: $(cat "$tray_status_hidden_path")" >&2; exit 1
+  # Same five names, still governed, none of them hidden any more. An empty
+  # `collapses` here would mean the layout changed under the run rather than
+  # the state.
+  if ! grep -q "\"collapsed\":false,\"collapses\":\[$chevron_hidden_names\],\"hidden\":\[\]" "$chevron_status_expanded_path"; then
+    echo "SMOKE_FAIL: bar chevron expand did not clear the hidden set while keeping the same governed names. Got: $(cat "$chevron_status_expanded_path")" >&2; exit 1
   fi
-  # The item itself must still be registered: hidden is a render decision,
-  # never an unregistration, so the SNI stub count cannot have moved.
-  tray_count_hidden=$(grep -o '"id":' "$tray_status_hidden_path" | wc -l | tr -d ' ')
-  if [ "$tray_count_hidden" != "$tray_count1" ]; then
-    echo "SMOKE_FAIL: hiding an item changed the registered count ($tray_count1 -> $tray_count_hidden) — hide must not unregister" >&2; exit 1
+  if [ -f "$chevron_expanded_path" ]; then
+    echo "SMOKE_CHEVRON_EXPANDED $chevron_expanded_path"
+  else
+    echo "SMOKE_FAIL: no chevron-expanded screenshot produced" >&2; exit 1
   fi
-  if [ ! -s "$tray_manage_path" ]; then
-    echo "SMOKE_FAIL: no tray-manage screenshot produced" >&2; exit 1
-  fi
-  # Named-artifact marker, the same convention SMOKE_TRAY_COLLAPSED uses:
-  # dev/vm.sh pulls every "SMOKE_<NAME> <path>.png" line back to the mac,
-  # and without one the shot only ever exists inside the VM.
-  echo "SMOKE_TRAY_MANAGE $tray_manage_path"
 fi
 
 if $instance_mode; then

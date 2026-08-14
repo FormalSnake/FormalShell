@@ -12,4 +12,3 @@ Panel Panel.qml
 PanelOpenDot PanelOpenDot.qml
 PointerMoveGate PointerMoveGate.qml
 Tooltip Tooltip.qml
-TrayCollapseGate TrayCollapseGate.qml
