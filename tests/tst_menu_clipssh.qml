@@ -48,17 +48,58 @@ TestCase {
         compare(rows[0].label, "box");
         compare(rows[0].desc, "kyan@box.lan");
         compare(rows[0].kind, "action");
-        compare(rows[0].action, "clipssh 'box'");
-        compare(rows[0].notifySummary, "CLIPSSH");
-        compare(rows[0].notifyBody, "box");
+        // Dispatched in-process, never spawned: ClipsshService has to be the
+        // thing that runs clipssh, or nothing can report how it went. No
+        // shell quoting is involved because no shell string is built: the
+        // alias travels as the argument it is.
+        compare(rows[0].action, "@ipc:clipssh.send:box");
+        // The row fires no toast of its own; the service owns every word the
+        // user sees, so a row-level toast would only double the "sending" one.
+        compare(rows[0].notifySummary, undefined);
+        compare(rows[0].notifyBody, undefined);
     }
 
-    // Alias names can carry anything but '='/whitespace, so the spawned
-    // command must single-quote them — an embedded quote goes through the
-    // same '\'' escape clipboardProvider's actions use.
-    function test_rows_quote_alias_name() {
+    function test_rows_pass_an_awkward_alias_through_verbatim() {
         var rows = Providers.clipsshRows([{ name: "it's", target: "u@h" }]);
-        compare(rows[0].action, "clipssh 'it'\\''s'");
+        compare(rows[0].action, "@ipc:clipssh.send:it's");
+    }
+
+    function test_outcome_success_reads_the_remote_path() {
+        // clipssh's own success line, ANSI green included.
+        var outcome = Providers.clipsshOutcome(0,
+            "\u001b[0;32mUploaded: /tmp/clipboard-1755180000.png\u001b[0m\nPath copied to clipboard - paste it directly\n", "");
+        compare(outcome.ok, true);
+        compare(outcome.path, "/tmp/clipboard-1755180000.png");
+    }
+
+    function test_outcome_success_without_a_readable_path() {
+        // Still a completed transfer: the caller says so without inventing
+        // a path it never saw.
+        var outcome = Providers.clipsshOutcome(0, "", "");
+        compare(outcome.ok, true);
+        compare(outcome.path, "");
+    }
+
+    function test_outcome_failure_reads_clipssh_own_reason() {
+        var outcome = Providers.clipsshOutcome(1, "",
+            "\u001b[0;31mError:\u001b[0m No image in clipboard. Take a screenshot first\n");
+        compare(outcome.ok, false);
+        compare(outcome.error, "No image in clipboard. Take a screenshot first");
+    }
+
+    function test_outcome_missing_binary() {
+        compare(Providers.clipsshOutcome(127, "", "sh: line 1: clipssh: command not found\n").error,
+            "clipssh is not installed");
+    }
+
+    function test_outcome_failure_falls_back_to_the_last_line() {
+        var outcome = Providers.clipsshOutcome(255, "", "ssh: connect to host box.lan port 22: No route to host\n");
+        compare(outcome.ok, false);
+        compare(outcome.error, "ssh: connect to host box.lan port 22: No route to host");
+    }
+
+    function test_outcome_failure_with_nothing_to_go_on() {
+        compare(Providers.clipsshOutcome(3, "", "").error, "clipssh exited with code 3");
     }
 
     function test_rows_empty_is_note() {

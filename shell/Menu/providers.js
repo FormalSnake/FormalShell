@@ -429,15 +429,42 @@ function clipsshAliases(text) {
     return out;
 }
 
-// Alias rows for the clipssh route: Enter spawns `clipssh <name>` through
-// the normal activation path — clipssh grabs the clipboard image, scp's it
-// to the alias's host, and wl-copy's the remote path back, which
-// ClipboardService captures like any other copy, so the new clipboard
-// entry IS the success feedback. The scp can take seconds, so the row also
-// fires the activation toast (nixRows' notifySummary idiom) the moment
-// Enter lands. Names go through _shq: clipssh bans `=`/whitespace in them
-// but nothing else. Empty store renders one dim note row whose desc is the
-// exact add command, not a bare shrug.
+// clipssh's own output contract, read off its script (v1.0.0, 2026-08-14):
+// a completed transfer exits 0 and prints "Uploaded: <remote path>", every
+// refusal exits non-zero and prints "Error: <reason>" on stderr, and both
+// lines are wrapped in ANSI color, so the runs are stripped before anything
+// is read out of them. 127 is the shell's own answer for a clipssh that
+// isn't installed, which is worth saying plainly rather than reporting as an
+// empty failure.
+//
+// ClipsshService turns this into what the user sees; the only thing decided
+// here is what actually happened.
+function clipsshOutcome(exitCode, stdout, stderr) {
+    var out = String(stdout || "").replace(/\u001b\[[0-9;]*m/g, "");
+    var err = String(stderr || "").replace(/\u001b\[[0-9;]*m/g, "");
+    if (exitCode === 0) {
+        var uploaded = out.match(/^\s*Uploaded:\s*(.+?)\s*$/m);
+        return { ok: true, path: uploaded ? uploaded[1] : "" };
+    }
+    if (exitCode === 127)
+        return { ok: false, error: "clipssh is not installed" };
+    var reason = err.match(/^\s*Error:\s*(.+?)\s*$/m);
+    if (reason)
+        return { ok: false, error: reason[1] };
+    // No line in clipssh's own shape: fall back to whatever it did say, and
+    // only then to the bare code, so a failure never reports as nothing.
+    var lines = err.split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l !== ""; });
+    return { ok: false, error: lines.length > 0 ? lines[lines.length - 1] : "clipssh exited with code " + exitCode };
+}
+
+// Alias rows for the clipssh route: Enter hands the alias to ClipsshService
+// (`@ipc:` dispatch, so the shell runs clipssh itself rather than spawning
+// it through the compositor and losing sight of it). clipssh reads the
+// clipboard image, pipes it over ssh and wl-copy's the remote path back,
+// which takes as long as the link does. The service owns saying so, both
+// while it is in flight and when it lands, so these rows carry no toast of
+// their own. Empty store renders one dim note row whose desc is the exact
+// add command, not a bare shrug.
 function clipsshRows(aliases) {
     if (!aliases || aliases.length === 0) {
         return [{
@@ -463,9 +490,7 @@ function clipsshRows(aliases) {
             desc: a.target,
             aliases: [],
             kind: "action",
-            action: "clipssh " + _shq(a.name),
-            notifySummary: "CLIPSSH",
-            notifyBody: a.name,
+            action: "@ipc:clipssh.send:" + a.name,
             childIds: []
         };
     });

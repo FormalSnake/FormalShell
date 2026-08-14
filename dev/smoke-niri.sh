@@ -299,6 +299,20 @@
 # screenshot shows the provider's rows rendered as real menu cells — the
 # freshly-captured image now newest, so its thumbnail row is the one the
 # shot proves — left open through smoke.png/SMOKE_OK same as --panel.
+# With --clipssh, writes a two-alias ~/.clipssh/aliases into the isolated
+# HOME and drives the menu's clipssh route over `menu activate` (the rig's
+# Enter stand-in) against a PATH-shimmed clipssh speaking the real one's
+# output contract: `box` takes six seconds and succeeds, `nohost` fails at
+# once. Four frames off one timeline — clipssh-route.png (both rows),
+# clipssh-sending.png (the transfer in flight: the bar's own indicator cell
+# plus the SENDING toast, which is the state that had no feedback at all
+# before), clipssh-copied.png (COPIED, carrying the remote path clipssh
+# printed), clipssh-failed.png (a full-bleed urgent card carrying clipssh's
+# own Error line). The shim stands in for the real binary because what has
+# to be proven here is the shell's own path (row -> `@ipc:clipssh.send:` ->
+# ClipsshService -> Process -> exit code -> toast + indicator), not whether
+# the rig can reach an ssh host; real transfers are host-trial territory,
+# same line --panel github's `gh` shim draws.
 # With --tray, launches six dev/sni-stub.py processes (a minimal Python/GLib
 # StatusNotifierItem producer — see its own header comment) that each
 # register a real item on the isolated session bus, giving
@@ -676,6 +690,7 @@ osd_mode=false
 panel_mode=false
 panel_name=""
 clipboard_mode=false
+clipssh_mode=false
 wifi_mode=false
 media_mode=false
 lock_mode=false
@@ -714,6 +729,7 @@ while [ $# -gt 0 ]; do
     --osd) osd_mode=true; shift ;;
     --panel) panel_mode=true; panel_name="$2"; shift 2 ;;
     --clipboard) clipboard_mode=true; shift ;;
+    --clipssh) clipssh_mode=true; shift ;;
     --wifi) wifi_mode=true; shift ;;
     --media) media_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
@@ -757,7 +773,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
@@ -1217,6 +1233,10 @@ dump_path="$shot_dir/dump.json"
 status_path="$shot_dir/status.json"
 wallpaper_get_path="$shot_dir/wallpaper-get.txt"
 wallpaper_solid_path="$shot_dir/wallpaper-solid.png"
+clipssh_route_path="$shot_dir/clipssh-route.png"
+clipssh_sending_path="$shot_dir/clipssh-sending.png"
+clipssh_copied_path="$shot_dir/clipssh-copied.png"
+clipssh_failed_path="$shot_dir/clipssh-failed.png"
 theme_dark_png="$shot_dir/theme-dark.png"
 theme_light_png="$shot_dir/theme-light.png"
 theme_toggle_status_path="$shot_dir/theme-toggle-status.json"
@@ -1471,6 +1491,14 @@ cfg=$(mktemp -d)/config.kdl
 # Isolated HOME for the nested niri process and everything it spawns — see
 # the host-session safety note at the top of this file.
 iso_home=$(mktemp -d)
+
+# clipssh's own alias store, in the isolated HOME so the route's rows are
+# this run's two and not whatever the host has saved. `nohost` is the row
+# whose transfer fails; the shim above keys its failure off that name.
+if $clipssh_mode; then
+  mkdir -p "$iso_home/.clipssh"
+  printf '%s\n' 'box=test@10.255.255.7' 'nohost=test@10.255.255.1' > "$iso_home/.clipssh/aliases"
+fi
 
 # A deterministic fixture .desktop entry — DesktopEntries scans
 # $XDG_DATA_HOME/applications, which is isolated below, so without this the
@@ -1803,6 +1831,33 @@ fi
 exit 1
 EOF
   chmod +x "$gh_shim_dir/gh"
+fi
+
+# PATH-shimmed clipssh (same hermetic-producer idea as the nix/gh shims
+# above). clipssh itself is a 200-line bash wrapper around ssh, so running
+# the real one here would prove nothing about this shell and everything
+# about whether the rig can reach an ssh host: what has to be exercised is
+# the shell's own path, menu row -> `@ipc:clipssh.send:` -> ClipsshService
+# -> Process -> exit code -> toast, plus the indicator cell that is up for
+# exactly as long as the process runs. So the shim speaks clipssh's own
+# output contract (its bin/clipssh v1.0.0: "Uploaded: <path>" on stdout at
+# exit 0, "Error: <reason>" on stderr otherwise, both ANSI-colored) and
+# takes 6 seconds over the success case so the in-flight state is a thing a
+# screenshot can catch.
+if $clipssh_mode; then
+  clipssh_shim_dir="$shot_dir/clipssh-shim"
+  mkdir -p "$clipssh_shim_dir"
+  cat > "$clipssh_shim_dir/clipssh" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = "nohost" ]; then
+  printf '\033[0;31mError:\033[0m Failed to upload to test@10.255.255.1\n' >&2
+  exit 1
+fi
+sleep 6
+printf '\033[0;32mUploaded: /tmp/clipboard-1755180000.png\033[0m\n'
+printf 'Path copied to clipboard - paste it directly\n'
+EOF
+  chmod +x "$clipssh_shim_dir/clipssh"
 fi
 
 if $picker_mode; then
@@ -2145,6 +2200,28 @@ fi
 # entirely. `menu_finish_script` runs after the screenshot (never before:
 # closing the surface would leave nothing to screenshot), cancelling the
 # still-pending select and reading back its {cancelled:true} write.
+# Drives the clipssh route the way a user does, over `menu activate` (the
+# rig's stand-in for Enter, same division PickerIpc.choose draws): summon the
+# route, activate the row that succeeds, then the row that fails. The two
+# transfers are deliberately sequential rather than overlapping — the service
+# refuses a second transfer while one is in flight, so an overlap would be
+# testing the refusal rather than the failure path.
+if $clipssh_mode; then
+  clipssh_drive_script="$shot_dir/clipssh-drive.sh"
+  cat > "$clipssh_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call menu summon clipssh
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call menu activate 0
+sleep 12
+"$qs_bin" ipc -p "$shell_path" call menu summon clipssh
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call menu activate 1
+EOF
+  chmod +x "$clipssh_drive_script"
+fi
+
 if $menu_mode; then
   menu_open_script="$shot_dir/menu-open.sh"
   cat > "$menu_open_script" <<EOF
@@ -3613,6 +3690,9 @@ fi
   if $bar_layout_mode || $panel_github_mode; then
     shim_path_prefix="$gh_shim_dir:$shim_path_prefix"
   fi
+  if $clipssh_mode; then
+    shim_path_prefix="$clipssh_shim_dir:$shim_path_prefix"
+  fi
   if $instance_mode; then
     # Captures the primary instance's own stdout/stderr so InstanceLock.qml's
     # "being replaced" log line is real evidence below, not inferred from the
@@ -3640,6 +3720,20 @@ fi
   fi
   if $dump_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && '$qs_bin' ipc -p '$shell_path' call debug dump > $dump_path 2>&1\""
+  fi
+  if $clipssh_mode; then
+    echo "spawn-at-startup \"bash\" \"$clipssh_drive_script\""
+    # Four frames off one timeline: the route's own rows, the transfer in
+    # flight (the point of the whole mode: indicator cell up in the bar,
+    # SENDING toast beside it), the same transfer landed, and the failure.
+    # The in-flight frame sits mid-way through the shim's six seconds, the
+    # landed one a second after it exits, and the failure two seconds after
+    # its own activation, which is a `qs ipc` spawn on llvmpipe away from
+    # instant.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 4 && niri msg action screenshot-screen --path $clipssh_route_path\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 8 && niri msg action screenshot-screen --path $clipssh_sending_path\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 12 && niri msg action screenshot-screen --path $clipssh_copied_path\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 21 && niri msg action screenshot-screen --path $clipssh_failed_path\""
   fi
   if $wallpaper_mode; then
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp_path'\""
@@ -3878,7 +3972,14 @@ fi
   # the OSD's auto-hide window; every other mode keeps the original 8s
   # budget.
   screenshot_delay=8
-  if $center_mode; then
+  if $clipssh_mode; then
+    # clipssh-drive.sh's own last step lands at 19s (3+2 to summon and run
+    # the six-second success case, 12 to clear it, 2+2 for the failure),
+    # and the failure frame is taken a beat after it. This run's own
+    # smoke.png/SMOKE_OK comes after all four, showing the session with
+    # nothing in flight and the bar's indicator row gone again.
+    screenshot_delay=22
+  elif $center_mode; then
     screenshot_delay=15
   elif $capture_mode; then
     # capture-drive.sh's own worst case: 5+2+1+1 to open and cycle the
@@ -6121,6 +6222,18 @@ if $center_mode; then
   if ! grep -q '"centerOpen":false' "$center_status_closed_path"; then
     echo "SMOKE_FAIL: second showHistory did not close the center: $(cat "$center_status_closed_path")" >&2; exit 1
   fi
+fi
+
+if $clipssh_mode; then
+  for f in "$clipssh_route_path" "$clipssh_sending_path" "$clipssh_copied_path" "$clipssh_failed_path"; do
+    if [ ! -f "$f" ]; then
+      echo "SMOKE_FAIL: no clipssh screenshot produced at $f" >&2; exit 1
+    fi
+  done
+  echo "SMOKE_CLIPSSH_ROUTE $clipssh_route_path"
+  echo "SMOKE_CLIPSSH_SENDING $clipssh_sending_path"
+  echo "SMOKE_CLIPSSH_COPIED $clipssh_copied_path"
+  echo "SMOKE_CLIPSSH_FAILED $clipssh_failed_path"
 fi
 
 if $osd_mode; then

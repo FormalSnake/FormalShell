@@ -22,16 +22,18 @@ import "../../../Capture/model.js" as Capture
 // Cell, shown only while its condition holds; the whole row disappears
 // when none does — never an empty box.
 //
-// Two more cells joined the row and both carry more weight than a passive
+// Three more cells joined the row and all carry more weight than a passive
 // session flag, so they lead it, loudest first: a live screen recording
 // (M22, the only urgent cell here: a recording is the active thing on
 // screen, so it takes the full-bleed urgent fill; Cell.qml already excludes
 // an urgent cell from the hover-tint path, so the fill holds under the
-// pointer) and a pending reminder (countdown in the cell, message in the
-// tooltip; DESIGN.md §2 item 5 names countdown as a numeric display that
-// must not jitter, which only means anything if it is on screen). The
-// recording cell's own elapsed clock stays in its tooltip: a per-second
-// label on a glyph-only cell would relayout the bar every tick.
+// pointer), a clipssh transfer in flight (ClipsshService, whose whole point
+// is that an ssh takes as long as it takes), and a pending reminder
+// (countdown in the cell, message in the tooltip; DESIGN.md §2 item 5 names
+// countdown as a numeric display that must not jitter, which only means
+// anything if it is on screen). The recording cell's own elapsed clock stays
+// in its tooltip: a per-second label on a glyph-only cell would relayout the
+// bar every tick.
 //
 // Glyph codepoints taken from the pinned nerd-fonts-jetbrains-mono cmap
 // (nix/testvm.nix) by reading the font's own format-12 subtable, not
@@ -56,12 +58,13 @@ Row {
     // Live bindings on two more lazily-constructed singletons, same
     // construction-site mechanism the header documents for NightLightService.
     readonly property bool _recordingActive: RecordingService.active
+    readonly property bool _clipsshSending: ClipsshService.busy
     readonly property bool _reminderPending: ReminderService.count > 0
     // Read by Bar.qml's regionDelegate instead of `visible` directly — see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
-    readonly property bool shown: root._recordingActive || root._reminderPending || root._stayAwakeActive || root._nightLightActive
+    readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._stayAwakeActive || root._nightLightActive
 
     spacing: Theme.space.sm
     visible: root.shown
@@ -72,7 +75,6 @@ Row {
         visible: root._recordingActive
         standalone: true
         urgent: true
-        hovered: recordingArea.containsMouse
         tooltipText: "RECORDING " + Capture.elapsedLabel(RecordingService.elapsedMs)
 
         Text {
@@ -83,12 +85,34 @@ Row {
             font.pixelSize: Theme.fontSize.body
         }
 
-        MouseArea {
-            id: recordingArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: RecordingService.stop()
+        interactive: true
+        onClicked: RecordingService.stop()
+    }
+
+    // A clipssh transfer in flight (ClipsshService), up for as long as the
+    // ssh takes. The toast that fires when the transfer lands expires in
+    // seconds, so it can only answer "did it land", never "is it still
+    // going"; this cell is the second half of that. No click action: clipssh
+    // has no cancel, and killing the ssh mid-pipe would leave a truncated
+    // file on the far end.
+    Cell {
+        id: clipsshCell
+        height: root.height
+        visible: root._clipsshSending
+        standalone: true
+        // The alias is the user's own word for a host, so it goes through
+        // verbatim, same as the reminder message below.
+        tooltipVerbatim: true
+        tooltipText: ClipsshService.busy ? "SENDING CLIPBOARD IMAGE TO " + ClipsshService.target : ""
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            // md-console_network U+F08A9, the same glyph default-menu.jsonc
+            // already pins for the clipssh route itself.
+            text: "󰢩"
+            color: clipsshCell.foreground
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize.body
         }
     }
 
@@ -97,7 +121,6 @@ Row {
         height: root.height
         visible: root._reminderPending
         standalone: true
-        hovered: reminderArea.containsMouse
         // The message is the user's own typed words, so it goes through
         // verbatim rather than Tooltip's uppercasing (Tray.qml sets the same
         // flag for foreign strings).
@@ -127,13 +150,8 @@ Row {
 
         // Clearing deliberately lives in the menu and `reminder clear`, not
         // on an 18px cell with no confirm.
-        MouseArea {
-            id: reminderArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: ReminderService.showSummary()
-        }
+        interactive: true
+        onClicked: ReminderService.showSummary()
     }
 
     Cell {
@@ -147,7 +165,6 @@ Row {
         height: root.height
         visible: root._stayAwakeActive
         standalone: true
-        hovered: stayAwakeArea.containsMouse
         // This cell and the night-light one below say nothing but their
         // glyph, and both appear out of nowhere the moment their state turns
         // on, exactly the case a tooltip earns its place on. Both read "ON"
@@ -162,13 +179,8 @@ Row {
             font.pixelSize: Theme.fontSize.body
         }
 
-        MouseArea {
-            id: stayAwakeArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: IdleService.toggleStayAwake()
-        }
+        interactive: true
+        onClicked: IdleService.toggleStayAwake()
     }
 
     Cell {
@@ -176,7 +188,6 @@ Row {
         height: root.height
         visible: root._nightLightActive
         standalone: true
-        hovered: nightLightArea.containsMouse
         tooltipText: "NIGHT LIGHT ON"
 
         Text {
@@ -192,11 +203,7 @@ Row {
         // leaves the cursor alone; all it does is give the tooltip above
         // something to trigger on, and pick up the bar's usual hover
         // inversion while it's there.
-        MouseArea {
-            id: nightLightArea
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.NoButton
-        }
+        interactive: true
+        acceptedButtons: Qt.NoButton
     }
 }

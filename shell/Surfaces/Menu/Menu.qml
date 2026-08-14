@@ -1281,6 +1281,13 @@ PanelWindow {
     }
 
     function _dispatchInternal(name) {
+        // The one `@ipc:` name that carries an argument (`clipssh.send:<alias>`):
+        // the alias is per-row data, and the alternative was a shell command
+        // the shell could not watch (see ClipsshService's header).
+        if (name.indexOf("clipssh.send:") === 0) {
+            ClipsshService.send(name.slice("clipssh.send:".length));
+            return;
+        }
         switch (name) {
         case "theme.toggleMode":
             Core.State.toggleMode();
@@ -1638,7 +1645,6 @@ PanelWindow {
 
                     width: variantRow.width / 2
                     selected: root._pickerVariant === variantCell.modelData.variant
-                    hovered: variantMouse.containsMouse
 
                     MetaLabel {
                         anchors.centerIn: parent
@@ -1646,13 +1652,8 @@ PanelWindow {
                         color: variantCell.foreground
                     }
 
-                    MouseArea {
-                        id: variantMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.setPickerVariant(variantCell.modelData.variant)
-                    }
+                    interactive: true
+                    onClicked: root.setPickerVariant(variantCell.modelData.variant)
                 }
             }
         }
@@ -1727,7 +1728,6 @@ PanelWindow {
                 width: gridView.cellWidth
                 height: gridView.cellHeight
                 selected: imageCell.index === root._cursorIndex
-                hovered: imageHover.containsMouse
 
                 // Decode capped at the cell's own on-screen size (M16 Task
                 // 12): without this, a 6000×4000 source decodes at full
@@ -1753,20 +1753,15 @@ PanelWindow {
                     sourceSize.height: imageCell.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
                 }
 
-                MouseArea {
-                    id: imageHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    // Same gate as the row list: filtering re-renders cells
-                    // under a parked pointer, and Qt delivers that as a
-                    // hover move indistinguishable from a real one.
-                    onPositionChanged: event => {
-                        if (pointerGate.moved(imageHover, event.x, event.y))
-                            root._setCursor(imageCell.index);
-                    }
-                    onClicked: root._activateFromPointer(imageCell.index)
+                interactive: true
+                // Same gate as the row list: filtering re-renders cells
+                // under a parked pointer, and Qt delivers that as a
+                // hover move indistinguishable from a real one.
+                onPointerMoved: (x, y) => {
+                    if (pointerGate.moved(imageCell, x, y))
+                        root._setCursor(imageCell.index);
                 }
+                onClicked: root._activateFromPointer(imageCell.index)
             }
         }
 
