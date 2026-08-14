@@ -21,6 +21,12 @@ Panel {
     // `96`s below).
     readonly property real _artSlotSize: 96
 
+    // Plenty of players publish no `mpris:artUrl` at all (browsers, most
+    // notably), so the slot collapses out of the row rather than reserving
+    // 96px of blank next to the title.
+    readonly property bool _hasArt: MediaService.artUrl !== ""
+        || AppleMusicArtService.animatedArtUrl !== ""
+
     Cell {
         visible: !MediaService.available
         width: parent.width
@@ -46,6 +52,7 @@ Panel {
 
             Item {
                 id: artSlot
+                visible: root._hasArt
                 width: root._artSlotSize
                 height: root._artSlotSize
                 anchors.verticalCenter: parent.verticalCenter
@@ -81,7 +88,9 @@ Panel {
             }
 
             Column {
-                width: infoRow.width - artSlot.width - infoRow.spacing
+                // Row drops an invisible child's spacing too, so the text
+                // takes the whole cell when the art slot is gone.
+                width: root._hasArt ? infoRow.width - artSlot.width - infoRow.spacing : infoRow.width
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space.xxs
 

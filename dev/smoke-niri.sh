@@ -1916,7 +1916,16 @@ fi
 # Six saturated, distinct-hue stripes, not one flat color: the retro
 # dither needs real color variety in the source to prove hue survives the
 # posterize pass.
-if $media_mode || $visualizer_mode; then
+#
+# MEDIA_NO_ART=1 mutes the embedded cover for a single run, reproducing the
+# artless MPRIS export browsers publish (title/artist, no `mpris:artUrl`);
+# MediaPanel must then collapse the art slot out of its row instead of
+# reserving a blank square beside the title. --visualizer keeps its cover
+# either way, since its own check is the dither.
+media_art=true
+if [ "${MEDIA_NO_ART:-}" = "1" ]; then media_art=false; fi
+
+if $visualizer_mode || { $media_mode && $media_art; }; then
   media_art_path="$shot_dir/smoke-art.png"
   $convert_bin -size 64x64 "xc:#E03131" -size 64x64 "xc:#F08C00" -size 64x64 "xc:#FFD700" \
     -size 64x64 "xc:#2F9E44" -size 64x64 "xc:#1971C2" -size 64x64 "xc:#9C36B5" \
@@ -1927,7 +1936,7 @@ if $media_mode || $screensaver_mode; then
   media_track_path="$shot_dir/smoke-track.flac"
   media_track_title="FormalShell Smoke Track"
   media_track_artist="FormalShell Test Artist"
-  if $media_mode; then
+  if $media_mode && $media_art; then
     "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -i "$media_art_path" \
       -map 0:a -map 1:0 -t 20 \
       -metadata "title=$media_track_title" -metadata "artist=$media_track_artist" \
@@ -1949,10 +1958,16 @@ if $media_mode; then
   # dither at all.
   media_track_long_path="$shot_dir/smoke-track-long.flac"
   media_track_title_long="FormalShell Marquee Autoscroll Verification Overflow Track"
-  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -i "$media_art_path" \
-    -map 0:a -map 1:0 -t 20 \
-    -metadata "title=$media_track_title_long" -metadata "artist=$media_track_artist" \
-    -c:a flac -c:v png -disposition:v attached_pic -y "$media_track_long_path"
+  if $media_art; then
+    "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -i "$media_art_path" \
+      -map 0:a -map 1:0 -t 20 \
+      -metadata "title=$media_track_title_long" -metadata "artist=$media_track_artist" \
+      -c:a flac -c:v png -disposition:v attached_pic -y "$media_track_long_path"
+  else
+    "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 20 \
+      -metadata "title=$media_track_title_long" -metadata "artist=$media_track_artist" \
+      -c:a flac -y "$media_track_long_path"
+  fi
 fi
 
 if $media_mode; then
