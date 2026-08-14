@@ -37,4 +37,30 @@ TestCase {
         compare(M.extractSection(t, "templates").indexOf("b = 2") >= 0, true);
         compare(M.extractSection("", "config"), "");
     }
+
+    // Verbatim stderr from `matugen -d image ... --dry-run` (matugen 4.1.0,
+    // captured on g815 against dark/ARC - Towers.PNG), ANSI runs and all.
+    readonly property string _probeStderr:
+        "[2026-08-14T13:38:49.145998Z INFO  matugen::color::color] Opening image in dark/ARC - Towers.PNG\n" +
+        "[2026-08-14T13:38:49.596348Z DEBUG matugen::color::color] Ranked colors:\n" +
+        "[2026-08-14T13:38:49.596356Z DEBUG matugen::color::color] 0: #648db8 [37;48;2;100;141;184m  [0m\n" +
+        "[2026-08-14T13:38:49.596357Z DEBUG matugen::color::color] 1: #908a61 [37;48;2;144;138;97m  [0m\n" +
+        "[2026-08-14T13:38:49.596361Z DEBUG matugen::color::color] Multiple source colors found, attempting to pick a color by user preference \"Saturation\"\n" +
+        "[2026-08-14T13:38:49.596362Z DEBUG matugen::color::color] Chose 1\n"
+
+    function test_ranked_source_color() {
+        compare(M.rankedSourceColor(_probeStderr), "#648db8");
+    }
+
+    function test_ranked_source_color_absent() {
+        // No ranking to read means the caller falls back to a --prefer run,
+        // so every one of these has to answer null rather than guess. The
+        // last two are the ones a looser match would get wrong: a timestamp
+        // carrying "0:", and a ranking that starts somewhere other than 0.
+        compare(M.rankedSourceColor(""), null);
+        compare(M.rankedSourceColor(null), null);
+        compare(M.rankedSourceColor("Ranked colors:\n"), null);
+        compare(M.rankedSourceColor("[2026-08-14T10:00:00.1Z INFO x] Opening image\n"), null);
+        compare(M.rankedSourceColor("[x] Ranked colors:\n[x] 1: #908a61\n[x] 0: #648db8\n"), null);
+    }
 }

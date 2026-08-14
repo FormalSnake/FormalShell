@@ -4,6 +4,37 @@
 // user [config] verbatim, then the shell's own template blocks, then the
 // user's [templates.*] section verbatim, then any drop-in fragments.
 
+// Rank 0 of matugen's own candidate ranking, read off a `-d` run's stderr:
+//
+//   ... matugen::color::color] Ranked colors:
+//   ... matugen::color::color] 0: #648db8
+//   ... matugen::color::color] 1: #908a61
+//
+// The ranking is material's Score order, so rank 0 is the image's own color;
+// ThemeEngine's header covers why none of the --prefer scalars substitutes
+// for it. Returns null when the ranking isn't there to read (a matugen whose
+// debug output moved, a run that died before extraction), which the caller
+// answers with a plain --prefer run rather than by skipping the retheme.
+function rankedSourceColor(text) {
+    if (!text)
+        return null;
+    var lines = text.split("\n");
+    var inRanking = false;
+    for (var i = 0; i < lines.length; i++) {
+        if (!inRanking) {
+            inRanking = lines[i].indexOf("Ranked colors:") !== -1;
+            continue;
+        }
+        // Anchored on the log prefix's own closing bracket so a timestamp can
+        // never be read as a rank.
+        var entry = lines[i].match(/\]\s*(\d+):\s*(#[0-9a-fA-F]{6})/);
+        if (!entry)
+            continue;
+        return entry[1] === "0" ? entry[2].toLowerCase() : null;
+    }
+    return null;
+}
+
 function extractSection(text, name) {
     if (!text) return "";
     var headerRe = new RegExp("^\\[" + name + "(\\.|\\])");

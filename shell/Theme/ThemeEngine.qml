@@ -42,21 +42,38 @@ import "palette.js" as Palette
 // reproducing the wedge with a throwaway probe script before switching to
 // Process-based writes.
 //
-// --prefer is required, not cosmetic: matugen prompts on an ambiguous source
-// color, but Process gives it no TTY/stdin to prompt on, so an unprefixed run
-// against a near-solid wallpaper — a very plausible choice for this shell's
-// brutalist aesthetic — fails outright with "no preference was inputted, and
-// a terminal was not detected" (verified against a solid-swatch PNG).
-// The value is a FIXED "lightness", never matched to State.mode: --prefer
-// picks WHICH extracted candidate becomes the scheme's seed color ("when
-// multiple colors can be extracted from an image, this will decide which to
-// pick" — matugen's own help), while -m alone tones the scheme. The
-// original mode-matched darkness/lightness pair made the same wallpaper
-// flip hue family across a mode toggle (verified 2026-08-09 against a
-// green-foliage wallpaper: darkness seeded its blue candidate, lightness
-// its green one, in BOTH modes), so one constant keeps the palette a
-// function of the wallpaper alone and still answers the prompt that would
-// otherwise hang a TTY-less run.
+// The source color is pinned to matugen's own rank 0, not left to --prefer.
+//
+// Some source-color decision has to be forced: matugen prompts when an image
+// yields more than one candidate, and Process gives it no TTY/stdin to prompt
+// on, so an unforced run fails outright with "no preference was inputted, and
+// a terminal was not detected" (verified against a solid-swatch PNG). It is
+// also the common case, not an edge one: 50 of the owner's 57 wallpapers on
+// g815 produce multiple candidates.
+//
+// Every --prefer value is a scalar tiebreak over those candidates (the
+// lightest, the most saturated, ...) and none of them asks what the wallpaper
+// actually looks like. `lightness` reads a small warm highlight as the
+// image's color: measured across those 57 wallpapers (2026-08-14) its pick
+// sat a mean 50 degrees of hue away from the image's own saturation-weighted
+// dominant hue, 20 of them more than 45 degrees off. A blue tower shot seeds
+// a tan scheme under it, a navy interior seeds gold.
+//
+// matugen already ranks candidates by material's own Score and prints that
+// ranking under -d, and rank 0 is the image's color by material's reckoning
+// (mean 14 degrees off, 5 outliers, over the same corpus). So a retheme runs
+// matugen twice: a --dry-run probe reads the ranking off stderr, then the
+// real run pins the source to rank 0 with `--prefer closest-to-fallback
+// --fallback-color <rank0>`, which resolves to that exact candidate since its
+// distance to itself is zero. The real run stays `matugen image`, so a user
+// template reading image-derived variables still gets them. A probe that
+// finds no ranking falls back to `--prefer saturation` (the least-bad scalar
+// on the same corpus: mean 42 degrees, 15 outliers) and warns.
+//
+// Whichever path runs, the choice is a function of the wallpaper alone, never
+// of State.mode: a mode-matched darkness/lightness pair used to flip the same
+// wallpaper's hue family across a mode toggle (verified 2026-08-09 against a
+// green-foliage wallpaper), while -m alone tones the scheme.
 Singleton {
     id: root
 
@@ -189,12 +206,34 @@ Singleton {
                         root._finish();
                         return;
                     }
-                    matugenProc.command = ["matugen", "image", Core.State.wallpaper, "-m", Core.State.mode,
-                        "-c", root._mergedConfigPath,
-                        "--prefer", "lightness"];
-                    matugenProc.running = true;
+                    // Extraction only: --dry-run writes no template and runs
+                    // no command, and -d is what prints the ranking. -q would
+                    // silence that ranking, so it is deliberately absent.
+                    sourceProbeProc.command = ["matugen", "-d", "image", Core.State.wallpaper, "--dry-run",
+                        "--prefer", "saturation"];
+                    sourceProbeProc.running = true;
                 });
             }
+        }
+    }
+
+    Process {
+        id: sourceProbeProc
+
+        stderr: StdioCollector {
+            id: sourceProbeErr
+        }
+
+        onExited: exitCode => {
+            var source = exitCode === 0 ? Matugen.rankedSourceColor(sourceProbeErr.text) : null;
+            if (!source)
+                console.warn("ThemeEngine: no source-color ranking from matugen (code", exitCode + "), falling back to --prefer saturation");
+            var pick = source
+                ? ["--prefer", "closest-to-fallback", "--fallback-color", source]
+                : ["--prefer", "saturation"];
+            matugenProc.command = ["matugen", "image", Core.State.wallpaper, "-m", Core.State.mode,
+                "-c", root._mergedConfigPath].concat(pick);
+            matugenProc.running = true;
         }
     }
 
