@@ -84,10 +84,13 @@ import QtQuick
 // two separate keys.
 // "chevron" (M24) is a bar.layout entry name like any other builtin, absent
 // from the default arrangement. Its POSITION is the whole configuration:
-// everything after it in its own region collapses behind it, and moving it
-// is the only control there is: no per-widget key says whether a widget
-// hides. One chevron per region; a second, or one placed last with nothing
-// after it, is dropped with a warning (shell/Bar/layout.js). Whether a
+// everything on its governed side of its own region collapses behind it, and
+// moving it is the only control there is: no per-widget key says whether a
+// widget hides. The governed side runs inward from the region's anchored
+// edge (M25), so a right-region chevron collapses what precedes it and a
+// left or center one collapses what follows. One chevron per region; a
+// second, or one with nothing at all on its governed side, is dropped with a
+// warning (shell/Bar/layout.js). Whether a
 // region is currently collapsed is runtime state, not settings: it lives in
 // state.json's `barCollapsed`, defaults collapsed, and is written by the
 // cell's own click or by `bar chevron toggle|expand|collapse [region]`.

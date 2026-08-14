@@ -34,10 +34,13 @@ import "../../Bar/layout.js" as Layout
 // dangling module/plugin reference is dropped with a console warning, never
 // a crash.
 // One of those names, "chevron" (M24, ChevronWidget.qml), is a collapse
-// boundary rather than a readout: every entry after it in the same region
-// hides behind it, which layout.js hands over as a per-entry `collapsible`
-// flag and the region delegate below gates on. Its position in bar.layout is
-// the whole of its configuration.
+// boundary rather than a readout: every entry on its governed side of the
+// same region hides behind it, which layout.js hands over as a per-entry
+// `collapsible` flag and the region delegate below gates on. Its position in
+// bar.layout is the whole of its configuration. Which side it governs is the
+// side away from the region's own anchored edge (M25, layout.js's
+// governsBefore), so the reveal grows into empty bar and the chevron itself
+// keeps its x.
 // Every widget cell is a `standalone` Cell (DESIGN.md §3):
 // borderless at rest, hover-cursor fill+border only on
 // mouseover, separated from its neighbor by a small gap plus its own
@@ -322,7 +325,9 @@ PanelWindow {
             // condition a second time under `shown` (Tray/Indicators/
             // Battery/NowPlaying) instead of `visible` itself; a widget with
             // no such property is always shown, so `true` is the safe
-            // fallback rather than ever reading `.visible` here.
+            // fallback rather than ever reading `.visible` here. `shown`
+            // stays the outer term below, so a widget that hides itself stays
+            // hidden whether the region's chevron is open or shut.
             sourceComponent: {
                 switch (entryLoader.modelData.kind) {
                 case "builtin": return bar._builtinComponents[entryLoader.modelData.name];
@@ -330,21 +335,50 @@ PanelWindow {
                 }
                 return entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent;
             }
-            // M24's collapse gate, an extra term on the Loader's OWN visible
+            // M24's collapse gate, driving the Loader's OWN width below
             // rather than a second thing routed through `shown`: `shown` is
             // the widget's statement about itself (a Battery with no battery),
             // and writing into it from here would put two authors on one
             // property. `collapsible` is layout.js's per-entry annotation
-            // (true for every entry after a chevron in the same region), so a
-            // layout with no chevron leaves this term false everywhere and
-            // the binding reads exactly as it did before.
+            // (true for every entry on the governed side of a chevron in the
+            // same region), so a layout with no chevron leaves this term
+            // false everywhere and the width below stays exactly what the
+            // Loader would have sized itself to anyway.
             readonly property bool _collapsedAway: {
                 if (!entryLoader.modelData.collapsible)
                     return false;
                 var stored = Core.State.barCollapsed;
                 return !stored || stored[entryLoader.modelData.region] !== false;
             }
-            visible: !entryLoader._collapsedAway && (entryLoader.item
+
+            // M25: the governed group glides open and shut instead of
+            // appearing in one frame. A collapsed entry animates to width 0,
+            // and `clip` holds the cell's own content inside whatever width
+            // the animation has reached. The Loader resizes its item to the
+            // width it is given, so the cell wipes from its outer edge rather
+            // than redrawing its content at every step.
+            clip: true
+            width: entryLoader.modelData.collapsible
+                ? (entryLoader._collapsedAway ? 0 : entryLoader.implicitWidth)
+                : entryLoader.implicitWidth
+            // Governed entries only. Every other cell keeps the instant width
+            // tracking it has always had, so a title rename or a battery tick
+            // never gains motion it didn't ask for. Theme.motion.standard is
+            // already 0 when motion is disabled (Theme/tokens.js's
+            // motionTokens) and a zero-duration animation lands on the same
+            // end state, so honoring that setting needs no branch here.
+            Behavior on width {
+                enabled: entryLoader.modelData.collapsible
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+            }
+            // Gated on the animated width rather than on `_collapsedAway`:
+            // Row lays out (and spaces) its visible children, so a cell that
+            // went invisible the moment the chevron shut would have nothing
+            // left to animate, while one left visible at width 0 would still
+            // be charged the region's own `spacing`, and six of those is
+            // ~48px of dead bar. Width crossing 0 is the one moment both are
+            // true at once.
+            visible: entryLoader.width > 0 && (entryLoader.item
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
                 : false)
             onLoaded: {

@@ -216,7 +216,7 @@ shell/
                                    own "plugin:<id>" name
   Bar/
     layout.js                     pure JS, .pragma library — resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings.
-                                   Also annotates every entry with its region and a `collapsible` flag (true past a "chevron" in the same region), and drops a chevron that is duplicated or has nothing after it. collapsedNames()/hasChevron() read that back
+                                   Also annotates every entry with its region and a `collapsible` flag (true on the governed side of a "chevron" in the same region, governsBefore() picking that side per region), and drops a chevron that is duplicated or has nothing on that side. collapsedNames()/hasChevron() read that back
     commandOutput.js               pure JS, .pragma library — resolve(exitCode, stdout)/errorState() for CommandModule.qml's Waybar-JSON parsing
   Surfaces/
     Bar/
@@ -814,14 +814,22 @@ shell).
 **Chevron** (`ChevronWidget.qml`, `shell/Ipc/BarIpc.qml`, `Bar/layout.js`):
 macOS Hidden Bar / Bartender as a bar widget. `chevron` is an ordinary
 `bar.layout` name and its position is its entire configuration: `layout.js`
-annotates every later entry in the same region `collapsible: true`, and
-`Bar.qml`'s region delegate ANDs that with `State.barCollapsed[region]` as
-an extra term on the `Loader`'s own `visible`. That last part is not a
+annotates every entry on its governed side of the same region
+`collapsible: true`, and `Bar.qml`'s region delegate ANDs that with
+`State.barCollapsed[region]` to drive the `Loader`'s own width, which is
+what the delegate's `visible` then reads. That last part is not a
 style choice: reading a `Loader`-hosted item's built-in `visible` from
 outside permanently detaches the item's own binding (see `Bar.qml`'s
 delegate comment), which is why widgets expose `shown` and why the gate
 lives on the `Loader` rather than being written into either property.
-Collapsed is the default, per region, in `state.json`.
+The governed side is the one away from the region's anchored edge
+(`layout.js`'s `governsBefore`, M25): a right-region chevron collapses what
+precedes it, so the reveal grows into empty bar and the chevron itself never
+moves. The group's width animates over `Theme.motion.standard`, and the
+delegate's `visible` is gated on that animated width rather than on the
+collapse flag, so a cell only leaves the `Row`'s spacing accounting once it
+has actually reached zero. Collapsed is the default, per region, in
+`state.json`.
 
 **Indicators** (`Indicators.qml`): four glyph cells, each shown only while
 its own condition holds, the whole row hidden when none does. Loudest

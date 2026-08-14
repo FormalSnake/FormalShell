@@ -331,19 +331,24 @@
 # processes are killed by PID (tray-pids.txt, same pattern as --media's mpv)
 # right before niri quits.
 # With --chevron, writes a settings.json fixture putting `chevron` mid
-# right-region (after battery/audio/network, before bluetooth/weather/tray/
-# bell/indicators) and drives the `bar` IPC target across the collapse
-# boundary it creates. `bar chevron status` is dumped collapsed
+# right-region (after bluetooth/weather/tray/bell/indicators, before
+# battery/audio/network) and drives the `bar` IPC target across the collapse
+# boundary it creates. A right-region chevron governs what precedes it (M25),
+# so those five lead the region and the three that follow sit outboard
+# against the screen edge, where the reveal never moves them.
+# `bar chevron status` is dumped collapsed
 # (chevron-status-collapsed.json; collapsed is the shipped default, so this
 # is the state the bar boots into), screenshotted (chevron-collapsed.png),
 # then `bar chevron expand` (the rig's stand-in for a click on the chevron
 # cell, since no synthetic pointer exists here) is called, dumped again
 # (chevron-status-expanded.json) and screenshotted (chevron-expanded.png).
 # Both dumps are asserted, not just captured: the collapsed one must list
-# every name after the chevron under `hidden`, and the expanded one must
+# every governed name under `hidden`, and the expanded one must
 # report the same names still under `collapses` with `hidden` empty. The
 # region is inferred rather than named, which is itself the proof that a
-# single-chevron layout needs no argument.
+# single-chevron layout needs no argument. The two PNGs are asserted to
+# differ, which is the cheapest possible guard against the M24 failure of
+# shipping a correct IPC contract over a bar that never rendered the change.
 # With --picker, generates 20 fixture PNGs (imagemagick, solid colors at
 # 1920x1080 — bigger than the grid cell's decode cap and the VM's own
 # screen, so both actually downscale rather than passing an already-smaller
@@ -1659,12 +1664,15 @@ elif $mic_mode; then
   bar_settings=', "bar": {"layout": {"right": ["microphone", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
 elif $chevron_mode; then
   # M24: the chevron's POSITION is its whole configuration, so the fixture is
-  # today's exact default right region with one name inserted mid-way. That
-  # keeps the collapsed/expanded pair directly comparable to bar-niri.png,
-  # and it means the five names after it (bluetooth, weather, tray, bell,
-  # indicators) are the hidden set the status dumps below assert on, while
-  # the three before it prove the boundary only ever looks forward.
-  bar_settings=', "bar": {"layout": {"right": ["battery", "audio", "network", "chevron", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+  # today's exact default right region with one name inserted mid-way. M25
+  # moved which side of that name collapses: a right-region chevron governs
+  # what PRECEDES it, so the same five names (bluetooth, weather, tray, bell,
+  # indicators) are the hidden set the status dumps below assert on only if
+  # they now lead the region, with battery/audio/network sitting outboard
+  # against the screen edge. Those three are what proves the anchoring: they
+  # and the chevron itself hold their x across the two screenshots, since the
+  # group opens inward into empty bar rather than pushing the edge.
+  bar_settings=', "bar": {"layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "chevron", "battery", "audio", "network"]}}'
 elif $systemupdate_mode; then
   # Naming the widget IS the opt-in to background polling
   # (SystemUpdateWidget's Component.onCompleted flips the panel's
@@ -3608,7 +3616,11 @@ fi
 # fixture above. That IS the claim: adding `chevron` to bar.layout
 # visibly does something on first run. `bar chevron expand` then stands in
 # for a click on the cell, with no region argument, since a layout carrying
-# exactly one chevron is meant to infer it.
+# exactly one chevron is meant to infer it. The reveal animates now (M25,
+# Theme.motion.standard), so the shot after the expand is deliberately three
+# seconds behind it: an order of magnitude past the animation, which is what
+# makes the screenshot a picture of the end state rather than of a frame
+# somewhere inside it.
 if $chevron_mode; then
   chevron_drive_script="$shot_dir/chevron-drive.sh"
   cat > "$chevron_drive_script" <<EOF
@@ -5347,9 +5359,10 @@ if $tray_mode; then
 fi
 
 if $chevron_mode; then
-  # The five names bar_settings above put after the chevron. Order matters:
-  # `collapses` reports them in layout order, so one grep can assert the
-  # whole boundary rather than five independent membership checks.
+  # The five names bar_settings above put before the chevron (M25: a
+  # right-region chevron governs inward, away from the screen edge). Order
+  # matters: `collapses` reports them in layout order, so one grep can assert
+  # the whole boundary rather than five independent membership checks.
   chevron_hidden_names='"bluetooth","weather","tray","bell","indicators"'
   if [ -s "$chevron_status_collapsed_path" ]; then
     cat "$chevron_status_collapsed_path"
@@ -5360,7 +5373,7 @@ if $chevron_mode; then
     echo "SMOKE_FAIL: bar chevron status did not resolve exactly one chevron, in the right region. Got: $(cat "$chevron_status_collapsed_path")" >&2; exit 1
   fi
   if ! grep -q "\"collapses\":\[$chevron_hidden_names\]" "$chevron_status_collapsed_path"; then
-    echo "SMOKE_FAIL: bar chevron status does not govern the five names placed after it. Got: $(cat "$chevron_status_collapsed_path")" >&2; exit 1
+    echo "SMOKE_FAIL: bar chevron status does not govern the five names placed before it. Got: $(cat "$chevron_status_collapsed_path")" >&2; exit 1
   fi
   # The claim the screenshot alone cannot make: collapsed means those exact
   # names are hidden right now, not merely that the chevron knows about them.
@@ -5393,6 +5406,13 @@ if $chevron_mode; then
     echo "SMOKE_CHEVRON_EXPANDED $chevron_expanded_path"
   else
     echo "SMOKE_FAIL: no chevron-expanded screenshot produced" >&2; exit 1
+  fi
+  # The one assertion the status dumps cannot make: something on screen
+  # actually changed. M24 shipped a correct IPC contract over a bar whose
+  # governed cells never moved (the QtQuick `State` collision), and these two
+  # frames were byte-identical the whole time with every dump passing.
+  if cmp -s "$chevron_collapsed_path" "$chevron_expanded_path"; then
+    echo "SMOKE_FAIL: chevron-collapsed and chevron-expanded screenshots are byte-identical: the expand changed the state but rendered nothing" >&2; exit 1
   fi
 fi
 

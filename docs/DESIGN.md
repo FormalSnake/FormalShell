@@ -720,13 +720,22 @@ floats with a margin or fuses to the screen edge.
   ambiguous, and as the one two-line cell it was setting the whole bar's
   height to say so. This bar's one Bartender affordance is a widget rather
   than a tray feature (M24): `chevron` is an ordinary `bar.layout` entry, and
-  everything placed after it in its own region collapses behind it. Its
-  position is the entire configuration, so which cells hide is a question of
-  where the boundary sits, not of a per-widget flag, and moving it one slot
-  changes the answer. Collapsed is the default, persisted per region to
-  `state.json`. One chevron per region, and one with nothing after it hides
-  nothing and is dropped rather than drawn as a control that answers no
-  click. The tray sits under that rule like any other widget, with no drawer,
+  everything placed on its governed side of its own region collapses behind
+  it. Its position is the entire configuration, so which cells hide is a
+  question of where the boundary sits, not of a per-widget flag, and moving
+  it one slot changes the answer. The governed side runs inward, away from the region's
+  own anchored edge (M25): the right region is pinned to the screen edge, so
+  its chevron collapses what *precedes* it and the group opens into empty
+  bar, leaving the chevron and every cell outboard of it at the x they
+  already had. The left region mirrors that; `center` is pinned to nothing
+  and reflows from both ends whichever way it governs, so it keeps the left
+  region's direction. The glyph follows the same rule, always pointing where
+  the group moves on the next click. The reveal animates the governed cells'
+  width over `Theme.motion.standard` (§4) rather than swapping them in one
+  frame, so the group glides rather than snapping. Collapsed is the default,
+  persisted per region to `state.json`. One chevron per region, and one with
+  nothing on its governed side hides nothing and is dropped rather than
+  drawn as a control that answers no click. The tray sits under that rule like any other widget, with no drawer,
   no visible limit and no per-icon buckets of its own: M23 shipped those and
   M24 replaced them, because two chevrons on one bar made the affordance
   ambiguous about what it governed.

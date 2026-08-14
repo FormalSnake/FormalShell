@@ -32,8 +32,9 @@ import qs.Components
 // pinned/drawer/hidden split either (M23's buckets, removed the day after
 // they shipped). Bounding the strip moved up one altitude, to the bar's own
 // chevron widget (ChevronWidget.qml): a user with a large tray puts
-// `chevron` before `tray` in bar.layout and the whole tray collapses behind
-// it along with everything else after that point in the region, which
+// `chevron` on the far side of `tray` from that region's anchored edge
+// (after it in the right region, before it in the other two) and the whole
+// tray collapses behind it along with everything else on that side, which
 // generalizes the protection the 4-item limit gave rather than dropping it.
 // Two chevrons on one bar (this file's own and the bar's) is what made
 // the affordance ambiguous in the first place.

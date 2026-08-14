@@ -7,7 +7,8 @@ import "../Bar/layout.js" as Layout
 // `qs ipc call bar chevronAt <toggle|expand|collapse> <region>`: a spec
 // addendum in the same class as `panel` (CLAUDE.md's own note on that
 // target). The bar chevron (M24, ChevronWidget.qml) collapses everything
-// placed after it in its own region, and its only real input is a click on
+// placed on its governed side of its own region (M25: inward from that
+// region's anchored edge), and its only real input is a click on
 // that cell, which this rig cannot synthesize: no synthetic pointer exists
 // here, only wtype's keyboard events. Without these routes the feature could
 // not be verified headlessly at all, and a compositor keybind would have no

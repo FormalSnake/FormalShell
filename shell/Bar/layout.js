@@ -17,12 +17,15 @@
 // exact arrangement); a region present but empty (`[]`) stays empty.
 
 // "chevron" (M24) is placed like any other builtin, and its POSITION is its
-// entire configuration: every entry after it in the same region is annotated
-// `collapsible: true`, which is what Bar.qml's region delegate gates on. Two
-// rules keep it from being a control that does nothing, both enforced here
-// rather than in the widget: only the first chevron in a region survives,
-// and a chevron with nothing after it is dropped outright. Each drop carries
-// its own warning string, same as an unknown widget name.
+// entire configuration: every entry on its governed side of the same region
+// is annotated `collapsible: true`, which is what Bar.qml's region delegate
+// gates on. Which side that is depends on the region (governsBefore() below),
+// so the group always opens away from the region's anchored edge.
+// Two rules keep the chevron from being a control that does nothing, both
+// enforced here rather than in the widget: only the first chevron in a region
+// survives, and a chevron with nothing on its governed side is dropped
+// outright. Each drop carries its own warning string, same as an unknown
+// widget name.
 //
 // Drop-in plugins (shell/Plugins/manifest.js) are placed by the same
 // mechanism under their own disjoint prefix: a `plugin:<id>` name resolves
@@ -123,11 +126,24 @@ function _isChevron(entry) {
     return entry.kind === "builtin" && entry.name === "chevron";
 }
 
+// Which side of a region's chevron collapses behind it (M25). A region pinned
+// to a screen edge governs inward, away from that edge: the right region is
+// anchored right, so its chevron governs the entries BEFORE it and the cells
+// between it and the edge, the chevron itself included, keep their x when the
+// group opens. `center` is anchored to nothing and reflows from both ends
+// whichever side it governs, so it stays on the left region's "after"
+// direction rather than paying for a mirror that buys it nothing.
+function governsBefore(region) {
+    return region === "right";
+}
+
 // Two passes, in this order, because the second depends on what the first
-// leaves behind: ["clock", "chevron", "chevron"] loses its trailing chevron
-// as a duplicate, which makes the surviving one trailing in turn, and a
-// chevron that collapses nothing is exactly the dead control the rule
-// exists to prevent. Both passes warn per drop.
+// leaves behind: a left region's ["clock", "chevron", "chevron"] loses its
+// trailing chevron as a duplicate, which makes the surviving one trailing in
+// turn, and a chevron that collapses nothing is exactly the dead control the
+// rule exists to prevent. The right region's mirror of that case is
+// ["chevron", "chevron", "clock"], where the survivor ends up first with
+// nothing before it. Both passes warn per drop.
 function _dropDeadChevrons(entries, region, warnings) {
     var deduped = [];
     var seen = false;
@@ -142,9 +158,11 @@ function _dropDeadChevrons(entries, region, warnings) {
         }
         deduped.push(entries[i]);
     }
-    if (deduped.length > 0 && _isChevron(deduped[deduped.length - 1])) {
-        warnings.push("bar.layout." + region + ": chevron has nothing after it");
-        deduped.pop();
+    var before = governsBefore(region);
+    var edge = before ? 0 : deduped.length - 1;
+    if (deduped.length > 0 && _isChevron(deduped[edge])) {
+        warnings.push("bar.layout." + region + ": chevron has nothing " + (before ? "before" : "after") + " it");
+        deduped.splice(edge, 1);
     }
     return deduped;
 }
@@ -154,12 +172,16 @@ function _dropDeadChevrons(entries, region, warnings) {
 // whose collapse state it answers to, without the delegate having to know
 // which Repeater it was instantiated from.
 function _annotate(entries, region) {
-    var collapsible = false;
-    for (var i = 0; i < entries.length; i++) {
-        entries[i].region = region;
-        entries[i].collapsible = collapsible;
+    var before = governsBefore(region);
+    var chevronAt = -1;
+    var i;
+    for (i = 0; i < entries.length && chevronAt < 0; i++) {
         if (_isChevron(entries[i]))
-            collapsible = true;
+            chevronAt = i;
+    }
+    for (i = 0; i < entries.length; i++) {
+        entries[i].region = region;
+        entries[i].collapsible = chevronAt >= 0 && (before ? i < chevronAt : i > chevronAt);
     }
 }
 
@@ -176,7 +198,7 @@ function entryName(entry) {
 
 // The names a region's chevron governs, in layout order. Empty for a region
 // with no chevron; never empty for a region that has one, since a chevron
-// with nothing after it was already dropped above.
+// with nothing on its governed side was already dropped above.
 function collapsedNames(entries) {
     var out = [];
     for (var i = 0; i < entries.length; i++) {
@@ -230,8 +252,10 @@ function resolve(bar, barPlugins) {
     }
 
     // After the auto-append, never inside _resolveRegion: an unnamed plugin
-    // lands past everything bar.layout listed, so a chevron the user wrote
-    // last is only genuinely last once that pass has run.
+    // lands past everything bar.layout listed, so a left or center chevron
+    // the user wrote last is only genuinely last once that pass has run. A
+    // right region's chevron governs the other way and no append can land
+    // before it, so the ordering only ever decides the other two.
     for (i = 0; i < REGIONS.length; i++) {
         region = REGIONS[i];
         regions[region] = _dropDeadChevrons(regions[region], region, warnings);

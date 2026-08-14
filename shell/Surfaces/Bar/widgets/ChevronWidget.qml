@@ -15,11 +15,11 @@ import "../../../Bar/layout.js" as Layout
 // show/hide bar items that shouldn't always show, and the chevron in of
 // itself is an item so it can be changed position"). An ordinary bar.layout
 // entry carrying no config of its own: its POSITION is the entire
-// configuration, and everything after it in its own region collapses behind
-// it. This is macOS Hidden Bar / Bartender at the bar's altitude rather than
-// the tray's. M23 built the same idea inside Tray.qml over SNI item ids,
-// which was the wrong altitude and is gone; Tray.qml's own header records
-// the spec deviation that removal amounts to.
+// configuration, and everything on its governed side of its own region
+// collapses behind it. This is macOS Hidden Bar / Bartender at the bar's
+// altitude rather than the tray's. M23 built the same idea inside Tray.qml
+// over SNI item ids, which was the wrong altitude and is gone; Tray.qml's
+// own header records the spec deviation that removal amounts to.
 //
 // `region` and `regionEntries` are handed over by Bar.qml's region delegate
 // once loaded, the same after-creation assignment CommandModule/QmlModule/
@@ -35,13 +35,13 @@ import "../../../Bar/layout.js" as Layout
 // confirmed against that font's post table) rather than from memory, per
 // DESIGN.md's literal-character rule.
 //
-// The direction deliberately does NOT mirror per region. A Row lays out left
-// to right in all three regions and layout.js marks `collapsible` as
-// strictly-later-in-the-array, so the group this cell governs sits to its
-// RIGHT whichever region it is in. The glyph points where that group goes on
-// the next click: right to let it out, left to fold it back in. A
-// left-region mirror would point at the widgets BEFORE the chevron, which it
-// never touches.
+// The direction mirrors per region because the governed side does (M25).
+// layout.js marks `collapsible` on the side away from the region's anchored
+// edge, so a right-region group sits to this cell's LEFT and a left- or
+// center-region group sits to its RIGHT. The glyph points where that group
+// moves on the next click: in a right region collapsed points left and
+// expanded points right, and the other two regions read the same pair the
+// other way round.
 Cell {
     id: root
 
@@ -61,12 +61,17 @@ Cell {
         return !stored || stored[root.region] !== false;
     }
 
+    // Which of the two glyphs below is the outward one, read off layout.js's
+    // own rule rather than restated here: the same annotation the governed
+    // cells are gated on decides which way this points.
+    readonly property bool _pointsRight: Layout.governsBefore(root.region) ? !root.collapsed : root.collapsed
+
     standalone: true
     tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: root.collapsed ? "󰅂" : "󰅁"
+        text: root._pointsRight ? "󰅂" : "󰅁"
         color: root.foreground
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize.body

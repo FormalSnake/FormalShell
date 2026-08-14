@@ -14,8 +14,8 @@ import Quickshell.Services.SystemTray
 // The tray owns no drawer, no per-item buckets and no expand state of its
 // own since M24, so none of those verbs exist here any more. Collapsing the
 // tray is the bar chevron's job (`bar chevron`, BarIpc.qml): one region-level
-// toggle over whatever bar.layout put after it, rather than a set of
-// per-item moves only this widget understood.
+// toggle over whatever bar.layout put on its governed side, rather than a set
+// of per-item moves only this widget understood.
 IpcHandler {
     target: "tray"
 

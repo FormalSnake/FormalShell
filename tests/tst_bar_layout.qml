@@ -212,14 +212,22 @@ TestCase {
 
     // M24: the chevron is a collapse boundary, its position is its whole
     // configuration, and every rule that keeps it from being a dead control
-    // lives in the resolver rather than in the widget.
+    // lives in the resolver rather than in the widget. M25: which side it
+    // governs follows the region, inward from the region's anchored edge, so
+    // the chevron itself keeps its x when the group opens.
     function collapsible(entries) {
         return entries.map(function (e) { return e.collapsible ? "1" : "0"; }).join("");
     }
 
+    function test_governs_before_only_in_the_right_region() {
+        verify(Layout.governsBefore("right"));
+        verify(!Layout.governsBefore("left"));
+        verify(!Layout.governsBefore("center"));
+    }
+
     function test_chevron_is_an_optin_builtin_absent_from_defaults() {
-        var r = Layout.resolve({ layout: { right: ["chevron", "tray"] } });
-        compare(names(r.regions.right), "chevron,tray");
+        var r = Layout.resolve({ layout: { right: ["tray", "chevron"] } });
+        compare(names(r.regions.right), "tray,chevron");
         compare(r.warnings.length, 0);
         var d = Layout.resolve(undefined);
         verify(names(d.regions.left).indexOf("chevron") < 0);
@@ -234,10 +242,23 @@ TestCase {
         compare(collapsible(r.regions.right), "00000000");
     }
 
-    function test_mid_region_chevron_marks_only_what_follows_it() {
+    function test_right_region_chevron_marks_only_what_precedes_it() {
         var r = Layout.resolve({ layout: { right: ["battery", "chevron", "weather", "tray"] } });
         compare(names(r.regions.right), "battery,chevron,weather,tray");
-        compare(collapsible(r.regions.right), "0011");
+        compare(collapsible(r.regions.right), "1000");
+        compare(r.warnings.length, 0);
+    }
+
+    function test_left_region_chevron_marks_only_what_follows_it() {
+        var r = Layout.resolve({ layout: { left: ["battery", "chevron", "weather", "tray"] } });
+        compare(names(r.regions.left), "battery,chevron,weather,tray");
+        compare(collapsible(r.regions.left), "0011");
+        compare(r.warnings.length, 0);
+    }
+
+    function test_center_region_chevron_marks_what_follows_it() {
+        var r = Layout.resolve({ layout: { center: ["clock", "chevron", "nowPlaying", "weather"] } });
+        compare(collapsible(r.regions.center), "0011");
         compare(r.warnings.length, 0);
     }
 
@@ -249,37 +270,68 @@ TestCase {
         compare(r.regions.right[0].region, "right");
     }
 
-    function test_trailing_chevron_is_dropped_with_a_warning() {
-        var r = Layout.resolve({ layout: { right: ["battery", "chevron"] } });
-        compare(names(r.regions.right), "battery");
+    // The live half of the two drop cases below: a chevron placed against
+    // its region's own anchored edge governs everything else in that region,
+    // which is the arrangement M25 exists to produce.
+    function test_chevron_against_its_regions_anchored_edge_survives() {
+        var r = Layout.resolve({ layout: { right: ["battery", "chevron"], left: ["chevron", "workspaces"] } });
+        compare(names(r.regions.right), "battery,chevron");
+        compare(collapsible(r.regions.right), "10");
+        compare(names(r.regions.left), "chevron,workspaces");
+        compare(collapsible(r.regions.left), "01");
+        compare(r.warnings.length, 0);
+    }
+
+    function test_left_region_chevron_placed_last_is_dropped_with_a_warning() {
+        var r = Layout.resolve({ layout: { left: ["workspaces", "chevron"] } });
+        compare(names(r.regions.left), "workspaces");
         compare(r.warnings.length, 1);
         verify(r.warnings[0].indexOf("nothing after it") >= 0);
+        verify(r.warnings[0].indexOf("bar.layout.left") >= 0);
+    }
+
+    function test_right_region_chevron_placed_first_is_dropped_with_a_warning() {
+        var r = Layout.resolve({ layout: { right: ["chevron", "battery"] } });
+        compare(names(r.regions.right), "battery");
+        compare(r.warnings.length, 1);
+        verify(r.warnings[0].indexOf("nothing before it") >= 0);
         verify(r.warnings[0].indexOf("bar.layout.right") >= 0);
     }
 
     function test_lone_chevron_in_a_region_is_dropped_with_a_warning() {
-        var r = Layout.resolve({ layout: { center: ["chevron"] } });
+        var r = Layout.resolve({ layout: { center: ["chevron"], right: ["chevron"] } });
         compare(r.regions.center.length, 0);
-        compare(r.warnings.length, 1);
+        compare(r.regions.right.length, 0);
+        compare(r.warnings.length, 2);
         verify(r.warnings[0].indexOf("nothing after it") >= 0);
+        verify(r.warnings[1].indexOf("nothing before it") >= 0);
     }
 
     function test_second_chevron_in_a_region_is_dropped_with_a_warning() {
-        var r = Layout.resolve({ layout: { right: ["chevron", "battery", "chevron", "tray"] } });
-        compare(names(r.regions.right), "chevron,battery,tray");
-        compare(collapsible(r.regions.right), "011");
+        var r = Layout.resolve({ layout: { left: ["chevron", "battery", "chevron", "tray"] } });
+        compare(names(r.regions.left), "chevron,battery,tray");
+        compare(collapsible(r.regions.left), "011");
         compare(r.warnings.length, 1);
         verify(r.warnings[0].indexOf("only one chevron per region") >= 0);
     }
 
-    // The dedupe pass runs first, so the survivor can itself end up trailing
-    // and has to be dropped by the second pass with its own warning.
-    function test_duplicate_chevron_that_leaves_a_trailing_survivor_drops_both() {
-        var r = Layout.resolve({ layout: { right: ["battery", "chevron", "chevron"] } });
-        compare(names(r.regions.right), "battery");
+    // The dedupe pass runs first, so the survivor can itself end up on the
+    // region's anchored edge and has to be dropped by the second pass with
+    // its own warning.
+    function test_duplicate_chevron_that_leaves_a_dead_survivor_drops_both() {
+        var r = Layout.resolve({ layout: { left: ["battery", "chevron", "chevron"] } });
+        compare(names(r.regions.left), "battery");
         compare(r.warnings.length, 2);
         verify(r.warnings[0].indexOf("only one chevron per region") >= 0);
         verify(r.warnings[1].indexOf("nothing after it") >= 0);
+    }
+
+    function test_right_region_duplicate_chevron_that_leaves_a_dead_survivor_drops_both() {
+        var r = Layout.resolve({ layout: { right: ["chevron", "chevron", "battery"] } });
+        compare(names(r.regions.right), "battery");
+        compare(r.warnings.length, 2);
+        verify(r.warnings[0].indexOf("only one chevron per region") >= 0);
+        verify(r.warnings[1].indexOf("nothing before it") >= 0);
     }
 
     function test_chevron_in_one_region_does_not_mark_another() {
@@ -290,20 +342,32 @@ TestCase {
     }
 
     // An unnamed bar plugin is appended after everything bar.layout listed,
-    // so a chevron written last is only genuinely last once that pass is done.
+    // so a left or center chevron written last is only genuinely last once
+    // that pass is done.
     function test_auto_appended_plugin_saves_an_otherwise_trailing_chevron() {
-        var p = barPlugin("diskwatch", "right");
-        var r = Layout.resolve({ layout: { right: ["battery", "chevron"] } }, [p]);
+        var p = barPlugin("diskwatch", "left");
+        var r = Layout.resolve({ layout: { left: ["battery", "chevron"] } }, [p]);
         compare(r.warnings.length, 0);
-        compare(r.regions.right.length, 3);
-        compare(collapsible(r.regions.right), "001");
+        compare(r.regions.left.length, 3);
+        compare(collapsible(r.regions.left), "001");
+    }
+
+    // The same append lands on the wrong side to save a right region's
+    // chevron, which governs the other way.
+    function test_auto_appended_plugin_cannot_save_a_right_region_chevron() {
+        var p = barPlugin("diskwatch", "right");
+        var r = Layout.resolve({ layout: { right: ["chevron", "battery"] } }, [p]);
+        compare(r.warnings.length, 1);
+        verify(r.warnings[0].indexOf("nothing before it") >= 0);
+        compare(r.regions.right.length, 2);
+        compare(collapsible(r.regions.right), "00");
     }
 
     function test_collapsed_names_reports_layout_names_in_order() {
         var mod = { id: "disk", type: "command", command: ["echo", "hi"] };
         var p = barPlugin("diskwatch", "right");
-        var r = Layout.resolve({ layout: { right: ["battery", "chevron", "tray", "custom:disk", "plugin:diskwatch"] }, modules: [mod] }, [p]);
-        compare(Layout.collapsedNames(r.regions.right).join(","), "tray,custom:disk,plugin:diskwatch");
+        var r = Layout.resolve({ layout: { right: ["custom:disk", "plugin:diskwatch", "tray", "chevron", "battery"] }, modules: [mod] }, [p]);
+        compare(Layout.collapsedNames(r.regions.right).join(","), "custom:disk,plugin:diskwatch,tray");
         compare(Layout.collapsedNames(r.regions.left).length, 0);
     }
 
