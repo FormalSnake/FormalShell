@@ -106,11 +106,17 @@ Cell {
         }
     }
 
-    MouseArea {
+    // Cell's `hit` escape hatch rather than its own `interactive`, which is
+    // the whole-cell target: only the primary half of this bar is a button,
+    // and the hint caps to its right are a legend that has to stay inert.
+    hit: MouseArea {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        width: barRow.width + Theme.space.controlPaddingX
+        // barRow plus the cell's padding on both sides: this layer spans the
+        // cell, not the padded content box barRow sits in, so the left inset
+        // has to be paid for here too.
+        width: barRow.width + Theme.space.controlPaddingX * 2
         enabled: !!root.primary
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor

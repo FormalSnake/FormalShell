@@ -160,7 +160,7 @@ Panel {
         Cell {
             id: prevCell
             width: parent.width / 3
-            selected: prevArea.containsMouse
+            selected: prevCell.containsPointer
             enabled: MediaService.canGoPrevious
 
             Text {
@@ -171,19 +171,14 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            MouseArea {
-                id: prevArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: MediaService.previous()
-            }
+            interactive: true
+            onClicked: MediaService.previous()
         }
 
         Cell {
             id: playPauseCell
             width: parent.width / 3
-            selected: playPauseArea.containsMouse
+            selected: playPauseCell.containsPointer
 
             Text {
                 anchors.centerIn: parent
@@ -193,19 +188,14 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            MouseArea {
-                id: playPauseArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: MediaService.playPause()
-            }
+            interactive: true
+            onClicked: MediaService.playPause()
         }
 
         Cell {
             id: nextCell
             width: parent.width / 3
-            selected: nextArea.containsMouse
+            selected: nextCell.containsPointer
             enabled: MediaService.canGoNext
 
             Text {
@@ -216,13 +206,8 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            MouseArea {
-                id: nextArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: MediaService.next()
-            }
+            interactive: true
+            onClicked: MediaService.next()
         }
     }
 }

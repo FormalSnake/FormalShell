@@ -278,20 +278,14 @@ Panel {
 
         Cell {
             width: monthNav.width / 7
-            hovered: prevMonthArea.containsMouse
 
             MetaLabel {
                 anchors.centerIn: parent
                 text: "<"
             }
 
-            MouseArea {
-                id: prevMonthArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root._stepMonth(-1)
-            }
+            interactive: true
+            onClicked: root._stepMonth(-1)
         }
 
         Cell {
@@ -305,20 +299,14 @@ Panel {
 
         Cell {
             width: monthNav.width / 7
-            hovered: nextMonthArea.containsMouse
 
             MetaLabel {
                 anchors.centerIn: parent
                 text: ">"
             }
 
-            MouseArea {
-                id: nextMonthArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root._stepMonth(1)
-            }
+            interactive: true
+            onClicked: root._stepMonth(1)
         }
     }
 
@@ -364,7 +352,6 @@ Panel {
                     && dayCell.modelData.year === root._selected.getFullYear()
                 selected: dayCell.isSelected
                 accent: dayCell.isToday && !dayCell.isSelected
-                hovered: dayArea.containsMouse
                 // Only in-month cells query events — the leading/trailing
                 // padding days belong to the adjacent month and are dimmed
                 // rather than dotted.
@@ -399,13 +386,8 @@ Panel {
                     }
                 }
 
-                MouseArea {
-                    id: dayArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root._selectDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day))
-                }
+                interactive: true
+                onClicked: root._selectDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day))
             }
         }
     }

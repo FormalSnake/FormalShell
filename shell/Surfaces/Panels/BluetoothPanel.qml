@@ -444,7 +444,7 @@ Panel {
             readonly property bool _isTrusted: btCell._device.trusted === true
             readonly property bool _trustPending: (root._actionKind === "trust" || root._actionKind === "untrust") && root._actionAddress === btCell._address
             selected: btCell._bucket === "connected"
-            hovered: rowMouse.containsMouse || trustMouse.containsMouse || forgetMouse.containsMouse || (root._cursorAddress !== "" && root._cursorAddress === btCell._address)
+            hovered: rowMouse.containsMouse || trustCell.containsPointer || forgetCell.containsPointer || (root._cursorAddress !== "" && root._cursorAddress === btCell._address)
 
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionAddress === btCell._address) {
@@ -517,14 +517,8 @@ Panel {
                                 color: btCell.foreground
                             }
 
-                            MouseArea {
-                                id: trustMouse
-                                anchors.fill: parent
-                                enabled: trustCell.enabled
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root._setTrust(btCell._device, !btCell._isTrusted)
-                            }
+                            interactive: trustCell.enabled
+                            onClicked: root._setTrust(btCell._device, !btCell._isTrusted)
                         }
 
                         Cell {
@@ -544,14 +538,8 @@ Panel {
                                 color: Theme.color.urgent
                             }
 
-                            MouseArea {
-                                id: forgetMouse
-                                anchors.fill: parent
-                                enabled: forgetCell.enabled
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root._forgetDevice(btCell._device)
-                            }
+                            interactive: forgetCell.enabled
+                            onClicked: root._forgetDevice(btCell._device)
                         }
                     }
 
@@ -640,13 +628,10 @@ Panel {
                     color: powerCell.foreground
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (root._adapter)
-                            root._adapter.enabled = !root._adapter.enabled;
-                    }
+                interactive: true
+                onClicked: {
+                    if (root._adapter)
+                        root._adapter.enabled = !root._adapter.enabled;
                 }
             }
         }
@@ -738,20 +723,15 @@ Panel {
             readonly property string _address: "airpods:" + modeCell._key
             width: implicitWidth
             height: implicitHeight
-            hovered: modeMouse.containsMouse || (root._cursorAddress !== "" && root._cursorAddress === modeCell._address)
+            hovered: modeCell.containsPointer || (root._cursorAddress !== "" && root._cursorAddress === modeCell._address)
 
             MetaLabel {
                 text: modeCell.modelData.label
                 color: modeCell.foreground
             }
 
-            MouseArea {
-                id: modeMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: LibrePodsService.setNoise(modeCell._key)
-            }
+            interactive: true
+            onClicked: LibrePodsService.setNoise(modeCell._key)
         }
     }
 

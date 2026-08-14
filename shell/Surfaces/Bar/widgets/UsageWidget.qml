@@ -40,7 +40,6 @@ Cell {
 
     visible: root.shown
     standalone: true
-    hovered: hoverArea.containsMouse
     urgent: root._worstPercent >= 0.9
 
     // No prior tooltip existed since the label was always on; now that the
@@ -80,20 +79,15 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (!root.panel)
-                return;
-            // Clicking a stale cell is an explicit "fix it", so it skips the
-            // refresh cooldown (UsagePanel's own header) and the panel that
-            // opens is already showing the attempt.
-            if (root.panel.claudeState === "stale")
-                root.panel.refreshClaudeToken(true);
-            root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (!root.panel)
+            return;
+        // Clicking a stale cell is an explicit "fix it", so it skips the
+        // refresh cooldown (UsagePanel's own header) and the panel that
+        // opens is already showing the attempt.
+        if (root.panel.claudeState === "stale")
+            root.panel.refreshClaudeToken(true);
+        root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

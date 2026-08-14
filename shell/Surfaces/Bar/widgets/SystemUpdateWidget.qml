@@ -37,7 +37,6 @@ Cell {
 
     standalone: true
     warning: root._behind > 0
-    hovered: hoverArea.containsMouse
 
     // The cell already carries the count; the tooltip names what it counts,
     // which "2 BEHIND" alone never says.
@@ -75,14 +74,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

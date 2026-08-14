@@ -45,7 +45,6 @@ Cell {
 
     visible: root.shown
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // The cell shows the title alone, and marquees or elides it once it
     // outgrows maxWidth — the tooltip adds the artist and, for a title that
@@ -112,14 +111,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

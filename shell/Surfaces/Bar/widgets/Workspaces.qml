@@ -58,7 +58,6 @@ Item {
                 height: root.height
                 standalone: true
                 accent: ws.isFocused
-                hovered: hoverArea.containsMouse
                 // A bare ordinal says nothing about what is on it, and the
                 // occupancy filter means the numbers can skip.
                 tooltipText: "WORKSPACE " + cell.label + " / " + cell.windowCount
@@ -72,13 +71,8 @@ Item {
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                MouseArea {
-                    id: hoverArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: CompositorService.focusWorkspace(ws.id)
-                }
+                interactive: true
+                onClicked: CompositorService.focusWorkspace(ws.id)
             }
         }
     }

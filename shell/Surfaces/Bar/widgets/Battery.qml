@@ -78,7 +78,6 @@ Cell {
     standalone: true
     urgent: root._critical
     warning: root._low
-    hovered: hoverArea.containsMouse
 
     // What the BAT / NN% label can't say: how long that percentage is worth.
     // UPower reports 0 for whichever estimate doesn't apply — timeToFull
@@ -126,14 +125,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

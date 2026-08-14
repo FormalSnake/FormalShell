@@ -97,7 +97,8 @@ TestCase {
     }
 
     // A bar cell (Clock.qml's shape): implicitly sized in both axes, a
-    // vertically centred Column plus a fill-anchored MouseArea sibling.
+    // vertically centred Column in the default slot, and the cell's own
+    // pointer target rather than one the call site built.
     Component {
         id: barCellComponent
 
@@ -105,8 +106,11 @@ TestCase {
             id: barCell
 
             readonly property Item probeColumn: column
+            property int clicks: 0
 
             standalone: true
+            interactive: true
+            onClicked: barCell.clicks++
 
             Column {
                 id: column
@@ -122,11 +126,6 @@ TestCase {
                     font.pixelSize: 13
                 }
             }
-
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-            }
         }
     }
 
@@ -139,6 +138,33 @@ TestCase {
         Cell {
             readonly property Item probeLabel: label
             MetaLabel { id: label; text: "NO ADAPTER" }
+        }
+    }
+
+    // MenuActionBar's shape: a cell whose left half is a button and whose
+    // right half is an inert legend, so it builds a partial target in `hit`
+    // instead of taking the cell-wide `interactive` one.
+    Component {
+        id: actionBarComponent
+
+        Cell {
+            id: actionBar
+
+            readonly property Item probeHalf: half
+            property int clicks: 0
+
+            width: 200
+
+            MetaLabel { text: "SELECT" }
+
+            hit: MouseArea {
+                id: half
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 60
+                onClicked: actionBar.clicks++
+            }
         }
     }
 
@@ -230,14 +256,79 @@ TestCase {
         settle(cell);
 
         // standalone: no rule reserve, so padding is exactly space.lg * 2
-        // by space.sm * 2 around the column. The fill-anchored MouseArea
-        // sibling and the vertically centred column must not contribute.
+        // by space.sm * 2 around the column. The `hit` layer (which is the
+        // cell's full size) and the vertically centred column's own offset
+        // must not contribute.
         var column = cell.probeColumn;
         compare(cell.implicitWidth, column.implicitWidth + 8 * 2);
         compare(cell.implicitHeight, column.implicitHeight + 4 * 2);
         compare(cell.width, cell.implicitWidth);
         compare(cell.height, cell.implicitHeight);
         compare(column.y, 0);
+    }
+
+    function test_pointer_reaches_every_corner_of_the_cell() {
+        failOnWarning(/Binding loop/);
+        var cell = createTemporaryObject(barCellComponent, testCase);
+        verify(cell);
+        settle(cell);
+
+        // The hover fill covers the cell, so the pointer target has to as
+        // well. A MouseArea built at the call site lands in the default slot,
+        // which is inset by the control padding: 8px either side and 4px top
+        // and bottom answered nothing while still lighting up, and on the bar
+        // that top band is the row of pixels against the screen edge.
+        //
+        // The content really is inset by that padding, so these points are
+        // not inside it and the check isn't passing by accident.
+        compare(cell.probeColumn.mapToItem(cell, 0, 0).x, 8);
+
+        var corners = [[1, 1], [cell.width - 1, 1], [1, cell.height - 1], [cell.width - 1, cell.height - 1]];
+        for (var i = 0; i < corners.length; i++) {
+            mouseMove(cell, corners[i][0], corners[i][1]);
+            settle(cell);
+            verify(cell.containsPointer);
+            // Nothing bound `hovered`, so it follows the pointer on its own.
+            verify(cell.hovered);
+
+            mouseClick(cell, corners[i][0], corners[i][1]);
+            compare(cell.clicks, i + 1);
+        }
+    }
+
+    function test_a_cell_that_never_opted_in_stays_inert() {
+        var cell = createTemporaryObject(plainCellComponent, testCase);
+        verify(cell);
+        settle(cell);
+
+        // `interactive` is the whole opt-in: an ordinary content cell must
+        // not light up under the pointer, and must not eat the click.
+        mouseMove(cell, cell.width / 2, cell.height / 2);
+        settle(cell);
+        compare(cell.containsPointer, false);
+        compare(cell.hovered, false);
+    }
+
+    function test_hit_slot_spans_the_cell_for_a_partial_target() {
+        var cell = createTemporaryObject(actionBarComponent, testCase);
+        verify(cell);
+        settle(cell);
+
+        // MenuActionBar's shape: only part of the cell is a button, so it
+        // builds its own target in `hit`. That slot spans the cell, so the
+        // target starts at the cell's own edge and covers the padding the
+        // content box leaves out.
+        var origin = cell.probeHalf.mapToItem(cell, 0, 0);
+        compare(origin.x, 0);
+        compare(origin.y, 0);
+        compare(cell.probeHalf.height, cell.height);
+
+        mouseClick(cell, 1, 1);
+        compare(cell.clicks, 1);
+
+        // Past the target's own width, and still inside the cell: inert.
+        mouseClick(cell, cell.width - 1, cell.height - 1);
+        compare(cell.clicks, 1);
     }
 
     function test_cell_measures_children_by_the_size_they_were_given() {

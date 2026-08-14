@@ -103,7 +103,6 @@ Row {
             // implicitHeight chain Bar.qml measures this Row by).
             height: root.height
             standalone: true
-            hovered: itemHover.containsMouse
             // The item's own words, in the SNI's own order of preference:
             // ToolTip.title is what the spec means for hover text, Title is
             // the display name, and Id is the last thing that is always set.
@@ -137,26 +136,18 @@ Row {
                 source: itemCell.modelData.icon
             }
 
-            // Plain default-slot MouseArea, not Cell's `hit` slot: that alias
-            // is part of an in-flight hit-area refactor not yet on main, and
-            // this file has to build against HEAD alone.
-            MouseArea {
-                id: itemHover
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                cursorShape: Qt.PointingHandCursor
-                onClicked: mouse => {
-                    if (mouse.button === Qt.LeftButton) {
-                        if (itemCell.modelData.onlyMenu && itemCell.modelData.hasMenu)
-                            root.openMenu(itemCell);
-                        else
-                            itemCell.modelData.activate();
-                    } else if (mouse.button === Qt.MiddleButton) {
-                        itemCell.modelData.secondaryActivate();
-                    } else if (mouse.button === Qt.RightButton && itemCell.modelData.hasMenu) {
+            interactive: true
+            acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+            onClicked: mouse => {
+                if (mouse.button === Qt.LeftButton) {
+                    if (itemCell.modelData.onlyMenu && itemCell.modelData.hasMenu)
                         root.openMenu(itemCell);
-                    }
+                    else
+                        itemCell.modelData.activate();
+                } else if (mouse.button === Qt.MiddleButton) {
+                    itemCell.modelData.secondaryActivate();
+                } else if (mouse.button === Qt.RightButton && itemCell.modelData.hasMenu) {
+                    root.openMenu(itemCell);
                 }
             }
         }

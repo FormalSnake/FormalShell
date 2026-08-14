@@ -156,23 +156,20 @@ Panel {
             required property int index
             width: parent.width
             selected: outCell.modelData.name === CompositorService.focusedOutputName
-            hovered: rowMouse.containsMouse || toggleMouse.containsMouse || root._cursor === outCell.index
+            hovered: outCell.containsPointer || toggleCell.containsPointer || root._cursor === outCell.index
 
             readonly property bool _canToggle: root._backend.outputConfigAvailable
                 && Outputs.canToggle(root._outputs, outCell.modelData.name)
             readonly property string _identity: Outputs.describe(outCell.modelData)
             readonly property string _status: Outputs.statusLine(outCell.modelData)
 
-            // First child, so every control in the Column below sits above it
-            // and keeps its own hover: this one only follows the pointer to
-            // move the shared keyboard cursor onto the row it is over.
-            MouseArea {
-                id: rowMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                acceptedButtons: Qt.NoButton
-                onContainsMouseChanged: if (containsMouse) root._cursor = outCell.index
-            }
+            // Takes no buttons: the cell's own target sits under its content,
+            // so every control in the Column below stays above it and keeps
+            // its own hover, and this only follows the pointer to move the
+            // shared keyboard cursor onto the row it is over.
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (outCell.containsPointer) root._cursor = outCell.index
 
             Column {
                 width: parent.width
@@ -210,14 +207,8 @@ Panel {
                             color: outCell._canToggle ? toggleCell.foreground : Theme.color.foregroundDim
                         }
 
-                        MouseArea {
-                            id: toggleMouse
-                            anchors.fill: parent
-                            enabled: outCell._canToggle
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root._toggleOutput(outCell.modelData.name)
-                        }
+                        interactive: outCell._canToggle
+                        onClicked: root._toggleOutput(outCell.modelData.name)
                     }
                 }
 
@@ -372,11 +363,8 @@ Panel {
                     color: mirrorToggle.foreground
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root._setMirror(!root._mirrorOn)
-                }
+                interactive: true
+                onClicked: root._setMirror(!root._mirrorOn)
             }
         }
     }

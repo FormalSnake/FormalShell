@@ -966,15 +966,12 @@ Panel {
                             color: actionCell.foreground
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (netCell.modelData.network.connected)
-                                    netCell.modelData.network.disconnect();
-                                else
-                                    netCell.modelData.network.connect();
-                            }
+                        interactive: true
+                        onClicked: {
+                            if (netCell.modelData.network.connected)
+                                netCell.modelData.network.disconnect();
+                            else
+                                netCell.modelData.network.connect();
                         }
                     }
                 }
@@ -998,7 +995,7 @@ Panel {
             required property var modelData
             width: parent.width
             selected: wifiCell.modelData.network.connected
-            hovered: rowMouse.containsMouse || forgetMouse.containsMouse || (root._cursorSsid !== "" && root._cursorSsid === wifiCell._ssid)
+            hovered: rowMouse.containsMouse || forgetCell.containsPointer || (root._cursorSsid !== "" && root._cursorSsid === wifiCell._ssid)
 
             readonly property var _network: wifiCell.modelData.network
             readonly property string _ssid: wifiCell._network.name || ""
@@ -1090,14 +1087,8 @@ Panel {
                             color: Theme.color.urgent
                         }
 
-                        MouseArea {
-                            id: forgetMouse
-                            anchors.fill: parent
-                            enabled: forgetCell.enabled
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root._forgetNetwork(wifiCell._network)
-                        }
+                        interactive: forgetCell.enabled
+                        onClicked: root._forgetNetwork(wifiCell._network)
                     }
 
                     Text {
@@ -1258,11 +1249,8 @@ Panel {
                     color: wifiPowerToggle.foreground
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
-                }
+                interactive: true
+                onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
             }
         }
     }
@@ -1319,11 +1307,8 @@ Panel {
                     color: qrToggle.foreground
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root._toggleWifiQr()
-                }
+                interactive: true
+                onClicked: root._toggleWifiQr()
             }
         }
     }
@@ -1438,11 +1423,8 @@ Panel {
                         color: pwToggle.foreground
                     }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root._togglePasswordReveal()
-                    }
+                    interactive: true
+                    onClicked: root._togglePasswordReveal()
                 }
             }
 
@@ -1504,12 +1486,8 @@ Panel {
                     color: runToggle.foreground
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: !root._stRunning
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root._startSpeedTest()
-                }
+                interactive: !root._stRunning
+                onClicked: root._startSpeedTest()
             }
         }
     }

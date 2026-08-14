@@ -22,7 +22,6 @@ Cell {
     readonly property bool _showLabel: Config.get("bar.widgets.audio.showLabel", false)
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // Muted keeps showing the pre-mute percentage (Osd.qml makes the same
     // call, it's still the level you'll get back), which leaves the mute
@@ -60,21 +59,16 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
-        // 5% steps, same as the panel's own tracks (M15 Task 4 parity) —
-        // scrolling the bar cell adjusts the default sink without opening
-        // the panel at all.
-        onWheel: wheel => {
-            AudioService.setVolume(AudioService.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
-            wheel.accepted = true;
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
+    }
+    // 5% steps, same as the panel's own tracks (M15 Task 4 parity) —
+    // scrolling the bar cell adjusts the default sink without opening
+    // the panel at all.
+    onWheeled: wheel => {
+        AudioService.setVolume(AudioService.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
+        wheel.accepted = true;
     }
 }

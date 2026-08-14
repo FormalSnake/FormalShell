@@ -420,14 +420,9 @@ Panel {
                     Cell {
                         id: tooltipCell
                         width: parent.width
-                        hovered: tooltipMouse.containsMouse
                         tooltipText: "TOOLTIP / THE REAL CARD, LOADED BY THIS CELL"
 
-                        MouseArea {
-                            id: tooltipMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                        }
+                        interactive: true
 
                         MetaLabel {
                             text: "TOOLTIP / REAL TOOLTIPTEXT"

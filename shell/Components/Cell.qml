@@ -48,6 +48,49 @@ Item {
 
     default property alias data: content.data
 
+    // --- Pointer (DESIGN.md §1.1: the lit area is the hit area) ----------
+    //
+    // The cell owns the one pointer target that spans it, so no surface
+    // builds its own. A MouseArea in the default slot cannot do this job:
+    // that slot forwards into `content`, which is inset by the control
+    // padding, so the area lands short by controlPaddingX either side and
+    // controlPaddingY top and bottom, and the cell lights up and reads as
+    // clickable across a band that answers nothing. On the bar that band
+    // includes the row of pixels against the screen edge.
+    //
+    // `interactive` arms it: hover tracking, the pointing-hand cursor, and
+    // clicks. It doubles as the enable gate, so `interactive: outCell._canToggle`
+    // says both things at once, and a cell that never sets it stays inert.
+    property bool interactive: false
+
+    // Widens what `clicked` reports (the bell's right-click DND, the tray's
+    // three buttons) or empties it: `Qt.NoButton` makes a hover-only tracker,
+    // which also drops the pointing-hand cursor, since nothing there answers
+    // a click.
+    property int acceptedButtons: Qt.LeftButton
+
+    // `hovered` follows the pointer by default. A surface carrying its own
+    // keyboard cursor (every panel list) ORs the two instead:
+    // `hovered: root.containsPointer || index === panel.cursor`.
+    readonly property bool containsPointer: pointer.containsMouse
+
+    signal clicked(var mouse)
+    signal wheeled(var wheel)
+    // Local to the cell, which is the frame PointerMoveGate.moved() wants
+    // (`pointer` spans it exactly).
+    signal pointerMoved(real x, real y)
+
+    // Escape hatch for a target that deliberately covers less than the cell:
+    // MenuActionBar's primary half is the only one, since its right half is a
+    // legend rather than a button. A whole-cell target belongs on
+    // `interactive` above, never here. Anchor to `parent` (this layer spans
+    // the cell) and not to a content child.
+    //
+    // Declared ahead of `content` deliberately: an interactive child inside
+    // the content box (a slider track, a nested Cell) is then stacked above
+    // both this and `pointer`, and keeps its own events.
+    property alias hit: hitLayer.data
+
     property bool selected: false
     property bool accent: false
     property bool urgent: false
@@ -59,7 +102,7 @@ Item {
     // the standalone bar-cell case (`_hoverInverted` below), so this is a
     // resting affordance only, never a second selection state.
     property bool ink: false
-    property bool hovered: false
+    property bool hovered: root.containsPointer
     property bool standalone: false
     // Dithered resting backdrop (DESIGN.md §2.8) for a still-unseen row —
     // NotificationCard.qml's pending notification-center rows, currently the
@@ -151,8 +194,8 @@ Item {
 
     // How big the content wants to be. This used to be `content`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
-    // the cell: childrenRect measures a fill-anchored child (every cell's
-    // hit area) at exactly the width of the cell the measurement is sizing,
+    // the cell: childrenRect measures a fill-anchored child (a backdrop, an
+    // overlay) at exactly the width of the cell the measurement is sizing,
     // and it measures each child's x/y, so a centered child's offset (half
     // the leftover room) lands back in the size that leftover room came
     // from. QML answers a looping binding by aborting it, which leaves the
@@ -259,6 +302,26 @@ Item {
         Behavior on opacity {
             NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
         }
+    }
+
+    // The cell's own target. A sibling of `hitLayer` rather than its child,
+    // so the `hit` alias assigns into an item this never shares: writing a
+    // list property replaces what is already in it.
+    MouseArea {
+        id: pointer
+        anchors.fill: parent
+        enabled: root.interactive
+        hoverEnabled: root.interactive
+        acceptedButtons: root.acceptedButtons
+        cursorShape: root.acceptedButtons === Qt.NoButton ? Qt.ArrowCursor : Qt.PointingHandCursor
+        onClicked: mouse => root.clicked(mouse)
+        onWheel: wheel => root.wheeled(wheel)
+        onPositionChanged: event => root.pointerMoved(event.x, event.y)
+    }
+
+    Item {
+        id: hitLayer
+        anchors.fill: parent
     }
 
     Item {

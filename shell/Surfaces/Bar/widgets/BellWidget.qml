@@ -30,7 +30,6 @@ Cell {
     readonly property bool _showLabel: Config.get("bar.widgets.bell.showLabel", true)
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // The bell-off glyph reads as "DND" only if you already know the pair,
     // and the bare count next to it doesn't say what it counts. Suppression
@@ -68,21 +67,16 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        cursorShape: Qt.PointingHandCursor
-        onClicked: mouse => {
-            if (mouse.button === Qt.RightButton) {
-                NotificationService.setDnd(!NotificationService.dnd);
-            } else if (root.center) {
-                if (root.center.isOpen)
-                    root.center.close();
-                else
-                    root.center.open();
-            }
+    interactive: true
+    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            NotificationService.setDnd(!NotificationService.dnd);
+        } else if (root.center) {
+            if (root.center.isOpen)
+                root.center.close();
+            else
+                root.center.open();
         }
     }
 }

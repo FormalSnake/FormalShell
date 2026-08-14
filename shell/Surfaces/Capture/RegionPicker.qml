@@ -996,7 +996,6 @@ Scope {
                         required property var modelData
                         standalone: true
                         selected: root._toolIndex === toolCell.modelData.key - 1
-                        hovered: toolArea.containsMouse
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
@@ -1015,13 +1014,8 @@ Scope {
                             }
                         }
 
-                        MouseArea {
-                            id: toolArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.setTool(toolCell.modelData.key - 1)
-                        }
+                        interactive: true
+                        onClicked: root.setTool(toolCell.modelData.key - 1)
                     }
                 }
 
@@ -1067,7 +1061,6 @@ Scope {
                         id: commitCell
                         anchors.verticalCenter: parent.verticalCenter
                         ink: true
-                        hovered: commitArea.containsMouse
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
@@ -1086,13 +1079,8 @@ Scope {
                             }
                         }
 
-                        MouseArea {
-                            id: commitArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.commit(false)
-                        }
+                        interactive: true
+                        onClicked: root.commit(false)
                     }
                 }
             }

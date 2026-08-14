@@ -62,7 +62,6 @@ Cell {
     }
 
     standalone: true
-    hovered: hoverArea.containsMouse
     tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
 
     Text {
@@ -73,16 +72,6 @@ Cell {
         font.pixelSize: Theme.fontSize.body
     }
 
-    // Plain default-slot MouseArea, not Cell's `hit` slot: that alias is part
-    // of an in-flight hit-area refactor that is not on main yet, and this file
-    // has to build against HEAD alone. The known cost until it lands is the
-    // one that refactor exists to fix, the cell's hover fill reaching
-    // controlPadding past what the area answers.
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: Core.State.setBarCollapsed(root.region, !root.collapsed)
-    }
+    interactive: true
+    onClicked: Core.State.setBarCollapsed(root.region, !root.collapsed)
 }

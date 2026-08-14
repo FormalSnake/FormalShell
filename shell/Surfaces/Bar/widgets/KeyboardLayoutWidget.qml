@@ -55,7 +55,6 @@ Cell {
 
     visible: root.shown
     standalone: true
-    hovered: hoverArea.containsMouse
     tooltipText: Keyboard.tooltipText(root.layout)
 
     function _poll() {
@@ -120,9 +119,5 @@ Cell {
         }
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-    }
+    interactive: true
 }

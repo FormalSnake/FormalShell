@@ -30,7 +30,6 @@ Cell {
     readonly property bool _showLabel: Config.get("bar.widgets.weather.showLabel", false)
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // The glyph carries the condition and the label the temperature, but a
     // glyph is a guess until it's named. "UNAVAILABLE" is WeatherPanel.qml's
@@ -73,14 +72,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

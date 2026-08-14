@@ -28,24 +28,18 @@ Cell {
     property bool invertOnHover: false
 
     urgent: root.entry.urgency === 2
-    hovered: cardHover.containsMouse
-    selected: root.invertOnHover && cardHover.containsMouse
+    selected: root.invertOnHover && root.containsPointer
     width: Theme.space.popupWidthWide
 
     signal dismiss
     signal bodyClicked
     signal actionInvoked(string key)
 
-    // Declared first (behind everything painted after it) so it never
-    // intercepts a click meant for textArea's or a Cell button's own
-    // MouseArea below — Qt.NoButton means it only ever tracks hover, never
-    // grabs a press.
-    MouseArea {
-        id: cardHover
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
-    }
+    // Hover only: the cell's own target sits under its content, and taking no
+    // buttons means it never grabs a press meant for textArea's or a nested
+    // Cell button's own MouseArea below.
+    interactive: true
+    acceptedButtons: Qt.NoButton
 
     // sanitizeBody/styledBody live once in model.js and are applied here at
     // the shared-component boundary, so both Toasts.qml's popups and
@@ -177,7 +171,7 @@ Cell {
                 id: dismissCell
                 width: implicitWidth
                 height: implicitHeight
-                selected: dismissHover.containsMouse
+                selected: dismissCell.containsPointer
 
                 Text {
                     text: "✕"
@@ -193,13 +187,8 @@ Cell {
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                MouseArea {
-                    id: dismissHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.dismiss()
-                }
+                interactive: true
+                onClicked: root.dismiss()
             }
         }
 
@@ -236,7 +225,6 @@ Cell {
                     // be. Hover still inverts to the accent pair — Cell.qml
                     // handles that itself once `ink` is set.
                     ink: true
-                    hovered: actionHover.containsMouse
 
                     Text {
                         text: actionCell.modelData.label
@@ -245,13 +233,8 @@ Cell {
                         font.pixelSize: Theme.fontSize.bodySmall
                     }
 
-                    MouseArea {
-                        id: actionHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.actionInvoked(actionCell.modelData.key)
-                    }
+                    interactive: true
+                    onClicked: root.actionInvoked(actionCell.modelData.key)
                 }
             }
         }

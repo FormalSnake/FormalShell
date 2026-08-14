@@ -33,7 +33,6 @@ Cell {
 
     visible: root.shown
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // One glyph, dim or not — nothing on the cell says what it stands for.
     // Every branch is TailscalePanel.qml's own wording for the SAME poll
@@ -72,14 +71,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

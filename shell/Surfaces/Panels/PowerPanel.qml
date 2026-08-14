@@ -485,11 +485,8 @@ Panel {
                 color: profileCell.foreground
             }
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root._applyProfile(profileCell.index)
-            }
+            interactive: true
+            onClicked: root._applyProfile(profileCell.index)
         }
     }
 

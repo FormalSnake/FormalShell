@@ -159,7 +159,6 @@ Panel {
             id: rowCell
             required property var modelData
             width: parent.width
-            hovered: rowArea.containsMouse
 
             Column {
                 width: parent.width
@@ -185,15 +184,10 @@ Panel {
                 }
             }
 
-            MouseArea {
-                id: rowArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    CompositorService.spawn(["xdg-open", rowCell.modelData.url]);
-                    root.close();
-                }
+            interactive: true
+            onClicked: {
+                CompositorService.spawn(["xdg-open", rowCell.modelData.url]);
+                root.close();
             }
         }
     }

@@ -29,7 +29,6 @@ Cell {
     readonly property string _state: Audio.sourceState(AudioService.sourceAvailable, AudioService.sourceMuted)
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     tooltipText: {
         switch (root._state) {
@@ -63,11 +62,6 @@ Cell {
         }
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: AudioService.toggleSourceMute()
-    }
+    interactive: true
+    onClicked: AudioService.toggleSourceMute()
 }

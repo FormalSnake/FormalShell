@@ -54,7 +54,6 @@ Cell {
     readonly property bool shown: root.focusedWindow !== null
     visible: root.shown
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // `maxWidth` is the whole pill's ceiling, so the row content gets it
     // minus the cell's own control padding.
@@ -137,14 +136,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

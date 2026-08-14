@@ -35,7 +35,6 @@ Cell {
     property bool _sawExit: false
 
     standalone: true
-    hovered: hoverArea.containsMouse
     accent: root._class === "warning"
     urgent: root._class === "critical" || root._class === "urgent"
     tooltipText: root._tooltip
@@ -131,10 +130,6 @@ Cell {
     // takes no buttons and leaves the cursor alone. It exists to drive the
     // tooltip above, and brings this cell's hover chrome in line with every
     // other bar cell while it's there.
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.NoButton
-    }
+    interactive: true
+    acceptedButtons: Qt.NoButton
 }

@@ -32,7 +32,6 @@ Cell {
         : (root._connected ? "󰂱" : "󰂯")
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // Three glyphs cover four states between them (no adapter and adapter
     // off share one), and none of them names the device that's connected.
@@ -63,14 +62,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

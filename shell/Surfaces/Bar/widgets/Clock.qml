@@ -16,7 +16,6 @@ Cell {
     property date _now: new Date()
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
@@ -40,14 +39,9 @@ Cell {
         onTriggered: root._now = new Date()
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

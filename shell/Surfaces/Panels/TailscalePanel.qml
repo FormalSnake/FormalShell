@@ -270,18 +270,14 @@ Panel {
             }
         }
 
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root._toggle()
-        }
+        interactive: true
+        onClicked: root._toggle()
     }
 
     Cell {
         id: selfCell
         visible: root.pollState === "ok"
         width: parent.width
-        hovered: selfMouse.containsMouse
 
         Column {
             width: parent.width
@@ -304,14 +300,8 @@ Panel {
             }
         }
 
-        MouseArea {
-            id: selfMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: root.status && Tailscale.selfIp(root.status) !== null
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root._copyIp(root.status ? Tailscale.selfIp(root.status) : null)
-        }
+        interactive: root.status && Tailscale.selfIp(root.status) !== null
+        onClicked: root._copyIp(root.status ? Tailscale.selfIp(root.status) : null)
     }
 
     Cell {
@@ -329,7 +319,7 @@ Panel {
             required property var modelData
             required property int index
             width: parent.width
-            hovered: peerMouse.containsMouse || root._cursor === (index + 1)
+            hovered: peerCell.containsPointer || root._cursor === (index + 1)
 
             Column {
                 width: parent.width
@@ -379,14 +369,8 @@ Panel {
                 }
             }
 
-            MouseArea {
-                id: peerMouse
-                anchors.fill: parent
-                enabled: peerCell.modelData.ip !== null
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root._copyIp(peerCell.modelData.ip)
-            }
+            interactive: peerCell.modelData.ip !== null
+            onClicked: root._copyIp(peerCell.modelData.ip)
         }
     }
 

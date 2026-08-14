@@ -198,15 +198,12 @@ Panel {
                 elide: Text.ElideRight
             }
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (deviceCell.modelData.isOutput)
-                        Pipewire.preferredDefaultAudioSink = deviceCell.modelData.node;
-                    else
-                        Pipewire.preferredDefaultAudioSource = deviceCell.modelData.node;
-                }
+            interactive: true
+            onClicked: {
+                if (deviceCell.modelData.isOutput)
+                    Pipewire.preferredDefaultAudioSink = deviceCell.modelData.node;
+                else
+                    Pipewire.preferredDefaultAudioSource = deviceCell.modelData.node;
             }
         }
     }
@@ -262,11 +259,8 @@ Panel {
 
                         MetaLabel { text: "MUTE"; color: streamMuteCell.foreground }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
-                        }
+                        interactive: true
+                        onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
                     }
                 }
 
@@ -359,11 +353,8 @@ Panel {
 
                     MetaLabel { text: "MUTE"; color: outputMuteCell.foreground }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
-                    }
+                    interactive: true
+                    onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
                 }
             }
 
@@ -438,11 +429,8 @@ Panel {
 
                     MetaLabel { text: "MUTE"; color: inputMuteCell.foreground }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
-                    }
+                    interactive: true
+                    onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
                 }
             }
 

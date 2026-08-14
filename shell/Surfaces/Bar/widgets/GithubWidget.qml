@@ -39,7 +39,6 @@ Cell {
 
     visible: root.shown
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // "3/7" is unreadable without knowing which number is which.
     tooltipText: root._state === "ok"
@@ -80,14 +79,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

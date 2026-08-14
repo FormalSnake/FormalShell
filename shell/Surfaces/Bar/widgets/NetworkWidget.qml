@@ -43,7 +43,6 @@ Cell {
     }
 
     standalone: true
-    hovered: hoverArea.containsMouse
 
     // The glyph alone says "wifi", never which network or how well. Same
     // precedence the glyph uses (wired beats wifi beats nothing).
@@ -75,14 +74,9 @@ Cell {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            if (root.panel)
-                root.panel.toggle(root.mapToItem(null, 0, 0).x);
-        }
+    interactive: true
+    onClicked: {
+        if (root.panel)
+            root.panel.toggle(root.mapToItem(null, 0, 0).x);
     }
 }

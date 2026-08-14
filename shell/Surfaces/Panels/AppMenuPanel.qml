@@ -59,7 +59,6 @@ Panel {
             id: actionCell
             required property var modelData
             width: parent.width
-            hovered: actionArea.containsMouse
 
             Text {
                 width: parent.width
@@ -70,15 +69,10 @@ Panel {
                 elide: Text.ElideRight
             }
 
-            MouseArea {
-                id: actionArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    actionCell.modelData.execute();
-                    root.close();
-                }
+            interactive: true
+            onClicked: {
+                actionCell.modelData.execute();
+                root.close();
             }
         }
     }
@@ -94,7 +88,6 @@ Panel {
             // The window you are already in inverts, DESIGN's selection
             // idiom standing in for macOS's Window-menu checkmark.
             selected: windowCell.isCurrent
-            hovered: windowArea.containsMouse
 
             Text {
                 width: parent.width
@@ -107,15 +100,10 @@ Panel {
                 elide: Text.ElideRight
             }
 
-            MouseArea {
-                id: windowArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    CompositorService.focusWindow(windowCell.modelData.id);
-                    root.close();
-                }
+            interactive: true
+            onClicked: {
+                CompositorService.focusWindow(windowCell.modelData.id);
+                root.close();
             }
         }
     }
@@ -169,7 +157,6 @@ Panel {
         id: closeCell
         visible: root._window !== null
         width: parent.width
-        hovered: closeArea.containsMouse
 
         Text {
             width: parent.width
@@ -180,16 +167,11 @@ Panel {
             elide: Text.ElideRight
         }
 
-        MouseArea {
-            id: closeArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (root._window)
-                    CompositorService.closeWindow(root._window.id);
-                root.close();
-            }
+        interactive: true
+        onClicked: {
+            if (root._window)
+                CompositorService.closeWindow(root._window.id);
+            root.close();
         }
     }
 }

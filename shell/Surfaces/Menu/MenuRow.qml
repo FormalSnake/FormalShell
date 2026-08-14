@@ -32,7 +32,6 @@ Cell {
 
     selected: root.current
     accent: root.confirming
-    hovered: hoverArea.containsMouse
 
     // Clipboard image entries (M14 Task 6) ride a taller row: the thumbnail
     // is twice the height a plain text row's content would be.
@@ -162,15 +161,10 @@ Cell {
         }
     }
 
-    MouseArea {
-        id: hoverArea
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        // Qt re-delivers a hover move to whichever row slid under a parked
-        // pointer, so this fires on every filter keystroke and every scroll
-        // with the pointer untouched — hence the gate on the other end.
-        onPositionChanged: event => root.hoverMoved(hoverArea, event.x, event.y)
-        onClicked: root.activate()
-    }
+    interactive: true
+    // Qt re-delivers a hover move to whichever row slid under a parked
+    // pointer, so this fires on every filter keystroke and every scroll
+    // with the pointer untouched — hence the gate on the other end.
+    onPointerMoved: (x, y) => root.hoverMoved(root, x, y)
+    onClicked: root.activate()
 }
