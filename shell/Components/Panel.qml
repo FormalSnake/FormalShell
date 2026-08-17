@@ -82,7 +82,18 @@ PanelWindow {
     // visible line on every edge.
     readonly property real _contentWidth: root.panelWidth - Theme.borderWidth * 2 - Theme.space.panelPadding * 2
 
-    readonly property real _maxContentHeight: root._screen ? root._screen.height * 0.6 : 400
+    // Caps content to the room actually left on screen — from the frame's
+    // own top (`Theme.barHeight + panelGap` below) down to a mirrored
+    // `panelGap` above the screen's bottom edge, minus the frame's own
+    // chrome — rather than a flat 60% of total screen height, which clipped
+    // a panel well within genuinely empty space below it on a short/wide
+    // monitor (the M26 calendar hero pushed CalendarPanel past a 693px-tall
+    // screen's 60% cap with ~170px of untouched room still below the
+    // frame). Content only ever scrolls once it truly can't fit.
+    readonly property real _maxContentHeight: root._screen
+        ? Math.max(0, root._screen.height - Theme.barHeight - Theme.space.panelGap * 2
+            - Theme.borderWidth * 2 - Theme.space.panelPadding * 2 - titleCell.height)
+        : 400
     readonly property real _frameHeight: Theme.borderWidth * 2 + Theme.space.panelPadding * 2
         + titleCell.height + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
 
