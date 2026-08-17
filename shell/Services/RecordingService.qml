@@ -46,6 +46,13 @@ import "../Capture/model.js" as Capture
 // fatal: a probe or ffmpeg failure keeps the raw file wf-recorder already
 // wrote. recording.finalize (default true) turns the whole pass off.
 //
+// SAVED toast: a one-frame ffmpeg thumbnail attached as the notification's
+// image (upstream's own omarchy-capture-screenrecording:224-239, MIT),
+// deleted 2s later since Toasts.qml loads it into memory once and never
+// re-reads the path. A PLAY action opens the file with recording.player
+// (default xdg-open), the same env+sh handoff screenshot.editor already
+// establishes; GIF stays alongside it as a second action, M27 Task 3.
+//
 // No webcam overlay. Compositing a camera into the frame needs the camera
 // window to float at a fixed corner, which is a compositor window rule this
 // shell does not install and cannot install portably (niri window-rule vs
@@ -97,6 +104,8 @@ Singleton {
     property string _finalizeSource: ""
     property string _finalizeProcessed: ""
     property bool _finalizeReencode: false
+    property string _previewSource: ""
+    property string _previewCleanupPath: ""
     property var _audioModules: []
     property bool _stopping: false
     property bool _cancelling: false
@@ -246,6 +255,21 @@ Singleton {
         return out;
     }
 
+    // Hands the finished file to the user's configured player. Same env+sh
+    // handoff ScreenshotIpc.edit() uses for screenshot.editor, so the two
+    // are one idiom rather than two.
+    function play(path) {
+        if (!path)
+            return "error: no path";
+        playerProc.environment = ({
+            FS_PLAYER: Core.Config.get("recording.player", "xdg-open"),
+            FS_PLAY_PATH: path
+        });
+        playerProc.command = ["sh", "-c", 'exec "$FS_PLAYER" "$FS_PLAY_PATH"'];
+        playerProc.running = true;
+        return "ok";
+    }
+
     function _prepareDirectory() {
         mkdirProc.command = ["mkdir", "-p", root._dir()];
         mkdirProc.running = true;
@@ -343,13 +367,16 @@ Singleton {
         finalizeProbeVideoProc.running = true;
     }
 
+    // The file itself is already fully settled here (finalizeCleanupProc's
+    // `mv` has already exited), so the frame grab below reads the same bytes
+    // the user's player will. `finalizing` drops immediately rather than
+    // staying true through the grab: that flag is about the finalize
+    // rewrite, and this is a read against a file nothing is rewriting.
     function _announceSaved(path) {
         root.finalizing = false;
-        NotificationService.notify("RECORDING SAVED", path, 1, [{
-            key: "default",
-            label: "GIF",
-            invoke: () => root.gif(path)
-        }]);
+        root._previewSource = path;
+        previewProc.command = Capture.previewFrameArgv(path, Capture.previewFramePath(path));
+        previewProc.running = true;
     }
 
     Component.onCompleted: runtimeDirProc.running = true
@@ -571,6 +598,66 @@ Singleton {
     Process {
         id: finalizeCleanupProc
         onExited: exitCode => root._announceSaved(root._finalizeSource)
+    }
+
+    // A failed grab still announces the save with no image rather than
+    // holding the notification back -- a missing thumbnail is never a
+    // reason to withhold a finished recording.
+    Process {
+        id: previewProc
+        onExited: exitCode => {
+            const path = root._previewSource;
+            const preview = Capture.previewFramePath(path);
+            const image = exitCode === 0 ? preview : "";
+            NotificationService.notify("RECORDING SAVED", path, 1, [
+                {
+                    key: "default",
+                    label: "PLAY",
+                    invoke: () => root.play(path)
+                },
+                {
+                    key: "gif",
+                    label: "GIF",
+                    invoke: () => root.gif(path)
+                }
+            ], image);
+            if (image !== "") {
+                root._previewCleanupPath = image;
+                previewCleanupTimer.restart();
+            }
+        }
+    }
+
+    // 2s, matching upstream's own delay (omarchy-capture-screenrecording:
+    // 236-239, MIT): Toasts.qml loads the image into memory once when the
+    // popup appears and never re-reads the path, so the frame only has to
+    // outlive that load, not the toast itself.
+    Timer {
+        id: previewCleanupTimer
+        interval: 2000
+        onTriggered: {
+            previewCleanupProc.command = ["rm", "-f", root._previewCleanupPath];
+            previewCleanupProc.running = true;
+        }
+    }
+
+    Process {
+        id: previewCleanupProc
+    }
+
+    Process {
+        id: playerProc
+
+        stderr: StdioCollector {
+            id: playerErr
+        }
+        onExited: exitCode => {
+            if (exitCode === 0)
+                return;
+            const why = playerErr.text.trim() || ("player exited " + exitCode);
+            console.warn("RecordingService: player launch failed:", why);
+            NotificationService.notify("PLAYER FAILED", why);
+        }
     }
 
     Process {

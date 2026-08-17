@@ -223,3 +223,23 @@ function finalizeArgv(inPath, outPath, opts) {
     argv.push(outPath);
     return argv;
 }
+
+// The SAVED toast's own thumbnail (bin/omarchy-capture-screenrecording:224,
+// upstream, MIT). Same dotfile-safe stem logic as gifOutputPath/
+// finalizeOutputPath, so all three temp-output conventions read the same way.
+function previewFramePath(source) {
+    if (!source)
+        return "";
+    var slash = source.lastIndexOf("/");
+    var dot = source.lastIndexOf(".");
+    var stem = dot > slash + 1 ? source.slice(0, dot) : source;
+    return stem + "-preview.png";
+}
+
+// One frame at 0.1s in -- the same offset finalizeArgv trims to, so the
+// thumbnail matches what the finalized file actually opens on -- at
+// upstream's own -q:v 2 (bin/omarchy-capture-screenrecording:227, MIT).
+function previewFrameArgv(source, outPath) {
+    return ["ffmpeg", "-y", "-loglevel", "error", "-ss", "0.1", "-i", source,
+        "-vframes", "1", "-q:v", "2", outPath];
+}

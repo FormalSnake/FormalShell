@@ -147,6 +147,9 @@ import QtQuick
 // ffmpeg, re-encoding only when the first GOP holds discardable warmup
 // packets, and loudnorm-normalizes the audio track when there is one;
 // false saves the raw file exactly as wf-recorder wrote it, M27 Task 2.
+// recording.player (string, default "xdg-open"): the command the SAVED
+// notification's PLAY action hands the finished file to, the same
+// env+sh convention screenshot.editor already establishes, M27 Task 3.
 // reminders.defaultMessage (string, default "Time's up"): the body a
 // reminder set with no message of its own fires with. ReminderService
 // fills it in at set time, so a stored entry always carries a real message

@@ -208,4 +208,20 @@ TestCase {
         verify(af.indexOf("afade=t=in:st=0.4:d=0.05") >= 0);
         verify(af.indexOf("loudnorm=I=-14:TP=-1.5:LRA=11") >= 0);
     }
+
+    function test_preview_frame_path_sits_next_to_its_source() {
+        compare(Capture.previewFramePath("/v/a.mp4"), "/v/a-preview.png");
+        compare(Capture.previewFramePath("/v/b.d/a.mp4"), "/v/b.d/a-preview.png");
+        compare(Capture.previewFramePath(""), "");
+    }
+
+    function test_preview_frame_argv_pulls_one_frame_near_the_start() {
+        var argv = Capture.previewFrameArgv("/v/a.mp4", "/v/a-preview.png");
+        compare(argv[0], "ffmpeg");
+        compare(argv[argv.indexOf("-ss") + 1], "0.1");
+        compare(argv[argv.indexOf("-i") + 1], "/v/a.mp4");
+        compare(argv[argv.indexOf("-vframes") + 1], "1");
+        compare(argv[argv.indexOf("-q:v") + 1], "2");
+        compare(argv[argv.length - 1], "/v/a-preview.png");
+    }
 }

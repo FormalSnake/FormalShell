@@ -1987,7 +1987,8 @@ surface never looks the same in the two states.
 
 Recording starts through `RecordingService` exactly as `record start` does —
 same wf-recorder child, same destination, same `RECORDING SAVED` notification
-with its `GIF` action. It picks up audio from `recording.audio` in
+carrying a real frame from the finish and its `PLAY` and `GIF` actions. It
+picks up audio from `recording.audio` in
 `settings.json` (`none` by default, or `desktop` / `desktopmic`); every other
 recording setting applies unchanged. Unlike a shot, the picker **unmaps
 itself** before the recorder starts: wf-recorder records live content, so an
@@ -2208,9 +2209,10 @@ Stopping sends SIGTERM, which is one of wf-recorder's own graceful
 termination signals, so the container is finalized rather than truncated. A
 recorder that ignores it for 5 seconds is killed, and the notification says
 so (`RECORDING TRUNCATED`) instead of reporting a save. Recordings land at
-`<recording.directory>/screenrecording-<timestamp>.mp4`, and the
-`RECORDING SAVED` notification carries a `GIF` action that transcodes it in
-place.
+`<recording.directory>/screenrecording-<timestamp>.mp4`. The
+`RECORDING SAVED` notification carries a thumbnail pulled from the finished
+file, a `PLAY` action that opens it with `recording.player`, and a `GIF`
+action that transcodes it in place.
 
 `record gif` is a two-pass ffmpeg palettegen/paletteuse transcode, writing
 next to its source rather than into `recording.directory`: the everyday case
@@ -2230,6 +2232,7 @@ Every setting, with its default:
 | `recording.audio` | `"none"` | audio mode the capture picker's REC tools start with; `record start` takes its own argument instead |
 | `recording.gifFps` | `12` | GIF frame rate |
 | `recording.gifWidth` | `640` | GIF width in pixels, height follows the aspect |
+| `recording.player` | `"xdg-open"` | command the SAVED toast's `PLAY` action hands the file to |
 
 ```jsonc
 {
