@@ -94,6 +94,27 @@ Panel {
         return (typeof v === "number" && v > 0) ? v : 900000;
     }
 
+    // The single row nearest its limit across every ENABLED provider, or null
+    // before any provider has answered. Only "ok" providers contribute: a
+    // failed or disabled leg has no windows to rank, and ranking a leg that is
+    // merely still loading would make the headline jump as the slower one
+    // lands.
+    readonly property var _peakRow: {
+        var rows = [];
+        if (root.claudeEnabled && root.claudeState === "ok")
+            rows = rows.concat(root.claudeRows);
+        if (root.codexEnabled && root.codexState === "ok")
+            rows = rows.concat(root.codexRows);
+        var peak = null;
+        for (var i = 0; i < rows.length; i++) {
+            if (!rows[i] || !isFinite(Number(rows[i].percent)))
+                continue;
+            if (!peak || Number(rows[i].percent) > Number(peak.percent))
+                peak = rows[i];
+        }
+        return peak;
+    }
+
     // "unknown" (pre-first-answer) | "noauth" | "stale" | "loading" | "error" | "ok"
     property string claudeState: "unknown"
     property string claudeTier: ""
@@ -496,6 +517,22 @@ Panel {
                 }
             }
         }
+    }
+
+    // The panel's headline: of every rate window on show, the one closest to
+    // its limit, which is the question the panel gets opened to answer. The
+    // sections below still list every window; this only promotes the worst.
+    //
+    // It names that window in the meta line rather than repeating the section
+    // header, so the hero and the CLAUDE/CODEX headers below state different
+    // facts instead of the same one twice.
+    PanelHero {
+        width: parent.width
+        glyph: "󱚣"
+        title: "Usage"
+        meta: root._peakRow ? root._peakRow.label : (root.claudeEnabled ? "LOADING" : "DISABLED")
+        readout: root._peakRow ? Math.round(root._peakRow.percent * 100) + "%" : ""
+        rail: root._peakRow ? root._peakRow.percent : -1
     }
 
     // ---- CLAUDE section ----
