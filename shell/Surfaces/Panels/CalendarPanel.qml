@@ -65,7 +65,12 @@ Panel {
     id: root
 
     panelTitle: "CALENDAR"
-    panelWidth: Core.Theme.space.popupWidthNarrow
+    // Wide, not narrow: this grid carries eight columns (the ISO week number
+    // plus seven days) and a hero, and at the narrow step the day cells were
+    // tighter than anything else in the shell. Upstream's own clock popup runs
+    // at 560 for the same content; 400 is the widest step DESIGN.md sanctions
+    // for a bar-anchored panel, 560 being reserved for the menu.
+    panelWidth: Core.Theme.space.popupWidthWide
 
     // Set from shell.qml, the single Menu instance, needed to drive the
     // life-progress easter egg's two-step birth-year/life-expectancy prompt
@@ -289,18 +294,23 @@ Panel {
         easing.type: Core.Theme.motion.easing
     }
 
-    // Calendar hero (M26 Task 4): weekday as the title, today's day-of-month
-    // as the display readout (the surrounding month/year already sits in
-    // monthNav below), the existing year-progress fraction doubling as the
-    // rail. PanelHero's own rail carries no MouseArea, so the YEAR ledger
-    // cell further down keeps both its full header/percent/rail chrome and
-    // its double-click life-progress easter egg unchanged.
+    // Calendar hero: weekday as the title, today's day-of-month as the display
+    // readout (the surrounding month/year already sits in monthNav below), and
+    // today's ISO week as the meta line, which is the one fact about today the
+    // grid below cannot state without the reader counting rows.
+    //
+    // The hero deliberately carries NO rail. It briefly mirrored the year
+    // fraction, which put the same percentage and the same bar on screen twice
+    // over: once here and once in the YEAR ledger cell further down, which owns
+    // that number along with its full header/percent/rail chrome and its
+    // double-click life-progress easter egg. Upstream keeps its year and life
+    // bars as their own rows under the grid for the same reason.
     PanelHero {
         width: parent.width
         title: Qt.locale().dayName(root._today.getDay(), Locale.LongFormat)
-        meta: Progress.formatPercent(root._yearFraction)
+        meta: "WEEK " + ClockModel.pad2(ClockModel.isoWeek(
+            root._today.getFullYear(), root._today.getMonth(), root._today.getDate()))
         readout: String(root._today.getDate())
-        rail: root._yearFraction
     }
 
     Row {
