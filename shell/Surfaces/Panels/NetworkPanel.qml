@@ -951,7 +951,7 @@ Panel {
                     spacing: Theme.space.sm
 
                     Text {
-                        width: parent.width - actionCell.width - parent.spacing
+                        width: parent.width - actionLabel.width - parent.spacing
                         text: netCell.modelData.network.name || "(unnamed)"
                         color: netCell.foreground
                         font.family: Theme.fontFamily
@@ -959,23 +959,27 @@ Panel {
                         elide: Text.ElideRight
                     }
 
-                    Cell {
-                        id: actionCell
-                        width: implicitWidth
-                        height: implicitHeight
-                        selected: netCell.modelData.network.connected
+                    // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+                    // amendment): no cell chrome, armed state promotes
+                    // straight to accent instead of a fill/inversion.
+                    MetaLabel {
+                        id: actionLabel
+                        text: netCell.modelData.network.connected ? "DISCONNECT" : "CONNECT"
+                        color: netCell.modelData.network.connected
+                            ? Theme.color.accent
+                            : (actionHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                        MetaLabel {
-                            text: netCell.modelData.network.connected ? "DISCONNECT" : "CONNECT"
-                            color: actionCell.dimForeground
-                        }
-
-                        interactive: true
-                        onClicked: {
-                            if (netCell.modelData.network.connected)
-                                netCell.modelData.network.disconnect();
-                            else
-                                netCell.modelData.network.connect();
+                        MouseArea {
+                            id: actionHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (netCell.modelData.network.connected)
+                                    netCell.modelData.network.disconnect();
+                                else
+                                    netCell.modelData.network.connect();
+                            }
                         }
                     }
                 }
@@ -1240,19 +1244,23 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            Cell {
+            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+            // amendment): no cell chrome, armed state promotes straight to
+            // accent instead of a fill/inversion.
+            MetaLabel {
                 id: wifiPowerToggle
-                width: implicitWidth
-                height: implicitHeight
-                selected: Networking.wifiEnabled
+                text: "WI-FI POWER"
+                color: Networking.wifiEnabled
+                    ? Theme.color.accent
+                    : (wifiPowerHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                MetaLabel {
-                    text: "WI-FI POWER"
-                    color: wifiPowerToggle.dimForeground
+                MouseArea {
+                    id: wifiPowerHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
                 }
-
-                interactive: true
-                onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
             }
         }
     }
@@ -1298,19 +1306,23 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            Cell {
+            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+            // amendment): no cell chrome, armed state promotes straight to
+            // accent instead of a fill/inversion.
+            MetaLabel {
                 id: qrToggle
-                width: implicitWidth
-                height: implicitHeight
-                selected: root._qrOpen
+                text: "QR"
+                color: root._qrOpen
+                    ? Theme.color.accent
+                    : (qrHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                MetaLabel {
-                    text: "QR"
-                    color: qrToggle.dimForeground
+                MouseArea {
+                    id: qrHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root._toggleWifiQr()
                 }
-
-                interactive: true
-                onClicked: root._toggleWifiQr()
             }
         }
     }
@@ -1414,19 +1426,23 @@ Panel {
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                Cell {
+                // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+                // amendment): no cell chrome, armed state promotes straight
+                // to accent instead of a fill/inversion.
+                MetaLabel {
                     id: pwToggle
-                    width: implicitWidth
-                    height: implicitHeight
-                    selected: root._pwPhase !== "idle"
+                    text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
+                    color: root._pwPhase !== "idle"
+                        ? Theme.color.accent
+                        : (pwHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                    MetaLabel {
-                        text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
-                        color: pwToggle.dimForeground
+                    MouseArea {
+                        id: pwHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root._togglePasswordReveal()
                     }
-
-                    interactive: true
-                    onClicked: root._togglePasswordReveal()
                 }
             }
 
@@ -1477,19 +1493,26 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            Cell {
+            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+            // amendment): no cell chrome, armed state promotes straight to
+            // accent instead of a fill/inversion. Disabled while running:
+            // no hover tracking or pointer, same gate `interactive` used to
+            // carry.
+            MetaLabel {
                 id: runToggle
-                width: implicitWidth
-                height: implicitHeight
-                selected: root._stRunning
+                text: root._stRunning ? "RUNNING…" : "RUN"
+                color: root._stRunning
+                    ? Theme.color.accent
+                    : (runHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                MetaLabel {
-                    text: root._stRunning ? "RUNNING…" : "RUN"
-                    color: runToggle.dimForeground
+                MouseArea {
+                    id: runHover
+                    anchors.fill: parent
+                    enabled: !root._stRunning
+                    hoverEnabled: !root._stRunning
+                    cursorShape: root._stRunning ? Qt.ArrowCursor : Qt.PointingHandCursor
+                    onClicked: root._startSpeedTest()
                 }
-
-                interactive: !root._stRunning
-                onClicked: root._startSpeedTest()
             }
         }
     }

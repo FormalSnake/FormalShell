@@ -236,7 +236,7 @@ Panel {
                     spacing: Theme.space.sm
 
                     Text {
-                        width: parent.width - streamPercent.width - streamMuteCell.width - parent.spacing * 2
+                        width: parent.width - streamPercent.width - streamMuteLabel.width - parent.spacing * 2
                         text: streamCell._label
                         color: streamCell.foreground
                         font.family: Theme.fontFamily
@@ -252,16 +252,23 @@ Panel {
                         font.pixelSize: Theme.fontSize.caption
                     }
 
-                    Cell {
-                        id: streamMuteCell
-                        width: implicitWidth
-                        height: implicitHeight
-                        selected: streamCell._muted
+                    // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+                    // amendment): no cell chrome, armed state promotes
+                    // straight to accent instead of a fill/inversion.
+                    MetaLabel {
+                        id: streamMuteLabel
+                        text: "MUTE"
+                        color: streamCell._muted
+                            ? Theme.color.accent
+                            : (streamMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                        MetaLabel { text: "MUTE"; color: streamMuteCell.dimForeground }
-
-                        interactive: true
-                        onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
+                        MouseArea {
+                            id: streamMuteHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
+                        }
                     }
                 }
 
@@ -339,23 +346,27 @@ Panel {
                 spacing: Theme.space.sm
 
                 Text {
-                    width: parent.width - outputMuteCell.width - parent.spacing
+                    width: parent.width - outputMuteLabel.width - parent.spacing
                     text: Math.round((root._sink && root._sink.audio ? root._sink.audio.volume : 0) * 100) + "%"
                     color: outputMasterCell.foreground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                Cell {
-                    id: outputMuteCell
-                    width: implicitWidth
-                    height: implicitHeight
-                    selected: root._sink && root._sink.audio && root._sink.audio.muted
+                MetaLabel {
+                    id: outputMuteLabel
+                    text: "MUTE"
+                    color: (root._sink && root._sink.audio && root._sink.audio.muted)
+                        ? Theme.color.accent
+                        : (outputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                    MetaLabel { text: "MUTE"; color: outputMuteCell.dimForeground }
-
-                    interactive: true
-                    onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
+                    MouseArea {
+                        id: outputMuteHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
+                    }
                 }
             }
 
@@ -415,23 +426,27 @@ Panel {
                 spacing: Theme.space.sm
 
                 Text {
-                    width: parent.width - inputMuteCell.width - parent.spacing
+                    width: parent.width - inputMuteLabel.width - parent.spacing
                     text: Math.round((root._source && root._source.audio ? root._source.audio.volume : 0) * 100) + "%"
                     color: inputMasterCell.foreground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                Cell {
-                    id: inputMuteCell
-                    width: implicitWidth
-                    height: implicitHeight
-                    selected: root._source && root._source.audio && root._source.audio.muted
+                MetaLabel {
+                    id: inputMuteLabel
+                    text: "MUTE"
+                    color: (root._source && root._source.audio && root._source.audio.muted)
+                        ? Theme.color.accent
+                        : (inputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                    MetaLabel { text: "MUTE"; color: inputMuteCell.dimForeground }
-
-                    interactive: true
-                    onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
+                    MouseArea {
+                        id: inputMuteHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
+                    }
                 }
             }
 

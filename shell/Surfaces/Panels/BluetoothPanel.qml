@@ -605,7 +605,7 @@ Panel {
             spacing: Theme.space.sm
 
             Text {
-                width: parent.width - powerCell.width - parent.spacing
+                width: parent.width - powerLabel.width - parent.spacing
                 // Not routed through ActionLabel/MetaLabel: the adapter's own
                 // name is real device data, not ours to force uppercase (the
                 // same reasoning Tooltip.qml's `verbatim` flag documents) —
@@ -620,21 +620,25 @@ Panel {
                 elide: Text.ElideRight
             }
 
-            Cell {
-                id: powerCell
-                width: implicitWidth
-                height: implicitHeight
-                selected: root._adapter ? root._adapter.enabled : false
+            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+            // amendment): no cell chrome, armed state promotes straight to
+            // accent instead of a fill/inversion.
+            MetaLabel {
+                id: powerLabel
+                text: "POWER"
+                color: (root._adapter && root._adapter.enabled)
+                    ? Theme.color.accent
+                    : (powerHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                MetaLabel {
-                    text: "POWER"
-                    color: powerCell.dimForeground
-                }
-
-                interactive: true
-                onClicked: {
-                    if (root._adapter)
-                        root._adapter.enabled = !root._adapter.enabled;
+                MouseArea {
+                    id: powerHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root._adapter)
+                            root._adapter.enabled = !root._adapter.enabled;
+                    }
                 }
             }
         }

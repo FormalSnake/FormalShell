@@ -343,7 +343,7 @@ Panel {
             spacing: Theme.space.sm
 
             Text {
-                width: parent.width - mirrorToggle.width - parent.spacing
+                width: parent.width - mirrorLabel.width - parent.spacing
                 // What the mirror is centred on: the live source while it is
                 // on, the primary the plan would pick while it is off.
                 text: root._mirrorOn ? Outputs.mirrorSource(root._outputs) : root._mirrorPlan.primary
@@ -353,19 +353,23 @@ Panel {
                 font.pixelSize: Theme.fontSize.body
             }
 
-            Cell {
-                id: mirrorToggle
-                width: implicitWidth
-                height: implicitHeight
-                selected: root._mirrorOn
+            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+            // amendment): no cell chrome, armed state promotes straight to
+            // accent instead of a fill/inversion.
+            MetaLabel {
+                id: mirrorLabel
+                text: root._mirrorOn ? "ON" : "OFF"
+                color: root._mirrorOn
+                    ? Theme.color.accent
+                    : (mirrorHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                MetaLabel {
-                    text: root._mirrorOn ? "ON" : "OFF"
-                    color: mirrorToggle.dimForeground
+                MouseArea {
+                    id: mirrorHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root._setMirror(!root._mirrorOn)
                 }
-
-                interactive: true
-                onClicked: root._setMirror(!root._mirrorOn)
             }
         }
     }
