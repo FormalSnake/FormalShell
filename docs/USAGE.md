@@ -2076,14 +2076,25 @@ qs ipc --any-display -p <store-path>/share/formalshell call screenshot key 4    
 capability report: zero drawable alongside a non-empty named list is the
 normal niri answer, not a failure.
 
+**Recommended keybinds.** `screenshot pick smart default` is the route
+worth binding to your main capture chord (`Mod+Shift+S`, or whatever your
+compositor uses for "area screenshot") — it is the only route with the
+toolbar, keyboard window selection, and recording. `screenshot region`
+(bare slurp) and `screenshot full` (instant whole output) are both
+non-interactive legacy routes: no toolbar, no recording. `full` is still
+worth a bind of its own for a plain "whole screen right now" key like
+`Print`, but binding `Print` or `Mod+Shift+S` to `region` and expecting the
+picker is the mistake that shipped for weeks on one machine before anyone
+noticed the bind, not the shell, was wrong.
+
 Bind them in niri, same pattern as every other target:
 
 ```kdl
 binds {
-    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; }
-    Mod+Shift+S { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; }
+    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }               // instant, no toolbar, no recording
+    Mod+Shift+S { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; } // the picker: toolbar, recording, keyboard select
     Shift+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "region" "copy"; }
-    Ctrl+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
+    Ctrl+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "region"; }        // legacy bare slurp, no toolbar, no recording
     Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "edit" ""; }
 }
 ```

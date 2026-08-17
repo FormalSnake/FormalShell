@@ -32,6 +32,17 @@ import qs.Services
 // 90) with a SCREENSHOT CANCELLED notification; the `cancel` verb does the
 // same on demand. Scope root, not a bare IpcHandler: IpcHandler has no
 // default property, so the capture Processes can't live inside it.
+//
+// Three routes, and only one of them is the rich one. `full()` and
+// `region()` are non-interactive legacy paths (whole output, bare slurp)
+// with no toolbar and no recording — they exist for anyone who wants a
+// plain instant capture. `pick()` opens RegionPicker below, which is the
+// only route carrying the toolbar, keyboard window selection, and
+// recording; bind it to whatever chord is meant to be "the" screenshot
+// bind. A compositor bind pointed at `region` where `pick smart default`
+// was intended looks identical from the outside (both pop a selection
+// overlay) and was exactly the misbinding that shipped unnoticed for
+// weeks (M27).
 Scope {
     id: root
 
