@@ -30,7 +30,11 @@ import qs.Compositor
 Panel {
     id: root
 
-    panelTitle: root._entry ? root._entry.name : (root._appId !== "" ? root._appId : "APP")
+    // The panel's own noun, not the instance: the hero below carries the
+    // focused app's name (M28 Task 5). Titling the card band with that same
+    // name too was the duplication trap DESIGN.md's plan bans — every other
+    // panel's card band names the panel, not its subject.
+    panelTitle: "APP MENU"
     panelWidth: Theme.space.popupWidthWide
 
     // Held, not raw: opening this panel takes keyboard focus off the very
@@ -139,11 +143,11 @@ Panel {
         }
     }
 
-    // The panel's own subject (M28 Task 5): the focused window's app name —
-    // the card band above already says this too, but at a different
-    // register (the ALL-CAPS title band vs. this row's own content ink),
-    // and the icon here is genuinely new: nothing else in this panel shows
-    // it. No readout: this panel is a list of actions/windows, not a metric.
+    // The panel's own subject (M28 Task 5): the focused window's app name.
+    // The card band above says the panel's noun (APP MENU) now, not the
+    // instance, so this is the only place the name prints. The icon here is
+    // genuinely new too: nothing else in this panel shows it. No readout:
+    // this panel is a list of actions/windows, not a metric.
     PanelHero {
         visible: root._window !== null
         width: parent.width

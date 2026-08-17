@@ -178,6 +178,11 @@ Panel {
             readonly property string _status: outCell.selected
                 ? Outputs.statusLineNoMode(outCell.modelData)
                 : Outputs.statusLine(outCell.modelData)
+            // Same drop, completed: the focused row's own name is already
+            // the hero's title above, so this row's identity line goes
+            // blank rather than repeat it. The inversion (selected) is
+            // already what marks this row as the hero's row.
+            readonly property string _nameText: outCell.selected ? "" : outCell.modelData.name
 
             // Takes no buttons: the cell's own target sits under its content,
             // so every control in the Column below stays above it and keeps
@@ -200,7 +205,7 @@ Panel {
 
                     Text {
                         width: parent.width - toggleLabel.width - parent.spacing
-                        text: outCell.modelData.name
+                        text: outCell._nameText
                         color: outCell.foreground
                         elide: Text.ElideRight
                         font.family: Theme.fontFamily
