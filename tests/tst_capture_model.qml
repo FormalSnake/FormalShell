@@ -120,6 +120,47 @@ TestCase {
         verify(full.indexOf("--no-dmabuf") >= 0);
     }
 
+    function test_scale_cap_filter_is_empty_without_a_cap() {
+        compare(Capture.scaleCapFilter(0), "");
+        compare(Capture.scaleCapFilter(-5), "");
+        compare(Capture.scaleCapFilter(undefined), "");
+        compare(Capture.scaleCapFilter(""), "");
+        compare(Capture.scaleCapFilter("not a number"), "");
+    }
+
+    function test_scale_cap_filter_clamps_height_and_keeps_width_even() {
+        compare(Capture.scaleCapFilter(720), "scale=-2:'min(ih,720)'");
+        compare(Capture.scaleCapFilter("1080"), "scale=-2:'min(ih,1080)'");
+        compare(Capture.scaleCapFilter(480.9), "scale=-2:'min(ih,480)'");
+    }
+
+    function test_recorder_argv_adds_the_scale_filter_only_when_capped() {
+        var uncapped = Capture.recorderArgv({ path: "/v/a.mp4", framerate: 30, output: "DP-1" });
+        verify(uncapped.indexOf("-F") < 0);
+
+        var capped = Capture.recorderArgv({ path: "/v/a.mp4", framerate: 30, output: "DP-1", maxHeight: 720 });
+        compare(capped[capped.indexOf("-F") + 1], "scale=-2:'min(ih,720)'");
+    }
+
+    function test_resolve_max_height_defers_to_the_config_default_on_empty() {
+        compare(Capture.resolveMaxHeight("", 720), 720);
+        compare(Capture.resolveMaxHeight(undefined, 720), 720);
+        compare(Capture.resolveMaxHeight(null, 0), 0);
+        compare(Capture.resolveMaxHeight("  ", 720), 720);
+    }
+
+    function test_resolve_max_height_accepts_a_plain_non_negative_integer() {
+        compare(Capture.resolveMaxHeight("480", 720), 480);
+        compare(Capture.resolveMaxHeight("0", 720), 0);
+    }
+
+    function test_resolve_max_height_rejects_anything_that_is_not_a_number() {
+        verify(isNaN(Capture.resolveMaxHeight("tall", 0)));
+        verify(isNaN(Capture.resolveMaxHeight("-5", 0)));
+        verify(isNaN(Capture.resolveMaxHeight("720p", 0)));
+        verify(isNaN(Capture.resolveMaxHeight("7.5", 0)));
+    }
+
     function test_gif_argv_pass_one_writes_a_single_frame_palette() {
         var a = Capture.gifArgv("/v/a.mp4", "/run/pal.png", "/v/a.gif", { fps: 12, width: 640 });
         compare(a.pass1[a.pass1.indexOf("-f") + 1], "image2");

@@ -53,6 +53,12 @@ import "../Capture/model.js" as Capture
 // (default xdg-open), the same env+sh handoff screenshot.editor already
 // establishes; GIF stays alongside it as a second action, M27 Task 3.
 //
+// recording.maxHeight (default 0, no cap) downscales via wf-recorder's own
+// -F filter (model.js's scaleCapFilter) when the captured source is taller
+// than it, preserving aspect ratio. `record startCapped` overrides it for
+// one run without editing config; every other entry point (start, startAt,
+// the picker's own REC tools) still resolves the config default. M27 Task 4.
+//
 // No webcam overlay. Compositing a camera into the frame needs the camera
 // window to float at a fixed corner, which is a compositor window rule this
 // shell does not install and cannot install portably (niri window-rule vs
@@ -101,6 +107,10 @@ Singleton {
     property string _pendingOutput: ""
     property string _pendingGifPath: ""
     property var _pendingGifPass2: []
+    // Resolved once per start/startAt call and read at launch time, so a
+    // config change mid-recording can't retroactively change what
+    // `_launch` builds -F around.
+    property real _pendingMaxHeight: 0
     property string _finalizeSource: ""
     property string _finalizeProcessed: ""
     property bool _finalizeReencode: false
@@ -121,7 +131,15 @@ Singleton {
     // "error: ..." string. IpcHandler replies are synchronous, so a region
     // scope (which blocks on a human answering slurp) can only ever answer
     // with its destination, the same contract ScreenshotIpc.region() has.
-    function start(scopeArg, audioArg) {
+    //
+    // maxHeightArg is undefined from the plain 2-arg `record start`/`toggle`
+    // callers (defers to recording.maxHeight) and a string from
+    // RecordIpc.startCapped, which overrides it for this one run without
+    // touching config -- its own verb rather than a third argument on
+    // `start` itself, since IpcHandler dispatches on exact arity and a
+    // defaulted parameter would break the bare `record start` a keybind
+    // already calls (M27 Task 4).
+    function start(scopeArg, audioArg, maxHeightArg) {
         if (recProc.running)
             return "error: already recording";
         if (slurpProc.running || mkdirProc.running || audioProc.running)
@@ -133,9 +151,13 @@ Singleton {
         const wantAudio = audioArg || "none";
         if (["none", "desktop", "desktopmic"].indexOf(wantAudio) < 0)
             return "error: unknown audio mode \"" + wantAudio + "\" (none|desktop|desktopmic)";
+        const maxHeight = Capture.resolveMaxHeight(maxHeightArg, Core.Config.get("recording.maxHeight", 0));
+        if (isNaN(maxHeight))
+            return "error: not a number: \"" + maxHeightArg + "\" (maxHeight)";
 
         root.scope = wantScope;
         root.audioMode = wantAudio;
+        root._pendingMaxHeight = maxHeight;
         root.lastError = "";
         root._pendingGeometry = "";
         root._pendingOutput = "";
@@ -195,9 +217,13 @@ Singleton {
         const wantAudio = (opts && opts.audio) || "none";
         if (["none", "desktop", "desktopmic"].indexOf(wantAudio) < 0)
             return "error: unknown audio mode \"" + wantAudio + "\" (none|desktop|desktopmic)";
+        const maxHeight = Capture.resolveMaxHeight(opts && opts.maxHeight, Core.Config.get("recording.maxHeight", 0));
+        if (isNaN(maxHeight))
+            return "error: not a number: \"" + opts.maxHeight + "\" (maxHeight)";
 
         root.scope = wantScope;
         root.audioMode = wantAudio;
+        root._pendingMaxHeight = maxHeight;
         root.lastError = "";
         root._pendingGeometry = geometry;
         root._pendingOutput = (opts && opts.output) || "";
@@ -318,6 +344,7 @@ Singleton {
             output: root._pendingOutput || CompositorService.focusedOutputName,
             geometry: root._pendingGeometry,
             codec: Core.Config.get("recording.codec", ""),
+            maxHeight: root._pendingMaxHeight,
             noDmabuf: Core.Config.get("recording.noDmabuf", false) === true,
             audioDevice: device,
             audioBackend: Core.Config.get("recording.audioBackend", "")

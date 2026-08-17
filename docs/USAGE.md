@@ -2233,6 +2233,7 @@ Every setting, with its default:
 | `recording.gifFps` | `12` | GIF frame rate |
 | `recording.gifWidth` | `640` | GIF width in pixels, height follows the aspect |
 | `recording.player` | `"xdg-open"` | command the SAVED toast's `PLAY` action hands the file to |
+| `recording.maxHeight` | `0` | downscale height in pixels via wf-recorder's own `-F` scale filter, `0` means no cap; `record startCapped` overrides it for one run |
 
 ```jsonc
 {
@@ -2248,6 +2249,7 @@ default rather than omitting it:
 qs ipc --any-display -p <store-path>/share/formalshell call record start screen none
 qs ipc --any-display -p <store-path>/share/formalshell call record start region desktopmic
 qs ipc --any-display -p <store-path>/share/formalshell call record startAt "0,0 1280x720" none   # a rectangle you already have, no selection
+qs ipc --any-display -p <store-path>/share/formalshell call record startCapped screen none 720    # downscale to 720p regardless of recording.maxHeight
 qs ipc --any-display -p <store-path>/share/formalshell call record toggle screen none
 qs ipc --any-display -p <store-path>/share/formalshell call record stop            # also cancels a pending region selection
 qs ipc --any-display -p <store-path>/share/formalshell call record gif ""          # transcode the last recording
@@ -2259,7 +2261,9 @@ qs ipc --any-display -p <store-path>/share/formalshell call record status       
 the same contract `screenshot region` has: an IPC reply is synchronous while
 a region scope blocks on a human. An unknown scope or audio mode comes back
 as an error naming the accepted values, never a silent fallback to something
-you did not ask for.
+you did not ask for. `startCapped`'s own third argument follows the same
+rule: pass `""` to take `recording.maxHeight`'s own value, anything else has
+to be a plain integer height in pixels or it comes back as an error too.
 
 While a recording runs, the bar's indicators slot carries a full-bleed
 `urgent` cell; clicking it stops the recording. `active` is the live child

@@ -22,6 +22,17 @@ IpcHandler {
         return RecordingService.start(scope, audio);
     }
 
+    // Same scope/audio contract as start(), plus a resolution cap
+    // (recording.maxHeight) that overrides config for this one run. Its own
+    // verb rather than a third argument on start(): IpcHandler dispatches
+    // on exact arity, so widening start() would break the bare `record
+    // start` a keybind already calls, the same reasoning startAt() already
+    // states. Pass "" to take recording.maxHeight's own value; anything
+    // else must be a plain integer height in pixels (M27 Task 4).
+    function startCapped(scope: string, audio: string, maxHeight: string): string {
+        return RecordingService.start(scope, audio, maxHeight);
+    }
+
     // Start against a geometry the caller already has ("X,Y WxH"), skipping
     // the selection. Its own verb rather than an optional argument on start():
     // IpcHandler dispatches on exact arity, so a defaulted parameter would

@@ -127,6 +127,9 @@ function recorderArgv(opts) {
         argv.push("-g", opts.geometry);
     if (opts.codec)
         argv.push("-c", opts.codec);
+    var scaleFilter = scaleCapFilter(opts.maxHeight);
+    if (scaleFilter)
+        argv.push("-F", scaleFilter);
     if (opts.noDmabuf === true)
         argv.push("--no-dmabuf");
     if (opts.audioDevice) {
@@ -135,6 +138,39 @@ function recorderArgv(opts) {
             argv.push("--audio-backend", opts.audioBackend);
     }
     return argv;
+}
+
+// wf-recorder's -F/--filter (M27 Task 4) passes straight into ffmpeg's own
+// filtergraph parser (avfilter_graph_parse_ptr, upstream frame-writer.cpp
+// init_video_filters), so an ordinary scale expression works with no shell
+// in between to escape it. -2 asks ffmpeg to compute the width from the
+// chosen height, rounded to an even number (most encoders require one);
+// min(ih,H) leaves the height untouched under the cap and clamps it to H
+// otherwise, so nothing here has to know the captured height in advance --
+// screen scope has none until wf-recorder opens the real output. Single-
+// quoted per ffmpeg's own filtergraph escaping, since the comma inside
+// min(...) would otherwise read as the end of the -F value.
+function scaleCapFilter(maxHeight) {
+    var h = Number(maxHeight);
+    if (!(h > 0))
+        return "";
+    return "scale=-2:'min(ih," + Math.floor(h) + ")'";
+}
+
+// The record IPC's own maxHeight override: "" defers to recording.maxHeight
+// (the same "pass \"\" for a default" contract every other optional record
+// argument already holds, USAGE.md), and 0 is itself the legal "uncapped,
+// regardless of what config says" answer. Anything else must be a plain
+// non-negative integer; NaN signals "not a number", which the caller turns
+// into an IPC error string rather than silently falling back to the config
+// default and hiding a typo.
+function resolveMaxHeight(arg, configDefault) {
+    var raw = (arg === undefined || arg === null) ? "" : ("" + arg).trim();
+    if (raw === "")
+        return configDefault;
+    if (!/^\d+$/.test(raw))
+        return NaN;
+    return Number(raw);
 }
 
 // Two-pass palettegen/paletteuse. `-f image2 -update 1` is what makes pass

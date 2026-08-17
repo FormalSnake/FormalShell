@@ -150,6 +150,10 @@ import QtQuick
 // recording.player (string, default "xdg-open"): the command the SAVED
 // notification's PLAY action hands the finished file to, the same
 // env+sh convention screenshot.editor already establishes, M27 Task 3.
+// recording.maxHeight (number, default 0 meaning no cap): downscales the
+// capture to this height in pixels via wf-recorder's own -F scale filter
+// when the source exceeds it, preserving aspect ratio. `record startCapped`
+// overrides it for one run without touching config, M27 Task 4.
 // reminders.defaultMessage (string, default "Time's up"): the body a
 // reminder set with no message of its own fires with. ReminderService
 // fills it in at set time, so a stored entry always carries a real message
