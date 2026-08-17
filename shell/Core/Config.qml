@@ -142,6 +142,11 @@ import QtQuick
 // recording.timeoutSeconds (number, default 90: the region-scope slurp
 // watchdog), recording.gifFps (number, default 12) and recording.gifWidth
 // (number, default 640: the two-pass ffmpeg transcode's output size, M22).
+// recording.finalize (bool, default true): after wf-recorder exits,
+// RecordingService trims the first 0.1s (a PipeWire capture-open click) via
+// ffmpeg, re-encoding only when the first GOP holds discardable warmup
+// packets, and loudnorm-normalizes the audio track when there is one;
+// false saves the raw file exactly as wf-recorder wrote it, M27 Task 2.
 // reminders.defaultMessage (string, default "Time's up"): the body a
 // reminder set with no message of its own fires with. ReminderService
 // fills it in at set time, so a stored entry always carries a real message

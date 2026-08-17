@@ -175,3 +175,51 @@ function ocrOutcome(exitCode) {
         return "empty";
     return "failed";
 }
+
+// finalize_recording's own trim (bin/omarchy-capture-screenrecording:253-280,
+// upstream, MIT), ported verbatim in intent: PipeWire emits a click at the
+// start of every captured stream, so the first 0.1s is always cut. Kept as
+// pure functions rather than one shell script (unlike _setupAudio's) so the
+// reencode/audio decisions are directly testable.
+
+// ffprobe -select_streams v:0 -read_intervals %+0.2 -show_entries
+// packet=flags -of csv=p=0: one flag string per packet in the first 0.2s.
+// A "D" (discard) flag is what a stream copy can't trim past -- it rewinds
+// to the keyframe instead -- so its presence is what forces a re-encode.
+function finalizeNeedsReencode(packetFlagsText) {
+    return /D/.test("" + packetFlagsText);
+}
+
+// ffprobe -select_streams a -show_entries stream=codec_type -of csv=p=0:
+// one "audio" line per audio stream, nothing at all when there is none.
+function finalizeHasAudio(streamTypesText) {
+    return ("" + streamTypesText).indexOf("audio") >= 0;
+}
+
+// Sits next to its source, the same dotfile-safe stem logic as
+// gifOutputPath, so the two temp-output conventions read the same way.
+function finalizeOutputPath(source) {
+    if (!source)
+        return "";
+    var slash = source.lastIndexOf("/");
+    var dot = source.lastIndexOf(".");
+    var stem = dot > slash + 1 ? source.slice(0, dot) : source;
+    return stem + "-processed.mp4";
+}
+
+// `-ss` before `-i` trims frame-accurately on the reencode path and at the
+// nearest keyframe on the copy path -- both are upstream's own command,
+// ported as-is. The audio filter chain hard-mutes the first 400ms (the
+// PipeWire capture-open pop a fade alone can't attenuate enough), fades the
+// next 50ms, then normalizes the rest to -14 LUFS.
+function finalizeArgv(inPath, outPath, opts) {
+    var argv = ["ffmpeg", "-y", "-ss", "0.1", "-i", inPath];
+    if (opts && opts.reencode)
+        argv.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "20");
+    else
+        argv.push("-c:v", "copy");
+    if (opts && opts.hasAudio)
+        argv.push("-af", "volume=enable='lt(t,0.4)':volume=0,afade=t=in:st=0.4:d=0.05,loudnorm=I=-14:TP=-1.5:LRA=11");
+    argv.push(outPath);
+    return argv;
+}

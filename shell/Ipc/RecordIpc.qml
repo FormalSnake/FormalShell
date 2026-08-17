@@ -53,6 +53,7 @@ IpcHandler {
             path: RecordingService.path,
             elapsedMs: RecordingService.elapsedMs,
             transcoding: RecordingService.transcoding,
+            finalizing: RecordingService.finalizing,
             lastGifPath: RecordingService.lastGifPath,
             lastError: RecordingService.lastError
         });

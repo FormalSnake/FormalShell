@@ -1,6 +1,6 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx
-, wf-recorder, tesseract, ffmpeg-headless, git }:
+, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -34,11 +34,16 @@ stdenvNoCC.mkDerivation {
     # the two-pass GIF transcode). wf-recorder rather than
     # gpu-screen-recorder: it captures through wlr-screencopy, which a nested
     # compositor implements, so recording is reachable by the smoke rig
-    # instead of needing real KMS. git is read-only here, probing the locked
-    # revision of a flake input for the system-update widget.
+    # instead of needing real KMS. pulseaudio is CLI-only here (pactl):
+    # RecordingService's desktop/desktopmic audio setup resolves the
+    # default sink/source and mixes the two through it, and pipewire's own
+    # pulse compat layer (services.pipewire.pulse.enable) provides the
+    # protocol without ever installing the client tool itself. git is
+    # read-only here, probing the locked revision of a flake input for the
+    # system-update widget.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless git ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git ]} \
       --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \

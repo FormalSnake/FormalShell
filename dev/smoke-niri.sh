@@ -538,18 +538,28 @@
 # process, the same way share_mode's own pgrep proves a real
 # `localsend_app` process rather than trusting an IPC reply.
 #
-# With --record (M22), drives the `record` target through a real
-# wf-recorder child: `record start screen none` (settings.json sets
-# recording.noDmabuf, the one key llvmpipe makes non-optional: there is no
-# GPU buffer to import in a software-rendered nested session; every other
-# recording key stays at its default so this proves those defaults
-# resolve), `record status` must report active:true against the exact
-# destination path `start` replied with, and the bar is screenshotted mid
-# recording (record-active.png) since that is the only state Indicators.qml's
-# recording cell exists in. `record stop` then polls until `active` goes
-# false (SIGTERM asks wf-recorder to finalize the container rather than
-# truncate it), and the file on disk must be a real non-empty MP4 by
-# file(1). Finally `record gif <path>` runs the two-pass ffmpeg transcode
+# With --record (M22, finalize pass M27 Task 2), drives the `record` target
+# through a real wf-recorder child: `record start screen desktop`
+# (settings.json sets recording.noDmabuf, the one key llvmpipe makes
+# non-optional: there is no GPU buffer to import in a software-rendered
+# nested session; every other recording key stays at its default so this
+# proves those defaults resolve; `desktop` audio needs only the VM's
+# pipewire null sink's own monitor, no real microphone, so the finalize
+# pass below has a genuine audio track to normalize), `record status` must
+# report active:true against the exact destination path `start` replied
+# with, and the bar is screenshotted mid recording (record-active.png)
+# since that is the only state Indicators.qml's recording cell exists in.
+# `record stop` then polls until `active` goes false (SIGTERM asks
+# wf-recorder to finalize the container rather than truncate it), then
+# polls `finalizing` (RecordingService's own trim/loudnorm pass) until it
+# too settles false, so the ffprobe read that follows lands on the settled
+# file rather than one mid-rewrite. That ffprobe read must show a positive
+# duration and an audio stream (recording.finalize's default keeps the
+# track rather than dropping it) — an exact before/after duration delta
+# isn't asserted here: the 0.1s trim is proven at the unit level
+# (tst_capture_model.qml's finalizeArgv tests), since a wall-clock
+# comparison across llvmpipe scheduling jitter would be a coin flip at that
+# margin. Finally `record gif <path>` runs the two-pass ffmpeg transcode
 # and the .gif must exist, be non-empty, be a GIF by file(1), and match
 # `record status`'s own lastGifPath. A wf-recorder that cannot start at all
 # fails the run loudly with its own stderr (status's lastError), never a
@@ -907,6 +917,23 @@ if $media_mode || $screensaver_mode || $visualizer_mode; then
     ffmpeg_bin=$(command -v ffmpeg)
   else
     ffmpeg_bin=$(nix build 'nixpkgs#ffmpeg-headless^out' --no-link --print-out-paths)/bin/ffmpeg
+  fi
+fi
+
+# record_mode needs ffprobe alone (no mpv), to read back what
+# RecordingService's own finalize pass did to a real captured file.
+if $media_mode || $screensaver_mode || $visualizer_mode || $record_mode; then
+  if [ -z "${ffmpeg_bin:-}" ]; then
+    if command -v ffmpeg >/dev/null 2>&1; then
+      ffmpeg_bin=$(command -v ffmpeg)
+    else
+      ffmpeg_bin=$(nix build 'nixpkgs#ffmpeg-headless^out' --no-link --print-out-paths)/bin/ffmpeg
+    fi
+  fi
+  if command -v ffprobe >/dev/null 2>&1; then
+    ffprobe_bin=$(command -v ffprobe)
+  else
+    ffprobe_bin="$(dirname "$ffmpeg_bin")/ffprobe"
   fi
 fi
 
@@ -1392,6 +1419,8 @@ record_status3_path="$shot_dir/record-status-3.json"
 record_stop_reply_path="$shot_dir/record-stop-reply.txt"
 record_gif_reply_path="$shot_dir/record-gif-reply.txt"
 record_active_path="$shot_dir/record-active.png"
+record_finalize_status_path="$shot_dir/record-finalize-status.json"
+record_ffprobe_path="$shot_dir/record-ffprobe.txt"
 ocr_fixture_png="$shot_dir/ocr-fixture-screen.png"
 ocr_text_status_path="$shot_dir/ocr-text-status.json"
 ocr_text_slurp_path="$shot_dir/ocr-text-slurp.txt"
@@ -3276,7 +3305,7 @@ if $record_mode; then
   cat > "$record_drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call record start screen none > "$record_start_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call record start screen desktop > "$record_start_reply_path" 2>&1
 # Long enough that the container holds real frames rather than a header:
 # the GIF transcode below has to have something to read.
 sleep 4
@@ -3290,7 +3319,20 @@ while [ "\$SECONDS" -lt 15 ]; do
   grep -qF '"active":false' "$record_status2_path" && break
   sleep 1
 done
+# wf-recorder itself has already exited here, but RecordingService's own
+# finalize pass (two ffprobes plus one ffmpeg encode) still owns the file;
+# waiting for the flag it exposes for exactly this is what makes the
+# ffprobe read below land on the settled, finalized file rather than a
+# file mid-rewrite.
+SECONDS=0
+while [ "\$SECONDS" -lt 20 ]; do
+  "$qs_bin" ipc -p "$shell_path" call record status > "$record_finalize_status_path" 2>&1
+  grep -qF '"finalizing":false' "$record_finalize_status_path" && break
+  sleep 1
+done
 rec_file=\$(head -n1 "$record_start_reply_path" | tr -d '\r')
+"$ffprobe_bin" -v error -show_entries format=duration:stream=codec_type \
+  -of default=noprint_wrappers=1 "\$rec_file" > "$record_ffprobe_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call record gif "\$rec_file" > "$record_gif_reply_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 40 ]; do
@@ -5870,7 +5912,8 @@ fi
 
 if $record_mode; then
   for f in "$record_start_reply_path" "$record_stop_reply_path" "$record_gif_reply_path" \
-    "$record_status1_path" "$record_status2_path" "$record_status3_path"; do
+    "$record_status1_path" "$record_status2_path" "$record_status3_path" \
+    "$record_finalize_status_path" "$record_ffprobe_path"; do
     if [ ! -s "$f" ]; then
       echo "SMOKE_FAIL: no record artifact produced at $f" >&2; exit 1
     fi
@@ -5912,6 +5955,24 @@ if $record_mode; then
   if ! grep -qF '"active":false' "$record_status2_path" || ! grep -qF '"lastError":""' "$record_status2_path"; then
     echo "SMOKE_FAIL: recording did not settle clean after stop: $(cat "$record_status2_path")" >&2; exit 1
   fi
+
+  # RecordingService's finalize pass (M27 Task 2) outlives wf-recorder's own
+  # exit, so `finalizing` has to settle false on its own before the ffprobe
+  # read below means anything.
+  cat "$record_finalize_status_path"; echo
+  if ! grep -qF '"finalizing":false' "$record_finalize_status_path"; then
+    echo "SMOKE_FAIL: finalize never settled: $(cat "$record_finalize_status_path")" >&2; exit 1
+  fi
+  cat "$record_ffprobe_path"; echo
+  if ! grep -qF "codec_type=audio" "$record_ffprobe_path"; then
+    echo "SMOKE_FAIL: finalized recording lost its audio stream: $(cat "$record_ffprobe_path")" >&2; exit 1
+  fi
+  finalize_duration=$(sed -n 's/^duration=//p' "$record_ffprobe_path" | head -n1)
+  case "$finalize_duration" in
+    ''|N/A) echo "SMOKE_FAIL: finalized recording reports no duration: $(cat "$record_ffprobe_path")" >&2; exit 1 ;;
+  esac
+  echo "SMOKE_RECORD_FINALIZE duration=${finalize_duration}s"
+
   if [ ! -s "$record_file" ]; then
     echo "SMOKE_FAIL: recording file is missing or empty: $record_file" >&2; exit 1
   fi

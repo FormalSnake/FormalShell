@@ -162,4 +162,50 @@ TestCase {
         compare(Capture.ocrOutcome(1), "failed");
         compare(Capture.ocrOutcome(127), "failed");
     }
+
+    function test_finalize_needs_reencode_reads_the_discard_flag() {
+        compare(Capture.finalizeNeedsReencode("K_\nD_\n__\n"), true);
+        compare(Capture.finalizeNeedsReencode("K_\n__\n__\n"), false);
+        compare(Capture.finalizeNeedsReencode(""), false);
+    }
+
+    function test_finalize_has_audio_reads_the_stream_list() {
+        compare(Capture.finalizeHasAudio("audio\n"), true);
+        compare(Capture.finalizeHasAudio(""), false);
+        compare(Capture.finalizeHasAudio("\n"), false);
+    }
+
+    function test_finalize_output_path_sits_next_to_its_source() {
+        compare(Capture.finalizeOutputPath("/v/a.mp4"), "/v/a-processed.mp4");
+        compare(Capture.finalizeOutputPath("/v/b.d/a.mp4"), "/v/b.d/a-processed.mp4");
+        compare(Capture.finalizeOutputPath(""), "");
+    }
+
+    function test_finalize_argv_always_trims_the_first_tenth_of_a_second() {
+        var argv = Capture.finalizeArgv("/v/a.mp4", "/v/a-processed.mp4", { reencode: false, hasAudio: false });
+        compare(argv[argv.indexOf("-ss") + 1], "0.1");
+        verify(argv.indexOf("-af") < 0);
+        compare(argv[argv.indexOf("-c:v") + 1], "copy");
+        compare(argv[argv.length - 1], "/v/a-processed.mp4");
+    }
+
+    function test_finalize_argv_reencodes_only_when_the_gop_needs_it() {
+        var argv = Capture.finalizeArgv("/v/a.mp4", "/v/out.mp4", { reencode: true, hasAudio: false });
+        compare(argv[argv.indexOf("-c:v") + 1], "libx264");
+        verify(argv.indexOf("-preset") >= 0);
+        verify(argv.indexOf("-crf") >= 0);
+    }
+
+    function test_finalize_argv_skips_the_audio_filter_without_a_track() {
+        var argv = Capture.finalizeArgv("/v/a.mp4", "/v/out.mp4", { reencode: false, hasAudio: false });
+        verify(argv.indexOf("-af") < 0);
+    }
+
+    function test_finalize_argv_mutes_fades_and_normalizes_when_there_is_audio() {
+        var argv = Capture.finalizeArgv("/v/a.mp4", "/v/out.mp4", { reencode: false, hasAudio: true });
+        var af = argv[argv.indexOf("-af") + 1];
+        verify(af.indexOf("volume=enable='lt(t,0.4)':volume=0") >= 0);
+        verify(af.indexOf("afade=t=in:st=0.4:d=0.05") >= 0);
+        verify(af.indexOf("loudnorm=I=-14:TP=-1.5:LRA=11") >= 0);
+    }
 }

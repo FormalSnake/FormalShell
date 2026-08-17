@@ -37,6 +37,15 @@ import "../Capture/model.js" as Capture
 // Requesting desktopmic where the default source is itself a monitor fails
 // loudly instead of quietly recording desktop audio twice.
 //
+// Finalize, after wf-recorder exits and before the SAVED notification:
+// upstream's own PipeWire-click fix (bin/omarchy-capture-screenrecording's
+// finalize_recording, MIT), ported because it is pure ffmpeg and
+// compositor-neutral. Trims the first 0.1s, re-encoding only when the first
+// GOP holds discardable warmup packets a stream copy can't cut, and
+// hard-mutes/fades/loudnorms the audio track when there is one. Never
+// fatal: a probe or ffmpeg failure keeps the raw file wf-recorder already
+// wrote. recording.finalize (default true) turns the whole pass off.
+//
 // No webcam overlay. Compositing a camera into the frame needs the camera
 // window to float at a fixed corner, which is a compositor window rule this
 // shell does not install and cannot install portably (niri window-rule vs
@@ -47,6 +56,11 @@ Singleton {
 
     readonly property bool active: recProc.running
     readonly property bool transcoding: paletteProc.running || gifProc.running
+    // True from the moment a finished recording starts through finalize
+    // until the SAVED notification fires. `record status` exposes this so a
+    // caller can wait for the rewrite to settle instead of guessing a delay
+    // (the same poll-don't-sleep contract `active` already holds).
+    property bool finalizing: false
 
     // "screen" | "region" | "window", and "none" | "desktop" | "desktopmic":
     // what the current (or most recent) run was asked for. "window" only ever
@@ -80,6 +94,9 @@ Singleton {
     property string _pendingOutput: ""
     property string _pendingGifPath: ""
     property var _pendingGifPass2: []
+    property string _finalizeSource: ""
+    property string _finalizeProcessed: ""
+    property bool _finalizeReencode: false
     property var _audioModules: []
     property bool _stopping: false
     property bool _cancelling: false
@@ -311,6 +328,30 @@ Singleton {
         NotificationService.notify("RECORDING FAILED", why);
     }
 
+    // Entry point once wf-recorder has exited clean. recording.finalize
+    // off skips straight to the notification, unchanged from before this
+    // pass existed.
+    function _finalize(path) {
+        if (Core.Config.get("recording.finalize", true) !== true) {
+            root._announceSaved(path);
+            return;
+        }
+        root.finalizing = true;
+        root._finalizeSource = path;
+        finalizeProbeVideoProc.command = ["ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-read_intervals", "%+0.2", "-show_entries", "packet=flags", "-of", "csv=p=0", path];
+        finalizeProbeVideoProc.running = true;
+    }
+
+    function _announceSaved(path) {
+        root.finalizing = false;
+        NotificationService.notify("RECORDING SAVED", path, 1, [{
+            key: "default",
+            label: "GIF",
+            invoke: () => root.gif(path)
+        }]);
+    }
+
     Component.onCompleted: runtimeDirProc.running = true
 
     Process {
@@ -469,12 +510,67 @@ Singleton {
             }
             root.lastPath = saved;
             root.lastError = "";
-            NotificationService.notify("RECORDING SAVED", saved, 1, [{
-                key: "default",
-                label: "GIF",
-                invoke: () => root.gif(saved)
-            }]);
+            root._finalize(saved);
         }
+    }
+
+    // finalize_recording's own three-step shape (probe video, probe audio,
+    // one ffmpeg pass), chained the same way mkdirProc -> audioProc ->
+    // recProc already are above.
+    Process {
+        id: finalizeProbeVideoProc
+
+        stdout: StdioCollector {
+            id: finalizeVideoOut
+        }
+        onExited: exitCode => {
+            root._finalizeReencode = Capture.finalizeNeedsReencode(finalizeVideoOut.text);
+            finalizeProbeAudioProc.command = ["ffprobe", "-v", "error", "-select_streams", "a",
+                "-show_entries", "stream=codec_type", "-of", "csv=p=0", root._finalizeSource];
+            finalizeProbeAudioProc.running = true;
+        }
+    }
+
+    Process {
+        id: finalizeProbeAudioProc
+
+        stdout: StdioCollector {
+            id: finalizeAudioOut
+        }
+        onExited: exitCode => {
+            const hasAudio = Capture.finalizeHasAudio(finalizeAudioOut.text);
+            root._finalizeProcessed = Capture.finalizeOutputPath(root._finalizeSource);
+            finalizeProc.command = Capture.finalizeArgv(root._finalizeSource, root._finalizeProcessed, {
+                reencode: root._finalizeReencode,
+                hasAudio: hasAudio
+            });
+            finalizeProc.running = true;
+        }
+    }
+
+    Process {
+        id: finalizeProc
+
+        stderr: StdioCollector {
+            id: finalizeErr
+        }
+        onExited: exitCode => {
+            if (exitCode === 0) {
+                finalizeCleanupProc.command = ["mv", root._finalizeProcessed, root._finalizeSource];
+            } else {
+                console.warn("RecordingService: finalize failed, keeping the raw recording:",
+                    finalizeErr.text.trim() || ("ffmpeg exited " + exitCode));
+                finalizeCleanupProc.command = ["rm", "-f", root._finalizeProcessed];
+            }
+            finalizeCleanupProc.running = true;
+        }
+    }
+
+    // Reused for both the success move and the failure cleanup, the same
+    // one-process-two-call-sites idiom unloadProc already establishes.
+    Process {
+        id: finalizeCleanupProc
+        onExited: exitCode => root._announceSaved(root._finalizeSource)
     }
 
     Process {
