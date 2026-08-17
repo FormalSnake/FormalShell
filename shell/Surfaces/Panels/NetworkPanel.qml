@@ -1168,6 +1168,9 @@ Panel {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: identityInput.text.length === 0
                             text: "IDENTITY (USER@DOMAIN)"
+                            // Faint placeholder ink, DESIGN.md §1.4: one
+                            // band under the field's own label.
+                            color: Theme.color.foregroundFaint
                         }
 
                         TextInput {
@@ -1199,6 +1202,9 @@ Panel {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: passphraseInput.text.length === 0
                             text: "ENTER PASSPHRASE"
+                            // Faint placeholder ink, DESIGN.md §1.4: one
+                            // band under the field's own label.
+                            color: Theme.color.foregroundFaint
                         }
 
                         TextInput {
@@ -1256,12 +1262,9 @@ Panel {
             width: parent.width
             spacing: Theme.space.sm
 
-            Text {
+            MetaLabel {
                 width: parent.width - wifiPowerToggle.width - parent.spacing
                 text: "WI-FI"
-                color: wifiPowerCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
             }
 
             // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
@@ -1318,12 +1321,9 @@ Panel {
             width: parent.width
             spacing: Theme.space.sm
 
-            Text {
+            MetaLabel {
                 width: parent.width - qrToggle.width - parent.spacing
                 text: "SHARE"
-                color: qrShareCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
             }
 
             // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
@@ -1438,12 +1438,9 @@ Panel {
                 width: parent.width
                 spacing: Theme.space.sm
 
-                Text {
+                MetaLabel {
                     width: parent.width - pwToggle.width - parent.spacing
                     text: "PASSWORD"
-                    color: passwordCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
                 }
 
                 // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
@@ -1505,12 +1502,9 @@ Panel {
             width: parent.width
             spacing: Theme.space.sm
 
-            Text {
+            MetaLabel {
                 width: parent.width - runToggle.width - parent.spacing
                 text: "SPEED TEST"
-                color: speedTestCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
             }
 
             // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
@@ -1559,12 +1553,9 @@ Panel {
                 width: parent.width
                 spacing: Theme.space.sm
 
-                Text {
+                MetaLabel {
                     width: parent.width - downloadValue.width - parent.spacing
                     text: "DOWNLOAD"
-                    color: downloadCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
                 }
 
                 Text {
@@ -1611,12 +1602,9 @@ Panel {
                 width: parent.width
                 spacing: Theme.space.sm
 
-                Text {
+                MetaLabel {
                     width: parent.width - uploadValue.width - parent.spacing
                     text: "UPLOAD"
-                    color: uploadCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
                 }
 
                 Text {
