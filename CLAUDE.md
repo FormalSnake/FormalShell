@@ -26,7 +26,15 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   in-session before screenshotting, and prints the `theme status` JSON. This
   is THE visual verification loop for any theming change — confirms the
   background layer and bar tokens actually recolored away from the Flexoki
-  fallback, not just that `theme.json` was written.
+  fallback, not just that `theme.json` was written. It then crossfades to a
+  SECOND wallpaper, a gradient, and samples both frames for the dither
+  contract (DESIGN.md §2 item 12): the solid one must be its own exact color
+  end to end (`wallpaper-solid.png` — an image-derived palette holds a
+  monotone source's own color, so it must paint with no dots at all), and a
+  full-width strip of the gradient must carry at least three colors and no
+  more than `wallpaper.ditherColors` of them. The dither never reaches
+  matugen either way: `ThemeEngine` runs `matugen image <path>` against the
+  wallpaper FILE, and nothing dithered is ever written to disk.
 - `dev/smoke-niri.sh --dump` — same, plus calls the `debug` IPC target and
   cats the JSON reply; the two flags can combine.
 - `dev/smoke-niri.sh --menu` — same, plus drives the `menu` IPC target
@@ -77,6 +85,19 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   reads the system clipboard back to confirm it landed, before summoning
   the menu's `clipboard` route so the screenshot shows the provider's rows
   rendered as real menu cells.
+- `dev/smoke-niri.sh --clipssh` — writes a two-alias `~/.clipssh/aliases`
+  into the isolated HOME and drives the menu's clipssh route over `menu
+  activate` (the rig's Enter stand-in) against a PATH-shimmed `clipssh`
+  speaking the real one's output contract: `box` takes six seconds and
+  succeeds, `nohost` fails at once. Four frames off one timeline —
+  `clipssh-route.png` (both rows), `clipssh-sending.png` (in flight: the
+  bar's own indicator cell plus the SENDING toast), `clipssh-copied.png`
+  (COPIED, carrying the remote path clipssh printed), `clipssh-failed.png`
+  (a full-bleed urgent card carrying clipssh's own `Error:` line). The shim
+  stands in for the binary because what needs proving is the shell's path
+  (row → `@ipc:clipssh.send:` → `ClipsshService` → `Process` → exit code →
+  toast + indicator), not whether the rig can reach an ssh host; same line
+  `--panel github`'s `gh` shim draws.
 - `dev/smoke-niri.sh --media` — plays a real MPRIS player in-session (`mpv`
   with its own `mpris.lua` script, a generated silent fixture track tagged
   with a title/artist, into the pipewire null sink), opens the media panel
@@ -108,23 +129,29 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   reads `true`), then kills mpv and waits past the timeout to prove the
   screensaver auto-activates purely from the guard clearing — no
   `screensaver start` call involved — screenshotted (`screensaver-auto.png`,
-  the block-character `FORMALSHELL` banner converging via one of five
-  effects — decrypt/rain/expand/slide/scatter — in the mono font/theme
-  accent; `SCREENSAVER_EFFECT`/`SCREENSAVER_ASCII_TEXT` env vars pin an
+  the block-character `FORMALSHELL` banner converging via one of ttfx's 37
+  effects, in the mono font and that effect's own upstream gradient;
+  `SCREENSAVER_EFFECT`/`SCREENSAVER_ASCII_TEXT` env vars pin an
   effect or banner for a single run). `screensaver
   stop` dismisses it, then a final explicit `start`/screenshot
   (`screensaver-manual.png`)/`stop` proves the manual IPC path
   independently of the idle timer.
-- `dev/smoke-niri.sh --screensaver-gif` — records all five effects in
-  `effect.js` as GIFs, one independent nested-niri session per effect: pins
-  `screensaver.effect` via the settings fixture, starts the screensaver,
-  reads real convergence off `screensaver frameInfo`, then steps
-  `screensaver frame(n)` from 0 to convergence plus an 8-frame hold,
-  `grim`-screenshotting each frame (frame-stepped, not wall-clock-timed, so
-  the VM's llvmpipe rendering can't produce uneven spacing) before
-  assembling `docs/media/screensaver-<effect>.gif` with imagemagick
-  (resized to 640px wide, palette capped, `-layers Optimize`). Confirms
-  `frameInfo` reports the pinned effect name before accepting the run.
+- `dev/smoke-niri.sh --screensaver-gif` — records five ttfx effects as GIFs,
+  one independent nested-niri session per effect: pins `screensaver.effect`
+  via the settings fixture, starts the screensaver, pins `screensaver frame
+  0` (which is what makes a streaming run's frame count knowable at all),
+  reads that count off `screensaver frameInfo`, then steps `screensaver
+  frame(n)` across a strided sample of the run plus an 8-frame hold on the
+  converged banner, `grim`-screenshotting each (frame-stepped, not
+  wall-clock-timed, so the VM's llvmpipe rendering can't produce uneven
+  spacing) before assembling `docs/media/screensaver-<effect>.gif` with
+  imagemagick (resized to 640px wide, palette capped, `-layers Optimize`,
+  frame delay derived from the stride so playback is real time). Confirms
+  `frameInfo` reports the pinned effect name **and** `"engine":"ttfx"`
+  before accepting the run — a missing ttfx would otherwise record a
+  perfectly plausible GIF of the builtin fallback. `matrix`/`thunderstorm`
+  are deliberately not in the list: both are gated on wall-clock time, so
+  the same frame index means something different on the next machine.
 - `dev/smoke-niri.sh --picker` — generates a handful of solid-color fixture
   PNGs (imagemagick) into a directory pointed at by settings.json's
   `picker.directory`, then drives the `picker` IPC target: `summon` opens
@@ -136,19 +163,61 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   became the wallpaper. Then `select` reopens the grid over the same
   directory in the generic image-selector mode with a caller token,
   `choose` picks a different fixture, and `picker-selection.txt` is read
-  back to confirm `{token, value}` landed.
-- `dev/smoke-niri.sh --tray` — launches six real `dev/sni-stub.py`
+  back to confirm `{token, value}` landed. Every leg above runs against a
+  FLAT directory (`picker-status-flat.json`: `hasVariants:false`, all 20
+  images), then staged `Dark`/`Light` subdirectories are moved into place
+  underneath the running shell and the route re-summoned — which also proves
+  the scan re-runs per entry: `picker-status-dark.json` must report the theme
+  mode's own set, `picker variant light` (the `DARK | LIGHT` switcher's own
+  action over IPC, same division as `choose`) must answer `ok`, and
+  `picker-variant.png`/`picker-status-light.json` must show the other set.
+- `dev/smoke-niri.sh --hotcorner` — asks niri itself (`niri msg -j layers`)
+  which layer surfaces exist and asserts exactly two carry the
+  `formalshell:hotcorner` namespace, on the `Top` layer with
+  `keyboard_interactivity: None`. Two, not four: the default corner set
+  leaves both TOP corners at "none" (the bar owns that edge) and this run
+  writes no `hotCorners` config at all, so the count also proves a corner
+  set to "none" costs no surface. Entering a corner cannot be driven here —
+  the rig has no synthetic pointer, same limit the tray's overflow cell hits
+  — so what this leg proves is that the surfaces map, at the resolved
+  corners, with the per-corner `PanelWindow.anchors` bindings intact.
+- `dev/smoke-niri.sh --tray` launches six real `dev/sni-stub.py`
   StatusNotifierItem producers (a minimal PyGObject SNI client, registers
   for real on the isolated session bus, never faked inside the shell),
-  dumps `tray status` (proves the real item count and `expanded:false`)
-  before screenshotting the collapsed drawer (`tray-collapsed.png` — past
-  `Tray.qml`'s 4-item visible limit, 3 pinned cells plus a "+3" overflow
-  cell), then calls `tray expand` (the rig's stand-in for the overflow
-  cell's own click — no synthetic pointer exists here) and dumps `tray
-  status` again to confirm `expanded:true` with the same item count; the
-  run's own `smoke.png`/`SMOKE_OK`, taken after the expand call, shows every
-  item as its own cell with the drawer already open. The stub processes are
-  killed by PID right before niri quits.
+  dumps `tray status` (proves all six registered, and that no drawer,
+  bucket or expand key comes back at all) and screenshots the whole strip
+  (`tray-strip.png`), then calls `tray activate tray-fixture-2` and reads
+  the stub's own `--activate-file` back to prove the D-Bus Activate round
+  trip reached that item and only that item. Six items with no visible
+  limit is the point since M24: every one is its own cell, and bounding a
+  long strip is the bar chevron's job (`--chevron` below), not the tray's.
+  The stub processes are killed by PID right before niri quits.
+- `dev/smoke-niri.sh --chevron` points `settings.json`'s `bar.layout` at
+  today's exact default right region reordered around `chevron`: the five
+  governed names (bluetooth/weather/tray/bell/indicators) lead the region,
+  then `chevron`, then battery/audio/network sit outboard against the screen
+  edge. A right-region chevron governs what PRECEDES it (M25), so the group
+  opens inward into empty bar and the chevron plus every cell outboard of it
+  keeps its x: that is what the two screenshots are read for, as much as
+  which cells appeared. The bar boots collapsed, which is the shipped default
+  and the claim itself: `bar chevron status` is dumped and asserted
+  (`chevron-status-collapsed.json` must name exactly one chevron region and
+  report the five names before it under both `collapses` and `hidden`), then
+  screenshotted (`chevron-collapsed.png`). `bar chevron expand` follows, the
+  rig's stand-in for a click on the cell since no synthetic pointer exists
+  here, deliberately with no region argument because a single-chevron layout
+  is meant to infer it; the second dump must show `hidden` empty with
+  `collapses` unchanged, and the second shot is `chevron-expanded.png`, taken
+  three seconds after the expand so the animated reveal
+  (`Theme.motion.standard`, 130ms) is long settled and the frame is the end
+  state rather than one mid-glide. The two PNGs are then asserted to differ,
+  the cheapest guard there is against shipping a correct IPC contract over a
+  bar that rendered nothing. Both carry a `SMOKE_CHEVRON_*` marker line so
+  `dev/vm.sh` pulls them back to the mac. ⚠️ Any file reaching the `State`
+  singleton while also importing QtQuick must `import qs.Core as Core` and
+  say `Core.State`: QtQuick exports its own `State` type, and the bare name
+  silently reads back undefined, which is exactly how M24's chevron shipped
+  rendering-dead while its own IPC status reported the right answer.
 - `dev/smoke-niri.sh --bar-layout` — points `settings.json`'s `bar.layout`
   at a left region led by six `bar.modules` entries (swapped ahead of the
   reordered builtins — `activeWindow` before `workspaces`, away from
@@ -186,23 +255,45 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   won't screenshot, fall back to verifying the backend via qmllint plus the
   `debug` IPC dump (`qs ipc call debug dump`) rather than skipping
   verification.
-- matugen runs (`ThemeEngine`) need a live TTY-free color decision: an
-  unprefixed `matugen image` prompts on an ambiguous/near-solid source color,
-  which hangs forever under `Process` (no stdin). `ThemeEngine` always passes
-  a fixed `--prefer lightness` — the flag picks WHICH extracted candidate
-  seeds the scheme (not the scheme's lightness; `-m` does that), so matching
-  it to `State.mode` made the same wallpaper flip hue family across a mode
-  toggle (2026-08-09). If you invoke matugen by hand while debugging, pass
-  the same fixed `--prefer` or a `--fallback-color`.
+- matugen runs (`ThemeEngine`) need a live TTY-free source-color decision: an
+  unforced `matugen image` prompts whenever an image yields more than one
+  candidate (50 of the owner's 57 wallpapers do), which hangs forever under
+  `Process` (no stdin). `--prefer` answers that prompt with a scalar tiebreak
+  over the candidates, and every one of them is a bad proxy for "what color
+  is this wallpaper": the old fixed `--prefer lightness` read a small warm
+  highlight as the image's color, which is what turned blue wallpapers orange
+  (2026-08-14). `ThemeEngine` now probes first (`matugen -d image <wp>
+  --dry-run`), reads rank 0 off the ranking matugen prints on stderr (its own
+  material Score order), and pins the real run to it with `--prefer
+  closest-to-fallback --fallback-color <rank0>`; a probe that finds no
+  ranking falls back to `--prefer saturation` and warns. Whichever path runs,
+  the pick is a function of the wallpaper alone, never of `State.mode`:
+  matching it to the mode made the same wallpaper flip hue family across a
+  mode toggle (2026-08-09). If you invoke matugen by hand while debugging,
+  force the source the same way rather than letting `--prefer` choose.
 
 ## macOS verification loop (mac e2e rig)
 
-The Linux hosts (g815, e1504g) are currently offline. Until one returns, a
-macbook running Determinate Nix under nix-darwin is the only place any of
-this gets verified — nix-darwin's `nix.linux-builder.enable` is unavailable
-under `determinateNix.enable = true`, so the rig is hand-rolled as two
-layers, both driven from this repo (`docs/superpowers/plans/2026-07-28-mac-e2e-rig.md`
-has the full design rationale):
+Both Linux hosts (g815, e1504g) are reachable again over ssh, and both were
+rebuilt onto HEAD on 2026-08-12 (`nix flake update formalshell` in
+`~/.config/nix`, then `sudo nixos-rebuild switch --flake .#<host>`; both have
+passwordless sudo, and their `formalshell.service` user unit restarts onto the
+new store path as part of the home-manager activation — their nix config
+consumes this repo as `github:FormalSnake/FormalShell`, so a change has to be
+pushed before a rebuild can pick it up). That makes them the place to confirm
+what the VM's llvmpipe/no-desktop-bus environment cannot show — real GPU
+rendering, a real session bus owner, real hardware devices — but it does NOT
+make them a test target: the host-session-safety and lock-screen rules below
+still forbid running the shell, the ThemeEngine or any compositor action
+against a live session there. Rebuild them and look; anything that drives a
+surface goes through the nested rig.
+
+Sessions themselves run from a macbook, which has no Wayland at all, so that
+rig is where verification happens. nix-darwin's `nix.linux-builder.enable` is
+unavailable under `determinateNix.enable = true`, so it is hand-rolled as two
+layers, both driven from this repo
+(`docs/superpowers/plans/2026-07-28-mac-e2e-rig.md` has the full design
+rationale):
 
 - **Build layer** — `dev/linux-builder.sh {start|stop|status|register}` boots
   the stock `darwin.linux-builder` VM in the background and registers it in
@@ -307,6 +398,23 @@ behavior on hosts where a real owner exists.
   screenshot show more — inventing fake `/sys` entries or synthetic devices
   is not.
 - Pure QML/JS. No compiled companion binary. No Node/npm/bun anywhere.
+  Third-party CLIs the shell shells out to (matugen, grim, cava, ttfx, …)
+  are runtime dependencies wired onto the wrapper's PATH in
+  `nix/package.nix`, not companion binaries: nothing here is built from
+  source we maintain, and every one of them has an honest fallback or
+  unavailable state when it isn't installed.
+- **ttfx is a spec addendum, not a conflict.** Spec §10 says the
+  screensaver renders "TTE-style rain/decrypt/matrix drawn in QML with the
+  shell's mono font and palette — no spawned terminal windows". The
+  screensaver now runs `ttfx` (`nix/ttfx-package.nix`) as a frame source and
+  parses its ANSI stream, still drawing every glyph itself on its own
+  Canvas in the shell's own mono font, with no terminal window anywhere —
+  what moved out of QML is the frame math, and with it the palette, since
+  each ttfx effect carries its own gradient (owner's call: match omarchy
+  exactly, 2026-08-11). `shell/Screensaver/effect.js` stays as the engine
+  for an install with no ttfx on PATH, so the pure-QML/JS guarantee above
+  still holds with nothing installed alongside the shell. `screensaver
+  frameInfo` reports which engine is live.
 - Compositor window/workspace ids are **opaque strings** end to end. Never
   parse, compare numerically, or assume stability. The one exception is the
   IPC wire boundary in each backend, where niri/Hyprland actions convert the
