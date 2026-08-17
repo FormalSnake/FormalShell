@@ -40,6 +40,14 @@ Panel {
     readonly property var _entry: root._appId !== "" ? DesktopEntries.heuristicLookup(root._appId) : null
     readonly property var _actions: (root._entry && root._entry.actions) ? root._entry.actions : []
 
+    // The themed icon behind the hero's leading slot (M28 Task 5) — the
+    // same lookup/check-then-fall-back-to-nothing idiom ActiveWindow.qml's
+    // own bar cell already uses, so an unresolved icon just leaves the row
+    // shorter rather than a missing-texture box.
+    readonly property string _iconSource: (root._entry && root._entry.icon)
+        ? Quickshell.iconPath(root._entry.icon, true)
+        : ""
+
     readonly property var _appWindows: {
         var out = [];
         if (root._appId === "")
@@ -113,6 +121,34 @@ Panel {
         width: parent.width
 
         MetaLabel { text: "NO WINDOW" }
+    }
+
+    Component {
+        id: appIcon
+
+        Item {
+            width: Theme.space.xxl * 2
+            height: Theme.space.xxl * 2
+
+            Image {
+                anchors.fill: parent
+                visible: root._iconSource !== ""
+                source: root._iconSource
+                fillMode: Image.PreserveAspectFit
+            }
+        }
+    }
+
+    // The panel's own subject (M28 Task 5): the focused window's app name —
+    // the card band above already says this too, but at a different
+    // register (the ALL-CAPS title band vs. this row's own content ink),
+    // and the icon here is genuinely new: nothing else in this panel shows
+    // it. No readout: this panel is a list of actions/windows, not a metric.
+    PanelHero {
+        visible: root._window !== null
+        width: parent.width
+        leading: appIcon
+        title: root._entry ? root._entry.name : root._appId
     }
 
     Cell {

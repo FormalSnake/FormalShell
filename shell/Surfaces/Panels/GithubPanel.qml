@@ -45,6 +45,9 @@ Panel {
     // nodes per list.
     property var prRows: []
     property var issueRows: []
+    // The authenticated account itself (M28 Task 5's hero subject) — "" until
+    // a poll answers, never a guess at who's signed in.
+    property string viewerLogin: ""
 
     readonly property int _interval: {
         var v = Config.get("github.intervalMs", 300000);
@@ -96,7 +99,7 @@ Panel {
 
     Process {
         id: proc
-        command: ["sh", "-c", "command -v gh >/dev/null 2>&1 || exit 127; exec gh api graphql -f query='{ prs: search(query: \"is:open is:pr author:@me\", type: ISSUE, first: 15) { issueCount nodes { ... on PullRequest { title url repository { nameWithOwner } } } } issues: search(query: \"is:open is:issue assignee:@me\", type: ISSUE, first: 15) { issueCount nodes { ... on Issue { title url repository { nameWithOwner } } } } }'"]
+        command: ["sh", "-c", "command -v gh >/dev/null 2>&1 || exit 127; exec gh api graphql -f query='{ viewer { login } prs: search(query: \"is:open is:pr author:@me\", type: ISSUE, first: 15) { issueCount nodes { ... on PullRequest { title url repository { nameWithOwner } } } } issues: search(query: \"is:open is:issue assignee:@me\", type: ISSUE, first: 15) { issueCount nodes { ... on Issue { title url repository { nameWithOwner } } } } }'"]
         stdout: StdioCollector {
             id: collector
         }
@@ -123,6 +126,7 @@ Panel {
                 root.issueCount = issues;
                 root.prRows = root._parseRows(d.data.prs.nodes);
                 root.issueRows = root._parseRows(d.data.issues.nodes);
+                root.viewerLogin = (d.data.viewer && typeof d.data.viewer.login === "string") ? d.data.viewer.login : "";
                 root.pollState = "ok";
             } catch (e) {
                 console.warn("GithubPanel: unparsable gh api output:", e.message);
@@ -150,6 +154,18 @@ Panel {
         width: parent.width
 
         MetaLabel { text: "NO AUTH" }
+    }
+
+    // The panel's own subject (M28 Task 5): the signed-in account, and how
+    // many things await it. The two counts below still carry their own
+    // breakdown (PRs vs. issues); this only promotes the total.
+    PanelHero {
+        visible: root.pollState === "ok"
+        width: parent.width
+        glyph: ""
+        title: root.viewerLogin !== "" ? root.viewerLogin : "GITHUB"
+        meta: "OPEN ITEMS"
+        readout: String(root.prCount + root.issueCount)
     }
 
     Component {

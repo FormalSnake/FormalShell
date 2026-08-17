@@ -48,6 +48,14 @@ Panel {
     readonly property var counts: Update.countBehind(root.inputs, root.heads)
     readonly property string summary: Update.summaryLabel(root.pollState, root.counts)
 
+    // The hero's own subject (M28 Task 5): which flake this is (the
+    // directory's own basename — the instance, not the panel's generic
+    // "flake inputs" noun) and how many inputs are behind.
+    readonly property string _flakeName: {
+        var parts = root.flakeDir.split("/").filter(function (p) { return p !== ""; });
+        return parts.length > 0 ? parts[parts.length - 1] : "";
+    }
+
     readonly property string flakeDir: {
         var v = Config.get("systemUpdate.flakeDir", "");
         return (typeof v === "string") ? v : "";
@@ -180,10 +188,31 @@ Panel {
         }
     }
 
+    // NOFLAKE/NOLOCK/CHECKING/OFFLINE all stay this one honest text line —
+    // there is no real subject to promote until a poll actually resolves.
     Cell {
+        visible: root.pollState !== "ok"
         width: parent.width
 
         MetaLabel { text: root.summary }
+    }
+
+    // The panel's own subject once a poll resolves (M28 Task 5): which
+    // flake, and how many of its inputs are behind.
+    PanelHero {
+        visible: root.pollState === "ok"
+        width: parent.width
+        glyph: root.counts.behind > 0 ? "󰏕" : "󰏓"
+        title: root._flakeName
+        meta: "INPUTS BEHIND"
+        readout: String(root.counts.behind)
+    }
+
+    Cell {
+        visible: root.pollState === "ok" && root.counts.unknown > 0
+        width: parent.width
+
+        MetaLabel { text: root.counts.unknown + " UNKNOWN" }
     }
 
     Cell {

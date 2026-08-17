@@ -252,69 +252,78 @@ Panel {
         MetaLabel { text: "NEEDS LOGIN" }
     }
 
-    Cell {
-        id: statusCell
+    // The panel's own subject (M28 Task 5): this machine's own tailnet name,
+    // the backend's connection state, connect/disconnect promoted into the
+    // trailing slot — replaces the old STATUS row outright, which said the
+    // same two things (running state, and the toggle itself).
+    PanelHero {
+        id: statusHero
         visible: root.pollState === "ok"
         width: parent.width
-        selected: root.status ? root.status.running : false
+        glyph: "󰌘"
+        title: (root.status && root.status.selfName) ? root.status.selfName : "UNKNOWN"
+        meta: root._actionKind === "up" ? "CONNECTING…" : root._actionKind === "down" ? "DISCONNECTING…" : (root.status && root.status.running ? "CONNECTED" : "STOPPED")
+        trailing: statusToggle
         hovered: root.cursorActive && root._cursor === 0
-        onContainsPointerChanged: if (statusCell.containsPointer) {
+        interactive: true
+        acceptedButtons: Qt.NoButton
+        onContainsPointerChanged: if (statusHero.containsPointer) {
             root.cursorActive = true;
             root._cursor = 0;
         }
+    }
 
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
+    Component {
+        id: statusToggle
 
-            Text {
-                text: root._actionKind === "up" ? "CONNECTING…" : root._actionKind === "down" ? "DISCONNECTING…" : (statusCell.selected ? "CONNECTED" : "STOPPED")
-                color: statusCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-            }
+        // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09 amendment):
+        // no cell chrome, armed state promotes straight to accent instead
+        // of a fill/inversion.
+        MetaLabel {
+            text: (root.status && root.status.running) ? "DISCONNECT" : "CONNECT"
+            color: root._actionKind !== ""
+                ? Theme.color.accent
+                : (statusToggleHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-            Text {
-                visible: root._actionError !== ""
-                text: root._actionError
-                color: Theme.color.urgent
-                font.italic: true
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.caption
+            MouseArea {
+                id: statusToggleHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root._toggle()
             }
         }
-
-        interactive: true
-        onClicked: root._toggle()
     }
 
     Cell {
-        id: selfCell
-        visible: root.pollState === "ok"
+        visible: root.pollState === "ok" && root._actionError !== ""
         width: parent.width
 
-        Column {
+        MetaLabel { text: root._actionError; color: Theme.color.urgent }
+    }
+
+    // The hero above already names this machine; the IP is the one fact it
+    // doesn't carry, so this row narrows to just that.
+    Cell {
+        id: selfCell
+        visible: root.pollState === "ok" && root.status && Tailscale.selfIp(root.status) !== null
+        width: parent.width
+
+        Row {
             width: parent.width
-            spacing: Theme.space.xxs
+            spacing: Theme.space.sm
+
+            MetaLabel { text: "IP" }
 
             Text {
-                text: (root.status && root.status.selfName) ? root.status.selfName : "UNKNOWN"
+                text: root.status ? (Tailscale.selfIp(root.status) || "") : ""
                 color: selfCell.foreground
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
             }
-
-            Text {
-                readonly property string _ip: root.status ? Tailscale.selfIp(root.status) : null
-                visible: _ip !== null
-                text: _ip || ""
-                color: Theme.color.foregroundDim
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.caption
-            }
         }
 
-        interactive: root.status && Tailscale.selfIp(root.status) !== null
+        interactive: true
         onClicked: root._copyIp(root.status ? Tailscale.selfIp(root.status) : null)
     }
 

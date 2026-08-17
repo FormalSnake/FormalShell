@@ -92,6 +92,22 @@ Panel {
     readonly property var _availableRows: root._buckets.available
     readonly property bool _hasAnyRows: root._connectedRows.length > 0 || root._pairedRows.length > 0 || root._availableRows.length > 0
 
+    // The hero's own subject (M28 Task 5): the one connected device when
+    // there is exactly one, else the adapter's own name — a specific
+    // connected device is only named when it is unambiguous which one, so
+    // two simultaneous connections (a mouse and a headset, say) fall back to
+    // naming the radio itself rather than picking one arbitrarily.
+    readonly property var _heroDevice: root._connectedRows.length === 1 ? root._connectedRows[0] : null
+    readonly property string _heroTitle: root._heroDevice
+        ? (root._heroDevice.name || root._heroDevice.deviceName)
+        : (root._adapter ? root._adapter.name : "")
+    readonly property string _heroMeta: root._heroDevice
+        ? (BluetoothModel.statusText(root._heroDevice) || "CONNECTED")
+        : (root._adapter ? BluetoothAdapterState.toString(root._adapter.state).toUpperCase() : "")
+    readonly property string _heroGlyph: (!root._adapter || !root._adapter.enabled)
+        ? "󰂲"
+        : (root._connectedRows.length > 0 ? "󰂱" : "󰂯")
+
     readonly property bool _airpodsAvailable: LibrePodsService.available && BluetoothModel.hasConnectedAirpods(root._connectedRows)
     readonly property var _airpodsModes: [
         { key: "off", label: "OFF" },
@@ -614,50 +630,38 @@ Panel {
         MetaLabel { text: "NO ADAPTER" }
     }
 
-    Cell {
-        id: adapterCell
+    // The panel's own subject (M28 Task 5): the one connected device, or the
+    // adapter itself, with POWER promoted into the trailing slot — this
+    // replaces the old adapter-name-plus-state row outright.
+    PanelHero {
         visible: root._adapter !== null
         width: parent.width
+        glyph: root._heroGlyph
+        title: root._heroTitle
+        meta: root._heroMeta
+        trailing: adapterPowerToggle
+    }
 
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
+    Component {
+        id: adapterPowerToggle
 
-            Text {
-                width: parent.width - powerLabel.width - parent.spacing
-                // Not routed through ActionLabel/MetaLabel: the adapter's own
-                // name is real device data, not ours to force uppercase (the
-                // same reasoning Tooltip.qml's `verbatim` flag documents) —
-                // only the trailing state word gets that treatment, via its
-                // own `.toUpperCase()`. Still needs the tracking every other
-                // uppercase label carries (audit "uppercase/meta treatment").
-                text: root._adapter ? root._adapter.name + "  " + BluetoothAdapterState.toString(root._adapter.state).toUpperCase() : ""
-                color: adapterCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-                font.letterSpacing: Theme.letterSpacing.meta
-                elide: Text.ElideRight
-            }
+        // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09 amendment):
+        // no cell chrome, armed state promotes straight to accent instead
+        // of a fill/inversion.
+        MetaLabel {
+            text: "POWER"
+            color: (root._adapter && root._adapter.enabled)
+                ? Theme.color.accent
+                : (powerHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-            // amendment): no cell chrome, armed state promotes straight to
-            // accent instead of a fill/inversion.
-            MetaLabel {
-                id: powerLabel
-                text: "POWER"
-                color: (root._adapter && root._adapter.enabled)
-                    ? Theme.color.accent
-                    : (powerHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
-
-                MouseArea {
-                    id: powerHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (root._adapter)
-                            root._adapter.enabled = !root._adapter.enabled;
-                    }
+            MouseArea {
+                id: powerHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (root._adapter)
+                        root._adapter.enabled = !root._adapter.enabled;
                 }
             }
         }

@@ -1877,13 +1877,15 @@ fi
 # screenshot proves the whole poll -> parse -> "3/2" cell path and --panel
 # github's proves the two panel sections' canned rows, without network or
 # auth. Real `gh` behaviour (auth, exit code 4) is host-trial territory.
+# `viewer.login` (M28 Task 5) is the hero's own title, so the fixture carries
+# one alongside the counts it always has.
 if $bar_layout_mode || $panel_github_mode; then
   gh_shim_dir="$shot_dir/gh-shim"
   mkdir -p "$gh_shim_dir"
   cat > "$gh_shim_dir/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "${1:-}" = "api" ]; then
-  printf '%s\n' '{"data":{"prs":{"issueCount":3,"nodes":[{"title":"Sort workspaces by idx","url":"https://github.com/formalshell/formalshell/pull/101","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Tray dbusmenu support","url":"https://github.com/formalshell/formalshell/pull/102","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Panel motion tokens","url":"https://github.com/formalshell/formalshell/pull/103","repository":{"nameWithOwner":"formalshell/formalshell"}}]},"issues":{"issueCount":2,"nodes":[{"title":"Calendar day selection","url":"https://github.com/formalshell/formalshell/issues/201","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Emoji picker should paste","url":"https://github.com/formalshell/formalshell/issues/202","repository":{"nameWithOwner":"formalshell/formalshell"}}]}}}'
+  printf '%s\n' '{"data":{"viewer":{"login":"formalsnake"},"prs":{"issueCount":3,"nodes":[{"title":"Sort workspaces by idx","url":"https://github.com/formalshell/formalshell/pull/101","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Tray dbusmenu support","url":"https://github.com/formalshell/formalshell/pull/102","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Panel motion tokens","url":"https://github.com/formalshell/formalshell/pull/103","repository":{"nameWithOwner":"formalshell/formalshell"}}]},"issues":{"issueCount":2,"nodes":[{"title":"Calendar day selection","url":"https://github.com/formalshell/formalshell/issues/201","repository":{"nameWithOwner":"formalshell/formalshell"}},{"title":"Emoji picker should paste","url":"https://github.com/formalshell/formalshell/issues/202","repository":{"nameWithOwner":"formalshell/formalshell"}}]}}}'
   exit 0
 fi
 exit 1

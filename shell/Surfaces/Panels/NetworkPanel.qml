@@ -135,6 +135,17 @@ Panel {
     readonly property var _wifiDevices: Networking.devices.values.filter(function (d) { return d.type === DeviceType.Wifi; })
     readonly property bool _hasWifiDevice: root._wifiDevices.length > 0
 
+    // The hero's own subject (M28 Task 5): the connected SSID when there is
+    // one, else the radio's own control-interface name — never a fabricated
+    // network, and never blank while a real wifi device exists.
+    readonly property string _wifiHeroTitle: root._connectedWifiSsid !== ""
+        ? root._connectedWifiSsid
+        : (root._wifiDevices.length > 0 ? root._wifiDevices[0].name : "")
+    readonly property string _wifiHeroMeta: root._connectedWifiSsid !== ""
+        ? "CONNECTED"
+        : (Networking.wifiEnabled ? "DISCONNECTED" : "RADIO OFF")
+    readonly property string _wifiHeroGlyph: root._connectedWifiSsid !== "" ? "󰖩" : "󰖪"
+
     function _applyScanner() {
         for (var i = 0; i < root._wifiDevices.length; i++)
             root._wifiDevices[i].scannerEnabled = root.isOpen;
@@ -1234,6 +1245,41 @@ Panel {
         }
     }
 
+    // The panel's own subject (M28 Task 5): the connected SSID (or the
+    // radio's own interface name while nothing is connected), the wifi
+    // radio's power toggle promoted into the trailing slot — the row this
+    // replaces below (the old WI-FI / WI-FI POWER row) said nothing else.
+    PanelHero {
+        visible: root._hasWifiDevice
+        width: parent.width
+        glyph: root._wifiHeroGlyph
+        title: root._wifiHeroTitle
+        meta: root._wifiHeroMeta
+        trailing: wifiPowerToggleHero
+    }
+
+    Component {
+        id: wifiPowerToggleHero
+
+        // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09 amendment):
+        // no cell chrome, armed state promotes straight to accent instead
+        // of a fill/inversion.
+        MetaLabel {
+            text: "WI-FI POWER"
+            color: Networking.wifiEnabled
+                ? Theme.color.accent
+                : (wifiPowerHeroHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+
+            MouseArea {
+                id: wifiPowerHeroHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
+            }
+        }
+    }
+
     Cell {
         visible: root._wiredEntries.length === 0 && root._wifiEntries.length === 0
         width: parent.width
@@ -1251,41 +1297,6 @@ Panel {
     Repeater {
         model: root._wiredEntries
         delegate: networkRow
-    }
-
-    Cell {
-        id: wifiPowerCell
-        visible: root._hasWifiDevice
-        width: parent.width
-
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
-
-            MetaLabel {
-                width: parent.width - wifiPowerToggle.width - parent.spacing
-                text: "WI-FI"
-            }
-
-            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-            // amendment): no cell chrome, armed state promotes straight to
-            // accent instead of a fill/inversion.
-            MetaLabel {
-                id: wifiPowerToggle
-                text: "WI-FI POWER"
-                color: Networking.wifiEnabled
-                    ? Theme.color.accent
-                    : (wifiPowerHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
-
-                MouseArea {
-                    id: wifiPowerHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
-                }
-            }
-        }
     }
 
     Cell {

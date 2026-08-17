@@ -43,6 +43,10 @@ Panel {
     readonly property var _mirroring: Outputs.mirroredNames(root._outputs)
     readonly property bool _mirrorOn: root._mirroring.length > 0
 
+    // The hero's own subject (M28 Task 5): the focused output's own name and
+    // resolution — never a fabricated mode for an output with none to report.
+    readonly property var _focusedOutput: Outputs.findOutput(root._outputs, CompositorService.focusedOutputName)
+
     // Keyboard cursor over the sorted output rows (PowerPanel's numeric
     // _cursor idiom — this table is one flat Repeater, so an index fits where
     // NetworkPanel's split sections needed a key). -1 is NetworkPanel's empty
@@ -168,7 +172,12 @@ Panel {
             readonly property bool _canToggle: root._backend.outputConfigAvailable
                 && Outputs.canToggle(root._outputs, outCell.modelData.name)
             readonly property string _identity: Outputs.describe(outCell.modelData)
-            readonly property string _status: Outputs.statusLine(outCell.modelData)
+            // The focused row's own resolution is already the hero's meta
+            // line above (M28 Task 5); this row keeps scale/mirror only, so
+            // the mode isn't printed twice.
+            readonly property string _status: outCell.selected
+                ? Outputs.statusLineNoMode(outCell.modelData)
+                : Outputs.statusLine(outCell.modelData)
 
             // Takes no buttons: the cell's own target sits under its content,
             // so every control in the Column below stays above it and keeps
@@ -233,10 +242,15 @@ Panel {
                     }
                 }
 
+                // Color collapses to the row's own ink when selected, the
+                // same single-band precedent the ON/OFF label above already
+                // follows: `foregroundDim` on the focused row's accent fill
+                // measures unreadable.
                 MetaLabel {
                     width: parent.width
                     visible: outCell._status !== ""
                     text: outCell._status
+                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
                     elide: Text.ElideRight
                 }
 
@@ -244,6 +258,7 @@ Panel {
                     width: parent.width
                     visible: outCell._identity !== ""
                     text: outCell._identity
+                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
                     elide: Text.ElideRight
                 }
 
@@ -259,6 +274,7 @@ Panel {
                         MetaLabel {
                             width: parent.width - scaleValue.width - parent.spacing
                             text: "SCALE"
+                            color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
                         }
 
                         Text {
@@ -300,6 +316,17 @@ Panel {
                 }
             }
         }
+    }
+
+    // The panel's own subject (M28 Task 5): the focused output's own name
+    // and resolution — hidden entirely when nothing is focused, the same
+    // honest-unavailable gate every other hero uses.
+    PanelHero {
+        visible: root._focusedOutput !== null
+        width: parent.width
+        glyph: "󰍹"
+        title: root._focusedOutput ? root._focusedOutput.name : ""
+        meta: root._focusedOutput ? Outputs.modeLabel(root._focusedOutput) : ""
     }
 
     // An empty list means two different things and only one of them licenses
