@@ -4,12 +4,15 @@ import qs.Core
 import qs.Components
 import "../../Audio/model.js" as AudioModel
 
-// Omarchy mixer behavior (DESIGN.md §Panels, spec §2, M6 Task 1; M15 Task 4):
-// OUTPUT — one master slider row for the current default sink, then one
-// selectable row per candidate sink (click/Enter sets
-// Pipewire.preferredDefaultAudioSink, the active row inverted); INPUT is
-// the same shape for sources, the whole section (header included) omitted
-// when no input hardware exists; APPS lists real playback streams
+// The shared PanelHero (M26 Task 1) opens the panel with the default
+// sink's own name, mute state, volume percent and rail, mute as its
+// trailing toggle (M28 Task 1). Omarchy mixer behavior below it (DESIGN.md
+// §Panels, spec §2, M6 Task 1; M15 Task 4): one selectable row per
+// candidate output sink (click/Enter sets Pipewire.preferredDefaultAudioSink,
+// the active row inverted); INPUT pairs its own noun with its percent and
+// mute on one header line, track underneath, then the same selectable rows
+// for sources, the whole section omitted when no input hardware exists;
+// APPS lists real playback streams
 // (Audio/model.js.isPlaybackStream, never reading `properties` at filter
 // time — the omarchy destabilization note), omitted entirely with no
 // streams. Master sliders clamp 0..1 (AudioModel.clampDevice); stream
@@ -32,6 +35,10 @@ Panel {
 
     readonly property var _sink: Pipewire.defaultAudioSink
     readonly property var _source: Pipewire.defaultAudioSource
+
+    readonly property bool _outputMuted: root._sink !== null && root._sink.audio !== null && root._sink.audio.muted
+    readonly property real _outputVolume: root._sink !== null && root._sink.audio !== null
+        ? AudioModel.clampDevice(root._sink.audio.volume) : 0
 
     readonly property var _deviceNodes: Pipewire.nodes.values.filter(function (n) {
         return n.audio !== null && !n.isStream;
@@ -258,43 +265,60 @@ Panel {
                 width: parent.width
                 spacing: Theme.space.xxs
 
-                Row {
+                // Same header-line rhythm as the hero and the INPUT row
+                // above: the app's own name left, its percent and mute
+                // right, one line, track underneath.
+                Item {
                     width: parent.width
-                    spacing: Theme.space.sm
+                    height: Math.max(streamLabelText.implicitHeight, streamValueRow.implicitHeight)
 
                     Text {
-                        width: parent.width - streamPercent.width - streamMuteLabel.width - parent.spacing * 2
+                        id: streamLabelText
                         text: streamCell._label
                         color: streamCell.foreground
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                         elide: Text.ElideRight
+                        anchors.left: parent.left
+                        anchors.right: streamValueRow.left
+                        anchors.rightMargin: Theme.space.sm
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    Text {
-                        id: streamPercent
-                        text: Math.round(streamCell._volume * 100) + "%"
-                        color: streamCell._muted ? Theme.color.foregroundFaint : streamCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.caption
-                    }
+                    Row {
+                        id: streamValueRow
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.sm
 
-                    // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-                    // amendment): no cell chrome, armed state promotes
-                    // straight to accent instead of a fill/inversion.
-                    MetaLabel {
-                        id: streamMuteLabel
-                        text: "MUTE"
-                        color: streamCell._muted
-                            ? Theme.color.accent
-                            : (streamMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                        Text {
+                            id: streamPercent
+                            text: Math.round(streamCell._volume * 100) + "%"
+                            color: streamCell._muted ? Theme.color.foregroundFaint : streamCell.foreground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize.caption
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
 
-                        MouseArea {
-                            id: streamMuteHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
+                        // Bare-label ink promotion (DESIGN.md §1.1's
+                        // 2026-08-09 amendment): no cell chrome, armed
+                        // state promotes straight to accent instead of a
+                        // fill/inversion.
+                        MetaLabel {
+                            id: streamMuteLabel
+                            text: "MUTE"
+                            color: streamCell._muted
+                                ? Theme.color.accent
+                                : (streamMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            MouseArea {
+                                id: streamMuteHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
+                            }
                         }
                     }
                 }
@@ -344,6 +368,44 @@ Panel {
         }
     }
 
+    // The panel's own subject: the default sink's name, mute state, volume
+    // and rail, with mute promoted into the trailing slot (M28 Task 1).
+    // Replaces the old OUTPUT header row and its master slider outright, so
+    // the output device list below opens directly on this.
+    PanelHero {
+        visible: root._sink !== null && root._sink.audio !== null
+        width: parent.width
+        glyph: root._outputMuted ? "󰝟" : "󰕾"
+        title: root._sink ? (root._sink.description || root._sink.name) : ""
+        meta: root._outputMuted ? "MUTED" : "ACTIVE"
+        readout: Math.round(root._outputVolume * 100) + "%"
+        rail: root._outputVolume
+        // No pointer on the hero (the rail is a readout, not a control),
+        // but the keyboard cursor still lands on "output-slider" for h/l —
+        // this is its only visual trace.
+        hovered: root.cursorActive && root._cursorKey === "output-slider"
+        trailing: outputMuteToggle
+    }
+
+    Component {
+        id: outputMuteToggle
+
+        MetaLabel {
+            text: "MUTE"
+            color: root._outputMuted
+                ? Theme.color.accent
+                : (outputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+
+            MouseArea {
+                id: outputMuteHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
+            }
+        }
+    }
+
     Cell {
         visible: root._outputs.length === 0 && root._inputs.length === 0
         width: parent.width
@@ -351,101 +413,17 @@ Panel {
         MetaLabel { text: "NO DEVICES" }
     }
 
-    Cell {
-        visible: root._outputs.length > 0
-        width: parent.width
-
-        MetaLabel { text: "OUTPUT"; colon: true }
-    }
-
-    Cell {
-        id: outputMasterCell
-        visible: root._sink !== null && root._sink.audio !== null
-        interactive: true
-        hovered: root.cursorActive && root._cursorKey === "output-slider"
-        onContainsPointerChanged: if (outputMasterCell.containsPointer) {
-            root.cursorActive = true;
-            root._cursorKey = "output-slider";
-        }
-        width: parent.width
-
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            Row {
-                width: parent.width
-                spacing: Theme.space.sm
-
-                Text {
-                    width: parent.width - outputMuteLabel.width - parent.spacing
-                    text: Math.round((root._sink && root._sink.audio ? root._sink.audio.volume : 0) * 100) + "%"
-                    color: outputMasterCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-
-                MetaLabel {
-                    id: outputMuteLabel
-                    text: "MUTE"
-                    color: (root._sink && root._sink.audio && root._sink.audio.muted)
-                        ? Theme.color.accent
-                        : (outputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
-
-                    MouseArea {
-                        id: outputMuteHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
-                    }
-                }
-            }
-
-            DitherFill {
-                id: outputTrack
-                width: parent.width
-                height: Theme.space.trackThickness
-
-                Rectangle {
-                    width: parent.width * (root._sink && root._sink.audio ? AudioModel.clampDevice(root._sink.audio.volume) : 0)
-                    height: parent.height
-                    color: Theme.color.accent
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    function _setFromX(x) {
-                        if (!root._sink || !root._sink.audio) return;
-                        root._sink.audio.volume = AudioModel.clampDevice(x / outputTrack.width);
-                    }
-                    onPressed: mouse => _setFromX(mouse.x)
-                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                    onWheel: wheel => {
-                        if (!root._sink || !root._sink.audio) return;
-                        root._sink.audio.volume = AudioModel.clampDevice(root._sink.audio.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
-                        wheel.accepted = true;
-                    }
-                }
-            }
-        }
-    }
-
     Repeater {
         model: root._outputRows
         delegate: deviceRow
     }
 
-    Cell {
-        visible: root._inputs.length > 0
-        width: parent.width
-
-        MetaLabel { text: "INPUT"; colon: true }
-    }
-
+    // Header-line pairing (upstream's own idiom, adopted M28 Task 1): the
+    // section noun sits left, its readout and mute right, on one line,
+    // track underneath — one row saved over a separate "INPUT:" header.
     Cell {
         id: inputMasterCell
-        visible: root._inputs.length > 0 && root._source !== null && root._source.audio !== null
+        visible: root._inputs.length > 0
         interactive: true
         hovered: root.cursorActive && root._cursorKey === "input-slider"
         onContainsPointerChanged: if (inputMasterCell.containsPointer) {
@@ -458,31 +436,44 @@ Panel {
             width: parent.width
             spacing: Theme.space.xxs
 
-            Row {
+            Item {
                 width: parent.width
-                spacing: Theme.space.sm
-
-                Text {
-                    width: parent.width - inputMuteLabel.width - parent.spacing
-                    text: Math.round((root._source && root._source.audio ? root._source.audio.volume : 0) * 100) + "%"
-                    color: inputMasterCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
+                height: Math.max(inputHeaderLabel.implicitHeight, inputValueRow.implicitHeight)
 
                 MetaLabel {
-                    id: inputMuteLabel
-                    text: "MUTE"
-                    color: (root._source && root._source.audio && root._source.audio.muted)
-                        ? Theme.color.accent
-                        : (inputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                    id: inputHeaderLabel
+                    text: "INPUT"
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                }
 
-                    MouseArea {
-                        id: inputMuteHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
+                Row {
+                    id: inputValueRow
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.space.sm
+
+                    Text {
+                        text: Math.round((root._source && root._source.audio ? root._source.audio.volume : 0) * 100) + "%"
+                        color: inputMasterCell.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize.body
+                    }
+
+                    MetaLabel {
+                        id: inputMuteLabel
+                        text: "MUTE"
+                        color: (root._source && root._source.audio && root._source.audio.muted)
+                            ? Theme.color.accent
+                            : (inputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+
+                        MouseArea {
+                            id: inputMuteHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
+                        }
                     }
                 }
             }
