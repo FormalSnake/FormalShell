@@ -7,17 +7,16 @@ import qs.Services
 import qs.Notifications
 import "../../Power/model.js" as Power
 
-// Power panel (DESIGN.md §Panels, spec §2, M6 Task 7): a battery/AC state
-// row (no header — mirrors BluetoothPanel's headerless adapter row, since
-// there's only ever one), then a keyboard-navigable power-profile picker
-// under a PROFILE header, the active profile inverted. Bound directly to
-// Quickshell.Services.UPower, same as AudioPanel binds Pipewire directly.
-// The test VM's QEMU aarch64 "virt" machine has no battery at all —
-// UPower.displayDevice.isLaptopBattery is then false and the panel renders
-// the honest "AC POWER" cell instead of a lying 0%, mirroring Bluetooth's
-// "NO ADAPTER" state. The charging pulse (DESIGN.md rule 9's breathing-
-// opacity idiom for in-progress states) runs on the status row only while
-// UPowerDeviceState.Charging is the live state.
+// Power panel (DESIGN.md §Panels, spec §2, M6 Task 7): the shared
+// PanelHero (M26 Task 1) opens the panel — battery glyph, "Battery",
+// four-way state meta line, percent as the displayLarge readout, charge
+// level as the rail — then a ruled stats ledger (M26 Task 3), then a
+// keyboard-navigable power-profile picker under a PROFILE header, the
+// active profile inverted. Bound directly to Quickshell.Services.UPower,
+// same as AudioPanel binds Pipewire directly. The test VM's QEMU aarch64
+// "virt" machine has no battery at all — UPower.displayDevice.isLaptopBattery
+// is then false and the panel renders the honest "AC POWER" cell instead
+// of a lying 0%, mirroring Bluetooth's "NO ADAPTER" state.
 //
 // M16 Task 5: this is the shell's one instance of PowerPanel (shell.qml
 // wires the same `powerPanelInstance` into every screen's Bar) — the
@@ -40,60 +39,29 @@ Panel {
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
     readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
-    // Mirrors Battery.qml's own bucket table for the hero's leading glyph —
-    // not extracted to a shared function here, since Task 3 is where the
-    // charge-aware discharging/charging ramp replaces this flat percent
-    // bucket in both places at once.
-    readonly property string _batteryGlyph: {
-        var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
-        switch (bucket) {
-        case 0: return "󰂎";
-        case 10: return "󰁺";
-        case 20: return "󰁻";
-        case 30: return "󰁼";
-        case 40: return "󰁽";
-        case 50: return "󰁾";
-        case 60: return "󰁿";
-        case 70: return "󰂀";
-        case 80: return "󰂁";
-        case 90: return "󰂂";
-        default: return "󰁹";
-        }
-    }
     readonly property real _timeToEmpty: root._hasBattery ? root._device.timeToEmpty : 0
     readonly property real _timeToFull: root._hasBattery ? root._device.timeToFull : 0
     readonly property real _changeRate: root._hasBattery ? root._device.changeRate : 0
 
-    // M16 Task 11 (owner-requested, gated subtle): the glanceable phrase
-    // set the status line rotates through — state first, then whichever
-    // real fields the static rows below already render, same skip-if-
-    // absent rule (never a "--", never a phrase for a field that isn't
-    // reporting). A set with only one phrase (no time-to-X, no rate) never
-    // rotates; the primary phrase is always index 0, so a closed/reopened
-    // panel or a disabled-motion session both show exactly today's line.
-    // M20 Task 5c: the rate no longer gets its own rotation phrase — the
-    // new wattage row below is a persistent display, not gated by
-    // rotation, so a "RATE 15.5W" phrase here would show the same figure
-    // on screen twice at once. Dropped from this list; the CHARGING/DRAW
-    // row is its replacement.
-    readonly property var _phrases: {
-        if (!root._hasBattery)
-            return [];
-        var list = [root._percent + "%  " + UPowerDeviceState.toString(root._device.state).toUpperCase()];
-        if (root._charging && root._timeToFull > 0)
-            list.push("TIME TO FULL " + Power.formatDuration(root._timeToFull));
-        if (!root._charging && root._timeToEmpty > 0)
-            list.push("TIME TO EMPTY " + Power.formatDuration(root._timeToEmpty));
-        return list;
-    }
-    readonly property bool _rotating: root._hasBattery
-        && (root._device.state === UPowerDeviceState.Charging || root._device.state === UPowerDeviceState.Discharging)
-        && root._phrases.length > 1
-    property int _phraseIndex: 0
-
-    // Battery info dedup (owner: duplicate fields while discharging) —
-    // Power.staticFieldsVisible's own header comment has the full rule.
-    readonly property bool _staticFieldsVisible: Power.staticFieldsVisible(Theme.motionEnabled, root._rotating)
+    // Charge-threshold detection (M26 Task 3): UPower's own AC-vs-battery
+    // aggregate, not a per-device state parse, and the states object the
+    // Power/model.js checks need — shared by the glyph, the hero meta line,
+    // and the stats ledger below so none of the three can disagree.
+    readonly property bool _onBattery: UPower.onBattery
+    readonly property var _upowerStates: ({
+        PendingCharge: UPowerDeviceState.PendingCharge,
+        FullyCharged: UPowerDeviceState.FullyCharged,
+        Charging: UPowerDeviceState.Charging
+    })
+    readonly property bool _thresholdActive: root._hasBattery
+        ? Power.chargeThresholdActive(root._percent, root._device.state, root._changeRate, root._timeToFull, root._onBattery, root._upowerStates)
+        : false
+    readonly property string _batteryGlyph: root._hasBattery
+        ? Power.batteryGlyph(root._percent, root._onBattery, root._thresholdActive)
+        : ""
+    readonly property string _stateLabel: root._hasBattery
+        ? Power.chargeStateLabel(root._percent, root._device.state, root._onBattery, root._thresholdActive, root._upowerStates)
+        : ""
 
     // Hysteresis state for Power/model.js's warnEvent() — persisted here
     // across calls, never reset except by the model's own re-arm-on-charge
@@ -160,7 +128,6 @@ Panel {
     onIsOpenChanged: {
         if (root.isOpen) {
             root._cursor = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
-            root._phraseIndex = 0;
             BrightnessService.refreshDevices();
         } else {
             // Drop the RAPL baseline on close (M20 Task 5c) — no
@@ -273,110 +240,115 @@ Panel {
         width: parent.width
         glyph: root._batteryGlyph
         title: "Battery"
-        meta: root._hasBattery ? UPowerDeviceState.toString(root._device.state) : ""
+        meta: root._stateLabel
         readout: root._hasBattery ? root._percent + "%" : ""
         readoutSize: "displayLarge"
         rail: root._hasBattery ? root._percent / 100 : -1
     }
 
+    // Stats ledger (M26 Task 3): two ruled half-width cells for the short
+    // readings, two ruled full-width cells for the two whose value can run
+    // long (the wattage row's optional CPU suffix). "Charge cycles" is not
+    // in this ledger — verified against the pinned quickshell source
+    // (services/upower/device.hpp / org.freedesktop.UPower.Device.xml):
+    // UPowerDevice exposes no cycle-count property at all. Battery size
+    // (energyCapacity, a real UPower Wh reading) fills that slot instead;
+    // healthPercentage (the DBus "Capacity" property, already "design
+    // capacity as a percentage") covers design capacity. Every row here
+    // reads a live UPowerDevice binding directly, never an async-populated
+    // cache, so the four rows stay mounted for the panel's whole lifetime
+    // (`visible: root._hasBattery`, same gate as the hero) — an AC
+    // plug/unplug only ever changes a row's value text, never its
+    // presence.
+    Grid {
+        id: batteryStatsGrid
+        visible: root._hasBattery
+        width: parent.width
+        columns: 2
+
+        Cell {
+            id: capacityCell
+            width: batteryStatsGrid.width / 2
+
+            Column {
+                width: parent.width
+                spacing: Theme.space.xxs
+
+                MetaLabel { text: "CAPACITY" }
+                Text {
+                    width: parent.width
+                    text: root._hasBattery ? Power.formatHealthPercent(root._device.healthPercentage, root._device.healthSupported) : ""
+                    color: capacityCell.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.body
+                    elide: Text.ElideRight
+                }
+            }
+        }
+
+        Cell {
+            id: sizeCell
+            width: batteryStatsGrid.width / 2
+
+            Column {
+                width: parent.width
+                spacing: Theme.space.xxs
+
+                MetaLabel { text: "SIZE" }
+                Text {
+                    width: parent.width
+                    text: root._hasBattery ? Power.formatWh(root._device.energyCapacity) : ""
+                    color: sizeCell.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.body
+                    elide: Text.ElideRight
+                }
+            }
+        }
+    }
+
     Cell {
-        id: statusCell
+        id: timeStatCell
         visible: root._hasBattery
         width: parent.width
 
-        Column {
+        Row {
             width: parent.width
-            spacing: Theme.space.xxs
+            spacing: Theme.space.sm
 
-            // M16 Task 11: the phrase swap fades `statusTextWrap`'s opacity,
-            // never `statusText`'s own — that one already carries the
-            // charging breathing pulse below, and two animations writing
-            // the same property would fight. Wrapping keeps them
-            // independent: total rendered opacity is just the product of
-            // both, so a swap mid-breath still reads as one organism.
-            Item {
-                id: statusTextWrap
-                width: statusText.implicitWidth
-                height: statusText.implicitHeight
-
-                Text {
-                    id: statusText
-                    text: root._phrases.length > 0 ? root._phrases[root._phraseIndex % root._phrases.length] : ""
-                    color: statusCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-
-                    // Gated on root.isOpen too (M16 Task 12): this panel's
-                    // content is instantiated once for the shell's whole
-                    // lifetime (Panel.qml never destroys it on close, only
-                    // hides the window), so an unqualified `running:
-                    // root._charging` kept animating a fully hidden window
-                    // for as long as the laptop stayed on AC.
-                    SequentialAnimation on opacity {
-                        running: root._charging && root.isOpen
-                        loops: Animation.Infinite
-                        NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
-                        NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
-                    }
-                }
+            MetaLabel { id: timeStatLabel; text: Power.timeRowLabel(root._charging); colon: true }
+            Text {
+                width: parent.width - timeStatLabel.implicitWidth - parent.spacing
+                text: root._hasBattery ? Power.timeRowValue(root._charging, root._timeToFull, root._timeToEmpty) : ""
+                color: timeStatCell.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+                elide: Text.ElideRight
             }
+        }
+    }
 
-            // Advances `_phraseIndex` every `Theme.motion.rotatePeriod`
-            // while the panel is open, motion is enabled, and there's more
-            // than one real phrase to show — closing the panel, disabling
-            // motion, or losing the rotating state all just stop new
-            // triggers; the in-flight fade (if any) still runs to
-            // completion on its own since nothing else writes
-            // `statusTextWrap.opacity`.
-            Timer {
-                id: phraseTimer
-                interval: Theme.motion.rotatePeriod
-                running: root.isOpen && Theme.motionEnabled && root._rotating
-                repeat: true
-                triggeredOnStart: false
-                onTriggered: phraseFade.restart()
-            }
+    // No colon on the rate row (DESIGN §2 item 10): the value is already
+    // fused with its own CHARGING/DRAW word via formatWattageRow.
+    Cell {
+        id: rateStatCell
+        visible: root._hasBattery
+        width: parent.width
 
-            SequentialAnimation {
-                id: phraseFade
-                PropertyAnimation { target: statusTextWrap; property: "opacity"; to: 0.0; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-                ScriptAction { script: root._phraseIndex = (root._phraseIndex + 1) % Math.max(1, root._phrases.length) }
-                PropertyAnimation { target: statusTextWrap; property: "opacity"; to: 1.0; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
+        Row {
+            width: parent.width
+            spacing: Theme.space.sm
 
-            // Static ports of the hero-rotation content (M16 Task 5):
-            // dim meta rows, one per UPower field that's actually
-            // reporting something — timeToFull is 0 while discharging
-            // and timeToEmpty is 0 while charging (the pinned quickshell
-            // source's own contract), so at most one of the two is ever
-            // visible; changeRate is 0 when UPower simply has no reading
-            // yet. Nothing renders in place of an absent value — no
-            // "--", no rotation, no timer (Task 11's job). Gated on
-            // `_staticFieldsVisible` (dedup fix, owner-reported): while the
-            // status line above is actually rotating through these same
-            // fields, showing them here too doubled the information: the
-            // rotating line owns them, and these rows only render once it
-            // isn't (motion disabled, or nothing to rotate through).
-            MetaLabel {
-                visible: root._staticFieldsVisible && root._charging && root._timeToFull > 0
-                text: "TIME TO FULL " + Power.formatDuration(root._timeToFull)
-            }
-
-            MetaLabel {
-                visible: root._staticFieldsVisible && !root._charging && root._timeToEmpty > 0
-                text: "TIME TO EMPTY " + Power.formatDuration(root._timeToEmpty)
-            }
-
-            // Wattage row (M20 Task 5c, owner ask): persistent, not gated
-            // by `_staticFieldsVisible` — unlike TIME TO FULL/EMPTY above,
-            // this replaces the rotation's own RATE phrase entirely (see
-            // `_phrases`' header comment), so it always renders whenever
-            // there's a real rate to show, rotating or not. Slash-fused
-            // per DESIGN §2 item 10: no colon, the CPU half only appears
-            // once RAPL has actually resolved a sample.
-            MetaLabel {
-                visible: root._changeRate !== 0
-                text: Power.formatWattageRow(root._charging, root._changeRate, root.cpuPackageW)
+            MetaLabel { id: rateStatLabel; text: "RATE" }
+            Text {
+                width: parent.width - rateStatLabel.implicitWidth - parent.spacing
+                text: root._hasBattery
+                    ? (root._thresholdActive ? "HOLDING" : Power.formatWattageRow(root._charging, root._changeRate, root.cpuPackageW))
+                    : ""
+                color: rateStatCell.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+                elide: Text.ElideRight
             }
         }
     }

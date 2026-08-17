@@ -14,12 +14,12 @@ import "../../../Power/model.js" as Power
 // AC-only displayDevice the test VM reports fails it, so this cell's
 // `visible: false` drops it out of Bar.qml's Row entirely rather than
 // leaving a dead slot — DESIGN's honest-unavailable-state rule pushed all
-// the way to "don't show the cell at all". Charging is communicated inside
-// PowerPanel's breathing-opacity pulse, not here — no separate charging
-// glyph set. Glyph codepoints taken from the pinned nerd-fonts-jetbrains-
-// mono cmap (nix/testvm.nix), rounded to the nearest 10%: md-battery_outline
-// U+F008E (0%), md-battery_NN U+F007A..F0082 (10%..90%), md-battery U+F0079
-// (100%).
+// the way to "don't show the cell at all". Glyph ramp is charge-aware
+// (M26 Task 3, Power/model.js's batteryGlyph): a genuine AC charge draws
+// from the bolt ramp, discharging and the charge-threshold state (still
+// plugged in, not visibly climbing) share the plain ramp, both converging
+// on the same glyph at 100%. Codepoints taken from the pinned
+// nerd-fonts-jetbrains-mono cmap (nix/testvm.nix).
 //
 // Critical battery (M16 Task 5, DESIGN.md §2.4): at/below
 // battery.criticalPercent while discharging, the cell goes full-bleed
@@ -47,22 +47,19 @@ Cell {
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
     readonly property bool _critical: root._discharging && root._percent <= Config.get("battery.criticalPercent", 5)
     readonly property bool _low: root._discharging && !root._critical && root._percent <= Config.get("battery.warnPercent", 10)
-    readonly property string _glyph: {
-        var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
-        switch (bucket) {
-        case 0: return "󰂎";
-        case 10: return "󰁺";
-        case 20: return "󰁻";
-        case 30: return "󰁼";
-        case 40: return "󰁽";
-        case 50: return "󰁾";
-        case 60: return "󰁿";
-        case 70: return "󰂀";
-        case 80: return "󰂁";
-        case 90: return "󰂂";
-        default: return "󰁹";
-        }
-    }
+    // UPower's own AC-vs-battery aggregate (device.state can lag on some
+    // drivers), and PowerPanel's own charge-threshold detection mirrored
+    // here so the bar cell and the panel never disagree (M26 Task 3).
+    readonly property bool _onBattery: UPower.onBattery
+    readonly property var _upowerStates: ({
+        PendingCharge: UPowerDeviceState.PendingCharge,
+        FullyCharged: UPowerDeviceState.FullyCharged,
+        Charging: UPowerDeviceState.Charging
+    })
+    readonly property bool _thresholdActive: root._hasBattery
+        ? Power.chargeThresholdActive(root._percent, root._device.state, root._device.changeRate, root._device.timeToFull, root._onBattery, root._upowerStates)
+        : false
+    readonly property string _glyph: root._hasBattery ? Power.batteryGlyph(root._percent, root._onBattery, root._thresholdActive) : ""
 
     // Read by Bar.qml's regionDelegate instead of `visible` directly — see
     // that file's own header comment for why crossing the Loader boundary
@@ -88,14 +85,13 @@ Cell {
         if (!root._hasBattery)
             return "";
         var head = "BATTERY " + root._percent + "%";
+        if (root._thresholdActive)
+            return head + " / THRESHOLD";
         if (root._charging && root._device.timeToFull > 0)
             return head + " / FULL IN " + Power.formatDuration(root._device.timeToFull);
         if (root._discharging && root._device.timeToEmpty > 0)
             return head + " / " + Power.formatDuration(root._device.timeToEmpty) + " LEFT";
-        // Uppercased at display time by Tooltip.qml's own MetaLabel — the
-        // JS-level `.toUpperCase()` this used to carry was pure redundancy
-        // (audit "uppercase/meta treatment").
-        return head + " / " + UPowerDeviceState.toString(root._device.state);
+        return head + " / " + Power.chargeStateLabel(root._percent, root._device.state, root._onBattery, root._thresholdActive, root._upowerStates);
     }
 
     Row {

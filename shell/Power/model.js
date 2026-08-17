@@ -125,19 +125,83 @@ function formatWattageRow(charging, changeRateW, cpuPackageW) {
     return head + " / CPU " + formatRate(cpuPackageW);
 }
 
-// Whether the static TIME TO FULL/EMPTY meta rows should render (M-polish
-// batch item D, owner-reported: they duplicated the same fields the status
-// line above already rotates through). The static rows defer only while
-// the rotation is actually going to show those fields — `rotating` already
-// requires charging/discharging AND more than one real phrase — so a field
-// that would never get a turn in rotation (motion enabled but the device
-// isn't charging/discharging) still falls back to rendering statically
-// instead of vanishing outright. With motion disabled, `rotating` is
-// irrelevant: the status line never advances past phrase 0, so the static
-// rows always carry the extra fields. The wattage row (formatWattageRow)
-// is NOT part of this dedup group — it replaced the rotation's own RATE
-// phrase outright (see PowerPanel.qml's `_phrases`), so it renders
-// unconditionally whenever there's a real rate, independent of `rotating`.
-function staticFieldsVisible(motionEnabled, rotating) {
-    return !(motionEnabled && rotating);
+// Charge-threshold detection (M26 Task 3, ported from omarchy quattro's
+// power/Model.js:52-64, read-reference only). A laptop holding at a
+// configured charge limit reports one of three UPower shapes that all mean
+// "plugged in but not actually charging toward 100": PendingCharge
+// outright, FullyCharged below 99% (the limit sits under what UPower calls
+// full), or Charging with a near-zero rate or a time-to-full of 8 hours or
+// more (a real charge crawling toward a limit reads the same as a charger
+// that can't keep up). `onBattery` is UPower's own aggregate property, not
+// a per-device state parse, matching the gate upstream uses. `pct` is a
+// whole-number percentage (0..100), same convention as warnEvent above.
+// `states` carries the three UPowerDeviceState values the check needs
+// (PendingCharge, FullyCharged, Charging) — passed in rather than imported,
+// since this file has no Qt/Quickshell dependency.
+function chargeThresholdActive(pct, state, changeRate, timeToFull, onBattery, states) {
+    if (onBattery)
+        return false;
+    if (state === states.PendingCharge)
+        return true;
+    if (state === states.FullyCharged)
+        return pct < 99;
+    if (state !== states.Charging || pct >= 99)
+        return false;
+    return Math.abs(changeRate || 0) <= 0.2 || (timeToFull || 0) >= 8 * 60 * 60;
+}
+
+// The bar tooltip and the hero meta line's four-way state word.
+function chargeStateLabel(pct, state, onBattery, thresholdActive, states) {
+    if (thresholdActive)
+        return "THRESHOLD";
+    if (onBattery)
+        return "ON BATTERY";
+    if (state === states.FullyCharged || pct >= 100)
+        return "FULLY CHARGED";
+    return "CHARGING";
+}
+
+var BATTERY_EMPTY_GLYPH = "󰂎";
+// Discharging ramp (also used for the threshold state, which is plugged in
+// but not visibly charging) and the charging ramp — both converge on the
+// same glyph at 100% by construction, so no separate fully-charged special
+// case is needed.
+var BATTERY_DISCHARGE_RAMP = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"];
+var BATTERY_CHARGE_RAMP = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"];
+
+// Percent-bucketed battery glyph, decile rounded — the bar cell and the
+// power panel's hero share this so their icon never drifts apart.
+function batteryGlyph(pct, onBattery, thresholdActive) {
+    var bucket = Math.max(0, Math.min(100, Math.round(pct / 10) * 10));
+    if (bucket === 0)
+        return BATTERY_EMPTY_GLYPH;
+    var index = bucket === 100 ? 9 : (bucket / 10) - 1;
+    return (!onBattery && !thresholdActive) ? BATTERY_CHARGE_RAMP[index] : BATTERY_DISCHARGE_RAMP[index];
+}
+
+// "56.0 WH", or an honest em dash when the device hasn't reported a
+// capacity (energyCapacity reads 0 rather than being absent).
+function formatWh(wh) {
+    return (wh > 0) ? wh.toFixed(1) + " WH" : "—";
+}
+
+// UPower's Capacity property is already "design capacity as a percentage"
+// (device.hpp: healthPercentage, "health of the device as a percentage of
+// its original health") — healthSupported is false when the driver never
+// reported one, the honest case to show an em dash rather than a bogus 0%.
+function formatHealthPercent(pct, supported) {
+    return supported ? Math.round(pct) + "%" : "—";
+}
+
+function timeRowLabel(charging) {
+    return charging ? "TIME FULL" : "TIME LEFT";
+}
+
+// timeToFull/timeToEmpty are 0 whenever the other one applies (the pinned
+// quickshell source's own contract, see formatWattageRow above) and can
+// both briefly read 0 right after a state flip before UPower's next
+// estimate lands — an honest em dash rather than "0M" either way.
+function timeRowValue(charging, timeToFull, timeToEmpty) {
+    var seconds = charging ? timeToFull : timeToEmpty;
+    return (seconds > 0) ? formatDuration(seconds) : "—";
 }

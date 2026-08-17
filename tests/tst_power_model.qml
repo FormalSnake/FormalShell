@@ -133,24 +133,6 @@ TestCase {
         compare(Power.formatRate(-8.05), "8.1W");
     }
 
-    // staticFieldsVisible
-
-    function test_static_fields_hidden_while_motion_enabled_and_rotating() {
-        compare(Power.staticFieldsVisible(true, true), false);
-    }
-
-    function test_static_fields_shown_when_motion_disabled_even_if_rotating() {
-        compare(Power.staticFieldsVisible(false, true), true);
-    }
-
-    function test_static_fields_shown_when_not_rotating_even_with_motion_enabled() {
-        compare(Power.staticFieldsVisible(true, false), true);
-    }
-
-    function test_static_fields_shown_when_motion_disabled_and_not_rotating() {
-        compare(Power.staticFieldsVisible(false, false), true);
-    }
-
     // raplDeltaUj
 
     function test_rapl_delta_normal_increase() {
@@ -213,6 +195,137 @@ TestCase {
 
     function test_parseRaplUj_non_numeric_is_null() {
         compare(Power.parseRaplUj("cat: Permission denied\ncat: Permission denied\n"), null);
+    }
+
+    // chargeThresholdActive
+
+    readonly property var _states: ({ PendingCharge: 5, FullyCharged: 4, Charging: 1 })
+
+    function test_threshold_false_on_battery() {
+        compare(Power.chargeThresholdActive(50, 1, 10, 0, true, _states), false);
+    }
+
+    function test_threshold_true_pending_charge() {
+        compare(Power.chargeThresholdActive(80, 5, 0, 0, false, _states), true);
+    }
+
+    function test_threshold_true_fully_charged_below_99() {
+        compare(Power.chargeThresholdActive(95, 4, 0, 0, false, _states), true);
+    }
+
+    function test_threshold_false_fully_charged_at_99() {
+        compare(Power.chargeThresholdActive(99, 4, 0, 0, false, _states), false);
+    }
+
+    function test_threshold_true_charging_near_zero_rate() {
+        compare(Power.chargeThresholdActive(50, 1, 0.1, 3600, false, _states), true);
+    }
+
+    function test_threshold_true_charging_long_time_to_full() {
+        compare(Power.chargeThresholdActive(50, 1, 15, 9 * 3600, false, _states), true);
+    }
+
+    function test_threshold_false_charging_normally() {
+        compare(Power.chargeThresholdActive(50, 1, 15, 3600, false, _states), false);
+    }
+
+    function test_threshold_false_charging_above_99() {
+        compare(Power.chargeThresholdActive(99, 1, 0.1, 9 * 3600, false, _states), false);
+    }
+
+    function test_threshold_false_discharging_state() {
+        compare(Power.chargeThresholdActive(50, 2, 0, 0, false, _states), false);
+    }
+
+    // chargeStateLabel
+
+    function test_label_threshold_wins() {
+        compare(Power.chargeStateLabel(80, 1, false, true, _states), "THRESHOLD");
+    }
+
+    function test_label_on_battery() {
+        compare(Power.chargeStateLabel(50, 2, true, false, _states), "ON BATTERY");
+    }
+
+    function test_label_fully_charged_by_state() {
+        compare(Power.chargeStateLabel(99, 4, false, false, _states), "FULLY CHARGED");
+    }
+
+    function test_label_fully_charged_by_percent() {
+        compare(Power.chargeStateLabel(100, 1, false, false, _states), "FULLY CHARGED");
+    }
+
+    function test_label_charging() {
+        compare(Power.chargeStateLabel(50, 1, false, false, _states), "CHARGING");
+    }
+
+    // batteryGlyph
+
+    function test_glyph_empty_at_zero() {
+        compare(Power.batteryGlyph(0, true, false), "󰂎");
+    }
+
+    function test_glyph_discharge_ramp() {
+        compare(Power.batteryGlyph(10, true, false), "󰁺");
+        compare(Power.batteryGlyph(90, true, false), "󰂂");
+    }
+
+    function test_glyph_discharge_ramp_full() {
+        compare(Power.batteryGlyph(100, true, false), "󰁹");
+    }
+
+    function test_glyph_charge_ramp() {
+        compare(Power.batteryGlyph(10, false, false), "󰢜");
+    }
+
+    function test_glyph_charge_ramp_full() {
+        compare(Power.batteryGlyph(100, false, false), "󰂅");
+    }
+
+    function test_glyph_threshold_uses_discharge_ramp() {
+        compare(Power.batteryGlyph(50, false, true), Power.batteryGlyph(50, true, false));
+    }
+
+    // formatWh
+
+    function test_format_wh_positive() {
+        compare(Power.formatWh(56.04), "56.0 WH");
+    }
+
+    function test_format_wh_zero_is_dash() {
+        compare(Power.formatWh(0), "—");
+    }
+
+    // formatHealthPercent
+
+    function test_format_health_percent_supported() {
+        compare(Power.formatHealthPercent(91.6, true), "92%");
+    }
+
+    function test_format_health_percent_unsupported_is_dash() {
+        compare(Power.formatHealthPercent(0, false), "—");
+    }
+
+    // timeRowLabel / timeRowValue
+
+    function test_time_row_label_charging() {
+        compare(Power.timeRowLabel(true), "TIME FULL");
+    }
+
+    function test_time_row_label_discharging() {
+        compare(Power.timeRowLabel(false), "TIME LEFT");
+    }
+
+    function test_time_row_value_charging() {
+        compare(Power.timeRowValue(true, 2 * 3600 + 14 * 60, 0), "2H 14M");
+    }
+
+    function test_time_row_value_discharging() {
+        compare(Power.timeRowValue(false, 0, 14 * 60), "14M");
+    }
+
+    function test_time_row_value_no_reading_is_dash() {
+        compare(Power.timeRowValue(true, 0, 0), "—");
     }
 
     // formatWattageRow
