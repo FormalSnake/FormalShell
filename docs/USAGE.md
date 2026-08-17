@@ -2233,6 +2233,7 @@ Every setting, with its default:
 | `recording.gifFps` | `12` | GIF frame rate |
 | `recording.gifWidth` | `640` | GIF width in pixels, height follows the aspect |
 | `recording.player` | `"xdg-open"` | command the SAVED toast's `PLAY` action hands the file to |
+| `recording.finalize` | `true` | trim the PipeWire warmup click and loudnorm the audio after wf-recorder exits, before the SAVED notification fires |
 | `recording.maxHeight` | `0` | downscale height in pixels via wf-recorder's own `-F` scale filter, `0` means no cap; `record startCapped` overrides it for one run |
 | `recording.webcam` | `false` | spawn an mpv overlay of a video capture device before the recording starts |
 | `recording.webcamDevice` | `""` | a specific `/dev/video*` node; empty auto-detects the first one found |
@@ -2266,7 +2267,7 @@ qs ipc --any-display -p <store-path>/share/formalshell call record toggle screen
 qs ipc --any-display -p <store-path>/share/formalshell call record stop            # also cancels a pending region selection
 qs ipc --any-display -p <store-path>/share/formalshell call record gif ""          # transcode the last recording
 qs ipc --any-display -p <store-path>/share/formalshell call record gif /path/to/clip.mp4
-qs ipc --any-display -p <store-path>/share/formalshell call record status          # {"active":…,"scope":…,"audio":…,"path":…,"elapsedMs":…,"transcoding":…,"lastGifPath":…,"lastError":…}
+qs ipc --any-display -p <store-path>/share/formalshell call record status          # {"active":…,"scope":…,"audio":…,"path":…,"elapsedMs":…,"transcoding":…,"finalizing":…,"lastGifPath":…,"lastError":…}
 ```
 
 `start` answers with the destination path rather than a completion signal,
@@ -2289,12 +2290,6 @@ binds {
     Mod+Shift+R { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "record" "toggle" "screen" "none"; }
 }
 ```
-
-**No webcam overlay.** Compositing a camera into the frame needs the camera
-window pinned floating at a fixed corner, which is a compositor window rule
-this shell does not install and cannot install portably (niri `window-rule`
-against Hyprland `windowrulev2`). Building half of it, an mpv window that
-then tiles across the recording, would be worse than not having it.
 
 **`record start window` does not exist**, and the reason is wf-recorder's own
 interface rather than a gap in niri's IPC: `wf-recorder` takes an output or a
