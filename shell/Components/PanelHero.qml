@@ -13,6 +13,15 @@ import qs.Core
 // the title next to it, the same jitter guard Task 7 gives the bar's own
 // glyph-only cells. `readout` renders at `readoutSize`, right-aligned ahead
 // of `trailing` when both are set.
+//
+// `leading` (M28 Task 2) is `trailing`'s mirror: a Component that replaces
+// the glyph text in that same slot, for a panel whose subject has real
+// imagery instead of an icon (MediaPanel's album art). The slot's width
+// stays the shared `Theme.space.xxl * 2` either way — a caller-provided
+// component sizes itself to that same token rather than PanelHero handing
+// out its own internal geometry, so a Media panel with no art (falling
+// back to `glyph`) and every other panel's hero still line up their titles
+// at the identical x.
 Cell {
     id: root
 
@@ -22,11 +31,12 @@ Cell {
     property string readout: ""
     // "display" (26px) or "displayLarge" (30px), DESIGN.md §1.3.
     property string readoutSize: "display"
+    property Component leading: null
     property Component trailing: null
     // 0..1 fills the rail; -1 (default) leaves it undrawn.
     property real rail: -1
 
-    readonly property real _glyphSlotWidth: root.glyph !== "" ? Theme.space.xxl * 2 : 0
+    readonly property real _glyphSlotWidth: (root.glyph !== "" || root.leading !== null) ? Theme.space.xxl * 2 : 0
 
     Column {
         width: parent.width
@@ -44,22 +54,30 @@ Cell {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 width: root._glyphSlotWidth
-                height: glyphText.implicitHeight
+                height: leadingLoader.active ? leadingLoader.height : glyphText.implicitHeight
 
                 Text {
                     id: glyphText
+                    visible: !leadingLoader.active
                     anchors.centerIn: parent
                     text: root.glyph
                     color: root.foreground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.heading
                 }
+
+                Loader {
+                    id: leadingLoader
+                    anchors.centerIn: parent
+                    active: root.leading !== null
+                    sourceComponent: root.leading
+                }
             }
 
             Column {
                 id: textColumn
                 anchors.left: glyphSlot.right
-                anchors.leftMargin: root.glyph !== "" ? Theme.space.md : 0
+                anchors.leftMargin: (root.glyph !== "" || root.leading !== null) ? Theme.space.md : 0
                 anchors.right: root.readout !== ""
                     ? readoutText.left
                     : (trailingLoader.active ? trailingLoader.left : parent.right)
