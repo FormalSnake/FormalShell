@@ -76,6 +76,10 @@ Singleton {
     function applyThemeFragment() { backend.applyThemeFragment() }
     function refreshWindows() { backend.refreshWindows() }
 
+    readonly property bool floatingPlacementAvailable: backend.floatingPlacementAvailable
+    function floatWindow(id) { backend.floatWindow(id) }
+    function placeFloatingWindow(id, x, y, width, height) { backend.placeFloatingWindow(id, x, y, width, height) }
+
     Connections {
         target: backend
         function onConfigReloaded(failed) { root.configReloaded(failed) }

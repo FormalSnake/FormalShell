@@ -1,6 +1,6 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx
-, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git }:
+, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -40,10 +40,12 @@ stdenvNoCC.mkDerivation {
     # pulse compat layer (services.pipewire.pulse.enable) provides the
     # protocol without ever installing the client tool itself. git is
     # read-only here, probing the locked revision of a flake input for the
-    # system-update widget.
+    # system-update widget. mpv backs the recording.webcam overlay
+    # (RecordingService spawns it against a v4l2 device through the
+    # compositor, never through this wrapper's own child process tree).
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv ]} \
       --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \

@@ -59,6 +59,37 @@ Scope {
         requestSocket.request({ Action: { LoadConfigFile: {} } });
     }
 
+    // Webcam overlay placement (M27 Task 5). MoveWindowToFloating rather than
+    // ToggleWindowFloating (niri-ipc's other floating action) so a second call
+    // on an already-floating window is a no-op instead of tiling it back.
+    readonly property bool floatingPlacementAvailable: true
+
+    function floatWindow(id) {
+        requestSocket.request({ Action: { MoveWindowToFloating: { id: Number(id) } } });
+    }
+
+    // SizeChange::SetFixed/PositionChange::AdjustFixed are both logical
+    // pixels (niri-ipc/src/lib.rs), but position is relative to the window's
+    // own current spot, not absolute -- SetFixed's own offset is the
+    // workspace's working-area origin, which this shell never queries. The
+    // caller already guarantees `windows` carries a real `rect` for `id`
+    // (BackendBase's contract), so reading it back here gives the delta to
+    // the requested absolute (x, y) without needing that origin at all.
+    function placeFloatingWindow(id, x, y, width, height) {
+        const numId = Number(id);
+        const w = Math.max(1, Math.round(width));
+        const h = Math.max(1, Math.round(height));
+        requestSocket.request({ Action: { SetWindowWidth: { id: numId, change: { SetFixed: w } } } });
+        requestSocket.request({ Action: { SetWindowHeight: { id: numId, change: { SetFixed: h } } } });
+        const current = root.windows.find(win => win.id === id);
+        const pos = current && current.rect ? current.rect : { x: x, y: y };
+        requestSocket.request({ Action: { MoveFloatingWindow: {
+            id: numId,
+            x: { AdjustFixed: x - pos.x },
+            y: { AdjustFixed: y - pos.y }
+        } } });
+    }
+
     readonly property bool outputConfigAvailable: true
     // niri-ipc's OutputAction (lib.rs:1018) is Off/On/Mode/CustomMode/
     // Modeline/Scale/Transform/Position/Vrr — no mirror variant, because niri

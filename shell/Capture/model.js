@@ -279,3 +279,67 @@ function previewFrameArgv(source, outPath) {
     return ["ffmpeg", "-y", "-loglevel", "error", "-ss", "0.1", "-i", source,
         "-vframes", "1", "-q:v", "2", outPath];
 }
+
+// Webcam overlay (M27 Task 5): mpv's own low-latency profile and 8:9
+// portrait crop (bin/omarchy-capture-screenrecording:86-92, upstream, MIT),
+// given its own title/app-id so the compositor placement below (and the map
+// poll that precedes it) can find exactly this window and nothing else mpv
+// might already have open. No forced --demuxer-lavf-o video_size: the crop
+// filter derives its width from whatever height the device actually opens
+// at, so there is nothing here that needs a v4l2-ctl format probe first.
+function webcamArgv(device, appId) {
+    return ["mpv", "av://v4l2:" + device,
+        "--profile=low-latency", "--untimed", "--no-cache",
+        "--vf=lavfi=[crop=ih*8/9:ih]",
+        "--title=" + appId, "--wayland-app-id=" + appId,
+        "--no-border", "--no-audio", "--no-osc", "--osd-level=0", "--really-quiet"];
+}
+
+// `for f in /dev/video*; do [ -e "$f" ] && echo "$f"; done` output: one path
+// per line, sorted by the shell's own glob order, empty when the glob
+// matched nothing and stayed a literal unexpanded string the `-e` test
+// rejects. The auto-detect pick is the first line -- no v4l2-ctl capability
+// filter, which is what upstream's own list script adds and this shell
+// doesn't pull in a second CLI dependency to replicate.
+function parseWebcamDevices(text) {
+    return ("" + text).split("\n")
+        .map(function (s) { return s.trim(); })
+        .filter(function (s) { return s !== ""; });
+}
+
+// The 8:9 portrait presets, scaled from the captured region's own height so
+// the camera occupies the same share of the frame at 1080p as at a scaled
+// 6K capture (omarchy-capture-webcam-resize:78-95, upstream, MIT -- ported
+// as intent, not its integer-bash arithmetic). `large`'s width is what a
+// tall, narrow region can't fit at full scale, so the height every preset
+// scales from is capped to what the region's own width (minus two margins)
+// allows the widest preset to reach.
+var WEBCAM_HEIGHT_FRACTION = { small: 9 / 50, medium: 1 / 4, large: 27 / 80 };
+
+function webcamGeometry(sizeName, region, margin) {
+    var frac = WEBCAM_HEIGHT_FRACTION[sizeName] || WEBCAM_HEIGHT_FRACTION.medium;
+    var scaleHeight = region.height;
+    var availableWidth = region.width - 2 * margin;
+    var largeWidth = scaleHeight * WEBCAM_HEIGHT_FRACTION.large * 8 / 9;
+    if (availableWidth > 0 && largeWidth > availableWidth)
+        scaleHeight = availableWidth * 10 / 3;
+    var height = Math.max(1, Math.round(scaleHeight * frac));
+    var width = Math.max(1, Math.round(height * 8 / 9));
+    var x = region.x + region.width - width - margin;
+    var y = region.y + region.height - height - margin;
+    if (x < region.x + margin)
+        x = region.x + margin;
+    if (y < region.y + margin)
+        y = region.y + margin;
+    return { width: width, height: height, x: Math.round(x), y: Math.round(y) };
+}
+
+// The "X,Y WxH" geometry a region/window recording already resolved, back
+// into the {x,y,width,height} webcamGeometry needs -- parseGeometry's own
+// shape, minus the round trip through a string.
+function regionFromGeometry(geometryStr) {
+    var m = GEOMETRY_RE.exec(("" + geometryStr).trim());
+    if (!m)
+        return null;
+    return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
+}

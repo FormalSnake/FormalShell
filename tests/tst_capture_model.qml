@@ -265,4 +265,48 @@ TestCase {
         compare(argv[argv.indexOf("-q:v") + 1], "2");
         compare(argv[argv.length - 1], "/v/a-preview.png");
     }
+
+    function test_webcam_argv_targets_the_device_and_carries_the_app_id() {
+        var argv = Capture.webcamArgv("/dev/video0", "formalshell-webcam");
+        compare(argv[0], "mpv");
+        compare(argv[1], "av://v4l2:/dev/video0");
+        verify(argv.indexOf("--title=formalshell-webcam") >= 0);
+        verify(argv.indexOf("--wayland-app-id=formalshell-webcam") >= 0);
+        verify(argv.indexOf("--vf=lavfi=[crop=ih*8/9:ih]") >= 0);
+    }
+
+    function test_parse_webcam_devices_reads_one_path_per_line() {
+        compare(Capture.parseWebcamDevices("/dev/video0\n/dev/video1\n"),
+            ["/dev/video0", "/dev/video1"]);
+        compare(Capture.parseWebcamDevices(""), []);
+        compare(Capture.parseWebcamDevices("\n\n"), []);
+    }
+
+    function test_webcam_geometry_scales_the_medium_preset_from_region_height() {
+        var g = Capture.webcamGeometry("medium", { x: 100, y: 200, width: 1920, height: 1080 }, 18);
+        compare(g, { width: 240, height: 270, x: 1762, y: 992 });
+    }
+
+    function test_webcam_geometry_falls_back_to_medium_for_an_unknown_size() {
+        var known = Capture.webcamGeometry("medium", { x: 0, y: 0, width: 1920, height: 1080 }, 18);
+        var unknown = Capture.webcamGeometry("bogus", { x: 0, y: 0, width: 1920, height: 1080 }, 18);
+        compare(unknown, known);
+    }
+
+    function test_webcam_geometry_caps_the_scale_height_for_a_narrow_region() {
+        var g = Capture.webcamGeometry("large", { x: 0, y: 0, width: 300, height: 1000 }, 18);
+        compare(g, { width: 264, height: 297, x: 18, y: 685 });
+    }
+
+    function test_webcam_geometry_clamps_to_the_region_when_margins_overwhelm_it() {
+        var g = Capture.webcamGeometry("medium", { x: 0, y: 0, width: 10, height: 10 }, 18);
+        compare(g, { width: 3, height: 3, x: 18, y: 18 });
+    }
+
+    function test_region_from_geometry_parses_the_slurp_shape() {
+        compare(Capture.regionFromGeometry("100,200 800x600"), { x: 100, y: 200, width: 800, height: 600 });
+        compare(Capture.regionFromGeometry("-10,-20 100x50"), { x: -10, y: -20, width: 100, height: 50 });
+        compare(Capture.regionFromGeometry(""), null);
+        compare(Capture.regionFromGeometry("bogus"), null);
+    }
 }

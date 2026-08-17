@@ -154,6 +154,14 @@ import QtQuick
 // capture to this height in pixels via wf-recorder's own -F scale filter
 // when the source exceeds it, preserving aspect ratio. `record startCapped`
 // overrides it for one run without touching config, M27 Task 4.
+// recording.webcam (bool, default false): spawns an mpv overlay of a video
+// capture device, placed bottom-right of the captured region, before the
+// recording starts. recording.webcamDevice (string, default "" meaning
+// auto-detect the first /dev/video* node) and recording.webcamSize (one of
+// "small"/"medium"/"large", default "medium": the 8:9 portrait preset it
+// scales to). Off entirely wherever CompositorService.floatingPlacementAvailable
+// is false (no compositor detected) -- an unplaceable camera window is worse
+// than none, M27 Task 5.
 // reminders.defaultMessage (string, default "Time's up"): the body a
 // reminder set with no message of its own fires with. ReminderService
 // fills it in at set time, so a stored entry always carries a real message

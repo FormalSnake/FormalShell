@@ -2234,6 +2234,18 @@ Every setting, with its default:
 | `recording.gifWidth` | `640` | GIF width in pixels, height follows the aspect |
 | `recording.player` | `"xdg-open"` | command the SAVED toast's `PLAY` action hands the file to |
 | `recording.maxHeight` | `0` | downscale height in pixels via wf-recorder's own `-F` scale filter, `0` means no cap; `record startCapped` overrides it for one run |
+| `recording.webcam` | `false` | spawn an mpv overlay of a video capture device before the recording starts |
+| `recording.webcamDevice` | `""` | a specific `/dev/video*` node; empty auto-detects the first one found |
+| `recording.webcamSize` | `"medium"` | one of `small`/`medium`/`large`, the 8:9 portrait preset the overlay scales to |
+
+A webcam overlay anchors bottom-right of the captured region, sized as a
+proportion of it so the camera occupies the same share of the frame at any
+resolution. It needs `CompositorService.floatingPlacementAvailable` (niri and
+Hyprland both support it; no other compositor is detected here at all): an
+unplaceable camera window landing mid-recording is worse than no camera, so
+an unsupported compositor, a missing device, or a placement that never
+settles all fall back to recording without one, with a `WEBCAM UNAVAILABLE`
+or `WEBCAM UNPLACED` notification saying why.
 
 ```jsonc
 {

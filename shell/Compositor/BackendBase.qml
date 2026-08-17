@@ -43,6 +43,23 @@ QtObject {
     function powerOnMonitors() {}
     function applyThemeFragment() {} // niri-only; no-op on backends without one
 
+    // Webcam overlay placement (M27 Task 5): whether this backend can move an
+    // arbitrary window into the floating layout at an absolute pixel size and
+    // position. False here, the null backend's answer for "no compositor
+    // detected" -- RecordingService checks this before ever spawning the
+    // overlay, so an unsupported compositor never leaves an unplaceable mpv
+    // window sitting mid-recording.
+    readonly property bool floatingPlacementAvailable: false
+    // Idempotent: makes `id` floating if it isn't already. Never toggles a
+    // window that already is, since a fresh recording always calls this once
+    // right after the window maps.
+    function floatWindow(id) {}
+    // Resizes and moves an already-floating `id` to width x height at the
+    // absolute logical position (x, y) -- the same space `windows[].rect`
+    // reports. Callers only invoke this once a poll on `windows` has already
+    // confirmed `id` carries a non-null `rect`.
+    function placeFloatingWindow(id, x, y, width, height) {}
+
     // Re-reads `windows`; never moves or focuses anything. A backend whose
     // window model is already event-driven leaves this a no-op. It exists for
     // Hyprland, where the box in `rect` goes stale between refreshes, so

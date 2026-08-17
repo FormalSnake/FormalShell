@@ -168,6 +168,40 @@ Scope {
     // niri only) — no-op, matching BackendBase's contract default.
     function applyThemeFragment() {}
 
+    // Webcam overlay placement (M27 Task 5), the exact dual dispatch
+    // omarchy-capture-webcam-resize's own hypr_dispatch already establishes
+    // (Lua hl.dsp.window.* first, legacy dispatcher string on Hyprland <0.55,
+    // MIT). `setfloating` is a toggle in the legacy dispatcher, unlike Lua's
+    // `action = "set"`, so both branches skip the call once `isFloating` is
+    // already true rather than risk tiling a window back.
+    readonly property bool floatingPlacementAvailable: true
+
+    function floatWindow(id) {
+        const w = root.windows.find(win => win.id === id);
+        if (w && w.isFloating)
+            return;
+        const selector = root._windowSelector(id);
+        if (Hyprland.usingLua)
+            Hyprland.dispatch("hl.dsp.window.float({ window = " + root._luaString(selector) + ", action = \"set\" })");
+        else
+            Hyprland.dispatch("setfloating " + selector);
+    }
+
+    function placeFloatingWindow(id, x, y, width, height) {
+        const selector = root._windowSelector(id);
+        const w = Math.max(1, Math.round(width));
+        const h = Math.max(1, Math.round(height));
+        const px = Math.round(x);
+        const py = Math.round(y);
+        if (Hyprland.usingLua) {
+            Hyprland.dispatch("hl.dsp.window.resize({ window = " + root._luaString(selector) + ", x = " + w + ", y = " + h + " })");
+            Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector) + ", x = " + px + ", y = " + py + " })");
+        } else {
+            Hyprland.dispatch("resizewindowpixel exact " + w + " " + h + "," + selector);
+            Hyprland.dispatch("movewindowpixel exact " + px + " " + py + "," + selector);
+        }
+    }
+
     readonly property bool outputConfigAvailable: true
     readonly property bool mirrorSupported: true
 

@@ -1719,10 +1719,15 @@ fi
 # other recording key stays at its documented default so this run proves
 # those defaults resolve (recording.directory included), which is why the
 # post-run assertions read the destination back out of `record status`
-# rather than off a path this script chose.
+# rather than off a path this script chose. webcam is on so the same
+# `record start` below also exercises the M27 Task 5 overlay path: the VM
+# has no /dev/video* device at all, so this is the honest WEBCAM UNAVAILABLE
+# leg, not a real camera -- the whole point of the honest-unavailable-state
+# rule. It resolves near-instantly (an empty device glob, no poll timers
+# ever engaged), so it costs the rest of this leg nothing.
 record_settings=""
 if $record_mode; then
-  record_settings=', "recording": {"noDmabuf": true}'
+  record_settings=', "recording": {"noDmabuf": true, "webcam": true}'
 fi
 # systemupdate_mode: this repo's own flake is the target, so the panel
 # parses a real flake.lock and probes the real upstream refs behind its

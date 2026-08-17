@@ -59,11 +59,25 @@ import "../Capture/model.js" as Capture
 // one run without editing config; every other entry point (start, startAt,
 // the picker's own REC tools) still resolves the config default. M27 Task 4.
 //
-// No webcam overlay. Compositing a camera into the frame needs the camera
-// window to float at a fixed corner, which is a compositor window rule this
-// shell does not install and cannot install portably (niri window-rule vs
-// Hyprland windowrulev2). Half of it (spawning an mpv window that then
-// tiles across the recording) would be worse than not having it.
+// Webcam overlay (recording.webcam, default off): spawned right before
+// _launch, not alongside it, since the recording must not start until the
+// camera has actually mapped and settled into its corner -- filming it
+// slide into place is worse than a beat of extra wait. Placement goes
+// through CompositorService.floatWindow/placeFloatingWindow
+// (CompositorService.qml, backends in shell/Compositor/{niri,hyprland}),
+// each backend's own primitive for "float this window, then resize and move
+// it to an absolute pixel rect". A backend with no such primitive
+// (floatingPlacementAvailable false -- the null backend's answer whenever no
+// compositor was detected at all) never sees mpv spawned in the first
+// place: half a webcam overlay, a camera window that tiles across the
+// recording, is worse than none. Two bounded polls stand in for upstream's
+// blind "wait for the client, then sleep 600ms" (bin/omarchy-capture-
+// screenrecording:96-104, MIT) -- one for the window to map (matched by its
+// own app id, since spawning gives no window id up front), one for its rect
+// to actually reach the requested size after placement -- each reporting an
+// honest WEBCAM UNAVAILABLE/WEBCAM UNPLACED notification and recording
+// anyway on expiry, never blocking the primary capture on a camera that
+// never showed up.
 Singleton {
     id: root
 
@@ -116,6 +130,17 @@ Singleton {
     property bool _finalizeReencode: false
     property string _previewSource: ""
     property string _previewCleanupPath: ""
+    // Webcam overlay state (M27 Task 5). _webcamTarget/_webcamAudioDevice are
+    // resolved once per start and read back by the two poll timers below;
+    // _webcamWindowId is "" whenever no overlay is live, the flag
+    // recProc.onExited/onRunningChanged read to know whether there is
+    // anything left to close.
+    readonly property string _webcamAppId: "formalshell-webcam"
+    property string _webcamWindowId: ""
+    property var _webcamTarget: null
+    property string _webcamAudioDevice: ""
+    property bool _webcamPlaced: false
+    property int _webcamAttempts: 0
     property var _audioModules: []
     property bool _stopping: false
     property bool _cancelling: false
@@ -142,7 +167,7 @@ Singleton {
     function start(scopeArg, audioArg, maxHeightArg) {
         if (recProc.running)
             return "error: already recording";
-        if (slurpProc.running || mkdirProc.running || audioProc.running)
+        if (slurpProc.running || mkdirProc.running || audioProc.running || root._webcamWindowId !== "" || webcamMapTimer.running || webcamSettleTimer.running)
             return "error: a recording start is already in flight";
 
         const wantScope = scopeArg || "screen";
@@ -204,7 +229,7 @@ Singleton {
     function startAt(opts) {
         if (recProc.running)
             return "error: already recording";
-        if (slurpProc.running || mkdirProc.running || audioProc.running)
+        if (slurpProc.running || mkdirProc.running || audioProc.running || root._webcamWindowId !== "" || webcamMapTimer.running || webcamSettleTimer.running)
             return "error: a recording start is already in flight";
 
         const asked = (opts && opts.geometry) || "";
@@ -311,7 +336,7 @@ Singleton {
     // microphone on this machine" answer.
     function _setupAudio() {
         if (root.audioMode === "none") {
-            root._launch("");
+            root._setupWebcam("");
             return;
         }
         const desktop =
@@ -354,6 +379,79 @@ Singleton {
         root._stopping = false;
         root._sawExit = false;
         recProc.running = true;
+    }
+
+    // Chained in place of a direct _launch() from both of _setupAudio's own
+    // call sites, so a config change to recording.webcam takes effect on the
+    // very next recording with no other call site touched.
+    function _setupWebcam(device) {
+        root._webcamAudioDevice = device;
+        if (Core.Config.get("recording.webcam", false) !== true) {
+            root._launch(device);
+            return;
+        }
+        if (!CompositorService.floatingPlacementAvailable) {
+            console.warn("RecordingService: webcam overlay unavailable: compositor cannot place a floating window");
+            NotificationService.notify("WEBCAM UNAVAILABLE", "this compositor cannot place a floating window");
+            root._launch(device);
+            return;
+        }
+        const region = root._webcamRegion();
+        if (!region) {
+            console.warn("RecordingService: webcam overlay unavailable: could not resolve the captured region");
+            NotificationService.notify("WEBCAM UNAVAILABLE", "could not resolve the captured region");
+            root._launch(device);
+            return;
+        }
+        root._webcamTarget = Capture.webcamGeometry(
+            Core.Config.get("recording.webcamSize", "medium"), region, Core.Theme.space.huge);
+        const configured = Core.Config.get("recording.webcamDevice", "");
+        if (configured) {
+            root._startWebcamOverlay(configured);
+            return;
+        }
+        webcamListProc.command = ["sh", "-c", 'for f in /dev/video*; do [ -e "$f" ] && echo "$f"; done'];
+        webcamListProc.running = true;
+    }
+
+    // The rectangle the webcam anchors against: a region/window recording's
+    // own resolved geometry, or the target output's full box for scope
+    // "screen" -- the same output _launch below pins wf-recorder's -o to.
+    // Quickshell.screens, not CompositorService.outputs: the latter's
+    // width/height are the OUTPUT MODE's physical pixels (DisplayPanel's own
+    // need, outputs.js), while windows[].rect and the placement dispatchers
+    // both work in logical pixels -- the exact split RegionPicker.qml's own
+    // _focusedOutputRect() already resolves this same way. Quickshell.screens
+    // is a QML list, not a JS array (RegionPicker's own comment), hence the
+    // indexed loop rather than .find.
+    function _webcamRegion() {
+        if (root._pendingGeometry)
+            return Capture.regionFromGeometry(root._pendingGeometry);
+        const outName = root._pendingOutput || CompositorService.focusedOutputName;
+        const screens = Quickshell.screens;
+        for (var i = 0; i < screens.length; i++) {
+            if (screens[i].name === outName)
+                return { x: screens[i].x, y: screens[i].y, width: screens[i].width, height: screens[i].height };
+        }
+        return null;
+    }
+
+    function _startWebcamOverlay(devicePath) {
+        root._webcamAttempts = 0;
+        root._webcamPlaced = false;
+        root._webcamWindowId = "";
+        CompositorService.spawn(Capture.webcamArgv(devicePath, root._webcamAppId));
+        webcamMapTimer.restart();
+    }
+
+    // Closes whatever overlay window is still tracked, if any. Called from
+    // every recProc exit path (recording ended, was killed, or never started
+    // at all) so the camera never outlives the recording it was placed for.
+    function _cleanupWebcam() {
+        if (root._webcamWindowId === "")
+            return;
+        CompositorService.closeWindow(root._webcamWindowId);
+        root._webcamWindowId = "";
     }
 
     function _releaseAudio() {
@@ -445,6 +543,94 @@ Singleton {
         }
     }
 
+    // Auto-detect device listing (recording.webcamDevice empty). A separate
+    // Process rather than folded into audioProc's sh script: this one only
+    // runs when recording.webcam is on, so a session that never touches the
+    // feature never spawns it.
+    Process {
+        id: webcamListProc
+
+        stdout: StdioCollector {
+            id: webcamListOut
+        }
+        onExited: exitCode => {
+            const devices = Capture.parseWebcamDevices(webcamListOut.text);
+            if (devices.length === 0) {
+                console.warn("RecordingService: webcam overlay unavailable: no /dev/video* device");
+                NotificationService.notify("WEBCAM UNAVAILABLE", "no video capture device found");
+                root._launch(root._webcamAudioDevice);
+                return;
+            }
+            root._startWebcamOverlay(devices[0]);
+        }
+    }
+
+    // 50ms x 40 = 2s, the same bound upstream's own client-detect loop uses
+    // (omarchy-capture-screenrecording:96-99, MIT) before it gives up and
+    // moves on. Matches by app id: a freshly spawned window carries no id
+    // this shell already knows, so identity has to come from what mpv itself
+    // was told to call itself.
+    Timer {
+        id: webcamMapTimer
+        interval: 50
+        repeat: true
+        onTriggered: {
+            root._webcamAttempts++;
+            const win = (CompositorService.windows || []).find(w => w.appId === root._webcamAppId);
+            if (win) {
+                webcamMapTimer.stop();
+                root._webcamWindowId = win.id;
+                root._webcamAttempts = 0;
+                CompositorService.floatWindow(win.id);
+                webcamSettleTimer.restart();
+                return;
+            }
+            if (root._webcamAttempts >= 40) {
+                webcamMapTimer.stop();
+                console.warn("RecordingService: webcam overlay unavailable: camera did not open in time");
+                NotificationService.notify("WEBCAM UNAVAILABLE", "camera did not open in time");
+                root._launch(root._webcamAudioDevice);
+            }
+        }
+    }
+
+    // Two-phase on the same clock: waits for `rect` to appear at all (proof
+    // the float actually landed) before issuing the resize/move, then waits
+    // for the reported size to actually match what was requested (proof the
+    // placement itself landed) before letting the recording start -- the
+    // poll this shell has in place of upstream's blind 600ms sleep.
+    Timer {
+        id: webcamSettleTimer
+        interval: 50
+        repeat: true
+        onTriggered: {
+            root._webcamAttempts++;
+            const win = (CompositorService.windows || []).find(w => w.id === root._webcamWindowId);
+            const rect = win ? win.rect : null;
+            if (rect && !root._webcamPlaced) {
+                root._webcamPlaced = true;
+                root._webcamAttempts = 0;
+                const t = root._webcamTarget;
+                CompositorService.placeFloatingWindow(win.id, t.x, t.y, t.width, t.height);
+                return;
+            }
+            if (rect && root._webcamPlaced) {
+                const t = root._webcamTarget;
+                if (Math.round(rect.width) === t.width && Math.round(rect.height) === t.height) {
+                    webcamSettleTimer.stop();
+                    root._launch(root._webcamAudioDevice);
+                    return;
+                }
+            }
+            if (root._webcamAttempts >= 40) {
+                webcamSettleTimer.stop();
+                console.warn("RecordingService: webcam overlay did not settle in time, recording anyway");
+                NotificationService.notify("WEBCAM UNPLACED", "the camera did not settle in time");
+                root._launch(root._webcamAudioDevice);
+            }
+        }
+    }
+
     Process {
         id: slurpProc
 
@@ -509,7 +695,7 @@ Singleton {
                 return;
             }
             root._audioModules = setup.modules;
-            root._launch(setup.device);
+            root._setupWebcam(setup.device);
         }
     }
 
@@ -531,13 +717,16 @@ Singleton {
             // starts (NightLightService.qml's own learned idiom:
             // onErrorOccurred only emits runningChanged for FailedToStart),
             // so a missing wf-recorder lands here rather than below.
-            if (!root._sawExit && !root._stopping)
+            if (!root._sawExit && !root._stopping) {
+                root._cleanupWebcam();
                 root._fail("wf-recorder not found (failed to start)");
+            }
         }
 
         onExited: exitCode => {
             root._sawExit = true;
             killTimer.stop();
+            root._cleanupWebcam();
             root._releaseAudio();
             const saved = root._pendingPath;
             root._pendingPath = "";
