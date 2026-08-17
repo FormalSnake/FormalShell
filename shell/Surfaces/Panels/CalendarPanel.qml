@@ -12,12 +12,13 @@ import qs.Core as Core
 import qs.Components
 import qs.Services
 import "../../Calendar/progress.js" as Progress
+import "../../Clock/model.js" as ClockModel
 
 // Month grid + year-progress popout (DESIGN.md §Panels' clock/calendar
 // entry, spec §2, M6 Task 3): a MONTH/YEAR meta row flanked by `<`/`>`
 // month-nav cells, then the grid itself — weekday header meta row followed
 // by one ledger cell per day, days outside the current month dimmed to
-// foregroundDim — and below it the year-progress bar as a full-width flat
+// foregroundFaint — and below it the year-progress bar as a full-width flat
 // accent-fill cell with its percentage as mono text, mirroring AudioPanel's
 // slider idiom. Day selection (M13 Task 4): every day cell is clickable
 // (hover-cursor state, DESIGN §1.1); the selected day carries Cell's fg/bg
@@ -53,6 +54,13 @@ import "../../Calendar/progress.js" as Progress
 // by summary, or a single dim "NO EVENTS" row when there are none — the
 // honest-empty-state every other panel backend already follows in the test
 // VM.
+//
+// M26 Task 4: the panel opens with the shared PanelHero (weekday as title,
+// today's day-of-month as the display readout, the year row's own fraction
+// doubling as the hero's rail). The grid always renders 6 week rows so
+// stepping months never resizes the card, with an ISO week-number column
+// (ClockModel.isoWeek, shared with the bar clock's own ISO-week format
+// preset) down the left in foregroundFaint.
 Panel {
     id: root
 
@@ -64,10 +72,13 @@ Panel {
     // through the menu's own input mode (M6 Task 4).
     property var menu: null
 
-    readonly property var _monthNames: [
-        "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-        "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
-    ]
+    // Locale month name (QML's Locale.monthName takes 0-11, matching JS
+    // Date, unlike the C++ QLocale API it wraps). MetaLabel's own
+    // Font.AllUppercase renders this the same as the hand-built array it
+    // replaces (M26 Task 4) whatever case the locale returns.
+    function _monthName(month) {
+        return Qt.locale().monthName(month, Locale.LongFormat);
+    }
     readonly property var _monthShort: [
         "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
         "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
@@ -152,7 +163,7 @@ Panel {
             open: root.isOpen,
             selected: root._isoDate(root._selected),
             today: root._isoDate(root._today),
-            view: root._monthNames[root._viewMonth] + " " + root._viewYear
+            view: root._monthName(root._viewMonth) + " " + root._viewYear
         };
     }
 
@@ -224,36 +235,42 @@ Panel {
         }
     }
 
-    function _daysInMonth(year, month) {
-        return new Date(year, month + 1, 0).getDate();
-    }
-
-    // Monday-first grid, padded with dimmed leading/trailing days from the
-    // adjacent months so every row has exactly 7 cells. Each cell carries
-    // its fully resolved year/month so a padding-day click can select the
-    // real adjacent-month date; today/selected are compared in the delegate
-    // (live bindings) rather than baked in here.
+    // Monday-first grid, always 6 rows/42 cells regardless of month length
+    // (M26 Task 4) so stepping months never resizes the card — a 28-day
+    // February and a 31-day month both pad out with dimmed leading/trailing
+    // days from the adjacent months. Each cell carries its fully resolved
+    // year/month so a padding-day click can select the real adjacent-month
+    // date; today/selected are compared in the delegate (live bindings)
+    // rather than baked in here.
     readonly property var _cells: {
         var year = root._viewYear;
         var month = root._viewMonth;
         var firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
-        var daysInMonth = root._daysInMonth(year, month);
-        var prevMonth = month === 0 ? 11 : month - 1;
-        var prevYear = month === 0 ? year - 1 : year;
-        var nextMonth = month === 11 ? 0 : month + 1;
-        var nextYear = month === 11 ? year + 1 : year;
-        var prevMonthDays = root._daysInMonth(prevYear, prevMonth);
-
+        var start = new Date(year, month, 1 - firstWeekday);
         var cells = [];
-        for (var i = 0; i < firstWeekday; i++)
-            cells.push({ year: prevYear, month: prevMonth, day: prevMonthDays - firstWeekday + 1 + i, inMonth: false });
-        for (var d = 1; d <= daysInMonth; d++)
-            cells.push({ year: year, month: month, day: d, inMonth: true });
-        var trailing = (7 - (cells.length % 7)) % 7;
-        for (var t = 1; t <= trailing; t++)
-            cells.push({ year: nextYear, month: nextMonth, day: t, inMonth: false });
+        for (var i = 0; i < 42; i++) {
+            var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+            cells.push({ year: d.getFullYear(), month: d.getMonth(), day: d.getDate(), inMonth: d.getMonth() === month && d.getFullYear() === year });
+        }
         return cells;
     }
+
+    // One ISO week number per grid row, read off that row's Thursday
+    // (index 3 of its 7 Monday-first cells) — the definition of the week a
+    // row belongs to whenever the row's days span a month or year boundary.
+    readonly property var _weekNumbers: {
+        var weeks = [];
+        for (var r = 0; r < 6; r++) {
+            var thursday = root._cells[r * 7 + 3];
+            weeks.push(ClockModel.isoWeek(thursday.year, thursday.month, thursday.day));
+        }
+        return weeks;
+    }
+
+    // Same fixed slot width PanelHero gives its own leading glyph column —
+    // wide enough for two digits, narrow enough to read as a margin rather
+    // than an eighth day column.
+    readonly property real _weekColumnWidth: Core.Theme.space.xxl * 2
 
     // Month swap (DESIGN.md §4): the regenerated grid fades in on view
     // change — a crossfade would need a second live grid instance for no
@@ -270,6 +287,20 @@ Panel {
         to: 1
         duration: Core.Theme.motion.standard
         easing.type: Core.Theme.motion.easing
+    }
+
+    // Calendar hero (M26 Task 4): weekday as the title, today's day-of-month
+    // as the display readout (the surrounding month/year already sits in
+    // monthNav below), the existing year-progress fraction doubling as the
+    // rail. PanelHero's own rail carries no MouseArea, so the YEAR ledger
+    // cell further down keeps both its full header/percent/rail chrome and
+    // its double-click life-progress easter egg unchanged.
+    PanelHero {
+        width: parent.width
+        title: Qt.locale().dayName(root._today.getDay(), Locale.LongFormat)
+        meta: Progress.formatPercent(root._yearFraction)
+        readout: String(root._today.getDate())
+        rail: root._yearFraction
     }
 
     Row {
@@ -293,7 +324,7 @@ Panel {
 
             MetaLabel {
                 anchors.centerIn: parent
-                text: root._monthNames[root._viewMonth] + " " + root._viewYear
+                text: root._monthName(root._viewMonth) + " " + root._viewYear
             }
         }
 
@@ -310,84 +341,141 @@ Panel {
         }
     }
 
-    Grid {
-        id: dayGrid
+    Row {
+        id: calendarGrid
         width: parent.width
-        columns: 7
 
-        Repeater {
-            model: root._weekdayLabels
+        // ISO week-number column (M26 Task 4): a blank header cell over
+        // one number per grid row, quiet enough (foregroundFaint) to never
+        // compete with the dates it sits beside.
+        Column {
+            id: weekColumn
+            width: root._weekColumnWidth
 
-            delegate: Cell {
-                id: weekdayCell
-                required property string modelData
-                width: dayGrid.width / 7
+            Cell {
+                width: weekColumn.width
 
+                // Blank, not omitted: an empty MetaLabel still measures the
+                // same line height as the weekday header cells beside it, so
+                // the two header rows stay level.
                 MetaLabel {
                     anchors.centerIn: parent
-                    text: weekdayCell.modelData
+                    text: ""
+                }
+            }
+
+            Repeater {
+                model: root._weekNumbers
+
+                delegate: Cell {
+                    id: weekNumberCell
+                    required property int modelData
+                    width: weekColumn.width
+
+                    // Same Text-plus-reserved-space shape as a day cell
+                    // (below), so this row's height matches its day-grid
+                    // neighbours row for row rather than running short.
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: Core.Theme.space.xxs
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: ClockModel.pad2(weekNumberCell.modelData)
+                            color: Core.Theme.color.foregroundFaint
+                            font.family: Core.Theme.fontFamily
+                            font.pixelSize: Core.Theme.fontSize.body
+                        }
+
+                        Item {
+                            width: Core.Theme.space.sm
+                            height: Core.Theme.space.sm
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
                 }
             }
         }
 
-        Repeater {
-            model: root._cells
+        Grid {
+            id: dayGrid
+            width: calendarGrid.width - weekColumn.width
+            columns: 7
 
-            delegate: Cell {
-                id: dayCell
-                required property var modelData
-                width: dayGrid.width / 7
-                // Selection inversion and today's accent fill apply to
-                // in-month cells only — padding days stay purely dim even
-                // when they happen to be today/selected in their own month
-                // (both are transient: selecting a padding day immediately
-                // realigns the view, see the header comment).
-                readonly property bool isToday: dayCell.modelData.inMonth
-                    && dayCell.modelData.day === root._today.getDate()
-                    && dayCell.modelData.month === root._today.getMonth()
-                    && dayCell.modelData.year === root._today.getFullYear()
-                readonly property bool isSelected: dayCell.modelData.inMonth
-                    && dayCell.modelData.day === root._selected.getDate()
-                    && dayCell.modelData.month === root._selected.getMonth()
-                    && dayCell.modelData.year === root._selected.getFullYear()
-                selected: dayCell.isSelected
-                accent: dayCell.isToday && !dayCell.isSelected
-                // Only in-month cells query events — the leading/trailing
-                // padding days belong to the adjacent month and are dimmed
-                // rather than dotted.
-                readonly property bool hasEvents: dayCell.modelData.inMonth
-                    && CalendarEventsService.onDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day)).length > 0
+            Repeater {
+                model: root._weekdayLabels
 
-                Column {
-                    anchors.centerIn: parent
-                    spacing: Core.Theme.space.xxs
+                delegate: Cell {
+                    id: weekdayCell
+                    required property string modelData
+                    width: dayGrid.width / 7
 
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: dayCell.modelData.day
-                        color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundDim
-                        font.family: Core.Theme.fontFamily
-                        font.pixelSize: Core.Theme.fontSize.body
-                    }
-
-                    // Reserved space always present so a day without events
-                    // doesn't sit shorter than its row neighbours — flat
-                    // accent dot, no glow, per DESIGN.md.
-                    Rectangle {
-                        width: Core.Theme.space.sm
-                        height: Core.Theme.space.sm
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.accent
-                        opacity: dayCell.hasEvents ? 1 : 0
-
-                        Behavior on opacity {
-                            NumberAnimation { duration: Core.Theme.motion.fast; easing.type: Core.Theme.motion.easing }
-                        }
+                    MetaLabel {
+                        anchors.centerIn: parent
+                        text: weekdayCell.modelData
                     }
                 }
+            }
 
-                interactive: true
-                onClicked: root._selectDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day))
+            Repeater {
+                model: root._cells
+
+                delegate: Cell {
+                    id: dayCell
+                    required property var modelData
+                    width: dayGrid.width / 7
+                    // Selection inversion and today's accent fill apply to
+                    // in-month cells only — padding days stay purely dim even
+                    // when they happen to be today/selected in their own month
+                    // (both are transient: selecting a padding day immediately
+                    // realigns the view, see the header comment).
+                    readonly property bool isToday: dayCell.modelData.inMonth
+                        && dayCell.modelData.day === root._today.getDate()
+                        && dayCell.modelData.month === root._today.getMonth()
+                        && dayCell.modelData.year === root._today.getFullYear()
+                    readonly property bool isSelected: dayCell.modelData.inMonth
+                        && dayCell.modelData.day === root._selected.getDate()
+                        && dayCell.modelData.month === root._selected.getMonth()
+                        && dayCell.modelData.year === root._selected.getFullYear()
+                    selected: dayCell.isSelected
+                    accent: dayCell.isToday && !dayCell.isSelected
+                    // Only in-month cells query events — the leading/trailing
+                    // padding days belong to the adjacent month and are dimmed
+                    // rather than dotted.
+                    readonly property bool hasEvents: dayCell.modelData.inMonth
+                        && CalendarEventsService.onDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day)).length > 0
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: Core.Theme.space.xxs
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: dayCell.modelData.day
+                            color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundFaint
+                            font.family: Core.Theme.fontFamily
+                            font.pixelSize: Core.Theme.fontSize.body
+                        }
+
+                        // Reserved space always present so a day without events
+                        // doesn't sit shorter than its row neighbours — flat
+                        // accent dot, no glow, per DESIGN.md.
+                        Rectangle {
+                            width: Core.Theme.space.sm
+                            height: Core.Theme.space.sm
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.accent
+                            opacity: dayCell.hasEvents ? 1 : 0
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: Core.Theme.motion.fast; easing.type: Core.Theme.motion.easing }
+                            }
+                        }
+                    }
+
+                    interactive: true
+                    onClicked: root._selectDate(new Date(dayCell.modelData.year, dayCell.modelData.month, dayCell.modelData.day))
+                }
             }
         }
     }

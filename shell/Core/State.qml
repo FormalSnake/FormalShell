@@ -15,6 +15,7 @@ Singleton {
     property alias dnd: adapter.dnd
     property alias calendarBirthYear: adapter.calendarBirthYear
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
+    property alias clockFormat: adapter.clockFormat
     property alias appLaunches: adapter.appLaunches
     property alias reminders: adapter.reminders
     property alias barCollapsed: adapter.barCollapsed
@@ -45,6 +46,13 @@ Singleton {
     function setCalendarLifeProgress(birthYear, lifeExpectancy) {
         adapter.calendarBirthYear = birthYear;
         adapter.calendarLifeExpectancy = lifeExpectancy;
+        stateFile.writeAdapter();
+    }
+
+    // Right-click on the bar clock walks Clock/model.js's format ring and
+    // lands here — never settings.json, which the shell only ever reads.
+    function setClockFormat(format) {
+        adapter.clockFormat = format;
         stateFile.writeAdapter();
     }
 
@@ -109,6 +117,7 @@ Singleton {
             property bool dnd: false
             property int calendarBirthYear: 0
             property int calendarLifeExpectancy: 0
+            property string clockFormat: ""
             property var appLaunches: []
             property var reminders: []
             // Collapsed is the default for every region, matching Hidden Bar
