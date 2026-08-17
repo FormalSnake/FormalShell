@@ -77,7 +77,11 @@ import "../Capture/model.js" as Capture
 // to actually reach the requested size after placement -- each reporting an
 // honest WEBCAM UNAVAILABLE/WEBCAM UNPLACED notification and recording
 // anyway on expiry, never blocking the primary capture on a camera that
-// never showed up.
+// never showed up. The map poll itself is two-phase (Capture.
+// webcamMapPollAction): mpv is already spawned by the time it gives up, so
+// after the honest notification it keeps watching a while longer purely to
+// close a straggler window that maps late instead of leaking it into the
+// recording untracked.
 Singleton {
     id: root
 
@@ -141,6 +145,11 @@ Singleton {
     property string _webcamAudioDevice: ""
     property bool _webcamPlaced: false
     property int _webcamAttempts: 0
+    // True once webcamMapTimer has given up waiting and launched the
+    // recording without the camera. The timer keeps running past that point
+    // in reap mode: a window that maps late is closed on sight rather than
+    // left untracked over the recording.
+    property bool _webcamGaveUp: false
     property var _audioModules: []
     property bool _stopping: false
     property bool _cancelling: false
@@ -438,6 +447,7 @@ Singleton {
 
     function _startWebcamOverlay(devicePath) {
         root._webcamAttempts = 0;
+        root._webcamGaveUp = false;
         root._webcamPlaced = false;
         root._webcamWindowId = "";
         CompositorService.spawn(Capture.webcamArgv(devicePath, root._webcamAppId));
@@ -565,11 +575,17 @@ Singleton {
         }
     }
 
-    // 50ms x 40 = 2s, the same bound upstream's own client-detect loop uses
-    // (omarchy-capture-screenrecording:96-99, MIT) before it gives up and
-    // moves on. Matches by app id: a freshly spawned window carries no id
-    // this shell already knows, so identity has to come from what mpv itself
-    // was told to call itself.
+    // Two-phase on Capture.webcamMapPollAction: wait up to 5s (widened from
+    // upstream's own 2s client-detect loop, omarchy-capture-screenrecording:
+    // 96-99, MIT -- too tight for real v4l2 init on some USB cameras) for
+    // mpv's window to map, then a further 5s of reap-only watching after the
+    // honest WEBCAM UNAVAILABLE notification fires and the recording
+    // launches without it, so a window that maps just past the timeout gets
+    // closed the moment it appears instead of leaking into the recording
+    // untracked (mpv was already spawned by _startWebcamOverlay by the time
+    // either bound is hit). Matches by app id: a freshly spawned window
+    // carries no id this shell already knows, so identity has to come from
+    // what mpv itself was told to call itself.
     Timer {
         id: webcamMapTimer
         interval: 50
@@ -577,19 +593,27 @@ Singleton {
         onTriggered: {
             root._webcamAttempts++;
             const win = (CompositorService.windows || []).find(w => w.appId === root._webcamAppId);
-            if (win) {
+            const action = Capture.webcamMapPollAction(!!win, root._webcamAttempts, root._webcamGaveUp,
+                Capture.WEBCAM_MAP_GIVEUP_ATTEMPTS, Capture.WEBCAM_MAP_REAP_ATTEMPTS);
+            if (action === "place") {
                 webcamMapTimer.stop();
                 root._webcamWindowId = win.id;
                 root._webcamAttempts = 0;
                 CompositorService.floatWindow(win.id);
                 webcamSettleTimer.restart();
-                return;
-            }
-            if (root._webcamAttempts >= 40) {
+            } else if (action === "reap") {
                 webcamMapTimer.stop();
+                console.warn("RecordingService: webcam mapped after the timeout; closing the straggler");
+                CompositorService.closeWindow(win.id);
+                root._webcamGaveUp = false;
+            } else if (action === "give-up") {
+                root._webcamGaveUp = true;
                 console.warn("RecordingService: webcam overlay unavailable: camera did not open in time");
                 NotificationService.notify("WEBCAM UNAVAILABLE", "camera did not open in time");
                 root._launch(root._webcamAudioDevice);
+            } else if (action === "stop") {
+                webcamMapTimer.stop();
+                root._webcamGaveUp = false;
             }
         }
     }

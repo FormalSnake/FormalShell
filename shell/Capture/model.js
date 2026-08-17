@@ -307,6 +307,29 @@ function parseWebcamDevices(text) {
         .filter(function (s) { return s !== ""; });
 }
 
+// webcamMapTimer's phase machine (defect fix, M27): 50ms x 100 = 5s to wait
+// for mpv's window to map before giving up honestly -- upstream's own 2s
+// budget (bin/omarchy-capture-screenrecording:96-99) was too tight for real
+// v4l2 init on some USB cameras, and mpv is already spawned by the time the
+// old code gave up, so a late map became an untracked window tiled across
+// the recording forever. giveUpAttempts is when the WEBCAM UNAVAILABLE
+// notification fires and the recording launches without the camera;
+// reapAttempts is how much further the same poll keeps watching afterward so
+// a straggler window that maps just past the timeout gets closed the instant
+// it appears instead of leaking.
+var WEBCAM_MAP_GIVEUP_ATTEMPTS = 100;
+var WEBCAM_MAP_REAP_ATTEMPTS = 200;
+
+function webcamMapPollAction(found, attempts, gaveUp, giveUpAttempts, reapAttempts) {
+    if (found)
+        return gaveUp ? "reap" : "place";
+    if (!gaveUp && attempts >= giveUpAttempts)
+        return "give-up";
+    if (gaveUp && attempts >= reapAttempts)
+        return "stop";
+    return "wait";
+}
+
 // The 8:9 portrait presets, scaled from the captured region's own height so
 // the camera occupies the same share of the frame at 1080p as at a scaled
 // 6K capture (omarchy-capture-webcam-resize:78-95, upstream, MIT -- ported

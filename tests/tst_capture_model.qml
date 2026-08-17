@@ -303,6 +303,28 @@ TestCase {
         compare(g, { width: 3, height: 3, x: 18, y: 18 });
     }
 
+    function test_webcam_map_poll_waits_while_unfound_and_under_the_giveup_bound() {
+        compare(Capture.webcamMapPollAction(false, 1, false, 100, 200), "wait");
+        compare(Capture.webcamMapPollAction(false, 99, false, 100, 200), "wait");
+    }
+
+    function test_webcam_map_poll_places_the_window_the_first_time_it_is_found() {
+        compare(Capture.webcamMapPollAction(true, 3, false, 100, 200), "place");
+    }
+
+    function test_webcam_map_poll_gives_up_honestly_at_the_bound_but_keeps_polling() {
+        compare(Capture.webcamMapPollAction(false, 100, false, 100, 200), "give-up");
+    }
+
+    function test_webcam_map_poll_reaps_a_straggler_window_found_after_giveup() {
+        compare(Capture.webcamMapPollAction(true, 150, true, 100, 200), "reap");
+    }
+
+    function test_webcam_map_poll_stops_once_the_reap_bound_is_hit_with_nothing_found() {
+        compare(Capture.webcamMapPollAction(false, 199, true, 100, 200), "wait");
+        compare(Capture.webcamMapPollAction(false, 200, true, 100, 200), "stop");
+    }
+
     function test_region_from_geometry_parses_the_slurp_shape() {
         compare(Capture.regionFromGeometry("100,200 800x600"), { x: 100, y: 200, width: 800, height: 600 });
         compare(Capture.regionFromGeometry("-10,-20 100x50"), { x: -10, y: -20, width: 100, height: 50 });
