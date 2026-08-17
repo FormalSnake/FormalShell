@@ -706,14 +706,25 @@ Scope {
             function toGlobalX(x) { return x + surface.modelData.x; }
             function toGlobalY(y) { return y + surface.modelData.y; }
 
-            // The frozen screen, 1:1. This is what grim photographs at capture
-            // time, which is why it sits under everything and is never scaled.
+            // The frozen screen. This is what grim photographs at capture time,
+            // so it sits under everything.
+            //
+            // Stretched onto the surface rather than padded at natural size:
+            // grim writes the output's BUFFER, in physical pixels, while this
+            // layer surface is sized in logical ones. On any output whose scale
+            // is not 1 the two differ, and padding renders the capture 1:1 from
+            // the top-left corner, which shows a fraction of the screen blown
+            // up. Stretching maps the photograph back onto the exact logical
+            // box it was taken from, at any scale, which is also the space
+            // every rect in this file already lives in. `smooth` matters only
+            // where that mapping actually resamples; on a scale-1 output the
+            // source and the surface agree and it costs nothing.
             Image {
                 id: frozen
                 anchors.fill: parent
                 source: surface._frameSource
-                fillMode: Image.Pad
-                smooth: false
+                fillMode: Image.Stretch
+                smooth: true
                 cache: false
             }
 
