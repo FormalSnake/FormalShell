@@ -711,6 +711,19 @@ adjective:
     names one number as its subject (battery charge, current temperature,
     today's date) renders that number at `display`/`displayLarge`, never
     `body`; every other row on the same card stays at `body` or `caption`.
+14. **Section rhythm is the fused rule, not a gap (2026-08-17).** A section
+    header (an uppercase `MetaLabel` cell) transitions into its first row,
+    and a section's last row into the next header, exactly like any two
+    adjacent rows: `Panel.qml`'s `contentColumn` carries zero spacing of its
+    own, and every row's breathing room comes from the one token `Cell`
+    already resolves its padding through, `controlPaddingY` (§1.3) — a
+    header cell and a content cell are the same primitive at the same
+    padding, so no panel can drift its own rhythm by hand. No panel spaces a
+    header away from its first row with an extra `Item`, a `Column`
+    `spacing`, or a margin; the shared hairline between them (item 1) is the
+    only divider. Checkable: `contentColumn`'s own `Column` carries no
+    `spacing` property, and no panel file under `shell/Surfaces/Panels/`
+    declares a bare spacer `Item` between two content `Cell`s.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,

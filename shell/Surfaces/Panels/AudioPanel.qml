@@ -258,7 +258,7 @@ Panel {
                         height: implicitHeight
                         selected: streamCell._muted
 
-                        MetaLabel { text: "MUTE"; color: streamMuteCell.foreground }
+                        MetaLabel { text: "MUTE"; color: streamMuteCell.dimForeground }
 
                         interactive: true
                         onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
@@ -352,7 +352,7 @@ Panel {
                     height: implicitHeight
                     selected: root._sink && root._sink.audio && root._sink.audio.muted
 
-                    MetaLabel { text: "MUTE"; color: outputMuteCell.foreground }
+                    MetaLabel { text: "MUTE"; color: outputMuteCell.dimForeground }
 
                     interactive: true
                     onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
@@ -428,7 +428,7 @@ Panel {
                     height: implicitHeight
                     selected: root._source && root._source.audio && root._source.audio.muted
 
-                    MetaLabel { text: "MUTE"; color: inputMuteCell.foreground }
+                    MetaLabel { text: "MUTE"; color: inputMuteCell.dimForeground }
 
                     interactive: true
                     onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted

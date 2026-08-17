@@ -967,7 +967,7 @@ Panel {
 
                         MetaLabel {
                             text: netCell.modelData.network.connected ? "DISCONNECT" : "CONNECT"
-                            color: actionCell.foreground
+                            color: actionCell.dimForeground
                         }
 
                         interactive: true
@@ -1122,13 +1122,11 @@ Panel {
                     }
                 }
 
-                Text {
+                MetaLabel {
                     visible: wifiCell._statusText !== ""
                     text: wifiCell._statusText
-                    color: wifiCell._isFailed ? Theme.color.urgent : wifiCell.foreground
+                    color: wifiCell._isFailed ? Theme.color.urgent : wifiCell.dimForeground
                     font.italic: wifiCell._isFailed
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.caption
                 }
 
                 Column {
@@ -1250,7 +1248,7 @@ Panel {
 
                 MetaLabel {
                     text: "WI-FI POWER"
-                    color: wifiPowerToggle.foreground
+                    color: wifiPowerToggle.dimForeground
                 }
 
                 interactive: true
@@ -1308,7 +1306,7 @@ Panel {
 
                 MetaLabel {
                     text: "QR"
-                    color: qrToggle.foreground
+                    color: qrToggle.dimForeground
                 }
 
                 interactive: true
@@ -1424,7 +1422,7 @@ Panel {
 
                     MetaLabel {
                         text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
-                        color: pwToggle.foreground
+                        color: pwToggle.dimForeground
                     }
 
                     interactive: true
@@ -1487,7 +1485,7 @@ Panel {
 
                 MetaLabel {
                     text: root._stRunning ? "RUNNING…" : "RUN"
-                    color: runToggle.foreground
+                    color: runToggle.dimForeground
                 }
 
                 interactive: !root._stRunning

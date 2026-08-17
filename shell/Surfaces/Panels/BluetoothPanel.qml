@@ -570,16 +570,18 @@ Panel {
                     Text {
                         visible: btCell._statusText !== ""
                         text: btCell._statusText
-                        color: btCell._isFailed ? Theme.color.urgent : btCell.foreground
+                        color: btCell._isFailed ? Theme.color.urgent : btCell.dimForeground
                         font.italic: btCell._isFailed
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: Theme.letterSpacing.meta
                     }
 
                     MetaLabel {
                         visible: btCell._isTrusted && !btCell._trustPending
                         text: "TRUSTED"
-                        color: btCell.foreground
+                        color: btCell.dimForeground
                     }
                 }
             }
@@ -626,7 +628,7 @@ Panel {
 
                 MetaLabel {
                     text: "POWER"
-                    color: powerCell.foreground
+                    color: powerCell.dimForeground
                 }
 
                 interactive: true

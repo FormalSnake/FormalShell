@@ -205,7 +205,7 @@ Panel {
 
                         MetaLabel {
                             text: outCell.modelData.enabled ? "ON" : "OFF"
-                            color: outCell._canToggle ? toggleCell.foreground : Theme.color.foregroundDim
+                            color: toggleCell.dimForeground
                         }
 
                         interactive: outCell._canToggle
@@ -361,7 +361,7 @@ Panel {
 
                 MetaLabel {
                     text: root._mirrorOn ? "ON" : "OFF"
-                    color: mirrorToggle.foreground
+                    color: mirrorToggle.dimForeground
                 }
 
                 interactive: true

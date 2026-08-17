@@ -342,9 +342,11 @@ Panel {
                     Text {
                         id: onlineText
                         text: peerCell.modelData.online ? "ONLINE" : "OFFLINE"
-                        color: peerCell.modelData.online ? peerCell.foreground : Theme.color.foregroundDim
+                        color: peerCell.modelData.online ? peerCell.dimForeground : Theme.color.foregroundDim
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: Theme.letterSpacing.meta
 
                         // Gated on root.isOpen too (M16 Task 12 hidden-
                         // surface audit): panel content stays instantiated
