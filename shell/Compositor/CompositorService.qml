@@ -74,6 +74,7 @@ Singleton {
     function powerOffMonitors() { backend.powerOffMonitors() }
     function powerOnMonitors() { backend.powerOnMonitors() }
     function applyThemeFragment() { backend.applyThemeFragment() }
+    function refreshWindows() { backend.refreshWindows() }
 
     Connections {
         target: backend

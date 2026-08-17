@@ -232,6 +232,14 @@ Scope {
         root._cursor = -1;
         root._capturing = false;
         root._frames = ({});
+        // The window boxes this surface is about to draw and crop to are only
+        // as fresh as the backend's model. On Hyprland that model goes stale
+        // between refreshes and omits the box entirely for anything opened
+        // since startup, which reads here as "window with no rect" and used
+        // to send the capture down the niri-only server-side path. Ask for a
+        // current set before the candidate list is built; a backend that is
+        // already event-driven no-ops.
+        CompositorService.refreshWindows();
 
         // No interaction at all: the focused output is the answer, and no
         // surface ever maps. This is the keybind form of "whole display" —

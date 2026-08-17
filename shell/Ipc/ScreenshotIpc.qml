@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
+import qs.Compositor
 import qs.Core
 import qs.Notifications
 import qs.Services
@@ -150,6 +151,22 @@ Scope {
         // runs wl-copy.
         function onPickedWindow(windowId) {
             watchdog.stop();
+            // Only niri has a server-side per-window capture. Everywhere else
+            // a window with no rect is a window this shell cannot crop to,
+            // and running `niri msg` off a Hyprland session just reports that
+            // niri is not installed, which tells the user nothing about their
+            // own screenshot. RegionPicker.open() now refreshes the window
+            // model first, so reaching this on Hyprland means the box really
+            // is unavailable rather than merely stale.
+            if (CompositorService.compositor !== "niri") {
+                const why = "no geometry for that window; pick a region instead";
+                root._busy = false;
+                root._pendingPath = "";
+                root._lastError = why;
+                console.warn("ScreenshotIpc:", why);
+                NotificationService.notify("SCREENSHOT FAILED", why);
+                return;
+            }
             root._grabNiriWindow(windowId);
         }
 

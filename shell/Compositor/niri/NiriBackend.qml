@@ -81,6 +81,15 @@ Scope {
         requestSocket.request("Outputs");
     }
 
+    // No-op, matching BackendBase's contract default: `windows` here is
+    // reduced from the event stream the socket already pushes, so it is never
+    // behind in the way Hyprland's cached `j/clients` object is. Spelled out
+    // rather than inherited because these backends duck-type the contract as
+    // plain Scopes; BackendBase is the written contract and the null backend,
+    // not a base type, so a caller reaching a function only defined there
+    // would throw on whichever backend forgot it.
+    function refreshWindows() {}
+
     function setOutputEnabled(name, enabled) {
         requestSocket.request({ Output: { output: name, action: enabled ? "On" : "Off" } });
         outputRefreshTimer.restart();

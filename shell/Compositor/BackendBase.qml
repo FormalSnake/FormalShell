@@ -43,6 +43,13 @@ QtObject {
     function powerOnMonitors() {}
     function applyThemeFragment() {} // niri-only; no-op on backends without one
 
+    // Re-reads `windows`; never moves or focuses anything. A backend whose
+    // window model is already event-driven leaves this a no-op. It exists for
+    // Hyprland, where the box in `rect` goes stale between refreshes, so
+    // anything about to CROP to a window (the capture picker) can ask for a
+    // current one first rather than capturing where the window used to be.
+    function refreshWindows() {}
+
     // Output management (DisplayPanel). `outputs` above is the read model;
     // these are the writes, and both capability flags exist so the panel can
     // render an honest unavailable cell instead of a control that would

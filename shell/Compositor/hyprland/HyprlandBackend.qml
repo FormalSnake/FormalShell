@@ -106,6 +106,19 @@ Scope {
         return "'" + String(arg).replace(/'/g, "'\\''") + "'";
     }
 
+    // Quickshell repopulates `lastIpcObject` from `j/clients` only on connect
+    // and on configreloaded (pinned quickshell 43d4fa9,
+    // src/wayland/hyprland/ipc/connection.cpp:705, called from :92 and :277
+    // only), so a window opened since startup carries no `at`/`size` at all
+    // and every window moved since then reports a stale box. Both make
+    // `rect` above lie. `refreshToplevels` is the module's own escape hatch
+    // for exactly this and is Q_INVOKABLE on the QML singleton
+    // (ipc/qml.hpp:73); it re-reads `j/clients` rather than dispatching
+    // anything, so it cannot move a window.
+    function refreshWindows() {
+        Hyprland.refreshToplevels();
+    }
+
     function focusWorkspace(id) {
         if (Hyprland.usingLua)
             Hyprland.dispatch("hl.dsp.focus({ workspace = " + root._luaValue(id) + " })");
