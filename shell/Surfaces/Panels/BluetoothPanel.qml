@@ -139,6 +139,12 @@ Panel {
     onIsOpenChanged: {
         if (root.isOpen) {
             LibrePodsService.probe();
+            // Cursor identity starts on the first row every open (M26 Task
+            // 8's reveal-only guard below needs a real position to show,
+            // never an empty address that would gate `hovered` false on the
+            // first press) — empty when discovery hasn't produced a row
+            // yet, which the guard's own fallback handles honestly.
+            root._cursorAddress = root._allRows.length > 0 ? root._allRows[0].device.address : "";
         } else {
             root._cursorAddress = "";
             if (root._adapter)
@@ -176,6 +182,15 @@ Panel {
         function onKeyPressed(event) {
             if (!root.isOpen)
                 return;
+            // First Up/Down only reveals the cursor where it already sits
+            // (M26 Task 8, upstream's CursorSurface contract) — it does not
+            // also move it, so the highlight appears where the user can see
+            // it before anything happens.
+            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                root.cursorActive = true;
+                event.accepted = true;
+                return;
+            }
             switch (event.key) {
             case Qt.Key_Up:
                 root._moveCursor(-1);
@@ -445,7 +460,7 @@ Panel {
             readonly property bool _isTrusted: btCell._device.trusted === true
             readonly property bool _trustPending: (root._actionKind === "trust" || root._actionKind === "untrust") && root._actionAddress === btCell._address
             selected: btCell._bucket === "connected"
-            hovered: rowMouse.containsMouse || trustCell.containsPointer || forgetCell.containsPointer || (root._cursorAddress !== "" && root._cursorAddress === btCell._address)
+            hovered: root.cursorActive && root._cursorAddress === btCell._address
 
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionAddress === btCell._address) {
@@ -553,6 +568,10 @@ Panel {
                         enabled: root._actionKind === ""
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+                        onEntered: {
+                            root.cursorActive = true;
+                            root._cursorAddress = btCell._address;
+                        }
                         onClicked: root._activateRow(btCell._bucket, btCell._device)
                     }
                 }
@@ -730,7 +749,11 @@ Panel {
             readonly property string _address: "airpods:" + modeCell._key
             width: implicitWidth
             height: implicitHeight
-            hovered: modeCell.containsPointer || (root._cursorAddress !== "" && root._cursorAddress === modeCell._address)
+            // Mouse-only: these synthetic "airpods:" addresses never enter
+            // `_allRows`, so the shared row cursor never reaches them —
+            // same standalone ink-hover category as Task 6's inline toggles,
+            // not the CursorSurface row contract above.
+            hovered: modeCell.containsPointer
 
             MetaLabel {
                 text: modeCell.modelData.label

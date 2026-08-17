@@ -145,7 +145,16 @@ Panel {
         root._muteCursor();
     }
 
-    onIsOpenChanged: if (!root.isOpen) root._cursorKey = ""
+    // Cursor identity starts on the first row every open (audio devices can
+    // change while the panel was closed) so the M26 Task 8 reveal-only
+    // guard above has a real position to show, never an empty key that
+    // would gate `hovered` false on the first press.
+    onIsOpenChanged: {
+        if (root.isOpen)
+            root._cursorKey = root._cursorEntries.length > 0 ? root._cursorEntries[0].key : "";
+        else
+            root._cursorKey = "";
+    }
 
     // Panel.qml's shared keyboard-nav hook (M6 Task 7, PowerPanel/
     // NetworkPanel's consumer pattern): Up/Down move the cursor, h/l step
@@ -156,6 +165,15 @@ Panel {
         function onKeyPressed(event) {
             if (!root.isOpen)
                 return;
+            // First Up/Down only reveals the cursor where it already sits
+            // (M26 Task 8, upstream's CursorSurface contract) — it does not
+            // also move it, so the highlight appears where the user can see
+            // it before anything happens.
+            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                root.cursorActive = true;
+                event.accepted = true;
+                return;
+            }
             if (event.key === Qt.Key_Up) {
                 root._moveCursor(-1);
                 event.accepted = true;
@@ -188,7 +206,11 @@ Panel {
             selected: deviceCell.modelData.isOutput
                 ? (root._sink !== null && deviceCell.modelData.node.id === root._sink.id)
                 : (root._source !== null && deviceCell.modelData.node.id === root._source.id)
-            hovered: root._cursorKey === deviceCell.modelData.cursorKey
+            hovered: root.cursorActive && root._cursorKey === deviceCell.modelData.cursorKey
+            onContainsPointerChanged: if (deviceCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursorKey = deviceCell.modelData.cursorKey;
+            }
 
             Text {
                 width: parent.width
@@ -216,7 +238,12 @@ Panel {
             id: streamCell
             required property var modelData
             width: parent.width
-            hovered: root._cursorKey === streamCell.modelData.cursorKey
+            interactive: true
+            hovered: root.cursorActive && root._cursorKey === streamCell.modelData.cursorKey
+            onContainsPointerChanged: if (streamCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursorKey = streamCell.modelData.cursorKey;
+            }
 
             readonly property var _node: streamCell.modelData.node
             readonly property var _audio: streamCell._node ? streamCell._node.audio : null
@@ -334,7 +361,12 @@ Panel {
     Cell {
         id: outputMasterCell
         visible: root._sink !== null && root._sink.audio !== null
-        hovered: root._cursorKey === "output-slider"
+        interactive: true
+        hovered: root.cursorActive && root._cursorKey === "output-slider"
+        onContainsPointerChanged: if (outputMasterCell.containsPointer) {
+            root.cursorActive = true;
+            root._cursorKey = "output-slider";
+        }
         width: parent.width
 
         Column {
@@ -414,7 +446,12 @@ Panel {
     Cell {
         id: inputMasterCell
         visible: root._inputs.length > 0 && root._source !== null && root._source.audio !== null
-        hovered: root._cursorKey === "input-slider"
+        interactive: true
+        hovered: root.cursorActive && root._cursorKey === "input-slider"
+        onContainsPointerChanged: if (inputMasterCell.containsPointer) {
+            root.cursorActive = true;
+            root._cursorKey = "input-slider";
+        }
         width: parent.width
 
         Column {

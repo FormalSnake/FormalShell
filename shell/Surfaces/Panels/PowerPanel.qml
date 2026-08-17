@@ -208,6 +208,15 @@ Panel {
         function onKeyPressed(event) {
             if (!root.isOpen)
                 return;
+            // First Up/Down only reveals the cursor on the active profile
+            // (M26 Task 8, upstream's CursorSurface contract) — it does not
+            // also move it, so the highlight appears where the user can see
+            // it before anything happens.
+            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                root.cursorActive = true;
+                event.accepted = true;
+                return;
+            }
             switch (event.key) {
             case Qt.Key_Up:
                 root._cursor = Math.max(0, root._cursor - 1);
@@ -392,6 +401,7 @@ Panel {
             required property real percent
             width: parent.width
             hovered: root._brightnessHoverId === brightnessCell.deviceId
+            onHoveredChanged: if (brightnessCell.hovered) root.cursorActive = false
 
             Column {
                 width: parent.width
@@ -471,7 +481,11 @@ Panel {
             required property var modelData
             width: parent.width
             selected: profileCell.modelData === PowerProfiles.profile
-            hovered: profileCell.index === root._cursor
+            hovered: root.cursorActive && profileCell.index === root._cursor
+            onContainsPointerChanged: if (profileCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursor = profileCell.index;
+            }
 
             ActionLabel {
                 text: PowerProfile.toString(profileCell.modelData)

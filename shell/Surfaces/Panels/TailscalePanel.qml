@@ -204,6 +204,15 @@ Panel {
         function onKeyPressed(event) {
             if (!root.isOpen || root.pollState !== "ok")
                 return;
+            // First Up/Down only reveals the cursor on the status row
+            // (M26 Task 8, upstream's CursorSurface contract) — it does not
+            // also move it, so the highlight appears where the user can see
+            // it before anything happens.
+            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                root.cursorActive = true;
+                event.accepted = true;
+                return;
+            }
             switch (event.key) {
             case Qt.Key_Up:
                 root._cursor = Math.max(0, root._cursor - 1);
@@ -248,7 +257,11 @@ Panel {
         visible: root.pollState === "ok"
         width: parent.width
         selected: root.status ? root.status.running : false
-        hovered: root._cursor === 0
+        hovered: root.cursorActive && root._cursor === 0
+        onContainsPointerChanged: if (statusCell.containsPointer) {
+            root.cursorActive = true;
+            root._cursor = 0;
+        }
 
         Column {
             width: parent.width
@@ -320,7 +333,11 @@ Panel {
             required property var modelData
             required property int index
             width: parent.width
-            hovered: peerCell.containsPointer || root._cursor === (index + 1)
+            hovered: root.cursorActive && root._cursor === (index + 1)
+            onContainsPointerChanged: if (peerCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursor = index + 1;
+            }
 
             Column {
                 width: parent.width

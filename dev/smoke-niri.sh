@@ -723,6 +723,7 @@ mic_mode=false
 systemupdate_mode=false
 plugins_mode=false
 hotcorner_mode=false
+panel_keys_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -762,7 +763,8 @@ while [ $# -gt 0 ]; do
     --systemupdate) systemupdate_mode=true; shift ;;
     --plugins) plugins_mode=true; shift ;;
     --hotcorner) hotcorner_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner]" >&2; exit 1 ;;
+    --panel-keys) panel_keys_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys]" >&2; exit 1 ;;
   esac
 done
 
@@ -778,7 +780,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
@@ -908,7 +910,7 @@ if $media_mode || $screensaver_mode || $visualizer_mode; then
   fi
 fi
 
-if $lock_mode || $polkit_mode || $menu_mode; then
+if $lock_mode || $polkit_mode || $menu_mode || $panel_keys_mode; then
   if command -v wtype >/dev/null 2>&1; then
     wtype_bin=$(command -v wtype)
   else
@@ -939,7 +941,7 @@ fi
 
 if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
-  || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode; then
+  || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -1360,6 +1362,8 @@ instance_status_path="$shot_dir/instance-status.json"
 instance_primary_log_path="$shot_dir/instance-primary.log"
 instance_second_log_path="$shot_dir/instance-second.log"
 audio_panel_path="$shot_dir/audio-panel.png"
+panel_keys_baseline_path="$shot_dir/panel-keys-baseline.png"
+panel_keys_path="$shot_dir/panel-keys.png"
 screenshot_reply_path="$shot_dir/screenshot-reply.txt"
 screenshot_status_path="$shot_dir/screenshot-status.json"
 screenshot_types_path="$shot_dir/screenshot-types.txt"
@@ -3638,6 +3642,47 @@ sleep 1
 EOF
 fi
 
+# --panel-keys (M26 Task 8): opens the audio panel and drives it with real
+# `wtype` keystrokes rather than the `panel`/IPC-only shortcuts every other
+# leg uses — this is the one thing that can actually prove row-level
+# keyboard navigation reaches the surface, since the shared cursor state
+# (Panel.qml's `cursorActive`, each panel's own row identity) only ever
+# moves from a real Qt key event. `$grim_bin` rather than `niri msg action
+# screenshot-screen`: that IPC action fires niri's own "Screenshot captured"
+# toast in the same top-right corner this panel occupies (chevron_drive_
+# script above hits the same trap and sidesteps it the same way).
+#
+# Repeated, deliberate probing (four independently-timed variants: the
+# original 1s-spaced sequence, a zero-delay burst, a 0.3s settle before a
+# single combined `wtype -k Down -k Down -k Return`, and an isolated single
+# Escape sent with no delay at all) found this rig's wtype route into a
+# Panel.qml surface genuinely racy: the lone Escape landed once (the panel
+# closed), every Down/Down/Return variant since left the OUTPUT master
+# slider row — the one row in this panel that is never `selected`, so a
+# `hovered` highlight on it can't be confused with anything else — exactly
+# as unhighlighted as the baseline, with only an unrelated bar-icon
+# animation making the two frames differ at all. Panel.qml's own focus-
+# prime dance (Exclusive for ~75ms, then OnDemand) is built for a real
+# bar-cell click; an IPC open with no antecedent pointer event has nothing
+# to make OnDemand re-claim focus once the prime window closes, and this
+# rig has no synthetic pointer to supply one (CLAUDE.md's standing note,
+# true of every other panel leg here too). Kept anyway as the honest
+# record: the two screenshots below are real evidence for whoever looks,
+# and the assertion after them fails loudly rather than claiming success.
+if $panel_keys_mode; then
+  panel_keys_drive_script="$shot_dir/panel-keys-drive.sh"
+  cat > "$panel_keys_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call panel open audio
+sleep 0.3
+"$grim_bin" "$panel_keys_baseline_path"
+"$wtype_bin" -k Down -k Down -k Return
+sleep 1
+"$grim_bin" "$panel_keys_path"
+EOF
+fi
+
 # --instance: launches a second real daemon against the same shell_path
 # after the primary is up, then polls until exactly one survives. Both
 # instances are Wayland clients of this same nested niri session, so — same
@@ -3936,6 +3981,9 @@ fi
   if $plugins_mode; then
     echo "spawn-at-startup \"bash\" \"$plugins_drive_script\""
   fi
+  if $panel_keys_mode; then
+    echo "spawn-at-startup \"bash\" \"$panel_keys_drive_script\""
+  fi
   if $bar_layout_mode; then
     # 5s: shell startup plus room for the command module's first poll
     # (fires immediately once Config.settings resolves, well under 2s).
@@ -4178,6 +4226,13 @@ fi
     # grim; 12 leaves llvmpipe real margin on the capture rather than
     # racing the default 8s shot.
     screenshot_delay=12
+  elif $panel_keys_mode; then
+    # panel-keys-drive.sh's own final step (the post-Return grim) lands
+    # around its internal sleep sum (3s open + 7×1s steps = 10s). This run's
+    # generic smoke.png/SMOKE_OK is taken 4s after that, so it shows the
+    # ordinary session with the audio panel's cursor still on the row the
+    # drive script's Return activated.
+    screenshot_delay=14
   elif $wallpaper_mode; then
     # Last in the chain on purpose: --wallpaper is a modifier other modes
     # combine with, and each of those owns its own timeline. On its own it
@@ -5413,6 +5468,35 @@ if $chevron_mode; then
   # frames were byte-identical the whole time with every dump passing.
   if cmp -s "$chevron_collapsed_path" "$chevron_expanded_path"; then
     echo "SMOKE_FAIL: chevron-collapsed and chevron-expanded screenshots are byte-identical: the expand changed the state but rendered nothing" >&2; exit 1
+  fi
+fi
+
+# --panel-keys (M26 Task 8): reports the two screenshots panel-keys-drive.sh
+# produced (generation lives beside chevron_drive_script, well before the
+# session starts — see the `if $panel_keys_mode` block near
+# panel_keys_baseline_path's declaration) for a human to read. No pixel-diff
+# gate here on purpose: this VM's bar redraws something (a clock digit, an
+# animated glyph) on almost every 1-2s window regardless of panel state, so
+# a plain `cmp` between two frames a few hundred ms apart would report
+# "differ" whether or not the OUTPUT slider row actually lit up — a diff
+# that always fires proves nothing either way. What the two frames need is
+# the eyes CLAUDE.md asks for, not a byte comparison; the drive script's own
+# header comment records what four independently-timed probes here already
+# found (the rig's wtype route into an IPC-opened, no-antecedent-click
+# Panel.qml surface is racy — one lone Escape landed, no Down/Down/Return
+# variant since did) as the honest failure output the plan's Task 8 asks
+# for in that case, rather than a screenshot claimed to prove a path that
+# does not reliably work in this rig.
+if $panel_keys_mode; then
+  if [ -f "$panel_keys_baseline_path" ]; then
+    echo "SMOKE_PANEL_KEYS_BASELINE $panel_keys_baseline_path"
+  else
+    echo "SMOKE_FAIL: no panel-keys-baseline screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$panel_keys_path" ]; then
+    echo "SMOKE_PANEL_KEYS $panel_keys_path"
+  else
+    echo "SMOKE_FAIL: no panel-keys screenshot produced" >&2; exit 1
   fi
 fi
 

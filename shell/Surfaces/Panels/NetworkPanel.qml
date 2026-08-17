@@ -145,7 +145,14 @@ Panel {
 
     onIsOpenChanged: {
         root._applyScanner();
-        if (!root.isOpen) {
+        if (root.isOpen) {
+            // Cursor identity starts on the first row every open (M26 Task
+            // 8's reveal-only guard below needs a real position to show,
+            // never an empty ssid that would gate `hovered` false on the
+            // first press) — empty when the scan hasn't produced a row yet,
+            // which the guard's own fallback handles honestly.
+            root._cursorSsid = root._wifiSorted.length > 0 ? (root._wifiSorted[0].network.name || "") : "";
+        } else {
             root._cancelPasswordPrompt();
             root._cursorSsid = "";
             root._stopSpeedTest();
@@ -759,6 +766,15 @@ Panel {
         function onKeyPressed(event) {
             if (!root.isOpen || root._passwordSsid !== "")
                 return;
+            // First Up/Down only reveals the cursor where it already sits
+            // (M26 Task 8, upstream's CursorSurface contract) — it does not
+            // also move it, so the highlight appears where the user can see
+            // it before anything happens.
+            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                root.cursorActive = true;
+                event.accepted = true;
+                return;
+            }
             switch (event.key) {
             case Qt.Key_Up:
                 root._moveCursor(-1);
@@ -1003,7 +1019,7 @@ Panel {
             required property var modelData
             width: parent.width
             selected: wifiCell.modelData.network.connected
-            hovered: rowMouse.containsMouse || forgetCell.containsPointer || (root._cursorSsid !== "" && root._cursorSsid === wifiCell._ssid)
+            hovered: root.cursorActive && root._cursorSsid === wifiCell._ssid
 
             readonly property var _network: wifiCell.modelData.network
             readonly property string _ssid: wifiCell._network.name || ""
@@ -1122,6 +1138,10 @@ Panel {
                         enabled: root._actionKind === ""
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+                        onEntered: {
+                            root.cursorActive = true;
+                            root._cursorSsid = wifiCell._ssid;
+                        }
                         onClicked: root._activateWifiRow(wifiCell._network)
                     }
                 }

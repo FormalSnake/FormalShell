@@ -123,10 +123,16 @@ Panel {
                 return;
             switch (event.key) {
             case Qt.Key_Up:
+                // The very first Up/Down (_cursor still -1) clamps straight
+                // to row 0 rather than stepping past it, so this already IS
+                // the reveal-only press (M26 Task 8, upstream's CursorSurface
+                // contract) — cursorActive just has to catch up to it.
+                root.cursorActive = true;
                 root._cursor = root._cursor <= 0 ? 0 : root._cursor - 1;
                 event.accepted = true;
                 return;
             case Qt.Key_Down:
+                root.cursorActive = true;
                 root._cursor = Math.min(root._outputs.length - 1, root._cursor + 1);
                 event.accepted = true;
                 return;
@@ -157,7 +163,7 @@ Panel {
             required property int index
             width: parent.width
             selected: outCell.modelData.name === CompositorService.focusedOutputName
-            hovered: outCell.containsPointer || toggleCell.containsPointer || root._cursor === outCell.index
+            hovered: root.cursorActive && root._cursor === outCell.index
 
             readonly property bool _canToggle: root._backend.outputConfigAvailable
                 && Outputs.canToggle(root._outputs, outCell.modelData.name)
@@ -170,7 +176,10 @@ Panel {
             // shared keyboard cursor onto the row it is over.
             interactive: true
             acceptedButtons: Qt.NoButton
-            onContainsPointerChanged: if (outCell.containsPointer) root._cursor = outCell.index
+            onContainsPointerChanged: if (outCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursor = outCell.index;
+            }
 
             Column {
                 width: parent.width
@@ -209,6 +218,10 @@ Panel {
                         }
 
                         interactive: outCell._canToggle
+                        onContainsPointerChanged: if (toggleCell.containsPointer) {
+                            root.cursorActive = true;
+                            root._cursor = outCell.index;
+                        }
                         onClicked: root._toggleOutput(outCell.modelData.name)
                     }
                 }

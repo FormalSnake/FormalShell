@@ -22,6 +22,17 @@ PanelWindow {
     id: root
 
     property bool isOpen: false
+    // Shared cursor-visibility gate (M26 Task 8, upstream's CursorSurface
+    // contract — Ui/CursorSurface.qml — restated in Cell terms): each
+    // row-navigable panel keeps its own row identity (a numeric index or a
+    // string key, whichever survives that panel's own list reshuffling),
+    // but every row gates its `hovered` paint on this ONE flag rather than
+    // reading `containsMouse`/`containsPointer` directly. A mouse entering
+    // a row or the first navigation key both flip it true; a fresh open
+    // starts it false, so the highlight stays invisible until the user has
+    // actually reached for it instead of a stale or default position
+    // painting on open.
+    property bool cursorActive: false
     property string panelTitle: ""
     property int panelWidth: Theme.space.popupWidthDefault
     // Screen-relative x of the bar cell that opened this panel, mapped within
@@ -111,6 +122,7 @@ PanelWindow {
 
     function close() {
         root.isOpen = false;
+        root.cursorActive = false;
         if (PanelRegistry.current === root)
             PanelRegistry.current = null;
     }
@@ -199,6 +211,12 @@ PanelWindow {
         anchors.fill: parent
         enabled: root.isOpen
         focus: true
+        // Explicit despite matching Item's own default: states outright that
+        // row navigation has to win over contentFlickable's scroll, which is
+        // a descendant of this MouseArea and never holds focus of its own
+        // (open() always forces it here), so key events land here first
+        // regardless — this pins that contract rather than leaning on it.
+        Keys.priority: Keys.BeforeItem
         Keys.onEscapePressed: root.close()
         Keys.onPressed: event => root.keyPressed(event)
         onClicked: root.close()
