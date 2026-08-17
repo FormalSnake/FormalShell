@@ -541,11 +541,7 @@ Panel {
             }
 
             // Flat accent fill, no thumb, no radius — same idiom as
-            // AudioPanel's volume slider. Double-click is the life-progress
-            // easter egg: prompts for birth year/life expectancy the first
-            // time, then toggles the LIFE row below on/off. It never
-            // replaces this row (M20 Task 5e) — the easter egg adds, never
-            // swaps.
+            // AudioPanel's volume slider.
             DitherFill {
                 width: parent.width
                 height: Core.Theme.space.trackThickness
@@ -555,12 +551,22 @@ Panel {
                     height: parent.height
                     color: Core.Theme.color.accent
                 }
-
-                MouseArea {
-                    anchors.fill: parent
-                    onDoubleClicked: root._onProgressDoubleClicked()
-                }
             }
+        }
+
+        // The life-progress easter egg: prompts for birth year/life expectancy
+        // the first time, then toggles the LIFE row below on/off. It never
+        // replaces this row (M20 Task 5e), it adds.
+        //
+        // The whole cell is the target, not just the fill bar underneath it.
+        // That bar is `trackThickness` tall, 6px, so aiming two clicks into it
+        // was the actual reason this went untriggerable: an easter egg may be
+        // undocumented, but it still has to be hittable once you know where it
+        // is. Anchored to fill, which Cell excludes from its own implicit size,
+        // so covering the row costs the row no height.
+        MouseArea {
+            anchors.fill: parent
+            onDoubleClicked: root._onProgressDoubleClicked()
         }
     }
 
