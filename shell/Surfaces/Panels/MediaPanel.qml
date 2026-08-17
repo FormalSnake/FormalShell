@@ -153,14 +153,19 @@ Panel {
         }
     }
 
-    // One small cluster of touching, content-sized cells (BluetoothPanel's
-    // own inline-action idiom) instead of three glyphs stretched across
-    // equal 1/3-width cells — the controls read as buttons, not as padding.
+    // One small cluster of touching, content-sized cells instead of three
+    // glyphs stretched across equal 1/3-width cells — the controls read as
+    // buttons, not as padding. Each inner Cell draws only its own
+    // bottom/right rule (Cell's shared-rule contract), so the two explicit
+    // Rectangles below close the group's top and left edge the way
+    // Panel.qml's own frame closes it for the whole card — without them the
+    // cluster is three verticals and an underline with no top or left edge.
     Cell {
         visible: MediaService.available
         width: parent.width
 
         Row {
+            id: transportRow
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 0
 
@@ -219,6 +224,22 @@ Panel {
                 interactive: true
                 onClicked: MediaService.next()
             }
+        }
+
+        Rectangle {
+            anchors.top: transportRow.top
+            anchors.left: transportRow.left
+            anchors.right: transportRow.right
+            height: Theme.borderWidth
+            color: Theme.color.rule
+        }
+
+        Rectangle {
+            anchors.top: transportRow.top
+            anchors.left: transportRow.left
+            anchors.bottom: transportRow.bottom
+            width: Theme.borderWidth
+            color: Theme.color.rule
         }
     }
 }
