@@ -45,18 +45,23 @@ Cell {
     standalone: true
 
     // The glyph alone says "wifi", never which network or how well. Same
-    // precedence the glyph uses (wired beats wifi beats nothing).
+    // precedence the glyph uses (wired beats wifi beats nothing). The
+    // trailing segment states the M26 Task 9 right-click action —
+    // otherwise it's undiscoverable.
     // ⚠️ signalStrength is a 0..1 fraction, not a percent (quickshell
     // src/network/wifi.hpp:23) — the same conversion NetworkPanel.qml's own
     // signal column makes.
     tooltipText: {
+        var head;
         if (root._wiredConnected)
-            return "NETWORK / WIRED";
-        if (root._activeWifi)
-            return "WI-FI / " + root._activeWifi.name + " " + Math.round(root._activeWifi.signalStrength * 100) + "%";
-        if (root._wifiConnected)
-            return "WI-FI / CONNECTED";
-        return "NETWORK / OFFLINE";
+            head = "NETWORK / WIRED";
+        else if (root._activeWifi)
+            head = "WI-FI / " + root._activeWifi.name + " " + Math.round(root._activeWifi.signalStrength * 100) + "%";
+        else if (root._wifiConnected)
+            head = "WI-FI / CONNECTED";
+        else
+            head = "NETWORK / OFFLINE";
+        return head + " / RIGHT " + (Networking.wifiEnabled ? "WI-FI OFF" : "WI-FI ON");
     }
 
     Text {
@@ -75,8 +80,15 @@ Cell {
     }
 
     interactive: true
-    onClicked: {
-        if (root.panel)
+    // M26 Task 9: right click toggles the Wi-Fi radio, middle also opens
+    // the panel (upstream's redundant left/middle idiom, `manual/
+    // 05-the-top-bar.md`'s Audio row).
+    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            Networking.wifiEnabled = !Networking.wifiEnabled;
+        } else if (root.panel) {
             root.panel.toggleFrom(root);
+        }
     }
 }

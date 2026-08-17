@@ -27,8 +27,9 @@ Cell {
     // call, it's still the level you'll get back), which leaves the mute
     // state resting entirely on one glyph. This names it, and now that the
     // label defaults off, carries the percentage too so hiding it never
-    // deletes information.
-    tooltipText: (AudioService.muted ? "OUTPUT MUTED" : "OUTPUT VOLUME") + " / " + Math.round(AudioService.volume * 100) + "%"
+    // deletes information. The trailing segment states the M26 Task 9
+    // right-click action — otherwise it's undiscoverable.
+    tooltipText: (AudioService.muted ? "OUTPUT MUTED" : "OUTPUT VOLUME") + " / " + Math.round(AudioService.volume * 100) + "% / RIGHT MUTE"
 
     // Mute swaps the glyph and the percent label resizes this cell — glide
     // the width instead of shoving the bar's other widgets instantly
@@ -79,9 +80,14 @@ Cell {
     }
 
     interactive: true
-    onClicked: {
-        if (root.panel)
+    // M26 Task 9: right click mutes the default sink, left opens the panel.
+    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            AudioService.toggleMute();
+        } else if (root.panel) {
             root.panel.toggleFrom(root);
+        }
     }
     // 5% steps, same as the panel's own tracks (M15 Task 4 parity) —
     // scrolling the bar cell adjusts the default sink without opening

@@ -35,10 +35,11 @@ Cell {
     // glyph is a guess until it's named. "UNAVAILABLE" is WeatherPanel.qml's
     // own honest-empty string for a forecast that hasn't resolved. Carries
     // the temperature too now that the label defaults off, so hiding it
-    // never deletes information.
-    tooltipText: root._hasCurrent
+    // never deletes information. The trailing segment states the M26
+    // Task 9 right-click action — otherwise it's undiscoverable.
+    tooltipText: (root._hasCurrent
         ? "WEATHER / " + Openmeteo.conditionLabel(root.panel.currentCode) + " / " + Math.round(root.panel.currentTemp) + "°"
-        : "WEATHER / UNAVAILABLE"
+        : "WEATHER / UNAVAILABLE") + " / RIGHT REFRESH"
 
     Component.onCompleted: {
         if (root.panel)
@@ -92,8 +93,16 @@ Cell {
     }
 
     interactive: true
-    onClicked: {
-        if (root.panel)
+    // M26 Task 9: right click refetches the forecast, middle also opens
+    // the panel (upstream's redundant left/middle idiom, `manual/
+    // 05-the-top-bar.md`'s Audio row).
+    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            if (root.panel)
+                root.panel.refresh();
+        } else if (root.panel) {
             root.panel.toggleFrom(root);
+        }
     }
 }

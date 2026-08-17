@@ -19,6 +19,7 @@ Singleton {
     property alias appLaunches: adapter.appLaunches
     property alias reminders: adapter.reminders
     property alias barCollapsed: adapter.barCollapsed
+    property alias batteryShowPercent: adapter.batteryShowPercent
 
     function setWallpaper(path) {
         adapter.wallpaper = path;
@@ -84,6 +85,15 @@ Singleton {
     // JsonAdapter var property only notifies on assignment, so writing one
     // key of the existing object would persist without ever re-evaluating a
     // binding.
+    // Right-click on the bar battery cell (M26 Task 9). null means "no
+    // override yet, follow bar.widgets.battery.showLabel from settings.json"
+    // — the same layered-default shape settings.json keys get everywhere
+    // else, just persisted here since this one toggles at runtime.
+    function setBatteryShowPercent(shown) {
+        adapter.batteryShowPercent = shown;
+        stateFile.writeAdapter();
+    }
+
     function setBarCollapsed(region, collapsed) {
         var next = {};
         var current = adapter.barCollapsed;
@@ -124,6 +134,7 @@ Singleton {
             // and Bartender: adding `chevron` to bar.layout has to visibly do
             // something on first run, or the widget reads as inert.
             property var barCollapsed: ({ left: true, center: true, right: true })
+            property var batteryShowPercent: null
         }
     }
 }

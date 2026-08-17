@@ -36,15 +36,20 @@ Cell {
     // Three glyphs cover four states between them (no adapter and adapter
     // off share one), and none of them names the device that's connected.
     // "NO ADAPTER"/"NO DEVICES" are BluetoothPanel.qml's own honest-empty
-    // strings, not second wordings for the same states.
+    // strings, not second wordings for the same states. The trailing
+    // segment states the M26 Task 9 right-click action — no adapter means
+    // there's nothing to toggle, so it's omitted rather than dangled.
     tooltipText: {
         if (!root._adapter)
             return "BLUETOOTH / NO ADAPTER";
+        var head;
         if (!root._adapter.enabled)
-            return "BLUETOOTH / OFF";
-        if (root._connectedNames.length === 0)
-            return "BLUETOOTH / NO DEVICES";
-        return "BLUETOOTH / " + root._connectedNames.join(", ");
+            head = "BLUETOOTH / OFF";
+        else if (root._connectedNames.length === 0)
+            head = "BLUETOOTH / NO DEVICES";
+        else
+            head = "BLUETOOTH / " + root._connectedNames.join(", ");
+        return head + " / RIGHT " + (root._adapter.enabled ? "RADIO OFF" : "RADIO ON");
     }
 
     Text {
@@ -63,8 +68,16 @@ Cell {
     }
 
     interactive: true
-    onClicked: {
-        if (root.panel)
+    // M26 Task 9: right click toggles the adapter radio, middle also opens
+    // the panel (upstream's redundant left/middle idiom, `manual/
+    // 05-the-top-bar.md`'s Audio row).
+    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            if (root._adapter)
+                root._adapter.enabled = !root._adapter.enabled;
+        } else if (root.panel) {
             root.panel.toggleFrom(root);
+        }
     }
 }

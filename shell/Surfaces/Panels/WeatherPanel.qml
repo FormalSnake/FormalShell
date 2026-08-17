@@ -122,6 +122,14 @@ Panel {
         xhr.send();
     }
 
+    // Public wrapper for WeatherWidget's right-click (M26 Task 9): the bar
+    // cell has no business reaching into an underscore-prefixed internal,
+    // UsagePanel's refreshClaudeToken is the same call-a-named-panel-method
+    // shape a widget already uses.
+    function refresh() {
+        root._fetch();
+    }
+
     onIsOpenChanged: if (root.isOpen) root._fetch();
     onPollEnabledChanged: if (root.pollEnabled) root._fetch();
 

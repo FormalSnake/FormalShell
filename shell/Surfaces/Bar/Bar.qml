@@ -239,6 +239,9 @@ PanelWindow {
     Component {
         id: microphoneComponent
         MicWidget {
+            // M26 Task 9: middle click opens the audio panel, since the mic
+            // has no panel of its own.
+            panel: bar.audioPanel
         }
     }
     Component {

@@ -1,6 +1,12 @@
 import QtQuick
 import Quickshell.Services.UPower
-import qs.Core
+// Aliased, not a bare `import qs.Core`: right-click now reaches Core.State
+// (the label toggle's persisted override) alongside a bare import, which
+// loses the singleton to QtQuick's own colliding `State` name (the M24
+// chevron trap, CLAUDE.md). Every Core.* reference in this file goes
+// through the Core. prefix, not just the new ones, since qmllint's module
+// resolution breaks the moment qs.Core is imported both ways in one file.
+import qs.Core as Core
 import qs.Components
 import "../../../Power/model.js" as Power
 
@@ -45,8 +51,8 @@ Cell {
     readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
     readonly property bool _discharging: root._hasBattery && root._device.state === UPowerDeviceState.Discharging
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
-    readonly property bool _critical: root._discharging && root._percent <= Config.get("battery.criticalPercent", 5)
-    readonly property bool _low: root._discharging && !root._critical && root._percent <= Config.get("battery.warnPercent", 10)
+    readonly property bool _critical: root._discharging && root._percent <= Core.Config.get("battery.criticalPercent", 5)
+    readonly property bool _low: root._discharging && !root._critical && root._percent <= Core.Config.get("battery.warnPercent", 10)
     // UPower's own AC-vs-battery aggregate (device.state can lag on some
     // drivers), and PowerPanel's own charge-threshold detection mirrored
     // here so the bar cell and the panel never disagree (M26 Task 3).
@@ -69,7 +75,11 @@ Cell {
 
     // Visible by default (owner's explicit instruction, M23): unlike
     // weather/audio the percentage is content, not a repeat of the glyph.
-    readonly property bool _showLabel: Config.get("bar.widgets.battery.showLabel", true)
+    // Right-click flips Core.State's own override (M26 Task 9); null there
+    // means no override yet, so the settings.json default still applies.
+    readonly property bool _showLabel: Core.State.batteryShowPercent !== null
+        ? Core.State.batteryShowPercent
+        : Core.Config.get("bar.widgets.battery.showLabel", true)
 
     visible: root.shown
     standalone: true
@@ -81,17 +91,22 @@ Cell {
     // while discharging, timeToEmpty while charging — and for both while it
     // has no reading at all (PowerPanel.qml's own note on the same fields),
     // so the state name is the honest fallback rather than a guessed time.
+    // The trailing " / RIGHT ..." segment states the M26 Task 9 secondary
+    // action — otherwise a right-click toggle is undiscoverable.
     tooltipText: {
         if (!root._hasBattery)
             return "";
         var head = "BATTERY " + root._percent + "%";
+        var body;
         if (root._thresholdActive)
-            return head + " / THRESHOLD";
-        if (root._charging && root._device.timeToFull > 0)
-            return head + " / FULL IN " + Power.formatDuration(root._device.timeToFull);
-        if (root._discharging && root._device.timeToEmpty > 0)
-            return head + " / " + Power.formatDuration(root._device.timeToEmpty) + " LEFT";
-        return head + " / " + Power.chargeStateLabel(root._percent, root._device.state, root._onBattery, root._thresholdActive, root._upowerStates);
+            body = head + " / THRESHOLD";
+        else if (root._charging && root._device.timeToFull > 0)
+            body = head + " / FULL IN " + Power.formatDuration(root._device.timeToFull);
+        else if (root._discharging && root._device.timeToEmpty > 0)
+            body = head + " / " + Power.formatDuration(root._device.timeToEmpty) + " LEFT";
+        else
+            body = head + " / " + Power.chargeStateLabel(root._percent, root._device.state, root._onBattery, root._thresholdActive, root._upowerStates);
+        return body + " / RIGHT " + (root._showLabel ? "HIDE %" : "SHOW %");
     }
 
     // The percent label resizes this cell as it ticks — glide the width
@@ -99,12 +114,12 @@ Cell {
     // M16 Task 2's contract, extended to every numeric bar cell by M26
     // Task 7).
     Behavior on implicitWidth {
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
     }
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.xxs
+        spacing: Core.Theme.space.xxs
 
         // Fixed-width slot (M26 Task 7): the glyph ramp swaps codepoints as
         // charge state changes, and a Nerd Font glyph's own advance width
@@ -113,7 +128,7 @@ Cell {
         Item {
             id: glyphSlot
             anchors.verticalCenter: parent.verticalCenter
-            width: Theme.space.huge
+            width: Core.Theme.space.huge
             height: glyphText.implicitHeight
 
             Text {
@@ -121,8 +136,8 @@ Cell {
                 anchors.centerIn: parent
                 text: root._glyph
                 color: root.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
             }
         }
 
@@ -142,8 +157,16 @@ Cell {
     }
 
     interactive: true
-    onClicked: {
-        if (root.panel)
+    // M26 Task 9: right click flips the BAT / NN% label on and off, both
+    // left and middle open the power panel (upstream's own redundant
+    // left/middle idiom for a bar cell whose whole point is opening a
+    // panel, `manual/05-the-top-bar.md`'s Audio row).
+    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            Core.State.setBatteryShowPercent(!root._showLabel);
+        } else if (root.panel) {
             root.panel.toggleFrom(root);
+        }
     }
 }

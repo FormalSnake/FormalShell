@@ -48,12 +48,14 @@ Cell {
 
     // The cell shows the title alone, and marquees or elides it once it
     // outgrows maxWidth — the tooltip adds the artist and, for a title that
-    // was scrolling, lets it be read in one piece.
+    // was scrolling, lets it be read in one piece. The trailing segment
+    // states the M26 Task 9 right-click/scroll actions — otherwise they're
+    // undiscoverable.
     tooltipText: {
         if (!root.shown)
             return "";
         var track = MediaService.title !== "" ? MediaService.title : MediaService.identity;
-        return "NOW PLAYING / " + (MediaService.artist !== "" ? MediaService.artist + " / " : "") + track;
+        return "NOW PLAYING / " + (MediaService.artist !== "" ? MediaService.artist + " / " : "") + track + " / RIGHT NEXT / SCROLL PREV NEXT";
     }
 
     // Track title changes resize this cell — animate the width instead of
@@ -112,8 +114,21 @@ Cell {
     }
 
     interactive: true
-    onClicked: {
-        if (root.panel)
+    // M26 Task 9: right click skips ahead, scroll steps prev/next (up:
+    // next, matching AudioWidget's own "up increases" scroll direction).
+    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    onClicked: mouse => {
+        if (mouse.button === Qt.RightButton) {
+            MediaService.next();
+        } else if (root.panel) {
             root.panel.toggleFrom(root);
+        }
+    }
+    onWheeled: wheel => {
+        if (wheel.angleDelta.y > 0)
+            MediaService.next();
+        else
+            MediaService.previous();
+        wheel.accepted = true;
     }
 }

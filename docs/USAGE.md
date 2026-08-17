@@ -215,11 +215,12 @@ is configurable from `settings.json`.
 
 **Microphone** — opt-in via `bar.layout` (add `"microphone"` to a region);
 one glyph for the default capture source, swapping between live and muted,
-click toggles its mute. No percentage and no wheel handler: input gain is a
-panel concern and a mic reads as on or off. Honest state: no default source
-at all (the mac VM rig's own state, which has no capture device) renders a
-dim `NO MIC` label instead of a glyph, and the cell stays visible, because
-it is opt-in and hiding it would be the lie.
+click toggles its mute, middle click opens the audio panel (M26 Task 9 —
+the mic has no panel of its own). No percentage and no wheel handler: input
+gain is a panel concern and a mic reads as on or off. Honest state: no
+default source at all (the mac VM rig's own state, which has no capture
+device) renders a dim `NO MIC` label instead of a glyph, and the cell stays
+visible, because it is opt-in and hiding it would be the lie.
 
 **Keyboard layout** — opt-in via `bar.layout` (add `"keyboardLayout"` to a
 region); a glyph plus the short form of the active layout, read-only (no
@@ -304,6 +305,32 @@ qs ipc --any-display -p <store-path>/share/formalshell call tray expand    # sam
 qs ipc --any-display -p <store-path>/share/formalshell call tray collapse
 qs ipc --any-display -p <store-path>/share/formalshell call tray activate <id>   # same action as left-clicking the item's cell
 ```
+
+**Click, right-click, and scroll** (M26 Task 9) — every widget below
+already states its own secondary action in its tooltip:
+
+| Widget | Left | Right | Middle / scroll |
+| --- | --- | --- | --- |
+| Clock | Calendar panel | Cycle the format ring | Middle: calendar panel |
+| Weather | Forecast panel | Refresh | Middle: forecast panel |
+| Audio | Audio panel | Mute | Scroll: volume |
+| Battery | Power panel | Toggle the `BAT / NN%` label | Middle: power panel |
+| Network | Network panel | Toggle the Wi-Fi radio | Middle: network panel |
+| Bluetooth | Bluetooth panel | Toggle the adapter radio | Middle: bluetooth panel |
+| Now playing | Media panel | Next track | Scroll: previous/next |
+| Microphone | Mute | — | Middle: audio panel |
+
+Left/middle both opening the same panel on Clock, Weather, Battery,
+Network, and Bluetooth mirrors omarchy's own idiom for a cell whose whole
+point is opening a panel (`manual/05-the-top-bar.md`'s Audio row). The
+microphone cell has no right-click: left already mutes, and omarchy's own
+table has no right-click there either — only left (mute) and middle (audio
+panel). No new backend calls exist for any of this; every action above
+already existed as a service call or an existing panel method, this table
+just wires bar-cell buttons to it. Right and middle clicks have no
+synthetic-pointer coverage in the headless smoke rig
+(`dev/smoke-niri.sh`'s own limit), so this table is verified by reading
+its source rather than by a screenshot of a click landing.
 
 ## Theming
 

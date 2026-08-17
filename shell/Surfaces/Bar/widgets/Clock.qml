@@ -10,13 +10,14 @@ import qs.Components
 import "../../../Clock/model.js" as ClockModel
 
 // Bar cell for the wall clock (DESIGN.md §3 Bar, M23: single-line like
-// every other widget here). Left click toggles the calendar panel anchored
-// under this cell, same panel-open accent dot idiom as Battery.qml. Right
-// click cycles ClockModel's format ring (M26 Task 4) and persists the
-// choice through Core.State, never settings.json (the shell only ever
-// reads that file). Every ring entry renders through Qt.formatDateTime;
-// the ISO-week preset substitutes its 'ww' token by hand first since Qt
-// has no ISO-week specifier of its own.
+// every other widget here). Left and middle click both toggle the calendar
+// panel anchored under this cell (upstream's redundant left/middle idiom,
+// `manual/05-the-top-bar.md`'s Audio row), same panel-open accent dot idiom
+// as Battery.qml. Right click cycles ClockModel's format ring (M26 Task 4)
+// and persists the choice through Core.State, never settings.json (the
+// shell only ever reads that file). Every ring entry renders through
+// Qt.formatDateTime; the ISO-week preset substitutes its 'ww' token by
+// hand first since Qt has no ISO-week specifier of its own.
 Cell {
     id: root
 
@@ -61,7 +62,10 @@ Cell {
     }
 
     interactive: true
-    acceptedButtons: Qt.LeftButton | Qt.RightButton
+    // M26 Task 9's trailing hint states the right-click action — otherwise
+    // it's undiscoverable. Middle also opens the panel, added below.
+    tooltipText: "RIGHT CYCLE FORMAT / MIDDLE CALENDAR"
+    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
     onClicked: mouse => {
         if (mouse.button === Qt.RightButton) {
             Core.State.setClockFormat(ClockModel.nextFormat(root._format));
