@@ -62,7 +62,7 @@ Cell {
     interactive: true
     onClicked: {
         if (root.panel)
-            root.panel.toggle(root.mapToItem(null, 0, 0).x);
+            root.panel.toggleFrom(root);
     }
     // 5% steps, same as the panel's own tracks (M15 Task 4 parity) —
     // scrolling the bar cell adjusts the default sink without opening

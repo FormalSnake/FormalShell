@@ -76,7 +76,7 @@ Cell {
             if (root.center.isOpen)
                 root.center.close();
             else
-                root.center.open();
+                root.center.openFrom(root);
         }
     }
 }

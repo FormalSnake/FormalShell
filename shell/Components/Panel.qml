@@ -24,13 +24,20 @@ PanelWindow {
     property bool isOpen: false
     property string panelTitle: ""
     property int panelWidth: Theme.space.popupWidthDefault
-    // Screen-relative x of the bar cell that opened this panel, computed by
-    // the caller within ITS OWN window (see AudioWidget.qml) — Wayland gives
-    // clients no cross-window global coordinates, so a raw Item reference
-    // mapped here would be meaningless. -1 means "no cell, opened via IPC",
-    // which falls back to the bar's right region, where every M6 widget
-    // cell lives.
+    // Screen-relative x of the bar cell that opened this panel, mapped within
+    // that cell's OWN window (openFrom below) — Wayland gives clients no
+    // cross-window global coordinates, so mapping the cell into this window's
+    // coordinate space instead would be meaningless. -1 means "no cell, opened
+    // via IPC", which falls back to the bar's right region, where every M6
+    // widget cell lives.
     property real anchorX: -1
+    // The output this popout belongs on, taken from the window of the cell
+    // that opened it (openFrom below): the monitor you clicked is the monitor
+    // the popout has to appear on, whatever the compositor calls focused at
+    // that moment — a bar cell can be clicked without keyboard focus ever
+    // leaving another output. Null means nobody named one (an IPC open), and
+    // the focused output decides.
+    property var anchorScreen: null
     // Focus-prime phase, read only by the keyboardFocus binding below (which
     // carries the full rationale): false for the brief Exclusive prime that
     // actually acquires keyboard focus, true once the surface can settle on
@@ -48,6 +55,7 @@ PanelWindow {
     signal keyPressed(var event)
 
     readonly property var _screen: {
+        if (root.anchorScreen) return root.anchorScreen;
         var name = CompositorService.focusedOutputName;
         var screens = Quickshell.screens;
         for (var i = 0; i < screens.length; i++) {
@@ -78,11 +86,12 @@ PanelWindow {
     readonly property real _frameHeight: Theme.borderWidth * 2 + Theme.space.panelPadding * 2
         + titleCell.height + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
 
-    function open(x) {
+    function open(x, screen) {
         if (PanelRegistry.current && PanelRegistry.current !== root)
             PanelRegistry.current.close();
         PanelRegistry.current = root;
         root.anchorX = x !== undefined ? x : -1;
+        root.anchorScreen = screen !== undefined ? screen : null;
         root.isOpen = true;
         root._focusPrimed = false;
         root._beginFocusPrime();
@@ -95,9 +104,23 @@ PanelWindow {
             PanelRegistry.current = null;
     }
 
-    function toggle(x) {
+    function toggle(x, screen) {
         if (root.isOpen) root.close();
-        else root.open(x);
+        else root.open(x, screen);
+    }
+
+    // The entry point every bar cell uses: both answers a popout needs — which
+    // output, and where along it — come off the cell's own window, since
+    // Wayland hands clients no cross-window geometry. Same `QsWindow.window`
+    // idiom Tooltip.qml resolves its own anchor through.
+    function openFrom(item) {
+        var window = item ? item.QsWindow.window : null;
+        root.open(item ? item.mapToItem(null, 0, 0).x : -1, window ? window.screen : null);
+    }
+
+    function toggleFrom(item) {
+        if (root.isOpen) root.close();
+        else root.openFrom(item);
     }
 
     screen: root._screen

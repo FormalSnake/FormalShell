@@ -103,11 +103,18 @@ function withAbsoluteRects(windows, workspaces, outputs) {
     });
 }
 
+// niri's event stream has no focused-output event at all (niri-ipc's `Event`
+// enum), and the Outputs request that does enumerate outputs carries no focus
+// flag. The focused workspace's own `output` is therefore the only report of
+// which output is active, and every surface that opens on the focused screen
+// resolves through it — a focusedOutputName left empty here silently sends all
+// of them to Quickshell.screens[0].
 function withWorkspaces(state, workspaces) {
     var focused = workspaces.find(function (ws) { return ws.isFocused; });
     return Object.assign({}, state, {
         workspaces: workspaces,
-        focusedWorkspaceId: focused ? focused.id : state.focusedWorkspaceId
+        focusedWorkspaceId: focused ? focused.id : state.focusedWorkspaceId,
+        focusedOutputName: focused && focused.output ? focused.output : state.focusedOutputName
     });
 }
 
@@ -140,7 +147,14 @@ function reduce(state, event) {
             });
         });
         var next = Object.assign({}, state, { workspaces: workspaces });
-        if (focused) next.focusedWorkspaceId = id;
+        if (focused) {
+            next.focusedWorkspaceId = id;
+            // Moving focus across outputs arrives as nothing but this event,
+            // so the activated workspace's output is where focus now is. An
+            // activation for a workspace this state has never seen leaves the
+            // last known output rather than blanking it.
+            if (output) next.focusedOutputName = output;
+        }
         return next;
     }
 

@@ -104,7 +104,8 @@ shell/
     MetaLabel.qml                uppercase/letterspaced/dim caption Text for meta rows
     Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,
                                   opaque fill, Theme.space.panelGap below the bar) anchored under its
-                                  opening bar cell (anchorX real, -1 falls back to the bar's right region),
+                                  opening bar cell, on that cell's own output (anchorX/anchorScreen, both
+                                  unset for an IPC open: bar's right region on the focused output),
                                   WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside
     AuthPrompt.qml                the lock/greeter shared centre plate (M8b Task 6): one bordered card
                                   holding clock + date + a dividing rule + a single 3px-outlined
@@ -447,6 +448,13 @@ state unchanged** — niri's forward-compatibility mandate, so a newer niri
 adding event types doesn't break the reducer. Both sockets reconnect on
 error/close via a 2s `Timer`.
 
+`focusedOutputName` is derived from the focused workspace's own `output`
+(`WorkspacesChanged` hydrates it, `WorkspaceActivated { focused: true }`
+moves it), because niri's event stream carries no focused-output event and
+the `Outputs` request carries no focus flag. Everything that opens "on the
+focused screen" — panels, menu, OSD, notification center, polkit dialog,
+capture picker — resolves through it.
+
 Hyprland has no equivalent hand-rolled reducer: `HyprlandBackend.qml` reads
 `Quickshell.Hyprland`'s own reactive `workspaces`/`toplevels`/`monitors`
 models directly and maps them onto the same contract shapes, so there's no
@@ -722,10 +730,10 @@ opens its panel two ways:
 
 ```
 click on the bar cell                          qs ipc call panel open/toggle <name>
-  -> panel.open(cell's own screen-relative x)     -> PanelIpc.qml: registry[name].open()
-     (anchorX real, computed within the            (no click happened, so anchorX stays
-      widget's own window — Wayland gives           unset — Panel.qml falls back to the
-      no cross-window global coordinates)            bar's right region, Theme.spacing.md in)
+  -> panel.toggleFrom(the cell itself)            -> PanelIpc.qml: registry[name].open()
+     (anchorX and anchorScreen both read off       (no cell, so both stay unset — Panel.qml
+      the cell's OWN window — Wayland gives         falls back to the bar's right region on
+      no cross-window global coordinates)           the compositor's focused output)
   v                                               v
 Panel.qml: isOpen = true, forceActiveFocus() on its full-screen backdrop MouseArea
   -> frame positions at (anchorX, barHeight), sized to its content's implicitHeight

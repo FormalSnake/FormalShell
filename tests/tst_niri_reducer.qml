@@ -14,6 +14,7 @@ TestCase {
         compare(s.workspaces[0].id, "3");           // opaque string
         compare(s.workspaces[1].name, "mail");
         compare(s.focusedWorkspaceId, "3");
+        compare(s.focusedOutputName, "eDP-1");
     }
 
     function test_window_focus_change() {
@@ -58,6 +59,42 @@ TestCase {
         compare(s.workspaces[1].isActive, true);
         compare(s.workspaces[1].isFocused, false);
         compare(s.focusedWorkspaceId, "3");
+    }
+
+    // Every surface that opens "on the focused screen" (panels, menu, OSD,
+    // notification center, polkit dialog) resolves through focusedOutputName,
+    // and niri reports the move across outputs as nothing but this event. Left
+    // empty, all of them land on Quickshell.screens[0] forever.
+    function test_focused_output_follows_workspace_across_outputs() {
+        var s = R.reduce(R.initialState(), { WorkspacesChanged: { workspaces: [
+            { id: 3, idx: 1, name: null, output: "eDP-1", is_urgent: false, is_active: true, is_focused: true, active_window_id: 7 },
+            { id: 9, idx: 1, name: null, output: "DP-2", is_urgent: false, is_active: true, is_focused: false, active_window_id: null }
+        ]}});
+        compare(s.focusedOutputName, "eDP-1");
+        s = R.reduce(s, { WorkspaceActivated: { id: 9, focused: true } });
+        compare(s.focusedOutputName, "DP-2");
+    }
+
+    // An activation on another output that does NOT take focus (a workspace
+    // switch on the unfocused monitor) leaves the focused output alone.
+    function test_unfocused_activation_leaves_focused_output() {
+        var s = R.reduce(R.initialState(), { WorkspacesChanged: { workspaces: [
+            { id: 3, idx: 1, name: null, output: "eDP-1", is_urgent: false, is_active: true, is_focused: true, active_window_id: 7 },
+            { id: 9, idx: 1, name: null, output: "DP-2", is_urgent: false, is_active: false, is_focused: false, active_window_id: null }
+        ]}});
+        s = R.reduce(s, { WorkspaceActivated: { id: 9, focused: false } });
+        compare(s.focusedOutputName, "eDP-1");
+    }
+
+    // niri creates workspaces on demand, so an activation can name one this
+    // state has not been told about yet. Holding the last known output beats
+    // blanking it: empty is what sends every popout to the first screen.
+    function test_activation_of_unknown_workspace_holds_focused_output() {
+        var s = R.reduce(R.initialState(), { WorkspacesChanged: { workspaces: [
+            { id: 3, idx: 1, name: null, output: "eDP-1", is_urgent: false, is_active: true, is_focused: true, active_window_id: 7 }
+        ]}});
+        s = R.reduce(s, { WorkspaceActivated: { id: 42, focused: true } });
+        compare(s.focusedOutputName, "eDP-1");
     }
 
     function test_overview_opened_or_closed() {

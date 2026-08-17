@@ -74,6 +74,6 @@ Cell {
     interactive: true
     onClicked: {
         if (root.panel)
-            root.panel.toggle(root.mapToItem(null, 0, 0).x);
+            root.panel.toggleFrom(root);
     }
 }

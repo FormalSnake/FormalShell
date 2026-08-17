@@ -88,6 +88,6 @@ Cell {
         // opens is already showing the attempt.
         if (root.panel.claudeState === "stale")
             root.panel.refreshClaudeToken(true);
-        root.panel.toggle(root.mapToItem(null, 0, 0).x);
+        root.panel.toggleFrom(root);
     }
 }

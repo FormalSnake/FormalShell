@@ -45,7 +45,14 @@ PanelWindow {
     // dot (found pixel-checking M13b Task 2's smoke screenshots).
     readonly property int _barHeight: Theme.barHeight
 
+    // Set when the bell cell opened this (openFrom below), for the same reason
+    // Panel.qml carries one: the bar cell you clicked names its own output,
+    // and clicking a layer surface need not move keyboard focus there at all.
+    // Null (every IPC and menu-route open) falls back to the focused output.
+    property var anchorScreen: null
+
     readonly property var _screen: {
+        if (root.anchorScreen) return root.anchorScreen;
         var name = CompositorService.focusedOutputName;
         var screens = Quickshell.screens;
         for (var i = 0; i < screens.length; i++) {
@@ -66,8 +73,16 @@ PanelWindow {
     readonly property var _pendingRows: Model.groupEntries(NotificationService.pending)
     readonly property var _pastRows: Model.groupEntries(root._pastNewestFirst)
 
-    function open() {
+    function open(screen) {
+        root.anchorScreen = screen !== undefined ? screen : null;
         root.isOpen = true;
+    }
+
+    // Panel.qml's openFrom, for the one surface here that isn't a Panel: the
+    // bell cell's own window names the output this card belongs on.
+    function openFrom(item) {
+        var window = item ? item.QsWindow.window : null;
+        root.open(window ? window.screen : null);
     }
 
     // Marking pending seen happens on close, not open, so the PENDING
