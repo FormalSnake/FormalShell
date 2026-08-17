@@ -7,3 +7,8 @@ dev/.linux-builder/
 dev/.testvm/
 artifacts/
 __pycache__/
+CLAUDE-decisions.md
+CLAUDE-patterns.md
+CLAUDE-troubleshooting.md
+CLAUDE-activeContext.md
+CLAUDE-config-variables.md
