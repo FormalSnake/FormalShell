@@ -94,16 +94,36 @@ Cell {
         return head + " / " + Power.chargeStateLabel(root._percent, root._device.state, root._onBattery, root._thresholdActive, root._upowerStates);
     }
 
+    // The percent label resizes this cell as it ticks — glide the width
+    // instead of shoving the bar's other widgets instantly (DESIGN.md §4,
+    // M16 Task 2's contract, extended to every numeric bar cell by M26
+    // Task 7).
+    Behavior on implicitWidth {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        // Fixed-width slot (M26 Task 7): the glyph ramp swaps codepoints as
+        // charge state changes, and a Nerd Font glyph's own advance width
+        // varies by codepoint — without this, the swap alone would shift
+        // the label next to it even with the implicitWidth glide above.
+        Item {
+            id: glyphSlot
             anchors.verticalCenter: parent.verticalCenter
-            text: root._glyph
-            color: root.foreground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
+            width: Theme.space.huge
+            height: glyphText.implicitHeight
+
+            Text {
+                id: glyphText
+                anchors.centerIn: parent
+                text: root._glyph
+                color: root.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+            }
         }
 
         MetaLabel {

@@ -52,16 +52,35 @@ Cell {
             root.panel.pollEnabled = true;
     }
 
+    // The worst-window percent resizes this cell — glide the width
+    // instead of shoving the bar's other widgets instantly (DESIGN.md §4,
+    // M16 Task 2's contract, extended to every numeric bar cell by M26
+    // Task 7).
+    Behavior on implicitWidth {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        // Fixed-width slot (M26 Task 7), matching this cell's siblings even
+        // though this glyph itself never swaps — one idiom for the bar's
+        // leading icon column rather than two.
+        Item {
+            id: glyphSlot
             anchors.verticalCenter: parent.verticalCenter
-            text: "󱚣"
-            color: root._textColor
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
+            width: Theme.space.huge
+            height: glyphText.implicitHeight
+
+            Text {
+                id: glyphText
+                anchors.centerIn: parent
+                text: "󱚣"
+                color: root._textColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+            }
         }
 
         MetaLabel {

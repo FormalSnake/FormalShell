@@ -47,16 +47,35 @@ Cell {
             root.panel.pollEnabled = true;
     }
 
+    // The BEHIND count and status summary resize this cell — glide the
+    // width instead of shoving the bar's other widgets instantly
+    // (DESIGN.md §4, M16 Task 2's contract, extended to every numeric bar
+    // cell by M26 Task 7).
+    Behavior on implicitWidth {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        // Fixed-width slot (M26 Task 7): the glyph swaps between "behind"
+        // and "up to date" states, and a Nerd Font glyph's own advance
+        // width varies by codepoint.
+        Item {
+            id: glyphSlot
             anchors.verticalCenter: parent.verticalCenter
-            text: root._behind > 0 ? "󰏕" : "󰏓"
-            color: root.foreground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
+            width: Theme.space.huge
+            height: glyphText.implicitHeight
+
+            Text {
+                id: glyphText
+                anchors.centerIn: parent
+                text: root._behind > 0 ? "󰏕" : "󰏓"
+                color: root.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+            }
         }
 
         MetaLabel {

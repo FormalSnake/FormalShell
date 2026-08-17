@@ -30,16 +30,35 @@ Cell {
     // deletes information.
     tooltipText: (AudioService.muted ? "OUTPUT MUTED" : "OUTPUT VOLUME") + " / " + Math.round(AudioService.volume * 100) + "%"
 
+    // Mute swaps the glyph and the percent label resizes this cell — glide
+    // the width instead of shoving the bar's other widgets instantly
+    // (DESIGN.md §4, M16 Task 2's contract, extended to every numeric bar
+    // cell by M26 Task 7).
+    Behavior on implicitWidth {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
     Row {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        // Fixed-width slot (M26 Task 7): the mute glyph swap alone would
+        // shift the label next to it, since a Nerd Font glyph's own advance
+        // width varies by codepoint.
+        Item {
+            id: glyphSlot
             anchors.verticalCenter: parent.verticalCenter
-            text: AudioService.muted ? "󰝟" : "󰕾"
-            color: root.foreground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
+            width: Theme.space.huge
+            height: glyphText.implicitHeight
+
+            Text {
+                id: glyphText
+                anchors.centerIn: parent
+                text: AudioService.muted ? "󰝟" : "󰕾"
+                color: root.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+            }
         }
 
         Text {
