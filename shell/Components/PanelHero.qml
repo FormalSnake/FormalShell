@@ -1,0 +1,130 @@
+import QtQuick
+import qs.Core
+
+// The shared panel-opening block (DESIGN.md §2 addendum, M26 Task 1): one
+// glyph, one bold noun, one uppercase state line, an optional oversized
+// readout, an optional trailing control, an optional progress rail. Built on
+// Cell, so the block's whole border is Cell's own shared-rule bottom/right
+// contract — no second box drawn here, and no fixed height: everything below
+// sizes off its own content like every other panel row.
+//
+// All properties are optional except `title`. `glyph` sits in a fixed-width
+// slot (`Theme.space.xxl * 2`) so a wider Nerd Font codepoint never shifts
+// the title next to it, the same jitter guard Task 7 gives the bar's own
+// glyph-only cells. `readout` renders at `readoutSize`, right-aligned ahead
+// of `trailing` when both are set.
+Cell {
+    id: root
+
+    property string glyph: ""
+    property string title: ""
+    property string meta: ""
+    property string readout: ""
+    // "display" (26px) or "displayLarge" (30px), DESIGN.md §1.3.
+    property string readoutSize: "display"
+    property Component trailing: null
+    // 0..1 fills the rail; -1 (default) leaves it undrawn.
+    property real rail: -1
+
+    readonly property real _glyphSlotWidth: root.glyph !== "" ? Theme.space.xxl * 2 : 0
+
+    Column {
+        width: parent.width
+        spacing: Theme.space.xs
+
+        Item {
+            id: heroRow
+            width: parent.width
+            height: Math.max(glyphSlot.height, textColumn.height,
+                readoutText.visible ? readoutText.implicitHeight : 0,
+                trailingLoader.active ? trailingLoader.height : 0)
+
+            Item {
+                id: glyphSlot
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._glyphSlotWidth
+                height: glyphText.implicitHeight
+
+                Text {
+                    id: glyphText
+                    anchors.centerIn: parent
+                    text: root.glyph
+                    color: root.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.heading
+                }
+            }
+
+            Column {
+                id: textColumn
+                anchors.left: glyphSlot.right
+                anchors.leftMargin: root.glyph !== "" ? Theme.space.md : 0
+                anchors.right: trailingLoader.active
+                    ? trailingLoader.left
+                    : (root.readout !== "" ? readoutText.left : parent.right)
+                anchors.rightMargin: (trailingLoader.active || root.readout !== "") ? Theme.space.md : 0
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.space.xxs
+
+                // Sentence case, not uppercase: the panel's noun is content,
+                // not a meta label, so MetaLabel's forced capitalization
+                // does not apply here.
+                Text {
+                    width: parent.width
+                    text: root.title
+                    color: root.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.subtitle
+                    elide: Text.ElideRight
+                }
+
+                MetaLabel {
+                    width: parent.width
+                    visible: root.meta !== ""
+                    text: root.meta
+                    color: root.dimForeground
+                    elide: Text.ElideRight
+                }
+            }
+
+            // Monospace tabular digits by construction (DESIGN.md §2 item
+            // 5): the readout never jitters as its value ticks.
+            Text {
+                id: readoutText
+                anchors.right: trailingLoader.active ? trailingLoader.left : parent.right
+                anchors.rightMargin: trailingLoader.active ? Theme.space.md : 0
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.readout !== ""
+                text: root.readout
+                color: root.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: root.readoutSize === "displayLarge" ? Theme.fontSize.displayLarge : Theme.fontSize.display
+            }
+
+            Loader {
+                id: trailingLoader
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                active: root.trailing !== null
+                sourceComponent: root.trailing
+            }
+        }
+
+        // Flat accent fill over the dither remainder, the same read-only
+        // idiom PowerPanel's own battery track and CalendarPanel's
+        // year-progress bar already use. No knob, no MouseArea: the rail is
+        // a readout, not a control.
+        DitherFill {
+            width: parent.width
+            height: Theme.space.trackThickness
+            visible: root.rail >= 0
+
+            Rectangle {
+                width: parent.width * Math.max(0, Math.min(1, root.rail))
+                height: parent.height
+                color: Theme.color.accent
+            }
+        }
+    }
+}

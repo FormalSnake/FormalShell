@@ -36,6 +36,26 @@ Panel {
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
     readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
+    // Mirrors Battery.qml's own bucket table for the hero's leading glyph —
+    // not extracted to a shared function here, since Task 3 is where the
+    // charge-aware discharging/charging ramp replaces this flat percent
+    // bucket in both places at once.
+    readonly property string _batteryGlyph: {
+        var bucket = Math.max(0, Math.min(100, Math.round(root._percent / 10) * 10));
+        switch (bucket) {
+        case 0: return "󰂎";
+        case 10: return "󰁺";
+        case 20: return "󰁻";
+        case 30: return "󰁼";
+        case 40: return "󰁽";
+        case 50: return "󰁾";
+        case 60: return "󰁿";
+        case 70: return "󰂀";
+        case 80: return "󰂁";
+        case 90: return "󰂂";
+        default: return "󰁹";
+        }
+    }
     readonly property real _timeToEmpty: root._hasBattery ? root._device.timeToEmpty : 0
     readonly property real _timeToFull: root._hasBattery ? root._device.timeToFull : 0
     readonly property real _changeRate: root._hasBattery ? root._device.changeRate : 0
@@ -244,6 +264,17 @@ Panel {
         }
     }
 
+    PanelHero {
+        visible: root._hasBattery
+        width: parent.width
+        glyph: root._batteryGlyph
+        title: "Battery"
+        meta: root._hasBattery ? UPowerDeviceState.toString(root._device.state) : ""
+        readout: root._hasBattery ? root._percent + "%" : ""
+        readoutSize: "displayLarge"
+        rail: root._hasBattery ? root._percent / 100 : -1
+    }
+
     Cell {
         id: statusCell
         visible: root._hasBattery
@@ -307,20 +338,6 @@ Panel {
                 PropertyAnimation { target: statusTextWrap; property: "opacity"; to: 0.0; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
                 ScriptAction { script: root._phraseIndex = (root._phraseIndex + 1) % Math.max(1, root._phrases.length) }
                 PropertyAnimation { target: statusTextWrap; property: "opacity"; to: 1.0; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
-
-            // Flat accent fill, no thumb, no radius — same idiom as
-            // AudioPanel's volume slider and CalendarPanel's year-progress
-            // bar, read-only here (no MouseArea; the level isn't settable).
-            DitherFill {
-                width: parent.width
-                height: Theme.space.trackThickness
-
-                Rectangle {
-                    width: parent.width * Math.max(0, Math.min(1, root._percent / 100))
-                    height: parent.height
-                    color: Theme.color.accent
-                }
             }
 
             // Static ports of the hero-rotation content (M16 Task 5):

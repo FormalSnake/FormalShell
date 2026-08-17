@@ -687,6 +687,23 @@ adjective:
     shipped answer, treatment TBD with the owner. Checkable: zoom a tray
     icon in a screenshot, pixels carry the vendor's own colors, never a
     flattened `Theme.color.foreground` silhouette.
+13. **The panel hero (2026-08-17).** Every panel opens with one shared block
+    (`Components/PanelHero.qml`): a leading glyph in a fixed-width slot so a
+    wider Nerd Font codepoint never shifts the title next to it, the panel's
+    noun in sentence case (content ink, not a meta label), an uppercase
+    state line through `MetaLabel`, and — only when the panel's whole point
+    is a number — that number promoted out of the type scale entirely, to
+    `display` (26px) or `displayLarge` (30px) rather than `body`. A panel
+    whose point is not a number (a device list, a picker) carries no
+    oversized readout at all; inventing one where the content is a list, not
+    a figure, is a defect. An optional full-width `rail` reads a 0..1
+    progress as a flat `accent` fill over the `DitherFill` remainder, the
+    same read-only track idiom every other slider in the shell already
+    uses, no knob. The block draws only Cell's own shared-rule bottom/right
+    border, never a second box of its own. Checkable: a panel whose brief
+    names one number as its subject (battery charge, current temperature,
+    today's date) renders that number at `display`/`displayLarge`, never
+    `body`; every other row on the same card stays at `body` or `caption`.
 
 **Where the two references conflict, omarchy's structural chrome wins**:
 the outer shape of a floating surface (card with margin, single border,

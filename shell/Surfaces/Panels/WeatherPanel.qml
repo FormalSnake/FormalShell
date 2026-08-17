@@ -175,35 +175,14 @@ Panel {
         MetaLabel { text: "LOADING" }
     }
 
-    Cell {
-        id: currentCell
+    PanelHero {
         visible: root._result !== null
         width: parent.width
-
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            MetaLabel { text: root._result ? Openmeteo.conditionLabel(root._result.current.code) : "" }
-
-            Row {
-                spacing: Theme.space.sm
-
-                Text {
-                    text: root._result ? Openmeteo.glyphForCode(root._result.current.code, root._isDay) : ""
-                    color: currentCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-
-                Text {
-                    text: root._result ? Math.round(root._result.current.temperature) + "°" : ""
-                    color: currentCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-            }
-        }
+        glyph: root._result ? Openmeteo.glyphForCode(root._result.current.code, root._isDay) : ""
+        title: "Weather"
+        meta: root._result ? Openmeteo.conditionLabel(root._result.current.code) : ""
+        readout: root._result ? Math.round(root._result.current.temperature) + "°" : ""
+        readoutSize: "displayLarge"
     }
 
     Cell {
