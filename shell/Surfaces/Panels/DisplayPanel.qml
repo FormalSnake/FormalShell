@@ -190,7 +190,7 @@ Panel {
                     spacing: Theme.space.sm
 
                     Text {
-                        width: parent.width - toggleCell.width - parent.spacing
+                        width: parent.width - toggleLabel.width - parent.spacing
                         text: outCell.modelData.name
                         color: outCell.foreground
                         elide: Text.ElideRight
@@ -198,31 +198,38 @@ Panel {
                         font.pixelSize: Theme.fontSize.body
                     }
 
-                    Cell {
-                        id: toggleCell
-                        width: implicitWidth
-                        height: implicitHeight
-                        // The last enabled output has no OFF to offer. It says
-                        // so with the shell's own dim token rather than a
-                        // fractional opacity: `selected` inverts this cell, so
-                        // multiplying the whole thing by an opacity would drag
-                        // its fill AND its background-colored label down
-                        // together and land the pair below every other label on
-                        // the panel for contrast. Nothing else in shell/ dims
-                        // by opacity, and no Theme token defines one.
-                        selected: outCell.modelData.enabled && outCell._canToggle
+                    // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
+                    // amendment): no cell chrome, armed state promotes
+                    // straight to accent instead of a fill/inversion. The
+                    // last enabled output has no OFF to offer, so its resting
+                    // ink stays dim rather than promoting on a control that
+                    // would do nothing.
+                    MetaLabel {
+                        id: toggleLabel
+                        text: outCell.modelData.enabled ? "ON" : "OFF"
+                        // The focused output's own row is already a full-bleed
+                        // accent fill (outCell.selected); accent ink on an
+                        // accent ground is unreadable, so this label collapses
+                        // to the row's own contrasting ink instead, matching
+                        // Cell.dimForeground's single-band precedent.
+                        color: outCell.selected
+                            ? outCell.foreground
+                            : (outCell.modelData.enabled && outCell._canToggle)
+                                ? Theme.color.accent
+                                : (toggleHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
 
-                        MetaLabel {
-                            text: outCell.modelData.enabled ? "ON" : "OFF"
-                            color: toggleCell.dimForeground
+                        MouseArea {
+                            id: toggleHover
+                            anchors.fill: parent
+                            enabled: outCell._canToggle
+                            hoverEnabled: outCell._canToggle
+                            cursorShape: outCell._canToggle ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onContainsMouseChanged: if (toggleHover.containsMouse) {
+                                root.cursorActive = true;
+                                root._cursor = outCell.index;
+                            }
+                            onClicked: root._toggleOutput(outCell.modelData.name)
                         }
-
-                        interactive: outCell._canToggle
-                        onContainsPointerChanged: if (toggleCell.containsPointer) {
-                            root.cursorActive = true;
-                            root._cursor = outCell.index;
-                        }
-                        onClicked: root._toggleOutput(outCell.modelData.name)
                     }
                 }
 
