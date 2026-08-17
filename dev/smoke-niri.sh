@@ -718,6 +718,7 @@ chevron_mode=false
 bar_layout_mode=false
 screenshot_mode=false
 capture_mode=false
+capture_edit_mode=false
 nightlight_mode=false
 speedtest_mode=false
 instance_mode=false
@@ -758,6 +759,7 @@ while [ $# -gt 0 ]; do
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
     --capture) capture_mode=true; shift ;;
+    --capture-edit) capture_edit_mode=true; shift ;;
     --nightlight) nightlight_mode=true; shift ;;
     --speedtest) speedtest_mode=true; shift ;;
     --instance) instance_mode=true; shift ;;
@@ -774,7 +776,7 @@ while [ $# -gt 0 ]; do
     --plugins) plugins_mode=true; shift ;;
     --hotcorner) hotcorner_mode=true; shift ;;
     --panel-keys) panel_keys_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--bar-layout] [--screenshot] [--capture] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys]" >&2; exit 1 ;;
   esac
 done
 
@@ -790,7 +792,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $capture_edit_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
@@ -836,7 +838,7 @@ fi
 # already depends on, and its own background color is a known solid fill
 # for the colour-pick leg: one real window carrying both targets, with no
 # imagemagick font lookup to gamble on.
-if $active_window_fixture_mode || $ocr_mode; then
+if $active_window_fixture_mode || $ocr_mode || $capture_edit_mode; then
   if command -v foot >/dev/null 2>&1; then
     foot_bin=$(command -v foot)
   else
@@ -872,7 +874,7 @@ if $clipboard_mode || $screenshot_mode || $menu_mode || $ocr_mode; then
   fi
 fi
 
-if $screenshot_mode || $capture_mode || $record_mode; then
+if $screenshot_mode || $capture_mode || $capture_edit_mode || $record_mode; then
   if command -v file >/dev/null 2>&1; then
     file_bin=$(command -v file)
   else
@@ -968,7 +970,8 @@ fi
 
 if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
-  || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode; then
+  || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode \
+  || $capture_edit_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -991,7 +994,10 @@ if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_t
   # menu row, one bar cell), and niri's own capture toast lands on top of
   # exactly that corner. chevron_mode is the sharpest case of it: its whole
   # claim is which cells the bar's RIGHT region is drawing, which is
-  # precisely where that toast lands.
+  # precisely where that toast lands. capture_edit_mode needs the same top-
+  # right corner for a different reason: the shell's own SCREENSHOT SAVED
+  # toast anchors there too (Toasts.qml), and the claim is reading that
+  # toast's EDIT action and thumbnail, not niri's unrelated one.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -1400,6 +1406,11 @@ screenshot_cancel_reply_path="$shot_dir/screenshot-cancel-reply.txt"
 screenshot_cancelled_status_path="$shot_dir/screenshot-cancelled-status.json"
 screenshot_slurp_before_path="$shot_dir/screenshot-slurp-before.txt"
 screenshot_slurp_after_path="$shot_dir/screenshot-slurp-after.txt"
+capture_edit_reply_path="$shot_dir/capture-edit-reply.txt"
+capture_edit_status_path="$shot_dir/capture-edit-status.json"
+capture_edit_toast_path="$shot_dir/capture-edit-toast.png"
+capture_edit_edit_reply_path="$shot_dir/capture-edit-edit-reply.txt"
+capture_edit_argv_path="$shot_dir/capture-edit-argv.txt"
 capture_picker_path="$shot_dir/capture-picker.png"
 capture_open_status_path="$shot_dir/capture-open-status.json"
 capture_cycled_status_path="$shot_dir/capture-cycled-status.json"
@@ -1437,6 +1448,7 @@ ocr_color_cancel_path="$shot_dir/ocr-color-cancel.json"
 ocr_clipboard_path="$shot_dir/ocr-clipboard.txt"
 ocr_slurp_after_path="$shot_dir/ocr-slurp-after.txt"
 ocr_pid_path="$shot_dir/ocr-foot.pid"
+capture_edit_fixture_pid_path="$shot_dir/capture-edit-foot.pid"
 reminder_set_reply_path="$shot_dir/reminder-set-reply.json"
 reminder_status1_path="$shot_dir/reminder-status-1.json"
 reminder_status2_path="$shot_dir/reminder-status-2.json"
@@ -1906,6 +1918,22 @@ EOF
   chmod +x "$clipssh_shim_dir/clipssh"
 fi
 
+# PATH-shimmed editor for --capture-edit (M27 Task 6, same hermetic-producer
+# idea as the gh/clipssh shims above). What needs proving is the shell's own
+# path (capture, save, notify, EDIT action, spawn, argv), not whether a real
+# GTK4 app renders in a VM, so the shim stands in for tensaku-edit under its
+# own default name and just logs the argv it was handed to a fixed file
+# rather than doing anything with it.
+if $capture_edit_mode; then
+  capture_edit_shim_dir="$shot_dir/capture-edit-shim"
+  mkdir -p "$capture_edit_shim_dir"
+  cat > "$capture_edit_shim_dir/tensaku-edit" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" > "$capture_edit_argv_path"
+EOF
+  chmod +x "$capture_edit_shim_dir/tensaku-edit"
+fi
+
 if $picker_mode; then
   # M16 Task 12 perf evidence: fixtures must be genuinely bigger than the
   # grid cell's decode cap (105px cell, 2x for the cover-not-fit fix, so
@@ -2266,6 +2294,75 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call menu activate 1
 EOF
   chmod +x "$clipssh_drive_script"
+fi
+
+# A real foot window filling the tiled screen with a known solid color (same
+# fixture idiom as ocr_mode above), spawned before capture-edit-drive.sh's
+# own screenshot so the SAVED thumbnail actually shows scaled color rather
+# than an empty test desktop that would look identical to the card's own
+# background either way.
+if $capture_edit_mode; then
+  capture_edit_fixture_script="$shot_dir/capture-edit-fixture.sh"
+  cat > "$capture_edit_fixture_script" <<EOF
+#!/usr/bin/env bash
+sleep 1
+echo \$\$ > "$capture_edit_fixture_pid_path"
+exec "$foot_bin" --app-id=formalshell-smoke-capture-edit \\
+  --override=colors.background=e6a23c --override=colors.foreground=101010 \\
+  sh -c 'sleep 300'
+EOF
+
+  capture_edit_fixture_kill_script="$shot_dir/capture-edit-fixture-kill.sh"
+  cat > "$capture_edit_fixture_kill_script" <<EOF
+#!/usr/bin/env bash
+if [ -f "$capture_edit_fixture_pid_path" ]; then
+  kill "\$(cat "$capture_edit_fixture_pid_path")" 2>/dev/null || true
+fi
+EOF
+fi
+
+# --capture-edit (M27 Task 6): nothing in this rig had ever driven
+# ScreenshotIpc.edit() or the SAVED notification's EDIT action before this
+# leg — the single most owner-visible part of the capture flow had no test
+# at all (the misbinding that shipped for weeks was found by the owner, not
+# by this suite). `screenshot full` is the plain grim/wl-copy pipeline
+# (ScreenshotIpc.qml's own `_grab`), the same pipeline `pick`'s default
+# processing hands off to once a region is chosen — the notify()/edit() half
+# under test does not depend on which route picked the geometry, so the
+# simpler non-interactive route is enough here; --capture already covers the
+# picker's own toolbar and keyboard model. Once `status` settles to
+# capturing:false the SAVED toast (thumbnail image + EDIT action) has
+# already fired synchronously inside the same onExited handler that cleared
+# it, so there is no race to poll for separately. `screenshot edit` with no
+# path argument is the exact call the toast's own EDIT action invokes
+# (`root.edit(saved)`), reachable here without depending on synthetic click
+# delivery into the toast's Overlay-layer surface, the same split every
+# other IPC-driven leg in this rig already uses.
+if $capture_edit_mode; then
+  capture_edit_drive_script="$shot_dir/capture-edit-drive.sh"
+  cat > "$capture_edit_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call screenshot full > "$capture_edit_reply_path" 2>&1
+for _ in \$(seq 1 20); do
+  "$qs_bin" ipc -p "$shell_path" call screenshot status > "$capture_edit_status_path" 2>&1
+  if grep -q '"capturing":false' "$capture_edit_status_path"; then
+    break
+  fi
+  sleep 0.5
+done
+# The toast's own image slot decodes asynchronously (Image.asynchronous:
+# true in NotificationCard.qml), scaling the just-saved screenshot down to
+# a 40x40 thumbnail off the render thread — a 1s buffer here once left the
+# shot racing that decode, landing a blank slot even though the layout had
+# already reserved its width (found live in this leg's own first run,
+# 2026-08-17). 3s gives llvmpipe real margin.
+sleep 3
+"$grim_bin" "$capture_edit_toast_path"
+"$qs_bin" ipc -p "$shell_path" call screenshot edit "" > "$capture_edit_edit_reply_path" 2>&1
+sleep 1
+EOF
+  chmod +x "$capture_edit_drive_script"
 fi
 
 if $menu_mode; then
@@ -3797,6 +3894,9 @@ fi
   if $clipssh_mode; then
     shim_path_prefix="$clipssh_shim_dir:$shim_path_prefix"
   fi
+  if $capture_edit_mode; then
+    shim_path_prefix="$capture_edit_shim_dir:$shim_path_prefix"
+  fi
   if $instance_mode; then
     # Captures the primary instance's own stdout/stderr so InstanceLock.qml's
     # "being replaced" log line is real evidence below, not inferred from the
@@ -4002,6 +4102,10 @@ fi
   fi
   if $screenshot_mode; then
     echo "spawn-at-startup \"bash\" \"$screenshot_drive_script\""
+  fi
+  if $capture_edit_mode; then
+    echo "spawn-at-startup \"bash\" \"$capture_edit_fixture_script\""
+    echo "spawn-at-startup \"bash\" \"$capture_edit_drive_script\""
   fi
   if $record_mode; then
     echo "spawn-at-startup \"bash\" \"$record_drive_script\""
@@ -4280,6 +4384,14 @@ fi
     # ordinary session with the audio panel's cursor still on the row the
     # drive script's Return activated.
     screenshot_delay=14
+  elif $capture_edit_mode; then
+    # capture-edit-drive.sh's own sequence: 3s startup, the full()/status
+    # poll (fast: real grim + wl-copy against a small VM screen), a 3s
+    # settle for the toast's own image slot to finish its asynchronous
+    # decode before the grim shot, then the edit() call and a closing 1s so
+    # the shim's write has landed. ~9s worst case; 14 leaves llvmpipe real
+    # margin.
+    screenshot_delay=14
   elif $wallpaper_mode; then
     # Last in the chain on purpose: --wallpaper is a modifier other modes
     # combine with, and each of those owns its own timeline. On its own it
@@ -4323,7 +4435,13 @@ fi
   if $ocr_mode; then
     ocr_kill="bash '$ocr_kill_script'; "
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}${ocr_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # capture_edit_mode's foot fixture window has no auto-close of its own
+  # either, same reasoning as active_window_kill above.
+  capture_edit_kill=""
+  if $capture_edit_mode; then
+    capture_edit_kill="bash '$capture_edit_fixture_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}${ocr_kill}${capture_edit_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 # The 40s default comfortably outlives every mode's screenshot-then-quit
@@ -5913,6 +6031,55 @@ if $screenshot_mode; then
   else
     echo "SMOKE_FAIL: wl-paste --list-types did not offer image/png after the capture: $(cat "$screenshot_types_path" 2>/dev/null)" >&2; exit 1
   fi
+fi
+
+if $capture_edit_mode; then
+  if [ -s "$capture_edit_reply_path" ]; then
+    cat "$capture_edit_reply_path"
+  else
+    echo "SMOKE_FAIL: no screenshot full IPC reply produced" >&2; exit 1
+  fi
+  capture_edit_file=$(head -n1 "$capture_edit_reply_path" | tr -d '\r')
+  case "$capture_edit_file" in
+    error*|"") echo "SMOKE_FAIL: screenshot full replied with an error: $(cat "$capture_edit_reply_path")" >&2; exit 1 ;;
+  esac
+  if [ ! -f "$capture_edit_file" ]; then
+    echo "SMOKE_FAIL: screenshot reply path does not exist: $capture_edit_file" >&2; exit 1
+  fi
+  if ! "$file_bin" "$capture_edit_file" | grep -q "PNG image data"; then
+    echo "SMOKE_FAIL: saved screenshot is not a valid PNG, file(1) says: $("$file_bin" -b "$capture_edit_file")" >&2; exit 1
+  fi
+  if [ -s "$capture_edit_status_path" ]; then
+    cat "$capture_edit_status_path"
+  else
+    echo "SMOKE_FAIL: no screenshot status produced" >&2; exit 1
+  fi
+  if ! grep -q '"capturing":false' "$capture_edit_status_path" || ! grep -q '"lastError":""' "$capture_edit_status_path"; then
+    echo "SMOKE_FAIL: screenshot status did not settle clean before the edit handoff: $(cat "$capture_edit_status_path")" >&2; exit 1
+  fi
+  if ! grep -qF "\"lastPath\":\"$capture_edit_file\"" "$capture_edit_status_path"; then
+    echo "SMOKE_FAIL: screenshot status lastPath does not match the reply path ($capture_edit_file): $(cat "$capture_edit_status_path")" >&2; exit 1
+  fi
+  # The toast this reads is the shell's own, not niri's (grim, not
+  # `screenshot-screen` — see the grim-availability gate's comment above):
+  # thumbnail image and EDIT action are read by eye from this PNG, since
+  # NotificationsIpc's status() only counts popups, it doesn't dump their
+  # content.
+  if [ ! -f "$capture_edit_toast_path" ]; then
+    echo "SMOKE_FAIL: no capture-edit toast screenshot produced at $capture_edit_toast_path" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$capture_edit_edit_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: screenshot edit did not return ok — got: $(cat "$capture_edit_edit_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$capture_edit_argv_path" ]; then
+    echo "SMOKE_FAIL: the shimmed editor never ran — no argv recorded at $capture_edit_argv_path" >&2; exit 1
+  fi
+  capture_edit_argv=$(cat "$capture_edit_argv_path")
+  echo "SMOKE_CAPTURE_EDIT_ARGV $capture_edit_argv"
+  if [ "$capture_edit_argv" != "$capture_edit_file" ]; then
+    echo "SMOKE_FAIL: editor argv did not match the saved path — got '$capture_edit_argv', wanted '$capture_edit_file'" >&2; exit 1
+  fi
+  echo "SMOKE_CAPTURE_EDIT_TOAST $capture_edit_toast_path"
 fi
 
 if $record_mode; then
