@@ -96,11 +96,8 @@ function letterSpacingTokens(scale) {
 // not a duration, so `enabled` doesn't zero them the way it zeroes
 // fast/standard/reveal; the caller (NowPlaying.qml) gates the whole
 // animation on `Theme.motionEnabled` directly and falls back to today's
-// elide instead of scrolling at 0px/s. `rotatePeriod` paces the power
-// panel's charging/discharging phrase rotation the same way — a fixed
-// cadence the caller (PowerPanel.qml) also gates on `Theme.motionEnabled`
-// itself, not a value this function zeroes.
-var MOTION_BASE = { fast: 100, standard: 130, slide: 6, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000, rotatePeriod: 3000 };
+// elide instead of scrolling at 0px/s.
+var MOTION_BASE = { fast: 100, standard: 130, slide: 6, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
 
 function motionTokens(enabled) {
     return {
@@ -109,8 +106,7 @@ function motionTokens(enabled) {
         slide: MOTION_BASE.slide,
         reveal: enabled ? MOTION_BASE.reveal : 0,
         marqueePxPerSec: MOTION_BASE.marqueePxPerSec,
-        marqueeHoldMs: MOTION_BASE.marqueeHoldMs,
-        rotatePeriod: MOTION_BASE.rotatePeriod
+        marqueeHoldMs: MOTION_BASE.marqueeHoldMs
     };
 }
 

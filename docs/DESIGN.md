@@ -941,35 +941,28 @@ and every rule here is checkable:
    root.active || content.opacity > 0`, the same hold Panel.qml uses), and
    the animation freezes at the start of the exit fade instead of running
    on behind it.
-7. **Marquee-on-overflow and status rotation** (owner-requested, M16 Task
-   11) are the fourth and fifth continuous-motion carve-outs, each with a
-   real gate — never a decoration running for its own sake. The bar's
-   now-playing title scrolls (`Theme.motion.marqueePxPerSec`, ~30px/s, no
-   easing, a `Theme.motion.marqueeHoldMs` ~2s hold at the loop start) only
-   when the title genuinely overflows its cell's cap AND the bar window is
-   actually on screen; a title that fits never moves. The power panel's
-   charging/discharging status line cycles its real phrase set (state,
-   time-to-full/empty, charge rate) every `Theme.motion.rotatePeriod`
-   (~3s), fading at `Theme.motion.standard`, only while the panel is open
-   and more than one phrase is real — a single-phrase set stays put. Both
-   sit outside rule 1's 90–140ms band on purpose (a scrolling title or a
-   phrase change reads better paced in seconds, not fractions of one) —
-   only the rotation's own fade transition uses `Theme.motion.standard`.
-   Unlike the pulse and the screensaver, both DO respect
-   `motion.enabled: false`: a disabled marquee falls back to today's plain
-   elide, and disabled rotation just stops advancing past the primary
-   phrase.
+7. **Marquee-on-overflow** (owner-requested, M16 Task 11) is the fourth
+   continuous-motion carve-out, with a real gate — never a decoration
+   running for its own sake. The bar's now-playing title scrolls
+   (`Theme.motion.marqueePxPerSec`, ~30px/s, no easing, a
+   `Theme.motion.marqueeHoldMs` ~2s hold at the loop start) only when the
+   title genuinely overflows its cell's cap AND the bar window is actually
+   on screen; a title that fits never moves. This sits outside rule 1's
+   90–140ms band on purpose (a scrolling title reads better paced in
+   seconds, not fractions of one). Unlike the pulse and the screensaver, it
+   DOES respect `motion.enabled: false`: a disabled marquee falls back to
+   today's plain elide.
 8. **The bar's visualizer** (owner-requested: "next to the now playing it
    would be nice to have an ASCII style audio visualizer"; dithered-track
    rendering added 2026-08-09 for consistency with the other fill tracks)
-   is the sixth continuous-motion carve-out. Its live frames come from a
+   is the fifth continuous-motion carve-out. Its live frames come from a
    real `cava` child process (`VisualizerService.qml`), not a QML
    animation, so the gate kills the process outright rather than pausing a
    paint: it runs only while `MediaService.isPlaying` AND the bar window
    showing the widget is actually on screen AND `Theme.motionEnabled` —
-   any one going false stops the process, zero CPU, same as the
-   marquee/rotation gates above but enforced on a real OS process instead
-   of a `Behavior`. Six per-column dithered tracks (§2 item 8's fill+dither
+   any one going false stops the process, zero CPU, same as the marquee
+   gate above but enforced on a real OS process instead of a `Behavior`.
+   Six per-column dithered tracks (§2 item 8's fill+dither
    idiom) render the live spectrum, a fill rising from each column's bottom
    to its own level. The fill's color is the column's own energy band
    (`Model.levelColorBand`): `dimForeground` below 0.4, `foreground`
@@ -996,11 +989,11 @@ carve-out each. The wallpaper crossfade (`Background.qml`) is the third:
 90–140ms band on purpose — a full-screen image swap reads better slower
 than a control hover — and, unlike the pulse, it does respect
 `motion.enabled: false` (zeroed to a hard cut straight onto the new
-wallpaper, same as `fast`/`standard`). The now-playing marquee and the
-power panel's status rotation are the fourth and fifth (rule 7 above) —
-gated subtle by owner request, never running unwatched or undisableable.
-The bar's visualizer (rule 8 above) is the sixth, the only one of the six
-gated on a real child process rather than a QML animation.
+wallpaper, same as `fast`/`standard`). The now-playing marquee is the
+fourth (rule 7 above) — gated subtle by owner request, never running
+unwatched or undisableable. The bar's visualizer (rule 8 above) is the
+fifth, the only one of the five gated on a real child process rather than
+a QML animation.
 
 Do not restyle a surface outside a plan that schedules it (Tasks 2–7 of the
 M8b plan schedule every surface named above in turn).
