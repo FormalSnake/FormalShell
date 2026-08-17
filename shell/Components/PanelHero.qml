@@ -22,6 +22,15 @@ import qs.Core
 // out its own internal geometry, so a Media panel with no art (falling
 // back to `glyph`) and every other panel's hero still line up their titles
 // at the identical x.
+//
+// `railInteractive` (M28 review fix) opts the rail into press/drag/wheel,
+// reporting through `railPressed`/`railStepped` rather than writing state
+// itself — the rail stays a dumb readout of whatever `rail` says either
+// way. Default false, so Weather/Calendar/Power/Usage keep the plain
+// readout DESIGN.md §2 item 13 describes; Audio is the one panel whose
+// subject is itself an adjustable value, not a metric, so its hero opts in
+// to restore the press/drag/wheel volume control the old master-slider row
+// carried before the hero absorbed it.
 Cell {
     id: root
 
@@ -35,6 +44,9 @@ Cell {
     property Component trailing: null
     // 0..1 fills the rail; -1 (default) leaves it undrawn.
     property real rail: -1
+    property bool railInteractive: false
+    signal railPressed(real fraction)
+    signal railStepped(int direction)
 
     readonly property real _glyphSlotWidth: (root.glyph !== "" || root.leading !== null) ? Theme.space.xxl * 2 : 0
 
@@ -129,11 +141,12 @@ Cell {
             }
         }
 
-        // Flat accent fill over the dither remainder, the same read-only
-        // idiom PowerPanel's own battery track and CalendarPanel's
-        // year-progress bar already use. No knob, no MouseArea: the rail is
-        // a readout, not a control.
+        // Flat accent fill over the dither remainder, the same idiom
+        // PowerPanel's own battery track and CalendarPanel's year-progress
+        // bar already use. No knob either way; no MouseArea unless a
+        // caller opts into `railInteractive` (AudioPanel's volume rail).
         DitherFill {
+            id: railTrack
             width: parent.width
             height: Theme.space.trackThickness
             visible: root.rail >= 0
@@ -142,6 +155,19 @@ Cell {
                 width: parent.width * Math.max(0, Math.min(1, root.rail))
                 height: parent.height
                 color: Theme.color.accent
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                enabled: root.railInteractive
+                hoverEnabled: root.railInteractive
+                cursorShape: Qt.PointingHandCursor
+                onPressed: mouse => root.railPressed(Math.max(0, Math.min(1, mouse.x / railTrack.width)))
+                onPositionChanged: mouse => { if (pressed) root.railPressed(Math.max(0, Math.min(1, mouse.x / railTrack.width))); }
+                onWheel: wheel => {
+                    root.railStepped(wheel.angleDelta.y > 0 ? 1 : -1);
+                    wheel.accepted = true;
+                }
             }
         }
     }

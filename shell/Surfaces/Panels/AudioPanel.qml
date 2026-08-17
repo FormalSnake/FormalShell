@@ -6,13 +6,18 @@ import "../../Audio/model.js" as AudioModel
 
 // The shared PanelHero (M26 Task 1) opens the panel with the default
 // sink's own name, mute state, volume percent and rail, mute as its
-// trailing toggle (M28 Task 1). Omarchy mixer behavior below it (DESIGN.md
-// §Panels, spec §2, M6 Task 1; M15 Task 4): one selectable row per
-// candidate output sink (click/Enter sets Pipewire.preferredDefaultAudioSink,
-// the active row inverted); INPUT pairs its own noun with its percent and
-// mute on one header line, track underneath, then the same selectable rows
-// for sources, the whole section omitted when no input hardware exists;
-// APPS lists real playback streams
+// trailing toggle, the rail itself press/drag/wheel-adjustable via
+// `railInteractive` (M28 Task 1, review fix: the hero is the master
+// slider now, not a readout of one). Omarchy mixer behavior below it
+// (DESIGN.md §Panels, spec §2, M6 Task 1; M15 Task 4): one selectable row
+// per OTHER candidate output sink (click/Enter sets
+// Pipewire.preferredDefaultAudioSink) — the active sink is deliberately
+// left out of this list, since the hero above already names it and an
+// inverted row repeating that same name would just say it twice; INPUT
+// pairs its own noun with its percent and mute on one header line, track
+// underneath, then the same selectable rows for sources, the whole
+// section omitted when no input hardware exists; APPS lists real playback
+// streams
 // (Audio/model.js.isPlaybackStream, never reading `properties` at filter
 // time — the omarchy destabilization note), omitted entirely with no
 // streams. Master sliders clamp 0..1 (AudioModel.clampDevice); stream
@@ -50,7 +55,12 @@ Panel {
         return n.audio !== null && AudioModel.isPlaybackStream(n);
     })
 
-    readonly property var _outputRows: root._outputs.map(function (n) {
+    // The active sink is excluded here (M28 review fix, the duplication
+    // trap): the hero above already names it, so this list is only the
+    // OTHER candidates there is any point clicking.
+    readonly property var _outputRows: root._outputs.filter(function (n) {
+        return root._sink === null || n.id !== root._sink.id;
+    }).map(function (n) {
         return { node: n, cursorKey: "output-device:" + n.id, isOutput: true };
     })
     readonly property var _inputRows: root._inputs.map(function (n) {
@@ -380,9 +390,13 @@ Panel {
         meta: root._outputMuted ? "MUTED" : "ACTIVE"
         readout: Math.round(root._outputVolume * 100) + "%"
         rail: root._outputVolume
-        // No pointer on the hero (the rail is a readout, not a control),
-        // but the keyboard cursor still lands on "output-slider" for h/l —
-        // this is its only visual trace.
+        // Press/drag/wheel on the rail itself (M28 review fix): the old
+        // master-slider row's only pointer target, restored here now that
+        // the hero is what stands in for it. The keyboard cursor still
+        // lands on "output-slider" for h/l.
+        railInteractive: true
+        onRailPressed: fraction => { if (root._sink && root._sink.audio) root._sink.audio.volume = AudioModel.clampDevice(fraction); }
+        onRailStepped: direction => { if (root._sink && root._sink.audio) root._sink.audio.volume = AudioModel.clampDevice(root._sink.audio.volume + direction * 0.05); }
         hovered: root.cursorActive && root._cursorKey === "output-slider"
         trailing: outputMuteToggle
     }
