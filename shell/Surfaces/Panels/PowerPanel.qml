@@ -214,6 +214,7 @@ Panel {
             // it before anything happens.
             if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
                 root.cursorActive = true;
+                root._brightnessHoverId = "";
                 event.accepted = true;
                 return;
             }

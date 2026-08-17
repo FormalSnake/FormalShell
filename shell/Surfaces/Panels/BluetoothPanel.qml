@@ -749,11 +749,17 @@ Panel {
             readonly property string _address: "airpods:" + modeCell._key
             width: implicitWidth
             height: implicitHeight
-            // Mouse-only: these synthetic "airpods:" addresses never enter
-            // `_allRows`, so the shared row cursor never reaches them —
-            // same standalone ink-hover category as Task 6's inline toggles,
-            // not the CursorSurface row contract above.
-            hovered: modeCell.containsPointer
+            // These synthetic "airpods:" addresses already live in
+            // `_allRows` (Enter-on-cursor routes through `_activateRow`
+            // exactly like a device row), so hover joins the same shared
+            // cursor `deviceRow`'s `rowMouse` writes below rather than
+            // painting its own independent highlight (M26 Task 8 fix: two
+            // independent hover states showed two highlights at once).
+            hovered: root.cursorActive && root._cursorAddress === modeCell._address
+            onContainsPointerChanged: if (modeCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursorAddress = modeCell._address;
+            }
 
             MetaLabel {
                 text: modeCell.modelData.label
