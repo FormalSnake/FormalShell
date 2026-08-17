@@ -82,6 +82,7 @@ Panel {
     id: root
 
     panelTitle: "BLUETOOTH"
+    panelWidth: Theme.space.popupWidthDefault
 
     readonly property var _adapter: Bluetooth.defaultAdapter
     readonly property var _devices: root._adapter ? root._adapter.devices.values : []

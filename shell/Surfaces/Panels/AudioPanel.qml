@@ -28,6 +28,7 @@ Panel {
     id: root
 
     panelTitle: "AUDIO"
+    panelWidth: Theme.space.popupWidthDefault
 
     readonly property var _sink: Pipewire.defaultAudioSink
     readonly property var _source: Pipewire.defaultAudioSource

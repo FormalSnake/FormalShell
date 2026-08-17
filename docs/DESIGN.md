@@ -360,6 +360,13 @@ Two numbers set the whole shell's size:
   everything from a small popout to the picker snaps to narrow/default/wide)
   instead of each surface picking its own literal.
 
+  **A panel that does not name its width is a defect (2026-08-17).** Every
+  `Panel` sets `panelWidth` explicitly from the four steps above; silence
+  defaulting to `popupWidthDefault` is not a decision, it is the widest and
+  the densest surface in the shell landing on the same width by accident.
+  Checkable: `grep` `shell/Surfaces/Panels/` for `panelWidth` and every file
+  declaring a `Panel` root has one.
+
   **Card-gutter split (2026-08-07, Task 6):** `popupPadding` (14) insets a
   *summoned list surface* — the menu, the notification center; `panelPadding`
   (18) insets a *bar-anchored panel* — every widget popout (audio, network,

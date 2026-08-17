@@ -32,6 +32,7 @@ Panel {
     id: root
 
     panelTitle: "SYSTEM UPDATE"
+    panelWidth: Theme.space.popupWidthDefault
 
     property bool pollEnabled: false
 

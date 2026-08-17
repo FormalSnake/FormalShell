@@ -80,6 +80,10 @@ Panel {
     id: root
 
     panelTitle: "NETWORK"
+    // Densest surface in the shell: signal bar, lock glyph, SSID, a hover-
+    // revealed FORGET, a status subline, inline password fields, the QR
+    // matrix and the speed-test ledger all share one row's width.
+    panelWidth: Theme.space.popupWidthWide
 
     // EAP profile creation shells out to nmcli (Constraints: the password
     // never touches argv: it arrives over the Process's own stdin, read by

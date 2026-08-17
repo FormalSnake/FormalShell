@@ -31,6 +31,10 @@ Panel {
     id: root
 
     panelTitle: "POWER"
+    // A hero plus a short PROFILE list, no ledger with competing columns —
+    // the same shape as Weather's own Narrow, and the closest sanctioned
+    // step to upstream's own 299px power panel.
+    panelWidth: Theme.space.popupWidthNarrow
 
     readonly property var _device: UPower.displayDevice
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false

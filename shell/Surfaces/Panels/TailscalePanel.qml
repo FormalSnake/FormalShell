@@ -40,6 +40,7 @@ Panel {
     id: root
 
     panelTitle: "TAILSCALE"
+    panelWidth: Theme.space.popupWidthDefault
 
     property bool pollEnabled: false
 

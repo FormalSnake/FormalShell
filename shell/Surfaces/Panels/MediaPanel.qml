@@ -15,6 +15,7 @@ Panel {
     id: root
 
     panelTitle: "NOW PLAYING"
+    panelWidth: Theme.space.popupWidthDefault
 
     // The one named image-slot size (DESIGN.md §1.3's structural-size
     // exceptions, audit "token hygiene strays" — was three repeated bare

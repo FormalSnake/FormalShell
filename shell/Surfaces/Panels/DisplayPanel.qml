@@ -30,6 +30,7 @@ Panel {
     id: root
 
     panelTitle: "DISPLAY"
+    panelWidth: Theme.space.popupWidthDefault
 
     // Bound to the active backend directly rather than through a forwarding
     // pair on CompositorService: output configuration is the one half of the
