@@ -60,9 +60,9 @@ Cell {
                 id: textColumn
                 anchors.left: glyphSlot.right
                 anchors.leftMargin: root.glyph !== "" ? Theme.space.md : 0
-                anchors.right: trailingLoader.active
-                    ? trailingLoader.left
-                    : (root.readout !== "" ? readoutText.left : parent.right)
+                anchors.right: root.readout !== ""
+                    ? readoutText.left
+                    : (trailingLoader.active ? trailingLoader.left : parent.right)
                 anchors.rightMargin: (trailingLoader.active || root.readout !== "") ? Theme.space.md : 0
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space.xxs
