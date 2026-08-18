@@ -23,8 +23,13 @@ Panel {
     panelTitle: "NOW PLAYING"
     panelWidth: Theme.space.popupWidthDefault
 
+    // The one named image-slot size (DESIGN.md §1.3's structural-size
+    // exceptions names "the media panel's 96x96 album-art slot" by name).
+    readonly property real _artSlotSize: 96
+
     // Plenty of players publish no `mpris:artUrl` at all (browsers, most
-    // notably), so the hero falls back to a glyph rather than an empty slot.
+    // notably), so the panel falls back to the ordinary hero with a glyph
+    // rather than a 96px blank slot.
     readonly property bool _hasArt: MediaService.artUrl !== ""
         || AppleMusicArtService.animatedArtUrl !== ""
 
@@ -44,48 +49,96 @@ Panel {
         MetaLabel { text: "NO PLAYER" }
     }
 
-    // The panel's own subject: the track itself. `leading` carries the
-    // dithered cover (plus the Apple Music animated overlay, unchanged from
-    // before this task) into the hero's own glyph slot when one exists,
-    // falling back to a note glyph — same slot width either way (PanelHero's
-    // own header comment), so the title lands at the same x whether or not
-    // this track happens to publish art.
-    PanelHero {
-        visible: MediaService.available
+    // The panel's own subject: the track itself. When art exists the
+    // panel's point IS the artwork, so it opens with the restored 96x96
+    // art+identity row (DESIGN.md §2 item 13's dated exception) instead of
+    // the shared hero — the analogue of a number panel's oversized readout.
+    // Art + identity share one row cell (owner: a two-cell layout left the
+    // art centered in its own mostly-empty row) rendered in our own ledger
+    // chrome: radius 0, no border on the art, the panel's usual shared Cell
+    // rule below it.
+    Cell {
+        id: infoCell
+        visible: MediaService.available && root._hasArt
         width: parent.width
-        glyph: root._hasArt ? "" : "󰎇"
-        leading: root._hasArt ? mediaArt : null
-        title: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
-        meta: MediaService.artist !== "" ? MediaService.artist : MediaService.identity
-    }
 
-    Component {
-        id: mediaArt
+        Row {
+            id: infoRow
+            width: parent.width
+            spacing: Theme.space.md
 
-        Item {
-            width: Theme.space.xxl * 2
-            height: Theme.space.xxl * 2
+            Item {
+                id: artSlot
+                width: root._artSlotSize
+                height: root._artSlotSize
+                anchors.verticalCenter: parent.verticalCenter
 
-            // Same DitherImage retro pass as every other named content
-            // surface (DESIGN.md §2 item 12), just at the hero's slot size
-            // instead of the old dedicated 96px art box.
-            DitherImage {
-                visible: MediaService.artUrl !== ""
-                anchors.fill: parent
-                source: MediaService.artUrl
-                mode: "retro"
+                // DitherImage owns the hidden source Image itself (decode
+                // capped near the slot size, no pixmap cache) and repaints
+                // the retro color dither (DESIGN.md §2 item 12) whenever
+                // artUrl changes — content imagery, so it keeps the
+                // cover's own colors rather than reducing to theme roles.
+                DitherImage {
+                    visible: MediaService.artUrl !== ""
+                    source: MediaService.artUrl
+                    mode: "retro"
+                    width: root._artSlotSize
+                    height: root._artSlotSize
+                }
+
+                // Apple Music animated cover (M7 Task 2, opt-in): layered
+                // over the static art above, which stays the permanent
+                // fallback for every failure path — disabled, no match, no
+                // animated art, download failure, or a missing
+                // QtMultimedia module. Active only while the panel is open
+                // and the track actually playing.
+                Loader {
+                    width: root._artSlotSize
+                    height: root._artSlotSize
+                    active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
+                    source: "AnimatedAlbumArt.qml"
+                }
             }
 
-            // Apple Music animated cover (M7 Task 2, opt-in), layered over
-            // the static art above, which stays the permanent fallback for
-            // every failure path — disabled, no match, no animated art,
-            // download failure, or a missing QtMultimedia module.
-            Loader {
-                anchors.fill: parent
-                active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
-                source: "AnimatedAlbumArt.qml"
+            Column {
+                width: infoRow.width - artSlot.width - infoRow.spacing
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.space.xxs
+
+                MetaLabel {
+                    text: "NOW PLAYING / " + MediaService.identity
+                }
+
+                Text {
+                    width: parent.width
+                    text: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
+                    color: infoCell.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.subtitle
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    visible: MediaService.artist !== ""
+                    text: MediaService.artist
+                    color: Theme.color.foregroundDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.body
+                    elide: Text.ElideRight
+                }
             }
         }
+    }
+
+    // No art (most browsers publish none): the ordinary hero with a note
+    // glyph, never a 96px blank slot.
+    PanelHero {
+        visible: MediaService.available && !root._hasArt
+        width: parent.width
+        glyph: "󰎇"
+        title: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
+        meta: MediaService.artist !== "" ? MediaService.artist : MediaService.identity
     }
 
     // Header-line pairing (Task 1's rhythm): elapsed left, total right, both

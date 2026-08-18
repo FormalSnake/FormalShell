@@ -714,6 +714,15 @@ adjective:
     names one number as its subject (battery charge, current temperature,
     today's date) renders that number at `display`/`displayLarge`, never
     `body`; every other row on the same card stays at `body` or `caption`.
+    Dated exception (owner, 2026-08-18): the media panel does not open with
+    this shared hero when art exists — the panel's whole point is the
+    artwork, so its opening block is the art+identity row at the dedicated
+    96x96 slot (§1.3's structural-size exception), the analogue of a number
+    panel's oversized readout. The hero-slot cover (`leading` at
+    `Theme.space.xxl * 2` = 24px) shipped 2026-08-17 and read as a downgrade
+    from the dedicated slot; the panel falls back to the ordinary hero
+    (note glyph, title, meta) only in the no-art case, so no player ever
+    gets a 96px blank.
 14. **Section rhythm is the fused rule, not a gap (2026-08-17).** A section
     header (an uppercase `MetaLabel` cell) transitions into its first row,
     and a section's last row into the next header, exactly like any two
