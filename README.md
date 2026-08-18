@@ -57,7 +57,10 @@ Task 5 (the `DISPLAY`/brightness section and static battery stats),
 VM-sourced as well — the VM has no backlight device, so it shows the
 honest `NO BACKLIGHT` fallback rather than a real brightness row. Details
 on what each shot proves are in `CLAUDE.md`'s verification loop section
-(the `dev/smoke-niri.sh` flag each was captured with) and git history.
+(the `dev/smoke-niri.sh` flag each was captured with) and git history. The
+AirPods panel shot is new for M29, VM-sourced against a fixture status
+file (`dev/smoke-niri.sh --panel airpods`) standing in for the `librepods`
+daemon — real hardware has never driven this panel.
 
 | | | |
 | :---: | :---: | :---: |
@@ -70,6 +73,7 @@ on what each shot proves are in `CLAUDE.md`'s verification loop section
 | <img src="docs/screenshots/active-window-niri.png" width="260"><br>**Active window icon** — mac VM | <img src="docs/screenshots/network-panel-niri.png" width="260"><br>**Network panel** — mac VM | <img src="docs/screenshots/bluetooth-panel-niri.png" width="260"><br>**Bluetooth panel** — mac VM |
 | <img src="docs/screenshots/clipboard-image-niri.png" width="260"><br>**Clipboard image entry** — mac VM | <img src="docs/screenshots/notifications-center-niri.png" width="260"><br>**Notification center: density + CLEAR ALL** — mac VM | <img src="docs/screenshots/audio-panel-niri.png" width="260"><br>**Audio panel: omarchy mixer** — mac VM |
 | <img src="docs/screenshots/weather-niri.png" width="260"><br>**Weather: live bar cell + panel** — mac VM | <img src="docs/screenshots/power-panel-niri.png" width="260"><br>**Power panel: profile + display** — mac VM | <img src="docs/screenshots/share-menu-niri.png" width="260"><br>**Share menu (LocalSend)** — mac VM |
+| <img src="docs/screenshots/airpods-niri.png" width="260"><br>**AirPods panel: battery + listening mode** — mac VM | | |
 
 The Hyprland backend is implemented and verified against a live nested
 session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
@@ -137,14 +141,18 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   passed while the shell was down fires late rather than silently.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
   media.
-- **Panels**: thirteen popouts (appmenu, audio, calendar, network,
+- **Panels**: fifteen popouts (appmenu, audio, calendar, network,
   bluetooth, power, weather, media, github, usage, tailscale, systemupdate,
-  display) sharing one component and one IPC target, plus any plugin panel
-  under `plugin:<id>`, each taking keyboard focus as it opens so a panel
-  summoned from a keybind is usable immediately. Network adds a Wi-Fi QR
-  share (optional `qrencode`) and a saved-password reveal; Bluetooth adds
-  per-device trust; display lists every connected output with on/off,
-  scale, and mirror.
+  display, airpods, dualsense) sharing one component and one IPC target,
+  plus any plugin panel under `plugin:<id>`, each taking keyboard focus as
+  it opens so a panel summoned from a keybind is usable immediately.
+  Network adds a Wi-Fi QR share (optional `qrencode`) and a saved-password
+  reveal; Bluetooth adds per-device trust; display lists every connected
+  output with on/off, scale, and mirror; airpods reads per-bud battery,
+  listening mode, Conversation Awareness, One-Bud ANC, and ear detection
+  from the `librepods` daemon (a real device, read-back state, not
+  set-only writes); dualsense is a read-only sysfs readout for a
+  controller's battery, lightbar color, and player LEDs.
 - **Clipboard** — capped, deduplicated history surfaced through the menu.
 - **Calendar** — month grid with clickable day selection, a year/life-
   progress bar, and events from local `.ics` files and EDS/GNOME Online

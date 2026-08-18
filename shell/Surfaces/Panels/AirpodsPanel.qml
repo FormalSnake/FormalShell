@@ -454,19 +454,22 @@ Panel {
             root._cursorKey = "ear";
         }
 
-        Row {
+        // Stacked, not a label/value Row: the longest earDetectionLabel()
+        // string ("PAUSE WHEN ONE IS OUT") doesn't fit beside the header at
+        // panelWidth, and a right-aligned Text wider than its own box
+        // overflows LEFT, straight back over the label — caught in this
+        // row's own M29 smoke screenshot.
+        Column {
             width: parent.width
-            spacing: Theme.space.sm
+            spacing: Theme.space.xxs
 
             MetaLabel {
-                id: earHeader
                 text: "EAR DETECTION"
                 colon: true
             }
 
             Text {
-                width: parent.width - earHeader.width - parent.spacing
-                horizontalAlignment: Text.AlignRight
+                width: parent.width
                 text: AirpodsModel.earDetectionLabel(root._status.earDetection)
                 color: earCell.foreground
                 font.family: Theme.fontFamily

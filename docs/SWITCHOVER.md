@@ -131,6 +131,26 @@ and untouched). The weather panel in particular moves out of this report's
 **Unverified** row for the first time — see the parity table and §2's
 resolved bullet below.
 
+**Update, 2026-08-18 (M29):** AirPods gets a dedicated panel and bar cell,
+retiring the M17 `AIRPODS NOISE` row that used to sit at the bottom of
+`BluetoothPanel`, per
+`docs/superpowers/plans/2026-08-18-m29-device-panels.md`. The backend
+changes too: the old integration probed the stock librepods Qt app's
+write-only `/tmp/app_server` socket and could only send four commands,
+never read anything back. `AirpodsPanel` now binds `AirpodsService`, which
+watches the `omarchy-pods` project's extended `librepods` daemon (a
+different, unrelated GPL-3.0 project — `daemon/` subtree, built and run
+out-of-repo) for its own `status.json`, so battery per bud/case, the active
+listening mode, Conversation Awareness, One-Bud ANC, and ear detection are
+all real read-back state, not set-only writes. Switchover means replacing
+the stock librepods tray app with this daemon (`librepods --headless`) as
+the running service — see the host-prerequisite bullet in §2. DualSense
+also gets a bar cell and panel (`DualsenseService`, read-only sysfs against
+`hid-playstation`), replacing the old `custom:dualsense` command module.
+Both are VM-only verified (mac VM rig, `dev/smoke-niri.sh --panel
+airpods`/`--panel dualsense` — the parity table rows below); neither has
+ever run against real hardware.
+
 ## 1. Parity table
 
 Evidence sources: the e1504g sweep at commit `1300b02`
@@ -163,7 +183,8 @@ hardware.
 | Panel: audio: omarchy mixer rewrite | VM-only | M15 (06b5781), `dev/smoke-niri.sh --media --panel audio` with a real `mpv` MPRIS stream playing into the null sink — `docs/screenshots/audio-panel-niri.png` shows `OUTPUT`'s master slider + `Virtual Sink` device row (selected row inverted) and an `APPS` section with the live `mpv` stream at a 100% overdrive fill past the 1.0 hairline notch on its 0..1.5 track; `INPUT` is correctly absent (no input hardware in the VM). Real hardware has never seen this layout — the g815/e1504g `panel-audio.png` captures above predate the rewrite and show the old per-device-slider-only layout |
 | Panel: network | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-network.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-network.png` — real SSID `kaiiserni` at 62% (the 0..1-scaling bug stayed fixed on a second real host) |
 | Panel: bluetooth | Hardware-verified, fix now visually confirmed | e1504g @ 1300b02 found the adapter-state title-case defect (`artifacts/e1504g/panel-bluetooth.png`); fixed at `4aad1d6`. **Closed:** the g815 HEAD sweep @ 52e2db0 re-screenshotted it against a real adapter and three real paired devices (`MX Master 3S M`, `CMF Headphone Pro`, `AirPods Pro`), status correctly uppercase `ENABLED` — `artifacts/g815-head/panel-bluetooth.png` |
-| Panel: bluetooth: AirPods noise (LibrePods) | VM-only | M17 Task 2, `dev/smoke-niri.sh --panel bluetooth` — the VM has no librepods socket, so the panel renders the honest unchanged `NO ADAPTER` cell with no `AIRPODS NOISE` row at all. The write-only protocol itself (probe, then the four `noise:*` messages) was proven against a real `QLocalServer` stand-in bound at the exact path librepods' own `linux/main.cpp` resolves to (`/tmp/app_server`), driven inside a temporary, uncommitted extension of the smoke script (reverted before this task's commit — not part of its file list) that opened the panel over IPC, drove the panel's existing address-keyed keyboard cursor with real `wtype` Down/Return presses, and read the fixture's received bytes back: `\n` (the probe's own bare connect-disconnect, confirming it never sends anything), then `noise:off`, `noise:anc`, `noise:transparency`, `noise:adaptive` in order — exactly the four cells in their on-screen sequence. The screenshot from that run shows the real `AIRPODS NOISE` row (dim `SET ONLY` tag, four plain `OFF`/`ANC`/`TRANSPARENCY`/`ADAPTIVE` cells) but isn't part of this repo's evidence trail since the driving script that produced it was never committed. The owner's actual e1504g librepods process (verified live, PID 3117) has never been swept against this row. |
+| Bar + panel: AirPods | VM-only | M29, `dev/smoke-niri.sh --panel airpods` — a schema-true fixture `status.json` (Pro 3, ANC mode, both buds in ear, CA on, one-bud off, lid open) staged into the isolated HOME plus a real `python3` `AF_UNIX` listener standing in for the daemon's control socket. `artifacts/airpods-panel.png` (`docs/screenshots/airpods-niri.png`) shows the bar cell's worst-bud `%` and the panel's per-bud `BATTERY` tracks, `LISTENING MODE` with the `ANC` row selected and no `Off` row (Pro 3 dropped it), `CA` `ON` in accent, `EAR DETECTION`. `qs ipc call airpods noise transparency` is asserted against the stub's own recorder file (`noise:transparency`, exactly), then the fixture is rewritten in place to `noise_mode:2` and `artifacts/airpods-live.png` proves the `FileView` watch re-rendered live (the two frames differ, the same dead-binding guard the chevron leg uses). Retires M17's `AIRPODS NOISE` row and its `/tmp/app_server` write-only probe entirely — see the M29 update above. **Never run against a real `librepods --headless` daemon or real AirPods** — that is exactly what switchover proves. |
+| Bar + panel: DualSense | VM-only, honest-unavailable path proven | M29, `dev/smoke-niri.sh --panel dualsense` — the VM has no `hid-playstation` device, so the honest `NO CONTROLLER` card (with its dim `READ ONLY` title-band tag) is the correct, deterministic screenshot, and the bar cell self-hides with no controller present. **Never run against real sysfs nodes:** a real battery percent/status, a real lightbar swatch, and real player-LED dots are all real-host-trial territory — g815 already runs the owner's `dualsense-sync` host units this panel's read path depends on, so it is the natural first real target |
 | Panel: power | Hardware-verified | e1504g @ 1300b02, `artifacts/e1504g/panel-power.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-power.png` — real battery 79%, uppercase `PENDING CHARGE`, correct active-profile highlight |
 | Panel: power: brightness (backlight + DDC), low-battery warnings, static battery stats | VM-only | M16 Task 5, `dev/smoke-niri.sh --panel power` — the VM (no battery, no backlight device, no DDC monitors) renders the fully honest fallback: `AC POWER` cell, no `DISPLAY` header, a single dim `NO BACKLIGHT` row. `Power/model.js`'s `warnEvent()` hysteresis (crossings, re-arm-on-charge, charge interruptions, boot-below-threshold) is unit-covered in `tests/tst_power_model.qml`, not screenshot-provable on hardware without draining a real battery to 5-10%. **Never run against real hardware:** a real internal backlight driving `BrightnessService.set()`/`step()`, and DDC control of an actual external monitor via `ddcutil`, are both real-host-trial territory — see §2's i2c-permissions gap below |
 | Panel: calendar | Hardware-verified (ics path) | e1504g @ 1300b02, `artifacts/e1504g/panel-calendar.png`; g815 HEAD sweep @ 52e2db0, `artifacts/g815-head/panel-calendar.png` — real month grid, local-.ics fixture event. `docs/screenshots/calendar-niri.png` was recaptured 2026-07-30 (M13) from the mac VM: tomorrow's cell inverted with its EDS fixture event under the `JUL 31` dated header, today's cell keeping its accent fill |
@@ -352,17 +373,28 @@ Hyprland backend has never run on either Linux host — it exists only as
   presence gate works and that the process launches against a real file
   carrying the fixture text is VM-only (parity table) — a real
   cross-device transfer over LAN has never run anywhere.
-- **The bluetooth panel's `AIRPODS NOISE` row needs the librepods Qt app
-  running — the owner's existing e1504g setup, nothing new to install.**
-  `LibrePodsService.qml` probes `/tmp/app_server` each time the panel opens;
-  no app running means no socket, and the row simply doesn't render. The
-  protocol is deliberately set-only: upstream librepods exports no battery
-  level or active noise-control mode outside its own GUI process (verified
-  against `linux/main.cpp` — no D-Bus service, no readable state on the
-  socket), so this row can never show which mode is active, only offer the
-  four writes. Two unrelated GPL-3.0 projects (EarPort, LinuxPods) do ship
-  battery-capable daemons; adopting either is a host-setup decision for a
-  future milestone, deliberately not smuggled into this task.
+- **Resolved 2026-08-18 (M29): the AirPods panel now reads real battery and
+  mode state, not just set-only writes — but needs a different daemon
+  installed than before.** `AirpodsPanel`/`AirpodsService` replace the old
+  `LibrePodsService` probe of the stock librepods Qt app's `/tmp/app_server`
+  socket with the `omarchy-pods` project's extended `librepods` daemon
+  (`daemon/` subtree, GPL-3.0, built and run out-of-repo), which writes its
+  whole state to `$XDG_STATE_HOME/librepods/status.json` and exposes a
+  control socket at `$XDG_RUNTIME_DIR/librepods.sock`. **Switchover means
+  running that daemon as `librepods --headless` in place of the stock app**
+  — the owner's e1504g and g815 both currently run the stock app, so this
+  is new host setup, not a drop-in continuation. VM-only verified so far
+  (parity table); the daemon has never run on either Linux host.
+- **DualSense needs `hid-playstation` bound and the owner's own
+  `dualsense-sync` udev LED rule for lightbar/player-LED readability.**
+  `DualsenseService` globs `/sys/class/power_supply/ps-controller-battery-*`
+  and `/sys/class/leds/input*:rgb:indicator` — both node names key off an
+  input index that drifts per reconnect, which is why the probe globs
+  rather than pinning a path. The shell only ever reads these nodes; the
+  owner's existing host units own writing the lightbar and player LEDs.
+  VM-only verified (the VM has no DualSense at all, so the honest `NO
+  CONTROLLER` card is the parity-table evidence); real sysfs reads are
+  real-host-trial territory.
 - **Tailscale up/down needs the invoking user set as operator first —
   otherwise the daemon refuses the toggle.** `TailscalePanel.qml`'s STATUS
   action cell shells out to `tailscale up`/`down` unprivileged; the real

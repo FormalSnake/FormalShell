@@ -53,7 +53,7 @@ arrangement:
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
 `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
 `indicators`, `github`, `usage`, `tailscale`, `visualizer`, `microphone`,
-`keyboardLayout`, `systemUpdate` (the last seven opt-in
+`keyboardLayout`, `systemUpdate`, `airpods`, `dualsense` (the last nine opt-in
 only — never part of the default arrangement; `bell` by contrast IS part of
 the defaults since M13b, so a config predating it that spells out its own
 `right` region won't show the bell until it's added there).
@@ -266,6 +266,23 @@ per git-forge input. GitHub's unauthenticated limit is 60 requests per hour
 per IP, and a 403 lands in the panel's unknown bucket, never in `current`.
 An input type with no cheap probe (`path`, `tarball`, `indirect`,
 sourcehut) stays `?` forever rather than a fabricated `CURRENT`.
+
+**AirPods** (M29) — opt-in via `bar.layout` (add `"airpods"` to a region); an
+earbuds glyph plus the worse of the two buds' battery as `NN%` (the case is
+excluded from that headline number — a full case next to a near-dead bud
+would read backwards — but joins both buds in the tooltip's `L 97 / R 99 /
+CASE 80` breakdown). Hidden entirely with no daemon running or no battery
+level known yet, so an ordinary host with no AirPods pays nothing. Click
+toggles the AirPods panel (see [Panels](#panels)); see that section for the
+`librepods` daemon this cell and its panel both depend on.
+
+**DualSense** (M29) — opt-in via `bar.layout` (add `"dualsense"` to a
+region); a gamepad glyph plus battery `NN%`, replacing the old
+`custom:dualsense` command module at the same 30-second poll cadence. Hidden
+entirely with no controller present. Goes full-bleed `warning` at ≤20%,
+`urgent` at ≤10% — the same thresholds the retired `dualsense-bar` script
+used. Click toggles the DualSense panel (see [Panels](#panels)), which is
+read-only: the shell never writes the controller's lightbar or player LEDs.
 
 **Tooltips** — hovering a bar cell for 400ms opens one omarchy card under
 it (`shell/Components/Tooltip.qml`, namespace `formalshell:tooltip`),
@@ -943,7 +960,7 @@ binds {
 
 ## Panels
 
-Thirteen popouts, twelve per-widget plus the IPC-only `display`, share one
+Fifteen popouts, fourteen per-widget plus the IPC-only `display`, share one
 component, `shell/Components/Panel.qml`: a ledger-table popout (header
 `MetaLabel` row, rows sharing hairline rules, `WlrLayershell` top layer,
 closes on Escape and on
@@ -986,6 +1003,8 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `appmenu`    | the focused window's desktop entry + the compositor's window list | `ActiveWindow.qml` |
 | `systemupdate` | `flake.lock` + one upstream probe per direct input | `SystemUpdateWidget.qml` |
 | `display`    | the compositor backend's own output contract  | none (IPC only)      |
+| `airpods`    | `AirpodsService` (librepods daemon `status.json` + control socket) | `AirpodsWidget.qml` |
+| `dualsense`  | `DualsenseService` (sysfs, read-only)        | `DualsenseWidget.qml` |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` is an omarchy-style mixer (M15 Task 4): `OUTPUT` is one
@@ -1112,22 +1131,46 @@ is off, or `SCANNING…` when it's on and discovering but nothing has turned
 up yet — the test VM has no adapter at all, so `NO ADAPTER` is what its
 smoke screenshot shows.
 
-**AirPods noise control (LibrePods, M17 Task 2).** Upstream librepods
-(`github.com/kavishdevar/librepods`) ships no D-Bus surface at all — its
-only IPC is a `QLocalServer` named `app_server`, which Qt's local-socket
-backend resolves to a real filesystem socket at `/tmp/app_server` (the
-app's own single-instance cleanup hardcodes that exact path). The protocol
-is four write-only messages (`noise:off`/`noise:anc`/`noise:transparency`/
-`noise:adaptive`); battery and the active mode are never exported outside
-the GUI. `LibrePodsService.qml` probes that socket (bare connect,
-disconnect, never a write) once each time the bluetooth panel opens — never
-a poll loop — and renders an `AIRPODS NOISE` row with a dim `SET ONLY` meta
-tag only while the probe succeeds. The row is four plain action cells (`OFF`
-/ `ANC` / `TRANSPARENCY` / `ADAPTIVE`) joining the panel's existing
-address-keyed keyboard cursor; none of them ever renders as selected or
-active, since the protocol has no read-back to key that off. No socket
-present (the test VM's default state) means the row simply doesn't exist —
-the rest of the panel renders byte-identical. `PowerPanel` pairs a status row (an honest
+**`AirpodsPanel`** (M29, retiring the M17 `AIRPODS NOISE` row that used to
+sit at the bottom of `BluetoothPanel`) is a dedicated popout for the
+`omarchy-pods` `librepods` daemon — an unrelated GPL-3.0 project, built and
+run out-of-repo (see [SWITCHOVER.md](SWITCHOVER.md) for the host
+prerequisite). `AirpodsService` watches the daemon's own
+`$XDG_STATE_HOME/librepods/status.json`, one line of sorted-key JSON the
+daemon writes on every change and removes on quit — the absent file IS the
+"daemon down" signal, so the panel needs no separate liveness probe. Honest
+states first: no status file at all renders a dim `NO DAEMON` cell; a daemon
+that is running but has never seen a battery packet and reports the link
+down renders `NO AIRPODS`. Past those, a `PanelHero` opens on the device's
+own name and a state line (`NOISE CANCELLATION / LID OPEN`, or
+`NOT CONNECTED` when the link is down but battery is still known — the buds
+keep reporting battery over BLE adverts while sitting in the case). A
+`BATTERY` section lists up to three rows (Left/Right/Case, each a full-width
+track plus `NN%` and an `IN EAR`/`CHARGING` hint), shown whenever any
+component has reported a level, in-case included; a `LISTENING MODE`
+section (gated on the link being up) lists only the modes the device
+actually has — Off omitted on a Pro 3, Adaptive shown only on Pro models —
+each row selectable and read-back-accurate, with an interactive
+`ADAPTIVE NOISE` track appearing while that mode is active. Pro models get
+two bare-label toggles, `Conversation awareness` and `One-bud ANC`, each ON
+in accent / OFF dim. An `EAR DETECTION` row cycles the daemon's host-side
+policy (pause on one bud out / both out / never) — this is not a device
+setting, so it stays visible whenever anything about the device is known at
+all. One flat keyboard cursor walks every actionable row, same pattern as
+`BluetoothPanel`'s own address-keyed cursor.
+
+**`DualsensePanel`** (M29) is a read-only sysfs readout for a Sony
+DualSense controller — no daemon, `hid-playstation`'s own `power_supply`
+and `leds` sysfs nodes. The title band carries a dim `READ ONLY` tag: the
+owner's own host units already own the lightbar and player-LED writes, so
+this panel only ever displays what sysfs reports. Honest state first: no
+matching `power_supply` node renders a dim `NO CONTROLLER` cell — the test
+VM's expected state, since it has no `hid-playstation` device. Past that,
+the hero's readout IS the battery percent (unlike `AirpodsPanel`, one
+number is genuinely the whole point here), with a `LIGHTBAR` row (a small
+color swatch plus the hex code, read from `multi_intensity`) and a
+`PLAYER LEDS` row (five dots, lit ones at content ink) each shown only
+while their own sysfs node was readable. `PowerPanel` pairs a status row (an honest
 `AC POWER` cell rather than a lying `0%` when `UPower.displayDevice.isLaptopBattery`
 is false) with a keyboard-navigable power-profile picker (Up/Down to move,
 Enter to apply) under power-profiles-daemon, plus a breathing-opacity
@@ -1327,7 +1370,7 @@ qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
 qs ipc --any-display -p <store-path>/share/formalshell call panel open display   # the display panel has no bar cell; this is its only summon path
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
-qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "appmenu" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "systemupdate" | "display" | "plugin:<id>"
+qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "appmenu" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "systemupdate" | "display" | "airpods" | "dualsense" | "plugin:<id>"
 ```
 
 An unknown panel name returns `error: unknown panel '<name>'` rather than a
@@ -1391,6 +1434,26 @@ Addresses match case-insensitively (BlueZ hands them out uppercase). An
 address no device on the adapter answers to returns
 `error: unknown device '<address>'`, and one BlueZ hasn't paired returns
 `error: device '<address>' is not paired`.
+
+**AirPods IPC** (`target: "airpods"`, M29, the same spec-addendum tradition
+as `panel`/`bluetooth`: compositor keybinds and the smoke rig both need a
+headless path onto the librepods daemon's control socket, since it takes a
+raw write, no reply, no CLI of its own):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call airpods status              # JSON: the parsed daemon state, or {"available":false}
+qs ipc --any-display -p <store-path>/share/formalshell call airpods noise transparency   # off | anc | transparency | adaptive
+qs ipc --any-display -p <store-path>/share/formalshell call airpods ca on                # or "off"
+qs ipc --any-display -p <store-path>/share/formalshell call airpods onebud off           # or "on"
+qs ipc --any-display -p <store-path>/share/formalshell call airpods ear both             # one | both | off
+qs ipc --any-display -p <store-path>/share/formalshell call airpods adaptive 40          # 0-100, meaningful only while noise mode is adaptive
+```
+
+Every verb is validated against `AirpodsService`'s own wire allow-list
+before the socket ever opens; an unknown mode/state or an unset
+`XDG_RUNTIME_DIR` both come back as `error: refused '<verb>'` rather than a
+silent no-op. There is no `dualsense` IPC target — that panel is read-only
+by design, so there is nothing here to drive beyond `panel open dualsense`.
 
 **Dev gallery** (`target: "gallery"`) is a component-QA sheet, not a user
 surface: it renders the REAL shared components (`Cell`, `MetaLabel`,
