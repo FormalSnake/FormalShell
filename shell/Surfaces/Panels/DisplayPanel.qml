@@ -2,6 +2,7 @@ import QtQuick
 import qs.Core
 import qs.Components
 import qs.Compositor
+import qs.Services
 import "../../Display/outputs.js" as Outputs
 
 // Display panel (DESIGN.md §Panels, M17): a ledger of every connected output
@@ -9,10 +10,16 @@ import "../../Display/outputs.js" as Outputs
 // owner asked for, on/off, scale, and mirror. Feature shape read off
 // omarchy's monitor panel (shell/plugins/panels/monitor/Panel.qml there:
 // internalMonitor/externalMonitor/internalEnabled/mirrorEnabled/monitorScale/
-// displays) and reimplemented in this shell's own language; its BRIGHTNESS
-// slider is deliberately NOT here — the M16 plan declined DDC/external-monitor
-// brightness for a laptop target, and BrightnessService already owns the
-// backlight path from PowerPanel.
+// displays) and reimplemented in this shell's own language.
+//
+// BRIGHTNESS (M33, owner reversal of the M16 call above: "move the display
+// things from battery to display, it makes no sense they were merged
+// anyway") sits between OUTPUTS and MIRROR — one row per BrightnessService
+// device, sharing this panel's own Up/Down cursor and h/l steps rather than
+// a separate hover system, since a second keyboard cursor on the same panel
+// would double-drive whichever row both happened to point at. The cursor
+// walks outputs first, then brightness devices, in the same top-to-bottom
+// order they render in.
 //
 // Everything reads and writes through CompositorService's backend contract
 // (BackendBase's outputs/refreshOutputs/setOutput*), never `niri msg` or
@@ -47,21 +54,32 @@ Panel {
     // resolution — never a fabricated mode for an output with none to report.
     readonly property var _focusedOutput: Outputs.findOutput(root._outputs, CompositorService.focusedOutputName)
 
-    // Keyboard cursor over the sorted output rows (PowerPanel's numeric
-    // _cursor idiom — this table is one flat Repeater, so an index fits where
-    // NetworkPanel's split sections needed a key). -1 is NetworkPanel's empty
-    // sentinel in numeric form: no cursor painted until the pointer or a
-    // navigation key puts one somewhere, so an untouched panel doesn't
-    // highlight its first row for no reason.
+    // Keyboard cursor over the sorted output rows, then the brightness
+    // device rows (PowerPanel's numeric _cursor idiom — this table is one
+    // flat walk, so an index fits where NetworkPanel's split sections needed
+    // a key). -1 is NetworkPanel's empty sentinel in numeric form: no cursor
+    // painted until the pointer or a navigation key puts one somewhere, so
+    // an untouched panel doesn't highlight its first row for no reason.
     property int _cursor: -1
 
-    on_OutputsChanged: if (root._cursor >= root._outputs.length) root._cursor = root._outputs.length - 1
+    readonly property int _cursorCount: root._outputs.length + BrightnessService.devices.count
+
+    on_OutputsChanged: if (root._cursor >= root._cursorCount) root._cursor = root._cursorCount - 1
+
+    Connections {
+        target: BrightnessService.devices
+        function onCountChanged() {
+            if (root._cursor >= root._cursorCount)
+                root._cursor = root._cursorCount - 1;
+        }
+    }
 
     onIsOpenChanged: {
         if (!root.isOpen)
             return;
         root._cursor = -1;
         root._backend.refreshOutputs();
+        BrightnessService.refreshDevices();
     }
 
     // Neither compositor pushes output changes: niri's event stream has no
@@ -88,7 +106,7 @@ Panel {
     }
 
     function _cursorRow() {
-        return root._cursor >= 0 ? root._outputs[root._cursor] : null;
+        return (root._cursor >= 0 && root._cursor < root._outputs.length) ? root._outputs[root._cursor] : null;
     }
 
     function _stepScale(direction) {
@@ -96,6 +114,20 @@ Panel {
         if (!row || !row.enabled)
             return;
         root._setScale(row.name, Outputs.stepScale(row.scale, direction));
+    }
+
+    // The brightness half of the same combined cursor: indices from
+    // _outputs.length up to _cursorCount name a BrightnessService device.
+    function _cursorBrightnessId() {
+        if (root._cursor < root._outputs.length || root._cursor >= root._cursorCount)
+            return "";
+        return BrightnessService.devices.get(root._cursor - root._outputs.length).deviceId;
+    }
+
+    function _stepBrightness(delta) {
+        var id = root._cursorBrightnessId();
+        if (id !== "")
+            BrightnessService.stepDevicePercent(id, delta);
     }
 
     // MIRROR is one bounded action over the whole set, not a per-output
@@ -117,13 +149,14 @@ Panel {
     }
 
     // Panel.qml's shared keyboard-nav hook (M6 Task 7): Up/Down move the
-    // cursor, Enter switches its output on or off, h/l step its scale — the
-    // same h/l binding PowerPanel uses for the brightness it hovers.
+    // cursor across outputs then brightness devices, Enter switches an
+    // output row on or off, h/l step an output row's scale or a brightness
+    // row's percent depending which the cursor is on.
     Connections {
         target: root
 
         function onKeyPressed(event) {
-            if (!root.isOpen || root._outputs.length === 0)
+            if (!root.isOpen || root._cursorCount === 0)
                 return;
             switch (event.key) {
             case Qt.Key_Up:
@@ -137,7 +170,7 @@ Panel {
                 return;
             case Qt.Key_Down:
                 root.cursorActive = true;
-                root._cursor = Math.min(root._outputs.length - 1, root._cursor + 1);
+                root._cursor = Math.min(root._cursorCount - 1, root._cursor + 1);
                 event.accepted = true;
                 return;
             case Qt.Key_Return:
@@ -148,11 +181,17 @@ Panel {
                 event.accepted = true;
                 return;
             }
+            // h/l act on whichever half of the cursor is live: a scale step
+            // on an output row, a brightness step on a device row — the two
+            // helpers below are no-ops outside their own half, so calling
+            // both is exactly one of them acting.
             if (event.text === "h" || event.text === "H") {
                 root._stepScale(-1);
+                root._stepBrightness(-5);
                 event.accepted = true;
             } else if (event.text === "l" || event.text === "L") {
                 root._stepScale(1);
+                root._stepBrightness(5);
                 event.accepted = true;
             }
         }
@@ -362,6 +401,102 @@ Panel {
     Repeater {
         model: root._outputs
         delegate: outputRow
+    }
+
+    Cell {
+        visible: BrightnessService.devices.count > 0
+        width: parent.width
+
+        MetaLabel { text: "BRIGHTNESS"; colon: true }
+    }
+
+    Cell {
+        visible: BrightnessService.devices.count === 0
+        width: parent.width
+
+        MetaLabel { text: "NO BACKLIGHT" }
+    }
+
+    Component {
+        id: brightnessRow
+
+        Cell {
+            id: brightnessCell
+            required property int index
+            required property string deviceId
+            required property string label
+            required property real percent
+            width: parent.width
+            hovered: root.cursorActive && root._cursor === (root._outputs.length + brightnessCell.index)
+
+            // Same whole-row hover-to-cursor wiring as outputRow above: the
+            // cell's own pointer layer tracks hover across the row, the
+            // track's MouseArea below keeps its own press/wheel events.
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (brightnessCell.containsPointer) {
+                root.cursorActive = true;
+                root._cursor = root._outputs.length + brightnessCell.index;
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.space.xxs
+
+                Row {
+                    width: parent.width
+                    spacing: Theme.space.sm
+
+                    Text {
+                        width: parent.width - percentText.width - parent.spacing
+                        text: brightnessCell.label
+                        color: brightnessCell.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize.body
+                    }
+
+                    Text {
+                        id: percentText
+                        text: brightnessCell.percent + "%"
+                        color: brightnessCell.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize.body
+                    }
+                }
+
+                // Flat accent fill, no thumb — same idiom as the scale
+                // track above and every other slider in the shell.
+                DitherFill {
+                    id: brightnessTrack
+                    width: parent.width
+                    height: Theme.space.trackThickness
+
+                    Rectangle {
+                        width: parent.width * Math.max(0, Math.min(1, brightnessCell.percent / 100))
+                        height: parent.height
+                        color: Theme.color.accent
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        function _setFromX(x) {
+                            BrightnessService.setDevicePercent(brightnessCell.deviceId, (x / brightnessTrack.width) * 100);
+                        }
+                        onPressed: mouse => _setFromX(mouse.x)
+                        onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+                        onWheel: wheel => {
+                            BrightnessService.stepDevicePercent(brightnessCell.deviceId, wheel.angleDelta.y > 0 ? 5 : -5);
+                            wheel.accepted = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Repeater {
+        model: BrightnessService.devices
+        delegate: brightnessRow
     }
 
     Cell {

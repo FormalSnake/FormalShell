@@ -35,7 +35,7 @@ Singleton {
     // in a runtime-dir file is just an in-memory map here, rebuilt on the
     // same cadence (refreshDevices()) instead of a TTL. Detection NEVER
     // runs on a timer — ddcutil's I2C round-trips are seconds-slow, and
-    // PowerPanel.qml is the only caller, from its own onIsOpenChanged. A
+    // DisplayPanel.qml is the only caller, from its own onIsOpenChanged. A
     // missing `ddcutil` binary or a detect that finds nothing just leaves
     // the DDC rows empty — identical, honest fallback to today's
     // backlight-only behavior either way.

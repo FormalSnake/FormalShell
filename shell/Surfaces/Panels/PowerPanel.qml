@@ -3,7 +3,6 @@ import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.Core
 import qs.Components
-import qs.Services
 import qs.Notifications
 import "../../Power/model.js" as Power
 
@@ -128,7 +127,6 @@ Panel {
     onIsOpenChanged: {
         if (root.isOpen) {
             root._cursor = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
-            BrightnessService.refreshDevices();
         } else {
             // Drop the RAPL baseline on close (M20 Task 5c) — no
             // background polling for a closed panel, and reopening starts
@@ -214,7 +212,6 @@ Panel {
             // it before anything happens.
             if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
                 root.cursorActive = true;
-                root._brightnessHoverId = "";
                 event.accepted = true;
                 return;
             }
@@ -232,15 +229,6 @@ Panel {
                 root._applyProfile(root._cursor);
                 event.accepted = true;
                 break;
-            }
-            if (event.text === "h" || event.text === "H") {
-                if (root._brightnessHoverId !== "")
-                    BrightnessService.stepDevicePercent(root._brightnessHoverId, -5);
-                event.accepted = true;
-            } else if (event.text === "l" || event.text === "L") {
-                if (root._brightnessHoverId !== "")
-                    BrightnessService.stepDevicePercent(root._brightnessHoverId, 5);
-                event.accepted = true;
             }
         }
     }
@@ -368,103 +356,6 @@ Panel {
         width: parent.width
 
         MetaLabel { text: "AC POWER"; colon: true }
-    }
-
-    Cell {
-        visible: BrightnessService.devices.count > 0
-        width: parent.width
-
-        MetaLabel { text: "DISPLAY"; colon: true }
-    }
-
-    Cell {
-        visible: BrightnessService.devices.count === 0
-        width: parent.width
-
-        MetaLabel { text: "NO BACKLIGHT" }
-    }
-
-    // Mouse-hover cursor for the brightness rows below, independent of
-    // the PROFILE section's keyboard `_cursor` — wheel is already
-    // mouse-position-driven (like every other flat-track slider in the
-    // shell), so pairing h/l with hover instead of folding brightness
-    // into the arrow-key cursor keeps both inputs consistent with each
-    // other without touching PROFILE's existing, working Up/Down system.
-    property string _brightnessHoverId: ""
-
-    Component {
-        id: brightnessRow
-
-        Cell {
-            id: brightnessCell
-            required property string deviceId
-            required property string label
-            required property real percent
-            width: parent.width
-            hovered: root._brightnessHoverId === brightnessCell.deviceId
-            onHoveredChanged: if (brightnessCell.hovered) root.cursorActive = false
-
-            Column {
-                width: parent.width
-                spacing: Theme.space.xxs
-
-                Row {
-                    width: parent.width
-                    spacing: Theme.space.sm
-
-                    Text {
-                        width: parent.width - percentText.width - parent.spacing
-                        text: brightnessCell.label
-                        color: brightnessCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
-                    }
-
-                    Text {
-                        id: percentText
-                        text: brightnessCell.percent + "%"
-                        color: brightnessCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
-                    }
-                }
-
-                // Flat accent fill, no thumb — same idiom as the battery
-                // track above and every other slider in the shell.
-                DitherFill {
-                    id: brightnessTrack
-                    width: parent.width
-                    height: Theme.space.trackThickness
-
-                    Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, brightnessCell.percent / 100))
-                        height: parent.height
-                        color: Theme.color.accent
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onEntered: root._brightnessHoverId = brightnessCell.deviceId
-                        onExited: if (root._brightnessHoverId === brightnessCell.deviceId) root._brightnessHoverId = ""
-                        function _setFromX(x) {
-                            BrightnessService.setDevicePercent(brightnessCell.deviceId, (x / brightnessTrack.width) * 100);
-                        }
-                        onPressed: mouse => _setFromX(mouse.x)
-                        onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                        onWheel: wheel => {
-                            BrightnessService.stepDevicePercent(brightnessCell.deviceId, wheel.angleDelta.y > 0 ? 5 : -5);
-                            wheel.accepted = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Repeater {
-        model: BrightnessService.devices
-        delegate: brightnessRow
     }
 
     Cell {

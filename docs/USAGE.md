@@ -1187,15 +1187,7 @@ time-to-empty/charge rate wherever `UPowerDevice` reports them
 no rotation, no invented value). `Battery.qml`'s bar cell goes
 further and drops out of the bar entirely on the same condition, rather than
 showing a stub `0%`, and goes full-bleed `urgent` at/below
-`battery.criticalPercent` while discharging. `PowerPanel` also carries a
-`DISPLAY` section, one `BRIGHTNESS` row per controllable monitor — the
-internal backlight (`BrightnessService`, `brightnessctl`-backed) labeled
-`INTERNAL`, plus one row per DDC-capable external monitor `ddcutil` can
-reach, keyed by DRM connector name; wheel, or `h`/`l` while hovering a row,
-steps it 5%, detection runs once per panel open (never a poll loop — `
-ddcutil`'s I2C round-trips are seconds-slow), and the section collapses to a
-single dim `NO BACKLIGHT` row when nothing is controllable — the test VM's
-expected state. `Power/model.js`'s `warnEvent()` hysteresis (persisted on
+`battery.criticalPercent` while discharging. `Power/model.js`'s `warnEvent()` hysteresis (persisted on
 the panel, which stays live in the background regardless of whether it's
 open) fires a normal `LOW BATTERY` toast crossing `battery.warnPercent`
 (default 10) while discharging, and a sticky, DND-bypassing
@@ -1345,11 +1337,19 @@ as a row: name, an `ON`/`OFF` toggle, a status meta line
 and model when the compositor reports them, and a flat accent-fill `SCALE`
 track from 1x to 3x in 0.25 steps. Press or wheel the track to commit one
 value (no drag-to-scrub — every step is a real output reconfiguration), or
-use the keyboard: Up/Down move the cursor, Enter toggles that output,
-`h`/`l` step its scale, the same binding `PowerPanel`'s brightness rows
-use. The focused output's row is inverted. A `MIRROR` section below points
-every other enabled output at the focused one, and off clears every output
-currently mirroring anything.
+use the keyboard: Up/Down move the cursor, Enter toggles that output, `h`/`l`
+step its scale. The focused output's row is inverted. A `BRIGHTNESS` section
+below that (M33, moved off `PowerPanel` — "it makes no sense they were
+merged") carries one row per controllable monitor — the internal backlight
+(`BrightnessService`, `brightnessctl`-backed) labeled `INTERNAL`, plus one
+row per DDC-capable external monitor `ddcutil` can reach, keyed by DRM
+connector name. The same Up/Down cursor reaches these rows after the last
+output, wheel or `h`/`l` steps one 5%, detection runs once per panel open
+(never a poll loop — `ddcutil`'s I2C round-trips are seconds-slow), and the
+section collapses to a single dim `NO BACKLIGHT` row when nothing is
+controllable — the test VM's expected state. A `MIRROR` section below that
+points every other enabled output at the focused one, and off clears every
+output currently mirroring anything.
 
 Everything reads and writes through the compositor backend contract
 (`outputs`/`refreshOutputs`/`setOutput*`), never `niri msg` or `hyprctl`
