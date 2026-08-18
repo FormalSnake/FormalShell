@@ -57,6 +57,7 @@ PanelWindow {
     property var calendarPanel: null
     property var networkPanel: null
     property var bluetoothPanel: null
+    property var airpodsPanel: null
     property var powerPanel: null
     property var weatherPanel: null
     property var mediaPanel: null
@@ -188,6 +189,12 @@ PanelWindow {
         }
     }
     Component {
+        id: airpodsComponent
+        AirpodsWidget {
+            panel: bar.airpodsPanel
+        }
+    }
+    Component {
         id: weatherComponent
         WeatherWidget {
             panel: bar.weatherPanel
@@ -285,6 +292,7 @@ PanelWindow {
         audio: audioComponent,
         network: networkComponent,
         bluetooth: bluetoothComponent,
+        airpods: airpodsComponent,
         weather: weatherComponent,
         tray: trayComponent,
         github: githubComponent,

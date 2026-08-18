@@ -48,6 +48,7 @@ ShellRoot {
                 calendarPanel: calendarPanelInstance
                 networkPanel: networkPanelInstance
                 bluetoothPanel: bluetoothPanelInstance
+                airpodsPanel: airpodsPanelInstance
                 powerPanel: powerPanelInstance
                 weatherPanel: weatherPanelInstance
                 mediaPanel: mediaPanelInstance
