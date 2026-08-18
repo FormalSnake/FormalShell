@@ -377,3 +377,36 @@ function invokeTarget(state) {
         return (latest === null || entry.arrivedAt > latest.arrivedAt) ? entry : latest;
     }, null);
 }
+
+// Config-driven popup corner (DESIGN.md §Notifications, M34 Task 1):
+// notifications.position, one of the four screen corners. Pure resolver, no
+// Quickshell access, so Toasts.qml's PanelWindow anchors/margins, the
+// column's stacking order and the enter/exit slide direction all read off
+// one object instead of re-deriving corner math independently. An unknown
+// or missing name falls back to the shipped default rather than erroring.
+var POSITIONS = ["top-right", "bottom-right", "bottom-left", "top-left"];
+var DEFAULT_POSITION = "bottom-right";
+
+function positionSpec(name) {
+    var pos = POSITIONS.indexOf(name) >= 0 ? name : DEFAULT_POSITION;
+    var top = pos.indexOf("top-") === 0;
+    var right = pos.indexOf("-right") > 0;
+    return {
+        name: pos,
+        top: top,
+        bottom: !top,
+        left: !right,
+        right: right,
+        // The newest toast sits nearest the anchored corner. The Column
+        // always lays its children out top-down; a top-anchored window's
+        // own top edge IS the anchor point, so newest needs to lead the
+        // list. A bottom-anchored window's bottom edge is the anchor point,
+        // which is already where groupEntries' own oldest-first order
+        // lands its newest (last) entry, so no reorder is needed there.
+        newestFirst: top,
+        // Enter/exit slide direction (DESIGN.md §4.2: "right-anchored
+        // surfaces slide in from the right", generalized to a left-anchored
+        // stack sliding in from the left).
+        slideSign: right ? 1 : -1
+    };
+}

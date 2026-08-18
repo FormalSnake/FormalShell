@@ -607,4 +607,57 @@ TestCase {
     function test_rel_time_clamps_future_arrival_to_now() {
         compare(M.relTime(1000, 5000), "now");
     }
+
+    function test_position_spec_top_right() {
+        var spec = M.positionSpec("top-right");
+        compare(spec.name, "top-right");
+        compare(spec.top, true);
+        compare(spec.bottom, false);
+        compare(spec.left, false);
+        compare(spec.right, true);
+        compare(spec.newestFirst, true);
+        compare(spec.slideSign, 1);
+    }
+
+    function test_position_spec_top_left() {
+        var spec = M.positionSpec("top-left");
+        compare(spec.name, "top-left");
+        compare(spec.top, true);
+        compare(spec.bottom, false);
+        compare(spec.left, true);
+        compare(spec.right, false);
+        compare(spec.newestFirst, true);
+        compare(spec.slideSign, -1);
+    }
+
+    function test_position_spec_bottom_right_is_the_default() {
+        var spec = M.positionSpec("bottom-right");
+        compare(spec.name, "bottom-right");
+        compare(spec.top, false);
+        compare(spec.bottom, true);
+        compare(spec.left, false);
+        compare(spec.right, true);
+        compare(spec.newestFirst, false);
+        compare(spec.slideSign, 1);
+        compare(M.DEFAULT_POSITION, "bottom-right");
+    }
+
+    function test_position_spec_bottom_left() {
+        var spec = M.positionSpec("bottom-left");
+        compare(spec.name, "bottom-left");
+        compare(spec.top, false);
+        compare(spec.bottom, true);
+        compare(spec.left, true);
+        compare(spec.right, false);
+        compare(spec.newestFirst, false);
+        compare(spec.slideSign, -1);
+    }
+
+    function test_position_spec_falls_back_to_default_on_garbage() {
+        compare(M.positionSpec("diagonal").name, M.DEFAULT_POSITION);
+        compare(M.positionSpec("").name, M.DEFAULT_POSITION);
+        compare(M.positionSpec(undefined).name, M.DEFAULT_POSITION);
+        compare(M.positionSpec(null).name, M.DEFAULT_POSITION);
+        compare(M.positionSpec(123).name, M.DEFAULT_POSITION);
+    }
 }

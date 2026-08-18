@@ -186,6 +186,14 @@ import QtQuick
 // network round trip per direct flake input and the unauthenticated GitHub
 // API allows 60 requests per hour per IP; the widget itself is opt-in via
 // bar.layout.
+// notifications.position (string, default "bottom-right"): which screen
+// corner the popup toast stack anchors to, one of "top-right" /
+// "bottom-right" / "bottom-left" / "top-left". An unrecognised value falls
+// back to the default (shell/Notifications/model.js's positionSpec()).
+// Top positions clear the bar (barHeight + panelGap); bottom positions sit
+// panelGap off the bottom edge. The newest toast always sits nearest the
+// anchored corner and the enter/exit slide comes from the anchored side
+// edge, M34 Task 1.
 Singleton {
     id: root
 
