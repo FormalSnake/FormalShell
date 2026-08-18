@@ -41,10 +41,32 @@ Singleton {
     property bool available: false
     property var status: AirpodsModel.parseStatus("")
 
-    // Bounded rewatch, same rationale as Config.qml/Theme.qml: at daemon
-    // startup ~/.local/state/librepods may not exist yet, and a bare
-    // watchChanges: true never attaches to a path whose parent dir is also
-    // missing — retry until the daemon creates it.
+    // Rewatch runs only while a consumer is registered — the bar widget,
+    // for as long as it exists at all (opted into bar.layout), and the
+    // panel, for as long as it's open — the same acquire()/release() shape
+    // DualsenseService uses. Unlike settings.json/theme.json, whose
+    // Config.qml/Theme.qml precedent this used to cite, status.json's
+    // parent directory is created by the daemon itself and, on the common
+    // daemonless host, never appears at all: an unconditional retry here
+    // ran a FileView reload every 300ms for the shell's entire lifetime
+    // even with zero consumers (AirpodsPanel is instantiated unconditionally
+    // in shell.qml). Gating on refcount makes that cost genuinely zero on a
+    // host that never opts in, and only as long as it takes the daemon to
+    // start on one that does.
+    property int _refCount: 0
+
+    function acquire() {
+        root._refCount++;
+        if (root._refCount === 1)
+            statusFile.reload();
+    }
+
+    function release() {
+        root._refCount = Math.max(0, root._refCount - 1);
+        if (root._refCount === 0)
+            rewatchTimer.stop();
+    }
+
     Timer {
         id: rewatchTimer
         interval: 300
@@ -59,17 +81,17 @@ Singleton {
         onLoaded: root._applyStatus()
         onLoadFailed: error => {
             // Only touch status/available on an actual transition. The
-            // rewatch loop below re-fires this handler every 300ms for as
-            // long as no daemon is running (the common case, including the
-            // VM's default install), and reassigning a fresh parseStatus()
-            // object on every miss fired statusChanged on every tick
-            // forever, re-evaluating every AirpodsPanel binding at ~3.3Hz
-            // with nothing actually available to show.
+            // rewatch loop below can re-fire this handler every 300ms for
+            // as long as a consumer is registered and no daemon is
+            // running, and reassigning a fresh parseStatus() object on
+            // every miss fired statusChanged on every tick, re-evaluating
+            // every AirpodsPanel binding with nothing actually available
+            // to show.
             if (root.available) {
                 root.status = AirpodsModel.parseStatus("");
                 root.available = false;
             }
-            if (error === FileViewError.FileNotFound)
+            if (error === FileViewError.FileNotFound && root._refCount > 0)
                 rewatchTimer.restart();
         }
     }

@@ -10,7 +10,10 @@ import "../../Airpods/model.js" as AirpodsModel
 // "AIRPODS NOISE" group bolted onto the bottom of BluetoothPanel. Bound
 // directly to AirpodsService (Services/AirpodsService.qml, M29 Task 1),
 // which itself watches the daemon's status.json and owns the control
-// socket — this panel reads `status` and calls `send(verb)`, nothing more.
+// socket — this panel reads `status` and calls `send(verb)`, and registers
+// as a rewatch consumer for as long as it's open (acquire()/release(),
+// DualsensePanel.qml's own onIsOpenChanged idiom) so a daemonless host
+// never pays for a panel that's opened but never used to find one.
 //
 // Honest states first: no status.json at all (the daemon isn't running, or
 // quit and removed it) renders one dim "NO DAEMON" cell; a live daemon that
@@ -122,10 +125,13 @@ Panel {
     }
 
     onIsOpenChanged: {
-        if (root.isOpen)
+        if (root.isOpen) {
             root._cursorKey = root._cursorEntries.length > 0 ? root._cursorEntries[0].key : "";
-        else
+            AirpodsService.acquire();
+        } else {
             root._cursorKey = "";
+            AirpodsService.release();
+        }
     }
 
     // Panel.qml's shared keyboard-nav hook (M6 Task 7, BluetoothPanel.qml's

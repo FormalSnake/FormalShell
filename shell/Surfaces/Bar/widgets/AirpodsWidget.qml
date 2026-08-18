@@ -16,7 +16,12 @@ import qs.Services
 // (pinned nerd-fonts-jetbrains-mono cmap, verified via fonttools ttx in
 // M29 Task 2): md-earbuds U+F184F. Click toggles the airpods panel
 // anchored under this cell, same PanelOpenDot idiom as every other M6
-// widget (BluetoothWidget.qml).
+// widget (BluetoothWidget.qml). Registers/unregisters as an
+// AirpodsService consumer for as long as this cell exists at all — it
+// only exists while "airpods" is actually in bar.layout, which is what
+// keeps that service's rewatch loop from spinning on a host that never
+// opted in (DualsenseWidget.qml's own consumer registration, same
+// reason).
 Cell {
     id: root
 
@@ -48,6 +53,9 @@ Cell {
 
     visible: root.shown
     standalone: true
+
+    Component.onCompleted: AirpodsService.acquire()
+    Component.onDestruction: AirpodsService.release()
 
     tooltipText: {
         var parts = [];
