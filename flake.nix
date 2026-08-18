@@ -4,7 +4,12 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     quickshell = {
-      url = "git+https://git.outfoxxed.me/quickshell/quickshell";
+      # The GitHub mirror of git.outfoxxed.me/quickshell/quickshell, same
+      # tree, pinned to the same rev the lock has carried all along. The
+      # upstream host times out from GitHub CI runners (every push since
+      # 2026-08-18 ~11:00 failed on the fetch), and flakes have no fallback
+      # URL. Bump by editing the rev here.
+      url = "github:quickshell-mirror/quickshell/43d4fa9e883cb03239b3d578c9c57070f4fbd281";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
