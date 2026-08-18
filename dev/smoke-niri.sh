@@ -346,9 +346,17 @@
 # `tray activate tray-fixture-2` drives the exact Activate() call Tray.qml's
 # own left-click handler makes, and the stub's --activate-file
 # (tray-activate.txt) is asserted afterward, proving the D-Bus Activate round
-# trip reached the item and reached only that item. Opening an item's
-# DBusMenu stays host-trial territory (a platform QMenu with no pointer to
-# dismiss it would wedge a headless run, see TrayIpc.qml). The stub
+# trip reached the item and reached only that item. M32: tray-fixture-2 also
+# carries --menu, exporting a real com.canonical.dbusmenu tree (see
+# sni-stub.py's own header) — `tray menu tray-fixture-2` over IPC opens it
+# (screenshot tray-menu.png, the shell-owned TrayMenu.qml surface, no
+# platform QMenu grab to wedge a headless run on any more), then
+# `menucursor`/`menuactivate` over IPC (not real wtype keys: an IPC-opened
+# popout gets no bar cell and never reliably picks up Wayland keyboard
+# focus in this rig, same limitation `picker`'s own choose()/variant()
+# verbs exist for) drive the cursor down through it and activate one row;
+# the stub's --activate-file gains a second line for the DBusMenu Event
+# that round trip produced, asserted alongside the Activate line. The stub
 # processes are killed by PID (tray-pids.txt, same pattern as --media's mpv)
 # right before niri quits.
 # With --chevron, writes a settings.json fixture putting `chevron` mid
@@ -1423,6 +1431,9 @@ tray_strip_path="$shot_dir/tray-strip.png"
 tray_pids_path="$shot_dir/tray-pids.txt"
 tray_activate_path="$shot_dir/tray-activate.txt"
 tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
+tray_menu_reply_path="$shot_dir/tray-menu-reply.txt"
+tray_menu_path="$shot_dir/tray-menu.png"
+tray_menuactivate_reply_path="$shot_dir/tray-menuactivate-reply.txt"
 chevron_status_collapsed_path="$shot_dir/chevron-status-collapsed.json"
 chevron_status_expanded_path="$shot_dir/chevron-status-expanded.json"
 chevron_expand_reply_path="$shot_dir/chevron-expand-reply.txt"
@@ -3904,7 +3915,7 @@ if $tray_mode; then
 #!/usr/bin/env bash
 sleep 1
 "$python3_bin" "$sni_stub_path" --id tray-fixture-1 --title "Tray Fixture 1" --color c0392b --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
-"$python3_bin" "$sni_stub_path" --id tray-fixture-2 --title "Tray Fixture 2" --color 27ae60 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
+"$python3_bin" "$sni_stub_path" --id tray-fixture-2 --title "Tray Fixture 2" --color 27ae60 --activate-file "$tray_activate_path" --menu & echo \$! >> "$tray_pids_path"
 "$python3_bin" "$sni_stub_path" --id tray-fixture-3 --title "Tray Fixture 3" --color 2980b9 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 "$python3_bin" "$sni_stub_path" --id tray-fixture-4 --title "Tray Fixture 4" --color f1c40f --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 "$python3_bin" "$sni_stub_path" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
@@ -3915,6 +3926,15 @@ sleep 1
 niri msg action screenshot-screen --path "$tray_strip_path"
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray menu tray-fixture-2 > "$tray_menu_reply_path" 2>&1
+sleep 7
+niri msg action screenshot-screen --path "$tray_menu_path"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray menucursor 1 > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray menucursor 1 > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call tray menuactivate > "$tray_menuactivate_reply_path" 2>&1
+sleep 1
 EOF
 
   tray_kill_script="$shot_dir/tray-kill.sh"
@@ -4445,16 +4465,31 @@ fi
     # closed again.
     screenshot_delay=46
   elif $tray_mode; then
-    # tray-drive.sh's own final step (the activate call) lands around its
-    # internal sleep sum (~11s in: 1s before the six stubs launch, 6s for
-    # them to register, then the status/screenshot/activate legs at roughly
-    # a second apiece plus qs spawn overhead on llvmpipe). This run's generic
-    # smoke.png/SMOKE_OK is taken 5s after that, so it shows the ordinary bar
-    # with all six items as their own cells. Getting this wrong is not a slow
-    # test, it is a false failure: the kill script takes the stubs down before
-    # niri quits, so a drive step that lands after this delay reads an empty
-    # item list.
-    screenshot_delay=16
+    # tray-drive.sh's own final step (the post-menuactivate settle) lands
+    # around its internal sleep sum (~21s in: 1s before the six stubs
+    # launch, 6s for them to register, then status/strip/activate/menu-open
+    # legs at roughly a second apiece plus qs spawn overhead on llvmpipe —
+    # the `tray menu` call's own DBusMenuHandle round trip itself,
+    # AboutToShow then GetLayout over real D-Bus, resolves in milliseconds
+    # once the item is registered, confirmed against a dbus-monitor
+    # capture, so these are the same generic per-step margins every other
+    # leg budgets, not a slow round trip — plus a deliberate 7s before the
+    # menu screenshot specifically: taking tray-strip.png fires niri's own
+    # "Screenshot captured" notification, which this shell's own
+    # NotificationService renders as a normal-urgency toast on THIS
+    # session's isolated bus (`_normalPopupDurationMs` = 8000,
+    # NotificationService.qml) anchored top-right — the same corner every
+    # IPC-opened popout falls back to with no bar cell to anchor under — so
+    # the menu screenshot needs the toast's own 8s to have elapsed since
+    # the strip shot, not just a settle margin; the menucursor/menuactivate
+    # legs that follow are near-instant IPC calls with no sleeps between
+    # them). This run's generic smoke.png/SMOKE_OK is taken 5s after that,
+    # so it shows the ordinary bar with all six items as their own cells
+    # (the menu itself closes on its own menuactivate, so it's not still
+    # open here). Getting this wrong is not a slow test, it is a false
+    # failure: the kill script takes the stubs down before niri quits, so
+    # a drive step that lands after this delay reads an empty item list.
+    screenshot_delay=26
   elif $chevron_mode; then
     # chevron-drive.sh's own final step (the expanded grim) lands around its
     # internal sleep sum (~10s in: 5s for the bar to settle, then the two
@@ -5768,9 +5803,53 @@ if $tray_mode; then
   if ! grep -q '^tray-fixture-2: Activate(' "$tray_activate_path"; then
     echo "SMOKE_FAIL: tray-activate.txt does not record Activate on tray-fixture-2 — got: $(cat "$tray_activate_path")" >&2; exit 1
   fi
+  # M32: tray menu tray-fixture-2 opens the shell-owned TrayMenu.qml surface
+  # (no platform QMenu grab to wedge a headless run any more).
+  if [ -s "$tray_menu_reply_path" ]; then
+    cat "$tray_menu_reply_path"
+  else
+    echo "SMOKE_FAIL: no tray menu IPC reply produced" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$tray_menu_reply_path"; then
+    echo "SMOKE_FAIL: tray menu IPC call did not return ok — got: $(cat "$tray_menu_reply_path")" >&2; exit 1
+  fi
+  if [ -f "$tray_menu_path" ]; then
+    echo "SMOKE_TRAY_MENU $tray_menu_path"
+  else
+    echo "SMOKE_FAIL: no tray-menu screenshot produced" >&2; exit 1
+  fi
+  if [ -s "$tray_menuactivate_reply_path" ]; then
+    cat "$tray_menuactivate_reply_path"
+  else
+    echo "SMOKE_FAIL: no tray menuactivate IPC reply produced" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$tray_menuactivate_reply_path"; then
+    echo "SMOKE_FAIL: tray menuactivate IPC call did not return ok — got: $(cat "$tray_menuactivate_reply_path")" >&2; exit 1
+  fi
+  # `menucursor 1` twice walks the cursor Plain Item -> Disabled Item ->
+  # Checked Item (rows 0/1/2, the fixture tree's own layout in
+  # sni-stub.py), and `menuactivate` activates the Checked Item (id 3) —
+  # entry.triggered() sends a DBusMenu Event with eventId "clicked" for
+  # exactly that id, appended to the same --activate-file as the earlier
+  # Activate() call. Driven over IPC rather than real wtype keys: a wtype
+  # Escape landing on a menu that stayed open (2026-08-18) confirmed this
+  # IPC-opened popout never picks up real Wayland keyboard focus in this
+  # rig, the same "unproven keyboard/pointer delivery into an
+  # OnDemand-focus layer surface" limitation the picker's own
+  # choose()/variant() verbs exist for. Refing/unreffing the root entry
+  # around open/close (QsMenuOpener's own contract, confirmed against the
+  # pinned source) also sends "opened" on open and "closed" once
+  # menuactivate's own root.close() drops the last ref, so the file ends
+  # up with exactly four lines: Activate, Event(0,opened),
+  # Event(3,clicked), Event(0,closed) — asserting the exact clicked line
+  # plus the total count catches both a missing round trip and an
+  # over-firing one (e.g. activate landing on more than the intended row).
+  if ! grep -q '^tray-fixture-2 menu: Event(3, clicked)$' "$tray_activate_path"; then
+    echo "SMOKE_FAIL: tray-activate.txt does not record the menu Event round trip on entry 3 — got: $(cat "$tray_activate_path")" >&2; exit 1
+  fi
   tray_activate_lines=$(wc -l < "$tray_activate_path" | tr -d ' ')
-  if [ "$tray_activate_lines" != "1" ]; then
-    echo "SMOKE_FAIL: expected exactly one activate record (got $tray_activate_lines) — activate hit more than the targeted item" >&2; exit 1
+  if [ "$tray_activate_lines" != "4" ]; then
+    echo "SMOKE_FAIL: expected exactly Activate + opened + clicked + closed (got $tray_activate_lines lines) — got: $(cat "$tray_activate_path")" >&2; exit 1
   fi
 fi
 

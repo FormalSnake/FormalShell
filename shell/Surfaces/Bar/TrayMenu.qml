@@ -136,6 +136,25 @@ Panel {
         root.close();
     }
 
+    // IPC-safe standins for the real Down/Up/Enter keys above (TrayIpc.qml's
+    // `menucursor <delta>`/`menuactivate`) — the same division the
+    // picker's `choose`/`variant` verbs already draw (their own header:
+    // "independent of real keyboard/pointer delivery... the same division
+    // every other surface's actions already use in the smoke rig"), needed
+    // here because this popout is IPC-opened with no bar cell (openItem's
+    // `cell` is null over IPC), so it never receives real focus in a rig
+    // with no synthetic pointer or working key delivery into an
+    // IPC-triggered OnDemand layer surface.
+    function moveCursor(delta) {
+        root.cursorActive = true;
+        root._moveCursor(delta);
+    }
+
+    function activateCursor() {
+        if (root._cursor >= 0 && root._cursor < root._rows.length)
+            root._activate(root._rows[root._cursor].entry);
+    }
+
     // Skips separator rows (an inverted/hovered hairline reads as broken
     // chrome); disabled rows stay reachable, same as most native menus —
     // `_activate` is what refuses them.
