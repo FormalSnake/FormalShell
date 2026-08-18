@@ -72,3 +72,40 @@ open + bar visible = one pipeline), hover-inversion content ruling
 intact, `motion.enabled: false` leaves a static cover and zero media
 processes, static-path smoke screenshots unchanged, DESIGN.md reversal
 recorded at §2.12, commits pushed.
+
+## Recovery addendum (2026-08-18, after the worktree loss)
+
+A first implementation was lost uncommitted (worktree cleanup raced the
+orchestrator's stop; nothing reached a commit). Its architecture was
+reviewed before the loss and is binding for the redo:
+
+- `shell/Services/AnimatedCoverFrameSource.qml` (new Singleton): the
+  single gate for the animated-cover decode. MediaPanel's own
+  `AnimatedAlbumArt` Loader stays the ONLY Video decode; the singleton
+  gates when that Loader may exist and republishes its grabbed frames so
+  `NowPlaying.qml` paints from the same frames with no second pipeline.
+  Consumers: `panelWants` (one flag, MediaPanel is a single instance) +
+  a bar refcount (`setBarWantsFrames(wasWanted, isWanted)` guarding
+  no-op transitions, the `VisualizerService.setBarVisible` precedent).
+  `active: (panelWants || _barWanters > 0) && MediaService.isPlaying &&
+  AppleMusicArtService.animatedArtUrl !== "" && Theme.motionEnabled`.
+- `shell/Components/Panel.qml` gains `property bool keepMapped: false`,
+  default-false so no other panel changes. Verbatim recovered diff:
+  `visible: root.isOpen || frame.opacity > 0 || root.keepMapped`, plus a
+  compositor-level click-through mask for exactly the new state:
+  `mask: (!root.isOpen && frame.opacity <= 0 && root.keepMapped) ?
+  _clickThroughMask : null` with `Region { id: _clickThroughMask }` (an
+  empty Region resolves to an empty QRegion, which QsWindow.mask turns
+  into WindowTransparentForInput — real click-through, not a disabled
+  MouseArea). Rationale: the media panel's window hosts the only Video;
+  `keepMapped` keeps it alive for grabToImage while the bar wants
+  frames and the panel is closed.
+- MediaPanel binds `keepMapped` and `panelWants`; NowPlaying registers
+  its refcount on visibility (Component.onCompleted/onDestruction plus
+  the on-screen gate) and renders the shared frames through the same
+  dither pass as its static mini cover.
+
+For the M33 redo in the same recovery workflow: three intermediate
+DisplayPanel blob versions survive unreachable in .git (4580ec3f,
+1089c5db, 6eb363c1) — consultable with `git cat-file -p`, but the plan
+text wins over any of them.
