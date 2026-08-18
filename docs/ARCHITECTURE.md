@@ -207,7 +207,7 @@ shell/
     ThemeIpc.qml                IpcHandler target "theme", retheme()/mode()/status()
     WallpaperIpc.qml            IpcHandler target "wallpaper", set()/get()
     MenuIpc.qml                 IpcHandler target "menu", toggle()/summon()/close()/refresh()/ping()/select()/input()
-    NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/invokeLast()
+    NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/invokeLast()/expand(on|off)
     OsdIpc.qml                  IpcHandler target "osd", volume()/brightness()/media()/close()/state()
     PanelIpc.qml                 IpcHandler target "panel", open(name)/close()/toggle(name)/state() — registry maps name -> Panel instance
     ClipboardIpc.qml             IpcHandler target "clipboard", list()/copy(id)/remove(id)/clear()
@@ -291,7 +291,7 @@ shell/
                                      percent as its readout, LIGHTBAR swatch+hex and PLAYER LEDS dot rows,
                                      a dim READ ONLY title-band tag since the owner's host units own writes
     Notifications/
-      Toasts.qml                 per-screen PanelWindow, Overlay layer; top-right popup column off NotificationService.popups
+      Toasts.qml                 per-screen PanelWindow, Overlay layer; sonner-style depth stack off NotificationService.popups, anchored per notifications.position (default bottom-right), hover/IPC expand into a full column
       Center.qml                  single-instance PanelWindow, Top layer; right-anchored PENDING/EARLIER sections + DND cell
       NotificationCard.qml        shared Cell: meta row (app name/relative time) + summary/body, critical = accent fill
     Osd/
@@ -666,7 +666,9 @@ Notifications/model.js  (.pragma library, pure — state in, state out)
         |                                       |
         v                                       v
 Surfaces/Notifications/Toasts.qml       Surfaces/Notifications/Center.qml
-  per-screen, Overlay layer, top-right    single instance, Top layer, right-anchored
+  per-screen, Overlay layer,              single instance, Top layer, right-anchored
+  notifications.position-anchored,
+  sonner depth stack (hover/IPC expand)
   reads .popups                           reads .pending then .past (PENDING/EARLIER sections)
   dismiss -> dismissPopup() (seen, ->past) dismiss -> dismissOne() (dropped outright)
                                            open() -> markAllSeen() on close

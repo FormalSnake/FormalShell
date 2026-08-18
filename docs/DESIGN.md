@@ -856,15 +856,32 @@ floats with a margin or fuses to the screen edge.
   brightness) are full-width tracks whose fill level is a flat `accent`
   block — no round thumb, no gradient fill.
 - **Notifications** — each popup toast is its own small omarchy card
-  (bordered, radius 0); stacked toasts keep omarchy's card-to-card gap, not
-  fused adjacency. The notification **center** (the summoned history list)
-  is the ASCII-OS table surface: rows share rules, app-name-plus-timestamp
-  is an uppercase meta row, a selected/highlighted row inverts. Critical
+  (bordered, radius 0); the toast stack anchors to a configurable screen
+  corner (`notifications.position`, default `bottom-right`, M34) and
+  renders **compact**: one meta row, body clamped to a single line, the
+  image slot down to caption height, actions as bare labels, the card
+  narrowed one width step (`popupWidthNarrow`). Collapsed, the stack is a
+  sonner-style offset-peek idiom: the newest/highest-urgency card sits full
+  size at the front, up to two older cards peek a fixed sliver out from
+  behind it — each a real card, content hidden, sized narrower by an
+  integer `Theme.space` step per level (never a fractional `transform:
+  scale` — a dated, surface-scoped exception to §4.2's no-scale reading,
+  the depth read entirely through stepped pixel sizing so borders stay
+  exactly `borderWidth` on every level). Hovering the stack (or
+  `notifications expand on/off` over IPC) expands it into today's plain
+  full-width column, `panelGap` apart, and pauses every visible popup's
+  expiry for as long as it's expanded — sonner's "hover shows everything
+  that arrived together." The notification **center** (the summoned
+  history list) keeps its own fixed right-anchored placement and today's
+  full-size card rendering regardless of the toast stack's corner — it is
+  the ASCII-OS table surface: rows share rules, app-name-plus-timestamp is
+  an uppercase meta row, a selected/highlighted row inverts. Critical
   severity is a full-bleed `urgent` fill (§2.4) on either surface. Cards
   render the notification's own image, or else the sender's themed app
-  icon, in a 40×40 slot, hidden entirely when neither resolves — the
-  shell's third sanctioned image-icon exception (M15), after the menu's
-  launcher rows and the bar's active-window cell.
+  icon, in a 40×40 slot (caption-height in the toast's compact mode),
+  hidden entirely when neither resolves — the shell's third sanctioned
+  image-icon exception (M15), after the menu's launcher rows and the bar's
+  active-window cell.
 - **OSD** — one small omarchy card, three-cell row inside it (icon | label |
   value fill track), fixed widths per the existing M-plan contract.
 - **Lock/greeter** — one composed centered block (Task 6's brief), not three

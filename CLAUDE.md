@@ -46,17 +46,26 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   Combine with `--wallpaper` to verify the menu over matugen-recolored
   colors (`docs/screenshots/menu-niri.png` is captured this way).
 - `dev/smoke-niri.sh --notify` — same, plus fires `notify-send -u normal`
-  then `-u critical` in-session and screenshots the resulting toasts (normal
-  card + a full-bleed accent cell for the critical one).
+  then `-u critical` in-session and screenshots the resulting toasts:
+  bottom-right by default since M34 (`notifications.position`,
+  `shell/Notifications/model.js`'s `positionSpec`), collapsed into a
+  sonner-style depth stack (critical wins the front slot over a newer
+  normal, older popups peek a fixed sliver out from behind it, each level
+  sized narrower by an integer `Theme.space` step — never a fractional
+  `transform: scale`). `notifications expand on` then `off` over IPC (the
+  rig's stand-in for hovering the stack) reflows it into the full column
+  and back, screenshotted separately (`toasts-expanded.png`).
 - `dev/smoke-niri.sh --center` — same as `--notify` (combine the two flags),
   plus fires one more `notify-send`, waits for it to auto-expire into
   `pending`, then summons the notification center over the `notifications`
   IPC target and screenshots it (DND cell, `PENDING / n` header, per-row
   cells). The sticky critical popup from `--notify` is still live in
   `NotificationService.popups`, but Toasts.qml suppresses its own
-  Overlay-layer stack for as long as the center is open (both surfaces are
-  top-right anchored, so left un-suppressed the popup would sit on top of
-  the center's own corner) — the screenshot shows the center alone, and the
+  Overlay-layer stack unconditionally for as long as the center is open:
+  Center.qml stays a fixed right-anchored, full-height Top-layer card no
+  matter where `notifications.position` puts the toast stack, so this is
+  one rule with no corner-collision math — the screenshot shows the
+  center alone, and the
   popup reappears once the center closes.
 - `dev/smoke-niri.sh --osd` — drives the bottom-center OSD three ways: a
   manual `qs ipc call osd volume` (screenshotted separately as

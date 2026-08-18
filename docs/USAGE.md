@@ -844,9 +844,10 @@ three-tier reducer (`popups` → `pending` → `past`), independent card toasts
 ledger rows), and a summonable history center — see `docs/DESIGN.md` and
 `docs/superpowers/specs/2026-07-27-formalshell-design.md` §6.
 
-**Three tiers.** A notification lands in `popups` (a top-right toast, capped
-at 4 — the oldest overflows to `pending`) unless DND is on, in which case it
-goes straight to `pending`. A popup that times out moves to `pending`,
+**Three tiers.** A notification lands in `popups` (a toast in the corner
+`notifications.position` names, capped at 4 — the oldest overflows to
+`pending`) unless DND is on, in which case it goes straight to `pending`. A
+popup that times out moves to `pending`,
 unseen — the duration is Omarchy's own band, honoring a sender's own
 `expire_timeout` hint when it falls inside the band: 5s floor for
 `urgency: low`, 8s floor otherwise, 30s cap either way, sticky (never times
@@ -870,6 +871,23 @@ notifications reading as an unreadable wall of link markup. A single-line
 entry (no body) gets tighter vertical padding than one with a body. The
 icon slot (40×40) shows the notification's own image, else the sender's
 themed app icon, hidden entirely when neither resolves.
+
+**Toast position and stack (M34).** `notifications.position` (default
+`bottom-right`, also `top-right`/`bottom-left`/`top-left`) picks the corner
+the popup stack anchors to; an unrecognised value falls back to the default
+(`shell/Notifications/model.js`'s `positionSpec`). Toasts render compact
+there — one meta row, body clamped to a single line, a caption-height icon
+slot, bare-label actions, one width step narrower than the center's own
+cards — and collapse into a sonner-style depth stack: the newest (or, if
+one is sticky-critical, that one regardless of arrival order) sits full
+size at the front, up to two older popups peek a fixed sliver out from
+behind it, each level a real card sized narrower by a fixed step rather
+than scaled down. Hovering the stack, or `notifications expand on|off` over
+IPC, reflows it into a full-width column and pauses every visible popup's
+countdown for as long as it's expanded — moving the pointer off (or
+`expand off`) collapses it back and resumes the clocks. The history center
+keeps its own fixed right-anchored placement and full-size cards regardless
+of where the toast stack is anchored.
 
 **Grouping.** Identical notifications collapse into one card carrying a
 repeat count in its meta row (`Signal / 2m ago / x4`). Identical means the
@@ -920,6 +938,8 @@ qs ipc --any-display -p <store-path>/share/formalshell call notifications dismis
 qs ipc --any-display -p <store-path>/share/formalshell call notifications clearPending    # drop pending outright
 qs ipc --any-display -p <store-path>/share/formalshell call notifications clear           # dismissAll + clearPending
 qs ipc --any-display -p <store-path>/share/formalshell call notifications invokeLast      # fire the newest popup/pending entry's default action
+qs ipc --any-display -p <store-path>/share/formalshell call notifications expand on       # reflow the collapsed toast stack into a full column, pause its expiry
+qs ipc --any-display -p <store-path>/share/formalshell call notifications expand off      # collapse it back, resume expiry
 ```
 
 Bind the center to a key in niri, same pattern as the menu:

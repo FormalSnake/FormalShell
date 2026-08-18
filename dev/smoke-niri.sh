@@ -67,22 +67,34 @@
 # With --notify, fires `notify-send -u normal` then `-u critical` then one
 # carrying two real `-A` actions (M19 Task 4: proves NotificationCard.qml's
 # action row renders as full-bleed ink-fill buttons) in-session and
-# screenshots the resulting toasts. Then flips DND on over the existing
-# `notifications` IPC target (`setDnd true`, dumped to dnd-status.txt — both
-# notify-sends already landed, so this can't retroactively suppress them)
-# and screenshots the bar again (indicator-dnd.png) to prove the bell cell
-# (BellWidget.qml, M13b Task 2) swaps to its bell-off glyph.
+# screenshots the resulting toasts — bottom-right by default since M34
+# (`notifications.position`, Config.qml), collapsed into the sonner-style
+# depth stack: the critical popup wins the front slot over the two normals
+# behind it (Model.stackOrder — urgency outranks recency), each peek level a
+# real card sized narrower by an integer Theme.space step, never a
+# fractional scale. `notifications expand on` (the rig's IPC stand-in for
+# hovering the stack — no synthetic pointer here) reflows the pile into the
+# full column and is screenshotted separately (toasts-expanded.png); `expand
+# off` immediately after restores the collapsed pile the run's own smoke.png
+# shows. Then flips DND on over the existing `notifications` IPC target
+# (`setDnd true`, dumped to dnd-status.txt — both notify-sends already
+# landed, so this can't retroactively suppress them) and screenshots the bar
+# again (indicator-dnd.png) to prove the bell cell (BellWidget.qml, M13b
+# Task 2) swaps to its bell-off glyph.
 # With --center, fires one more `notify-send -u normal` and waits for
 # non-critical popups to auto-expire into the `pending` tier before summoning
 # the notification center over the `notifications` IPC target and
 # screenshotting it — combine with --notify so there's a critical notify-send
-# still sitting sticky in the popup layer: Toasts.qml suppresses that whole
-# stack for as long as the center is open, so the screenshot shows the
-# center alone, not the two surfaces overlapping. `notifications status` is
-# dumped closed -> open -> closed around a showHistory toggle round trip
-# (the same center.open()/close() the bell cell's own click calls, so this
-# is the click's IPC stand-in) and asserted: pending non-zero before the
-# summon, centerOpen flipping true then back false.
+# still sitting sticky in the popup layer: Center.qml stays a fixed
+# right-anchored, full-height Top-layer card regardless of where
+# notifications.position puts the toast stack, so Toasts.qml suppresses its
+# whole stack unconditionally for as long as the center is open (one rule,
+# no corner-collision math) and the screenshot shows the center alone, not
+# the two surfaces overlapping. `notifications status` is dumped closed ->
+# open -> closed around a showHistory toggle round trip (the same
+# center.open()/close() the bell cell's own click calls, so this is the
+# click's IPC stand-in) and asserted: pending non-zero before the summon,
+# centerOpen flipping true then back false.
 # With --osd, drives the bottom-center OSD three ways: `qs ipc call osd
 # volume` (manual trigger, screenshotted as osd-manual.png — its path is
 # printed on its own line since it isn't the run's canonical SMOKE_OK
