@@ -123,9 +123,9 @@ disabled entries dim, a checked entry takes the cursor's `selected` fill,
 and a submenu expands in place as indented rows rather than opening a
 cascade window. Replaces the old native `QsMenuAnchor` popup, which took
 an xdg_popup grab Hyprland's layer-shell path tore down on the tray
-icon's own pixmap, closing the menu the instant it opened. Past 4 visible
-items the rest collapse into one more cell (`+N`) that expands the row to
-reveal them all.
+icon's own pixmap, closing the menu the instant it opened. The strip has
+no visible limit of its own; bounding a long tray is the bar chevron's
+job (M24).
 
 **Bell** — an always-visible notification cell (M13b): bell glyph, swapping
 to bell-off while DND is on, plus a pending-count meta label whenever
@@ -323,9 +323,7 @@ wordings: `BLUETOOTH / NO ADAPTER`, `BLUETOOTH / NO DEVICES`,
 and shows no card.
 
 ```bash
-qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…],"expanded":…}
-qs ipc --any-display -p <store-path>/share/formalshell call tray expand    # same action as clicking the "+N" cell
-qs ipc --any-display -p <store-path>/share/formalshell call tray collapse
+qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"items":[…]}
 qs ipc --any-display -p <store-path>/share/formalshell call tray activate <id>   # same action as left-clicking the item's cell
 qs ipc --any-display -p <store-path>/share/formalshell call tray menu <id>         # same action as right-clicking the item's cell
 qs ipc --any-display -p <store-path>/share/formalshell call tray menucursor <delta> # move the open menu's cursor row

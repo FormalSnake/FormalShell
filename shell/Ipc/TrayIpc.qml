@@ -78,7 +78,10 @@ IpcHandler {
     function menucursor(delta: string): string {
         if (!trayMenu || !trayMenu.isOpen)
             return "error: no tray menu open";
-        trayMenu.moveCursor(parseInt(delta, 10));
+        const step = parseInt(delta, 10);
+        if (isNaN(step))
+            return "error: delta must be an integer";
+        trayMenu.moveCursor(step);
         return "ok";
     }
 
