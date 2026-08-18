@@ -22,6 +22,14 @@ PanelWindow {
     id: root
 
     property bool isOpen: false
+    // Off for every panel but MediaPanel (M35): keeps this window mapped
+    // even while closed, for a caller that needs the surface alive without
+    // it being open — MediaPanel's own Video decode has to keep rendering
+    // for grabToImage while the bar's mini cover wants frames, and a
+    // closed-but-mapped PanelWindow is otherwise unmapped the instant the
+    // exit fade finishes (see `visible` below). Default false so no panel
+    // besides MediaPanel changes behavior.
+    property bool keepMapped: false
     // Shared cursor-visibility gate (M26 Task 8, upstream's CursorSurface
     // contract — Ui/CursorSurface.qml — restated in Cell terms): each
     // row-navigable panel keeps its own row identity (a numeric index or a
@@ -156,9 +164,19 @@ PanelWindow {
     // Held visible through the exit fade (DESIGN.md §4): close() drops
     // isOpen, the frame's opacity Behavior runs to 0, and only then does
     // the window unmap. Keyboard focus and the backdrop release on isOpen
-    // itself, so input never lands on a fading-out panel.
-    visible: root.isOpen || frame.opacity > 0
+    // itself, so input never lands on a fading-out panel. `keepMapped`
+    // extends this past the fade for MediaPanel's grabToImage need (M35).
+    visible: root.isOpen || frame.opacity > 0 || root.keepMapped
     color: "transparent"
+    // keepMapped alone (closed, fully faded, still mapped) is the one state
+    // that must take no input at all: an empty Region resolves to an empty
+    // QRegion, which QsWindow.mask turns into WindowTransparentForInput —
+    // real click-through, not a disabled MouseArea (Tooltip.qml's own
+    // precedent) — so a "closed" panel kept mapped for its Video decode
+    // never eats a click meant for whatever is really on screen there.
+    mask: (!root.isOpen && frame.opacity <= 0 && root.keepMapped) ? _clickThroughMask : null
+
+    Region { id: _clickThroughMask }
 
     WlrLayershell.namespace: "formalshell:panel"
     WlrLayershell.layer: WlrLayer.Top

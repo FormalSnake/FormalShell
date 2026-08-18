@@ -660,10 +660,22 @@ adjective:
     cadence is the aesthetic, not a defect, and stops the moment
     `motion.enabled: false`, playback pauses, or the frame errors, falling
     back to the static dithered art); and the bar's now-playing cell's mini
-    cover (M20 Task 4b/5b, §3 Bar), static only, no bar-scale animated
-    decode. The mini cover keeps its colors even on a hovered (inverted)
-    cell, content ruling winning over the cell's own hover inversion, the
-    same precedent the menu's app icons already set. The bar visualizer's
+    cover (M20 Task 4b/5b, §3 Bar), which now animates too (M35, owner:
+    "the bar cover doesnt appear to be animated ... like the image in the
+    bar, the panel is fine" — reversing M20's "static only, no bar-scale
+    animated decode" call). `AnimatedCoverFrameSource.qml` is the one gate
+    on the one Video decode (owned by MediaPanel's AnimatedAlbumArt.qml
+    Loader): it runs while the panel wants frames OR the bar's mini cover
+    does (a refcount, `VisualizerService.setBarVisible`'s own precedent),
+    AND `MediaService.isPlaying`, AND animated art is resolved, AND
+    `Theme.motionEnabled` — any leg going false kills the decode outright,
+    never just a paused paint. The panel and the bar both dither-paint the
+    same republished frames rather than each decoding their own, so the
+    "second, permanently-idle Video pipeline" cost M20 declined to pay
+    never materializes. The mini cover keeps its colors even on a hovered
+    (inverted) cell, animated or not, content ruling winning over the
+    cell's own hover inversion, the same precedent the menu's app icons
+    already set. The bar visualizer's
     per-bar fill colors (§4 item 8) are chrome inks, not content: they
     read the level bands, and swap on hover like every other ink on that
     cell. A cover-derived palette shipped here briefly and the owner
@@ -804,11 +816,11 @@ floats with a margin or fuses to the screen edge.
   cell, and notification card images: unlike those three, it renders
   through the retro color dither (§2 item 12) rather than a plain `Image`,
   so it stays inside the dither language while keeping the cover's own
-  colors, unaffected by hover inversion or a theme retheme alike. Static
-  art only, no bar-scale animated decode: the panel's Apple Music video
-  only exists while the panel itself is open, so sharing it at the bar
-  would mean a second, permanently-idle Video pipeline for a slot this
-  small.
+  colors, unaffected by hover inversion or a theme retheme alike. It now
+  animates too (M35, §2 item 12) rather than staying static: the panel's
+  Apple Music video is still the only decode that ever runs (M20's
+  second-pipeline objection stands), but `AnimatedCoverFrameSource.qml`
+  republishes its frames so this cell paints the same ones the panel does.
 - **Menu** — a floating card (omarchy chrome: bordered rectangle, `panelGap`
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),

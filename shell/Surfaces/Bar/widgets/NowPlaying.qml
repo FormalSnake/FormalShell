@@ -20,10 +20,17 @@ import qs.Services
 // dither and keeps its own colors even on a hovered (inverted) cell — the
 // same content-keeps-its-colors ruling the menu's app icons already have —
 // so unlike the rest of this cell's ink, the mini cover does NOT swap on
-// hover. Static art only: the panel's animated Apple Music cover (AnimatedAlbumArt.qml)
-// only decodes while the media panel itself is open, so sharing it at the
-// bar would mean a second, permanently-idle Video pipeline for a slot this
-// small: not worth it for a 16px icon (see DESIGN.md §3 Bar).
+// hover.
+//
+// M35 (owner: "the bar cover doesnt appear to be animated ... the panel is
+// fine" — reverses M20's "static only" call, DESIGN.md §2 item 12): a
+// second DitherImage layers over the static one, sourced from
+// `AnimatedCoverFrameSource.frameUrl` — the exact frames MediaPanel's own
+// AnimatedAlbumArt.qml grabs off its one Video decode, republished rather
+// than decoded twice for a slot this small. This cell registers as a
+// frame consumer via `_syncFrames()` below (windowVisible + shown gate,
+// VisualizerService.setBarVisible's own refcount idiom) so the shared
+// decode runs whenever either this bar or the panel wants it.
 Cell {
     id: root
 
@@ -45,6 +52,28 @@ Cell {
 
     visible: root.shown
     standalone: true
+
+    // M35: this cell wants animated frames exactly while it would actually
+    // paint them — shown AND its bar window on screen — mirroring
+    // Visualizer.qml's own windowVisible registration. AnimatedCoverFrameSource
+    // ANDs in isPlaying/animatedArtUrl/motionEnabled itself, so those gates
+    // don't need repeating here.
+    readonly property bool _wantsFrames: root.shown && root.windowVisible
+    property bool _registeredWantsFrames: false
+
+    function _syncFrames() {
+        if (root._wantsFrames === root._registeredWantsFrames)
+            return;
+        AnimatedCoverFrameSource.setBarWantsFrames(root._registeredWantsFrames, root._wantsFrames);
+        root._registeredWantsFrames = root._wantsFrames;
+    }
+
+    on_WantsFramesChanged: root._syncFrames()
+    Component.onCompleted: root._syncFrames()
+    Component.onDestruction: {
+        if (root._registeredWantsFrames)
+            AnimatedCoverFrameSource.setBarWantsFrames(true, false);
+    }
 
     // The cell shows the title alone, and marquees or elides it once it
     // outgrows maxWidth — the tooltip adds the artist and, for a title that
@@ -81,14 +110,31 @@ Cell {
         // Dithered mini cover, glyph's own slot size (`glyph.implicitHeight`
         // still resolves while the glyph itself is hidden). Retro color
         // dither, content ruling: keeps the cover's own colors at rest and
-        // on hover alike, unlike every other ink on this cell.
-        DitherImage {
+        // on hover alike, unlike every other ink on this cell. The static
+        // DitherImage below is the permanent fallback for every path the
+        // animated overlay above it doesn't cover — disabled, no match, no
+        // frame yet, motion off — same layering MediaPanel's artSlot uses.
+        Item {
+            id: coverSlot
             visible: MediaService.artUrl !== ""
             anchors.verticalCenter: parent.verticalCenter
             width: glyph.implicitHeight
             height: glyph.implicitHeight
-            source: MediaService.artUrl
-            mode: "retro"
+
+            DitherImage {
+                anchors.fill: parent
+                source: MediaService.artUrl
+                mode: "retro"
+            }
+
+            // M35: shares AnimatedCoverFrameSource's frames with the panel's
+            // own AnimatedAlbumArt.qml rather than decoding a second Video.
+            DitherImage {
+                anchors.fill: parent
+                visible: AnimatedCoverFrameSource.active && AnimatedCoverFrameSource.frameUrl !== ""
+                source: AnimatedCoverFrameSource.frameUrl
+                mode: "retro"
+            }
         }
 
         // M16 Task 11 (owner-requested, gated subtle), extracted to

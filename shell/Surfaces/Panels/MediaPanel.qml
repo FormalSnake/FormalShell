@@ -25,6 +25,21 @@ Panel {
     panelTitle: "NOW PLAYING"
     panelWidth: Theme.space.popupWidthDefault
 
+    // M35: the bar's mini cover (NowPlaying.qml) shares this panel's one
+    // Video decode rather than running its own. AnimatedCoverFrameSource
+    // is the single gate for that decode — panelWants is this panel's own
+    // half of it (MediaPanel is a shell-wide singleton instance,
+    // shell.qml, so one flag is enough), keepMapped keeps this panel's
+    // window mapped for grabToImage while the bar wants frames and the
+    // panel itself is closed (Panel.qml's own click-through mask covers
+    // input during that state).
+    keepMapped: AnimatedCoverFrameSource.active
+    Binding {
+        target: AnimatedCoverFrameSource
+        property: "panelWants"
+        value: root.isOpen
+    }
+
     // The one named image-slot size (DESIGN.md §1.3's structural-size
     // exceptions names "the media panel's 96x96 album-art slot" by name).
     readonly property real _artSlotSize: 96
@@ -92,12 +107,14 @@ Panel {
                 // over the static art above, which stays the permanent
                 // fallback for every failure path — disabled, no match, no
                 // animated art, download failure, or a missing
-                // QtMultimedia module. Active only while the panel is open
-                // and the track actually playing.
+                // QtMultimedia module. Active whenever AnimatedCoverFrameSource
+                // says either this panel or the bar's mini cover wants
+                // frames (M35) — not just `root.isOpen` any more, since the
+                // Video this Loader owns is the bar's decode too.
                 Loader {
                     width: root._artSlotSize
                     height: root._artSlotSize
-                    active: root.isOpen && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== ""
+                    active: AnimatedCoverFrameSource.active
                     source: "AnimatedAlbumArt.qml"
                 }
             }

@@ -1645,8 +1645,13 @@ downloads an MP4 to `~/.cache/formalshell/applemusic-art/` (per-lookup temp
 file + atomic rename), a miss is cached too (`{}`-shaped cache keyed by
 `artist/album`, so a track without animated art is never re-fetched every
 play), and a 30-day prune runs once at startup. The muted, looping video
-(`AnimatedAlbumArt.qml`, layered over the static art) plays only while the
-panel is open and the track is actually playing.
+(`AnimatedAlbumArt.qml`, layered over the static art) plays while the panel
+is open, the bar's now-playing mini cover is on screen, or both (M35) — one
+decode either way. `AnimatedCoverFrameSource.qml` gates when that Video may
+exist (panel open OR the bar wants frames, AND the track is actually
+playing, AND `Theme.motionEnabled`) and republishes its grabbed frames so
+`NowPlaying.qml`'s mini cover dither-paints the same ~8fps frames the panel
+does instead of decoding its own.
 
 **IPC** (`target: "media"`):
 
