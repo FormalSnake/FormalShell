@@ -40,6 +40,9 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // FORGET is hover-revealed on PAIRED rows only, the same "known and not
 // currently connected" restriction NetworkPanel's FORGET already applies.
 //
+// AirPods noise control moved out to its own AirpodsPanel (M29 Task 2) —
+// see that file for the daemon this panel used to talk to.
+//
 // TRUSTED is a peer of those actions — same _runAction machinery, same
 // failure surface — with one behavior difference the toolkit forces.
 // BluetoothDevice::setTrusted stores its local bindable and fires
@@ -66,18 +69,6 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // renders the honest "NO ADAPTER" cell — the adapter-off ("TURN ON TO SCAN")
 // and discovering-empty ("SCANNING…") states below it are exercised by the
 // model.js bucket tests, not the smoke rig.
-//
-// AIRPODS NOISE (M17 Task 2): four plain action cells (OFF/ANC/
-// TRANSPARENCY/ADAPTIVE) that join the same address-keyed cursor list as
-// the device rows above, appended last, and appear only while
-// `LibrePodsService.available` (probed once per panel open, never a poll)
-// AND a connected device actually names itself AirPods
-// (model.js's hasConnectedAirpods) — the socket alone only proves the
-// LibrePods app is running, not that the earbuds are here.
-// The protocol behind them is write-only (no D-Bus, a raw QLocalServer
-// socket — see LibrePodsService.qml), so none of the four ever renders as
-// selected/active; the header's dim "SET ONLY" tag is what tells the
-// owner that's deliberate, not broken.
 Panel {
     id: root
 
@@ -108,24 +99,12 @@ Panel {
         ? "󰂲"
         : (root._connectedRows.length > 0 ? "󰂱" : "󰂯")
 
-    readonly property bool _airpodsAvailable: LibrePodsService.available && BluetoothModel.hasConnectedAirpods(root._connectedRows)
-    readonly property var _airpodsModes: [
-        { key: "off", label: "OFF" },
-        { key: "anc", label: "ANC" },
-        { key: "transparency", label: "TRANSPARENCY" },
-        { key: "adaptive", label: "ADAPTIVE" }
-    ]
-
     readonly property var _allRows: {
         var out = [];
         var i;
         for (i = 0; i < root._connectedRows.length; i++) out.push({ device: root._connectedRows[i], bucket: "connected" });
         for (i = 0; i < root._pairedRows.length; i++) out.push({ device: root._pairedRows[i], bucket: "paired" });
         for (i = 0; i < root._availableRows.length; i++) out.push({ device: root._availableRows[i], bucket: "available" });
-        if (root._airpodsAvailable) {
-            for (i = 0; i < root._airpodsModes.length; i++)
-                out.push({ device: { address: "airpods:" + root._airpodsModes[i].key, mode: root._airpodsModes[i].key }, bucket: "airpods" });
-        }
         return out;
     }
 
@@ -154,7 +133,6 @@ Panel {
 
     onIsOpenChanged: {
         if (root.isOpen) {
-            LibrePodsService.probe();
             // Cursor identity starts on the first row every open (M26 Task
             // 8's reveal-only guard below needs a real position to show,
             // never an empty address that would gate `hovered` false on the
@@ -272,10 +250,6 @@ Panel {
     function _activateRow(bucket, device) {
         if (!device || root._actionKind !== "")
             return;
-        if (bucket === "airpods") {
-            LibrePodsService.setNoise(device.mode);
-            return;
-        }
         if (bucket === "connected") {
             if (root._runAction("disconnect", device))
                 device.disconnect();
@@ -720,73 +694,5 @@ Panel {
     Repeater {
         model: root._availableRows.map(function (d) { return { device: d, bucket: "available" }; })
         delegate: deviceRow
-    }
-
-    Cell {
-        visible: root._airpodsAvailable
-        width: parent.width
-
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
-
-            MetaLabel {
-                width: parent.width - setOnlyLabel.width - parent.spacing
-                text: "AIRPODS NOISE"
-                colon: true
-            }
-
-            MetaLabel {
-                id: setOnlyLabel
-                text: "SET ONLY"
-            }
-        }
-    }
-
-    Component {
-        id: airpodsModeCell
-
-        Cell {
-            id: modeCell
-            required property var modelData
-            readonly property string _key: modeCell.modelData.key
-            readonly property string _address: "airpods:" + modeCell._key
-            width: implicitWidth
-            height: implicitHeight
-            // These synthetic "airpods:" addresses already live in
-            // `_allRows` (Enter-on-cursor routes through `_activateRow`
-            // exactly like a device row), so hover joins the same shared
-            // cursor `deviceRow`'s `rowMouse` writes below rather than
-            // painting its own independent highlight (M26 Task 8 fix: two
-            // independent hover states showed two highlights at once).
-            hovered: root.cursorActive && root._cursorAddress === modeCell._address
-            onContainsPointerChanged: if (modeCell.containsPointer) {
-                root.cursorActive = true;
-                root._cursorAddress = modeCell._address;
-            }
-
-            MetaLabel {
-                text: modeCell.modelData.label
-                color: modeCell.foreground
-            }
-
-            interactive: true
-            onClicked: LibrePodsService.setNoise(modeCell._key)
-        }
-    }
-
-    Cell {
-        visible: root._airpodsAvailable
-        width: parent.width
-
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
-
-            Repeater {
-                model: root._airpodsModes
-                delegate: airpodsModeCell
-            }
-        }
     }
 }

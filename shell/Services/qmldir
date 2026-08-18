@@ -8,7 +8,6 @@ singleton ClipsshService ClipsshService.qml
 singleton ConnectivityService ConnectivityService.qml
 singleton IdleService IdleService.qml
 InstanceLock InstanceLock.qml
-singleton LibrePodsService LibrePodsService.qml
 singleton LocationService LocationService.qml
 singleton MediaService MediaService.qml
 singleton NightLightService NightLightService.qml

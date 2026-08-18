@@ -112,6 +112,7 @@ ShellRoot {
     CalendarPanel { id: calendarPanelInstance; menu: menu }
     NetworkPanel { id: networkPanelInstance }
     BluetoothPanel { id: bluetoothPanelInstance }
+    AirpodsPanel { id: airpodsPanelInstance }
     PowerPanel { id: powerPanelInstance }
     WeatherPanel { id: weatherPanelInstance }
     MediaPanel { id: mediaPanelInstance }
@@ -176,7 +177,7 @@ ShellRoot {
     // register/unregister, so this binding re-fires.
     PanelIpc {
         registry: {
-            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance };
+            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance };
             var surfaces = PluginService.surfaces;
             for (var key in surfaces)
                 reg[key] = surfaces[key];
@@ -187,6 +188,7 @@ ShellRoot {
     ClipboardIpc {}
     NetworkIpc { panel: networkPanelInstance }
     BluetoothIpc {}
+    AirpodsIpc {}
     MediaIpc {}
     TrayIpc {}
     BarIpc {}
