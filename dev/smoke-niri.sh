@@ -137,6 +137,27 @@
 # screenshot must show tomorrow's cell inverted (today's cell accent-filled
 # next to it) and the events ledger listing EDS TOMORROW EVENT under the
 # dated meta header; `calendar status` must report tomorrow selected.
+# `--panel airpods` (M29 Task 5) stages a schema-true status.json fixture
+# (Pro 3, ANC mode, both buds in ear, case known — the daemon's own
+# on-disk shape, plan's research block) into the isolated HOME before the
+# shell starts, and binds a plain python3 AF_UNIX stub at the daemon's own
+# control-socket path so the panel's real send() path has somewhere to
+# land. The drive opens the panel (airpods-panel.png: three battery
+# tracks, ANC selected with no Off row — Pro 3 dropped it — CA on in
+# accent, ear detection), sends `airpods noise transparency` over IPC (the
+# stub's recorder file must show exactly `noise:transparency`, proving the
+# verb reached the socket byte for byte), then rewrites status.json in
+# place to noise_mode:2 and screenshots again (airpods-live.png) — the two
+# frames are asserted to differ, the same dead-binding guard the chevron
+# leg uses. `--panel dualsense` has no daemon and no fixture to stage: the
+# VM carries no hid-playstation device, so the drive just opens the panel
+# and screenshots the honest NO CONTROLLER card (dualsense-panel.png) —
+# CLAUDE.md's honest-unavailable-states rule bans inventing a `/sys` node
+# to make this render more. Both legs point bar.layout's right region at
+# the two opt-in cells together (airpods leading dualsense), so the same
+# screenshots prove the bar side too: airpods self-hidden -> visible with
+# the fixture's own worst-bud percent, dualsense staying self-hidden with
+# no empty chrome.
 # With --wifi (M14 Task 3), drives the real `network` IPC target against
 # nix/testvm.nix's mac80211_hwsim rig — three simulated radios: wlan0 stays
 # NetworkManager's station device, wlan1/wlan2 are hostapd APs broadcasting
@@ -786,6 +807,18 @@ if $panel_mode && [ "$panel_name" = "github" ]; then
   panel_github_mode=true
 fi
 
+# --panel airpods/--panel dualsense (M29 Task 5) each need their own
+# multi-step drive script rather than the generic single `panel open`
+# spawn, same reason --panel calendar does.
+panel_airpods_mode=false
+if $panel_mode && [ "$panel_name" = "airpods" ]; then
+  panel_airpods_mode=true
+fi
+panel_dualsense_mode=false
+if $panel_mode && [ "$panel_name" = "dualsense" ]; then
+  panel_dualsense_mode=true
+fi
+
 # M14 Task 5: only the plain/default leg gets the focused fixture window —
 # every other mode's own smoke.png already exists to prove a different,
 # more specific surface (a summoned panel/menu, a locked screen, …), so
@@ -971,7 +1004,7 @@ fi
 if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
   || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode \
-  || $capture_edit_mode; then
+  || $capture_edit_mode || $panel_airpods_mode || $panel_dualsense_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -1005,11 +1038,13 @@ if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_t
   fi
 fi
 
-if $tray_mode; then
+if $tray_mode || $panel_airpods_mode; then
   # nix/testvm.nix stages this exact wrapped derivation into
   # environment.systemPackages (M10 Task 1), so `command -v python3` already
   # resolves to a PyGObject-capable interpreter on the VM; the fallback
-  # below is for a host that hasn't wired that in.
+  # below is for a host that hasn't wired that in. panel_airpods_mode's own
+  # stub (below) is stdlib-only (no gi/D-Bus needed), it just reuses
+  # whichever python3 tray_mode already resolved this run.
   if python3 -c 'import gi' >/dev/null 2>&1; then
     python3_bin=$(command -v python3)
   else
@@ -1035,6 +1070,10 @@ if $notify_mode || $center_mode; then
 fi
 shell_path=$(readlink -f result/share/formalshell)
 sni_stub_path="$PWD/dev/sni-stub.py"
+# Exact path AirpodsService.qml resolves ($XDG_RUNTIME_DIR/librepods.sock,
+# empty XDG_RUNTIME_DIR = no fallback, mirrored here) — never isolated per
+# run, same as WAYLAND_DISPLAY above (host-session-safety comment).
+airpods_sock_path="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/librepods.sock"
 
 # The nested instance is a Wayland client of the host compositor, so it needs
 # the host's WAYLAND_DISPLAY. This shell may not have it exported (e.g. a
@@ -1478,6 +1517,17 @@ mic_bar_png="$shot_dir/mic-bar.png"
 systemupdate_open_reply_path="$shot_dir/systemupdate-open-reply.txt"
 systemupdate_state_path="$shot_dir/systemupdate-panel-state.txt"
 systemupdate_panel_png="$shot_dir/systemupdate-panel.png"
+airpods_open_reply_path="$shot_dir/airpods-open-reply.txt"
+airpods_state_path="$shot_dir/airpods-panel-state.txt"
+airpods_panel_png="$shot_dir/airpods-panel.png"
+airpods_live_png="$shot_dir/airpods-live.png"
+airpods_noise_reply_path="$shot_dir/airpods-noise-reply.txt"
+airpods_recorder_path="$shot_dir/airpods-verbs.txt"
+airpods_stub_script="$shot_dir/airpods-stub.py"
+airpods_stub_pid_path="$shot_dir/airpods-stub.pid"
+dualsense_open_reply_path="$shot_dir/dualsense-open-reply.txt"
+dualsense_state_path="$shot_dir/dualsense-panel-state.txt"
+dualsense_panel_png="$shot_dir/dualsense-panel.png"
 plugins_list_path="$shot_dir/plugins-list.json"
 plugins_status_path="$shot_dir/plugins-status.json"
 plugins_bar_png="$shot_dir/plugins-bar.png"
@@ -1640,6 +1690,59 @@ if $panel_mode && [ "$panel_name" = "calendar" ]; then
 {"wallpaper": "", "mode": "dark", "dnd": false, "calendarBirthYear": 1990, "calendarLifeExpectancy": 80, "appLaunches": []}
 EOF
 fi
+# --panel airpods (M29 Task 5): a schema-true one-line sorted-key
+# status.json — the daemon's own on-disk shape, plan's research block,
+# keys matching tst_airpods_model.qml's own fixtures — staged into the
+# isolated HOME's XDG_STATE_HOME before the shell starts, so
+# AirpodsService's FileView reads a real Pro 3 (ANC mode, both buds in
+# ear, high levels, case known) on first load rather than the honest NO
+# DAEMON gate. airpods-drive.sh rewrites this same file in place partway
+# through the run to prove the FileView watch actually re-renders.
+#
+# The control side needs a real listener at the daemon's own socket path:
+# a plain python3 stdlib AF_UNIX server (no gi/D-Bus, unlike the tray
+# stubs) bound at $airpods_sock_path before niri ever starts, recording
+# every verb it receives to a file — the sni-stub "real external producer"
+# pattern, minus D-Bus since this protocol needs none. Started here rather
+# than inside the nested session (tray's spawn-at-startup) because the
+# socket path lives under XDG_RUNTIME_DIR, which stays the outer host's
+# real one on purpose (this file's own host-session-safety comment) — no
+# dbus-run-session boundary to be inside of.
+airpods_status_dir="$iso_home/.local/state/librepods"
+if $panel_airpods_mode; then
+  mkdir -p "$airpods_status_dir"
+  cat > "$airpods_status_dir/status.json" <<'EOF'
+{"adaptive_noise_level":0,"case":{"available":true,"charging":false,"level":80},"connected":true,"conversational_awareness":true,"device_name":"Fixture AirPods Pro","ear_detection_behavior":0,"is_pro_series":true,"left":{"available":true,"charging":false,"in_ear":true,"level":85},"lid_state":0,"model_name":"AirPods Pro 3","noise_mode":1,"one_bud_anc_mode":false,"right":{"available":true,"charging":false,"in_ear":true,"level":90},"schema_version":1,"supports_noise_off":false}
+EOF
+
+  cat > "$airpods_stub_script" <<'PYEOF'
+import os
+import socket
+import sys
+
+sock_path, out_path = sys.argv[1], sys.argv[2]
+if os.path.exists(sock_path):
+    os.unlink(sock_path)
+srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+srv.bind(sock_path)
+srv.listen(5)
+with open(out_path, "a") as f:
+    while True:
+        conn, _ = srv.accept()
+        data = b""
+        while True:
+            chunk = conn.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        conn.close()
+        f.write(data.decode("utf-8", "replace") + "\n")
+        f.flush()
+PYEOF
+
+  "$python3_bin" "$airpods_stub_script" "$airpods_sock_path" "$airpods_recorder_path" &
+  echo $! > "$airpods_stub_pid_path"
+fi
 # M6 Task 8: the VM/nested session has no Wi-Fi radio, so geoclue never
 # gets a fix — location.latitude/longitude here exercises the documented
 # settings.json override fallback (the actually-verifiable path) so
@@ -1725,6 +1828,12 @@ elif $systemupdate_mode; then
   # pollEnabled), so the cell and the panel below are polling the same
   # real flake rather than two independent reads.
   bar_settings=', "bar": {"layout": {"right": ["systemUpdate", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+elif $panel_airpods_mode || $panel_dualsense_mode; then
+  # Both legs prove the two opt-in cells at once (M29 Task 5): airpods
+  # self-hides -> visible with the fixture's own worst-bud percent,
+  # dualsense stays self-hidden since this VM has no hid-playstation
+  # device — one screenshot per leg, two presence proofs.
+  bar_settings=', "bar": {"layout": {"right": ["airpods", "dualsense", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
 fi
 # record_mode: wf-recorder's dmabuf path has no meaning under llvmpipe
 # (the nested session renders in software, so there is no GPU buffer to
@@ -3025,6 +3134,52 @@ sleep 2
 EOF
 fi
 
+# --panel airpods's drive: open, screenshot the Pro 3/ANC fixture render
+# (three battery tracks, ANC selected with no Off row, CA on, ear
+# detection), send `noise transparency` over the real control socket
+# (airpods-stub.py above records it), rewrite status.json to noise_mode:2
+# in place, then a second screenshot proves the FileView watch re-rendered
+# rather than the fixture rewrite landing on a dead binding.
+if $panel_airpods_mode; then
+  airpods_drive_script="$shot_dir/airpods-drive.sh"
+  cat > "$airpods_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call panel open airpods > "$airpods_open_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call panel state > "$airpods_state_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
+sleep 1
+"$grim_bin" "$airpods_panel_png"
+"$qs_bin" ipc -p "$shell_path" call airpods noise transparency > "$airpods_noise_reply_path" 2>&1
+sleep 1
+cat > "$airpods_status_dir/status.json" <<'FIXEOF'
+{"adaptive_noise_level":0,"case":{"available":true,"charging":false,"level":80},"connected":true,"conversational_awareness":true,"device_name":"Fixture AirPods Pro","ear_detection_behavior":0,"is_pro_series":true,"left":{"available":true,"charging":false,"in_ear":true,"level":85},"lid_state":0,"model_name":"AirPods Pro 3","noise_mode":2,"one_bud_anc_mode":false,"right":{"available":true,"charging":false,"in_ear":true,"level":90},"schema_version":1,"supports_noise_off":false}
+FIXEOF
+sleep 2
+"$grim_bin" "$airpods_live_png"
+EOF
+fi
+
+# --panel dualsense's drive: open, confirm the panel name over IPC, screenshot
+# the honest NO CONTROLLER card — this VM has no hid-playstation device, so
+# that dim cell is the correct rendering, not a stubbed value (CLAUDE.md's
+# honest-unavailable-states rule; the read-path proof on real hardware is
+# the owner's g815 after rollout, per the plan's own note).
+if $panel_dualsense_mode; then
+  dualsense_drive_script="$shot_dir/dualsense-drive.sh"
+  cat > "$dualsense_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call panel open dualsense > "$dualsense_open_reply_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call panel state > "$dualsense_state_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
+sleep 1
+"$grim_bin" "$dualsense_panel_png"
+EOF
+fi
+
 # --lock's whole sequence lives in one script, same rationale as
 # clipboard_drive_script: everything here is strictly ordered (lock, prove
 # it over IPC, screenshot, type a wrong password, screenshot the error
@@ -4049,6 +4204,10 @@ fi
   if $panel_mode; then
     if [ "$panel_name" = "calendar" ]; then
       echo "spawn-at-startup \"bash\" \"$eds_drive_script\""
+    elif $panel_airpods_mode; then
+      echo "spawn-at-startup \"bash\" \"$airpods_drive_script\""
+    elif $panel_dualsense_mode; then
+      echo "spawn-at-startup \"bash\" \"$dualsense_drive_script\""
     else
       echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call panel open '$panel_name'\""
     fi
@@ -4310,6 +4469,19 @@ fi
     # on-open refresh's own `formalshell-eds events` run and the select
     # comfortable room before the shot.
     screenshot_delay=13
+  elif $panel_airpods_mode; then
+    # airpods-drive.sh's own final step (the live-fixture screenshot) lands
+    # around its internal sleep sum (~8s in: open+state+dump, the first
+    # grim, the noise:transparency send, the in-place status.json rewrite,
+    # the second grim). This run's generic smoke.png/SMOKE_OK is taken 4s
+    # after that, so it shows the panel already settled on TRANSPARENCY.
+    screenshot_delay=12
+  elif $panel_dualsense_mode; then
+    # dualsense-drive.sh's own final step (the NO CONTROLLER screenshot)
+    # lands around its internal sleep sum (~5s in: open+state+dump, then
+    # the grim). This run's generic smoke.png/SMOKE_OK is taken 4s after
+    # that.
+    screenshot_delay=9
   elif $wifi_mode; then
     # wifi-drive.sh's own worst-case budget (wpa_supplicant restart settle
     # 2s + self-heal reset poll 2x15s + scan wait 25s + wrong-password poll
@@ -4501,6 +4673,16 @@ host_notifications_owner_after=$(host_notifications_owner)
 if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then
   echo "SMOKE_FAIL: host org.freedesktop.Notifications owner PID changed ($host_notifications_owner_before -> $host_notifications_owner_after) — nested NotificationServer touched the host bus" >&2
   exit 1
+fi
+
+# airpods-stub.py sits in its own accept() loop forever, same reasoning as
+# tray_kill above — killed by PID, socket unlinked so a stale file from an
+# abnormal exit can't wedge the next run's bind().
+if $panel_airpods_mode; then
+  if [ -f "$airpods_stub_pid_path" ]; then
+    kill "$(cat "$airpods_stub_pid_path")" 2>/dev/null || true
+  fi
+  rm -f "$airpods_sock_path"
 fi
 
 if $dump_mode; then
@@ -6598,6 +6780,60 @@ if $osd_mode; then
   else
     echo "SMOKE_FAIL: no osd-brightness screenshot produced" >&2; exit 1
   fi
+fi
+
+if $panel_airpods_mode; then
+  if ! grep -q '^ok$' "$airpods_open_reply_path"; then
+    echo "SMOKE_FAIL: panel open airpods did not return ok, got: $(cat "$airpods_open_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ "$(head -n1 "$airpods_state_path" 2>/dev/null | tr -d '\r')" != "airpods" ]; then
+    echo "SMOKE_FAIL: panel state did not report airpods open, got: $(cat "$airpods_state_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$dump_path" ]; then
+    echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+  if ! grep -qF '"right":["airpods","dualsense"' "$dump_path"; then
+    echo "SMOKE_FAIL: the resolved settings do not lead bar.layout's right region with airpods,dualsense — the opt-in cells were never placed: $(cat "$dump_path")" >&2; exit 1
+  fi
+  if [ ! -f "$airpods_panel_png" ]; then
+    echo "SMOKE_FAIL: no airpods-panel screenshot produced at $airpods_panel_png" >&2; exit 1
+  fi
+  echo "SMOKE_AIRPODS_PANEL $airpods_panel_png"
+  # The one assertion the screenshot alone cannot make: the verb actually
+  # reached the daemon's own control socket, byte for byte, not just that
+  # the IPC call returned ok.
+  if [ "$(cat "$airpods_recorder_path" 2>/dev/null)" != "noise:transparency" ]; then
+    echo "SMOKE_FAIL: the librepods control socket did not receive exactly 'noise:transparency', got: $(cat "$airpods_recorder_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -f "$airpods_live_png" ]; then
+    echo "SMOKE_FAIL: no airpods-live screenshot produced at $airpods_live_png" >&2; exit 1
+  fi
+  # The cheapest guard against a dead binding: the in-place status.json
+  # rewrite has to have actually reached the screen, same idiom as
+  # chevron-collapsed/chevron-expanded above.
+  if cmp -s "$airpods_panel_png" "$airpods_live_png"; then
+    echo "SMOKE_FAIL: airpods-panel and airpods-live screenshots are byte-identical: the status.json rewrite changed the fixture but the FileView watch rendered nothing" >&2; exit 1
+  fi
+  echo "SMOKE_AIRPODS_LIVE $airpods_live_png"
+fi
+
+if $panel_dualsense_mode; then
+  if ! grep -q '^ok$' "$dualsense_open_reply_path"; then
+    echo "SMOKE_FAIL: panel open dualsense did not return ok, got: $(cat "$dualsense_open_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ "$(head -n1 "$dualsense_state_path" 2>/dev/null | tr -d '\r')" != "dualsense" ]; then
+    echo "SMOKE_FAIL: panel state did not report dualsense open, got: $(cat "$dualsense_state_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ ! -s "$dump_path" ]; then
+    echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+  if ! grep -qF '"right":["airpods","dualsense"' "$dump_path"; then
+    echo "SMOKE_FAIL: the resolved settings do not lead bar.layout's right region with airpods,dualsense — the opt-in cells were never placed: $(cat "$dump_path")" >&2; exit 1
+  fi
+  if [ ! -f "$dualsense_panel_png" ]; then
+    echo "SMOKE_FAIL: no dualsense-panel screenshot produced at $dualsense_panel_png" >&2; exit 1
+  fi
+  echo "SMOKE_DUALSENSE $dualsense_panel_png (this VM has no hid-playstation device, so the honest NO CONTROLLER card is the correct rendering)"
 fi
 
 if [ -f "$shot_dir/smoke.png" ]; then
