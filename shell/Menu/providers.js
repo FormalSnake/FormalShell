@@ -135,6 +135,13 @@ function clipboardProvider(items, selfPath, mode) {
             title: "",
             desc: isImage ? _capturedAtLabel(entry.capturedAt) : "",
             thumbSource: isImage ? entry.path : "",
+            // Full untruncated text for the split-pane preview (M30) —
+            // "" for images, same emptiness `desc` already uses to mean
+            // "no text preview here". `time` rides every row (not just
+            // images, unlike `desc`) since the preview pane's meta line
+            // needs a capture time regardless of entry kind.
+            fullText: isImage ? "" : entry.text,
+            time: _capturedAtLabel(entry.capturedAt),
             aliases: [],
             kind: "action",
             action: mode === "share"
@@ -144,6 +151,43 @@ function clipboardProvider(items, selfPath, mode) {
         };
     });
 }
+
+// Route-local filter for the clipboard/share-history level (M30): unlike
+// Search.rank's whole-tree ranking, this only tests one field per row —
+// `fullText`, falling back to `label` for image rows (whose `fullText` is
+// always "") — so typing here narrows history instead of turning into a
+// global search the moment a query is non-empty. Case-insensitive
+// substring, not fuzzy: the ask is "does this entry contain what I typed".
+function clipboardSearch(rows, query) {
+    var q = String(query || "").trim().toLowerCase();
+    if (q === "") return rows || [];
+    return (rows || []).filter(function (row) {
+        var haystack = String(row.fullText || row.label || "").toLowerCase();
+        return haystack.indexOf(q) >= 0;
+    });
+}
+
+// Dim, non-activatable notes for the clipboard/share-history route
+// (mirrors `_nixNoteRow` below): an actually-empty history reads
+// differently from a query that matched nothing, so they carry distinct
+// labels instead of one shared shrug (§2 item 10: empty states take no
+// colon).
+function _clipboardNoteRow(id, label) {
+    return {
+        id: id,
+        parentId: null,
+        label: label,
+        icon: "",
+        title: "",
+        aliases: [],
+        kind: "note",
+        dim: true,
+        childIds: []
+    };
+}
+
+function clipboardEmptyRow() { return _clipboardNoteRow("clipboard.empty", "CLIPBOARD EMPTY"); }
+function clipboardNoMatchRow() { return _clipboardNoteRow("clipboard.nomatch", "NO MATCHES"); }
 
 // Single-quotes `value` for a sh -c string, escaping embedded single quotes
 // the same way HyprlandBackend.qml's _quoteArg does ('\'' — close the
