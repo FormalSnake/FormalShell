@@ -60,7 +60,12 @@ on what each shot proves are in `CLAUDE.md`'s verification loop section
 (the `dev/smoke-niri.sh` flag each was captured with) and git history. The
 AirPods panel shot is new for M29, VM-sourced against a fixture status
 file (`dev/smoke-niri.sh --panel airpods`) standing in for the `librepods`
-daemon — real hardware has never driven this panel.
+daemon — real hardware has never driven this panel. The tray context menu
+shot is new for M32, VM-sourced against `dev/sni-stub.py`'s fixture
+`com.canonical.dbusmenu` tree (`dev/smoke-niri.sh --tray`): it replaced the
+old native `QMenu` popup, which took an xdg_popup grab Hyprland's
+layer-shell path tore down on the tray icon's own pixmap, closing the menu
+the instant it opened.
 
 | | | |
 | :---: | :---: | :---: |
@@ -73,7 +78,7 @@ daemon — real hardware has never driven this panel.
 | <img src="docs/screenshots/active-window-niri.png" width="260"><br>**Active window icon** — mac VM | <img src="docs/screenshots/network-panel-niri.png" width="260"><br>**Network panel** — mac VM | <img src="docs/screenshots/bluetooth-panel-niri.png" width="260"><br>**Bluetooth panel** — mac VM |
 | <img src="docs/screenshots/clipboard-image-niri.png" width="260"><br>**Clipboard image entry** — mac VM | <img src="docs/screenshots/notifications-center-niri.png" width="260"><br>**Notification center: density + CLEAR ALL** — mac VM | <img src="docs/screenshots/audio-panel-niri.png" width="260"><br>**Audio panel: omarchy mixer** — mac VM |
 | <img src="docs/screenshots/weather-niri.png" width="260"><br>**Weather: live bar cell + panel** — mac VM | <img src="docs/screenshots/power-panel-niri.png" width="260"><br>**Power panel: profile + display** — mac VM | <img src="docs/screenshots/share-menu-niri.png" width="260"><br>**Share menu (LocalSend)** — mac VM |
-| <img src="docs/screenshots/airpods-niri.png" width="260"><br>**AirPods panel: battery + listening mode** — mac VM | | |
+| <img src="docs/screenshots/airpods-niri.png" width="260"><br>**AirPods panel: battery + listening mode** — mac VM | <img src="docs/screenshots/tray-menu-niri.png" width="260"><br>**Tray context menu: shell-owned, checkable + submenu rows** — mac VM | |
 
 The Hyprland backend is implemented and verified against a live nested
 session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a

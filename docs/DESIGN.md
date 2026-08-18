@@ -787,7 +787,18 @@ floats with a margin or fuses to the screen edge.
   drawn as a control that answers no click. The tray sits under that rule like any other widget, with no drawer,
   no visible limit and no per-icon buckets of its own: M23 shipped those and
   M24 replaced them, because two chevrons on one bar made the affordance
-  ambiguous about what it governed.
+  ambiguous about what it governed. A tray item's context menu (M32,
+  `TrayMenu.qml`) is a card of its own now, not the platform's native
+  QMenu: right click composes `Panel.qml` under the clicked cell, so
+  entries render as ledger rows sharing rules, the cursor row inverts
+  through the accent pair (§2.2), a checked entry takes the same
+  `selected` fill, disabled entries drop to `foregroundFaint`, and a
+  submenu expands in place as indented rows rather than a cascade
+  window. The native path (`QsMenuAnchor`) took an xdg_popup
+  keyboard+pointer grab that Hyprland's layer-shell path tore down on
+  the tray icon's own pixmap, closing the menu on open; a layer-shell
+  popout takes no such grab, so this surface is themeable and the bug
+  class is gone by construction.
   The now-playing cell's mini cover art (M20) is the fourth sanctioned
   image-icon site, after the menu's launcher rows, the bar's active-window
   cell, and notification card images: unlike those three, it renders

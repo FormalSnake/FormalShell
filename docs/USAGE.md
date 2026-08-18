@@ -116,10 +116,16 @@ cell entirely.
 session bus (`Quickshell.Services.SystemTray`) renders as its own cell:
 left click activates it, middle click secondary-activates it, right click
 opens its `DBusMenu` if it has one. Items whose SNI `ItemIsMenu` flag says
-activation-is-menu get the menu on left click too. The menu renders as a
-native-styled popup (quickshell's platform-menu path owns that widget
-outright), not a shell-themed surface. Past 4 visible items the rest
-collapse into one more cell (`+N`) that expands the row to reveal them all.
+activation-is-menu get the menu on left click too. The menu (M32,
+`TrayMenu.qml`) is a shell-owned card anchored under the clicked cell,
+built off `QsMenuOpener` over the item's own DBusMenu: ledger rows,
+disabled entries dim, a checked entry takes the cursor's `selected` fill,
+and a submenu expands in place as indented rows rather than opening a
+cascade window. Replaces the old native `QsMenuAnchor` popup, which took
+an xdg_popup grab Hyprland's layer-shell path tore down on the tray
+icon's own pixmap, closing the menu the instant it opened. Past 4 visible
+items the rest collapse into one more cell (`+N`) that expands the row to
+reveal them all.
 
 **Bell** — an always-visible notification cell (M13b): bell glyph, swapping
 to bell-off while DND is on, plus a pending-count meta label whenever
@@ -321,6 +327,9 @@ qs ipc --any-display -p <store-path>/share/formalshell call tray status     # {"
 qs ipc --any-display -p <store-path>/share/formalshell call tray expand    # same action as clicking the "+N" cell
 qs ipc --any-display -p <store-path>/share/formalshell call tray collapse
 qs ipc --any-display -p <store-path>/share/formalshell call tray activate <id>   # same action as left-clicking the item's cell
+qs ipc --any-display -p <store-path>/share/formalshell call tray menu <id>         # same action as right-clicking the item's cell
+qs ipc --any-display -p <store-path>/share/formalshell call tray menucursor <delta> # move the open menu's cursor row
+qs ipc --any-display -p <store-path>/share/formalshell call tray menuactivate      # same action as Enter on the cursor row
 ```
 
 **Click, right-click, and scroll** (M26 Task 9) — every widget below

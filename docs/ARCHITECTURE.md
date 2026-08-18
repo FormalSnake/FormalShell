@@ -215,7 +215,7 @@ shell/
     LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status() — no unlock(), see its own header comment
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
     PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/variant(dark|light)/close()/status()
-    TrayIpc.qml                   IpcHandler target "tray", status()/activate(id) — spec addendum, same rationale as "panel"
+    TrayIpc.qml                   IpcHandler target "tray", status()/activate(id)/menu(id)/menucursor(delta)/menuactivate() — spec addendum, same rationale as "panel"
     BarIpc.qml                    IpcHandler target "bar", chevron(action)/chevronAt(action,region): the bar's
                                    collapse boundary (M24). Two verbs, not one with an optional region, because
                                    quickshell dispatches IPC on exact arity; chevron() infers the region when
@@ -240,6 +240,7 @@ shell/
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
+      TrayMenu.qml               shell-owned tray context menu (M32): one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle — replaces the old native QsMenuAnchor popup
       widgets/
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
@@ -837,7 +838,7 @@ kind of reason: a `Loader` with no explicit size mirrors its item's actual
 size, so reading `Loader.implicitHeight` directly would close a cycle back
 through the very property computing it.
 
-**Tray** (`Tray.qml`, `shell/Ipc/TrayIpc.qml`):
+**Tray** (`Tray.qml`, `TrayMenu.qml`, `shell/Ipc/TrayIpc.qml`):
 referencing `Quickshell.Services.SystemTray` makes quickshell host and
 watch `org.kde.StatusNotifierWatcher`, so every real StatusNotifierItem
 registered on the session bus appears in `.items` with no extra wiring.
@@ -846,7 +847,33 @@ bounding a long strip up one altitude to the bar chevron below, which is a
 spec deviation (§Surfaces-1 says "grouped drawer") recorded in `Tray.qml`'s
 own header. `dev/sni-stub.py` is the VM's real StatusNotifierItem producer
 (PyGObject, registers on the session bus for real, never faked inside the
-shell).
+shell) and, behind `--menu`, exports a real `com.canonical.dbusmenu` tree
+(plain/disabled/checkable/separator/submenu entries) for `TrayMenu.qml`'s
+tests to drive.
+
+Right click (or `tray menu <id>`) opens `TrayMenu.qml`, a shell-owned
+context menu (M32) that replaced the old `Tray.qml`-hosted `QsMenuAnchor`.
+That native QMenu was an xdg_popup with its own keyboard+pointer grab
+(platformmenu.cpp); Hyprland's grab code never adds the layer-shell parent
+to the grab's accept set on the path Qt takes to map it, and a click
+anywhere outside that set — including the tray icon's own pixmap, inside
+the same Cell's hit area the surrounding padding shares — tore the grab
+down and closed the menu instantly (niri tracked this correctly; the
+owner's hosts moved niri→Hyprland 2026-08-17 and hit it there). One shared
+`TrayMenu` instance (`shell.qml`, wired through `Bar.qml` like every other
+panel) drives `Quickshell.QsMenuOpener` over the clicked item's own
+`DBusMenuHandle` (`item.menu`): assigning it to `QsMenuOpener.menu` fires
+`AboutToShow(0)` + `GetLayout(0, -1, [])` once and loads the whole subtree
+eagerly, so a `QsMenuEntry`'s own children are already populated by the
+time a submenu row expands — no second D-Bus round trip. Submenus expand
+in place as indented rows rather than spawning cascade popups, so the
+surface stays one layer-shell window taking no xdg_popup grab at all,
+which is what removes the Hyprland bug class rather than working around
+it. `TrayIpc.qml`'s `menucursor <delta>`/`menuactivate` verbs stand in for
+the menu's own Down/Up/Enter keys, the same "verify the action, not the
+input method" idiom `picker`'s `choose`/`variant` already draw: an
+IPC-opened popout gets no bar cell and so no real Wayland keyboard focus
+in the smoke rig.
 
 **Chevron** (`ChevronWidget.qml`, `shell/Ipc/BarIpc.qml`, `Bar/layout.js`):
 macOS Hidden Bar / Bartender as a bar widget. `chevron` is an ordinary
