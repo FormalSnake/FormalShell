@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import qs.Core
@@ -12,16 +11,24 @@ import qs.Components
 // tray contents"), so every real StatusNotifierItem registered on the
 // session bus shows up in .items with no extra wiring on our end. Each item
 // renders as its own standalone Cell — left click Activate()s it, middle
-// click SecondaryActivate()s it, right click opens its DBusMenu via
-// QsMenuAnchor when item.hasMenu is true (Quickshell.DBusMenu's own doc:
-// "can be displayed with QsMenuAnchor or QsMenuOpener"). Items whose
-// onlyMenu flag is set (SNI ItemIsMenu: "activation will do nothing") get
-// the menu on left click too. QsMenuAnchor requires QApplication mode —
-// shell.qml carries `//@ pragma UseQApplication` for exactly this — and
-// renders a native-styled QMenu, not a shell-themed surface: quickshell's
-// platform-menu path (core/platformmenu.cpp) owns that widget outright, so
-// its styling is accepted as-is rather than half-rebuilding a menu
-// renderer.
+// click SecondaryActivate()s it, right click opens its DBusMenu when
+// item.hasMenu is true. Items whose onlyMenu flag is set (SNI ItemIsMenu:
+// "activation will do nothing") get the menu on left click too.
+//
+// M32: the menu itself is TrayMenu.qml (`menu` below, one shared instance
+// wired in from shell.qml/Bar.qml), a shell-owned QsMenuOpener surface —
+// not the old QsMenuAnchor/native-QMenu path this file used to open
+// directly. That native QMenu was also an xdg_popup with its own
+// keyboard+pointer grab (platformmenu.cpp); Hyprland's grab code never adds
+// the layer-shell parent to the grab's accept set on the path Qt takes to
+// map it (`m_parent` stays null, XDGShell.cpp), and its popup grab is
+// pointer+keyboard rather than keyboard-only, so a click anywhere outside
+// the accept set — including the tray icon's own pixmap, inside the same
+// Cell's hit area the surrounding padding shares — tore the grab down and
+// closed the menu instantly (niri tracked this correctly; the same shell
+// worked before the owner's hosts moved niri→Hyprland, 2026-08-17). A
+// layer-shell popout takes no such grab, so this class of bug is gone by
+// construction rather than patched.
 // Hidden entirely (Row.implicitWidth is naturally 0 with an empty Repeater)
 // when nothing has registered, never an empty box.
 //
@@ -41,6 +48,11 @@ import qs.Components
 Row {
     id: root
 
+    // The shared TrayMenu instance (shell.qml, wired through Bar.qml same
+    // as every other panel property) — null is a valid state (menu never
+    // opened this session), openMenu() below just no-ops rather than crash.
+    property var menu: null
+
     // Read by Bar.qml's regionDelegate instead of `visible` directly — see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
@@ -52,24 +64,9 @@ Row {
     spacing: Theme.space.sm
     visible: root.shown
 
-    // Shared by every item cell below — right-clicking one just repoints
-    // this at that cell and its menu handle rather than each delegate
-    // owning its own anchor, since only one context menu is ever open.
-    // Anchored to the cell's bottom-left expanding down-right, so the menu
-    // drops under the bar cell instead of covering it (PopupAnchor's
-    // default edges are Top|Left).
-    QsMenuAnchor {
-        id: contextMenu
-        anchor.edges: Edges.Bottom | Edges.Left
-        anchor.gravity: Edges.Bottom | Edges.Right
-    }
-
     function openMenu(cell) {
-        if (contextMenu.visible)
-            contextMenu.close();
-        contextMenu.anchor.item = cell;
-        contextMenu.menu = cell.modelData.menu;
-        contextMenu.open();
+        if (root.menu)
+            root.menu.openItem(cell, cell.modelData);
     }
 
     // Bound to the live ObjectModel itself, not a `.values` snapshot slice:

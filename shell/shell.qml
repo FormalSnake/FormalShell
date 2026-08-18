@@ -1,7 +1,11 @@
 //@ pragma ShellId formalshell
-// UseQApplication: QsMenuAnchor.open() (the tray's DBusMenu path in
-// Surfaces/Bar/widgets/Tray.qml) hard-fails with a qCritical unless
-// quickshell runs in QApplication mode — platform menus are QMenus.
+// UseQApplication: kept in place, out of scope to reassess for M32. Its
+// only known justification was QsMenuAnchor.open() in Tray.qml's old
+// native-QMenu context-menu path, which M32 removed for a shell-owned
+// QsMenuOpener surface (TrayMenu.qml) after a Hyprland popup-grab bug tore
+// the native QMenu down on click (see Tray.qml's own header). Whether
+// anything else in quickshell's systray/icon rendering still needs
+// QApplication mode is unverified.
 //@ pragma UseQApplication
 import Quickshell
 import QtQuick
@@ -57,6 +61,7 @@ ShellRoot {
                 usagePanel: usagePanelInstance
                 tailscalePanel: tailscalePanelInstance
                 systemUpdatePanel: systemUpdatePanelInstance
+                trayMenu: trayMenuInstance
                 center: notificationsCenter
             }
         }
@@ -126,6 +131,12 @@ ShellRoot {
     DisplayPanel { id: displayPanelInstance }
     RegionPicker { id: regionPickerInstance }
 
+    // Same "one controller, opened on the focused screen at trigger time"
+    // reasoning as Menu/Center/Osd (M32): one TrayMenu instance shared by
+    // every bar output's Tray widget, its content swapped per item via
+    // openItem() rather than one instance per screen.
+    TrayMenu { id: trayMenuInstance }
+
     // Plugin-declared surfaces (shell/Plugins/manifest.js): created from the
     // scanned manifests rather than named here, because nobody knows their
     // ids at authoring time. Each host registers ITSELF with PluginService on
@@ -193,7 +204,7 @@ ShellRoot {
     BluetoothIpc {}
     AirpodsIpc {}
     MediaIpc {}
-    TrayIpc {}
+    TrayIpc { trayMenu: trayMenuInstance }
     BarIpc {}
     LockIpc { lockScreen: lock }
     ScreensaverIpc { screensaver: screensaver }
