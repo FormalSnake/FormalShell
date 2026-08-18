@@ -58,8 +58,17 @@ Singleton {
         onFileChanged: reload()
         onLoaded: root._applyStatus()
         onLoadFailed: error => {
-            root.status = AirpodsModel.parseStatus("");
-            root.available = false;
+            // Only touch status/available on an actual transition. The
+            // rewatch loop below re-fires this handler every 300ms for as
+            // long as no daemon is running (the common case, including the
+            // VM's default install), and reassigning a fresh parseStatus()
+            // object on every miss fired statusChanged on every tick
+            // forever, re-evaluating every AirpodsPanel binding at ~3.3Hz
+            // with nothing actually available to show.
+            if (root.available) {
+                root.status = AirpodsModel.parseStatus("");
+                root.available = false;
+            }
             if (error === FileViewError.FileNotFound)
                 rewatchTimer.restart();
         }
