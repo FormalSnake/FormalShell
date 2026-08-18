@@ -39,6 +39,19 @@ Cell {
     urgent: root._class === "critical" || root._class === "urgent"
     tooltipText: root._tooltip
 
+    // A module that succeeds with nothing to say renders no cell at all,
+    // rather than an empty bordered box with hover chrome. `dualsense-bar`
+    // is the case in hand: with no controller paired it prints
+    // {"text":"","tooltip":"","class":""} and exits 0, which is a real
+    // answer ("no controller"), not a failure. A failure cannot reach this
+    // branch, since commandOutput.js's errorState() always carries the
+    // literal "MODULE ERROR" text.
+    //
+    // Exposed as `shown`, never as `visible`: Bar.qml:320-333 documents that
+    // reading a Loader-hosted item's built-in `visible` from the outside
+    // permanently detaches that item's own visible binding.
+    readonly property bool shown: root._text !== ""
+
     function _run() {
         // `.length` truthiness, not Array.isArray: `module` crossed a
         // property assignment onto a Loader-created object (Bar.qml's

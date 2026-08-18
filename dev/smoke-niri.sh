@@ -1694,9 +1694,10 @@ bar_cmd_fixture_path="$shot_dir/bar-cmd-fixture.sh"
 bar_cmd_fail_path="$shot_dir/bar-cmd-fail.sh"
 bar_cmd_badjson_path="$shot_dir/bar-cmd-badjson.sh"
 bar_cmd_timeout_path="$shot_dir/bar-cmd-timeout.sh"
+bar_cmd_empty_path="$shot_dir/bar-cmd-empty.sh"
 bar_qml_fixture_path="$shot_dir/bar-qml-fixture.qml"
 if $bar_layout_mode; then
-  bar_settings=', "bar": {"layout": {"left": ["github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
+  bar_settings=', "bar": {"layout": {"left": ["github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:cmdempty", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "cmdempty", "type": "command", "command": ["bash", "'"$bar_cmd_empty_path"'"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
 elif $visualizer_mode; then
   # Puts the widget right where the owner asked for it — next to
   # nowPlaying — leaving left/right at their own DEFAULT_LAYOUT fallback
@@ -1759,6 +1760,17 @@ if $bar_layout_mode; then
 printf '{"text": "CMD 42", "tooltip": "smoke fixture tooltip", "class": "warning"}'
 EOF
   chmod +x "$bar_cmd_fixture_path"
+  # Empty SUCCESS, distinct from every failure below it: exit 0 carrying a
+  # well-formed payload whose text is "". That is a real answer ("nothing to
+  # report"), which is what `dualsense-bar` prints with no controller paired,
+  # and it must render NO CELL rather than an empty bordered box. Shipped
+  # broken until 2026-08-18; the four failure fixtures below could not catch
+  # it because every one of them renders "MODULE ERROR".
+  cat > "$bar_cmd_empty_path" <<'EOF'
+#!/usr/bin/env bash
+printf '{"text": "", "tooltip": "", "class": ""}'
+EOF
+  chmod +x "$bar_cmd_empty_path"
   # Four failure-path fixtures (CommandModule.qml, M10 review brief): a
   # non-zero exit despite well-formed stdout, well-formed exit but
   # unparsable stdout, a command that outlives its module's own `timeout`
