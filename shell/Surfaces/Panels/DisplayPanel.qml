@@ -404,7 +404,6 @@ Panel {
     }
 
     Cell {
-        visible: BrightnessService.devices.count > 0
         width: parent.width
 
         MetaLabel { text: "BRIGHTNESS"; colon: true }
