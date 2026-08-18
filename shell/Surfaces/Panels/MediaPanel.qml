@@ -3,14 +3,16 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// MPRIS now-playing popout (DESIGN.md §Panels, spec §5, M7 Task 1; recomposed
-// on PanelHero M28 Task 2): art or a glyph in the hero's leading slot, the
-// track title as the hero's own noun, artist (or the player identity when
-// there is no artist) as its meta line — never "Now playing" as the title,
-// the card's own title band already says that. Elapsed/total on one header
-// line (Task 1's rhythm), the flat accent-fill scrub track underneath, then
-// transport as one small cluster of content-sized cells rather than three
-// glyphs adrift in oversized ones.
+// MPRIS now-playing popout (DESIGN.md §Panels, spec §5, M7 Task 1; art+
+// identity row restored M31 Task 1 after M28 Task 2's brief PanelHero
+// recomposition): when art exists the panel opens with its own 96x96
+// dithered cover beside a "NOW PLAYING / <identity>" meta line, the track
+// title, and the artist (DESIGN.md §1.3's 96x96 exception, §2.13's dated
+// exception to "every panel opens with the shared hero"). No art (most
+// browsers publish none) falls back to the plain PanelHero: glyph, title,
+// meta. Elapsed/total on one header line (Task 1's rhythm), the flat
+// accent-fill scrub track underneath, then transport as one small cluster
+// of content-sized cells rather than three glyphs adrift in oversized ones.
 //
 // Play/pause stays in that transport cluster rather than moving to the
 // hero's `trailing` slot: unlike Audio's MUTE, it has no sense on its own —
