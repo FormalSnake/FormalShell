@@ -348,6 +348,7 @@ Two numbers set the whole shell's size:
   | | | `popupWidthDefault` | 320 |
   | | | `popupWidthWide` | 400 |
   | | | `popupWidthMenu` | 560 |
+  | | | `popupWidthMenuSplit` | 840 |
 
   Both scales can be overridden as a whole (one number denser/roomier) or
   per-token (a theme pins `display` to something huge for the lock clock
@@ -355,10 +356,12 @@ Two numbers set the whole shell's size:
   `lg`/`sm` exactly (2026-08-07 spacing-consistency pass, Task 6) — Cell.qml,
   the one shared row primitive, resolves its own padding through these
   rather than the bare scale steps, so the two numbers can't drift apart
-  independently again. `popupWidth{Narrow,Default,Wide,Menu}` are the four
-  steps every floating card's width snaps to (menu at 560 is its own step;
-  everything from a small popout to the picker snaps to narrow/default/wide)
-  instead of each surface picking its own literal.
+  independently again. `popupWidth{Narrow,Default,Wide,Menu,MenuSplit}` are
+  the five steps every floating card's width snaps to (menu at 560 is its
+  own step; everything from a small popout to the picker snaps to
+  narrow/default/wide) instead of each surface picking its own literal.
+  `MenuSplit` (840, 1.5x `Menu`) is the menu's own further step, for the
+  clipboard/share-history route's 50/50 list-plus-preview split (§3 Menu).
 
   **A panel that does not name its width is a defect (2026-08-17).** Every
   `Panel` sets `panelWidth` explicitly from the four steps above; silence
@@ -807,7 +810,11 @@ floats with a margin or fuses to the screen edge.
   (§Concrete translations' "grid of image cells sharing hairline rules") —
   keeping the same card, search field, cursor and action bar. It is a view
   swap over one level, not a second surface: the picker has no window of its
-  own.
+  own. The clipboard and share-history levels draw as a **50/50 split**
+  instead, same precedent: a left-half history list beside a right-half
+  preview pane holding the cursor row's complete text or image, behind one
+  shared vertical rule, on the same card at its own wider `popupWidthMenuSplit`
+  step.
 - **Panels** (audio/network/bluetooth/power/calendar/weather/media) — each is one
   omarchy-style card anchored under its bar cell (`panelGap` margin,
   bordered, radius 0, `panelPadding` internal padding). Inside: an uppercase

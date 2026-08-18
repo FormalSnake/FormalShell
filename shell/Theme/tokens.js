@@ -42,15 +42,19 @@ var SPACING_BASE = {
 // `lg`/`sm` exactly (2026-08-07 spacing-consistency pass) — Cell.qml's
 // implicit sizing routes through these now instead of the bare scale
 // steps, so the two numbers can't drift apart independently again.
-// `popupWidth{Narrow,Default,Wide,Menu}` are the four snap points every
-// floating card's width now picks from (DESIGN.md §1.3's popup width
-// scale) instead of each surface choosing its own literal.
+// `popupWidth{Narrow,Default,Wide,Menu,MenuSplit}` are the five snap points
+// every floating card's width now picks from (DESIGN.md §1.3's popup width
+// scale) instead of each surface choosing its own literal. `MenuSplit` (1.5x
+// `Menu`) is the menu's own split-pane step — the clipboard/share-history
+// route's left-half list plus right-half preview needs more than one column
+// of rows can hold.
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 8, controlPaddingY: 4, inputPaddingY: 7,
     controlHeight: 28, popupRowHeight: 28, rowGap: 8, rowPaddingX: 12,
     labelGap: 4, panelGap: 14, panelPadding: 18, popupPadding: 14,
     trackThickness: 6,
-    popupWidthNarrow: 280, popupWidthDefault: 320, popupWidthWide: 400, popupWidthMenu: 560
+    popupWidthNarrow: 280, popupWidthDefault: 320, popupWidthWide: 400, popupWidthMenu: 560,
+    popupWidthMenuSplit: 840
 };
 
 function spacingTokens(scale) {

@@ -520,6 +520,19 @@ PanelWindow {
         };
     }
 
+    // --- Clipboard split-pane preview (M30) ------------------------------
+    //
+    // omarchy's clipboard history layout (owner: "copy omarchy's clipboard
+    // history layout. It's way better."): a 50/50 split between the history
+    // list and a full preview of the cursor row, reached without a second
+    // surface — same card, search field, cursor and action bar as every
+    // other level, the same "view swap over one level" precedent the
+    // wallpaper grid already set. "share.history" qualifies too: it lists
+    // the identical rows (Providers.clipboardProvider with mode: "share"),
+    // so the split earns it for free rather than needing its own branch.
+    readonly property bool _isSplitRoute: root._mode === "menu"
+        && (root.currentNodeId === "clipboard" || root.currentNodeId === "share.history")
+
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
     // the ternary's closed branch never reads ClipboardService.items, so
@@ -616,6 +629,19 @@ PanelWindow {
         // query exactly the way the emoji dataset would.
         if (root._isPickerRoute)
             return Providers.imageRows(root._pickerImages, q);
+        // The clipboard/share-history route is route-local too (M30), for
+        // the same reason the picker route above is: typing here narrows
+        // history, it never falls through to whole-tree Search.rank or to
+        // the trigger routes below (checked here, ahead of them, on
+        // purpose — a ":e"/":nix"/":k"-prefixed clipboard entry is filter
+        // text on this level, not a trigger).
+        if (root._isSplitRoute) {
+            var historyRows = Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
+            if (historyRows.length === 0)
+                return [Providers.clipboardEmptyRow()];
+            var matchedRows = Providers.clipboardSearch(historyRows, q);
+            return matchedRows.length === 0 ? [Providers.clipboardNoMatchRow()] : matchedRows;
+        }
         // The emoji route searches the vendored dataset exclusively (an
         // empty query browses its head, Providers.emojiSearch), and the
         // ":e " trigger narrows to the same rows from any level (M12
@@ -666,6 +692,19 @@ PanelWindow {
     }
 
     readonly property var _cursorNode: root._displayRows[root._cursorIndex] || null
+
+    // Split-pane preview content (M30), derived from the cursor row: a
+    // note row (clipboardEmptyRow/clipboardNoMatchRow) renders an empty
+    // pane, an image row (thumbSource set) renders the full image, and
+    // everything else renders the full text. Read only while
+    // _isSplitRoute's own pane is visible, but cheap enough to leave bound
+    // unconditionally rather than gating the bindings themselves.
+    readonly property bool _previewIsNote: !!root._cursorNode && root._cursorNode.kind === "note"
+    readonly property bool _previewIsImage: !!root._cursorNode && !root._previewIsNote && (root._cursorNode.thumbSource || "") !== ""
+    readonly property bool _previewIsText: !!root._cursorNode && !root._previewIsNote && !root._previewIsImage
+    readonly property string _previewMetaText: root._previewIsNote || !root._cursorNode
+        ? ""
+        : (root._previewIsImage ? "IMAGE" : "TEXT") + " / " + (root._cursorNode.time || "")
 
     // What the bottom action bar says right now (Menu/actions.js). Bound
     // rather than pushed, so it tracks the cursor, the mode and the pending
@@ -726,7 +765,12 @@ PanelWindow {
     // row list everywhere else. The idle one is emptied rather than merely
     // hidden (see their `model` bindings), so its contentHeight is 0.
     readonly property real _viewContentHeight: root._isPickerRoute ? gridView.contentHeight : rowsView.contentHeight
-    readonly property real _rowsAreaHeight: Math.min(root._viewContentHeight, Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - variantRow.height - actionBar.height))
+    readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - variantRow.height - actionBar.height)
+    // Fixed height on the split route (M30, omarchy parity): the preview
+    // pane needs to be genuinely useful, not sized to whatever row count a
+    // filter happens to leave — so this route always takes the full cap
+    // instead of shrinking to content height like every other level does.
+    readonly property real _rowsAreaHeight: root._isSplitRoute ? root._rowsAreaCap : Math.min(root._viewContentHeight, root._rowsAreaCap)
 
     // Card-top freeze (omarchy parity, M16 Task 2): a filter keystroke pins
     // the top margin at whatever it currently resolves to, so every
@@ -1414,7 +1458,7 @@ PanelWindow {
     // card; card paints its own background.
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
-    implicitWidth: Core.Theme.space.popupWidthMenu
+    implicitWidth: root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu
     implicitHeight: root._chrome + searchCell.height + variantRow.height + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
@@ -1663,7 +1707,10 @@ PanelWindow {
             anchors.top: variantRow.bottom
             anchors.left: parent.left
             anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
-            width: root._contentWidth
+            // Split route (M30): the list keeps the left half of
+            // _contentWidth so the preview pane below can own the right
+            // half. Every other route is unchanged, full width.
+            width: root._isSplitRoute ? Math.round(root._contentWidth / 2) : root._contentWidth
             height: root._rowsAreaHeight
             visible: !root._isPickerRoute
             clip: true
@@ -1762,6 +1809,101 @@ PanelWindow {
                         root._setCursor(imageCell.index);
                 }
                 onClicked: root._activateFromPointer(imageCell.index)
+            }
+        }
+
+        // The split route's right half (M30): the cursor row's full
+        // content, behind one shared vertical rule. Positioned by anchoring
+        // off rowsView itself (whichever width it currently has) rather
+        // than an independent x/width pair, so the two views can never
+        // drift apart. `anchors.leftMargin: -borderWidth` pulls this pane's
+        // own left edge back by one rule width, landing it exactly where a
+        // history row's own trailing right-edge rule (Cell's shared-rule
+        // contract) already sits — the divider drawn below coincides with
+        // that rule as one line rather than doubling it, and continues for
+        // the pane's full height even past a short list's last row.
+        Item {
+            id: previewPane
+            visible: root._isSplitRoute
+            anchors.top: rowsView.top
+            anchors.left: rowsView.right
+            anchors.leftMargin: -Core.Theme.borderWidth
+            anchors.right: parent.right
+            anchors.rightMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            height: rowsView.height
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: Core.Theme.borderWidth
+                color: Core.Theme.color.rule
+            }
+
+            Item {
+                id: previewContent
+                anchors.fill: parent
+                anchors.topMargin: Core.Theme.space.popupPadding
+                anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+                anchors.rightMargin: Core.Theme.space.popupPadding
+                anchors.bottomMargin: Core.Theme.space.popupPadding
+                clip: true
+
+                MetaLabel {
+                    id: previewMeta
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    visible: root._previewMetaText !== ""
+                    text: root._previewMetaText
+                }
+
+                Text {
+                    anchors.top: previewMeta.bottom
+                    anchors.topMargin: Core.Theme.space.xxs
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    visible: root._previewIsText
+                    text: root._cursorNode ? (root._cursorNode.fullText || "") : ""
+                    wrapMode: Text.WrapAnywhere
+                    color: Core.Theme.color.foreground
+                    font.family: Core.Theme.fontFamily
+                    font.pixelSize: Core.Theme.fontSize.body
+                }
+
+                // True-color (DESIGN.md §2 item 12: menu thumbnails stay out
+                // of the dither list) full preview of the cursor row's
+                // capture, PreserveAspectFit against a box capped at the
+                // pane's own remaining size — the picker grid's decode-cap
+                // rationale. `anchors.topMargin` on the Image itself
+                // subtracts PreserveAspectFit's own vertical centering, so
+                // the image sits flush against this box's top like the text
+                // above it does, rather than centered in the leftover space
+                // of a portrait capture inside a landscape pane.
+                Item {
+                    id: previewImageBox
+                    anchors.top: previewMeta.bottom
+                    anchors.topMargin: Core.Theme.space.xxs
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    visible: root._previewIsImage
+                    clip: true
+
+                    Image {
+                        id: previewImage
+                        width: parent.width
+                        height: parent.height
+                        anchors.top: parent.top
+                        anchors.topMargin: -(height - previewImage.paintedHeight) / 2
+                        source: root._previewIsImage ? ("file://" + root._cursorNode.thumbSource) : ""
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false
+                        sourceSize.width: width * (root.screen ? root.screen.devicePixelRatio : 1)
+                        sourceSize.height: height * (root.screen ? root.screen.devicePixelRatio : 1)
+                    }
+                }
             }
         }
 

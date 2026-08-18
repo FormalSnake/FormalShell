@@ -39,6 +39,27 @@ Cell {
     readonly property real _bodyHeight: label.implicitHeight
     readonly property real _thumbHeight: root._bodyHeight * 2
 
+    // Label width cap (M30): the split-pane clipboard route's rowsView is
+    // roughly half the plain menu's width, narrow enough that a 60-char
+    // preview label (providers.js's previewLabel truncation) can run past
+    // the trailing indicator's reserved gutter — every route gets the cap,
+    // since a row this narrow is possible anywhere the tree gets deep
+    // enough to rank a long label. `_leadWidth` sums whichever leading
+    // slots are actually showing; `_trailReserve` mirrors whichever
+    // trailing element (the meta tag or the ▸/✓ indicator, the two never
+    // show together) reserves its own room past `content`'s padding.
+    readonly property real _leadWidth: (root._isImage ? root._thumbHeight * 3 + Theme.space.labelGap : 0)
+        + ((root.node.iconSource || "") !== "" ? label.implicitHeight + Theme.space.labelGap : 0)
+        + (root.node.icon !== "" ? iconGlyph.implicitWidth + Theme.space.labelGap : 0)
+    readonly property real _descWidth: (root.node.desc || "") !== "" ? descText.implicitWidth + Theme.space.labelGap : 0
+    readonly property real _trailReserve: (root.node.meta || "") !== ""
+        ? Theme.space.controlPaddingX + Theme.borderWidth + metaTagBg.width
+        : ((!root.confirming && (root.checkedState || root.isBranch))
+            ? Theme.space.controlPaddingX + Theme.borderWidth + trailingIndicator.implicitWidth
+            : 0)
+    readonly property real _labelMaxWidth: Math.max(0, root.width - Theme.space.controlPaddingX * 2 - Theme.borderWidth
+        - root._leadWidth - root._descWidth - root._trailReserve)
+
     width: ListView.view ? ListView.view.width : implicitWidth
     height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.space.controlPaddingY * 2 + Theme.borderWidth
 
@@ -92,6 +113,7 @@ Cell {
         }
 
         Text {
+            id: iconGlyph
             y: (contentRow.height - height) / 2
             visible: root.node.icon !== ""
             text: root.node.icon
@@ -103,6 +125,13 @@ Cell {
         Text {
             id: label
             y: (contentRow.height - height) / 2
+            // Capped to whatever room this row actually has (`_labelMaxWidth`
+            // above) and elided rather than left to overflow past the
+            // trailing indicator or get an ungraceful mid-character cut from
+            // the list's own clip — a no-op everywhere the label already
+            // fits, since `Math.min` only ever narrows it.
+            width: Math.min(label.implicitWidth, root._labelMaxWidth)
+            elide: Text.ElideRight
             text: root.confirming ? ("CONFIRM " + root.node.label + "?") : root.node.label
             // `dim: true` marks a non-activatable honest-empty row (the nix
             // provider's NO NIX) — `dimForeground` reads as `foregroundDim`
@@ -122,6 +151,7 @@ Cell {
         // the label above: this text sits on the cursor row's accent fill
         // too.
         Text {
+            id: descText
             y: (contentRow.height - height) / 2
             visible: (root.node.desc || "") !== ""
             text: root.node.desc || ""
@@ -132,6 +162,7 @@ Cell {
     }
 
     Text {
+        id: trailingIndicator
         anchors.right: parent.right
         anchors.rightMargin: Theme.space.controlPaddingX + Theme.borderWidth
         anchors.verticalCenter: parent.verticalCenter
@@ -145,6 +176,7 @@ Cell {
     // DESIGN.md §2.4: accent reads as a full-bleed fill with onAccent text,
     // never a tinted label — independent of the row's own cursor inversion.
     Rectangle {
+        id: metaTagBg
         visible: (root.node.meta || "") !== ""
         anchors.right: parent.right
         anchors.rightMargin: Theme.space.controlPaddingX + Theme.borderWidth
