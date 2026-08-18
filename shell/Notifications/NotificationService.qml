@@ -86,6 +86,20 @@ Singleton {
     // it is not a Panel so it never registers with PanelRegistry.
     property bool centerOpen: false
 
+    // Sonner-style stack force-expand (M34 Task 2), set only by the
+    // `notifications expand` IPC verb — the rig has no synthetic pointer,
+    // so this is the IPC stand-in for "hover the stack" (the bar
+    // chevron's own `expand` verb is the named precedent for this shape).
+    // Each Toasts.qml instance ORs this with its own local hover, and it
+    // is deliberately session-only (not Core.State/state.json): unlike the
+    // chevron's collapsed flag, this changes on every hover-enter/leave
+    // and has no business surviving a restart.
+    property bool stackExpanded: false
+
+    function setStackExpanded(on) {
+        root.stackExpanded = on;
+    }
+
     readonly property var popups: root._state.popups
     readonly property var pending: root._state.pending
     readonly property var past: root._state.past

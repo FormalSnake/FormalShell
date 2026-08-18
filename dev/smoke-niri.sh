@@ -1358,6 +1358,8 @@ selection_path="$shot_dir/selection.txt"
 menu_done_path="$shot_dir/menu-done.flag"
 dnd_status_path="$shot_dir/dnd-status.txt"
 dnd_indicator_path="$shot_dir/indicator-dnd.png"
+toasts_expand_status_path="$shot_dir/toasts-expand-status.txt"
+toasts_expanded_path="$shot_dir/toasts-expanded.png"
 center_status_before_path="$shot_dir/center-status-before.json"
 center_status_open_path="$shot_dir/center-status-open.json"
 center_status_closed_path="$shot_dir/center-status-closed.json"
@@ -4175,15 +4177,26 @@ fi
     # everything else. Two actions so the screenshot shows adjacent ink
     # cells, not just one.
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$notify_send_bin' -A 'view=View' -A 'dismiss=Dismiss' 'Actions' 'Pick one'\""
+    # Sonner stack expand/collapse (M34 Task 2): every popup above has
+    # landed by sleep 4, so the stack is genuinely collapsed (front card +
+    # peek slivers) by sleep 5 — this rig has no synthetic pointer, so
+    # `notifications expand on/off` is the IPC stand-in for hovering the
+    # stack (the bar chevron's own `expand` verb is the precedent). The
+    # expanded-pile screenshot lands a beat after the toggle so the
+    # Behavior-driven reflow has settled; `expand off` immediately after
+    # restores the collapsed pile the run's own generic smoke.png reads.
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call notifications expand on > $toasts_expand_status_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && niri msg action screenshot-screen --path $toasts_expanded_path\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && '$qs_bin' ipc -p '$shell_path' call notifications expand off\""
     # Bell cell DND display (M13b Task 2, formerly Indicators.qml's DND
-    # glyph, M10 Task 2): both notify-sends above have already fired by
-    # sleep 6, so flipping DND on here can't suppress them (dnd bypass is
+    # glyph, M10 Task 2): every notify-send above has already fired by
+    # sleep 9, so flipping DND on here can't suppress them (dnd bypass is
     # per-notification-on-arrival, not retroactive) — dndState is dumped
     # right after the toggle to prove it actually flipped, then the bar is
     # screenshotted a second later to show BellWidget.qml swap to its
     # bell-off glyph.
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call notifications setDnd true > $dnd_status_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 7 && niri msg action screenshot-screen --path $dnd_indicator_path\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 9 && '$qs_bin' ipc -p '$shell_path' call notifications setDnd true > $dnd_status_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 10 && niri msg action screenshot-screen --path $dnd_indicator_path\""
   fi
   if $center_mode; then
     # A second normal notify-send, offset from notify_mode's own so the
@@ -4385,6 +4398,12 @@ fi
     screenshot_delay=22
   elif $center_mode; then
     screenshot_delay=15
+  elif $notify_mode; then
+    # notify_mode's own worst case (the expand/collapse round trip at
+    # sleep 5-7, DND toggle at 9, its screenshot at 10) lands 10s in; this
+    # run's generic smoke.png/SMOKE_OK is taken 2s after that, showing the
+    # session back in its default (collapsed, DND-off-glyph-swapped) state.
+    screenshot_delay=12
   elif $capture_mode; then
     # capture-drive.sh's own worst case: 5+2+1+1 to open and cycle the
     # picker, up to 10s polling `capturing` back to false after the pick,
@@ -6797,6 +6816,19 @@ fi
 
 if $notify_mode; then
   echo "host org.freedesktop.Notifications owner PID unchanged: $host_notifications_owner_after"
+  if [ -s "$toasts_expand_status_path" ]; then
+    cat "$toasts_expand_status_path"
+  else
+    echo "SMOKE_FAIL: no notifications expand status produced" >&2; exit 1
+  fi
+  if ! grep -q "^on$" "$toasts_expand_status_path"; then
+    echo "SMOKE_FAIL: notifications expand on did not report on — got: $(cat "$toasts_expand_status_path")" >&2; exit 1
+  fi
+  if [ -f "$toasts_expanded_path" ]; then
+    echo "SMOKE_TOASTS_EXPANDED $toasts_expanded_path"
+  else
+    echo "SMOKE_FAIL: no toasts-expanded screenshot produced" >&2; exit 1
+  fi
   if [ -s "$dnd_status_path" ]; then
     cat "$dnd_status_path"
   else

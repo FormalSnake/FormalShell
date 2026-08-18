@@ -3,7 +3,7 @@ import Quickshell.Io
 import qs.Notifications
 
 // `qs ipc call notifications status|dndState|toggleDnd|setDnd|showHistory|
-// clear|clearPending|markAllSeen|dismissAll|invokeLast` — the
+// clear|clearPending|markAllSeen|dismissAll|invokeLast|expand` — the
 // notification-center half of the IPC surface; NotificationService's own
 // dismissPopup/invokeAction stay unexposed here (Toasts.qml/Center.qml call
 // them directly, keyed by a specific notification id, which isn't a
@@ -77,5 +77,18 @@ IpcHandler {
     function invokeLast(): string {
         NotificationService.invokeLast();
         return "ok";
+    }
+
+    // Sonner-style stack expand/collapse (M34 Task 2, DESIGN.md
+    // §Notifications): `on`/`off`, not a bool — matches how dndState/
+    // toggleDnd/setDnd already report this exact shape as a return value,
+    // and the rig types it as a bare word (`notifications expand on`)
+    // rather than `true`/`false`. See NotificationService.stackExpanded
+    // for why this lives there rather than in Core.State.
+    function expand(state: string): string {
+        if (state !== "on" && state !== "off")
+            return "error: unknown expand state '" + state + "' (on|off)";
+        NotificationService.setStackExpanded(state === "on");
+        return NotificationService.stackExpanded ? "on" : "off";
     }
 }

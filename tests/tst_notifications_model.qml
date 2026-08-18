@@ -660,4 +660,50 @@ TestCase {
         compare(M.positionSpec(null).name, M.DEFAULT_POSITION);
         compare(M.positionSpec(123).name, M.DEFAULT_POSITION);
     }
+
+    // stackOrder
+
+    function group(id, arrivedAt, urgency) {
+        return { id: id, arrivedAt: arrivedAt, urgency: urgency === undefined ? 1 : urgency, memberIds: [id] };
+    }
+
+    function test_stack_order_newest_first_with_no_critical() {
+        var order = M.stackOrder([group("a", 1000), group("b", 3000), group("c", 2000)]);
+        compare(order.map(function (g) { return g.id; }).join(","), "b,c,a");
+    }
+
+    function test_stack_order_critical_wins_front_over_newer_normal() {
+        var order = M.stackOrder([group("old-crit", 1000, 2), group("newer", 3000, 1)]);
+        compare(order[0].id, "old-crit");
+        compare(order[1].id, "newer");
+    }
+
+    function test_stack_order_critical_already_newest_is_a_noop() {
+        var order = M.stackOrder([group("normal", 1000, 1), group("crit", 3000, 2)]);
+        compare(order.map(function (g) { return g.id; }).join(","), "crit,normal");
+    }
+
+    function test_stack_order_two_criticals_newest_critical_wins_front() {
+        var order = M.stackOrder([group("crit-old", 1000, 2), group("normal", 1500, 1), group("crit-new", 2000, 2)]);
+        compare(order[0].id, "crit-new");
+        // The rest stays newest-first among what's left.
+        compare(order.slice(1).map(function (g) { return g.id; }).join(","), "normal,crit-old");
+    }
+
+    function test_stack_order_empty_is_empty() {
+        compare(M.stackOrder([]).length, 0);
+    }
+
+    function test_stack_order_single_entry() {
+        var order = M.stackOrder([group("only", 1000, 2)]);
+        compare(order.length, 1);
+        compare(order[0].id, "only");
+    }
+
+    function test_purity_stack_order_does_not_mutate_input() {
+        var input = [group("a", 1000, 1), group("b", 3000, 2)];
+        var before = JSON.stringify(input);
+        M.stackOrder(input);
+        compare(JSON.stringify(input), before);
+    }
 }

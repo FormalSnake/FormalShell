@@ -26,10 +26,23 @@ Cell {
     required property var entry
     property double now: Date.now()
     property bool invertOnHover: false
+    // Way-compacter toast rendering (DESIGN.md §Notifications, M34 Task 2):
+    // one width step narrower, a caption-height icon slot instead of
+    // 40x40, body clamped to one line, actions as bare labels instead of
+    // ink cells. Center.qml never sets this — its own rendering stays
+    // byte-identical to pre-M34.
+    property bool compact: false
+    // Toasts.qml's collapsed-stack peek levels (M34 Task 2): the card's own
+    // chrome (fill, border, dog-ear) still paints so the depth stack reads
+    // as real cards, but the text/icon/action content underneath is
+    // invisible AND non-interactive — a sliver of card, not a squeezed
+    // layout. Content stays laid out (opacity only) so the card's own
+    // implicit height never jumps when it later becomes the front card.
+    property bool contentVisible: true
 
     urgent: root.entry.urgency === 2
     selected: root.invertOnHover && root.containsPointer
-    width: Theme.space.popupWidthWide
+    width: root.compact ? Theme.space.popupWidthNarrow : Theme.space.popupWidthWide
 
     signal dismiss
     signal bodyClicked
@@ -81,6 +94,12 @@ Cell {
     Column {
         width: parent.width
         spacing: Theme.space.sm
+        // Toasts.qml's collapsed peek levels (see contentVisible above):
+        // opacity only, never `visible`, so this Column keeps reporting its
+        // real implicit height — the card's own size never jumps the
+        // moment it becomes (or stops being) the front card.
+        opacity: root.contentVisible ? 1 : 0
+        enabled: root.contentVisible
 
         // Single-line entries (no body) skip both spacers and the two
         // spacing gaps they'd otherwise pull in, landing on Cell's own
@@ -98,8 +117,12 @@ Cell {
 
             Item {
                 id: iconSlot
-                width: 40
-                height: 40
+                // Compact mode's icon slot (DESIGN.md §Notifications, M34
+                // Task 2): a caption-height square instead of the full
+                // 40x40 structural slot — "way compacter" per the owner
+                // ask, matching the caption-sized meta row directly above.
+                width: root.compact ? Theme.fontSize.caption : 40
+                height: root.compact ? Theme.fontSize.caption : 40
                 anchors.verticalCenter: parent.verticalCenter
                 // Hidden entirely — not a broken-image box — when neither
                 // the notification's image nor the sender's app icon
@@ -156,7 +179,7 @@ Cell {
                         font.pixelSize: Theme.fontSize.bodySmall
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
-                        maximumLineCount: 3
+                        maximumLineCount: root.compact ? 1 : 3
                     }
                 }
 
@@ -210,20 +233,19 @@ Cell {
             // Bar.qml's own row of cells uses (DESIGN.md §3).
             spacing: Theme.space.sm
 
+            // Full mode: the ink button (DESIGN.md §2 item 11, M19 Task
+            // 4) — a notification action commits something, so it rests
+            // as a full-bleed foreground fill with background ink. Hover
+            // still inverts to the accent pair — Cell.qml handles that
+            // itself once `ink` is set.
             Repeater {
-                model: root.entry.actions
+                model: root.compact ? [] : root.entry.actions
 
                 delegate: Cell {
                     id: actionCell
                     required property var modelData
                     width: implicitWidth
                     height: implicitHeight
-                    // The ink button (DESIGN.md §2 item 11, M19 Task 4): a
-                    // notification action commits something, so it rests as
-                    // a full-bleed foreground fill with background ink
-                    // rather than the plain hover-selected cell it used to
-                    // be. Hover still inverts to the accent pair — Cell.qml
-                    // handles that itself once `ink` is set.
                     ink: true
 
                     Text {
@@ -235,6 +257,37 @@ Cell {
 
                     interactive: true
                     onClicked: root.actionInvoked(actionCell.modelData.key)
+                }
+            }
+
+            // Compact mode: bare labels (DESIGN.md §1.1's ink-promotion
+            // amendment) — no cell chrome, hover promotes foregroundDim to
+            // foreground, same idiom Center.qml's own title-bar actions
+            // (DND / CLEAR ALL) already use.
+            Repeater {
+                model: root.compact ? root.entry.actions : []
+
+                delegate: Item {
+                    id: actionLabel
+                    required property var modelData
+                    width: label.implicitWidth
+                    height: label.implicitHeight
+
+                    Text {
+                        id: label
+                        text: actionLabel.modelData.label
+                        color: actionHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize.bodySmall
+                    }
+
+                    MouseArea {
+                        id: actionHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.actionInvoked(actionLabel.modelData.key)
+                    }
                 }
             }
         }

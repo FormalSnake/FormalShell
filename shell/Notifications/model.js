@@ -387,6 +387,26 @@ function invokeTarget(state) {
 var POSITIONS = ["top-right", "bottom-right", "bottom-left", "top-left"];
 var DEFAULT_POSITION = "bottom-right";
 
+// Collapsed-stack front-to-back order (DESIGN.md §Notifications, M34 Task
+// 2, sonner's depth stack translated to stepped-integer sizing): newest
+// group first, EXCEPT a critical group always wins the front slot over a
+// newer normal one — "urgency outranks recency at a glance". Ties (two
+// criticals) resolve by recency same as everything else. Pure and
+// independent of anchor direction/newestFirst — Toasts.qml's collapsed
+// layout reads index 0 as the front card, 1/2 as the two peek levels, the
+// rest as present only in the count the expanded stack reveals.
+function stackOrder(entries) {
+    var sorted = entries.slice().sort(function (a, b) { return b.arrivedAt - a.arrivedAt; });
+    var criticalIdx = -1;
+    for (var i = 0; i < sorted.length; i++) {
+        if (sorted[i].urgency === 2) { criticalIdx = i; break; }
+    }
+    if (criticalIdx <= 0)
+        return sorted;
+    var front = sorted[criticalIdx];
+    return [front].concat(sorted.slice(0, criticalIdx), sorted.slice(criticalIdx + 1));
+}
+
 function positionSpec(name) {
     var pos = POSITIONS.indexOf(name) >= 0 ? name : DEFAULT_POSITION;
     var top = pos.indexOf("top-") === 0;
