@@ -34,6 +34,12 @@ PanelWindow {
     // painting on open.
     property bool cursorActive: false
     property string panelTitle: ""
+    // Forwards into the card title-bar band's own right-side slot
+    // (DESIGN.md §2 item 9, CardTitleBar.qml's `actions`) — most panels
+    // never set this, so their title band stays the plain label it already
+    // was; DualsensePanel's read-only "READ ONLY" tag (M29 Task 4) is the
+    // first consumer.
+    property alias titleActions: titleCell.actions
     property int panelWidth: Theme.space.popupWidthDefault
     // Screen-relative x of the bar cell that opened this panel, mapped within
     // that cell's OWN window (openFrom below) — Wayland gives clients no

@@ -37,13 +37,13 @@
 // plugin named anywhere is never appended twice.
 
 // "github", "usage", "tailscale", "visualizer", "microphone",
-// "keyboardLayout", "systemUpdate", "chevron" and "airpods" are deliberately
-// absent from DEFAULT_LAYOUT below: all nine are opt-in builtins (M12 Task 8,
-// M14 Task 7, M16 Task 8, the ASCII visualizer's own owner-ask task, the
-// cheap-wins trio, M24's collapse boundary, and M29 Task 3's AirPods cell —
-// the last opt-in because most hosts have no librepods daemon at all), so the
-// no-config bar stays byte-identical.
-var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron", "airpods"];
+// "keyboardLayout", "systemUpdate", "chevron", "airpods" and "dualsense" are
+// deliberately absent from DEFAULT_LAYOUT below: all ten are opt-in builtins
+// (M12 Task 8, M14 Task 7, M16 Task 8, the ASCII visualizer's own owner-ask
+// task, the cheap-wins trio, M24's collapse boundary, and M29 Tasks 3+4's
+// AirPods/DualSense cells — both opt-in because most hosts have neither
+// device), so the no-config bar stays byte-identical.
+var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron", "airpods", "dualsense"];
 
 var MODULE_TYPES = ["command", "qml"];
 

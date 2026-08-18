@@ -6,6 +6,7 @@ singleton CalendarEventsService CalendarEventsService.qml
 singleton ClipboardService ClipboardService.qml
 singleton ClipsshService ClipsshService.qml
 singleton ConnectivityService ConnectivityService.qml
+singleton DualsenseService DualsenseService.qml
 singleton IdleService IdleService.qml
 InstanceLock InstanceLock.qml
 singleton LocationService LocationService.qml
