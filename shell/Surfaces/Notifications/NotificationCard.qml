@@ -276,7 +276,7 @@ Cell {
                     Text {
                         id: label
                         text: actionLabel.modelData.label
-                        color: actionHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim
+                        color: actionHover.containsMouse ? root.foreground : root.dimForeground
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.bodySmall
                     }

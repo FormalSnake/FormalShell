@@ -362,6 +362,18 @@ PanelWindow {
         width: root._frameWidth
         height: root._targetHeight
 
+        // The layer surface itself is sized off this height (implicitHeight
+        // above), and the compositor's resize is a real round trip — with
+        // no Behavior here the window used to jump to its target size in
+        // one frame while the delegates' own x/y Behaviors were still
+        // gliding, so a card mid-glide would render clipped to whichever
+        // (old or new) buffer size won the race. Matching duration/easing
+        // to the delegate Behaviors below keeps the surface resize and the
+        // card layout in lockstep frame by frame.
+        Behavior on height {
+            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+        }
+
         // Hover anywhere on the stack expands it (DESIGN.md §Notifications):
         // a HoverHandler, not a MouseArea, so it keeps reporting hover
         // across the whole bounding box even with the cards' own
@@ -462,8 +474,19 @@ PanelWindow {
                     width: root._cardWidth
                     contentVisible: cardFrame._geom.contentVisible
 
+                    // Gated on !root._expanded: `stackHover`'s HoverHandler
+                    // covers this same card's whole bounding box, so a card
+                    // hover inside an already-expanded stack always
+                    // coincides with `root._expanded` staying true — letting
+                    // this fire there too raced `_syncExpandPause`'s
+                    // stack-wide pause (moving the pointer from card A to
+                    // card B cleared A's id from `_hoveredPopups` with
+                    // neither `_expandedChanged` nor `_visibleMemberIdsChanged`
+                    // firing to restore it, so A could expire mid-hover).
+                    // Un-expanded, only the front card is interactive, and
+                    // this stays its per-card pause.
                     onHoveredChanged: {
-                        if (cardFrame._slot)
+                        if (cardFrame._slot && !root._expanded)
                             NotificationService.setPopupHovered(cardFrame._slot.entry.memberIds, card.hovered);
                     }
                     onDismiss: {
