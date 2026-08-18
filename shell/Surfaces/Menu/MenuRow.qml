@@ -48,17 +48,27 @@ Cell {
     // slots are actually showing; `_trailReserve` mirrors whichever
     // trailing element (the meta tag or the ▸/✓ indicator, the two never
     // show together) reserves its own room past `content`'s padding.
+    //
+    // The label (band 1) has priority over the dim desc (band 2): desc is
+    // provider-supplied context, not the row's own identity, and unlike
+    // the label it has no universal length cap upstream (keybind rows'
+    // `describeAction` joins action+argv uncapped). So `_labelMaxWidth`
+    // reserves only lead/trail, never desc. Desc gets whatever room the
+    // label's actual rendered width leaves behind, computed below as
+    // `_descMaxWidth` off `label.width` once the label itself has settled.
     readonly property real _leadWidth: (root._isImage ? root._thumbHeight * 3 + Theme.space.labelGap : 0)
         + ((root.node.iconSource || "") !== "" ? label.implicitHeight + Theme.space.labelGap : 0)
         + (root.node.icon !== "" ? iconGlyph.implicitWidth + Theme.space.labelGap : 0)
-    readonly property real _descWidth: (root.node.desc || "") !== "" ? descText.implicitWidth + Theme.space.labelGap : 0
     readonly property real _trailReserve: (root.node.meta || "") !== ""
         ? Theme.space.controlPaddingX + Theme.borderWidth + metaTagBg.width
         : ((!root.confirming && (root.checkedState || root.isBranch))
             ? Theme.space.controlPaddingX + Theme.borderWidth + trailingIndicator.implicitWidth
             : 0)
     readonly property real _labelMaxWidth: Math.max(0, root.width - Theme.space.controlPaddingX * 2 - Theme.borderWidth
-        - root._leadWidth - root._descWidth - root._trailReserve)
+        - root._leadWidth - root._trailReserve)
+    readonly property real _descMaxWidth: (root.node.desc || "") !== ""
+        ? Math.max(0, root._labelMaxWidth - label.width - Theme.space.labelGap)
+        : 0
 
     width: ListView.view ? ListView.view.width : implicitWidth
     height: (root._isImage ? root._thumbHeight : root._bodyHeight) + Theme.space.controlPaddingY * 2 + Theme.borderWidth
@@ -145,8 +155,10 @@ Cell {
         }
 
         // Dimmed trailing description (nix search rows, clipboard image
-        // captured-at) — pre-truncated by the provider, same contract as
-        // clipboardProvider's previewLabel, so no elision is needed here.
+        // captured-at, keybind chords). Most providers pre-truncate, but
+        // `describeAction`'s joined action+argv carries no such cap, so
+        // this band gets the same width-cap-and-elide treatment as the
+        // label rather than trusting every producer to bound it upstream.
         // `dimForeground` over a bare `foregroundDim` for the same reason as
         // the label above: this text sits on the cursor row's accent fill
         // too.
@@ -154,6 +166,8 @@ Cell {
             id: descText
             y: (contentRow.height - height) / 2
             visible: (root.node.desc || "") !== ""
+            width: Math.min(descText.implicitWidth, root._descMaxWidth)
+            elide: Text.ElideRight
             text: root.node.desc || ""
             color: root.dimForeground
             font.family: Theme.fontFamily
