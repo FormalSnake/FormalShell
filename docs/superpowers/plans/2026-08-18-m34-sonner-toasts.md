@@ -25,14 +25,24 @@ the center.
 is Emil Kowalski's sonner; DESIGN.md §4 wins on every conflict):
 
 - Sonner's collapsed stack scales older toasts down behind the newest.
-  §4.2 bans scale outright, so the translation is OFFSET-PEEK: only the
-  newest toast renders in full; each older live popup peeks out behind
-  it toward the screen edge by a fixed sliver (`Theme.space.lg`-ish,
-  token-resolved) showing its border edge and ground, inked one band
-  down (the peeking card's content does not render — a sliver of card,
-  not a squeezed card). At most 2 peek; further popups exist only in
-  the count the expanded stack reveals. No scale, no shadow, no blur,
-  radius 0.
+  Owner amendment (2026-08-18): "in this case the stack does need
+  scale, but make it consistent with pixel sizes so that it looks like
+  it fits in." So the depth effect ships, but NEVER as a fractional
+  render transform (a 2px border under `scale(0.95)` rasterizes at
+  1.9px and reads blurry, the opposite of this shell): each level
+  behind the front card is a real card SIZED narrower by an integer
+  token step per level (symmetric inset, e.g. `Theme.space.lg` per
+  side per level, resolved through tokens), horizontally centered on
+  the front card, offset toward the screen edge by a fixed peek so
+  only its edge sliver shows, its content not rendered (a sliver of
+  card, not a squeezed layout). Borders stay exactly `borderWidth` on
+  every level — that is the "consistent with pixel sizes" contract,
+  and it is the checkable. At most 2 levels peek; further popups exist
+  only in the count the expanded stack reveals. No shadow, no blur,
+  radius 0. This is a dated, surface-scoped exception to §4.2's
+  no-scale reading, recorded in DESIGN.md by Task 3 (precedent: the
+  screensaver's §4.6 carve-out), and it sanctions stepped SIZING only —
+  fractional `transform: scale` stays banned everywhere.
 - Hover anywhere on the stack EXPANDS it: the collapsed pile reflows
   into today's full Column (every live popup as a full card, `panelGap`
   gaps), animated by interruptible `Behavior`s on y/height inside the
@@ -144,7 +154,10 @@ Commit (`docs: m34 sonner toasts`).
 ## Review checkpoint
 
 After Task 3: motion-band compliance (grep new durations — everything
-inside fast/standard, zero scale/blur/bounce anywhere), reduced-motion
+inside fast/standard, zero blur/bounce anywhere, no `transform` scale —
+the stack's depth is stepped integer sizing, and a zoomed screenshot of
+the collapsed stack must sample every level's border at exactly
+`borderWidth` pixels), reduced-motion
 collapse verified (`motion.enabled: false` renders end-states
 instantly), the departing-item hold leaks no delegates (dismiss 10
 toasts fast, popup count returns to zero), center cards byte-identical
