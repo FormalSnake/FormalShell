@@ -14,6 +14,7 @@ Product overview, screenshots, features, and install instructions live in
 - [Notifications](#notifications)
 - [OSD](#osd)
 - [Panels](#panels)
+- [System monitor](#system-monitor)
 - [Clipboard](#clipboard)
 - [Calendar](#calendar)
 - [Now playing](#now-playing)
@@ -297,6 +298,17 @@ summarize. Always visible once placed — a session always has at least one
 output, so there is no absent state to hide on. `bar.widgets.display.showLabel`
 (default on) adds an uppercase `DISPLAY` caption next to the glyph. Click
 toggles the display panel (see [Panels](#panels)).
+
+**Monitor** (M38) — opt-in via `bar.layout` (add `"monitor"` to a region); a
+gauge glyph plus `CNN% MNN%` (CPU/memory percent), with a `GNN%` segment
+appended only when some GPU on the machine actually reports a busy fraction
+(amdgpu, or NVIDIA with `nvidia-smi` on PATH — i915/xe never contribute
+one). Any number can render as an em dash on the very first tick: a delta
+needs two samples, never a fabricated 0%. `bar.widgets.monitor.showLabel`
+(default off, unlike Display's) adds an uppercase `MONITOR` caption next to
+the glyph. Click toggles the compact monitor panel (see [Panels](#panels));
+the full monitor lives in the launcher regardless of whether this cell is
+placed at all (see [System monitor](#system-monitor)).
 
 **Tooltips** — hovering a bar cell for 400ms opens one omarchy card under
 it (`shell/Components/Tooltip.qml`, namespace `formalshell:tooltip`),
@@ -736,6 +748,27 @@ the history center rather than a submenu. A new root `THEME` node holds
 (`toggles.dark-mode`, in-process). `system.lock` stays `"when": "false"` —
 deliberately disabled, not part of this sweep.
 
+**Everything is reachable from here (M38).** The launcher is the front
+door: a feature that only exists behind a bar cell or a keybind disappears
+the moment that cell is opted out, which is why the panels/tray/console/
+screensaver/plugins/notifications/theme rows above all exist.
+`tests/tst_menu_reachability.qml` is the guard that keeps it true — it
+cross-checks the panel names `shell.qml`'s `PanelIpc` registry actually
+wires against the `PANELS` node's own rows, and fails the moment a panel
+ships with no route rather than shipping unreachable quietly. A route can
+also host a whole view instead of a row list — Raycast's model: the
+launcher is a window manager for small apps, not only a menu.
+`Menu/appviews.js`'s `VIEWS` registry is the seam: one line there
+(`routeId: "views/SomeView.qml"`) plus one QML file under
+`Surfaces/Menu/views/` is the entire cost of adding the next one, no
+`Menu.qml` edit required, because its chrome (breadcrumb, Escape/back,
+search focus, the `menu` IPC) already keys off the route id rather than
+which view happens to be loaded. `monitor` is the one route registered
+today (see [System monitor](#system-monitor)); a view opts into the live
+search field by declaring `property string query`, and a view that
+declares none simply has an inert search box, the honest state for a view
+with nothing to filter.
+
 **Share (LocalSend).** The root `SHARE` submenu exists only when
 `localsend_app` resolves on PATH (`command -v localsend_app`, a live `when`
 condition — the same idiom `system.logout`'s `NIRI_SOCKET` guard uses),
@@ -1028,7 +1061,7 @@ binds {
 
 ## Panels
 
-Fifteen popouts share one component, `shell/Components/Panel.qml`: a ledger-table popout (header
+Sixteen popouts share one component, `shell/Components/Panel.qml`: a ledger-table popout (header
 `MetaLabel` row, rows sharing hairline rules, `WlrLayershell` top layer,
 closes on Escape and on
 click-outside) anchored under the bar cell that opened it, or falling back to
@@ -1072,6 +1105,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `display`    | the compositor backend's own output contract  | `DisplayWidget.qml` (opt-in) |
 | `airpods`    | `AirpodsService` (librepods daemon `status.json` + control socket) | `AirpodsWidget.qml` |
 | `dualsense`  | `DualsenseService` (sysfs, read-only)        | `DualsenseWidget.qml` |
+| `monitor`    | `SystemMonitorService` + `GpuService` (`/proc`, `/sys/class/drm`, optional `nvidia-smi`) | `MonitorWidget.qml` (opt-in) |
 
 Every bar cell shows the Omarchy-style panel-open accent dot while its panel
 is open. `AudioPanel` is an omarchy-style mixer (M15 Task 4): `OUTPUT` is one
@@ -1427,6 +1461,30 @@ nothing on screen and no surface left to undo it from. A disabled output
 reports a zero mode rather than its last known one, which is why its status
 line says only `DISABLED`.
 
+**The main display.** `display.outputPriority` names which screen the shell
+treats as the main one, in preference order: the first entry with a
+connected output wins, so the list below reads "the desk monitor while it's
+plugged in, the laptop panel when it isn't". An entry matches a connector by
+exact name (`HDMI-A-1`), by the port it hangs off (`HDMI`, `DP-2`, anchored
+so `DP` never means the `eDP` the panel is on), or by the aliases `internal`
+(`eDP`/`LVDS`/`DSI`) and `external` (anything else). The list is re-applied
+whenever outputs change, so unplugging the main monitor hands the title down
+the list and plugging it back in takes it again. Unset — the default — it's
+the focused output.
+
+```jsonc
+{ "display": { "outputPriority": ["HDMI", "internal"] } }
+```
+
+One key, read everywhere a single screen has to be picked: the screensaver's
+animated head (below), the monitor panel's `MAIN DISPLAY` row and the
+launcher's monitor view, where the resolved connector reads `MAIN /
+CONNECTED` under the card driving it. This panel marks it too, on the
+matching output's row, and only when there is more than one output — naming
+the only screen there is says nothing. A list matching nothing connected
+logs once and falls back to the focused output rather than answering with
+nothing.
+
 **IPC** (`target: "panel"`, a documented spec addendum — see
 `docs/superpowers/plans/2026-07-28-m6-clipboard-and-panels.md`'s header note
 — since per-widget popouts otherwise have no summon path for compositor
@@ -1541,6 +1599,114 @@ qs ipc --any-display -p <store-path>/share/formalshell call gallery toggle
 qs ipc --any-display -p <store-path>/share/formalshell call gallery status   # {"isOpen":…}
 ```
 
+## System monitor
+
+Three surfaces over one data source (M38). `SystemMonitorService` runs one
+`sh -c` collector script per poll tick (`Monitor/collect.js`, sectioned
+`@stat/@mem/@load/@uptime/@net/@temp/@disk/@drm/@nvidia/@gfx` output),
+parsed by pure functions in `Monitor/sysinfo.js` and `Monitor/gpu.js` and
+published as plain properties; `GpuService` rides the same tick rather than
+running a second collector. The timer only runs while something has
+subscribed (the bar cell while placed, the compact panel while open, the
+launcher's full view while open), refcounted, so a shell with the cell off
+and every monitor surface closed spawns nothing at all. Poll interval is
+`monitor.intervalMs` in `settings.json` (default 2000, floored at 500). The
+first tick after a subscribe from zero has no previous `/proc/stat` or
+`/proc/net/dev` sample, so every delta (CPU busy, per-core busy, network
+rates) reads as an em dash rather than a fabricated 0 until the second tick
+lands.
+
+**The bar cell and compact panel** are the glance: see
+[Monitor](#bar) under Bar for the opt-in cell, and `monitor` in the
+[Panels](#panels) table for the popout it opens — CPU and memory rows with
+a flat accent-fill track each, then one line per GPU card (name plus a
+percent, or `NO METRICS` for a card with no unprivileged counter, or a
+single `NO GPU` row on a machine with none), a `MAIN DISPLAY` row naming the
+screen `display.outputPriority` resolves to (see [Panels](#panels)), and a
+closing `OPEN SYSTEM MONITOR` row that closes the panel and hands off to the
+full view below.
+
+**The full view** lives in the launcher (`menu summon monitor`, or the
+`MONITOR` row from root — see "Everything is reachable from here" under
+[Menu](#menu) for what makes this route special): two ledger columns behind
+a shared rule, `docs/DESIGN.md`'s cell grammar throughout. Left column: CPU
+(aggregate plus one bar per core), MEM, SWAP (a dim `NO SWAP` row when none
+is configured), LOAD, UPTIME. Right column: TEMPS (hwmon rows, an empty
+label falling back to the chip name), NET (per-interface rx/tx rates, `lo`
+excluded), DISK (`df`-style rows, a dim `NO MOUNTS` row when none report),
+then GPU — one block per card: name, driver, PCI address, its connectors
+with which are connected (the main display's connector reads `MAIN /
+CONNECTED`, so a hybrid machine shows which card is driving it), and either
+live metrics or an honest `NO METRICS`; a machine with no cards at all renders a single `NO GPU` row
+instead of an empty section.
+
+**The GPU model.** A card comes from `/sys/class/drm/cardN/device`: driver
+(`nvidia`, `i915`, `amdgpu`, `xe`), vendor/device PCI ids, the PCI address
+(used for `DRI_PRIME`), and its connector list. **`boot_vga` decides which
+card is integrated, never the card number or enumeration order** — a
+hybrid laptop can and does enumerate its discrete GPU as `card0` with
+`boot_vga=0` and its integrated one as `card1` with `boot_vga=1`. Naming
+prefers `nvidia-smi`'s marketing name, falls back to the ACPI `label`
+(`"Onboard - Video"` on Intel, empty on NVIDIA), then `"<vendor>
+<deviceId>"` from a small built-in vendor table, then the card id itself.
+Card ids are opaque strings end to end, the same rule compositor window ids
+follow (`CLAUDE.md`) — a single-GPU machine's one card can enumerate as
+`card1`, never assume `card0` exists.
+
+Metrics are per-driver and deliberately uneven, because the kernel is:
+
+- **amdgpu** reports a full row from sysfs and hwmon: utilization
+  (`gpu_busy_percent`), VRAM used/total, temperature, and power draw.
+- **NVIDIA** needs `nvidia-smi` on PATH; with nothing there the card still
+  lists (identity, outputs) with `NO METRICS`. `nvidia-smi` itself emits a
+  literal `[N/A]` for fan speed on laptop GPUs, and that renders as
+  unavailable, never a 0% fan.
+- **Intel i915 and xe** have no unprivileged utilisation counter in the
+  kernel at all. Those cards always render their identity and outputs
+  beside an honest `NO METRICS` — never a fabricated percent, no matter how
+  long the machine runs.
+
+**Launch on a discrete GPU.** The `GPU` launcher route lists the machine's
+cards as inert note rows (name, integrated/discrete, driver, connected
+outputs); under it, `gpu.launch` is the app list again, where activating a
+row launches that app on the machine's default discrete card instead of
+through the normal launch path. The same action is one keystroke away from
+any ordinary app row: `Shift+Enter` launches the row under the cursor on
+the default discrete card without leaving that level. Both routes are
+entirely absent — not present and empty — on a single-GPU or no-GPU
+machine, rather than offering a control with nothing to do.
+`DesktopEntry.execute()` can't carry an environment, so the launch path
+builds argv by hand (`Monitor/gpu.js`'s `offloadArgv`), stripping Exec
+field codes (`%f %F %u %U %i %c …`) first: `nvidia-offload` if it's on
+PATH (NixOS), else `prime-run` (Arch), else the four environment variables
+NixOS's own `nvidia-offload` wrapper exports by hand
+(`__NV_PRIME_RENDER_OFFLOAD=1`, `__NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0`,
+`__GLX_VENDOR_LIBRARY_NAME=nvidia`, `__VK_LAYER_NV_optimus=NVIDIA_only`) for
+an NVIDIA target; a non-NVIDIA target gets `DRI_PRIME=pci-<slot>` in Mesa's
+PCI-slot form (never the positional `DRI_PRIME=1`, ambiguous on a machine
+with more than two GPUs). A `runInTerminal` entry launches through
+`console.command` when one is set, else spawns bare with a warning.
+
+**`gpu.mode`** switches `supergfxctl` between integrated and hybrid, and
+the route only exists when `supergfxctl` resolves on PATH — there is no
+config toggle for it, and no placeholder row on a machine without it.
+Switching needs a logout or reboot to take effect; the reply says so rather
+than implying it happened live.
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call monitor status
+# => {"sampledAtMs":…,"ageMs":…,"cpu":{…},"mem":{…},"load":{…},"uptime":{…},"temps":{…},"net":{…},"disk":{…}}
+qs ipc --any-display -p <store-path>/share/formalshell call monitor gpu
+# => {"sampledAtMs":…,"ageMs":…,"available":true|false,"cards":[…],"gfxMode":{…},"tools":{…}}
+qs ipc --any-display -p <store-path>/share/formalshell call monitor launch <desktopId> [card]
+# offload-launches a desktop entry by id on `card` (a GpuService card id); "" or
+# omitted defaults to the first non-boot_vga card; errors when there is no
+# discrete GPU or the named card doesn't exist
+qs ipc --any-display -p <store-path>/share/formalshell call monitor mode [integrated|hybrid]
+# "" reports the current supergfxctl mode; a target switches it; errors when
+# supergfxctl is not on PATH
+```
+
 ## Clipboard
 
 `ClipboardService` captures via a long-running `wl-paste --type text --watch`
@@ -1615,9 +1781,12 @@ Hiding is the one place the two compositors differ. Hyprland has a special
 workspace (`special:formalshell-console`). niri has no hide primitive at all
 — no minimize, no scratchpad, nothing in `niri msg action` — so the console
 is parked on another workspace, preferring the empty trailing one every
-niri output carries (`shell/Compositor/park.js`). While it is hidden you
-will see that extra workspace in the bar; it goes away when the console
-comes back.
+niri output carries (`shell/Compositor/park.js`). On niri, while it is
+hidden you will see that extra workspace in the bar; it goes away when the
+console comes back. On Hyprland you will not: a special workspace is an
+overlay, not somewhere to switch to, so the bar drops specials from the
+workspace list entirely (`shell/Compositor/hyprland/model.js`) and the
+parked console leaves no cell behind.
 
 Placement is recomputed on every show: full width less one `space.xl`
 margin either side, top edge under the bar, covering `console.share` of what
@@ -1799,6 +1968,25 @@ and transport cells that invert on hover rather than the usual alpha-hover
 (DESIGN's "selection = inversion" rule applied to primary controls, not
 passive rows).
 
+**The rest of MPRIS.** Shuffle and `LoopStatus` are the outer two cells of
+that transport cluster, the player's own `Volume` is a second track under
+it, `Raise` is a `RAISE` label in the panel's title band, and a row per
+registered player appears above the progress track once more than one
+player is on the bus (click one to pin the bar cell, the panel and the IPC
+routes to it; it stays pinned until that player quits). Each control is
+gated on the player's own capability flag, so a player that implements none
+of them renders exactly the panel it rendered before, and the toggles carry
+their state as the ledger's inversion: an inverted shuffle cell means
+shuffle is on, not that the pointer is over it. Volume here is the player's
+own scale, unrelated to the sink volume the audio panel owns: a browser at
+30% is still whatever the sink says system-wide.
+
+**Liking a track is deliberately absent.** MPRIS has no set-rating call at
+all. `xesam:userRating` is read-only metadata a player may publish and
+nothing can write, so a like button would be a per-application D-Bus
+dialect (one for each of Cider, YouTube Music, and so on), not a feature of
+the protocol. Nothing here fakes one.
+
 **Apple Music animated album art** (`AppleMusicArtService.qml`,
 `shell/Media/applemusic.js`) is **opt-in** — `media.appleMusicArt` in
 `settings.json`, off by default — and resolves via iTunes Search plus
@@ -1824,8 +2012,19 @@ does instead of decoding its own.
 qs ipc --any-display -p <store-path>/share/formalshell call media playPause
 qs ipc --any-display -p <store-path>/share/formalshell call media next
 qs ipc --any-display -p <store-path>/share/formalshell call media previous
-qs ipc --any-display -p <store-path>/share/formalshell call media status     # {"available":…,"identity":…,"title":…,"artist":…,"album":…,"isPlaying":…,"position":…,"length":…}
+qs ipc --any-display -p <store-path>/share/formalshell call media shuffle toggle   # on|off|toggle
+qs ipc --any-display -p <store-path>/share/formalshell call media loop cycle       # none|track|playlist|cycle
+qs ipc --any-display -p <store-path>/share/formalshell call media volume 30        # percent, the player's own volume
+qs ipc --any-display -p <store-path>/share/formalshell call media raise
+qs ipc --any-display -p <store-path>/share/formalshell call media players          # [{"id":…,"identity":…,"label":…,"isPlaying":…}]
+qs ipc --any-display -p <store-path>/share/formalshell call media select org.mpris.MediaPlayer2.mpv
+qs ipc --any-display -p <store-path>/share/formalshell call media status     # {"available":…,"id":…,"selectedId":…,"playerCount":…,"identity":…,"title":…,"artist":…,"album":…,"isPlaying":…,"position":…,"length":…,"canSeek":…,"canRaise":…,"shuffleSupported":…,"shuffle":…,"loopSupported":…,"loop":…,"volumeSupported":…,"volume":…}
 ```
+
+A route that acts on something the player does not implement answers with an
+error naming it (`error: player does not support shuffle`) rather than `ok`
+over a call that went nowhere, and `select` rejects a bus name no registered
+player answers on.
 
 ## Lock screen
 
@@ -2042,26 +2241,17 @@ for any output the compositor doesn't scan out on the card the shell renders
 on — so animating every head is what makes the screensaver stutter on a
 multi-monitor session.
 
-`screensaver.outputPriority` names which one, in preference order: the first
-entry with a connected output wins, so the list below reads "the desk
-monitor while it's plugged in, the laptop panel when it isn't". An entry
-matches a connector by exact name (`HDMI-A-1`), by the port it hangs off
-(`HDMI`, `DP-2`, anchored so `DP` never means the `eDP` the panel is on), or
-by the aliases `internal` (`eDP`/`LVDS`/`DSI`) and `external` (anything
-else). The list is re-applied whenever outputs change, so unplugging the
-main monitor hands the animation down the list and plugging it back in takes
-it again. Unset — the default — animates the focused output and leaves it
-there for the run.
-
-```jsonc
-{ "screensaver": { "outputPriority": ["HDMI", "internal"] } }
-```
+The one that animates is the shell's main display,
+`display.outputPriority`'s first entry with a connected output — see [the
+display panel](#panels) for the matching rules. The pick is resolved at
+activation and then held for the run: re-resolving it live would restart the
+effect from frame 0 on a screen already past it. An output arriving or
+leaving does re-resolve, so unplugging the animating screen hands the
+animation down the list.
 
 `screensaver status` reports the resolved `mainOutput` — while inactive, the
 one that would animate if it activated now, resolved on the call, so a
-multi-head machine can be checked with a read instead of by covering it. A
-list that matches nothing connected logs once and falls back to the focused
-output rather than leaving the screensaver still.
+multi-head machine can be checked with a read instead of by covering it.
 
 It never activates while `screensaver.guardMediaPlayback` (default true)
 holds and `MediaService.isPlaying` is true — a live condition, not a

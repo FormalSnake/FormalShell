@@ -146,25 +146,42 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   passed while the shell was down fires late rather than silently.
 - **OSD** — one jitter-free bottom-center card for volume, brightness, and
   media.
-- **Panels**: fifteen popouts (appmenu, audio, calendar, network,
+- **Panels**: sixteen popouts (appmenu, audio, calendar, network,
   bluetooth, power, weather, media, github, usage, tailscale, systemupdate,
-  display, airpods, dualsense) sharing one component and one IPC target,
-  plus any plugin panel under `plugin:<id>`, each taking keyboard focus as
-  it opens so a panel summoned from a keybind is usable immediately.
-  Network adds a Wi-Fi QR share (optional `qrencode`) and a saved-password
-  reveal; Bluetooth adds per-device trust; display lists every connected
-  output with on/off, scale, and mirror; airpods reads per-bud battery,
-  listening mode, Conversation Awareness, One-Bud ANC, and ear detection
-  from the `librepods` daemon (a real device, read-back state, not
-  set-only writes); dualsense is a read-only sysfs readout for a
+  display, airpods, dualsense, monitor) sharing one component and one IPC
+  target, plus any plugin panel under `plugin:<id>`, each taking keyboard
+  focus as it opens so a panel summoned from a keybind is usable
+  immediately. Network adds a Wi-Fi QR share (optional `qrencode`) and a
+  saved-password reveal; Bluetooth adds per-device trust; display lists
+  every connected output with on/off, scale, and mirror; airpods reads
+  per-bud battery, listening mode, Conversation Awareness, One-Bud ANC, and
+  ear detection from the `librepods` daemon (a real device, read-back
+  state, not set-only writes); dualsense is a read-only sysfs readout for a
   controller's battery, lightbar color, and player LEDs.
+- **System monitor**: an opt-in bar cell and compact panel for CPU/memory
+  (and GPU, where the driver reports one), plus a full monitor inside the
+  launcher — per-core bars, mem/swap/load/uptime, temps, network rates,
+  disk, and full GPU detail — reachable whether or not the cell is placed
+  at all. Multi-GPU aware: amdgpu reports utilization, VRAM, and
+  temperature from sysfs; NVIDIA needs `nvidia-smi` on PATH and renders its
+  `[N/A]` fan reading as unavailable rather than 0; Intel i915/xe have no
+  unprivileged utilisation counter at all, so those cards show their
+  identity and outputs beside an honest `NO METRICS`. `Shift+Enter` on any
+  app row (or the `gpu.launch` launcher route) launches it on the
+  machine's discrete GPU with the right offload environment; `gpu.mode`
+  switches integrated/hybrid where `supergfxctl` is installed. The
+  launcher is the front door for every surface in this list — a
+  reachability test fails the build the moment a panel ships with no
+  launcher route.
 - **Clipboard** — capped, deduplicated history surfaced through the menu.
 - **Calendar** — month grid with clickable day selection, a year/life-
   progress bar, and events from local `.ics` files and EDS/GNOME Online
   Accounts (via the `formalshell-eds` companion CLI), with bounded RRULE
   expansion.
-- **Now playing** — an MPRIS-backed bar cell and panel, with optional Apple
-  Music animated album art.
+- **Now playing**: an MPRIS-backed bar cell and panel with transport, seek,
+  shuffle, repeat, the player's own volume, raise, and a switcher when
+  several players are registered at once, each control present only where
+  the player implements it. Optional Apple Music animated album art.
 - **Lock screen** — a real `WlSessionLock` + PAM, with the design's one
   sanctioned blur exception.
 - **Screensaver**: an idle-driven terminal-effect banner, animated by

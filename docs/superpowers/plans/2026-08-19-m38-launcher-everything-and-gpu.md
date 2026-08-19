@@ -1,4 +1,4 @@
-# M38 — everything in the launcher, and multi-GPU
+# M38: everything in the launcher, and multi-GPU
 
 **Date:** 2026-08-19
 **Status:** approved, pre-implementation
@@ -11,11 +11,11 @@ Two owner asks, one milestone.
 1. **The launcher is the front door.** Every feature of the shell must be
    reachable from the menu. The audit says 15 of 15 panels, the console, plain
    screenshots, manual screensaver, plugins and the notification actions have
-   no launcher path at all — they are bar-cell or keybind only. A feature that
+   no launcher path at all: they are bar-cell or keybind only. A feature that
    only exists behind a bar cell disappears the moment the cell is opt-out.
 2. **A launcher route may host a whole app, not a row list.** Raycast's model:
    the launcher is a window manager for small views. The system monitor is the
-   first one — a bar cell for people who want it there, a compact panel behind
+   first one: a bar cell for people who want it there, a compact panel behind
    that cell, and the FULL monitor inside the launcher for people who don't.
 3. **Multi-GPU.** The shell has no GPU awareness at all today. The owner's own
    g815 is an Intel + NVIDIA hybrid laptop whose external HDMI is wired to the
@@ -35,13 +35,13 @@ of it, replacing `Usage` (that is AI token usage and keeps its name).
 
 ## Locked design decisions
 
-### D1 — app views are a registry, not a special case
+### D1: app views are a registry, not a special case
 
 `_isPickerRoute` (`shell/Surfaces/Menu/Menu.qml:375`) and `_isSplitRoute`
 (`:533`) are both hardcoded route-id booleans. A third one would be a third
 special case, and the owner asked for a *class* of thing. So:
 
-- `shell/Menu/appviews.js` — pure module, single source of truth:
+- `shell/Menu/appviews.js`, pure module, single source of truth:
   `VIEWS = { monitor: "views/MonitorView.qml" }`, `viewFor(routeId)` returns
   the relative path or `""`, `isAppView(routeId)` is `viewFor() !== ""`.
 - `Menu.qml` grows ONE `Loader` sibling to `rowsView`/`gridView`, same
@@ -54,8 +54,13 @@ special case, and the owner asked for a *class* of thing. So:
   the live search text into it. `MonitorView` does not, so its search field is
   inert by design. This is the seam a future filterable app view needs, and it
   costs one `if (item && item.query !== undefined)`.
-- Arrow keys and Enter are no-ops while `_isAppView` (guard in `_activateRow`
-  and the key handler), because there is no row cursor to move.
+- Enter is a no-op while `_isAppView` (guard in `_activateRow`), because there
+  is no row cursor to activate. Arrow keys scroll the view instead: the rig
+  has no synthetic pointer and no wheel, so inert arrows left the content
+  below the fold unreachable, and the footer's own `UP/DOWN MOVE` hint would
+  have been advertising a key that did nothing. A view opts in by declaring
+  `readonly property Flickable scrollTarget`, the same shape as the `query`
+  seam above.
 - Width: new token `popupWidthMenuApp: 900` in `shell/Theme/tokens.js`
   alongside `popupWidthMenuSplit`, plus its row in DESIGN.md §1.3. Never a
   literal in Menu.qml.
@@ -63,7 +68,7 @@ special case, and the owner asked for a *class* of thing. So:
 Adding the second app view later is then one line of `appviews.js` plus one
 QML file under `shell/Surfaces/Menu/views/`.
 
-### D2 — one collector, pure parsers
+### D2: one collector, pure parsers
 
 `/proc` and `/sys` reading is done by ONE `sh -c` collector snippet emitting a
 sectioned `@stat/@mem/@load/@uptime/@net/@temp/@disk/@drm/@nvidia/@gfx/@end`
@@ -79,12 +84,12 @@ blob, run once per poll tick. Not N `FileView`s:
 The collector script text is a `const` in `shell/Monitor/collect.js` so it is
 reviewable, diffable and unit-testable, never an inline string in QML.
 
-Parsers live in `shell/Monitor/sysinfo.js` and `shell/Monitor/gpu.js` — pure,
+Parsers live in `shell/Monitor/sysinfo.js` and `shell/Monitor/gpu.js`, pure,
 no Quickshell imports, tested head-on by `qmltestrunner`, following the
 `shell/Usage/usage.js` and `shell/Display/outputs.js` precedent (parsing lives
 beside its feature, services stay thin).
 
-### D3 — the GPU model
+### D3: the GPU model
 
 A GPU record is derived from `/sys/class/drm/cardN/device`:
 
@@ -107,16 +112,16 @@ Metrics are per-driver and deliberately uneven, because the kernel is:
   --format=csv,noheader,nounits` when it is on PATH; `[N/A]` is a real value
   it emits (fan speed on laptop GPUs) and must parse to "unavailable", not 0.
 - **i915/xe**: no unprivileged utilisation counter exists. The row renders the
-  card, its outputs and `NO METRICS` — never a fabricated percentage. This is
+  card, its outputs and `NO METRICS`, never a fabricated percentage. This is
   the honest-unavailable rule, not a gap to paper over.
 
 Names: `nvidia-smi` gives the marketing name for NVIDIA. For everything else
 use the ACPI `label` when non-empty, else `"<vendor> <deviceId>"` from a small
 vendor-id table (`0x8086` Intel, `0x1002`/`0x1022` AMD, `0x10de` NVIDIA,
-`0x1af4` virtio). No `lspci` — it is absent on both NixOS hosts, and no
+`0x1af4` virtio). No `lspci`: it is absent on both NixOS hosts, and no
 `pci.ids` file is guaranteed.
 
-### D4 — launch on dGPU
+### D4: launch on dGPU
 
 `DesktopEntry.execute()` cannot carry an environment (upstream docs: "Run the
 application. Currently ignores runInTerminal and field codes"), so the offload
@@ -132,16 +137,16 @@ offloadArgv(execString, target, tools) -> ["nvidia-offload", "sh", "-c", "<exec>
   variables are the exact set NixOS's own `nvidia-offload` wrapper exports,
   read off g815 on 2026-08-19.
 - Non-NVIDIA target: `env DRI_PRIME=pci-0000_02_00_0` (Mesa's PCI-slot form,
-  taken from the card record — never the positional `DRI_PRIME=1`, which is
+  taken from the card record, never the positional `DRI_PRIME=1`, which is
   ambiguous on a three-GPU box).
 - Field codes (`%f %F %u %U %i %c %k %d %D %n %N %v %m`) are stripped from the
   Exec string first; nothing in the repo does this today, so it is new pure
   code with its own tests.
 - `runInTerminal` entries are launched through `Config.get("console.command")`
-  when set, else spawned bare with a warning — a terminal app asking for the
+  when set, else spawned bare with a warning: a terminal app asking for the
   dGPU is rare enough not to earn more.
 
-### D5 — evidence, given the rig has no GPU
+### D5: evidence, given the rig has no GPU
 
 `/sys/class/drm` in the mac VM contains `version` and nothing else: no cards.
 That is not a problem to route around, it is the honest-unavailable path and
@@ -149,7 +154,7 @@ the default `--monitor` smoke leg proves it (`NO GPU` cell, monitor still
 showing real CPU/MEM from the VM's own `/proc`).
 
 The parse-to-render path is proven separately by a PATH-shimmed `nvidia-smi`
-and a shimmed collector, both speaking bytes captured from real hardware —
+and a shimmed collector, both speaking bytes captured from real hardware:
 the same line `--panel github`'s `gh` shim and `--clipssh`'s `clipssh` shim
 already draw. What needs proving is the shell's path, not that a VM has a
 GPU. Inventing `/sys` entries inside the rig stays forbidden.
@@ -159,7 +164,7 @@ GPU. Inventing `/sys` entries inside the rig stays forbidden.
 Captured with the D2 collector over ssh. These exact bytes go into
 `tests/fixtures/` and back the parser tests.
 
-**g815 — hybrid Intel + NVIDIA (`gpu-hybrid.txt`)**
+**g815: hybrid Intel + NVIDIA (`gpu-hybrid.txt`)**
 
 ```
 @drm
@@ -177,11 +182,11 @@ conn|card1|eDP-1|connected
 ```
 
 Note what this fixture pins: the dGPU is `card0` but `boot_vga=0`, the iGPU is
-`card1` with `boot_vga=1` — card numbering does NOT imply primacy. The
+`card1` with `boot_vga=1`: card numbering does NOT imply primacy. The
 external HDMI hangs off the dGPU while the internal panel hangs off the iGPU.
 `fan.speed` is `[N/A]`. `supergfxctl` is absent, so `@gfx` is empty.
 
-**e1504g — single Intel (`gpu-single.txt`)**
+**e1504g: single Intel (`gpu-single.txt`)**
 
 ```
 @drm
@@ -195,7 +200,7 @@ conn|card1|HDMI-A-1|disconnected
 Note: the only card is `card1`, not `card0`. Any code indexing by number is
 wrong on this machine.
 
-**mac VM — no GPU (`gpu-none.txt`)**: `@drm` section empty.
+**mac VM, no GPU (`gpu-none.txt`)**: `@drm` section empty.
 
 **amdgpu (`gpu-amd.txt`)**: no AMD hardware is reachable from this rig, so
 this fixture is hand-written to the documented sysfs contract
@@ -216,11 +221,11 @@ waves are strictly sequential.
 
 ### Wave 1
 
-**Task 1 — `shell/Monitor/sysinfo.js` + tests**
+**Task 1: `shell/Monitor/sysinfo.js` + tests**
 Owns: `shell/Monitor/sysinfo.js`, `shell/Monitor/collect.js`,
 `tests/tst_monitor_sysinfo.qml`, `tests/fixtures/monitor-g815.txt`,
 `tests/fixtures/monitor-vm.txt`.
-Do: the collector script constant (D2) and pure parsers — `splitSections`,
+Do: the collector script constant (D2) and pure parsers: `splitSections`,
 `parseStat` (returns per-cpu jiffy records; a separate `cpuDelta(prev, next)`
 returns aggregate + per-core busy fractions in **0..1**, matching the repo's
 fraction convention), `parseMem` (total/available/free/swap in bytes, plus a
@@ -233,7 +238,7 @@ Rules: a missing section returns an empty result, never throws. Fractions are
 must return `null` rather than a fake 0.
 Verify: `just vm-test`.
 
-**Task 2 — `shell/Monitor/gpu.js` + tests**
+**Task 2: `shell/Monitor/gpu.js` + tests**
 Owns: `shell/Monitor/gpu.js`, `tests/tst_monitor_gpu.qml`,
 `tests/fixtures/gpu-hybrid.txt`, `gpu-single.txt`, `gpu-none.txt`,
 `gpu-amd.txt`.
@@ -249,11 +254,11 @@ index 0 and the e1504g fixture is the test that proves it. `boot_vga` decides
 which card is integrated, never the number.
 Verify: `just vm-test`, with the e1504g and hybrid fixtures both asserted.
 
-**Task 3 — launcher reachability sweep**
+**Task 3: launcher reachability sweep**
 Owns: `shell/Menu/default-menu.jsonc`, `shell/Menu/providers.js` (tray
 provider only), `tests/tst_menu_reachability.qml`, `docs/USAGE.md` (menu
 section only).
-Do: add a launcher route for every gap the audit found —
+Do: add a launcher route for every gap the audit found:
 - `panels.*` submenu with one row per name in the `PanelIpc` registry
   (appmenu, audio, calendar, network, bluetooth, airpods, dualsense, power,
   weather, media, github, usage, tailscale, systemupdate, display), each
@@ -277,7 +282,7 @@ PNG.
 
 ### Wave 2
 
-**Task 4 — `SystemMonitorService` + `GpuService`**
+**Task 4: `SystemMonitorService` + `GpuService`**
 Owns: `shell/Services/SystemMonitorService.qml`,
 `shell/Services/GpuService.qml`, `shell/Services/qmldir`.
 Do: two singletons over the Task 1/2 modules. One `Process` running the
@@ -291,7 +296,7 @@ poll only while subscribed. `nvidia-smi` absent is a normal state.
 Verify: `just vm-build`, `just vm-lint`, plus `qs ipc call debug dump` in the
 rig showing the services alive.
 
-**Task 5 — `MonitorIpc`**
+**Task 5: `MonitorIpc`**
 Owns: `shell/Ipc/MonitorIpc.qml`, `shell/shell.qml` (IPC registration only).
 Do: `monitor status` (JSON: cpu, mem, load, temps, net, disk, availability
 flags), `monitor gpu` (JSON: the card records with metrics and outputs),
@@ -304,12 +309,12 @@ Verify: `just vm-lint`, then in the rig `qs ipc call monitor status` and
 
 ### Wave 3
 
-**Task 6 — bar cell + compact panel**
+**Task 6: bar cell + compact panel**
 Owns: `shell/Surfaces/Bar/widgets/MonitorWidget.qml`,
 `shell/Surfaces/Panels/MonitorPanel.qml`, `shell/Bar/layout.js`,
 `shell/Surfaces/Bar/Bar.qml`, `shell/shell.qml` (panel wiring),
 `shell/Ipc/PanelIpc.qml` (header comment), `tests/tst_bar_layout.qml`.
-Do: `monitor` as an **opt-in** builtin — added to `BUILTIN_WIDGETS`, absent
+Do: `monitor` as an **opt-in** builtin, added to `BUILTIN_WIDGETS`, absent
 from `DEFAULT_LAYOUT`, with the opt-in comment extended and the
 `test_monitor_is_an_optin_builtin_absent_from_defaults` case following M36's
 `display` precedent verbatim. The cell shows CPU% and MEM% (and GPU% when a
@@ -319,31 +324,31 @@ summons the launcher's full monitor route.
 Verify: `just vm-test`, `just vm-lint`, `just vm-smoke --panel monitor`, read
 the PNG.
 
-**Task 7 — the app-view seam + `MonitorView`**
+**Task 7: the app-view seam + `MonitorView`**
 Owns: `shell/Menu/appviews.js`, `shell/Surfaces/Menu/Menu.qml`,
 `shell/Surfaces/Menu/views/MonitorView.qml`, `shell/Theme/tokens.js`,
 `docs/DESIGN.md` (§1.3 width table row), `tests/tst_menu_appviews.qml`,
 `shell/Menu/default-menu.jsonc` (the `monitor` route entry only).
-Do: D1 exactly. `MonitorView` is the FULL monitor in ledger grammar — CPU with
+Do: D1 exactly. `MonitorView` is the FULL monitor in ledger grammar: CPU with
 per-core bars, MEM, SWAP, LOAD, UPTIME, TEMPS, NET rates, DISK, then a GPU
 section: one block per card with name, driver, PCI address, its connectors
 (and which are connected), and either live metrics or `NO METRICS`. `NO GPU`
-when the machine has none. Every visual token from DESIGN.md — `Cell`,
+when the machine has none. Every visual token from DESIGN.md: `Cell`,
 `MetaLabel` uppercase with `colon: true`, `DitherFill` bars, rule width 2,
 radius 0, no invented spacing.
 Verify: `just vm-test`, `just vm-lint`, `just vm-smoke --monitor`, read the
-PNG — the launcher must show the full view with the VM's real CPU/MEM and an
+PNG: the launcher must show the full view with the VM's real CPU/MEM and an
 honest `NO GPU`.
 
 ### Wave 4
 
-**Task 8 — launch on dGPU**
+**Task 8: launch on dGPU**
 Owns: `shell/Menu/providers.js` (apps rows + a `gpu` provider),
 `shell/Surfaces/Menu/Menu.qml` (activation only),
 `shell/Menu/default-menu.jsonc` (`gpu.*` entries),
 `tests/tst_menu_gpu.qml`.
 Do: a `gpu` route listing the machine's cards (name, driver, integrated/
-discrete, outputs) with, under it, `gpu.launch` — the app list again, where
+discrete, outputs) with, under it, `gpu.launch`, the app list again, where
 activation goes through `monitor launch <id> <card>` instead of
 `_entry.execute()`. Plus Shift+Enter on any ordinary app row as the
 accelerator for the same thing, targeting the default discrete card. On a
@@ -351,7 +356,7 @@ single-GPU machine the whole `gpu.launch` route hides (`when`-style gating on
 the card count) rather than offering a no-op.
 Verify: `just vm-test`, `just vm-lint`, `just vm-smoke --gpu` (Task 10's leg).
 
-**Task 9 — outputs know their card**
+**Task 9: outputs know their card**
 Owns: `shell/Surfaces/Panels/DisplayPanel.qml`, `shell/Display/outputs.js`,
 `tests/tst_display_outputs.qml`.
 Do: annotate each output row with the card driving it, matching the
@@ -363,7 +368,7 @@ the PNG.
 
 ### Wave 5
 
-**Task 10 — smoke legs**
+**Task 10: smoke legs**
 Owns: `dev/smoke-niri.sh`, `dev/vm.sh` (artifact pulls), `justfile` if needed.
 Do: `--monitor` (bar cell led into `bar.layout.right`, panel opened, launcher
 monitor route summoned; three screenshots plus `monitor status` and `monitor
@@ -377,7 +382,7 @@ actually reached the child). Both legs carry `SMOKE_*` marker lines so
 Verify: `just vm-smoke --monitor` and `just vm-smoke --gpu`, every artifact
 read on the mac.
 
-**Task 11 — docs**
+**Task 11: docs**
 Owns: `docs/USAGE.md`, `docs/DESIGN.md`, `CLAUDE.md`, `README.md`.
 Do: document the monitor (cell, panel, launcher route), the app-view registry
 as the way to add the next one, the GPU story including what is honestly
@@ -405,5 +410,5 @@ what Task 10 actually built.
 
 - `system.lock` stays disabled in the menu; flipping it is the owner's call.
 - No settings UI for `monitor.*`; `settings.json` keys only, read-only as ever.
-- No AMD smoke leg — no AMD hardware is reachable, and faking one is banned.
+- No AMD smoke leg: no AMD hardware is reachable, and faking one is banned.
 - No per-process GPU accounting.

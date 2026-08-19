@@ -348,6 +348,7 @@ Two numbers set the whole shell's size:
   | | | `popupWidthWide` | 400 |
   | | | `popupWidthMenu` | 560 |
   | | | `popupWidthMenuSplit` | 840 |
+  | | | `popupWidthMenuApp` | 900 |
 
   Both scales can be overridden as a whole (one number denser/roomier) or
   per-token (a theme pins `display` to something huge for the lock clock
@@ -355,12 +356,14 @@ Two numbers set the whole shell's size:
   `lg`/`sm` exactly (2026-08-07 spacing-consistency pass, Task 6) — Cell.qml,
   the one shared row primitive, resolves its own padding through these
   rather than the bare scale steps, so the two numbers can't drift apart
-  independently again. `popupWidth{Narrow,Default,Wide,Menu,MenuSplit}` are
-  the five steps every floating card's width snaps to (menu at 560 is its
+  independently again. `popupWidth{Narrow,Default,Wide,Menu,MenuSplit,MenuApp}`
+  are the six steps every floating card's width snaps to (menu at 560 is its
   own step; everything from a small popout to the picker snaps to
   narrow/default/wide) instead of each surface picking its own literal.
   `MenuSplit` (840, 1.5x `Menu`) is the menu's own further step, for the
   clipboard/share-history route's 50/50 list-plus-preview split (§3 Menu).
+  `MenuApp` (900) is the app-view registry's own step (`Menu/appviews.js`,
+  M38 D1), for a route that renders a whole view instead of a row list.
 
   **A panel that does not name its width is a defect (2026-08-17).** Every
   `Panel` sets `panelWidth` explicitly from the four steps above; silence
@@ -932,11 +935,11 @@ floats with a margin or fuses to the screen edge.
   a host with no ttfx on PATH the surface falls back to effect.js's five
   builtin effects, which are accent-colored as before.
 
-  One output animates, not all of them (`shell/Screensaver/outputs.js`).
+  One output animates, not all of them (`shell/Display/priority.js`).
   Every other screen covers itself with the same surface carrying the
   converged banner, painted once, in `accent` — the effect's own gradient
   would mean running the effect there too. Which one comes from
-  `screensaver.outputPriority`, a preference list resolved against what is
+  `display.outputPriority`, a preference list resolved against what is
   connected (`["HDMI", "internal"]`), re-applied on any screen change so an
   unplug hands the animation down the list and a plug takes it back. Unset,
   it's the focused output. A frame is a full-screen Canvas repaint,
