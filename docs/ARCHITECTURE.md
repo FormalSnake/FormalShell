@@ -97,6 +97,8 @@ shell/
       reducer.js               pure JS: niri EventStream -> contract state
       NiriBackend.qml           two-socket JSON IPC client; applyThemeFragment() reloads config
     hyprland/
+      model.js                  pure JS: Hyprland workspaces onto the contract, dropping the
+                                 negative-id special:* overlays the quake console parks on
       HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
   Components/
     Cell.qml                    the shared ledger cell — selected/accent/hovered, bottom+right hairline
@@ -338,6 +340,7 @@ tests/
   tst_keybinds.qml               qmltestrunner tests for Compositor/keybinds.js
   tst_keyboard_layout.qml        qmltestrunner tests for Compositor/keyboard.js
   tst_app_match.qml              qmltestrunner tests for Compositor/appmatch.js
+  tst_hyprland_workspaces.qml    qmltestrunner tests for Compositor/hyprland/model.js
 dev/
   smoke-niri.sh                 nested-niri build+screenshot loop, dbus-run-session isolated; one mode
                                  flag per surface (--wallpaper, --menu, --notify, --osd, --panel <name>,

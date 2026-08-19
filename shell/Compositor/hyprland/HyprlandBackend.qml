@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 
 import "../../Display/outputs.js" as Outputs
+import "model.js" as Model
 
 // Hyprland backend over Quickshell's native Hyprland IPC module. Hyprland.workspaces/
 // toplevels/monitors are already-reactive ObjectModels (unlike niri's raw socket, no
@@ -21,17 +22,9 @@ Scope {
     // the available signal: it means the IPC round-trip actually returned data.
     readonly property bool available: Hyprland.monitors.values.length > 0
 
-    readonly property var workspaces: Hyprland.workspaces.values.map(function (w) {
-        return {
-            id: String(w.id),
-            idx: w.id,
-            name: w.name ?? "",
-            output: w.monitor ? w.monitor.name : "",
-            isActive: w.active,
-            isFocused: w.focused,
-            isUrgent: w.urgent
-        };
-    })
+    // Shape and the special-workspace exclusion both live in model.js; see its
+    // header for why an overlay workspace is not a workspace here.
+    readonly property var workspaces: Model.mapWorkspaces(Hyprland.workspaces.values)
 
     // `at`/`size` are already logical coordinates, so they map straight onto
     // the BackendBase `rect` contract. A hidden window (an unfocused member of
