@@ -1,4 +1,5 @@
 .pragma library
+.import "../Monitor/gpu.js" as Gpu
 
 // Pure output/display model for DisplayPanel (M17): both compositors' wire
 // shapes normalized onto one row contract, plus every derivation the panel
@@ -379,4 +380,24 @@ function _hyprlandMode(row) {
     if (row.refresh > 0)
         mode += "@" + _trimNumber(row.refresh, 5);
     return mode;
+}
+
+// ---- GPU annotation (M38 Task 9) ---------------------------------------
+
+// The row's own meta line naming the card driving it, e.g. "NVIDIA /
+// DISCRETE" for `connectorName`'s row when it matches one of `cards`'
+// (GpuService.cards, or any array of gpu.js card records) connector names
+// verbatim. "" when no card claims the connector, never a guess. Also ""
+// whenever there is one card or fewer, since annotating every row with the
+// same card is noise on a single-GPU machine, the common case (the owner's
+// second laptop, the test VM).
+function outputCardLabel(connectorName, cards) {
+    var list = cards || [];
+    if (list.length <= 1)
+        return "";
+    var card = Gpu.outputCard(connectorName, list);
+    if (!card)
+        return "";
+    var vendor = Gpu.vendorName(card.vendorId) || String(card.driver || "").toUpperCase();
+    return vendor + " / " + (Gpu.isDiscrete(card) ? "DISCRETE" : "INTEGRATED");
 }

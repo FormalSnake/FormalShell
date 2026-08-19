@@ -62,6 +62,7 @@ ShellRoot {
                 tailscalePanel: tailscalePanelInstance
                 systemUpdatePanel: systemUpdatePanelInstance
                 displayPanel: displayPanelInstance
+                monitorPanel: monitorPanelInstance
                 trayMenu: trayMenuInstance
                 center: notificationsCenter
             }
@@ -130,6 +131,7 @@ ShellRoot {
     TailscalePanel { id: tailscalePanelInstance }
     SystemUpdatePanel { id: systemUpdatePanelInstance }
     DisplayPanel { id: displayPanelInstance }
+    MonitorPanel { id: monitorPanelInstance; menu: menu }
     RegionPicker { id: regionPickerInstance }
 
     // Same "one controller, opened on the focused screen at trigger time"
@@ -185,14 +187,14 @@ ShellRoot {
     MenuIpc { menu: menu }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    // The static thirteen merged with every plugin surface that has
+    // The static sixteen merged with every plugin surface that has
     // registered itself. Plugin keys carry manifest.js's "plugin:" prefix, so
     // a plugin can never shadow a builtin name and PanelIpc needs no
     // reserved-id list. PluginService.surfaces is replaced wholesale on every
     // register/unregister, so this binding re-fires.
     PanelIpc {
         registry: {
-            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance };
+            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance };
             var surfaces = PluginService.surfaces;
             for (var key in surfaces)
                 reg[key] = surfaces[key];
@@ -202,6 +204,7 @@ ShellRoot {
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
     ConsoleIpc {}
+    MonitorIpc {}
     NetworkIpc { panel: networkPanelInstance }
     BluetoothIpc {}
     AirpodsIpc {}

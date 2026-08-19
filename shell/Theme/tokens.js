@@ -42,19 +42,23 @@ var SPACING_BASE = {
 // `lg`/`sm` exactly (2026-08-07 spacing-consistency pass) — Cell.qml's
 // implicit sizing routes through these now instead of the bare scale
 // steps, so the two numbers can't drift apart independently again.
-// `popupWidth{Narrow,Default,Wide,Menu,MenuSplit}` are the five snap points
-// every floating card's width now picks from (DESIGN.md §1.3's popup width
-// scale) instead of each surface choosing its own literal. `MenuSplit` (1.5x
-// `Menu`) is the menu's own split-pane step — the clipboard/share-history
-// route's left-half list plus right-half preview needs more than one column
-// of rows can hold.
+// `popupWidth{Narrow,Default,Wide,Menu,MenuSplit,MenuApp}` are the six snap
+// points every floating card's width now picks from (DESIGN.md §1.3's popup
+// width scale) instead of each surface choosing its own literal. `MenuSplit`
+// (1.5x `Menu`) is the menu's own split-pane step, for the
+// clipboard/share-history route's left-half list plus right-half preview,
+// which needs more than one column of rows can hold. `MenuApp` is one step
+// past it, for a menu route rendering a whole app view (Menu/appviews.js):
+// two ledger columns of labelled numbers, both carrying their own values,
+// where the split route's right half is a single preview that can take
+// whatever room is left over.
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 8, controlPaddingY: 4, inputPaddingY: 7,
     controlHeight: 28, popupRowHeight: 28, rowGap: 8, rowPaddingX: 12,
     labelGap: 4, panelGap: 14, panelPadding: 8,
     trackThickness: 6,
     popupWidthNarrow: 280, popupWidthDefault: 320, popupWidthWide: 400, popupWidthMenu: 560,
-    popupWidthMenuSplit: 840
+    popupWidthMenuSplit: 840, popupWidthMenuApp: 900
 };
 
 function spacingTokens(scale) {

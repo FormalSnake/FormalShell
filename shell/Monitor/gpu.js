@@ -1,7 +1,7 @@
 .pragma library
 
 // Pure GPU parsing for the system monitor and dGPU-offload launch (M38 Task
-// 2). No Quickshell/Process/XHR access here — SystemMonitorService/GpuService
+// 2). No Quickshell/Process/XHR access here: SystemMonitorService/GpuService
 // collect the bytes (the D2 collector's @drm/@nvidia/@gfx sections) and this
 // module turns them into records, tested head-on against bytes captured from
 // real hardware (tests/fixtures/gpu-*.txt).
@@ -99,7 +99,7 @@ function _numOrNull(field) {
 // nounits` output, one GPU per line. `[N/A]` is a value nvidia-smi really
 // emits (laptop GPUs report no fan reading) and must parse to null, never 0.
 // `utilization` is normalized to a 0..1 fraction here (repo convention);
-// `memUsed`/`memTotal` stay in the wire's MiB — mergeGpu is what needs bytes.
+// `memUsed`/`memTotal` stay in the wire's MiB: mergeGpu is what needs bytes.
 function parseNvidia(nvidiaText) {
     var rows = [];
     var lines = String(nvidiaText || "").split("\n");
@@ -160,7 +160,7 @@ function _amdMetrics(values) {
         vramTotal: values.mem_info_vram_total === undefined ? null : values.mem_info_vram_total,
         powerW: values.power1_average === undefined ? null : values.power1_average / 1000000,
         // fan1_input, when the collector gathers it, is RPM off the amdgpu
-        // hwmon ABI, not a percent — there is no percent-scale fan reading
+        // hwmon ABI, not a percent: there is no percent-scale fan reading
         // in this row, so this stays null instead of mislabeling an RPM.
         fanPercent: null
     };
@@ -170,7 +170,7 @@ function _amdMetrics(values) {
 // `nvidia`-driver cards in enumeration order (both lists are already the
 // collector's own emission order). amdgpu reads gpu_busy_percent (0..100,
 // divided) and mem_info_vram_* (bytes already) off `metrics`. Every other
-// driver (i915, xe, ...) gets `{available:false}` and nothing else — no
+// driver (i915, xe, ...) gets `{available:false}` and nothing else: no
 // unprivileged utilisation counter exists for those, and inventing one would
 // violate the honest-unavailable-state rule.
 function mergeGpu(cards, metrics, nvidiaRows) {
@@ -220,14 +220,14 @@ function displayName(card, nvidiaRow) {
     return card.card;
 }
 
-// boot_vga is the only signal for which card is the integrated/primary one —
+// boot_vga is the only signal for which card is the integrated/primary one:
 // never the card number (the g815 fixture has the dGPU at card0).
 function isDiscrete(card) {
     return card.bootVga !== "1";
 }
 
-// The card record driving `connectorName` (compositor output names —
-// "eDP-1", "HDMI-A-1" — match connector names verbatim), or null.
+// The card record driving `connectorName` (compositor output names, e.g.
+// "eDP-1", "HDMI-A-1", match connector names verbatim), or null.
 function outputCard(connectorName, cards) {
     var list = cards || [];
     for (var i = 0; i < list.length; i++) {
@@ -260,13 +260,13 @@ function stripFieldCodes(execString) {
 
 // The argv to spawn an app on `target` (a card record from mergeGpu/
 // parseCards). `DesktopEntry.execute()` cannot carry an environment, so this
-// builds the argv by hand instead. `tools` is `{nvidiaOffload, primeRun}` —
+// builds the argv by hand instead. `tools` is `{nvidiaOffload, primeRun}`,
 // what offload helper is on PATH.
 //
 // NVIDIA: nvidia-offload (NixOS) if present, else prime-run (Arch), else the
 // exact four env vars NixOS's own nvidia-offload wrapper exports (read off
 // the owner's g815, 2026-08-19). Non-NVIDIA: DRI_PRIME set to the card's PCI
-// slot in Mesa's `pci-0000_02_00_0` form — never the positional `DRI_PRIME=1`,
+// slot in Mesa's `pci-0000_02_00_0` form: never the positional `DRI_PRIME=1`,
 // ambiguous on a box with more than two GPUs.
 function offloadArgv(execString, target, tools) {
     var opts = tools || {};

@@ -25,8 +25,9 @@ iwlwifi_1_6|temp1_input||56000
 acpitz_0|temp1_input||27800
 nvme|temp1_input|Composite|45850
 @disk
-/                           269427478528 154960060416
-/boot                          467664896    204550144
+/dev/nvme0n1p5 /                           269427478528 164616077312
+/dev/nvme0n1p1 /boot                          467664896    204550144
+macbook:       /home/kyandesutter/.macbook 994662584320 787570077696
 @drm
 card|card0|nvidia|0x10de|0x2d58|0|0000:02:00.0|
 conn|card0|HDMI-A-1|connected

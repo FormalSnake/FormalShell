@@ -162,6 +162,16 @@ TestCase {
         verify(names(d.regions.right).indexOf("display") < 0);
     }
 
+    function test_monitor_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["monitor"] } });
+        compare(names(r.regions.right), "monitor");
+        compare(r.warnings.length, 0);
+        var d = Layout.resolve(undefined);
+        verify(names(d.regions.left).indexOf("monitor") < 0);
+        verify(names(d.regions.center).indexOf("monitor") < 0);
+        verify(names(d.regions.right).indexOf("monitor") < 0);
+    }
+
     function test_bell_is_a_default_builtin_before_indicators() {
         var r = Layout.resolve(undefined);
         var right = names(r.regions.right).split(",");

@@ -21,13 +21,13 @@ SwapFree:              0 kB
 hwsim0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
 @temp
 @disk
-/               41956900864  16143556608
-/etc/ssl/certs 994662580224 786681090048
-/tmp/shared    994662580224 786681090048
-/tmp/xchg      994662580224 786681090048
-/nix/.ro-store   8153669632   8153669632
-/var/keys      994662580224 786681090048
-/nix/store      41956900864  16143556608
+/dev/vda       /               41956900864  16550432768
+certs          /etc/ssl/certs 994662580224 787570237440
+shared         /tmp/shared    994662580224 787570237440
+xchg           /tmp/xchg      994662580224 787570237440
+/dev/vdb       /nix/.ro-store   8153669632   8153669632
+keys           /var/keys      994662580224 787570237440
+overlay        /nix/store      41956900864  16550432768
 @drm
 @nvidia
 @gfx

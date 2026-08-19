@@ -16,6 +16,7 @@ import "../../Menu/calc.js" as Calc
 import "../../Menu/frecency.js" as Frecency
 import "../../Menu/toggles.js" as Toggles
 import "../../Menu/actions.js" as Actions
+import "../../Menu/appviews.js" as AppViews
 import "../../Compositor/keybinds.js" as Keybinds
 import "../../Compositor/appmatch.js" as AppMatch
 
@@ -534,6 +535,23 @@ PanelWindow {
     readonly property bool _isSplitRoute: root._mode === "menu"
         && (root.currentNodeId === "clipboard" || root.currentNodeId === "share.history")
 
+    // --- App-view routes (M38 plan decision D1) --------------------------
+    //
+    // The third view over the same level machinery, after the grid and the
+    // split: a route registered in Menu/appviews.js renders one whole QML
+    // component in place of the row list ("everything is accessible through
+    // the main launcher ... it should open a full one in the launcher,
+    // similar to raycast apps"). Deliberately a registry lookup rather than
+    // a third hardcoded id like the two above, because the next app view
+    // must cost one line of appviews.js and one file, not another branch
+    // here.
+    //
+    // Everything else about the level is untouched: the breadcrumb, Escape,
+    // backspace-on-empty and the `menu` IPC all key off currentNodeId, so
+    // none of them needs to know a view is live.
+    readonly property string _appViewSource: root._mode === "menu" ? AppViews.viewFor(root.currentNodeId) : ""
+    readonly property bool _isAppView: root._appViewSource !== ""
+
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
     // the ternary's closed branch never reads ClipboardService.items, so
@@ -557,6 +575,11 @@ PanelWindow {
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
         var capture = Providers.captureEntries(Quickshell.shellDir);
+        // M38 Task 8: "gpu.launch"/"gpu.mode" fragments, present only when
+        // GpuService actually has a discrete card / supergfxctl -- see
+        // gpuLaunchEntry/gpuModeEntry's own header.
+        var gpuLaunch = Providers.gpuLaunchEntry(GpuService.defaultDiscrete());
+        var gpuMode = Providers.gpuModeEntry(Quickshell.shellDir, GpuService.gfxMode);
         // Live-while-open, unlike wallpaper/buttons above: its action
         // depends on the current newest clipboard entry, so
         // _liveClipboardItems rides this same binding for _defaultObj (and
@@ -570,6 +593,8 @@ PanelWindow {
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
         Object.keys(capture).forEach(function (k) { merged[k] = capture[k]; });
+        Object.keys(gpuLaunch).forEach(function (k) { merged[k] = gpuLaunch[k]; });
+        Object.keys(gpuMode).forEach(function (k) { merged[k] = gpuMode[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
     }
@@ -605,7 +630,18 @@ PanelWindow {
         // M38 Task 3 (launcher reachability sweep): both self-targeted the
         // same way apps/clipboard above are.
         panels: function () { return Providers.panelsProvider(Quickshell.shellDir); },
-        tray: function () { return Providers.trayProvider(SystemTray.items.values, Quickshell.shellDir); }
+        tray: function () { return Providers.trayProvider(SystemTray.items.values, Quickshell.shellDir); },
+        // M38 Task 8: card info rows (always present) and the launch-on-
+        // dGPU app list (only reached when gpuLaunchEntry above actually
+        // injected "gpu.launch" into _defaultObj).
+        gpu: function () { return Providers.gpuProvider(GpuService.cards); },
+        gpuLaunch: function () {
+            var card = GpuService.defaultDiscrete();
+            if (!card) return [];
+            return Providers.gpuLaunchProvider(DesktopEntries.applications.values, function (name) {
+                return Quickshell.iconPath(name, true);
+            }, Core.State.appLaunches, Date.now(), Quickshell.shellDir, card.card);
+        }
     })
     readonly property var _nodes: root._tree.nodes
 
@@ -754,7 +790,12 @@ PanelWindow {
         }
         return screens.length > 0 ? screens[0] : null;
     }
-    readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
+    // 0.6 of the screen for a row list, which is already more rows than
+    // anyone scans. An app view is a whole surface rather than a list, and
+    // capping it at the row-list height left the system monitor's own GPU
+    // section below the fold on a two-card machine, so it gets a taller
+    // ceiling and still scrolls past it.
+    readonly property real _maxTotalHeight: root._screen ? root._screen.height * (root._isAppView ? 0.82 : 0.6) : 400
     // Content gets a `panelPadding` gutter (DESIGN.md's omarchy card chrome:
     // "internal padding") on all four sides now — the frame draws its own
     // explicit ring on all four (below). Rows still draw their own
@@ -767,9 +808,15 @@ PanelWindow {
     readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.panelPadding * 2
     readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.panelPadding * 2
     // Whichever view owns the level: the grid on the wallpaper route, the
-    // row list everywhere else. The idle one is emptied rather than merely
-    // hidden (see their `model` bindings), so its contentHeight is 0.
-    readonly property real _viewContentHeight: root._isPickerRoute ? gridView.contentHeight : rowsView.contentHeight
+    // loaded component on an app-view route, the row list everywhere else.
+    // The idle ones are emptied or unloaded rather than merely hidden (see
+    // their `model`/`source` bindings), so their contribution is 0. The
+    // loader reports its item's own implicit height, which is what an app
+    // view's content wants before this caps it, and the view scrolls
+    // inside whatever it gets.
+    readonly property real _viewContentHeight: root._isPickerRoute
+        ? gridView.contentHeight
+        : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight)
     readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - variantRow.height - actionBar.height)
     // Fixed height on the split route (M30, omarchy parity): the preview
     // pane needs to be genuinely useful, not sized to whatever row count a
@@ -1234,6 +1281,41 @@ PanelWindow {
         root._confirmPendingId = "";
     }
 
+    // The app view's scroll seam, sibling of the `query` one below (D1): a
+    // view that declares `scrollTarget` hands the launcher its own
+    // Flickable and the keys below drive it, since there is no row cursor
+    // to move on those routes. It is what keeps the action bar's ↑↓ MOVE
+    // hint honest there, and what makes a view taller than the card's
+    // height cap reachable at all. A view declaring none leaves the arrows
+    // inert, exactly as before.
+    readonly property var _appViewScroll: (root._isAppView && appView.item && appView.item.scrollTarget)
+        ? appView.item.scrollTarget
+        : null
+
+    function _scrollAppViewTo(y) {
+        var flick = root._appViewScroll;
+        if (!flick) return;
+        flick.contentY = Math.max(0, Math.min(Math.max(0, flick.contentHeight - flick.height), y));
+    }
+
+    function _scrollAppViewBy(delta) {
+        if (root._appViewScroll)
+            root._scrollAppViewTo(root._appViewScroll.contentY + delta);
+    }
+
+    // What the action bar says about the app view's overflow, empty on
+    // every other route and on a view whose content already fits. It names
+    // the direction that still has content, because the arrows are what the
+    // reader presses.
+    readonly property string _appViewScrollHint: {
+        var flick = root._appViewScroll;
+        if (!flick || flick.contentHeight <= flick.height)
+            return "";
+        if (flick.atYBeginning)
+            return "↓ MORE";
+        return flick.atYEnd ? "↑ MORE" : "↑↓ MORE";
+    }
+
     // A click IS the pointer acting, so the level it opens hands the cursor to
     // whatever row lands under the (still parked) pointer: re-arm one
     // stationary sample after _activateRow's own level change has reset the
@@ -1245,6 +1327,11 @@ PanelWindow {
     }
 
     function _activateRow(index) {
+        // An app view has no row cursor, so Enter has nothing to act on.
+        // The guard is not decorative: a typed query on such a route still
+        // falls through to whole-tree ranking below, and without this Enter
+        // would launch a row that was never on screen.
+        if (root._isAppView) return;
         var rows = root._displayRows;
         if (index < 0 || index >= rows.length) return;
         var node = rows[index];
@@ -1315,6 +1402,25 @@ PanelWindow {
         if (node.kind === "link") {
             root._enterLevel((node.target && root._nodes[node.target]) ? node.target : node.id);
         }
+    }
+
+    // Shift+Enter accelerator (M38 Task 8): the cursor row's app launched on
+    // the default discrete card instead of normally, anywhere in the
+    // launcher an app row appears. Falls through to plain _activateRow when
+    // there is no discrete card or the cursor isn't on an app row: never a
+    // no-op that silently does nothing.
+    function _activateRowOnDiscreteGpu(index) {
+        if (root._isAppView) return;
+        var card = GpuService.defaultDiscrete();
+        var rows = root._displayRows;
+        var node = (index >= 0 && index < rows.length) ? rows[index] : null;
+        if (!card || !node || node.kind !== "app") {
+            root._activateRow(index);
+            return;
+        }
+        root._runAction(Providers.gpuLaunchAction(Quickshell.shellDir, node._entry.id, card.card));
+        Core.State.setAppLaunches(Frecency.record(Core.State.appLaunches, node._entry.id, Date.now()));
+        root.close();
     }
 
     // "@ipc:<name>" actions (see default-menu.jsonc's header comment)
@@ -1463,7 +1569,9 @@ PanelWindow {
     // card; card paints its own background.
     visible: root.isOpen || card.opacity > 0
     color: "transparent"
-    implicitWidth: root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu
+    implicitWidth: root._isAppView
+        ? Core.Theme.space.popupWidthMenuApp
+        : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
     implicitHeight: root._chrome + searchCell.height + variantRow.height + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
@@ -1599,12 +1707,22 @@ PanelWindow {
 
                     Keys.onPressed: event => {
                         switch (event.key) {
+                        // An app view has no row cursor, so the same two keys
+                        // scroll its content by a row instead. Claimed
+                        // either way: letting them through would only reach
+                        // the search field's own text cursor.
                         case Qt.Key_Up:
-                            root._moveCursor(root._isPickerRoute ? -root.pickerColumns : -1);
+                            if (root._isAppView)
+                                root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
+                            else
+                                root._moveCursor(root._isPickerRoute ? -root.pickerColumns : -1);
                             event.accepted = true;
                             break;
                         case Qt.Key_Down:
-                            root._moveCursor(root._isPickerRoute ? root.pickerColumns : 1);
+                            if (root._isAppView)
+                                root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
+                            else
+                                root._moveCursor(root._isPickerRoute ? root.pickerColumns : 1);
                             event.accepted = true;
                             break;
                         // Left/Right belong to the search field's own text
@@ -1622,10 +1740,38 @@ PanelWindow {
                                 event.accepted = true;
                             }
                             break;
+                        // Page/Home/End are the search field's own text
+                        // navigation everywhere else, so they are claimed
+                        // only where an app view declares something to
+                        // scroll. A page keeps one row of overlap, so the
+                        // reader carries context across the jump.
+                        case Qt.Key_PageUp:
+                        case Qt.Key_PageDown:
+                            if (root._appViewScroll) {
+                                var page = Math.max(Core.Theme.space.popupRowHeight,
+                                    root._appViewScroll.height - Core.Theme.space.popupRowHeight);
+                                root._scrollAppViewBy(event.key === Qt.Key_PageUp ? -page : page);
+                                event.accepted = true;
+                            }
+                            break;
+                        case Qt.Key_Home:
+                            if (root._appViewScroll) {
+                                root._scrollAppViewTo(0);
+                                event.accepted = true;
+                            }
+                            break;
+                        case Qt.Key_End:
+                            if (root._appViewScroll) {
+                                root._scrollAppViewTo(root._appViewScroll.contentHeight);
+                                event.accepted = true;
+                            }
+                            break;
                         case Qt.Key_Return:
                         case Qt.Key_Enter:
                             if (root._mode === "input")
                                 root._submitInput();
+                            else if ((event.modifiers & Qt.ShiftModifier) !== 0)
+                                root._activateRowOnDiscreteGpu(root._cursorIndex);
                             else
                                 root._activateRow(root._cursorIndex);
                             event.accepted = true;
@@ -1717,12 +1863,12 @@ PanelWindow {
             // half. Every other route is unchanged, full width.
             width: root._isSplitRoute ? Math.round(root._contentWidth / 2) : root._contentWidth
             height: root._rowsAreaHeight
-            visible: !root._isPickerRoute
+            visible: !root._isPickerRoute && !root._isAppView
             clip: true
-            // Emptied, not merely hidden, on the grid's route: an unread
-            // model keeps its delegates alive, and _viewContentHeight above
-            // needs the idle view to measure 0.
-            model: root._isPickerRoute ? [] : root._displayRows
+            // Emptied, not merely hidden, on the grid's and an app view's
+            // routes: an unread model keeps its delegates alive, and
+            // _viewContentHeight above needs the idle view to measure 0.
+            model: (root._isPickerRoute || root._isAppView) ? [] : root._displayRows
             currentIndex: root._cursorIndex
             // ListView tracks the cursor through its (always present, even
             // with no `highlight` component) highlight item, and the
@@ -1815,6 +1961,44 @@ PanelWindow {
                 }
                 onClicked: root._activateFromPointer(imageCell.index)
             }
+        }
+
+        // The third view (M38, D1): a whole component in place of the row
+        // list, for any route Menu/appviews.js registers. Shares rowsView's
+        // geometry exactly, like gridView above, so the action bar anchors
+        // to whichever of the three is live without knowing which.
+        //
+        // `source` empties off the route rather than the loader merely
+        // hiding: an app view holds a live subscription to whatever service
+        // it renders, and a hidden-but-loaded one would keep that service
+        // polling for a launcher nobody is looking at.
+        //
+        // It empties on the window going away too, not just on leaving the
+        // route. close() deliberately leaves currentNodeId where it was (so
+        // a resummon lands back on the same level), which would otherwise
+        // hold the subscription open for as long as the shell runs. Keyed
+        // off the window's own `visible` rather than `isOpen` so the view
+        // survives the exit fade instead of blanking the card mid-animation.
+        Loader {
+            id: appView
+            anchors.top: variantRow.bottom
+            anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
+            width: root._contentWidth
+            height: root._rowsAreaHeight
+            visible: root._isAppView
+            source: (root._isAppView && root.visible) ? Qt.resolvedUrl(root._appViewSource) : ""
+        }
+
+        // The seam that makes the registry reusable: a view that wants the
+        // search field declares `property string query` and gets the live
+        // text; one that declares none (MonitorView) leaves the field inert
+        // rather than pretending to filter something.
+        Binding {
+            target: appView.item
+            property: "query"
+            value: searchInput.text
+            when: appView.item !== null && appView.item.query !== undefined
         }
 
         // The split route's right half (M30): the cursor row's full
@@ -1928,6 +2112,26 @@ PanelWindow {
             // Clicking the primary is the pointer acting, exactly like
             // clicking the row itself — same path, same gate re-arm.
             onPrimaryActivated: root._activateFromPointer(root._cursorIndex)
+        }
+
+        // The app view's overflow hint, in the action bar's left half.
+        // That half is the row cursor's verb, which an app view has no
+        // cursor to fill, so the row is free chrome there. Drawn over the
+        // bar rather than passed in as its `primary` because a primary
+        // renders an accent key cap promising Enter an action it does not
+        // have on these routes, and drawn in the footer rather than over
+        // the view because a hint sitting on the content it announces hides
+        // the rows the reader is reaching for. controlPaddingX is Cell's
+        // own content inset, so this lands exactly where a primary would.
+        MetaLabel {
+            anchors.left: actionBar.left
+            anchors.leftMargin: Core.Theme.space.controlPaddingX
+            anchors.verticalCenter: actionBar.verticalCenter
+            // Yields to a real primary verb rather than drawing over it:
+            // a query typed on an app-view route still ranks the whole tree,
+            // which lights the left half up with an actual action.
+            visible: root._appViewScrollHint !== "" && !root._actionBar.primary
+            text: root._appViewScrollHint
         }
 
         // Erases the trailing hairline searchCell and every row draw along

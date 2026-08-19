@@ -3,10 +3,10 @@ import QtTest
 import "../shell/Menu/model.js" as Model
 import "../shell/Menu/providers.js" as Providers
 
-// M38 Task 3 — the launcher-reachability guard. Keeps the owner's
+// M38 Task 3: the launcher-reachability guard. Keeps the owner's
 // philosophy true: every panel registered in shell.qml's PanelIpc has a
-// route in the launcher. PANEL_NAMES here is a second, independently kept
-// copy of providers.js's own PANEL_NAMES list (not imported — a typo or a
+// route in the launcher. panelNames here is a second, independently kept
+// copy of providers.js's own panelNames list (not imported: a typo or a
 // dropped entry in the shipped list must show up as a mismatch between two
 // independently-written sources, not disappear because both read the same
 // array); test_registry_names_match_the_test_list below cross-checks it
@@ -16,10 +16,10 @@ import "../shell/Menu/providers.js" as Providers
 TestCase {
     name: "MenuReachability"
 
-    property var PANEL_NAMES: [
+    property var panelNames: [
         "appmenu", "audio", "calendar", "network", "bluetooth", "airpods",
         "dualsense", "power", "weather", "media", "github", "usage",
-        "tailscale", "systemupdate", "display"
+        "tailscale", "systemupdate", "display", "monitor"
     ]
 
     function _read(path) {
@@ -53,9 +53,9 @@ TestCase {
         var tree = _realTree();
         var panelsNode = tree.nodes["panels"];
         verify(panelsNode);
-        compare(panelsNode.childIds.length, PANEL_NAMES.length);
-        for (var i = 0; i < PANEL_NAMES.length; i++) {
-            var name = PANEL_NAMES[i];
+        compare(panelsNode.childIds.length, panelNames.length);
+        for (var i = 0; i < panelNames.length; i++) {
+            var name = panelNames[i];
             var node = tree.nodes["panels." + name];
             verify(node, "missing launcher route for panel '" + name + "'");
             compare(node.kind, "action");
@@ -74,21 +74,18 @@ TestCase {
         verify(start >= 0, "PanelIpc registry literal not found in shell.qml");
         var end = text.indexOf("};", start);
         var registryText = text.slice(start, end);
-        for (var i = 0; i < PANEL_NAMES.length; i++)
-            verify(registryText.indexOf(PANEL_NAMES[i] + ":") >= 0,
-                "'" + PANEL_NAMES[i] + "' not found in shell.qml's PanelIpc registry");
-        // "monitor" is a real Task 6 addition to the registry, opt-in and
-        // deliberately not part of this list yet (M38 wave ordering) — a
-        // fixed-count assertion here would only be able to fail late.
+        for (var i = 0; i < panelNames.length; i++)
+            verify(registryText.indexOf(panelNames[i] + ":") >= 0,
+                "'" + panelNames[i] + "' not found in shell.qml's PanelIpc registry");
     }
 
     function test_panels_provider_action_shape() {
         var rows = Providers.panelsProvider("/store/share/formalshell");
-        compare(rows.length, PANEL_NAMES.length);
+        compare(rows.length, panelNames.length);
         for (var i = 0; i < rows.length; i++) {
-            compare(rows[i].id, "panels." + PANEL_NAMES[i]);
+            compare(rows[i].id, "panels." + panelNames[i]);
             compare(rows[i].kind, "action");
-            compare(rows[i].action, "qs ipc -p /store/share/formalshell call panel open " + PANEL_NAMES[i]);
+            compare(rows[i].action, "qs ipc -p /store/share/formalshell call panel open " + panelNames[i]);
         }
     }
 
@@ -106,11 +103,13 @@ TestCase {
         compare(rows.length, 1);
         compare(rows[0].id, "tray.spotify");
         compare(rows[0].label, "Spotify");
-        compare(rows[0].action, "qs ipc -p /store/share/formalshell call tray activate spotify");
+        // The id is shell-quoted: tray ids are opaque strings that can carry
+        // spaces and quotes, so the provider must never interpolate one bare.
+        compare(rows[0].action, "qs ipc -p /store/share/formalshell call tray activate 'spotify'");
     }
 
-    // The rest of the sweep — console, plain screenshots, screensaver,
-    // plugins, notification bulk actions, retheme/explicit mode — all
+    // The rest of the sweep (console, plain screenshots, screensaver,
+    // plugins, notification bulk actions, retheme/explicit mode) all
     // injected the same self-targeted way captureEntries already injects
     // "capture". One assertion per IPC target/function actually referenced.
     function test_capture_entries_covers_the_rest_of_the_sweep() {
@@ -131,7 +130,7 @@ TestCase {
     }
 
     // system.lock stays a deliberate dead route (owner's call, not part of
-    // this sweep) — asserted so a future edit that quietly flips it on
+    // this sweep), asserted so a future edit that quietly flips it on
     // gets caught here rather than only in a live session.
     function test_system_lock_stays_disabled() {
         var tree = _realTree();

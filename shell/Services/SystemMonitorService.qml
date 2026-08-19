@@ -8,7 +8,7 @@ import "../Monitor/sysinfo.js" as Sysinfo
 
 // System monitor data layer (M38 Task 4, plan decision D2): one `sh -c`
 // collector Process per poll tick, parsed once through Monitor/sysinfo.js's
-// pure functions and published as plain properties. No FileView here —
+// pure functions and published as plain properties. No FileView here:
 // /proc and /sys/class/hwmon need globbing and defeat FileView's change
 // watching (Monitor/collect.js's own header), so this is a Process/Timer
 // service in CommandModule.qml's shape, not the FileView-watch idiom most
@@ -16,18 +16,18 @@ import "../Monitor/sysinfo.js" as Sysinfo
 //
 // subscribe()/unsubscribe() ref-count who currently wants live data (the
 // bar cell while visible, the compact panel and the launcher's full view
-// while open — the same acquire()/release() shape DualsenseService and
+// while open, the same acquire()/release() shape DualsenseService and
 // AirpodsService use, named subscribe/unsubscribe here since one tick fans
 // out to more than one consumer at once, including GpuService). The poll
 // timer runs only while the count is above zero, so a shell with the
 // monitor cell off and every monitor surface closed spawns nothing at all.
-// GpuService rides this same tick instead of running its own collector —
+// GpuService rides this same tick instead of running its own collector:
 // see its own header for why.
 //
 // Every delta needs two samples: the first tick after a subscribe from
 // zero has no previous /proc/stat or /proc/net/dev sample, so
 // cpu.aggregate/cores and net.rows come back null/empty rather than a
-// fabricated zero (Monitor/sysinfo.js's own cpuDelta/netDelta contract) —
+// fabricated zero (Monitor/sysinfo.js's own cpuDelta/netDelta contract);
 // the second tick fills them in.
 Singleton {
     id: root
@@ -40,9 +40,14 @@ Singleton {
     property var net: ({ available: false, rows: [] })
     property var disk: ({ available: false, rows: [] })
 
+    // Date.now() of the last completed tick, 0 before the first one lands.
+    // MonitorIpc's status()/gpu() report this alongside every reply so a
+    // caller can see how stale the sample is instead of trusting it blind.
+    property real lastTickAt: 0
+
     // Fired once per completed collector run, carrying the raw split
     // sections (Monitor/collect.js's splitSections output) so GpuService
-    // can read @drm/@nvidia/@gfx without spawning a second Process — the
+    // can read @drm/@nvidia/@gfx without spawning a second Process: the
     // whole point of collecting everything in one `sh -c` script (D2).
     signal tick(var sections)
 
@@ -77,7 +82,7 @@ Singleton {
     }
 
     // Skips the tick outright when the previous run is still in flight
-    // rather than queuing a second one — a slow disk (df on a network
+    // rather than queuing a second one: a slow disk (df on a network
     // mount, a wedged sysfs read) degrades to a slower poll, never two
     // collectors racing over the same output.
     function _runTick() {
@@ -88,6 +93,7 @@ Singleton {
     }
 
     function _applyBlob(blob) {
+        root.lastTickAt = Date.now();
         var sections = Collect.splitSections(blob);
 
         var statRecords = Sysinfo.parseStat(sections.stat);

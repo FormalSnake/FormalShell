@@ -6,7 +6,7 @@
 // on against bytes captured from real hardware (tests/tst_monitor_sysinfo.qml,
 // same split as Usage/usage.js and Display/outputs.js).
 //
-// Every fraction this module returns is 0..1, never 0..100 — the repo-wide
+// Every fraction this module returns is 0..1, never 0..100: the repo-wide
 // convention (CLAUDE.md), already the source of two shipped bugs when a
 // caller assumed otherwise. A missing or empty section is an empty array or
 // an `{available:false}` object, never a throw: the collector runs on
@@ -14,7 +14,7 @@
 // swapless VM, and all of that is a normal state to render, not an error.
 //
 // Delta functions (`cpuDelta`, `netDelta`) need two samples to mean
-// anything. Called with no previous sample they return `null` — never a
+// anything. Called with no previous sample they return `null`, never a
 // fabricated 0, which would read as "measured zero load" instead of "no
 // measurement yet".
 
@@ -120,7 +120,7 @@ function cpuDelta(prev, next) {
 // ---- /proc/meminfo --------------------------------------------------------
 
 // Bytes throughout (the section carries kB), plus a used fraction derived
-// from MemAvailable — the kernel's own estimate of reclaimable memory,
+// from MemAvailable, the kernel's own estimate of reclaimable memory,
 // closer to "what a user would call used" than MemTotal-MemFree.
 function parseMem(text) {
     var lines = _lines(text);
@@ -188,7 +188,7 @@ function parseUptime(text) {
 
 // ---- /proc/net/dev ---------------------------------------------------------
 
-// One row per interface, `lo` excluded — loopback traffic is never what a
+// One row per interface, `lo` excluded: loopback traffic is never what a
 // system monitor's network row means. Row shape is deliberately minimal
 // (rx/tx byte counters); everything else /proc/net/dev carries is dropped
 // at the parse boundary rather than threaded through unused.
@@ -243,7 +243,7 @@ function netDelta(prev, next, elapsedMs) {
 
 // One row per `chip|file|label|millidegrees` collector line. `label` falls
 // back to the chip name when the kernel exposes no *_label file for that
-// sensor (iwlwifi's radio sensor, most acpitz zones) — the chip name is
+// sensor (iwlwifi's radio sensor, most acpitz zones); the chip name is
 // kept on the row either way so the UI can group sensors that share it.
 function parseTemps(text) {
     var rows = [];
@@ -268,23 +268,48 @@ function parseTemps(text) {
 
 // ---- disk usage -------------------------------------------------------
 
-// `df --output=target,size,used`'s rows, already in bytes (collect.js runs
-// `df -B1`). `fraction` is used/size, clamped, 0 for a zero-size target.
+// `df --output=source,target,size,used`'s rows, already in bytes (collect.js
+// runs `df -B1`). `fraction` is used/size, clamped, 0 for a zero-size
+// target.
+//
+// Deduplicated by `source`: a NixOS machine's overlay/bind mounts put the
+// same device under several mount points, and without this a single
+// filesystem renders as one row per mount. Identity is the device string,
+// never size -- two distinct filesystems can legitimately report the same
+// size (9p mounts sharing a host directory's free space do). The row kept
+// for a repeated source is the one with the shortest mount path, the one a
+// human recognises (`/` over `/nix/store`).
 function parseDisk(text) {
-    var rows = [];
+    var bySource = {};
+    var order = [];
     var lines = _lines(text);
     for (var i = 0; i < lines.length; i++) {
-        var m = /^(.+?)\s+(\d+)\s+(\d+)$/.exec(lines[i].trim());
+        var m = /^(\S+)\s+(.+?)\s+(\d+)\s+(\d+)$/.exec(lines[i].trim());
         if (!m)
             continue;
-        var size = Number(m[2]);
-        var used = Number(m[3]);
-        rows.push({
-            mount: m[1],
+        var source = m[1];
+        var mount = m[2];
+        var size = Number(m[3]);
+        var used = Number(m[4]);
+        var row = {
+            source: source,
+            mount: mount,
             size: size,
             used: used,
             fraction: size > 0 ? Math.max(0, Math.min(1, used / size)) : 0
-        });
+        };
+
+        var existing = bySource[source];
+        if (!existing) {
+            bySource[source] = row;
+            order.push(source);
+        } else if (mount.length < existing.mount.length) {
+            bySource[source] = row;
+        }
     }
+
+    var rows = [];
+    for (var j = 0; j < order.length; j++)
+        rows.push(bySource[order[j]]);
     return rows;
 }

@@ -204,7 +204,7 @@ TestCase {
     }
 
     // A negative delta means the counter reset (interface bounced), not
-    // negative traffic — the row is dropped rather than reporting a
+    // negative traffic: the row is dropped rather than reporting a
     // fabricated rate.
     function test_net_delta_skips_an_interface_whose_counters_went_backwards() {
         var prev = [{ iface: "eth0", rxBytes: 5000, txBytes: 500 }];
@@ -245,19 +245,73 @@ TestCase {
 
     // ---- parseDisk ----
 
-    function test_parse_disk_reads_mount_size_used_and_fraction() {
+    function test_parse_disk_reads_source_mount_size_used_and_fraction() {
         var rows = Sysinfo.parseDisk(g815.disk);
-        compare(rows.length, 2);
+        compare(rows.length, 3);
+        compare(rows[0].source, "/dev/nvme0n1p5");
         compare(rows[0].mount, "/");
         compare(rows[0].size, 269427478528);
-        compare(rows[0].used, 154960060416);
-        fuzzyCompare(rows[0].fraction, 154960060416 / 269427478528, 0.0001);
+        compare(rows[0].used, 164616077312);
+        fuzzyCompare(rows[0].fraction, 164616077312 / 269427478528, 0.0001);
         verify(rows[0].fraction >= 0 && rows[0].fraction <= 1);
+        compare(rows[1].source, "/dev/nvme0n1p1");
         compare(rows[1].mount, "/boot");
+        compare(rows[2].source, "macbook:");
+        compare(rows[2].mount, "/home/kyandesutter/.macbook");
     }
 
     function test_parse_disk_on_a_missing_section_is_an_empty_array() {
         compare(Sysinfo.parseDisk("").length, 0);
+    }
+
+    // The VM's disk section carries four 9p mounts that share a size
+    // (certs/shared/xchg/keys) plus /dev/vda and overlay, which happen to
+    // share a size too: seven genuinely different sources, so dedup must
+    // change nothing here. This is the fixture the plan calls out as
+    // exercising "no true duplicate", the synthetic cases below cover the
+    // dedupe rule itself.
+    function test_parse_disk_keeps_every_row_when_all_sources_differ() {
+        var rows = Sysinfo.parseDisk(vm.disk);
+        compare(rows.length, 7);
+        var sources = rows.map(function (r) { return r.source; });
+        compare(sources, ["/dev/vda", "certs", "shared", "xchg", "/dev/vdb", "keys", "overlay"]);
+    }
+
+    // No real capture at hand contains a true duplicate source (both
+    // machines' df output above is already source-unique), so the dedupe
+    // rule itself is exercised against small inline input rather than a
+    // fabricated fixture.
+    function test_parse_disk_dedupes_a_repeated_source_keeping_the_shortest_mount() {
+        var text =
+            "/dev/sda1 /mnt/data/nested 1000 500\n" +
+            "/dev/sda1 /data 1000 500\n" +
+            "/dev/sda2 /var 2000 1000";
+        var rows = Sysinfo.parseDisk(text);
+        compare(rows.length, 2);
+        compare(rows[0].source, "/dev/sda1");
+        compare(rows[0].mount, "/data");
+        compare(rows[1].source, "/dev/sda2");
+        compare(rows[1].mount, "/var");
+    }
+
+    // Same rule, reversed order: the shortest mount for a repeated source
+    // can arrive first or last in df's output and the result must not
+    // depend on which.
+    function test_parse_disk_dedupe_does_not_depend_on_row_order() {
+        var text =
+            "/dev/sda1 /data 1000 500\n" +
+            "/dev/sda1 /mnt/data/nested 1000 500";
+        var rows = Sysinfo.parseDisk(text);
+        compare(rows.length, 1);
+        compare(rows[0].mount, "/data");
+    }
+
+    function test_parse_disk_size_alone_never_merges_distinct_sources() {
+        var text =
+            "certs /etc/ssl/certs 1000 500\n" +
+            "shared /tmp/shared 1000 500";
+        var rows = Sysinfo.parseDisk(text);
+        compare(rows.length, 2);
     }
 
     // ---- the VM fixture end to end: honest-unavailable, never throws ----

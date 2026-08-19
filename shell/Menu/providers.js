@@ -794,7 +794,8 @@ var PANEL_NAMES = [
     { id: "usage", label: "Usage", icon: "\u{F16A3}" }, // md-robot_excited
     { id: "tailscale", label: "Tailscale", icon: "\u{F0318}" }, // md-lan_connect
     { id: "systemupdate", label: "System Update", icon: "\u{F03D3}" }, // md-package
-    { id: "display", label: "Display", icon: "\u{F0379}" } // md-monitor
+    { id: "display", label: "Display", icon: "\u{F0379}" }, // md-monitor
+    { id: "monitor", label: "Monitor", icon: "\u{F029A}" } // md-gauge, same glyph MonitorWidget's bar cell uses
 ];
 
 function panelsProvider(selfPath) {
@@ -847,4 +848,114 @@ function trayProvider(items, selfPath) {
             childIds: []
         };
     });
+}
+
+// GPU routes (M38 Task 8). "gpu" is an always-present, informational-only
+// route (one note row per GpuService card); "gpu.launch"/"gpu.mode" are
+// runtime-injected fragments merged into _defaultObj the way captureEntries/
+// shareClipboardEntry already are, not declared in default-menu.jsonc,
+// because both must be genuinely ABSENT rather than empty on a machine
+// with no discrete card or no supergfxctl (no jsonc placeholder for either
+// means nothing for a one-card machine to fall back to).
+
+function _gpuOutputsDesc(outputs) {
+    var connected = (outputs || []).filter(function (o) { return o.connected; }).map(function (o) { return o.name; });
+    return connected.length > 0 ? connected.join(", ") : "no outputs";
+}
+
+// One inert note row per card: name, integrated/discrete, driver, connected
+// outputs. Mirrors keybinds.js's own rows() shape for a route that carries
+// information but nothing to activate -- Menu.qml's _activateRow has no
+// "note" case, so Enter here is a no-op. No cards renders the same NO GPU
+// label MonitorPanel/MonitorView use, instead of an empty level.
+function gpuProvider(cards) {
+    if (!cards || cards.length === 0) {
+        return [{
+            id: "gpu.empty",
+            parentId: null,
+            label: "NO GPU",
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "note",
+            dim: true,
+            childIds: []
+        }];
+    }
+    return cards.map(function (card) {
+        return {
+            id: "gpu.card." + card.card,
+            parentId: null,
+            label: card.name || card.card,
+            icon: "",
+            title: "",
+            desc: (card.discrete ? "Discrete" : "Integrated") + " · " + card.driver + " · " + _gpuOutputsDesc(card.outputs),
+            aliases: [],
+            kind: "note",
+            childIds: []
+        };
+    });
+}
+
+// The action string a gpu.launch row uses, and what Menu.qml's Shift+Enter
+// accelerator builds for an ordinary app row -- one shared quoting path so
+// the two can't drift. Self-targeted the same way panelsProvider is;
+// `_shq` guards a desktop id containing characters a bare interpolation
+// would break (flatpak's reverse-DNS ids can carry a trailing instance
+// suffix).
+function gpuLaunchAction(selfPath, desktopId, card) {
+    return "qs ipc -p " + selfPath + " call monitor launch " + _shq(desktopId) + " " + _shq(card);
+}
+
+// The app list again, reusing appsProvider's row shaping, but activating a
+// row spawns gpuLaunchAction's offload launch instead of _entry.execute().
+function gpuLaunchProvider(entries, resolveIcon, launches, nowMs, selfPath, card) {
+    return appsProvider(entries, resolveIcon, launches, nowMs).map(function (row) {
+        return {
+            id: "gpu.launch." + row._entry.id,
+            parentId: null,
+            label: row.label,
+            icon: row.icon,
+            iconSource: row.iconSource,
+            title: row.title,
+            aliases: [],
+            kind: "action",
+            action: gpuLaunchAction(selfPath, row._entry.id, card),
+            childIds: []
+        };
+    });
+}
+
+// "gpu.launch" fragment, merged into _defaultObj like captureEntries above.
+// `card` is GpuService.defaultDiscrete()'s answer (a card record, or null on
+// a single-GPU or no-GPU machine) -- null means {}, so the route does not
+// exist at all rather than existing empty.
+function gpuLaunchEntry(card) {
+    if (!card)
+        return {};
+    return {
+        "gpu.launch": { label: "Launch on GPU", icon: "\u{F14DE}", provider: "gpuLaunch" } // md-rocket_launch
+    };
+}
+
+// "gpu.mode" fragment, same merge mechanism, gated on GpuService.gfxMode
+// (supergfxctl's own presence) rather than card count. Neither of the
+// owner's machines has supergfxctl, so the normal case is {}.
+function gpuModeEntry(selfPath, gfxMode) {
+    if (!gfxMode || gfxMode.supported !== true)
+        return {};
+    var call = "qs ipc -p " + selfPath + " call ";
+    return {
+        "gpu.mode": { label: "GPU Mode", icon: "\u{F04E1}" }, // md-swap_horizontal
+        "gpu.mode.integrated": {
+            label: "Integrated",
+            icon: "\u{F0322}", // md-laptop
+            action: call + "monitor mode integrated"
+        },
+        "gpu.mode.hybrid": {
+            label: "Hybrid",
+            icon: "\u{F00FB}", // md-call_split
+            action: call + "monitor mode hybrid"
+        }
+    };
 }

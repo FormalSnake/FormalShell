@@ -2,7 +2,7 @@
 
 // The one-shot `sh -c` collector for the system monitor (M38 Task 1, plan
 // decision D2): every /proc and /sys read the monitor needs in ONE process
-// per poll tick, instead of N FileViews — procfs defeats FileView's change
+// per poll tick, instead of N FileViews: procfs defeats FileView's change
 // watching, and /sys/class/drm|hwmon need globbing QML has no primitive
 // for. Section markers (`@stat`, `@mem`, ...) let one parse pass split the
 // blob before Monitor/sysinfo.js and Monitor/gpu.js touch it; splitSections
@@ -19,14 +19,14 @@ var COLLECTOR_SCRIPT = [
     'echo "@uptime"; cat /proc/uptime',
     'echo "@net"; tail -n +3 /proc/net/dev',
     'echo "@temp"; for h in /sys/class/hwmon/hwmon*; do [ -d "$h" ] || continue; n=$(cat "$h/name" 2>/dev/null); for t in "$h"/temp*_input; do [ -r "$t" ] || continue; b=$(basename "$t"); l="${t%_input}_label"; echo "$n|$b|$(cat "$l" 2>/dev/null)|$(cat "$t" 2>/dev/null)"; done; done',
-    'echo "@disk"; df -B1 -x tmpfs -x devtmpfs -x efivarfs --output=target,size,used 2>/dev/null | tail -n +2',
+    'echo "@disk"; df -B1 -x tmpfs -x devtmpfs -x efivarfs --output=source,target,size,used 2>/dev/null | tail -n +2',
     'echo "@drm"; for c in /sys/class/drm/card*; do case "$(basename "$c")" in card[0-9]|card[0-9][0-9]) ;; *) continue ;; esac; d="$c/device"; echo "card|$(basename "$c")|$(basename "$(readlink -f "$d/driver" 2>/dev/null)")|$(cat "$d/vendor" 2>/dev/null)|$(cat "$d/device" 2>/dev/null)|$(cat "$d/boot_vga" 2>/dev/null)|$(basename "$(readlink -f "$d")")|$(cat "$d/label" 2>/dev/null)"; for f in gpu_busy_percent mem_info_vram_used mem_info_vram_total mem_busy_percent; do [ -r "$d/$f" ] && echo "metric|$(basename "$c")|$f|$(cat "$d/$f")"; done; for hw in "$d"/hwmon/hwmon*; do [ -d "$hw" ] || continue; for t in "$hw"/temp1_input "$hw"/power1_average "$hw"/fan1_input; do [ -r "$t" ] && echo "metric|$(basename "$c")|$(basename "$t")|$(cat "$t")"; done; done; for k in "$c"-*; do [ -d "$k" ] || continue; echo "conn|$(basename "$c")|$(basename "$k" | sed "s/^card[0-9]*-//")|$(cat "$k/status" 2>/dev/null)"; done; done',
     'echo "@nvidia"; command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=index,name,utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,fan.speed --format=csv,noheader,nounits 2>/dev/null',
     'echo "@gfx"; command -v supergfxctl >/dev/null 2>&1 && timeout 1 supergfxctl -g 2>/dev/null',
     'echo "@end"'
 ].join("\n");
 
-// argv for Process.command — the collector never takes arguments, so this
+// argv for Process.command: the collector never takes arguments, so this
 // is a fixed two-element convenience the poller doesn't have to restate.
 function collectCommand() {
     return ["sh", "-c", COLLECTOR_SCRIPT];
@@ -36,9 +36,9 @@ function collectCommand() {
 // keyed by marker name with the leading "@" stripped, each value the
 // section's body joined back with "\n" (no trailing marker line, no
 // leading/trailing blank line beyond what the source produced). A section
-// with nothing between its marker and the next one — @gfx when
+// with nothing between its marker and the next one (@gfx when
 // supergfxctl is absent, every section on a machine with no matching
-// hardware — comes back as "", not an absent key, so callers can always
+// hardware) comes back as "", not an absent key, so callers can always
 // index the result without a fallback.
 function splitSections(blob) {
     var sections = {};

@@ -67,6 +67,7 @@ PanelWindow {
     property var tailscalePanel: null
     property var systemUpdatePanel: null
     property var displayPanel: null
+    property var monitorPanel: null
     property var trayMenu: null
     // The single Center instance (shell.qml's notificationsCenter) — the
     // bell widget toggles it directly, same object NotificationsIpc drives.
@@ -284,6 +285,12 @@ PanelWindow {
         }
     }
     Component {
+        id: monitorComponent
+        MonitorWidget {
+            panel: bar.monitorPanel
+        }
+    }
+    Component {
         id: commandModuleComponent
         CommandModule {
         }
@@ -322,7 +329,8 @@ PanelWindow {
         keyboardLayout: keyboardLayoutComponent,
         systemUpdate: systemUpdateComponent,
         chevron: chevronComponent,
-        display: displayComponent
+        display: displayComponent,
+        monitor: monitorComponent
     })
 
     // Shared by every region below: a builtin entry loads straight from the

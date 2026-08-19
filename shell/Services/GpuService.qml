@@ -12,9 +12,9 @@ import "../Monitor/gpu.js" as Gpu
 // whole point is one collector run per poll, not N), so a second Process
 // here would just double the syscalls for data already carried on that
 // signal. refresh() and Component.onCompleted both pulse
-// SystemMonitorService's own subscribe()/unsubscribe() — a 0->1->0
+// SystemMonitorService's own subscribe()/unsubscribe(): a 0->1->0
 // transition triggers exactly one immediate tick, the same contract a real
-// subscriber joining from zero gets — rather than holding a permanent
+// subscriber joining from zero gets, rather than holding a permanent
 // subscription open, so card enumeration costs one collector run at
 // startup and on explicit refresh, never a standing poll of its own. Live
 // metrics keep updating only for as long as something else (the bar cell,
@@ -48,7 +48,7 @@ Singleton {
     }
 
     // First card with boot_vga=0 (isDiscrete), or null on a single-GPU or
-    // no-GPU machine. Never the first entry by array position — card
+    // no-GPU machine. Never the first entry by array position: card
     // numbering does not imply primacy (gpu.js's own header, pinned by the
     // g815 fixture: the dGPU enumerates as card0 with boot_vga=0, the iGPU
     // as card1 with boot_vga=1).
@@ -61,7 +61,7 @@ Singleton {
     }
 
     // The display name of the card driving `connector` (a compositor
-    // output name, e.g. "eDP-1"), or "" when no card claims it — never a
+    // output name, e.g. "eDP-1"), or "" when no card claims it, never a
     // guess.
     function outputCardName(connector) {
         var card = Gpu.outputCard(connector, root.cards);

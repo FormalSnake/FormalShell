@@ -47,6 +47,17 @@
     // instead of being a popout of its own. The search field filters it by
     // filename like any other level. md-wallpaper U+F0E09.
     "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "icon": "󰸉", "aliases": ["picker", "background"] },
+    // "monitor" registers no provider fn either, on the same footing as
+    // "wallpaper" above: a summonable route (`menu summon monitor`) whose
+    // level Menu.qml renders as a whole APP VIEW rather than as rows:
+    // Surfaces/Menu/views/MonitorView.qml, registered against this id in
+    // Menu/appviews.js. The full system monitor lives here for anyone who
+    // does not want its bar cell, which is opt-in. The declared "provider"
+    // is what keeps the row itself listed: a childless "submenu" is
+    // filtered out of its parent level (model.js's visibleChildren), a
+    // childless "provider" is not. md-cpu_64_bit U+F0EE0, pinned
+    // nerd-fonts-jetbrains-mono cmap.
+    "monitor": { "label": "System Monitor", "provider": "monitor", "icon": "󰻠", "aliases": ["sysmon", "system", "cpu", "gpu"] },
 
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"
@@ -57,6 +68,16 @@
     // trayProvider): one row per registered item, activating it the same
     // way a left click on its bar cell does.
     "tray": { "label": "Tray", "provider": "tray", "icon": "󱊔" },
+    // "gpu" registers a provider fn too (providers.js's gpuProvider): one
+    // inert note row per GpuService card -- name, integrated/discrete,
+    // driver, connected outputs -- informational only, same non-activatable
+    // footing as "keybinds" above. "gpu.launch" (the app list again,
+    // launching on the default discrete card) and "gpu.mode" (supergfxctl
+    // integrated/hybrid switching) are NOT declared here: Menu.qml merges
+    // them in at tree-build time (providers.js's gpuLaunchEntry/
+    // gpuModeEntry), because both must be genuinely absent -- not present
+    // and empty -- on a machine with one card or no supergfxctl.
+    "gpu": { "label": "GPU", "provider": "gpu", "icon": "󰢮" },
 
     "system": { "label": "System", "icon": "󰒓" },
     // Deliberately disabled -- flipping it on is the owner's call, not

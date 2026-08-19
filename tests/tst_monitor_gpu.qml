@@ -33,7 +33,7 @@ TestCase {
     }
 
     // The lines between a "@name" marker line and the next "@..." marker
-    // line (or end of file), joined back with "\n" — the same section text
+    // line (or end of file), joined back with "\n": the same section text
     // splitSections() hands to parseCards/parseNvidia/parseGfxMode.
     function _section(blob, name) {
         var lines = blob.split("\n");
@@ -69,7 +69,7 @@ TestCase {
     }
 
     // The point of this fixture: card0 has boot_vga=0 (discrete) and card1
-    // has boot_vga=1 (integrated) — numbering does not imply primacy.
+    // has boot_vga=1 (integrated): numbering does not imply primacy.
     function test_hybrid_card_numbering_is_not_primacy() {
         var cards = Gpu.parseCards(_section(hybridBlob, "drm"));
         compare(Gpu.isDiscrete(cards[0]), true);
@@ -87,7 +87,7 @@ TestCase {
         compare(cards[1].outputs[0].connected, false);
     }
 
-    // e1504g's only card is card1, not card0 — any code that assumes a
+    // e1504g's only card is card1, not card0: any code that assumes a
     // card0 exists (e.g. indexing cards[0] and expecting the integrated GPU)
     // would fail this test.
     function test_single_fixture_has_no_card0() {

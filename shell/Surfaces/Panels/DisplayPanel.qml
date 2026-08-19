@@ -211,6 +211,16 @@ Panel {
             readonly property bool _canToggle: root._backend.outputConfigAvailable
                 && Outputs.canToggle(root._outputs, outCell.modelData.name)
             readonly property string _identity: Outputs.describe(outCell.modelData)
+            // Which card drives this output, e.g. "NVIDIA / DISCRETE". ""
+            // on a single-GPU machine, or when the connector matches
+            // nothing in GpuService.cards (M38 Task 9).
+            readonly property string _cardLabel: Outputs.outputCardLabel(outCell.modelData.name, GpuService.cards)
+            // The screen `display.outputPriority` resolves to
+            // (MainOutputService), marked only where the answer can be
+            // anything else: on a one-output session naming it MAIN says
+            // nothing the list above doesn't already.
+            readonly property string _mainLabel: (root._outputs.length > 1
+                && MainOutputService.isMain(outCell.modelData.name)) ? "MAIN DISPLAY" : ""
             // The focused row's own resolution is already the hero's meta
             // line above (M28 Task 5); this row keeps scale/mirror only, so
             // the mode isn't printed twice.
@@ -302,6 +312,22 @@ Panel {
                     width: parent.width
                     visible: outCell._identity !== ""
                     text: outCell._identity
+                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                    elide: Text.ElideRight
+                }
+
+                MetaLabel {
+                    width: parent.width
+                    visible: outCell._cardLabel !== ""
+                    text: outCell._cardLabel
+                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                    elide: Text.ElideRight
+                }
+
+                MetaLabel {
+                    width: parent.width
+                    visible: outCell._mainLabel !== ""
+                    text: outCell._mainLabel
                     color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
                     elide: Text.ElideRight
                 }
