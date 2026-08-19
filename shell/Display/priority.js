@@ -1,20 +1,12 @@
 .pragma library
 
-// Which output animates. One does; every other screen paints the finished
-// banner once and never repaints.
+// Which output the shell treats as the main one, for every surface that has
+// to pick a single screen: the screensaver's animated head, and anything
+// downstream that wants to name the main monitor rather than guess at it.
 //
-// A frame of the animation is a full-screen Canvas repaint, and Qt 6's
-// Canvas can only render into a QImage, so each one costs a CPU rasterize
-// plus a whole-surface texture upload (16 MB at 2560x1600). On a hybrid
-// laptop the outputs are split across two cards — the panel on the iGPU, an
-// external head on the dGPU — while the shell renders on one device for all
-// of its surfaces, so every frame on an output the compositor doesn't scan
-// out locally is also a cross-GPU copy. Animating one screen instead of all
-// of them is the only lever the client has over that.
+// `display.outputPriority` names it, in preference order:
 //
-// `screensaver.outputPriority` names which one, in preference order:
-//
-//     "screensaver": { "outputPriority": ["HDMI", "internal"] }
+//     "display": { "outputPriority": ["HDMI", "internal"] }
 //
 // First entry with a connected output wins, so that list reads "the desk
 // monitor when it's plugged in, the laptop panel when it isn't". An entry
@@ -22,23 +14,28 @@
 // ("HDMI", "DP-2"), or by one of the two aliases below. Unset — the default
 // — falls through to the focused output, which on a single-head session is
 // the only output there is.
+//
+// Pure strings in, a string out: no Quickshell, no compositor, so the
+// multi-head rules are testable head-on (tests/tst_display_priority.qml) on
+// a rig with one screen. MainOutputService is the live wrapper.
 
 // Connectors the panel built into the machine shows up as.
 var INTERNAL_PREFIXES = ["edp", "lvds", "dsi"];
 
-// (names, priority, focused, current) -> the name to animate, "" only when
-// there are no outputs at all.
+// (names, priority, focused, current) -> the main output's name, "" only
+// when there are no outputs at all.
 //
 // A configured priority wins outright, and is re-applied on every screen
-// change: plugging the main monitor back in mid-run hands the animation to
-// it, which is the whole point of naming it first.
+// change: plugging the main monitor back in hands the title straight to it,
+// which is the whole point of naming it first.
 //
-// `current` only holds the line for an unconfigured session. There the
-// answer comes from focus, which says nothing new once the session is
-// already idle, so a screen arriving must not drag the animation off the
-// output it started on — restarting ttfx there would replay the effect from
-// frame 0 on a screen already past it. An unplug still moves it: the name is
-// gone from `names`, so the fallbacks below pick up.
+// `current` only holds the line for an unconfigured session, and only for
+// callers that pass one. There the answer comes from focus, which says
+// nothing new once the session is already idle, so a screen arriving must
+// not drag a running screensaver off the output it started on — restarting
+// ttfx there would replay the effect from frame 0 on a screen already past
+// it. An unplug still moves it: the name is gone from `names`, so the
+// fallbacks below pick up.
 function resolveMainOutput(names, priority, focused, current) {
     var preferred = matchPriority(names, priority);
     if (preferred)
@@ -52,8 +49,8 @@ function resolveMainOutput(names, priority, focused, current) {
 
 // The first entry in the priority list with a connected output, or "" —
 // which is also how a list of nothing but typos and unplugged monitors
-// answers, so Screensaver.qml can say so once rather than silently
-// animating somewhere else.
+// answers, so MainOutputService can say so once rather than silently
+// falling back somewhere else.
 function matchPriority(names, priority) {
     var entries = priorityList(priority);
     for (var i = 0; i < entries.length; i++) {

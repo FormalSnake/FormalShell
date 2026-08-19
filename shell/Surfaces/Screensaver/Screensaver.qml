@@ -6,7 +6,6 @@ import qs.Core as Core
 import qs.Compositor
 import qs.Services
 import "../../Screensaver/effect.js" as Effect
-import "../../Screensaver/outputs.js" as Outputs
 import "../../Screensaver/ttfx.js" as Ttfx
 
 // Idle-driven screensaver (DESIGN.md's terminal-text-effect exception, spec
@@ -258,26 +257,18 @@ Item {
             lockChainTimer.stop();
     }
 
-    // ---- main output (outputs.js) -----------------------------------------
-    // The one screen that animates: `screensaver.outputPriority`'s first
-    // entry with an output actually connected, e.g. ["HDMI", "internal"] for
-    // "the desk monitor while it's plugged in". With the key unset it's the
-    // focused output, resolved at activation rather than bound live — a focus
-    // event landing mid-run would restart ttfx on two screens at once, and
-    // nothing can move focus while the session is idle anyway.
+    // ---- main output (MainOutputService) ----------------------------------
+    // The one screen that animates is the shell's main output:
+    // `display.outputPriority`'s first entry with a screen actually
+    // connected, e.g. ["HDMI", "internal"] for "the desk monitor while it's
+    // plugged in". With the key unset it's the focused output, resolved at
+    // activation rather than bound live — a focus event landing mid-run
+    // would restart ttfx on two screens at once, and nothing can move focus
+    // while the session is idle anyway.
 
-    readonly property var outputPriority: Core.Config.get("screensaver.outputPriority", [])
     property string mainOutput: ""
-    property bool _loggedUnmatchedPriority: false
 
     function _resolveMainOutput(keepCurrent) {
-        var names = Outputs.screenNames(Quickshell.screens);
-        if (names.length > 0 && Outputs.priorityList(root.outputPriority).length > 0
-            && Outputs.matchPriority(names, root.outputPriority) === "" && !root._loggedUnmatchedPriority) {
-            console.warn("Screensaver: no output matches screensaver.outputPriority ("
-                + JSON.stringify(root.outputPriority) + "), falling back to the focused one of " + JSON.stringify(names));
-            root._loggedUnmatchedPriority = true;
-        }
         root.mainOutput = root.previewMainOutput(keepCurrent);
     }
 
@@ -285,8 +276,7 @@ Item {
     // checked over `screensaver status` with a read instead of by putting a
     // full-screen surface over a live session.
     function previewMainOutput(keepCurrent) {
-        return Outputs.resolveMainOutput(Outputs.screenNames(Quickshell.screens), root.outputPriority,
-            CompositorService.focusedOutputName, keepCurrent ? root.mainOutput : "");
+        return MainOutputService.resolve(keepCurrent ? root.mainOutput : "");
     }
 
     // Bound rather than connected so this re-runs off screensChanged itself.
