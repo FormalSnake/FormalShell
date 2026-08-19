@@ -51,6 +51,30 @@ arrangement:
 }
 ```
 
+### Launcher backdrop
+
+The launcher covers the whole output and dithers the desktop behind it. The
+frame comes from `grim` (a quarter-resolution PPM onto tmpfs), taken once at
+summon and then re-taken on an interval so the backdrop tracks the desktop:
+
+```jsonc
+{ "menu": { "backdropRefreshMs": 500 } }
+```
+
+`0` disables refreshing and leaves a single freeze from the moment of summon.
+The floor is the entrance animation's own duration plus 100ms, because a
+capture taken while the card is still sliding bakes a displaced ghost of it
+into the backdrop.
+
+A refresh photographs the backdrop it is about to replace. That is harmless:
+the retro dither pass is idempotent, so re-quantizing an already-quantized
+frame returns it unchanged (measured over six generations on a real desktop
+grab — byte-identical, RMSE 0). The one part that is not idempotent is the
+darkening wash, which multiplies; it is spent on the summon frame alone and
+from the first refresh onward arrives baked into the captured pixels. A
+consequence worth knowing: with refreshing on, the backdrop settles a shade
+brighter than it does frozen, since only one wash is ever in the chain.
+
 Builtin widget names: `launcher`, `workspaces`, `activeWindow`, `clock`,
 `nowPlaying`, `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`,
 `bell`, `indicators`, `github`, `usage`, `tailscale`, `visualizer`,

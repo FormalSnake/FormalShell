@@ -802,7 +802,20 @@ PanelWindow {
     // capping it at the row-list height left the system monitor's own GPU
     // section below the fold on a two-card machine, so it gets a taller
     // ceiling and still scrolls past it.
-    readonly property real _maxTotalHeight: root._screen ? root._screen.height * (root._isAppView ? 0.82 : 0.6) : 400
+    // The output's own size, read off THIS WINDOW rather than off the
+    // ShellScreen it sits on (M39 Task 6). The window covers the output
+    // exactly, so its width/height are the same fact — except they are also
+    // already in the window's own coordinate space, which a ShellScreen's are
+    // not once two heads differ in size or scale. Reading the screen instead
+    // laid the card out for whichever output was resolved rather than the one
+    // it was drawn on (owner, live shell, 2026-08-19: "on multi monitor
+    // setups it doesn't conform to the screen size of the smaller monitor").
+    // The screen is still the fallback for the window's first moments, before
+    // it has been given a size at all.
+    readonly property real _outputWidth: root.width > 0 ? root.width : (root._screen ? root._screen.width : 0)
+    readonly property real _outputHeight: root.height > 0 ? root.height : (root._screen ? root._screen.height : 0)
+
+    readonly property real _maxTotalHeight: root._outputHeight > 0 ? root._outputHeight * (root._isAppView ? 0.82 : 0.6) : 400
     // Content gets a `panelPadding` gutter (DESIGN.md's omarchy card chrome:
     // "internal padding") on all four sides now — the frame draws its own
     // explicit ring on all four (below). Rows still draw their own
@@ -849,7 +862,7 @@ PanelWindow {
     property var _frozenTop: null
 
     readonly property real _topInset: Core.Theme.space.panelGap
-    readonly property real _centeredTop: root._screen ? (root._screen.height - root._cardHeight) / 2 : 0
+    readonly property real _centeredTop: (root._outputHeight - root._cardHeight) / 2
 
     // Whatever the freeze or the centered formula produces, the card is
     // always fully on screen with a `panelGap` margin. Without this, the
@@ -858,9 +871,9 @@ PanelWindow {
     // the bottom edge (and, filtering the other way from a long list, ends
     // up hugging the top).
     function _clampTop(top) {
-        if (!root._screen)
+        if (root._outputHeight <= 0)
             return 0;
-        var maxTop = root._screen.height - root._cardHeight - root._topInset;
+        var maxTop = root._outputHeight - root._cardHeight - root._topInset;
         // Taller than the screen can hold even with no margin at all: center
         // the overflow instead of returning a negative top, which would push
         // the search field off the top edge. _maxTotalHeight caps the rows
@@ -916,6 +929,45 @@ PanelWindow {
     property int _frameSeq: 0
     property string _framePath: ""
 
+    // --- Live refresh (M39 Task 7) ----------------------------------------
+    //
+    // While the menu is up, re-capture on an interval so the backdrop tracks
+    // the desktop instead of being one still from the moment of summon
+    // (owner, 2026-08-19: "it takes a screenshot every X seconds, making it
+    // feel as real time as possible").
+    //
+    // The obvious objection is that a capture taken now contains the backdrop
+    // it is about to replace, so the pass is eating its own output. That is
+    // true and it is harmless, because the retro pass is IDEMPOTENT:
+    // quantizing an image that is already quantized onto a palette derived
+    // from itself returns the same picture. Measured, not assumed — six
+    // generations of feeding the pass its own output on a real 1920x1080
+    // desktop grab came back byte-identical, RMSE 0 between the last two.
+    //
+    // Exactly one thing in the chain is NOT idempotent: the `background` wash
+    // below. It multiplies, so re-applying it to a frame that already carries
+    // it sinks the backdrop toward black in a handful of refreshes (0.55^5 is
+    // 5% brightness). Hence `_frameGen`: the wash is spent on the summon
+    // frame alone, and from the first refresh onward it comes for free inside
+    // the captured pixels. Dropping it exactly when a washed capture reaches
+    // the screen is what makes the handover invisible rather than a flash.
+    //
+    // The card ghosts into every refresh too, and is exactly occluded by the
+    // real card above it — same geometry, opaque fill. That only holds once
+    // the entrance has finished moving the card, which is why the first
+    // refresh cannot land before then (see the interval floor below).
+    readonly property int _refreshMs: {
+        var configured = Core.Config.get("menu.backdropRefreshMs", 500);
+        if (typeof configured !== "number" || configured <= 0)
+            return 0;
+        // Never inside the entrance: a capture taken while the card is still
+        // sliding bakes a displaced ghost of it into the backdrop, and that
+        // one is not occluded by anything.
+        return Math.max(configured, Core.Theme.motion.standard + 100);
+    }
+    property int _frameGen: 0
+    property bool _refreshPending: false
+
     // Three states, not two, and the split is what makes the entrance
     // animate at all. `_armed` puts the surface up; `_shown` runs the
     // entrance on it. They cannot be one flag, because a Canvas does not
@@ -959,10 +1011,22 @@ PanelWindow {
             return;
         }
         root._framePath = "";
+        root._frameGen = 0;
+        root._refreshPending = false;
         if (!root._screen) {
             root._forceShow();
             return;
         }
+        root._startFreeze();
+        frameWatchdog.restart();
+    }
+
+    // One capture. Called for the summon frame and for every refresh after
+    // it; the only difference between the two is that a refresh has no
+    // watchdog and nothing waits on it, since a surface is already up.
+    function _startFreeze() {
+        if (!root._screen)
+            return;
         root._frameSeq++;
         // Read off the Process, not off `_framePath`: that one was cleared a
         // few lines up (it is what makes frameImage drop the old picture), so
@@ -993,7 +1057,6 @@ PanelWindow {
             'mkdir -p "$(dirname "$2")" && grim -s 0.25 -t ppm -o "$1" "$2" && rm -f "$3"',
             "sh", root._screen.name, freezeProc.framePath, retiredFrame];
         freezeProc.running = true;
-        frameWatchdog.restart();
     }
 
     Process {
@@ -1011,7 +1074,14 @@ PanelWindow {
                 root._forceShow();
                 return;
             }
+            var wasRefresh = root._armed;
             root._framePath = freezeProc.framePath;
+            if (wasRefresh) {
+                // A refresh only swaps the picture. `_refreshPending` carries
+                // the wash handover to the moment this frame actually paints.
+                root._refreshPending = true;
+                return;
+            }
             // Map now, still transparent: this is what gives the backdrop's
             // Canvas a rendering window to paint into. The watchdog keeps
             // running, so a frame that never paints still gets shown.
@@ -1025,8 +1095,30 @@ PanelWindow {
     Connections {
         target: backdropDither
         function onPaintedChanged() {
-            if (root.isOpen && root._armed && backdropDither.painted)
+            if (!root.isOpen || !backdropDither.painted)
+                return;
+            if (root._refreshPending) {
+                root._refreshPending = false;
+                // This frame carries the wash inside its own pixels now, so
+                // the display-side wash retires here and nowhere earlier —
+                // dropping it while the previous frame was still on screen
+                // would show as a brightness pop.
+                root._frameGen++;
+            }
+            if (root._armed)
                 root._forceShow();
+        }
+    }
+
+    Timer {
+        id: refreshTimer
+        interval: root._refreshMs
+        repeat: true
+        running: root._refreshMs > 0 && root.isOpen && root._shown
+        onTriggered: {
+            if (freezeProc.running)
+                return;
+            root._startFreeze();
         }
     }
 
@@ -1873,7 +1965,9 @@ PanelWindow {
         Rectangle {
             anchors.fill: parent
             color: Core.Theme.color.background
-            opacity: 0.45 * backdropDither.reveal
+            // Spent on the summon frame only — see `_frameGen` above for why
+            // re-applying it to a refresh would sink the backdrop to black.
+            opacity: root._frameGen === 0 ? 0.45 * backdropDither.reveal : 0
         }
     }
 
@@ -1893,7 +1987,7 @@ PanelWindow {
     // reverses in place.
     Item {
         id: card
-        x: root._screen ? Math.round((root._screen.width - root._cardWidth) / 2) : 0
+        x: Math.round((root._outputWidth - root._cardWidth) / 2)
         // Frozen while a filter query stands (_freezeTop), centered
         // otherwise, clamped on screen either way — see the _frozenTop
         // block above for the whole rule.

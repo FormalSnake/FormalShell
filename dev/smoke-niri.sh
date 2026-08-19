@@ -1438,6 +1438,7 @@ menu_top_relevel_png="$shot_dir/menu-top-relevel.png"
 toggle_path="$shot_dir/menu-toggle.txt"
 menu_frames_path="$shot_dir/menu-frames.txt"
 menu_frames_first_path="$shot_dir/menu-frames-first.txt"
+menu_frames_refresh_path="$shot_dir/menu-frames-refresh.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
 emoji_type_path="$shot_dir/emoji-wtype.txt"
@@ -2841,6 +2842,10 @@ sleep $menu_t0
 "$qs_bin" ipc -p "$shell_path" call menu summon ""
 sleep 1
 ls "\${XDG_RUNTIME_DIR:-/tmp}/formalshell" > "$menu_frames_first_path" 2>&1
+# Two seconds later, with the menu still open and NO summon in between: any
+# frame written in this gap can only have come from the live refresh timer.
+sleep 2
+ls "\${XDG_RUNTIME_DIR:-/tmp}/formalshell" > "$menu_frames_refresh_path" 2>&1
 EOF
 
   # `qs ipc call`'s CLI11 arg parser auto-splits any positional argument that
@@ -5611,6 +5616,17 @@ if $menu_mode; then
     exit 1
   fi
   echo "SMOKE_MENU_FRAMES backdrop frame went $menu_frame_first -> $menu_frame_last across summons, one file kept"
+  # Live refresh (M39 Task 7): the two dumps above straddle two seconds of a
+  # menu that was already open and never re-summoned, so a frame number that
+  # moved across them is the refresh timer and nothing else.
+  menu_frame_refresh=$(grep -oE 'menu-frame-[0-9]+\.ppm' "$menu_frames_refresh_path" 2>/dev/null | head -n1 || true)
+  menu_seq_first=$(printf '%s' "$menu_frame_first" | tr -dc '0-9')
+  menu_seq_refresh=$(printf '%s' "$menu_frame_refresh" | tr -dc '0-9')
+  if [ -z "$menu_seq_refresh" ] || [ "$menu_seq_refresh" -le "$menu_seq_first" ]; then
+    echo "SMOKE_FAIL: backdrop did not re-capture while the menu sat open — went $menu_frame_first -> $menu_frame_refresh over two idle seconds" >&2
+    exit 1
+  fi
+  echo "SMOKE_MENU_REFRESH backdrop advanced $menu_frame_first -> $menu_frame_refresh over two seconds with the menu open and no re-summon"
   # Nix runner end states (M13b Task 4, gated shim): while the shim blocks
   # on the gate flag the debounced search is genuinely in flight, so the
   # query must answer the dim SEARCHING note row; after the release it must
