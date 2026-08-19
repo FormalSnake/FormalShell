@@ -274,6 +274,94 @@ TestCase {
         verify(!samePixel(_pixel(canvas, 0, 10), _pixel(canvas, 18, 10)));
     }
 
+    // --- reveal (M39 Task 2) ---------------------------------------------
+    //
+    // The dissolve the launcher and lock backdrops animate on. The pass
+    // already draws the raw source into the canvas before painting quantized
+    // cells over it, so `reveal` is simply which of those cells get painted,
+    // gated by the same 4x4 Bayer matrix the quantizer uses — 0 leaves the
+    // raw image, 1 is the full dither, and the values between are a
+    // hard-edged ordered dissolve rather than a crossfade.
+    function _cellsAreFlat(canvas, chunk, size) {
+        for (var gy = 0; gy * chunk < size; gy++) {
+            for (var gx = 0; gx * chunk < size; gx++) {
+                var cell = _pixel(canvas, gx * chunk, gy * chunk);
+                for (var dy = 0; dy < chunk; dy++) {
+                    for (var dx = 0; dx < chunk; dx++) {
+                        var px = _pixel(canvas, gx * chunk + dx, gy * chunk + dy);
+                        if (px[0] !== cell[0] || px[1] !== cell[1] || px[2] !== cell[2])
+                            return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    function _snapshot(canvas, size) {
+        var out = [];
+        for (var y = 0; y < size; y += 2) {
+            for (var x = 0; x < size; x += 2)
+                out.push(_pixel(canvas, x, y).join(","));
+        }
+        return out.join("|");
+    }
+
+    function _revealFixture() {
+        var dither = createTemporaryObject(imageComponent, testCase, {
+            source: rampSource, mode: "retro", chunk: 4
+        });
+        verify(dither);
+        settle(dither);
+        var canvas = _findCanvas(dither);
+        verify(canvas);
+        waitForPixel(canvas, 19, 10, function (px) { return px[3] === 255 && px[2] > px[0]; });
+        return { dither: dither, canvas: canvas };
+    }
+
+    function test_reveal_defaults_to_a_fully_dithered_grid() {
+        var f = _revealFixture();
+        compare(f.dither.reveal, 1);
+        // Every chunk-sized cell flat is what "the dither owns this pixel"
+        // looks like: the raw ramp underneath crosses column boundaries
+        // inside a 4px cell, so it cannot be flat.
+        verify(_cellsAreFlat(f.canvas, 4, 20));
+    }
+
+    function test_reveal_zero_leaves_the_raw_source_showing() {
+        var f = _revealFixture();
+        f.dither.reveal = 0;
+        settle(f.dither);
+        verify(!_cellsAreFlat(f.canvas, 4, 20));
+    }
+
+    function test_reveal_between_the_ends_is_a_dissolve_not_a_crossfade() {
+        var f = _revealFixture();
+        var full = _snapshot(f.canvas, 20);
+        f.dither.reveal = 0;
+        settle(f.dither);
+        var none = _snapshot(f.canvas, 20);
+        f.dither.reveal = 0.5;
+        settle(f.dither);
+        var half = _snapshot(f.canvas, 20);
+        verify(half !== full);
+        verify(half !== none);
+    }
+
+    // The matrix has 16 thresholds and no more, so a reveal step landing
+    // inside the level it is already on has nothing to repaint. This is what
+    // caps a dissolve at 17 paints however long the animation runs.
+    function test_reveal_only_moves_on_a_bayer_level_boundary() {
+        var f = _revealFixture();
+        var full = _snapshot(f.canvas, 20);
+        f.dither.reveal = 0.99;
+        settle(f.dither);
+        compare(_snapshot(f.canvas, 20), full);
+        f.dither.reveal = 0.9;
+        settle(f.dither);
+        verify(_snapshot(f.canvas, 20) !== full);
+    }
+
     // The whole point of retro mode: a red source stays red. Every sampled
     // pixel's R channel must outrank both G and B, never collapsing to a
     // gray (R === G === B) the way duotone mode would.

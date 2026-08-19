@@ -139,6 +139,7 @@ shell/
     openmeteo.js                 pure JS, .pragma library — buildUrl()/parseResponse() with typed failure shapes
   Media/
     applemusic.js                 pure JS, .pragma library — URL construction, response parsing, cache-key/prune-decision logic
+    model.js                      pure JS, .pragma library: active-player pick, player labels, loop names and cycle order, volume/seek clamps
   Capture/
     model.js                      pure JS, .pragma library — the capture family's shared logic:
                                    outputPath()/gifOutputPath()/parseGeometry()/hexFromPpmBytes()/
@@ -193,7 +194,7 @@ shell/
     ClipboardService.qml        singleton — wl-paste --watch capture, drives Clipboard/history.js, writes clipboard.json
     LocationService.qml         singleton — QtPositioning PositionSource (geoclue2), settings.json lat/lon override
     CalendarEventsService.qml   singleton — reads Calendar/ics.js over a khal/vdir-style directory (calendar.icsDir)
-    MediaService.qml             singleton — Quickshell.Services.Mpris active-player pick, transport verbs, honest available:false
+    MediaService.qml             singleton: Quickshell.Services.Mpris player pick and full control surface (transport, seek, shuffle, loop, player volume, raise), honest available:false
     AppleMusicArtService.qml     singleton — opt-in (media.appleMusicArt), curl-driven iTunes Search + amp-api editorialVideo, cached MP4s
     IdleService.qml               singleton — one shared IdleMonitor (respectInhibitors:true), screensaver.timeoutSeconds
     RecordingService.qml          singleton — one wf-recorder child (`active` IS that child, never persisted,
@@ -244,6 +245,7 @@ shell/
       Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
       TrayMenu.qml               shell-owned tray context menu (M32): one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle — replaces the old native QsMenuAnchor popup
       widgets/
+        LauncherWidget.qml      leads the default left region: the "[F]" mark, toggles shell.qml's single Menu instance — the launcher's only pointer-reachable summon path
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
         Clock.qml                center region: TIME meta label + live clock, opens the calendar panel
@@ -269,7 +271,10 @@ shell/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper,
                                  dithered through DitherImage's retro pass (wallpaper.dither/ditherColors)
     Menu/
-      Menu.qml                  keyboard-exclusive top-layer window; jsonc -> tree -> cond batch -> rank/browse -> cells.
+      Menu.qml                  keyboard-exclusive top-layer window covering the focused output; jsonc -> tree -> cond batch -> rank/browse -> cells.
+                                 Backdrop (M39): one grim -t ppm freeze of the output taken BEFORE the surface maps (`_shown`
+                                 gates the map on it, fail-open behind a 250ms watchdog), through DitherImage's retro pass at
+                                 chunk 10 / palette 4 under a 0.45 background wash, dissolving in and out on `reveal`
                                  Two views over one row set: a ListView, or a GridView on the "wallpaper" route (the picker),
                                  plus that route's DARK | LIGHT variant switcher when the directory has the subdirectory pair
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
@@ -300,7 +305,7 @@ shell/
       Osd.qml                     single-instance PanelWindow, Overlay layer, bottom-center; icon|label|value, no keyboard focus
     Lock/
       Lock.qml                    WlSessionLock wrapper + both PamContexts (password, parallel fingerprint) + idle-blank/resume-guard state
-      LockSurface.qml              per-output Component WlSessionLock instantiates itself; blurred-wallpaper backdrop, oversized clock, one input cell
+      LockSurface.qml              per-output Component WlSessionLock instantiates itself; dithered-wallpaper backdrop, oversized clock, one input cell
     Screensaver/
       Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay; a Canvas drawing the banner off ttfx, or off effect.js with no ttfx on PATH
     Capture/
@@ -327,6 +332,7 @@ tests/
   tst_calendar_ics.qml          qmltestrunner tests for Calendar/ics.js
   tst_openmeteo.qml             qmltestrunner tests for Weather/openmeteo.js
   tst_applemusic.qml            qmltestrunner tests for Media/applemusic.js
+  tst_media_model.qml           qmltestrunner tests for Media/model.js
   tst_screensaver_effect.qml    qmltestrunner tests for Screensaver/effect.js
   tst_screensaver_ttfx.qml      qmltestrunner tests for Screensaver/ttfx.js
   tst_bar_layout.qml             qmltestrunner tests for Bar/layout.js
@@ -997,10 +1003,15 @@ quickshell modules.
 Quickshell.Services.Mpris.players.values
   |
   v
-Services/MediaService.qml
-  activePlayer = first isPlaying:true player, else players[0], else null
+Services/MediaService.qml            (pick + clamps: Media/model.js)
+  players = [{id: dbusName, identity, label, isPlaying}, …]
+  activePlayer = the selected player while it is still registered,
+                 else the first isPlaying:true one, else players[0], else null
   available / title / artist / album / artUrl / identity / isPlaying /
-  canGoNext / canGoPrevious / canSeek / position / length
+  canGoNext / canGoPrevious / canSeek / position / length /
+  shuffle+shuffleSupported / loopState+loopSupported ("none"/"track"/
+  "playlist") / volume+volumeSupported (the player's own 0..1, not the
+  sink's) / canRaise
     |  (position doesn't emit positionChanged on ordinary playback ticks —
     |   quickshell's own doc'd workaround: a 1s Timer re-emits it while
     |   isPlaying so any binding that reads position advances at all)
@@ -1011,8 +1022,11 @@ Services/MediaService.qml
     |
     +-- Surfaces/Panels/MediaPanel.qml
     |     album art cell (static Image off artUrl) + NOW PLAYING / <app>
-    |     meta row + title/artist + flat accent-fill progress cell
-    |     (draggable to seek when canSeek) + hover-inverted transport cells
+    |     meta row + title/artist + one row per player when more than one is
+    |     registered + flat accent-fill progress cell (draggable to seek when
+    |     canSeek) + hover-inverted transport cells, flanked by shuffle and
+    |     loop cells (inverted = on) when the player supports them + the
+    |     player's own volume track + a RAISE label in the title band
     |     |
     |     v
     |   Loader { source: "AnimatedAlbumArt.qml" }
@@ -1020,7 +1034,9 @@ Services/MediaService.qml
     |     animatedArtUrl !== "" — the static Image above is the permanent
     |     fallback under every other condition
     |
-    +-- Ipc/MediaIpc.qml (target "media"): playPause()/next()/previous()/status()
+    +-- Ipc/MediaIpc.qml (target "media"): playPause()/next()/previous()/
+          shuffle(on|off|toggle)/loop(none|track|playlist|cycle)/
+          volume(0-100)/raise()/select(id)/players()/status()
           calls MediaService directly — MediaPanel's own transport cells
           also call MediaService directly, this exists for compositor
           keybinds and headless smoke verification, same division of
@@ -1079,10 +1095,12 @@ Surfaces/Lock/Lock.qml  (one Item wrapping WlSessionLock + both PamContexts;
     |
     v
   Surfaces/Lock/LockSurface.qml
-    blurred backdrop: Image { source: Core.State.wallpaper } (hidden) feeding
-      a MultiEffect { blurEnabled: true } — DESIGN.md's ONE blur exception
-      in the whole shell (a ScreencopyView-based capture crashes the shell
-      outright instead, see the file's header comment — never reintroduce it)
+dithered backdrop: Image { source: Core.State.wallpaper } (hidden) feeding
+      a DitherImage { mode: "retro", chunk: 8, paletteSize: 6 } — was a
+      MultiEffect blur (DESIGN.md's one blur exception) until M39; nothing
+      in the shell blurs anything now. It has never captured the screen: a
+      ScreencopyView-based capture crashes the shell outright, see the
+      file's header comment — never reintroduce it
     Components/AuthPrompt.qml instance: one bordered plate holding an
       oversized clock, the date, a dividing rule, and a single 3px-outlined
       field (masked: true) whose border swaps to Theme.color.urgent on

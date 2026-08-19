@@ -21,7 +21,8 @@ import "../../Compositor/keybinds.js" as Keybinds
 import "../../Compositor/appmatch.js" as AppMatch
 
 // The unified menu (DESIGN.md §Concrete translations/Menu): a single
-// keyboard-exclusive top-layer window, centered on the focused output. Top
+// keyboard-exclusive top-layer window covering the focused output, carrying
+// a dithered scrim (M39 Task 2) with the card centered on top of it. Top
 // cell is the search field (breadcrumb as its meta row); below it, rows are
 // either search.rank() matches (query non-empty) or model.visibleChildren()
 // of the current level (query empty). Whole-tree search, cursor wraps,
@@ -750,7 +751,13 @@ PanelWindow {
     // What the bottom action bar says right now (Menu/actions.js). Bound
     // rather than pushed, so it tracks the cursor, the mode and the pending
     // confirm without a single imperative update.
-    readonly property var _actionBar: Actions.actionBar({
+    //
+    // An app view that declares `viewActions` fills the bar itself (the
+    // seam below), because the row cursor those verbs describe does not
+    // exist on such a route: the process view's Enter kills the process
+    // under ITS own cursor, and a footer still offering the row list's
+    // "Open" would be promising a key nothing answers.
+    readonly property var _actionBar: root._appViewActions !== null ? root._appViewActions : Actions.actionBar({
         mode: root._mode,
         node: root._cursorNode,
         atRoot: root.currentNodeId === null,
@@ -805,7 +812,7 @@ PanelWindow {
     // below paint over just that trailing hairline with the frame's own
     // background color, leaving the frame's rule as the single visible line
     // on every edge (same technique as Panel.qml's `_contentWidth`).
-    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.panelPadding * 2
+    readonly property real _contentWidth: root._cardWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.panelPadding * 2
     readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.panelPadding * 2
     // Whichever view owns the level: the grid on the wallpaper route, the
     // loaded component on an app-view route, the row list everywhere else.
@@ -842,7 +849,7 @@ PanelWindow {
     property var _frozenTop: null
 
     readonly property real _topInset: Core.Theme.space.panelGap
-    readonly property real _centeredTop: root._screen ? (root._screen.height - root.implicitHeight) / 2 : 0
+    readonly property real _centeredTop: root._screen ? (root._screen.height - root._cardHeight) / 2 : 0
 
     // Whatever the freeze or the centered formula produces, the card is
     // always fully on screen with a `panelGap` margin. Without this, the
@@ -853,7 +860,7 @@ PanelWindow {
     function _clampTop(top) {
         if (!root._screen)
             return 0;
-        var maxTop = root._screen.height - root.implicitHeight - root._topInset;
+        var maxTop = root._screen.height - root._cardHeight - root._topInset;
         // Taller than the screen can hold even with no margin at all: center
         // the overflow instead of returning a negative top, which would push
         // the search field off the top edge. _maxTotalHeight caps the rows
@@ -870,6 +877,88 @@ PanelWindow {
 
     function _releaseTopFreeze() {
         root._frozenTop = null;
+    }
+
+    // --- Backdrop freeze (M39 Task 2) ------------------------------------
+    //
+    // One grim frame of this output, written to tmpfs, taken BEFORE the menu
+    // maps: the capture has to predate the menu's own surface or the backdrop
+    // would be a dither of a picture of itself. That ordering is the whole
+    // reason `_shown` exists as a separate flag from `isOpen` — `isOpen` is
+    // the menu's state, `_shown` is "there is a frame in hand, put the
+    // surface up", and every one of open()/openSelect()/openInput() gets the
+    // sequencing for free by going through `isOpen` as they already did.
+    //
+    // `-t ppm`: the PNG encode is the slow half of a grim capture and nothing
+    // here needs a portable file — this lives for one summon on tmpfs, and
+    // Qt reads PPM natively. `-s 1` pins logical resolution instead of grim's
+    // default (the output's own scale factor), which on a HiDPI head writes
+    // and decodes a 4x buffer to draw the same pixels.
+    //
+    // Fail-open in every direction, because a launcher that will not open is
+    // a far worse bug than one that opens without a backdrop: no grim on
+    // PATH, a compositor with no screencopy, a capture that outlives the
+    // watchdog, or no screen resolved at all, and the menu maps anyway with
+    // nothing behind it. A Process that fails to START never emits `exited`
+    // at all (RegionPicker.qml documents this against quickshell's
+    // process.cpp), which is exactly the case the watchdog covers.
+    readonly property string _frameFile: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/formalshell/menu-frame.ppm"
+
+    property string _framePath: ""
+    property bool _shown: false
+
+    onIsOpenChanged: {
+        if (!root.isOpen) {
+            frameWatchdog.stop();
+            root._shown = false;
+            return;
+        }
+        // Cleared on every open, never only on failure: the path itself never
+        // changes, so this is the source change that makes frameImage reload
+        // rather than redisplay the previous summon's frame.
+        root._framePath = "";
+        if (!root._screen) {
+            root._shown = true;
+            return;
+        }
+        freezeProc.running = false;
+        freezeProc.command = ["sh", "-c",
+            'mkdir -p "$(dirname "$2")" && exec grim -s 1 -t ppm -o "$1" "$2"',
+            "sh", root._screen.name, root._frameFile];
+        freezeProc.running = true;
+        frameWatchdog.restart();
+    }
+
+    Process {
+        id: freezeProc
+        // Never a declarative `running: true`: that latches while `command`
+        // is still binding, same trap RegionPicker.qml's freeze hit.
+        running: false
+        stderr: StdioCollector { id: freezeErr }
+        onExited: exitCode => {
+            frameWatchdog.stop();
+            if (!root.isOpen)
+                return;
+            if (exitCode !== 0)
+                console.warn("Menu: backdrop freeze failed:", freezeErr.text.trim());
+            else
+                root._framePath = root._frameFile;
+            root._shown = true;
+        }
+    }
+
+    Timer {
+        id: frameWatchdog
+        // Long enough that a real grim on a 4K head lands inside it, short
+        // enough that a summon which will never get a frame still feels like
+        // a keypress rather than a hang.
+        interval: 250
+        onTriggered: {
+            if (!root.isOpen)
+                return;
+            console.warn("Menu: backdrop freeze did not land in", frameWatchdog.interval + "ms, opening without it");
+            root._shown = true;
+        }
     }
 
     readonly property string _stateDir: {
@@ -1162,7 +1251,27 @@ PanelWindow {
     function activate(index) {
         if (!root.isOpen)
             return false;
+        // On an app view the row list is not what is on screen, so the same
+        // call presses THAT view's own primary instead (the process route's
+        // Enter): `viewActivate(index)` takes the view's cursor to `index`
+        // first, exactly as arrowing onto the row and pressing Enter would.
+        if (root._isAppView) {
+            if (!appView.item || !appView.item.viewActivate)
+                return false;
+            return appView.item.viewActivate(index) === true;
+        }
         root._activateRow(index);
+        return true;
+    }
+
+    // The rig's stand-in for typing into the search field (`menu filter`).
+    // Real keyboard delivery into an OnDemand-focus layer surface is not
+    // provable headlessly, and on an app view the field IS the filter, so
+    // this is the only way to verify a route's own narrowing.
+    function setQuery(text) {
+        if (!root.isOpen)
+            return false;
+        searchInput.text = text;
         return true;
     }
 
@@ -1291,6 +1400,27 @@ PanelWindow {
     readonly property var _appViewScroll: (root._isAppView && appView.item && appView.item.scrollTarget)
         ? appView.item.scrollTarget
         : null
+
+    // The app view's action-bar seam (M39): a view that declares
+    // `viewActions` hands the footer its own { primary, hints } in
+    // Menu/actions.js's exact shape. A view declaring none keeps the row
+    // list's bar, unchanged.
+    readonly property var _appViewActions: (root._isAppView && appView.item && appView.item.viewActions)
+        ? appView.item.viewActions
+        : null
+
+    // The app view's key seam (M39): a view that declares `viewKey(key,
+    // modifiers)` is offered every key press BEFORE the menu's own handler
+    // and returns true for the ones it consumed. That order is the point:
+    // an app view with a cursor of its own has to claim ↑↓ and Enter, and
+    // everything it does not claim (Escape, backspace-on-empty, every
+    // printable character heading for the search field) still behaves
+    // exactly as it does on every other route.
+    function _appViewKey(key, modifiers) {
+        if (!root._isAppView || !appView.item || !appView.item.viewKey)
+            return false;
+        return appView.item.viewKey(key, modifiers) === true;
+    }
 
     function _scrollAppViewTo(y) {
         var flick = root._appViewScroll;
@@ -1567,25 +1697,107 @@ PanelWindow {
     // off the real visible flip below, exactly as before, just one exit
     // fade later. The window is transparent so the fade covers the whole
     // card; card paints its own background.
-    visible: root.isOpen || card.opacity > 0
+    visible: root._shown || card.opacity > 0
     color: "transparent"
-    implicitWidth: root._isAppView
+
+    // The window spans the whole output (M39 Task 2) so it can carry the
+    // scrim below; the card is one positioned Item inside it rather than the
+    // window's own content. These two are what `implicitWidth`/
+    // `implicitHeight` used to be, and every consumer of the old window size
+    // (_contentWidth, _centeredTop, _clampTop) reads them instead — the
+    // window's own width/height now say "the output", which is a different
+    // fact and never the one that math wanted.
+    readonly property real _cardWidth: root._isAppView
         ? Core.Theme.space.popupWidthMenuApp
         : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
-    implicitHeight: root._chrome + searchCell.height + variantRow.height + root._rowsAreaHeight + actionBar.height
+    readonly property real _cardHeight: root._chrome + searchCell.height + variantRow.height + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
-    anchors { top: true; left: true }
-    margins {
-        left: root._screen ? Math.round((root._screen.width - root.implicitWidth) / 2) : 0
-        // Frozen while a filter query stands (_freezeTop), centered
-        // otherwise, clamped on screen either way — see the _frozenTop
-        // block above for the whole rule.
-        top: root._clampTop(root._frozenTop !== null ? root._frozenTop : root._centeredTop)
+    anchors { top: true; left: true; right: true; bottom: true }
+
+    // The backdrop (M39 Task 2): the frozen desktop run through the shell's
+    // own retro dither pass. Before this the menu was a bordered card
+    // straight onto whatever was behind it, and against a busy or
+    // background-colored wallpaper it had nothing to sit on (owner: "it can
+    // blend in"). A gaussian blur was not available — DESIGN.md allows one in
+    // the whole shell and it is the lock screen's — so the desktop is
+    // destroyed the way everything else in this shell is: quantized onto a
+    // handful of its own colors on a chunky grid.
+    //
+    // Two motions on the way in, both reversed on the way out: the layer
+    // fades, and the dither itself dissolves over it in ordered-Bayer steps
+    // (DitherImage's `reveal`). Because the pass draws the raw frame before
+    // painting cells over it, a half-revealed backdrop is literally the
+    // desktop half eaten by the dither, not a crossfade between two pictures.
+    Item {
+        id: backdrop
+        anchors.fill: parent
+        opacity: root._shown ? 1 : 0
+        visible: opacity > 0
+
+        Behavior on opacity {
+            NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
+        }
+
+        // Loaded here rather than through DitherImage's own `source` so the
+        // decode is capped at this output's logical size: DitherImage's
+        // internal Image asks for `width * 2`, which on a full-screen frame
+        // is a 4x buffer decoded to draw the same pixels.
+        Image {
+            id: frameImage
+            anchors.fill: parent
+            visible: false
+            source: root._framePath !== "" ? "file://" + root._framePath : ""
+            asynchronous: true
+            // The path is reused every summon, so the loader must never
+            // answer from its cache — `_framePath` is cleared on each open,
+            // which is what makes the reload happen at all.
+            cache: false
+            smooth: false
+            fillMode: Image.PreserveAspectCrop
+        }
+
+        DitherImage {
+            id: backdropDither
+            anchors.fill: parent
+            mode: "retro"
+            sourceItem: frameImage
+            // Coarser and flatter than the wallpaper's own pass: this one is
+            // standing in for a blur, so the job is destroying detail, not
+            // rendering a picture worth looking at.
+            chunk: 10
+            paletteSize: 4
+            reveal: root._shown ? 1 : 0
+
+            Behavior on reveal {
+                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
+            }
+        }
+
+        // Sinks the frozen desktop toward the shell's own ground so the card
+        // reads as lit against it. Tied to `reveal` rather than given its own
+        // Behavior: the darkening is part of what the dither does here, so it
+        // arrives on the same steps and cannot drift out of sync with them.
+        Rectangle {
+            anchors.fill: parent
+            color: Core.Theme.color.background
+            opacity: 0.45 * backdropDither.reveal
+        }
+    }
+
+    // Click-to-dismiss on the menu's OWN output. DismissTwins below has
+    // always covered every other screen; this output had no backdrop to
+    // click at all until the window went full-output, so Escape was the only
+    // way out for a pointer user. Declared before `card`, so the card and
+    // every cell in it stack above and keep their own clicks.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+        onPressed: root.close()
     }
 
     // Enter/exit (DESIGN.md §4): the whole card fades and slides down into
@@ -1593,8 +1805,14 @@ PanelWindow {
     // reverses in place.
     Item {
         id: card
-        anchors.fill: parent
-        opacity: root.isOpen ? 1 : 0
+        x: root._screen ? Math.round((root._screen.width - root._cardWidth) / 2) : 0
+        // Frozen while a filter query stands (_freezeTop), centered
+        // otherwise, clamped on screen either way — see the _frozenTop
+        // block above for the whole rule.
+        y: root._clampTop(root._frozenTop !== null ? root._frozenTop : root._centeredTop)
+        width: root._cardWidth
+        height: root._cardHeight
+        opacity: root._shown ? 1 : 0
         transform: Translate { y: (card.opacity - 1) * Core.Theme.motion.slide }
 
         Behavior on opacity {
@@ -1604,6 +1822,15 @@ PanelWindow {
         Rectangle {
             anchors.fill: parent
             color: Core.Theme.color.background
+        }
+
+        // Swallows presses that land on the card's own padding gutters
+        // rather than on a cell, so a click inside the frame never falls
+        // through to the dismiss area above. First interactive child, so
+        // every Cell declared after it still wins its own clicks.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
         }
 
         // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
@@ -1706,6 +1933,12 @@ PanelWindow {
                     }
 
                     Keys.onPressed: event => {
+                        // An app view with its own cursor gets first refusal
+                        // on every key (root._appViewKey's own note).
+                        if (root._appViewKey(event.key, event.modifiers)) {
+                            event.accepted = true;
+                            return;
+                        }
                         switch (event.key) {
                         // An app view has no row cursor, so the same two keys
                         // scroll its content by a row instead. Claimed
@@ -2110,8 +2343,17 @@ PanelWindow {
             hints: root._actionBar.hints
 
             // Clicking the primary is the pointer acting, exactly like
-            // clicking the row itself — same path, same gate re-arm.
-            onPrimaryActivated: root._activateFromPointer(root._cursorIndex)
+            // clicking the row itself — same path, same gate re-arm. On an
+            // app view it presses that view's own primary instead, at
+            // whatever its cursor already is (index -1).
+            onPrimaryActivated: {
+                if (root._isAppView) {
+                    if (appView.item && appView.item.viewActivate)
+                        appView.item.viewActivate(-1);
+                    return;
+                }
+                root._activateFromPointer(root._cursorIndex);
+            }
         }
 
         // The app view's overflow hint, in the action bar's left half.

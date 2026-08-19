@@ -18,10 +18,10 @@ import "../../Bar/layout.js" as Layout
 // right — each populated from `bar.layout` in settings.json (left/center/
 // right arrays of widget names, resolved by ../../Bar/layout.js) rather
 // than a fixed declaration order; an absent or partial `bar.layout` falls
-// back region-by-region to exactly today's arrangement (workspaces+active
-// window left, clock+now-playing center, battery/audio/network/bluetooth/
-// weather/tray/bell/indicators right), so a user with no config sees no
-// change.
+// back region-by-region to exactly today's arrangement (launcher+workspaces
+// +active window left, clock+now-playing center, battery/audio/network/
+// bluetooth/weather/tray/bell/indicators right), so a user with no config
+// sees no change.
 // Layout entries name either a built-in widget (resolved against
 // `_builtinComponents` below, each pre-wired with the panel/screen context
 // only Bar.qml has), a `bar.modules[]` custom module via a "custom:<id>"
@@ -52,6 +52,8 @@ import "../../Bar/layout.js" as Layout
 PanelWindow {
     id: bar
     required property var modelData
+    // shell.qml's single Menu instance — the launcher cell's summon target.
+    property var menu: null
     property var appMenuPanel: null
     property var audioPanel: null
     property var calendarPanel: null
@@ -132,6 +134,12 @@ PanelWindow {
     // context (this bar's screen/width, or an owning popout panel instance)
     // that only Bar.qml knows, so a Layout.resolve() entry can instantiate
     // any of them purely by name.
+    Component {
+        id: launcherComponent
+        LauncherWidget {
+            menu: bar.menu
+        }
+    }
     Component {
         id: workspacesComponent
         Workspaces {
@@ -307,6 +315,7 @@ PanelWindow {
     }
 
     readonly property var _builtinComponents: ({
+        launcher: launcherComponent,
         workspaces: workspacesComponent,
         activeWindow: activeWindowComponent,
         clock: clockComponent,

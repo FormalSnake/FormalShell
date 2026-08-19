@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell.Wayland
 import qs.Core
 import qs.Core as Core
@@ -12,8 +11,8 @@ import qs.Components
 // `qs.Components`' `AuthPrompt` (M8b Task 6) — greeter.qml instantiates the
 // exact same component as its own twin.
 //
-// Blur: DESIGN.md's one exception in the whole shell, and it stays one — a
-// ScreencopyView + MultiEffect blurred-backdrop capture was tried first and
+// Why this surface never captures the screen: a ScreencopyView + MultiEffect
+// blurred-backdrop capture was tried first and
 // crashes the lock screen outright (the moment ANY ScreencopyView exists,
 // quickshell's WlBufferManager unconditionally negotiates v4+
 // zwp_linux_dmabuf_v1 feedback with no version guard —
@@ -22,12 +21,14 @@ import qs.Components
 // manager->lock() — src/wayland/session_lock.cpp — so the protocol
 // violation kills the whole Wayland connection, and thus the whole shell
 // process, before the lock has actually engaged: a fail-OPEN crash on a
-// security-critical surface). That failure is ScreencopyView-specific, not
-// a MultiEffect/blur one — MultiEffect is pure client-side QtQuick, no
-// Wayland protocol involved — so the backdrop below instead blurs a plain
+// security-critical surface). The backdrop below therefore reads a plain
 // Image of `Core.State.wallpaper` (the same file Background.qml already
-// shows on the desktop layer). Never reintroduce ScreencopyView here or
-// anywhere lock-adjacent.
+// shows on the desktop layer) and never the screen. Never reintroduce
+// ScreencopyView here or anywhere lock-adjacent.
+//
+// What it does to that image used to be a gaussian blur, DESIGN.md rule 8's
+// one exception anywhere in the shell. M39 spent that exception: it is a
+// dither pass now, and no surface here blurs anything.
 //
 // `Core.State` (qualified), not the bare `State` this file's other
 // unqualified `import qs.Core` would suggest: QtQuick's own built-in `State`
@@ -83,10 +84,20 @@ WlSessionLockSurface {
         color: Theme.color.background
     }
 
-    // Blurred wallpaper backdrop (spec §8, DESIGN.md rule 8's one exception):
-    // wallpaperImage stays hidden (visible: false) and only ever feeds
-    // MultiEffect below as its source — the solid Rectangle above is what
-    // shows through when Core.State.wallpaper is unset.
+    // Dithered wallpaper backdrop (spec §8; M39 Task 3 replaced the gaussian
+    // blur this used to carry): wallpaperImage stays hidden (visible: false)
+    // and only ever feeds DitherImage below as its source — the solid
+    // Rectangle above is what shows through when Core.State.wallpaper is
+    // unset.
+    //
+    // The blur was DESIGN.md rule 8's one named exception in the whole shell,
+    // and it is now spent nowhere: the lock backdrop destroys the wallpaper
+    // the same way the launcher's does and the desktop wallpaper already
+    // does, by quantizing it onto a handful of its own colors on a chunky
+    // grid (owner, 2026-08-19). Coarser than the desktop's own pass and
+    // finer than the launcher's — the wallpaper is the only thing on this
+    // surface worth looking at, so it keeps enough palette to still read as
+    // the picture it is.
     Image {
         id: wallpaperImage
         anchors.fill: parent
@@ -104,18 +115,13 @@ WlSessionLockSurface {
         sourceSize.height: Math.max(surfaceRoot.width, surfaceRoot.height)
     }
 
-    MultiEffect {
+    DitherImage {
         anchors.fill: parent
-        source: wallpaperImage
+        mode: "retro"
+        sourceItem: wallpaperImage
         visible: Core.State.wallpaper !== "" && !surfaceRoot.blanked
-        blurEnabled: true
-        // Omarchy's own LockView backdrop parameters (Task 6 bullet 4): the
-        // slight negative contrast is what keeps the plate's text reading
-        // crisply against a bright wallpaper instead of just a soft blur.
-        blur: 1.0
-        blurMax: 128
-        blurMultiplier: 1.25
-        contrast: -0.08
+        chunk: 8
+        paletteSize: 6
     }
 
     // Mouse-move activity detector for `activity()` (see its declaration

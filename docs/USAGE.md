@@ -40,7 +40,7 @@ arrangement:
 {
   "bar": {
     "layout": {
-      "left": ["workspaces", "activeWindow"],
+      "left": ["launcher", "workspaces", "activeWindow"],
       "center": ["clock", "nowPlaying"],
       "right": ["battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators", "custom:cpu"]
     },
@@ -51,13 +51,17 @@ arrangement:
 }
 ```
 
-Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
-`battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
-`indicators`, `github`, `usage`, `tailscale`, `visualizer`, `microphone`,
-`keyboardLayout`, `systemUpdate`, `airpods`, `dualsense`, `display` (the last
-ten opt-in only — never part of the default arrangement; `bell` by contrast
-IS part of the defaults since M13b, so a config predating it that spells out
-its own `right` region won't show the bell until it's added there).
+Builtin widget names: `launcher`, `workspaces`, `activeWindow`, `clock`,
+`nowPlaying`, `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`,
+`bell`, `indicators`, `github`, `usage`, `tailscale`, `visualizer`,
+`microphone`, `keyboardLayout`, `systemUpdate`, `airpods`, `dualsense`,
+`display` (the last ten opt-in only — never part of the default
+arrangement). Two are in the defaults but were added after the fact, so a
+config that spells out its own region won't show them until they are added
+there by hand: `bell` in the right region (M13b) and `launcher` at the head
+of the left region (M39) — the latter is the menu's only pointer-reachable
+summon path, so a left region without it leaves a mouse user no way to open
+the launcher at all.
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
@@ -763,11 +767,16 @@ launcher is a window manager for small apps, not only a menu.
 `Surfaces/Menu/views/` is the entire cost of adding the next one, no
 `Menu.qml` edit required, because its chrome (breadcrumb, Escape/back,
 search focus, the `menu` IPC) already keys off the route id rather than
-which view happens to be loaded. `monitor` is the one route registered
-today (see [System monitor](#system-monitor)); a view opts into the live
-search field by declaring `property string query`, and a view that
-declares none simply has an inert search box, the honest state for a view
-with nothing to filter.
+which view happens to be loaded. `monitor` and `processes` are the two routes registered
+today (see [System monitor](#system-monitor)). A view opts into each seam by
+declaring it and gets the row-list behaviour otherwise: `property string
+query` for the live search field (a view that declares none simply has an
+inert search box, the honest state for a view with nothing to filter),
+`property Flickable scrollTarget` for what the arrows scroll,
+`function viewKey(key, modifiers)` to claim keys ahead of the menu's own
+handler (what a view with a cursor of its own needs), and `property var
+viewActions` plus `function viewActivate(index)` to put its own verbs in the
+action bar. `MonitorView` uses the first two, `ProcessView` all four.
 
 **Share (LocalSend).** The root `SHARE` submenu exists only when
 `localsend_app` resolves on PATH (`command -v localsend_app`, a live `when`
@@ -877,7 +886,11 @@ checking before the handler ever ran), `summon(route)` (always open),
 `close()`, `refresh()` (force a re-read of default+user jsonc —
 `settings.json` is already watched live, this is a manual fallback for an
 editor save an fs watcher missed), `status()` (`{isOpen, level}`, for
-headless assertion), `ping()`. `route` is a node id
+headless assertion), `ping()`, plus two the smoke rig stands in with for
+input a nested session cannot prove was delivered: `activate(index)`
+(Enter on the row at `index`, or on an app view its own primary at that
+index) and `filter(text)` (typing into the search field, the only way to
+drive a route whose search field IS its filter, e.g. `processes`). `route` is a node id
 (`"system"`) or alias, or `""` for root. An absent optional
 `~/.config/formalshell/menu.jsonc` logs at most one line per path change,
 never a warning per internal retry. Bind it directly in niri:
@@ -1640,6 +1653,43 @@ CONNECTED`, so a hybrid machine shows which card is driving it), and either
 live metrics or an honest `NO METRICS`; a machine with no cards at all renders a single `NO GPU` row
 instead of an empty section.
 
+**The process table** is its own launcher route (`menu summon processes`, or
+the `PROCESSES` row from root, aliases `ps`/`kill`/`top`/`htop`), because
+the monitor above is a read-only ledger and this is the one surface that
+acts on the machine. One line per process: pid, the kernel's own comm, the
+full command line, CPU and resident memory. `ProcessService` polls it on its
+own timer (`monitor.processIntervalMs`, default 2000, floored at 500),
+subscribed only while the route is open, over a two-fork collector that
+reads every `/proc/[0-9]*/stat` in one `cat` and every cmdline in one
+`grep`, never a fork per process.
+
+- **The search field is the filter.** Typing narrows by process name, by
+  command line (which is how `python` finds a script the kernel named after
+  its interpreter), or by an exact pid.
+- **CPU is a share of the whole machine, not of one core**, matching the
+  monitor's own CPU TOTAL row: a process pinning one core of eight reads
+  12.5%, where `htop` would say 100%. It is a delta between two polls, so it
+  reads as an em dash until the second one lands, and a pid recycled onto a
+  different process between polls reads as an em dash too rather than
+  carrying a delta against a process that no longer exists.
+- **Sort** with `^S` (CPU, memory, pid, name) or by clicking a column
+  header; the arrow in the header names the live one. Every mode breaks ties
+  on pid, so rows cannot trade places under the cursor between polls.
+- **Acting on a row takes two presses.** `Enter` arms, and the row goes
+  full-bleed urgent under a `CONFIRM TERM <name>` verb; `Enter` again sends
+  it. `^Enter` arms `KILL` (SIGKILL) instead, `^R` arms `RESTART`, and
+  `Escape` cancels an armed action before it pops the route. Moving the
+  cursor or retyping the filter disarms.
+- **Restart** means TERM, wait for the pid to actually leave `/proc`, then
+  re-run the same argv from the same working directory. It re-runs a command
+  line, not a session: the environment the process was started with does not
+  come back. A process that ignores TERM is reported as still running after
+  five seconds rather than escalated to KILL unasked, and nothing is
+  re-launched in that case.
+- A kill that fails (another user's process, a pid that has already exited)
+  reports the kernel's own error text in the header line rather than
+  silently doing nothing.
+
 **The GPU model.** A card comes from `/sys/class/drm/cardN/device`: driver
 (`nvidia`, `i915`, `amdgpu`, `xe`), vendor/device PCI ids, the PCI address
 (used for `DRI_PRIME`), and its connector list. **`boot_vga` decides which
@@ -1705,6 +1755,15 @@ qs ipc --any-display -p <store-path>/share/formalshell call monitor launch <desk
 qs ipc --any-display -p <store-path>/share/formalshell call monitor mode [integrated|hybrid]
 # "" reports the current supergfxctl mode; a target switches it; errors when
 # supergfxctl is not on PATH
+qs ipc --any-display -p <store-path>/share/formalshell call monitor processes ""
+# the same filter the route's search field applies (name, command line, exact
+# pid), "" for the whole table; CPU-sorted, capped at 40 rows, with `total`,
+# `matched` and the last action's own outcome beside them
+qs ipc --any-display -p <store-path>/share/formalshell call monitor kill <pid> [TERM|KILL|HUP|INT]
+# "" means TERM. The reply says the signal was SENT, never that the process
+# died: the kill's exit status lands in the next `processes` dump's
+# `lastAction`, the same synchronous-reply limit `mode` has
+qs ipc --any-display -p <store-path>/share/formalshell call monitor restart <pid>
 ```
 
 ## Clipboard
@@ -2040,11 +2099,14 @@ chosen) **system-side** — the home-manager module alone cannot create a PAM
 service, only nixos/system config can (`nix/testvm.nix`'s own declaration is
 the reference).
 
-DESIGN.md's **one exception in the whole shell**: the blurred
-current-wallpaper backdrop (`LockSurface.qml`'s `Image` + `MultiEffect`,
-client-side QtQuick blur, tuned to Omarchy's own blur/contrast values — a
-`ScreencopyView`-based capture was tried first and crashes the whole shell
-outright, see the file's header comment for why it's never coming back).
+The backdrop is the current wallpaper run through the shell's own retro
+dither pass (`LockSurface.qml`'s hidden `Image` feeding a `DitherImage`,
+chunk 8, palette 6). It was a client-side `MultiEffect` gaussian blur
+through M38 — DESIGN.md's one blur exception in the whole shell — and M39
+replaced it with the dither, so nothing in the shell blurs anything now. It
+has never captured the screen: a `ScreencopyView`-based capture was tried
+first and crashes the whole shell outright, see the file's header comment
+for why it is never coming back.
 Everything else on the lock surface stays flat, drawn by the shared
 `Components/AuthPrompt.qml` plate (M8b Task 6) both `LockSurface.qml` and
 `greeter/greeter.qml` instantiate unchanged: one bordered card holding an

@@ -47,6 +47,7 @@ ShellRoot {
 
         delegate: Component {
             Bar {
+                menu: menu
                 appMenuPanel: appMenuPanelInstance
                 audioPanel: audioPanelInstance
                 calendarPanel: calendarPanelInstance

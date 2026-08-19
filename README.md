@@ -182,8 +182,8 @@ in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
   shuffle, repeat, the player's own volume, raise, and a switcher when
   several players are registered at once, each control present only where
   the player implements it. Optional Apple Music animated album art.
-- **Lock screen** — a real `WlSessionLock` + PAM, with the design's one
-  sanctioned blur exception.
+- **Lock screen** — a real `WlSessionLock` + PAM over a dithered
+  current-wallpaper backdrop.
 - **Screensaver**: an idle-driven terminal-effect banner, animated by
   ttfx (bundled) across its 37 effects, rerolling to a fresh one
   indefinitely until real input dismisses it. Without ttfx on PATH it falls

@@ -700,8 +700,9 @@ adjective:
     wallpaper picker's grid all stay true-color — the picker in particular
     shows candidates as they are, since the point of that grid is choosing
     a photograph, not previewing the texture it will be shown through. The
-    lock screen's blurred wallpaper backdrop stays undithered for the same
-    reason a blur and a dither cancel each other out. Checkable: zoom the media
+    lock screen's backdrop is the one place a wallpaper is dithered
+    *harder* than the desktop shows it (M39: chunk 8, 6 colors), since
+    destroying the picture is the point there. Checkable: zoom the media
     panel's album art in a screenshot, individual chunk-sized dither cells
     resolve as flat squares, and every sampled cell's channels each land
     on one of the posterized steps of the source image's own color, never
@@ -910,10 +911,11 @@ floats with a margin or fuses to the screen edge.
   border spec to the `urgent` token, and — when the platform exposes a
   fingerprint sensor — a fingerprint glyph pinned inside the field's right
   edge with symmetric horizontal reserve so centered dots stay centered.
-  Wake on any click/move/key; Escape or Ctrl+U clears. The blurred wallpaper
-  backdrop (`MultiEffect`, blur 1.0 / blurMax 128 / blurMultiplier 1.25 /
-  contrast -0.08 — omarchy's exact parameters) remains the shell's one named
-  blur exception (CLAUDE.md hard rule). The greeter is the same composed
+  Wake on any click/move/key; Escape or Ctrl+U clears. The backdrop is the
+  current wallpaper run through `DitherImage`'s retro pass (chunk 8, palette
+  6). It was a `MultiEffect` gaussian blur through M38 and was the shell's
+  one named blur exception; M39 spent that exception and nothing blurs
+  anywhere now (owner, 2026-08-19). The greeter is the same composed
   block, same component, identical language — no clock-less/field-only
   divergence from the lock screen.
 - **Screensaver** — the shell's other named continuous-motion exception
@@ -1079,9 +1081,9 @@ and every rule here is checkable:
 
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the
-screensaver plus the lock backdrop blur remain the two named, load-bearing
-exceptions to "flat and still" — not a crack in the doctrine, a documented
-carve-out each. The wallpaper crossfade (`Background.qml`) is the third:
+screensaver remains the one named, load-bearing exception to "flat and
+still" — not a crack in the doctrine, a documented carve-out. The
+wallpaper crossfade (`Background.qml`) is the second:
 `Theme.motion.reveal` (400ms, `Easing.InOutQuad`) sits outside rule 1's
 90–140ms band on purpose — a full-screen image swap reads better slower
 than a control hover — and, unlike the pulse, it does respect

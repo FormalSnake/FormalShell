@@ -45,13 +45,17 @@
 // (the display panel long predates having a cell at all), and M38 Task 6's
 // system monitor: a monitor cell in the bar is optional per install, since
 // the launcher's "monitor" route (Menu/appviews.js) is the always-available
-// path to the same data), so the no-config bar stays byte-identical.
-var BUILTIN_WIDGETS = ["workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron", "airpods", "dualsense", "display", "monitor"];
+// path to the same data), so a no-config bar carries none of them.
+var BUILTIN_WIDGETS = ["launcher", "workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron", "airpods", "dualsense", "display", "monitor"];
 
 var MODULE_TYPES = ["command", "qml"];
 
 var DEFAULT_LAYOUT = {
-    left: ["workspaces", "activeWindow"],
+    // "launcher" leads the default left region (M39): the menu's only
+    // pointer-reachable summon path, so unlike every opt-in builtin above it
+    // has to exist without a settings.json edit. A user who wants it gone
+    // writes a left region without it, same as any other default.
+    left: ["launcher", "workspaces", "activeWindow"],
     center: ["clock", "nowPlaying"],
     // "bell" joined the defaults in M13b Task 2 (owner-requested): the
     // notification bell is always-visible, so unlike "github" it earns a

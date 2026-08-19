@@ -840,6 +840,7 @@ hotcorner_mode=false
 panel_keys_mode=false
 monitor_mode=false
 gpu_mode=false
+processes_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -884,7 +885,8 @@ while [ $# -gt 0 ]; do
     --panel-keys) panel_keys_mode=true; shift ;;
     --monitor) monitor_mode=true; shift ;;
     --gpu) gpu_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--console] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys] [--monitor] [--gpu]" >&2; exit 1 ;;
+    --processes) processes_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--console] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys] [--monitor] [--gpu] [--processes]" >&2; exit 1 ;;
   esac
 done
 
@@ -912,7 +914,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $capture_edit_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode || $monitor_mode || $gpu_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $capture_edit_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode || $monitor_mode || $gpu_mode || $processes_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
@@ -1092,7 +1094,7 @@ if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_t
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
   || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode \
   || $capture_edit_mode || $panel_airpods_mode || $panel_dualsense_mode || $console_mode \
-  || $monitor_mode || $gpu_mode; then
+  || $monitor_mode || $gpu_mode || $processes_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -1676,6 +1678,25 @@ gpu_probe_script="$shot_dir/gpu-offload-probe.sh"
 gpu_drm_rows_path="$shot_dir/gpu-drm-rows.txt"
 gpu_route_png="$shot_dir/gpu-route.png"
 gpu_monitor_png="$shot_dir/gpu-monitor.png"
+processes_all_path="$shot_dir/processes-all.json"
+processes_filtered_path="$shot_dir/processes-filtered.json"
+processes_after_path="$shot_dir/processes-after.json"
+processes_menu_reply_path="$shot_dir/processes-menu-reply.txt"
+processes_filter_reply_path="$shot_dir/processes-filter-reply.txt"
+processes_menu_status_path="$shot_dir/processes-menu-status.json"
+processes_arm_reply_path="$shot_dir/processes-arm-reply.txt"
+processes_fire_reply_path="$shot_dir/processes-fire-reply.txt"
+processes_alive_arm_path="$shot_dir/processes-alive-after-arm.txt"
+processes_alive_fire_path="$shot_dir/processes-alive-after-fire.txt"
+processes_victim_pid_path="$shot_dir/processes-victim-pid.txt"
+processes_restart_pid_path="$shot_dir/processes-restart-pid.txt"
+processes_restart_reply_path="$shot_dir/processes-restart-reply.txt"
+processes_restart_pids_path="$shot_dir/processes-restart-pids.txt"
+processes_restart_status_path="$shot_dir/processes-restart-status.json"
+processes_full_png="$shot_dir/processes-full.png"
+processes_view_png="$shot_dir/processes-view.png"
+processes_confirm_png="$shot_dir/processes-confirm.png"
+processes_killed_png="$shot_dir/processes-killed.png"
 
 # --share's second phase (the honest-absent proof) needs a PATH that
 # genuinely cannot find `localsend_app` — not a shim with a fake one ahead
@@ -2784,10 +2805,29 @@ EOF
 fi
 
 if $menu_mode; then
+  # The menu leg's own clock. Every sleep in this mode's scripts is an offset
+  # from it, so the whole leg moves as one.
+  #
+  # It starts late under --wallpaper because the menu's backdrop covers the
+  # whole output (M39 Task 2): the wallpaper leg's monotone-flatness patch is
+  # cropped out of a screen grab at sleep 8, and an open menu at sleep 8 is
+  # what that patch would sample. The same offset fixes the shipped
+  # menu-niri.png, which under the old sleep-3 open froze a still-black
+  # startup frame into its backdrop — the menu now opens after the crossfade
+  # at sleep 9, over a wallpaper that has actually painted.
+  menu_t0=3
+  if $wallpaper_mode; then
+    menu_t0=11
+  fi
+  menu_nix_delay=$((menu_t0 + 1))
+  menu_query_delay=$((menu_t0 + 2))
+  menu_select_delay=$((menu_t0 + 3))
+  menu_finish_delay=$((menu_t0 + 6))
+
   menu_open_script="$shot_dir/menu-open.sh"
   cat > "$menu_open_script" <<EOF
 #!/usr/bin/env bash
-sleep 3
+sleep $menu_t0
 "$qs_bin" ipc -p "$shell_path" call menu summon ""
 EOF
 
@@ -2800,7 +2840,7 @@ EOF
   menu_select_script="$shot_dir/menu-select.sh"
   cat > "$menu_select_script" <<EOF
 #!/usr/bin/env bash
-sleep 6
+sleep $menu_select_delay
 "$qs_bin" ipc -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
 
@@ -2812,7 +2852,7 @@ EOF
   menu_finish_script="$shot_dir/menu-finish.sh"
   cat > "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
-sleep 9
+sleep $menu_finish_delay
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 {
@@ -2967,7 +3007,7 @@ EOF
   nix_states_script="$shot_dir/nix-states.sh"
   cat > "$nix_states_script" <<EOF
 #!/usr/bin/env bash
-sleep 4
+sleep $menu_nix_delay
 "$qs_bin" ipc -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_arm_path" 2>&1
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call debug query ':nix slowblock' > "$nix_searching_path" 2>&1
@@ -4358,6 +4398,78 @@ sleep 3
 EOF
 fi
 
+# --processes (M39): the launcher's process route, driven end to end against
+# two fixture processes this leg starts itself. Each is a COPY of bash under
+# a name the kernel's 15-byte comm can hold whole (smokevictim,
+# smokerestart) spinning on a builtin loop, which buys three things at once:
+# the row is findable by name (a truncated comm would blur which half of the
+# filter failed), it is the busiest process on the machine so the CPU column
+# has something real to show, and TERM kills it at once because the loop is
+# a builtin with no foreground child to wait out. Copying coreutils `sleep`
+# instead does not work at all: nixpkgs builds coreutils as a single
+# multi-call binary that dispatches on argv[0], so a copy named smokevictim
+# exits immediately with "unknown program".
+#
+# The kill is deliberately driven through `menu activate`, not through
+# `monitor kill`: `menu activate` is the rig's stand-in for Enter (MenuIpc's
+# own note), so this exercises the whole path a keypress takes (row cursor ->
+# ProcessView._press -> ProcessService.signalPid -> kill), where the IPC
+# target would only prove the service. It is called TWICE on purpose: this
+# route arms on the first press and fires on the second, and the file
+# written between the two (`kill -0` against the victim) is what proves the
+# arming press did not already kill it.
+#
+# The restart leg proves the one thing no screenshot can: `monitor restart`
+# TERMs the process, waits for the pid to leave /proc, and re-runs the same
+# argv, so afterwards there is exactly one smokerestart alive and it carries
+# a DIFFERENT pid.
+if $processes_mode; then
+  processes_victim_bin="$shot_dir/smokevictim"
+  processes_restart_bin="$shot_dir/smokerestart"
+  cp "$(readlink -f "$(command -v bash)")" "$processes_victim_bin"
+  cp "$(readlink -f "$(command -v bash)")" "$processes_restart_bin"
+  chmod +x "$processes_victim_bin" "$processes_restart_bin"
+
+  processes_drive_script="$shot_dir/processes-drive.sh"
+  cat > "$processes_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+"$processes_victim_bin" -c 'while :; do :; done' & echo \$! > "$processes_victim_pid_path"
+"$processes_restart_bin" -c 'while :; do :; done' & echo \$! > "$processes_restart_pid_path"
+"$qs_bin" ipc -p "$shell_path" call menu summon processes > "$processes_menu_reply_path" 2>&1
+# Two poll ticks with the route open: the service polls only while something
+# is subscribed, and the first tick after a subscribe has nothing to
+# difference, so a measured CPU column needs the second.
+sleep 5
+"$qs_bin" ipc -p "$shell_path" call monitor processes "" > "$processes_all_path" 2>&1
+"$grim_bin" "$processes_full_png"
+"$qs_bin" ipc -p "$shell_path" call menu filter smokevictim > "$processes_filter_reply_path" 2>&1
+sleep 3
+"$grim_bin" "$processes_view_png"
+"$qs_bin" ipc -p "$shell_path" call menu status > "$processes_menu_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call monitor processes smokevictim > "$processes_filtered_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$processes_arm_reply_path" 2>&1
+sleep 1
+"$grim_bin" "$processes_confirm_png"
+kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes_alive_arm_path"
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$processes_fire_reply_path" 2>&1
+sleep 3
+kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes_alive_fire_path"
+"$qs_bin" ipc -p "$shell_path" call monitor processes smokevictim > "$processes_after_path" 2>&1
+"$grim_bin" "$processes_killed_png"
+"$qs_bin" ipc -p "$shell_path" call monitor restart \$(cat "$processes_restart_pid_path") > "$processes_restart_reply_path" 2>&1
+sleep 6
+pgrep -f smokerestart > "$processes_restart_pids_path"
+"$qs_bin" ipc -p "$shell_path" call monitor processes smokerestart > "$processes_restart_status_path" 2>&1
+EOF
+
+  processes_kill_script="$shot_dir/processes-kill.sh"
+  cat > "$processes_kill_script" <<EOF
+#!/usr/bin/env bash
+pkill -f "$shot_dir/smoke" 2>/dev/null || true
+EOF
+fi
+
 # --panel-keys (M26 Task 8): opens the audio panel and drives it with real
 # `wtype` keystrokes rather than the `panel`/IPC-only shortcuts every other
 # leg uses — this is the one thing that can actually prove row-level
@@ -4522,12 +4634,28 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 21 && niri msg action screenshot-screen --path $clipssh_failed_path\""
   fi
   if $wallpaper_mode; then
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp_path'\""
+    # The lock leg never reaches the crossfade (excluded below), so whatever
+    # is set here is the only wallpaper its backdrop ever sees — and the
+    # monotone fixture is exactly the source a dither pass leaves perfectly
+    # flat, so a lock frame taken against it cannot show whether the pass ran
+    # at all. It gets the gradient instead, which makes the dithered lock
+    # backdrop visible in lock-locked.png.
+    wp_first_path="$wp_path"
+    if $lock_mode; then
+      wp_first_path="$wp2_path"
+    fi
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 3 && '$qs_bin' ipc -p '$shell_path' call wallpaper set '$wp_first_path'\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call theme status > $status_path 2>&1\""
     # The crossfade leg. Held back from the --theme-toggle combination,
     # whose own drive script owns the timeline from sleep 9 on and whose
-    # assertions all compare against the first wallpaper's path.
-    if ! $theme_toggle_mode; then
+    # assertions all compare against the first wallpaper's path — and from
+    # --lock, which locks the session at sleep 3: niri refuses
+    # `screenshot-screen` on a locked session (the lock leg takes its own
+    # frames with grim for exactly that reason), so both frames this leg
+    # needs would simply never be written. --lock --wallpaper still sets the
+    # wallpaper and dumps `theme status`, which is what that combination is
+    # for: a real matugen-recolored lock backdrop to photograph.
+    if ! $theme_toggle_mode && ! $lock_mode; then
       # The solid wallpaper's own shot, taken while it is still the only one
       # on screen: the monotone-flatness assertion needs a frame that predates
       # the gradient (see the wp2 fixture comment).
@@ -4541,10 +4669,10 @@ fi
   fi
   if $menu_mode; then
     echo "spawn-at-startup \"bash\" \"$menu_open_script\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
-    echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call debug query 'wall' > $wall_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep $menu_query_delay && '$qs_bin' ipc -p '$shell_path' call debug query 'e' > $query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep $menu_query_delay && '$qs_bin' ipc -p '$shell_path' call debug query '2+2*3' > $calc_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep $menu_query_delay && '$qs_bin' ipc -p '$shell_path' call debug query ':e thumbs' > $emoji_query_path 2>&1\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"sleep $menu_query_delay && '$qs_bin' ipc -p '$shell_path' call debug query 'wall' > $wall_query_path 2>&1\""
     # The nix end-state drive (M13b Task 4) replaced M12's plain two-pass
     # ':nix hello' one-liners: the gated slowblock release covers the same
     # debounce -> shim -> parse -> rows proof, plus SEARCHING while blocked
@@ -4704,6 +4832,9 @@ fi
   if $gpu_mode; then
     echo "spawn-at-startup \"bash\" \"$gpu_drive_script\""
   fi
+  if $processes_mode; then
+    echo "spawn-at-startup \"bash\" \"$processes_drive_script\""
+  fi
   if $capture_mode; then
     echo "spawn-at-startup \"bash\" \"$capture_drive_script\""
   fi
@@ -4790,7 +4921,12 @@ fi
   # the OSD's auto-hide window; every other mode keeps the original 8s
   # budget.
   screenshot_delay=8
-  if $clipssh_mode; then
+  if $menu_mode && $wallpaper_mode; then
+    # The menu leg's whole timeline is pushed back past the wallpaper legs in
+    # this combination (see menu_t0 above), so the frame that shows the menu
+    # in select mode moves with it — sleep 14 sets it, plus a beat.
+    screenshot_delay=16
+  elif $clipssh_mode; then
     # clipssh-drive.sh's own last step lands at 19s (3+2 to summon and run
     # the six-second success case, 12 to clear it, 2+2 for the failure),
     # and the failure frame is taken a beat after it. This run's own
@@ -4933,6 +5069,13 @@ fi
     # llvmpipe). This run's generic smoke.png/SMOKE_OK is taken 5s past
     # that, showing the same full monitor view still open.
     screenshot_delay=26
+  elif $processes_mode; then
+    # processes-drive.sh's own last step (the restart status dump) lands
+    # around 35s in: 23s of sleeps, plus a dozen `qs ipc` spawns and three
+    # grims at roughly a second apiece on llvmpipe. This run's generic
+    # smoke.png/SMOKE_OK is taken 5s past that, showing the route as the
+    # kill left it (the filter still typed, nothing matching it any more).
+    screenshot_delay=40
   elif $gpu_mode; then
     # gpu-drive.sh's own final step (the two-card view's grim) lands on the
     # same kind of budget (~21s in: 15s of sleeps plus five `qs ipc` spawns
@@ -5105,7 +5248,14 @@ fi
   if $capture_edit_mode; then
     capture_edit_kill="bash '$capture_edit_fixture_kill_script'; "
   fi
-  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}${ocr_kill}${capture_edit_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
+  # processes_mode's fixtures are `sleep` copies: the victim is killed by the
+  # run itself (that is the test), but the process `monitor restart` re-ran
+  # is a fresh child of the compositor and would outlive the session.
+  processes_kill=""
+  if $processes_mode; then
+    processes_kill="bash '$processes_kill_script'; "
+  fi
+  echo "spawn-at-startup \"sh\" \"-c\" \"sleep $screenshot_delay && niri msg action screenshot-screen --path $shot_dir/smoke.png && ${media_kill}${tray_kill}${active_window_kill}${visualizer_kill}${ocr_kill}${capture_edit_kill}${processes_kill}sleep $tail_gap && niri msg action quit --skip-confirmation\""
 } > "$cfg"
 
 # The 40s default comfortably outlives every mode's screenshot-then-quit
@@ -5129,6 +5279,10 @@ elif $media_mode; then
   # screenshot_delay=32 plus tail_gap: the default 40 leaves no margin once
   # media-controls.sh's second-player leg pushes the shot out to 32.
   session_timeout=50
+elif $processes_mode; then
+  # screenshot_delay=40 plus tail_gap is exactly the default ceiling, so the
+  # session was being SIGTERMed at the moment of its own final shot.
+  session_timeout=55
 elif $record_mode; then
   session_timeout=90
 elif $wifi_mode; then
@@ -5203,7 +5357,7 @@ fi
 # The crossfade plus the dither pass, proven off the rendered pixels rather
 # than off the shell's own account of itself. Skipped in the --theme-toggle
 # combination, which never sets the second wallpaper (see the spawn block).
-if $wallpaper_mode && ! $theme_toggle_mode; then
+if $wallpaper_mode && ! $theme_toggle_mode && ! $lock_mode; then
   if [ ! -s "$wallpaper_get_path" ] || ! grep -qF "$wp2_path" "$wallpaper_get_path"; then
     echo "SMOKE_FAIL: wallpaper get did not report the second wallpaper — got: $(cat "$wallpaper_get_path" 2>/dev/null)" >&2
     exit 1
@@ -7562,6 +7716,113 @@ if $monitor_mode; then
   else
     echo "SMOKE_FAIL: no monitor-view screenshot produced" >&2; exit 1
   fi
+fi
+
+# --processes (M39): the route renders a real /proc walk, the filter narrows
+# it to one fixture process, Enter twice kills that process and only that
+# process, and `monitor restart` re-runs another one under a new pid.
+if $processes_mode; then
+  victim_pid=$(cat "$processes_victim_pid_path" 2>/dev/null)
+  restart_pid=$(cat "$processes_restart_pid_path" 2>/dev/null)
+  if [ -s "$processes_all_path" ]; then
+    head -c 600 "$processes_all_path"; echo
+  else
+    echo "SMOKE_FAIL: no monitor processes dump produced" >&2; exit 1
+  fi
+  if ! grep -qF '"available":true' "$processes_all_path"; then
+    echo "SMOKE_FAIL: the process collector never landed a sample. Got: $(cat "$processes_all_path")" >&2
+    echo "--- shell log ---" >&2; cat "$shell_log_path" >&2 2>/dev/null; exit 1
+  fi
+  # A machine running a nested compositor, a shell and this script has
+  # nowhere near as few as 20 processes, so a table shorter than that means
+  # the /proc walk itself is broken rather than that the VM is quiet.
+  if [ "$(sed -n 's/.*"total":\([0-9]*\).*/\1/p' "$processes_all_path")" -lt 20 ]; then
+    echo "SMOKE_FAIL: the process table is implausibly short: $(cat "$processes_all_path")" >&2; exit 1
+  fi
+  # cpuFraction stays null until a row has been seen by two consecutive
+  # ticks (the surfaces render that as a dash, never a fabricated 0%), so a
+  # real fraction proves the delta path, not merely that /proc was read.
+  if ! grep -q '"cpuFraction":[0-9]' "$processes_all_path"; then
+    echo "SMOKE_FAIL: no process carries a measured CPU fraction: $(head -c 800 "$processes_all_path")" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$processes_menu_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: menu summon processes did not return ok, got: $(cat "$processes_menu_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$processes_filter_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: menu filter did not return ok, got: $(cat "$processes_filter_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if ! grep -qF '"isOpen":true,"level":"processes"' "$processes_menu_status_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: the launcher is not on the processes app view. Got: $(cat "$processes_menu_status_path" 2>/dev/null)" >&2; exit 1
+  fi
+  # The filter's own claim: one row out of the whole table, and it is the
+  # fixture, matched on a name the kernel's comm holds whole.
+  if [ -s "$processes_filtered_path" ]; then
+    cat "$processes_filtered_path"
+  else
+    echo "SMOKE_FAIL: no filtered process dump produced" >&2; exit 1
+  fi
+  if ! grep -qF '"matched":1' "$processes_filtered_path" \
+    || ! grep -qF "\"pid\":$victim_pid," "$processes_filtered_path" \
+    || ! grep -qF '"name":"smokevictim"' "$processes_filtered_path"; then
+    echo "SMOKE_FAIL: the filter did not narrow to the fixture process (pid $victim_pid): $(cat "$processes_filtered_path")" >&2; exit 1
+  fi
+  # The unfiltered table, at the card's own height cap with the rest of the
+  # machine's processes scrolled off below it.
+  if [ -f "$processes_full_png" ]; then
+    echo "SMOKE_PROCESSES_FULL $processes_full_png"
+  else
+    echo "SMOKE_FAIL: no processes-full screenshot produced" >&2; exit 1
+  fi
+  if [ -f "$processes_view_png" ]; then
+    echo "SMOKE_PROCESSES_VIEW $processes_view_png"
+  else
+    echo "SMOKE_FAIL: no processes-view screenshot produced" >&2; exit 1
+  fi
+  # Arming is not killing: this route takes two presses, and the first one
+  # has to leave the process alive or the confirm is decoration.
+  if [ "$(cat "$processes_alive_arm_path" 2>/dev/null)" != "0" ]; then
+    echo "SMOKE_FAIL: the arming press killed pid $victim_pid outright, the confirm did nothing" >&2; exit 1
+  fi
+  if [ -f "$processes_confirm_png" ]; then
+    echo "SMOKE_PROCESSES_CONFIRM $processes_confirm_png"
+  else
+    echo "SMOKE_FAIL: no processes-confirm screenshot produced" >&2; exit 1
+  fi
+  if [ "$(cat "$processes_alive_fire_path" 2>/dev/null)" = "0" ]; then
+    echo "SMOKE_FAIL: pid $victim_pid survived the confirming press" >&2; exit 1
+  fi
+  if ! grep -qF '"matched":0' "$processes_after_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: the killed fixture is still in the table: $(cat "$processes_after_path" 2>/dev/null)" >&2; exit 1
+  fi
+  # The kill's own exit status, which the synchronous IPC reply could not
+  # carry: ProcessService.lastResult is where it lands, and the next dump
+  # reports it.
+  if ! grep -qF "\"lastAction\":{\"pid\":$victim_pid,\"action\":\"TERM\",\"ok\":true" "$processes_after_path"; then
+    echo "SMOKE_FAIL: no successful TERM recorded for pid $victim_pid: $(cat "$processes_after_path")" >&2; exit 1
+  fi
+  if [ -f "$processes_killed_png" ]; then
+    echo "SMOKE_PROCESSES_KILLED $processes_killed_png"
+  else
+    echo "SMOKE_FAIL: no processes-killed screenshot produced" >&2; exit 1
+  fi
+  # The restart round trip: one process alive afterwards, under a pid that
+  # is not the one that was restarted.
+  if ! grep -q '^ok:' "$processes_restart_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: monitor restart did not return ok, got: $(cat "$processes_restart_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  new_restart_pid=$(cat "$processes_restart_pids_path" 2>/dev/null)
+  if [ "$(wc -l < "$processes_restart_pids_path" 2>/dev/null)" != "1" ]; then
+    echo "SMOKE_FAIL: expected exactly one smokerestart alive after the restart, got: $(cat "$processes_restart_pids_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ "$new_restart_pid" = "$restart_pid" ]; then
+    echo "SMOKE_FAIL: pid $restart_pid is unchanged, nothing was actually restarted" >&2; exit 1
+  fi
+  if ! grep -qF '"matched":1' "$processes_restart_status_path" 2>/dev/null \
+    || ! grep -qF "\"pid\":$new_restart_pid," "$processes_restart_status_path"; then
+    echo "SMOKE_FAIL: the re-run process ($new_restart_pid) is not in the table: $(cat "$processes_restart_status_path" 2>/dev/null)" >&2; exit 1
+  fi
+  cat "$processes_restart_status_path"
+  echo "processes: pid $restart_pid was TERMed and its argv re-ran as pid $new_restart_pid"
 fi
 
 # --gpu (M38 Task 10): the two-card rendering, then the offload argv.

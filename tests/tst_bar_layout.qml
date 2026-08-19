@@ -11,7 +11,7 @@ TestCase {
 
     function test_default_fallback_when_bar_is_undefined() {
         var r = Layout.resolve(undefined);
-        compare(names(r.regions.left), "workspaces,activeWindow");
+        compare(names(r.regions.left), "launcher,workspaces,activeWindow");
         compare(names(r.regions.center), "clock,nowPlaying");
         compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,bell,indicators");
         compare(r.warnings.length, 0);
@@ -19,7 +19,7 @@ TestCase {
 
     function test_default_fallback_when_layout_key_missing() {
         var r = Layout.resolve({});
-        compare(names(r.regions.left), "workspaces,activeWindow");
+        compare(names(r.regions.left), "launcher,workspaces,activeWindow");
         compare(names(r.regions.right), "battery,audio,network,bluetooth,weather,tray,bell,indicators");
     }
 
@@ -226,16 +226,16 @@ TestCase {
     function test_unnamed_bar_plugin_auto_appends_to_its_region() {
         var p = barPlugin("diskwatch", "left");
         var r = Layout.resolve(undefined, [p]);
-        compare(r.regions.left.length, 3);
-        compare(r.regions.left[2].kind, "plugin");
-        compare(r.regions.left[2].id, "diskwatch");
+        compare(r.regions.left.length, 4);
+        compare(r.regions.left[3].kind, "plugin");
+        compare(r.regions.left[3].id, "diskwatch");
         compare(r.warnings.length, 0);
     }
 
     function test_explicitly_placed_plugin_is_not_also_appended() {
         var p = barPlugin("diskwatch", "left");
         var r = Layout.resolve({ layout: { right: ["plugin:diskwatch"] } }, [p]);
-        compare(r.regions.left.length, 2);
+        compare(r.regions.left.length, 3);
         compare(r.regions.right.length, 1);
         compare(r.regions.right[0].id, "diskwatch");
     }
@@ -267,7 +267,7 @@ TestCase {
 
     function test_no_chevron_leaves_every_entry_uncollapsible() {
         var r = Layout.resolve(undefined);
-        compare(collapsible(r.regions.left), "00");
+        compare(collapsible(r.regions.left), "000");
         compare(collapsible(r.regions.center), "00");
         compare(collapsible(r.regions.right), "00000000");
     }

@@ -98,6 +98,32 @@ Item {
     // one chunk-sized hard-edged square (never smooth-scaled). 1 is a
     // plain per-pixel dither, same as before this property existed.
     property int chunk: 2
+    // "retro" mode only: how much of the grid has been taken over by the
+    // dither, 0..1, gated per cell by the same 4x4 Bayer threshold the
+    // quantizer uses. The pass already draws the raw source into the canvas
+    // before painting cells over it, so a cell left out by this gate shows
+    // that raw source through — which makes 0 -> 1 a hard-edged ordered
+    // dissolve from the untouched image into its quantized version, and
+    // 1 -> 0 the same dissolve run backwards. 1 paints every cell, which is
+    // the exact loop (run merge included) this had before the property
+    // existed, so every caller that never sets it is unaffected.
+    property real reveal: 1
+
+    // `reveal` quantized onto the Bayer matrix's own 16 thresholds. The
+    // matrix has no finer resolution than that, so two reveal values inside
+    // the same sixteenth paint pixel-identical frames — tracking the level
+    // instead of the raw scalar caps a dissolve at 17 repaints no matter how
+    // long the animation runs or how fast the compositor ticks, and makes
+    // the dissolve visibly stepped, which is the texture being referenced.
+    property int _revealLevel: 16
+
+    // Palette + per-cell indices from the last full pass. A `reveal` step
+    // only changes WHICH of those cells paint, never what color any of them
+    // is, so a dissolve frame reuses this instead of re-reading the whole
+    // canvas back (`getImageData` over a full-screen buffer) and re-running
+    // the median cut. Cleared by anything that changes what the grid means:
+    // a new source, a resize, a different chunk/palette/mode.
+    property var _quant: null
 
     // Whether the current source has reached the canvas. False again the
     // moment the source starts changing, so a caller can gate a crossfade
@@ -119,6 +145,45 @@ Item {
 
     property int _retryAttempts: 0
 
+    // Paints the quantized grid over the raw source already sitting on the
+    // canvas. Horizontal run merge: a same-index run paints as one fillRect,
+    // so a flat region costs one call per row instead of `gw` of them, and
+    // the era's own look is mostly flat regions. A run also breaks on a cell
+    // the `reveal` gate leaves out, which is what lets the raw source show
+    // through mid-dissolve.
+    function _paintCells(ctx, q, w, h) {
+        var chunk = q.chunk;
+        var gw = q.gw;
+        var gh = q.gh;
+        var indices = q.indices;
+        var hexes = q.hexes;
+        // +1 against a 0..15 matrix, so level 0 paints nothing and level 16
+        // paints everything, both exactly.
+        var limit = root._revealLevel;
+        for (var ry = 0; ry < gh; ry++) {
+            var py = ry * chunk;
+            var ch = Math.min(chunk, h - py);
+            var rowStart = ry * gw;
+            var bayerRow = (ry % 4) * 4;
+            var run = 0;
+            while (run < gw) {
+                if (Dither.BAYER[bayerRow + (run % 4)] + 1 > limit) {
+                    run++;
+                    continue;
+                }
+                var runIndex = indices[rowStart + run];
+                var runEnd = run + 1;
+                while (runEnd < gw && indices[rowStart + runEnd] === runIndex
+                       && Dither.BAYER[bayerRow + (runEnd % 4)] + 1 <= limit)
+                    runEnd++;
+                var px = run * chunk;
+                ctx.fillStyle = hexes[runIndex];
+                ctx.fillRect(px, py, Math.min(runEnd * chunk, w) - px, ch);
+                run = runEnd;
+            }
+        }
+    }
+
     Image {
         id: img
         anchors.fill: parent
@@ -139,6 +204,7 @@ Item {
         target: root._src
         function onStatusChanged() {
             root._painted = false;
+            root._quant = null;
             if (root._src.status === Image.Ready) {
                 root._retryAttempts = 0;
                 canvas.requestPaint();
@@ -146,6 +212,7 @@ Item {
         }
         function onSourceChanged() {
             root._painted = false;
+            root._quant = null;
         }
     }
 
@@ -194,6 +261,15 @@ Item {
                 return;
             }
 
+            // Dissolve frame: the raw source is back on the canvas above and
+            // the quantization still stands, so this is one cell-paint pass
+            // and nothing else — no readback, no median cut.
+            if (root.mode === "retro" && root._quant) {
+                root._paintCells(ctx, root._quant, w, h);
+                root._painted = true;
+                return;
+            }
+
             var sample = ctx.getImageData(0, 0, w, h).data;
 
             if (root._isBlankRead(sample)) {
@@ -229,29 +305,14 @@ Item {
                 }
 
                 var pal = Dither.palette(cells, cellCount, root.paletteSize);
-                var hexes = Dither.hexPalette(pal);
-                var indices = Dither.quantize(cells, cellCount, gw, pal);
-
-                // Horizontal run merge: a same-index run paints as one
-                // fillRect. On a flat region that is one call per row
-                // instead of `gw` of them, and the era's own look is mostly
-                // flat regions.
-                for (var ry = 0; ry < gh; ry++) {
-                    var py = ry * chunk;
-                    var ch = Math.min(chunk, h - py);
-                    var rowStart = ry * gw;
-                    var run = 0;
-                    while (run < gw) {
-                        var runIndex = indices[rowStart + run];
-                        var runEnd = run + 1;
-                        while (runEnd < gw && indices[rowStart + runEnd] === runIndex)
-                            runEnd++;
-                        var px = run * chunk;
-                        ctx.fillStyle = hexes[runIndex];
-                        ctx.fillRect(px, py, Math.min(runEnd * chunk, w) - px, ch);
-                        run = runEnd;
-                    }
-                }
+                root._quant = {
+                    chunk: chunk,
+                    gw: gw,
+                    gh: gh,
+                    hexes: Dither.hexPalette(pal),
+                    indices: Dither.quantize(cells, cellCount, gw, pal)
+                };
+                root._paintCells(ctx, root._quant, w, h);
                 root._painted = true;
                 return;
             }
@@ -272,27 +333,54 @@ Item {
             }
             root._painted = true;
         }
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
+        onWidthChanged: {
+            root._quant = null;
+            requestPaint();
+        }
+        onHeightChanged: {
+            root._quant = null;
+            requestPaint();
+        }
     }
 
     onSourceChanged: {
         root._retryAttempts = 0;
         root._painted = false;
+        root._quant = null;
         if (root._src.status === Image.Ready)
             canvas.requestPaint();
     }
     onSourceItemChanged: {
         root._retryAttempts = 0;
         root._painted = false;
+        root._quant = null;
         if (root._src.status === Image.Ready)
             canvas.requestPaint();
     }
-    onModeChanged: canvas.requestPaint()
+    onModeChanged: {
+        root._quant = null;
+        canvas.requestPaint();
+    }
     onLightColorChanged: canvas.requestPaint()
     onDarkColorChanged: canvas.requestPaint()
-    onPaletteSizeChanged: canvas.requestPaint()
-    onChunkChanged: canvas.requestPaint()
+    onPaletteSizeChanged: {
+        root._quant = null;
+        canvas.requestPaint();
+    }
+    onChunkChanged: {
+        root._quant = null;
+        canvas.requestPaint();
+    }
+    // Cheap by design: the cache above survives, so a dissolve step repaints
+    // cells without re-quantizing — and a step that lands inside the level
+    // it is already on repaints nothing at all.
+    onRevealChanged: {
+        var level = Math.max(0, Math.min(16, Math.ceil(root.reveal * 16)));
+        if (level === root._revealLevel)
+            return;
+        root._revealLevel = level;
+        canvas.requestPaint();
+    }
     // A Canvas does not paint while it is not visible, so a component that
     // was hidden through a source change has stale (or no) content the
     // moment it comes back.
