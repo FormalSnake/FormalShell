@@ -902,13 +902,18 @@ PanelWindow {
     // nothing behind it. A Process that fails to START never emits `exited`
     // at all (RegionPicker.qml documents this against quickshell's
     // process.cpp), which is exactly the case the watchdog covers.
-    // Two slots, alternating per summon, rather than one fixed path: the
-    // previous summon's grim may still be writing when the next one starts,
-    // and a half-written PPM read back as a backdrop is a torn frame. It also
-    // means the Image's `source` genuinely differs between consecutive
-    // summons, so nothing rests on how the loader treats a repeated URL.
+    // A FRESH FILENAME per summon, never a fixed path and never a small set
+    // of rotating ones. Qt's pixmap loader answers a repeated URL from its
+    // own cache, and `cache: false` on the Image does not save you: with two
+    // alternating slot files the backdrop showed the two pictures those two
+    // URLs happened to hold the first time each was decoded, forever, while
+    // grim went on writing correct new frames underneath (owner, live shell,
+    // 2026-08-19: "it cycles between both" — confirmed on g815, where both
+    // slot files carried mtimes a second old while the surface was showing a
+    // fullscreen video captured minutes earlier). A URL that has never been
+    // loaded before cannot be served from a cache.
     readonly property string _frameDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/formalshell"
-    property int _frameSlot: 0
+    property int _frameSeq: 0
     property string _framePath: ""
 
     // Three states, not two, and the split is what makes the entrance
@@ -958,23 +963,42 @@ PanelWindow {
             root._forceShow();
             return;
         }
-        root._frameSlot = 1 - root._frameSlot;
+        root._frameSeq++;
+        // Read off the Process, not off `_framePath`: that one was cleared a
+        // few lines up (it is what makes frameImage drop the old picture), so
+        // using it here passed an empty string to the `rm` below and every
+        // frame this session ever captured stayed on tmpfs.
+        var retiredFrame = freezeProc.framePath;
         freezeProc.running = false;
+        // The path this run writes, carried ON the process rather than
+        // recomputed in `onExited`: an exit can arrive after the next summon
+        // has already moved the counter on (a killed leftover reports too),
+        // and rebuilding the name from live state there would hand the
+        // backdrop a file some other run owns. RegionPicker.qml's freeze
+        // carries its own `framePath` for the same reason.
+        freezeProc.framePath = root._frameDir + "/menu-frame-" + root._frameSeq + ".ppm";
         // `-s 0.25`: a quarter-resolution capture, which is both far faster to
         // take and to decode than grim's default (the output's own scale), and
         // costs nothing visible — the dither pass samples one pixel per
         // `chunk`-sized cell, so at chunk 10 it is throwing away more detail
         // than the downscale does. Speed is the point: the whole freeze sits
         // in front of the launcher appearing.
+        // The `rm` retires the previous summon's file so a long session leaves
+        // one frame on tmpfs rather than hundreds — and it runs only once grim
+        // has actually succeeded (no `exec`, `&&` not `;`). Retiring it up
+        // front instead meant a summon cancelled before its capture landed —
+        // open and close inside the same second — destroyed the old frame and
+        // wrote nothing in its place, leaving the shell with no frame at all.
         freezeProc.command = ["sh", "-c",
-            'mkdir -p "$(dirname "$2")" && exec grim -s 0.25 -t ppm -o "$1" "$2"',
-            "sh", root._screen.name, root._frameDir + "/menu-frame-" + root._frameSlot + ".ppm"];
+            'mkdir -p "$(dirname "$2")" && grim -s 0.25 -t ppm -o "$1" "$2" && rm -f "$3"',
+            "sh", root._screen.name, freezeProc.framePath, retiredFrame];
         freezeProc.running = true;
         frameWatchdog.restart();
     }
 
     Process {
         id: freezeProc
+        property string framePath: ""
         // Never a declarative `running: true`: that latches while `command`
         // is still binding, same trap RegionPicker.qml's freeze hit.
         running: false
@@ -987,7 +1011,7 @@ PanelWindow {
                 root._forceShow();
                 return;
             }
-            root._framePath = root._frameDir + "/menu-frame-" + root._frameSlot + ".ppm";
+            root._framePath = freezeProc.framePath;
             // Map now, still transparent: this is what gives the backdrop's
             // Canvas a rendering window to paint into. The watchdog keeps
             // running, so a frame that never paints still gets shown.
