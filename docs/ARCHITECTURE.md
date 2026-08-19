@@ -8,9 +8,9 @@ FormalShell is a single QuickShell process, launched as:
 qs -p <store-path>/share/formalshell
 ```
 
-(the nix package wraps this as the `formalshell` binary — `nix/package.nix`;
+(the nix package wraps this as the `formalshell` binary, `nix/package.nix`;
 the home-manager module runs it as a `systemd --user` service bound to
-`graphical-session.target` — `nix/hm-module.nix`). There is no compiled
+`graphical-session.target`, `nix/hm-module.nix`). There is no compiled
 companion binary and nothing runs under Node/npm/bun: all logic is QML/JS,
 including the niri IPC client, which talks to niri's Unix sockets directly
 via `Quickshell.Io.Socket`.
@@ -32,18 +32,18 @@ they have to match the NetworkManager and bluez the system is running, and
 their callers already guard with `command -v`.
 
 A second, separate entry point (`greeter/greeter.qml`, wrapped as the
-`formalshell-greeter` binary — `nix/greeter-package.nix`) runs before any
+`formalshell-greeter` binary, `nix/greeter-package.nix`) runs before any
 user session exists, launched by greetd as its `default_session` instead of
 by a user's systemd. `nix/greeter-package.nix` copies `shell/` verbatim and
 layers `greeter.qml` on top of it, so `import qs.Core`/`qs.Components`
-resolve to the one real `Core`/`Components` tree, never a second copy — but
+resolve to the one real `Core`/`Components` tree, never a second copy, but
 it is a genuinely different process: `Quickshell.Services.Greetd` instead of
 compositor sockets or `Quickshell.Services.Pam`, no `WlSessionLock` (greetd
 already isolates the greeter into its own disposable compositor with no
 other client ever attached, so there's nothing for a lock primitive to
 exclude), and no `Core.State` reference at all (the `greeter` system
 account's `$HOME` has no real `state.json` to read, and must not get one
-written to it — see the file's own header comment).
+written to it, see the file's own header comment).
 
 `shell/shell.qml` is the entry point (`//@ pragma ShellId formalshell`). It
 instantiates a `Variants` over `Quickshell.screens`, spawning one `Bar`, one
@@ -52,7 +52,7 @@ non-per-screen `Menu`, `Center` (notification history), `Osd`, and one
 instance each of the seven `Panels/*.qml` popouts including `MediaPanel`
 (they open/show on the focused screen at summon/trigger time rather than
 living on every output); one `Lock` (its `WlSessionLock` manages its own
-per-output surfaces internally — no `Variants` loop needed here) and one
+per-output surfaces internally, no `Variants` loop needed here) and one
 `Screensaver` (which *does* need its own `Variants` over
 `Quickshell.screens`, since a plain overlay layer has no such auto-multi-
 output primitive); one `RegionPicker`; a `Variants` over
@@ -67,14 +67,14 @@ picker/screenshot/capture/record/reminder/nightlight/gallery/plugins).
 shell/
   shell.qml                  ShellRoot; Variants over Quickshell.screens -> Bar/Background per screen
   Core/
-    State.qml                 singleton — state.json (wallpaper, mode), FileView+JsonAdapter
-    Theme.qml                 singleton — Theme.color live off theme.json, Flexoki fallback statics
-    Config.qml                 singleton — read-only watched settings.json (menu.customPowerButtons, …)
+    State.qml                 singleton: state.json (wallpaper, mode), FileView+JsonAdapter
+    Theme.qml                 singleton: Theme.color live off theme.json, Flexoki fallback statics
+    Config.qml                 singleton: read-only watched settings.json (menu.customPowerButtons, …)
     qmldir
   Theme/
-    matugen.js                 pure JS, .pragma library — merged matugen TOML config builder
-    palette.js                 pure JS, .pragma library — theme.json validate() + Flexoki fallback()
-    ThemeEngine.qml             singleton — serialized matugen Process queue
+    matugen.js                 pure JS, .pragma library: merged matugen TOML config builder
+    palette.js                 pure JS, .pragma library: theme.json validate() + Flexoki fallback()
+    ThemeEngine.qml             singleton: serialized matugen Process queue
     templates/
       theme.json.tmpl           matugen template rendering theme.json
       niri-border.kdl.tmpl      matugen template rendering the niri layout{} border fragment
@@ -82,15 +82,15 @@ shell/
   Compositor/
     BackendBase.qml           the CompositorBackend contract (base component)
     CompositorService.qml     singleton facade; picks a backend, forwards everything
-    appmatch.js               pure JS, .pragma library — matchWindows()/nextWindow()/decorateAppRows():
+    appmatch.js               pure JS, .pragma library: matchWindows()/nextWindow()/decorateAppRows():
                                which running windows belong to a DesktopEntry (startupClass then id,
                                first tier wins, no fuzzy tier), backing the menu's launch-or-focus
-    keybinds.js                pure JS, .pragma library — parseNiriBinds() (a real KDL scanner:
+    keybinds.js                pure JS, .pragma library: parseNiriBinds() (a real KDL scanner:
                                quoted braces, block/slashdash comments, raw and multi-line strings)
                                + parseHyprlandBinds() + search()/rows(); inert "note" rows only
-    keyboard.js                pure JS, .pragma library — parseNiriLayouts()/parseHyprlandLayouts()
+    keyboard.js                pure JS, .pragma library: parseNiriLayouts()/parseHyprlandLayouts()
                                normalized to one {available, names, currentIdx, current} shape
-    focus.js                   pure JS, .pragma library — holds the last focused window across the
+    focus.js                   pure JS, .pragma library: holds the last focused window across the
                                gap a shell layer surface taking keyboard focus opens
     qmldir
     niri/
@@ -101,7 +101,7 @@ shell/
                                  negative-id special:* overlays the quake console parks on
       HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
   Components/
-    Cell.qml                    the shared ledger cell — selected/accent/hovered, bottom+right hairline
+    Cell.qml                    the shared ledger cell: selected/accent/hovered, bottom+right hairline
                                  rules only (shared-rule contract, see below), default-property content
     MetaLabel.qml                uppercase/letterspaced/dim caption Text for meta rows
     Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,
@@ -109,59 +109,59 @@ shell/
                                   opening bar cell, on that cell's own output (anchorX/anchorScreen, both
                                   unset for an IPC open: bar's right region on the focused output),
                                   WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside
-    AuthPrompt.qml                the lock/greeter shared centre plate (M8b Task 6): one bordered card
+    AuthPrompt.qml                the lock/greeter shared centre plate: one bordered card
                                   holding clock + date + a dividing rule + a single 3px-outlined
                                   password/username field (shrink-to-fit dot masking, CHECKING state,
                                   fingerprint glyph); LockSurface.qml and greeter/greeter.qml both
                                   instantiate it unchanged
     DitherImage.qml               content imagery's Canvas pass (DESIGN.md §2 item 12): duotone role-color
-                                  1-bit, or "retro" — an image-derived palette on a chunk grid
-    dither.js                    pure JS, .pragma library — palette() (median cut, up to paletteSize
+                                  1-bit, or "retro": an image-derived palette on a chunk grid
+    dither.js                    pure JS, .pragma library: palette() (median cut, up to paletteSize
                                   colors from the image itself), quantize() (nearest entry, ordered-
                                   dithered against the second nearest only), BAYER/hex/hexPalette
     qmldir
   Menu/
-    model.js                     pure JS, .pragma library — parseJsonc()/buildTree()/visibleChildren()
-    search.js                    pure JS, .pragma library — tiered fuzzy score()/rank()
-    providers.js                 pure JS, .pragma library — appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/imageRows()/wallpaperVariants()/wallpaperListing()/captureEntries()
-    actions.js                   pure JS, .pragma library — actionBar(): the bottom action bar's primary verb + key hints
-    toggles.js                   pure JS, .pragma library — the "@state:" checked-condition allow-list
+    model.js                     pure JS, .pragma library: parseJsonc()/buildTree()/visibleChildren()
+    search.js                    pure JS, .pragma library: tiered fuzzy score()/rank()
+    providers.js                 pure JS, .pragma library: appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/imageRows()/wallpaperVariants()/wallpaperListing()/captureEntries()
+    actions.js                   pure JS, .pragma library: actionBar(): the bottom action bar's primary verb + key hints
+    toggles.js                   pure JS, .pragma library: the "@state:" checked-condition allow-list
                                   (nightlight.active/screensaver.stayAwake/notifications.dnd/theme.dark),
                                   snapshot()/resolveState()/checkedFor(): live in-process state beats a
                                   cached Process result, an unlisted path answers false
     default-menu.jsonc           shipped default tree (apps, system/power, toggles, reminder, clipboard)
   Clipboard/
-    history.js                   pure JS, .pragma library — add()/remove()/clear()/sanitize(), 300-entry cap, dedup-to-front
+    history.js                   pure JS, .pragma library: add()/remove()/clear()/sanitize(), 300-entry cap, dedup-to-front
   Calendar/
-    progress.js                  pure JS, .pragma library — yearFraction()/lifeFraction()/resolveOverride()
-    ics.js                       pure JS, .pragma library — RFC 5545 VEVENT reader (unfold, DTSTART parse, no RRULE expansion)
+    progress.js                  pure JS, .pragma library: yearFraction()/lifeFraction()/resolveOverride()
+    ics.js                       pure JS, .pragma library: RFC 5545 VEVENT reader (unfold, DTSTART parse, no RRULE expansion)
   Weather/
-    openmeteo.js                 pure JS, .pragma library — buildUrl()/parseResponse() with typed failure shapes
+    openmeteo.js                 pure JS, .pragma library: buildUrl()/parseResponse() with typed failure shapes
   Media/
-    applemusic.js                 pure JS, .pragma library — URL construction, response parsing, cache-key/prune-decision logic
+    applemusic.js                 pure JS, .pragma library: URL construction, response parsing, cache-key/prune-decision logic
     model.js                      pure JS, .pragma library: active-player pick, player labels, loop names and cycle order, volume/seek clamps
   Capture/
-    model.js                      pure JS, .pragma library — the capture family's shared logic:
+    model.js                      pure JS, .pragma library: the capture family's shared logic:
                                    outputPath()/gifOutputPath()/parseGeometry()/hexFromPpmBytes()/
                                    parseAudioSetup()/recorderArgv()/gifArgv()/elapsedLabel()/ocrOutcome().
                                    argv builders return arrays that go straight onto Process.command,
                                    so a path carrying a quote can never splice a shell
   Reminders/
-    model.js                      pure JS, .pragma library — parseDuration()/parseSpec()/makeEntry()/
+    model.js                      pure JS, .pragma library: parseDuration()/parseSpec()/makeEntry()/
                                    add()/normalize()/due()/barLabel()/countdownLabel(); the clock is
                                    always a nowMs parameter, never Date.now()
-    ReminderService.qml           singleton — wiring only: mirrors Core.State.reminders one-directionally,
+    ReminderService.qml           singleton: wiring only: mirrors Core.State.reminders one-directionally,
                                    1s tick while any are pending, fires at urgency 2 (DND bypass)
     qmldir
   Plugins/
-    manifest.js                   pure JS, .pragma library — scanCommand()/splitScan()/validateRecord()/
+    manifest.js                   pure JS, .pragma library: scanCommand()/splitScan()/validateRecord()/
                                    resolve(): the eight-key manifest schema and its failure contract
                                    (whole plugin dropped vs one key back to its default)
-    PluginService.qml             singleton — the only QML touching ~/.config/formalshell/plugins;
+    PluginService.qml             singleton: the only QML touching ~/.config/formalshell/plugins;
                                    one scan Process, the surface registry, service-plugin creation
     qmldir
   SystemUpdate/
-    model.js                      pure JS, .pragma library — parseLock() (direct flake inputs only),
+    model.js                      pure JS, .pragma library: parseLock() (direct flake inputs only),
                                    per-input-type upstream probe argv, countBehind()/summaryLabel()
   Screensaver/
     effect.js                     pure JS, .pragma library: frameState(): five converging effects (decrypt/rain/expand/slide/scatter) over a loaded ASCII banner, stepped off a frame counter; the engine an install with no ttfx on PATH falls back to
@@ -171,39 +171,39 @@ shell/
                                    isTimedEffect() names the two (matrix/thunderstorm) that are wall-clock
                                    gated and so never frame-stepped
   Airpods/
-    model.js                     pure JS, .pragma library — parseStatus() (complete default shape on every
+    model.js                     pure JS, .pragma library: parseStatus() (complete default shape on every
                                   bad-input path), batteryRows()/modesFor()/earDetectionLabel()/lidLabel()/
                                   noiseModeLabel()/stateLine(): the omarchy-pods librepods daemon's own
                                   status.json wire shape, reimplemented independently (GPL, read-reference
                                   only)
   Dualsense/
-    model.js                     pure JS, .pragma library — parseSupply()/parseLightbar()/parsePlayerLeds()/
+    model.js                     pure JS, .pragma library: parseSupply()/parseLightbar()/parsePlayerLeds()/
                                   stateLine() over hid-playstation's own sysfs text shapes, warn/critical
                                   thresholds mirroring the retired dualsense-bar script
   Services/
-    AirpodsService.qml          singleton — FileView on $XDG_STATE_HOME/librepods/status.json (bounded
+    AirpodsService.qml          singleton: FileView on $XDG_STATE_HOME/librepods/status.json (bounded
                                  rewatch, Config.qml's own retry shape), available = file present + parsed
                                  ok; send(verb) opens a one-shot self-destroying Socket to
                                  $XDG_RUNTIME_DIR/librepods.sock against a local wire allow-list
-    DualsenseService.qml        singleton — one sh -c glob probe (power_supply capacity/status, leds
+    DualsenseService.qml        singleton: one sh -c glob probe (power_supply capacity/status, leds
                                  multi_intensity, five player-N brightness files) per call; present/battery/
                                  lightbar/playerLeds properties; a 30s Timer that only runs while
                                  acquire()/release() report a live consumer (widget mounted or panel open)
-    AudioService.qml            singleton — Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
-    BrightnessService.qml       singleton — brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
-    ClipboardService.qml        singleton — wl-paste --watch capture, drives Clipboard/history.js, writes clipboard.json
-    LocationService.qml         singleton — QtPositioning PositionSource (geoclue2), settings.json lat/lon override
-    CalendarEventsService.qml   singleton — reads Calendar/ics.js over a khal/vdir-style directory (calendar.icsDir)
+    AudioService.qml            singleton: Quickshell.Services.Pipewire default-sink volume/mute, changed() signal
+    BrightnessService.qml       singleton: brightnessctl-backed backlight, no polling loop (refresh()/set()/step())
+    ClipboardService.qml        singleton: wl-paste --watch capture, drives Clipboard/history.js, writes clipboard.json
+    LocationService.qml         singleton: QtPositioning PositionSource (geoclue2), settings.json lat/lon override
+    CalendarEventsService.qml   singleton: reads Calendar/ics.js over a khal/vdir-style directory (calendar.icsDir)
     MediaService.qml             singleton: Quickshell.Services.Mpris player pick and full control surface (transport, seek, shuffle, loop, player volume, raise), honest available:false
-    AppleMusicArtService.qml     singleton — opt-in (media.appleMusicArt), curl-driven iTunes Search + amp-api editorialVideo, cached MP4s
-    IdleService.qml               singleton — one shared IdleMonitor (respectInhibitors:true), screensaver.timeoutSeconds
-    RecordingService.qml          singleton — one wf-recorder child (`active` IS that child, never persisted,
+    AppleMusicArtService.qml     singleton: opt-in (media.appleMusicArt), curl-driven iTunes Search + amp-api editorialVideo, cached MP4s
+    IdleService.qml               singleton: one shared IdleMonitor (respectInhibitors:true), screensaver.timeoutSeconds
+    RecordingService.qml          singleton: one wf-recorder child (`active` IS that child, never persisted,
                                    never pgrep'd), the transient pactl mix modules desktopmic needs, and the
                                    two-pass ffmpeg GIF transcode
     qmldir
   Notifications/
-    model.js                    pure JS, .pragma library — three-tier reducer (popups/pending/past), DND bypass rule
-    NotificationService.qml     singleton — owns NotificationServer, drives model.js, live-Notification side map
+    model.js                    pure JS, .pragma library: three-tier reducer (popups/pending/past), DND bypass rule
+    NotificationService.qml     singleton: owns NotificationServer, drives model.js, live-Notification side map
     qmldir
   Ipc/
     DebugIpc.qml                IpcHandler target "debug", function dump(): string, query(q): string
@@ -212,15 +212,15 @@ shell/
     MenuIpc.qml                 IpcHandler target "menu", toggle()/summon()/close()/refresh()/ping()/select()/input()
     NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/invokeLast()/expand(on|off)
     OsdIpc.qml                  IpcHandler target "osd", volume()/brightness()/media()/close()/state()
-    PanelIpc.qml                 IpcHandler target "panel", open(name)/close()/toggle(name)/state() — registry maps name -> Panel instance
+    PanelIpc.qml                 IpcHandler target "panel", open(name)/close()/toggle(name)/state(): registry maps name -> Panel instance
     ClipboardIpc.qml             IpcHandler target "clipboard", list()/copy(id)/remove(id)/clear()
     MediaIpc.qml                  IpcHandler target "media", playPause()/next()/previous()/status()
-    LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status() — no unlock(), see its own header comment
+    LockIpc.qml                   IpcHandler target "lock", lock()/isLocked()/status(): no unlock(), see its own header comment
     ScreensaverIpc.qml            IpcHandler target "screensaver", start()/stop()/status()
     PickerIpc.qml                 IpcHandler target "picker", summon()/select(dir,token)/choose(path)/variant(dark|light)/close()/status()
-    TrayIpc.qml                   IpcHandler target "tray", status()/activate(id)/menu(id)/menucursor(delta)/menuactivate() — spec addendum, same rationale as "panel"
+    TrayIpc.qml                   IpcHandler target "tray", status()/activate(id)/menu(id)/menucursor(delta)/menuactivate(): spec addendum, same rationale as "panel"
     BarIpc.qml                    IpcHandler target "bar", chevron(action)/chevronAt(action,region): the bar's
-                                   collapse boundary (M24). Two verbs, not one with an optional region, because
+                                   collapse boundary. Two verbs, not one with an optional region, because
                                    quickshell dispatches IPC on exact arity; chevron() infers the region when
                                    exactly one exists and refuses to guess otherwise
     ScreenshotIpc.qml             IpcHandler target "screenshot", full()/region()/pick(mode,processing)/
@@ -231,21 +231,21 @@ shell/
                                    not a bare IpcHandler: the slurp/grim/tesseract Processes need a default
                                    property to live in. One busy flag guards all four verbs
     RecordIpc.qml                 IpcHandler target "record", start(scope,audio)/stop()/toggle(scope,audio)/
-                                   gif(path)/status() — thin, every rule lives in RecordingService
+                                   gif(path)/status(): thin, every rule lives in RecordingService
     ReminderIpc.qml               IpcHandler target "reminder", set(duration,message)/show()/clear()/status()
-    PluginsIpc.qml                IpcHandler target "plugins", list()/status()/reload() — introspection and
+    PluginsIpc.qml                IpcHandler target "plugins", list()/status()/reload(): introspection and
                                    lifecycle only; summoning a plugin surface stays on "panel" under its
                                    own "plugin:<id>" name
   Bar/
-    layout.js                     pure JS, .pragma library — resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings.
+    layout.js                     pure JS, .pragma library: resolve(bar): {left,center,right} from bar.layout/bar.modules, default-layout fallback, unknown-name/dangling-module warnings.
                                    Also annotates every entry with its region and a `collapsible` flag (true on the governed side of a "chevron" in the same region, governsBefore() picking that side per region), and drops a chevron that is duplicated or has nothing on that side. collapsedNames()/hasChevron() read that back
-    commandOutput.js               pure JS, .pragma library — resolve(exitCode, stdout)/errorState() for CommandModule.qml's Waybar-JSON parsing
+    commandOutput.js               pure JS, .pragma library: resolve(exitCode, stdout)/errorState() for CommandModule.qml's Waybar-JSON parsing
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
-      TrayMenu.qml               shell-owned tray context menu (M32): one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle — replaces the old native QsMenuAnchor popup
+      TrayMenu.qml               shell-owned tray context menu: one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle: replaces the old native QsMenuAnchor popup
       widgets/
-        LauncherWidget.qml      leads the default left region: the "[F]" mark, toggles shell.qml's single Menu instance — the launcher's only pointer-reachable summon path
+        LauncherWidget.qml      leads the default left region: the "[F]" mark, toggles shell.qml's single Menu instance: the launcher's only pointer-reachable summon path
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
         Clock.qml                center region: TIME meta label + live clock, opens the calendar panel
@@ -255,7 +255,7 @@ shell/
         BluetoothWidget.qml       adapter-state glyph, panel-open accent dot
         WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
         NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player (exposes `shown`)
-        Tray.qml                   SNI tray over Quickshell.Services.SystemTray, a plain strip since M24 (exposes `shown`)
+        Tray.qml                   SNI tray over Quickshell.Services.SystemTray, a plain strip (exposes `shown`)
         Indicators.qml              recording / reminder / stay-awake / night-light glyphs, hidden entirely when none holds (exposes `shown`)
         MicWidget.qml               opt-in: default-source mute glyph, honest NO MIC label with no capture device
         KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `niri msg --json keyboard-layouts` /
@@ -272,12 +272,12 @@ shell/
                                  dithered through DitherImage's retro pass (wallpaper.dither/ditherColors)
     Menu/
       Menu.qml                  keyboard-exclusive top-layer window covering the focused output; jsonc -> tree -> cond batch -> rank/browse -> cells.
-                                 Scrim (M39): plain black at 0.5, fading with the card. A dithered freeze of the screen was
-                                 tried first and could not be made to hold still under refresh — see the file's own comment
+                                 Scrim: plain black at 0.5, fading with the card. A dithered freeze of the screen was
+                                 tried first and could not be made to hold still under refresh: see the file's own comment
                                  Two views over one row set: a ListView, or a GridView on the "wallpaper" route (the picker),
                                  plus that route's DARK | LIGHT variant switcher when the directory has the subdirectory pair
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator
-      MenuActionBar.qml          Cell subtype: the card's bottom row — primary verb behind an accent key cap, key hints right
+      MenuActionBar.qml          Cell subtype: the card's bottom row: primary verb behind an accent key cap, key hints right
     Panels/
       AudioPanel.qml             Pipewire output/input node sliders (PwObjectTracker), MUTE toggle cells
       CalendarPanel.qml          month grid + year/life-progress bar + TODAY events section
@@ -291,7 +291,7 @@ shell/
                                     probe per direct input; the poll lives here, the widget only enables it
       AirpodsPanel.qml              honest NO DAEMON/NO AIRPODS gates, PanelHero, per-bud BATTERY tracks,
                                      LISTENING MODE rows (device-filtered, selected state real), Pro-only
-                                     CA/one-bud toggles, EAR DETECTION cycling row — retires M17's
+                                     CA/one-bud toggles, EAR DETECTION cycling row; replaces the old
                                      bluetooth-panel AIRPODS NOISE group
       DualsensePanel.qml            read-only sysfs readout: NO CONTROLLER gate, PanelHero with the battery
                                      percent as its readout, LIGHTBAR swatch+hex and PLAYER LEDS dot rows,
@@ -318,7 +318,7 @@ shell/
       qmldir
 greeter/
   greeter.qml                  greetd entry point (Quickshell.Services.Greetd); no WlSessionLock,
-                               no Core.State reference — see the file's own header comment
+                               no Core.State reference: see the file's own header comment
 tests/
   tst_niri_reducer.qml         qmltestrunner tests for reducer.js
   tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
@@ -354,7 +354,7 @@ dev/
                                  --systemupdate, --plugins, …), each documented in the script's own
                                  header block, which is the authoritative list
   smoke-hyprland.sh             same, nested Hyprland
-  sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items — registers for real on the session bus, never faked
+  sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items: registers for real on the session bus, never faked
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
                                  the exit-0-always wrapper around `qs ipc call lock lock`, and carries the
@@ -366,15 +366,15 @@ nix/
                                  shell/ verbatim and layers greeter.qml on top, no lock-before-sleep companion
   hm-module.nix                 home-manager module (programs.formalshell); wires formalshell-lock-before-sleep
                                  to a systemd --user oneshot bound to sleep.target (programs.formalshell.systemd.lockBeforeSleep)
-  nixos-module.nix               nixosModules.formalshell — security.pam.services.formalshell-lock,
+  nixos-module.nix               nixosModules.formalshell: security.pam.services.formalshell-lock,
                                  services.geoclue2 (+ agent), NetworkManager/bluez/upower/
                                  power-profiles-daemon/pipewire, each an mkDefault-guarded sub-option
-  nixos-greeter-module.nix       nixosModules.formalshell-greeter — services.greetd wired to the
+  nixos-greeter-module.nix       nixosModules.formalshell-greeter: services.greetd wired to the
                                  formalshell-greeter package under a wlroots compositor, generalizing
-                                 the hand-rolled rig M8 Task 2 built directly in nix/testvm.nix
+                                 the hand-rolled rig nix/testvm.nix built first
 ```
 
-Every widget under `Surfaces/` reads only `Theme` and `CompositorService` —
+Every widget under `Surfaces/` reads only `Theme` and `CompositorService` , 
 never a backend directly, and never a raw compositor socket. That boundary is
 what lets `Bar.qml` and its widgets be identical on niri and Hyprland.
 
@@ -412,7 +412,7 @@ Defined once, in `shell/Compositor/BackendBase.qml`, and referenced verbatim
 by every backend and by the facade:
 
 ```qml
-// BackendBase.qml — QtObject base every backend extends
+// BackendBase.qml: QtObject base every backend extends
 readonly property bool available          // backend detected its compositor and is connected
 property var workspaces: []               // [{ id:string, idx:int, name:string, output:string, isActive:bool, isFocused:bool, isUrgent:bool }]
 property var windows: []                  // [{ id:string, title:string, appId:string, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool }]
@@ -434,19 +434,19 @@ function applyThemeFragment() {}          // niri-only; no-op on backends withou
 the identical property/method surface, delegating to whichever backend is
 active, plus:
 
-- `readonly property string compositor` — `"niri" | "hyprland" | "unknown"`,
+- `readonly property string compositor`, `"niri" | "hyprland" | "unknown"`,
   detected via `Quickshell.env("NIRI_SOCKET")` then
   `Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")`. (Env-based detection is
   sufficient inside nested test sessions; walking `/proc/net/unix` by socket
   owner, the way DMS's `CompositorService.qml:927` does, is a hardening
   follow-up, not built yet.)
-- `readonly property var ext` — `{ overview: { available:bool, isOpen:bool,
+- `readonly property var ext`, `{ overview: { available:bool, isOpen:bool,
   toggle() } }`, all-defaults-false when the active backend doesn't support
   an overview.
 
 When no compositor is detected, the facade falls back to a bare
 `BackendBase {}` instance (`available: false`, empty lists) so the shell
-still builds and runs with nothing wired up — this is what makes Task 2's
+still builds and runs with nothing wired up, this is what makes Task 2's
 placeholder bar buildable before any backend existed.
 
 Ids are **opaque strings everywhere above this line**. The one place that
@@ -458,7 +458,7 @@ numerically, or assumes stability of an id.
 
 ## Reducer data flow (niri)
 
-niri requires two separate socket connections — the event stream socket
+niri requires two separate socket connections, the event stream socket
 monopolizes its connection, so requests go over a second one:
 
 ```
@@ -478,11 +478,11 @@ niri socket (NIRI_SOCKET)
 
 `reducer.js` is a `.pragma library` module: `initialState()` returns the
 zeroed contract shape, `reduce(state, event)` is a pure function (no
-mutation of its input — `tests/tst_niri_reducer.qml` asserts this directly)
+mutation of its input, `tests/tst_niri_reducer.qml` asserts this directly)
 that pattern-matches on the event's single top-level key (`WorkspacesChanged`,
 `WorkspaceActivated`, `WindowClosed`, `WindowFocusChanged`, `OverviewOpenedOrClosed`,
 `ConfigLoaded`, …) and returns a new state. **Unknown event keys return the
-state unchanged** — niri's forward-compatibility mandate, so a newer niri
+state unchanged**, niri's forward-compatibility mandate, so a newer niri
 adding event types doesn't break the reducer. Both sockets reconnect on
 error/close via a 2s `Timer`.
 
@@ -490,8 +490,8 @@ error/close via a 2s `Timer`.
 (`WorkspacesChanged` hydrates it, `WorkspaceActivated { focused: true }`
 moves it), because niri's event stream carries no focused-output event and
 the `Outputs` request carries no focus flag. Everything that opens "on the
-focused screen" — panels, menu, OSD, notification center, polkit dialog,
-capture picker — resolves through it.
+focused screen", panels, menu, OSD, notification center, polkit dialog,
+capture picker, resolves through it.
 
 Hyprland has no equivalent hand-rolled reducer: `HyprlandBackend.qml` reads
 `Quickshell.Hyprland`'s own reactive `workspaces`/`toplevels`/`monitors`
@@ -506,7 +506,7 @@ event stream or JSON parsing to test in isolation.
 read straight off `CompositorService`/`Core.Config`/`AudioService`/
 `BrightnessService`. This is the textual
 verification hook used by both smoke scripts (`qs ipc -p <path>
-call debug dump`) and by hand during backend development — it's the fastest
+call debug dump`) and by hand during backend development, it's the fastest
 way to confirm a backend is wired correctly without reading a screenshot.
 `function query(q: string): string` ranks `q` against the live menu tree
 (`Menu.qml#query()` → `search.js#rank()`) and returns the JSON result array,
@@ -534,7 +534,7 @@ matugen renders templates/theme.json.tmpl + templates/niri-border.kdl.tmpl
   |  (same run also renders templates/gtk-colors.css.tmpl ->
   |   ~/.config/gtk-{3,4}.0/formalshell-colors.css and
   |   templates/qtct-colors.conf.tmpl -> ~/.config/qt{5,6}ct/colors/matugen.conf,
-  |   written directly — apps read those at launch, nothing watches them)
+  |   written directly: apps read those at launch, nothing watches them)
   v
 $XDG_STATE_HOME/formalshell/theme.json          $XDG_STATE_HOME/formalshell/niri-border.kdl
   |  FileView watch (Core/Theme.qml)               |  niri `include`s this path from its own config
@@ -546,7 +546,7 @@ Theme.color.* properties update live              CompositorService.applyThemeFr
 
 `Core/Theme.qml` parses `theme.json`, validates it with `palette.js#validate()`,
 and falls back to `palette.js#fallback()` (the Flexoki statics) on absence or
-invalid content — so `Theme.color.*` is always a fully-populated 6-color
+invalid content, so `Theme.color.*` is always a fully-populated 6-color
 object, matugen-driven or not. `Surfaces/Background/Background.qml` is the
 one other consumer of `State.wallpaper` directly: a per-screen
 `WlrLayershell.layer: WlrLayer.Background` surface showing the image, or a
@@ -640,15 +640,15 @@ records a frecency hit, since it is a use of the app.
 
 **Cell shared-rule contract.** `Components/Cell.qml` draws only its own
 bottom and right hairline rule (`Theme.color.rule`, `Theme.borderWidth`
-thick) — the container arranging a grid of cells (`Menu.qml`'s `ListView`,
+thick), the container arranging a grid of cells (`Menu.qml`'s `ListView`,
 future bar/panel grids) is responsible for the outer top/left rule, so
-adjacent cells never double up a shared border. Post-M8b (DESIGN.md §1),
-surfaces themselves are omarchy-style cards (their own full border, opaque
-fill, floating with a gap below the bar) rather than edge-to-edge grids, but
-the *rows inside a card* still share this same hairline contract — every row
-on every M4+ surface goes through `Cell`, so a `Rectangle`-with-border
+adjacent cells never double up a shared border. Surfaces themselves are
+omarchy-style cards (DESIGN.md §1): their own full border, opaque fill,
+floating with a gap below the bar, rather than edge-to-edge grids. The rows
+inside a card still share the same hairline contract, and every row
+on every surface goes through `Cell`, so a `Rectangle`-with-border
 appearing outside `Components/` is drift, not a new pattern. `Cell`'s
-`standalone` prop (M8b Task 3) is the bar-widget variant: borderless idle,
+`standalone` prop is the bar-widget variant: borderless idle,
 gaining a hover-cursor fill+border only on mouseover, for cells that live
 directly on the bar rather than inside a card.
 
@@ -658,12 +658,12 @@ directly on the bar rather than inside a card.
 Quickshell.Services.Notifications.NotificationServer  (NotificationService.qml)
   onNotification: notification => { notification.tracked = true; ... }
     |  server.cpp mutates the SAME Notification object in place on a
-    |  replaces_id update rather than emitting a new `notification` — the
+    |  replaces_id update rather than emitting a new `notification`: the
     |  handler above runs exactly once per id; per-property *Changed signals
     |  (appName/summary/body/urgency/actions/image) resync the model entry
     |  on every later replace instead
     v
-Notifications/model.js  (.pragma library, pure — state in, state out)
+Notifications/model.js  (.pragma library, pure: state in, state out)
   add(state, notif, now, opts)
     |  dnd && !bypassesDnd(notif) -> straight to pending
     |  else -> popups (capped at 4, overflow pushes oldest to pending;
@@ -687,7 +687,7 @@ with tests on both sides (`tests/tst_notifications_model.qml`):
 `notif.urgency === 2 && notif.senderIsNotifySend === true`, where
 `senderIsNotifySend` is set by `NotificationService` from the sender's literal
 app name (`notification.appName === "notify-send"`), never inferred from
-urgency alone — a chat app marking its own messages critical does not bypass.
+urgency alone, a chat app marking its own messages critical does not bypass.
 
 **Repeats collapse into one card.** `Model.groupEntries()` keys on the
 sender's app name (trimmed, case-folded) plus the summary, deliberately not
@@ -715,12 +715,12 @@ close (never applied, so `closed` has to call `Model.dismissOne` itself).
 ## OSD trigger graph
 
 ```
-AudioService.changed()  (any volume/mute change on the default sink —
+AudioService.changed()  (any volume/mute change on the default sink , 
   |                       ours, wpctl, pavucontrol, hardware keys)
   v
 Osd.qml: Connections { onChanged: showVolume() }
   |
-  |  IpcHandler target "osd" (OsdIpc.qml) — every other trigger, no
+  |  IpcHandler target "osd" (OsdIpc.qml): every other trigger, no
   |  automatic signal exists for these:
   +-- volume()      -> osd.showVolume()                     (manual re-show)
   +-- brightness()  -> BrightnessService.refresh(); osd.showBrightness()
@@ -730,14 +730,14 @@ Osd.qml: Connections { onChanged: showVolume() }
 Osd.qml: kind = "volume"|"brightness"|"media", hideTimer restarts (1.6s)
   -> visible = kind !== ""
   -> icon|label|value Cells re-render off AudioService/BrightnessService
-     properties directly (no local copy — a still-open card tracks live
+     properties directly (no local copy: a still-open card tracks live
      changes, e.g. a second wpctl call while the card is showing)
 ```
 
 Column widths (`_iconWidth`/`_labelWidth`/`_valueWidth`) are computed once
 off a hidden calibration `Item` (every glyph/label the card can ever show,
 rendered at the live font) rather than off whatever value happens to be
-showing — this is the no-jitter contract: volume ticking 3% → 97% or a long
+showing, this is the no-jitter contract: volume ticking 3% → 97% or a long
 media title swapping in never reflows the card.
 
 `BrightnessService` has no polling loop by design (`brightnessctl -m`
@@ -746,12 +746,12 @@ so a hardware brightness key is expected to call `brightnessctl` itself and
 then poke the OSD to catch up: `brightnessctl set 5%+ && qs ipc call osd
 brightness`. On the mac VM rig, where the guest has a pipewire virtual sink
 but no backlight device, `AudioService.available` is honestly `true` and
-`BrightnessService.available` is honestly `false` — the brightness leg of
+`BrightnessService.available` is honestly `false`, the brightness leg of
 `dev/smoke-niri.sh --osd` still proves the surface renders that kind
 correctly (`BRIGHTNESS` label, `0%`, empty fill), not that hardware exists.
 One VM-specific gotcha: the guest's null-audio-sink volume persists across
 nested niri sessions (pipewire itself isn't restarted between runs), so a
-`wpctl set-volume … 30%` that re-sets an already-30% sink is a no-op —
+`wpctl set-volume … 30%` that re-sets an already-30% sink is a no-op , 
 `AudioService.changed` only fires on an actual value change, so a repeat
 `--osd` run's auto-show leg can legitimately capture nothing new. This isn't
 a bug in the trigger; it's a property of testing against durable state.
@@ -760,10 +760,10 @@ a bug in the trigger; it's a property of testing against durable state.
 
 One shared `Components/Panel.qml` is instantiated once per panel kind in
 `shell.qml` (`audioPanelInstance`, `calendarPanelInstance`, …), each binding
-its backend directly — `Quickshell.Services.Pipewire`,
+its backend directly, `Quickshell.Services.Pipewire`,
 `Quickshell.Networking`, `Quickshell.Bluetooth`, `Quickshell.Services.UPower`,
 or (for `WeatherPanel`) the shell's own `LocationService` plus a direct
-open-meteo fetch — rather than going through an intervening Services
+open-meteo fetch, rather than going through an intervening Services
 wrapper, the same "panel binds its backend directly" pattern
 `AudioPanel.qml` established first. A bar widget (`AudioWidget.qml`, …)
 opens its panel two ways:
@@ -771,8 +771,8 @@ opens its panel two ways:
 ```
 click on the bar cell                          qs ipc call panel open/toggle <name>
   -> panel.toggleFrom(the cell itself)            -> PanelIpc.qml: registry[name].open()
-     (anchorX and anchorScreen both read off       (no cell, so both stay unset — Panel.qml
-      the cell's OWN window — Wayland gives         falls back to the bar's right region on
+     (anchorX and anchorScreen both read off       (no cell, so both stay unset: Panel.qml
+      the cell's OWN window: Wayland gives         falls back to the bar's right region on
       no cross-window global coordinates)           the compositor's focused output)
   v                                               v
 Panel.qml: isOpen = true, forceActiveFocus() on its full-screen backdrop MouseArea
@@ -782,7 +782,7 @@ Panel.qml: isOpen = true, forceActiveFocus() on its full-screen backdrop MouseAr
 ```
 
 `shell/Ipc/PanelIpc.qml` (`target: "panel"`) is a spec addendum this repo's
-own M6 plan records rather than a conflict with `docs/superpowers/specs/2026-07-27-formalshell-design.md`'s
+own plan records rather than a conflict with `docs/superpowers/specs/2026-07-27-formalshell-design.md`'s
 §IPC list: per-widget popouts otherwise have no summon path for compositor
 keybinds, and no way to be verified headlessly in the smoke rig.
 `registry: { audio: audioPanelInstance, calendar: …, … }` is wired once in
@@ -790,11 +790,11 @@ keybinds, and no way to be verified headlessly in the smoke rig.
 own `open()`/`toggle()`, `close()` closes whichever panel is currently open
 (scans the registry for `isOpen`), `state()` returns that same panel's name
 or `""`. An unknown name returns `"error: unknown panel '<name>'"` from both
-`open()` and `toggle()` — never a silent no-op.
+`open()` and `toggle()`, never a silent no-op.
 
 ## Bar layout resolution + tray/custom-module lifecycle
 
-M10 replaced `Bar.qml`'s fixed widget declarations with a settings-driven
+`Bar.qml` has no fixed widget declarations; every region is a settings-driven
 `Repeater`/`Loader` dispatch per region:
 
 ```
@@ -815,28 +815,28 @@ settings.json bar.layout/bar.modules          Bar.qml
 ```
 
 An absent `bar.layout` region falls back to `layout.js`'s own
-`DEFAULT_LAYOUT` for that region alone — today's exact arrangement — so a
+`DEFAULT_LAYOUT` for that region alone, today's exact arrangement, so a
 user with no `bar` config sees no change; a present-but-empty region
 (`[]`) stays empty rather than falling back.
 
 **Each conditionally-hidden widget's own `visible` never crosses the
-Loader boundary directly** — this is the one real gotcha in the whole
-mechanism, found the hard way (M10 Task 5, `bd20ef6`): a `Loader`'s own
+Loader boundary directly.** This is the one real gotcha in the whole
+mechanism, and it was found the hard way. A `Loader`'s own
 `visible` needs to mirror its loaded item's `visible` so `Row` drops a
 hidden widget's slot entirely (`Row` only inspects *direct* children, and
 every entry here loads behind a `Loader`, whose own `visible` defaults
-`true` regardless of its item's) — but reading a Loader-hosted item's
+`true` regardless of its item's), but reading a Loader-hosted item's
 built-in `visible` property from *any* binding or signal handler outside
 that Loader, declarative or imperative, silently detaches the item's own
 `visible` binding from ever updating again afterward (confirmed by
-reproducing it in an isolated standalone repro — a property under any
+reproducing it in an isolated standalone repro, a property under any
 other name doesn't have this problem). So `Tray.qml`, `Indicators.qml`,
 `Battery.qml`, and `NowPlaying.qml` each expose a second property,
 `shown`, computed the same way their own `visible` already is; `Bar.qml`'s
 `regionDelegate` binds its `Loader`'s `visible` to
 `entryLoader.item.shown` (falling back to `true` for every widget that
-doesn't define one, since those never hide, so reading their `.visible` —
-which then never needs to update — is harmless). A widget that starts
+doesn't define one, since those never hide, so reading their `.visible` , 
+which then never needs to update, is harmless). A widget that starts
 hidden and later needs to show up reactively (a real tray item
 registering, DND flipping on, an MPRIS player appearing) **must** follow
 this `shown`-property pattern, not a bare `visible:` binding read from
@@ -852,22 +852,22 @@ through the very property computing it.
 referencing `Quickshell.Services.SystemTray` makes quickshell host and
 watch `org.kde.StatusNotifierWatcher`, so every real StatusNotifierItem
 registered on the session bus appears in `.items` with no extra wiring.
-Every item is its own cell, with no visible limit and no drawer: M24 moved
-bounding a long strip up one altitude to the bar chevron below, which is a
-spec deviation (§Surfaces-1 says "grouped drawer") recorded in `Tray.qml`'s
-own header. `dev/sni-stub.py` is the VM's real StatusNotifierItem producer
+Every item is its own cell, with no visible limit and no drawer. Bounding a
+long strip moved up one altitude to the bar chevron below, which is a spec
+deviation (§Surfaces-1 says "grouped drawer") recorded in `Tray.qml`'s own
+header. `dev/sni-stub.py` is the VM's real StatusNotifierItem producer
 (PyGObject, registers on the session bus for real, never faked inside the
 shell) and, behind `--menu`, exports a real `com.canonical.dbusmenu` tree
 (plain/disabled/checkable/separator/submenu entries) for `TrayMenu.qml`'s
 tests to drive.
 
 Right click (or `tray menu <id>`) opens `TrayMenu.qml`, a shell-owned
-context menu (M32) that replaced the old `Tray.qml`-hosted `QsMenuAnchor`.
+context menu that replaced the old `Tray.qml`-hosted `QsMenuAnchor`.
 That native QMenu was an xdg_popup with its own keyboard+pointer grab
 (platformmenu.cpp); Hyprland's grab code never adds the layer-shell parent
 to the grab's accept set on the path Qt takes to map it, and a click
-anywhere outside that set — including the tray icon's own pixmap, inside
-the same Cell's hit area the surrounding padding shares — tore the grab
+anywhere outside that set, including the tray icon's own pixmap, inside
+the same Cell's hit area the surrounding padding shares, tore the grab
 down and closed the menu instantly (niri tracked this correctly; the
 owner's hosts moved niri→Hyprland 2026-08-17 and hit it there). One shared
 `TrayMenu` instance (`shell.qml`, wired through `Bar.qml` like every other
@@ -875,7 +875,7 @@ panel) drives `Quickshell.QsMenuOpener` over the clicked item's own
 `DBusMenuHandle` (`item.menu`): assigning it to `QsMenuOpener.menu` fires
 `AboutToShow(0)` + `GetLayout(0, -1, [])` once and loads the whole subtree
 eagerly, so a `QsMenuEntry`'s own children are already populated by the
-time a submenu row expands — no second D-Bus round trip. Submenus expand
+time a submenu row expands, no second D-Bus round trip. Submenus expand
 in place as indented rows rather than spawning cascade popups, so the
 surface stays one layer-shell window taking no xdg_popup grab at all,
 which is what removes the Hyprland bug class rather than working around
@@ -897,7 +897,7 @@ outside permanently detaches the item's own binding (see `Bar.qml`'s
 delegate comment), which is why widgets expose `shown` and why the gate
 lives on the `Loader` rather than being written into either property.
 The governed side is the one away from the region's anchored edge
-(`layout.js`'s `governsBefore`, M25): a right-region chevron collapses what
+(`layout.js`'s `governsBefore`): a right-region chevron collapses what
 precedes it, so the reveal grows into empty bar and the chevron itself never
 moves. The group's width animates over `Theme.motion.standard`, and the
 delegate's `visible` is gated on that animated width rather than on the
@@ -916,7 +916,7 @@ in the tooltip), then stay-awake off the
 explicit `IdleService.stayAwake` toggle (click the glyph to turn it off;
 the media guard that also holds the idle chain shows no glyph of its own),
 then night light off `NightLightService.active`. DND has its own
-always-visible cell in `BellWidget.qml` instead — no second DND state
+always-visible cell in `BellWidget.qml` instead, no second DND state
 machine.
 
 **Custom modules** (`CommandModule.qml`, `QmlModule.qml`,
@@ -926,12 +926,12 @@ stdout as Waybar-JSON-compatible `{text, tooltip, class}`
 (`commandOutput.js`, pure), and renders the same honest `MODULE ERROR` cell
 for a non-zero exit, malformed JSON, a run that outlives `module.timeout`
 (SIGTERM'd), or a binary that fails to start at all (quickshell's `Process`
-only emits `runningChanged` for that case, never `exited` — tracked via a
+only emits `runningChanged` for that case, never `exited`, tracked via a
 `_sawExit` flag so it isn't mistaken for a normal completion). A `"qml"`
-module loads `module.source` into a `Loader` — isolating only *load-time*
+module loads `module.source` into a `Loader`, isolating only *load-time*
 failures (bad syntax, an unresolvable import) as `Loader.status ===
 Loader.Error`; a file that parses fine has the exact same engine access as
-any built-in widget (`qs.Core`, `qs.Services`, `Process`, …) — this is not
+any built-in widget (`qs.Core`, `qs.Services`, `Process`, …), this is not
 a runtime sandbox.
 
 ## Clipboard data flow
@@ -939,7 +939,7 @@ a runtime sandbox.
 ```
 wl-paste --type text --watch sh -c '… cat; printf "\0"'   (ClipboardService.qml, long-running Process)
   |  NUL-delimited stdout (clipboard text can itself contain newlines)
-  |  a capture is skipped — no NUL emitted at all — when wl-paste itself
+  |  a capture is skipped: no NUL emitted at all, when wl-paste itself
   |  sets CLIPBOARD_STATE=sensitive (its own x-kde-passwordManagerHint signal)
   v
 Clipboard/history.js#add(state, entry, now)   (.pragma library, pure)
@@ -955,7 +955,7 @@ $XDG_STATE_HOME/formalshell/clipboard.json      (FileView + JsonAdapter, same
   |
   +-- Menu/providers.js#clipboardProvider(): one menu row per entry, newest
         first; selecting a row runs `qs ipc -p <selfPath> call
-        clipboard copy <id>` — the exact same self-targeting invocation a
+        clipboard copy <id>`: the exact same self-targeting invocation a
         CLI caller would use, so the menu row is the IPC verb, not a second
         code path
 ```
@@ -965,12 +965,12 @@ $XDG_STATE_HOME/formalshell/clipboard.json      (FileView + JsonAdapter, same
 ```
 Services/LocationService.qml
   QtPositioning.PositionSource (geoclue2 D-Bus backend), left continuously
-  `active` with a repeating updateInterval — never a one-shot update() — so
+  `active` with a repeating updateInterval: never a one-shot update(), so
   an early inaccurate geoclue fix is just replaced by the next one instead
   of freezing in (the spec cites PR #2914's lesson by name for this)
     |
     |  settings.json's location.latitude/location.longitude, when BOTH are
-    |  present, override geoclue entirely (root._hasOverride) — the
+    |  present, override geoclue entirely (root._hasOverride): the
     |  documented fallback for geoclue's own known failure modes, and the
     |  path exercised in the test VM, which has no Wi-Fi radio to associate
     |  with in the first place
@@ -988,7 +988,7 @@ Surfaces/Panels/WeatherPanel.qml
   header meta row (condition label + temperature + glyph) + a FORECAST
   ledger (one row per daily period, glyph + weekday + high/low mono temps
   pinned right); an "UNAVAILABLE" cell carrying the `error` code replaces
-  the ledger on any fetch failure — never a stale or fabricated forecast
+  the ledger on any fetch failure: never a stale or fabricated forecast
 ```
 
 `WeatherPanel.qml` owns its own `XMLHttpRequest` directly (no separate
@@ -1011,12 +1011,12 @@ Services/MediaService.qml            (pick + clamps: Media/model.js)
   shuffle+shuffleSupported / loopState+loopSupported ("none"/"track"/
   "playlist") / volume+volumeSupported (the player's own 0..1, not the
   sink's) / canRaise
-    |  (position doesn't emit positionChanged on ordinary playback ticks —
+    |  (position doesn't emit positionChanged on ordinary playback ticks , 
     |   quickshell's own doc'd workaround: a 1s Timer re-emits it while
     |   isPlaying so any binding that reads position advances at all)
     |
     +-- Surfaces/Bar/widgets/NowPlaying.qml
-    |     visible: MediaService.available (hidden entirely otherwise —
+    |     visible: MediaService.available (hidden entirely otherwise , 
     |     not a "nothing playing" lie); click toggles MediaPanel
     |
     +-- Surfaces/Panels/MediaPanel.qml
@@ -1030,13 +1030,13 @@ Services/MediaService.qml            (pick + clamps: Media/model.js)
     |     v
     |   Loader { source: "AnimatedAlbumArt.qml" }
     |     active only when isOpen && isPlaying && AppleMusicArtService's
-    |     animatedArtUrl !== "" — the static Image above is the permanent
+    |     animatedArtUrl !== "": the static Image above is the permanent
     |     fallback under every other condition
     |
     +-- Ipc/MediaIpc.qml (target "media"): playPause()/next()/previous()/
           shuffle(on|off|toggle)/loop(none|track|playlist|cycle)/
           volume(0-100)/raise()/select(id)/players()/status()
-          calls MediaService directly — MediaPanel's own transport cells
+          calls MediaService directly: MediaPanel's own transport cells
           also call MediaService directly, this exists for compositor
           keybinds and headless smoke verification, same division of
           labour WallpaperIpc/ThemeIpc have over their own singletons
@@ -1056,14 +1056,14 @@ Services/AppleMusicArtService.qml   (opt-in: media.appleMusicArt, off by default
     -> _download(): curl to a per-lookup temp file -> atomic mv into
        ~/.cache/formalshell/applemusic-art/<cacheKey>.mp4
     |  every step's failure (parse error, http error, missing token, no
-    |  match) falls back to _store(key, "") — a cached MISS, so a track
-    |  without animated art is never re-fetched every play — never an
+    |  match) falls back to _store(key, ""): a cached MISS, so a track
+    |  without animated art is never re-fetched every play: never an
     |  uncaught error
     v
   animatedArtUrl (file:// or "") -> MediaPanel's AnimatedAlbumArt.qml Loader
 ```
 
-`Media/applemusic.js` (pure, `.pragma library`, TDD'd first —
+`Media/applemusic.js` (pure, `.pragma library`, TDD'd first , 
 `tests/tst_applemusic.qml`) owns every URL-building, response-parsing, and
 cache-key/prune-decision function; `AppleMusicArtService.qml` is pure
 side-effect orchestration around it, one fresh `Process` per `curl`/`find`/
@@ -1076,7 +1076,7 @@ the user has since skipped past can never overwrite a newer result.
 
 ```
 Ipc/LockIpc.qml (target "lock") lock()
-  |  reads lockScreen.locked straight back after calling lock() — catches
+  |  reads lockScreen.locked straight back after calling lock(): catches
   |  WlSessionLock::realizeLockTarget()'s silent fail-open paths (no
   |  ext-session-lock-v1 support, no surface, no WlSessionLockSurface) that
   |  would otherwise report "ok" while the session stayed unlocked
@@ -1085,7 +1085,7 @@ Surfaces/Lock/Lock.qml  (one Item wrapping WlSessionLock + both PamContexts;
                           see its own header comment for why a bare
                           PamContext can't be a WlSessionLock's direct child)
   lock(): sessionLock.locked = true; idleMonitor.enabled = true (imperative,
-          not bound to `locked` — WlSessionLock only emits lockStateChanged()
+          not bound to `locked`: WlSessionLock only emits lockStateChanged()
           on its *unlock* path, verified against session_lock.cpp)
     |
     v
@@ -1095,22 +1095,22 @@ Surfaces/Lock/Lock.qml  (one Item wrapping WlSessionLock + both PamContexts;
     v
   Surfaces/Lock/LockSurface.qml
 dithered backdrop: Image { source: Core.State.wallpaper } (hidden) feeding
-      a DitherImage { mode: "retro", chunk: 8, paletteSize: 6 } — was a
-      MultiEffect blur (DESIGN.md's one blur exception) until M39; nothing
+      a DitherImage { mode: "retro", chunk: 8, paletteSize: 6 }: was a
+      MultiEffect blur (DESIGN.md's one blur exception) once; nothing
       in the shell blurs anything now. It has never captured the screen: a
       ScreencopyView-based capture crashes the shell outright, see the
-      file's header comment — never reintroduce it
+      file's header comment: never reintroduce it
     Components/AuthPrompt.qml instance: one bordered plate holding an
       oversized clock, the date, a dividing rule, and a single 3px-outlined
       field (masked: true) whose border swaps to Theme.color.urgent on
-      errorState (M8b Task 6 — replaces the old three-loose-items Column)
+      errorState
     onAccepted -> Lock.qml#submitPassword(password)
     onPositionChanged/Keys.onPressed -> Lock.qml#wake() (clears a resume-guard trip)
 
   PamContext { config: "formalshell-lock" }         PamContext { config: lock.fingerprintPamService }
     password conversation, the sole unlock path        parallel conversation, only started when a
     onCompleted(Success) -> _unlock()                  reader is enrolled (empty string = never starts,
-    onCompleted(else) -> authError =                   the only "enrolled" this shell can express —
+    onCompleted(else) -> authError =                   the only "enrolled" this shell can express , 
       _resultError(result)  (WRONG PASSWORD /           no Fprintd binding); shares no state with the
       PAM ERROR / ACCOUNT LOCKED)                       password PamContext, so a pending scan never
                                                           blocks or disables the password field
@@ -1119,19 +1119,19 @@ dithered backdrop: Image { source: Core.State.wallpaper } (hidden) feeding
     idleMonitor: dedicated IdleMonitor, respectInhibitors:false (a locked
       screen should blank regardless of an app-held inhibitor), timeout =
       lock.blankAfterSeconds (default 30)
-    _resumeGuardActive: a 1s tickTimer compares Date.now() gaps — a jump
+    _resumeGuardActive: a 1s tickTimer compares Date.now() gaps: a jump
       much larger than one interval means the wall clock moved further than
-      monotonic time would explain (suspend, or a stepped clock) — set true
+      monotonic time would explain (suspend, or a stepped clock): set true
       on that gap, cleared by real activity or idleMonitor.isIdle going false
 ```
 
 A real deployment needs `security.pam.services.formalshell-lock = { };`
-declared system-side (`nix/testvm.nix`'s own copy is the reference) — the
+declared system-side (`nix/testvm.nix`'s own copy is the reference), the
 home-manager module alone cannot create a PAM service, only NixOS/system
 config can. The `lock-before-sleep` contract (spec §8) is a separate,
 narrower path: `nix/package.nix`'s `formalshell-lock-before-sleep` wraps
 `qs ipc call lock lock` in `|| true; exit 0`, and `nix/hm-module.nix` binds
-it to a `systemd --user` oneshot on `sleep.target` — so a lock failure can
+it to a `systemd --user` oneshot on `sleep.target`, so a lock failure can
 never block suspend, verified directly by running the wrapper with no shell
 instance up at all and reading `$?`.
 
@@ -1141,19 +1141,19 @@ instance up at all and reading `$?`.
 Services/IdleService.qml  (singleton, always-on, session-wide)
   one shared IdleMonitor, respectInhibitors:true (an app-held idle-inhibit
     or the compositor's own input-idle folding already keeps the whole
-    session non-idle — no polling of our own needed)
-  timeout = screensaver.timeoutSeconds (default 300) — armed exactly ONCE,
+    session non-idle: no polling of our own needed)
+  timeout = screensaver.timeoutSeconds (default 300): armed exactly ONCE,
     after Core.Config.loaded first resolves, never re-bound live: a live
     binding recreates IdleMonitor's underlying ext_idle_notification_v1
     object a moment after startup (settings.json loads asynchronously) and
     that recreation was reproduced silently and permanently breaking
-    isIdle propagation to QML for the rest of the process's life — a stale
+    isIdle propagation to QML for the rest of the process's life: a stale
     settings edit needing a shell restart is the accepted trade for idle
     detection actually working
     |
     v
   isIdle                                    (this is a DIFFERENT IdleMonitor
-    |                                         instance from Lock.qml's own —
+    |                                         instance from Lock.qml's own , 
     |                                         that one is on-demand and
     |                                         respectInhibitors:false on
     |                                         purpose; see its header comment)
@@ -1168,7 +1168,7 @@ Surfaces/Screensaver/Screensaver.qml  (one controller Item)
     |
     +-- Ipc/ScreensaverIpc.qml (target "screensaver"): start() sets _forced
     |     true; stop() sets _forced false AND _suppressed true (held until
-    |     IdleService.isIdle next drops to false — i.e. real activity —
+    |     IdleService.isIdle next drops to false: i.e. real activity , 
     |     so one dismissal doesn't get instantly re-triggered by the same
     |     idle stretch, but the NEXT idle cycle still fires normally)
     |
@@ -1195,7 +1195,7 @@ Surfaces/Screensaver/Screensaver.qml  (one controller Item)
     |    the frame math (spec addendum, see CLAUDE.md)
     |  any real key or pointer movement -> stop() (a MouseArea baseline
     |    swallows the single spurious positionChanged Qt fires the instant
-    |    the surface becomes visible under an already-stationary cursor —
+    |    the surface becomes visible under an already-stationary cursor , 
     |    reproduced directly: without it, an auto-triggered screensaver
     |    dismissed itself instantly and never re-triggered for the rest of
     |    the session)
@@ -1218,7 +1218,7 @@ Ipc/PickerIpc.qml (target "picker")
   status()               -> JSON.stringify(menu.pickerStatus())
     |
     v
-Surfaces/Menu/Menu.qml, the "wallpaper" ROUTE  (M23 — the picker has no
+Surfaces/Menu/Menu.qml, the "wallpaper" ROUTE  (the picker has no
                                    surface of its own; it is one level of
                                    the menu that draws as a grid, so the
                                    card, search field, cursor, pointer gate,
@@ -1245,7 +1245,7 @@ Surfaces/Menu/Menu.qml, the "wallpaper" ROUTE  (M23 — the picker has no
     v
   chooseImage(path):
     mode "wallpaper" -> Core.State.setWallpaper(path)   (the exact call
-                         WallpaperIpc's set() makes — ThemeEngine's retheme
+                         WallpaperIpc's set() makes: ThemeEngine's retheme
                          pipeline runs through the one trigger path, never
                          duplicated here)
     mode "select"    -> _writeSelectionFile(_pickerSelectionPath,
@@ -1261,7 +1261,7 @@ Surfaces/Menu/Menu.qml, the "wallpaper" ROUTE  (M23 — the picker has no
     |
     +-- _leavePickerRoute(): leaving the level (Escape, backspace-on-empty,
           the menu closing) still resolves the caller's poll loop, writing
-          { token, cancelled: true } instead — and drops _pickerImages,
+          { token, cancelled: true } instead: and drops _pickerImages,
           which destroys the grid delegates holding the decoded thumbnails
 ```
 
@@ -1269,7 +1269,7 @@ This is the exact request/answer handshake `Menu/MenuIpc.qml`'s
 `select()`/`input()` already established (see `Menu.qml`'s header comment
 for the full rationale: an `IpcHandler` call is synchronous request/
 response, so the UI's eventual answer can't ride back on the call that
-opened it) — reused rather than reinvented, correlated the same way by a
+opened it), reused rather than reinvented, correlated the same way by a
 caller-supplied token.
 
 ## Capture family: `screenshot` / `capture` / `record`
@@ -1471,7 +1471,7 @@ services.greetd  (nixosModules.formalshell-greeter)
 sessionScript  (nix/nixos-greeter-module.nix)
   exports XDG_RUNTIME_DIR/HOME/XDG_CONFIG_HOME/extraEnvironment
     (greetd's worker.rs resets the session environment to PAM's own envlist
-     — nothing this module's systemd units export reaches the script for
+    : nothing this module's systemd units export reaches the script for
      free, confirmed by reading greetd's own Rust source, not the nixpkgs
      module)
   backgrounds compositorPackage (default pkgs.sway) with WAYLAND_DISPLAY
@@ -1479,14 +1479,14 @@ sessionScript  (nix/nixos-greeter-module.nix)
     mere presence as "nested inside another Wayland session" and never
     falls through to DRM), discovers whichever socket the compositor
     actually created, exports WAYLAND_DISPLAY for that, THEN runs
-    formalshell-greeter in the FOREGROUND — greetd-ipc(7):
+    formalshell-greeter in the FOREGROUND: greetd-ipc(7):
     "the session will start after the greeter process terminates", which is
     what lets the script know the exact moment that happens, for
     postGreeterCommand and verification alike (never an async compositor
     `exec` line racing that signal)
     |
     v
-greeter/greeter.qml  (Quickshell.Services.Greetd; no WlSessionLock — greetd
+greeter/greeter.qml  (Quickshell.Services.Greetd; no WlSessionLock: greetd
                        already isolates this process into its own disposable
                        compositor with no other client ever attached, so
                        there's nothing for a lock primitive to exclude here)
@@ -1495,8 +1495,8 @@ greeter/greeter.qml  (Quickshell.Services.Greetd; no WlSessionLock — greetd
       -> _promptMessage/_promptEcho/_awaitingResponse drive the one input
          cell's meta label and TextInput.echoMode
     onAuthFailure(message) -> authError = message (inverts the input cell,
-      shows greetd's own PAM string verbatim — e.g. "pam_authenticate:
-      AUTH_ERR" — no second mapping table like Lock.qml's PamResult, since
+      shows greetd's own PAM string verbatim: e.g. "pam_authenticate:
+      AUTH_ERR": no second mapping table like Lock.qml's PamResult, since
       greetd hands back plain text, not an enum)
     onError(message) -> authError = message, UNLESS authError is already
       set: greetd (0.10.3) unconditionally follows every auth_error with a
@@ -1505,7 +1505,7 @@ greeter/greeter.qml  (Quickshell.Services.Greetd; no WlSessionLock — greetd
       onAuthFailure text already showing (a confirmed, fixed defect, 0757fc2)
     onReadyToLaunch() -> Greetd.launch(sessionCommand, [], true)
       ("Performing animations and such should be done *before* calling
-       launch" — Greetd::launch's own doc; nothing here to animate)
+       launch": Greetd::launch's own doc; nothing here to animate)
     |
     v (successful auth)
 greetd starts sessionCommand as the real user's session (from
@@ -1517,7 +1517,7 @@ greetd starts sessionCommand as the real user's session (from
 ```
 
 `Quickshell.Services.Greetd` exposes no session/user enumeration at all
-(confirmed against greetd's own `connection.cpp` —
+(confirmed against greetd's own `connection.cpp` , 
 `create_session`/`cancel_session`/`post_auth_message_response`/
 `start_session` is the entire wire protocol), so unlike the lock screen
 there is deliberately no picker here: typing a username into the one input
@@ -1534,7 +1534,7 @@ establishes.
 1. Create `shell/Compositor/<name>/<Name>Backend.qml`. QML can't literally
    `extend` `BackendBase` as its root type (its properties are read-only),
    so every backend is a duck-typed `Scope` (needs a default `children`/`data`
-   property to nest `Socket`/`Timer`/etc. children — plain `QtObject` doesn't
+   property to nest `Socket`/`Timer`/etc. children, plain `QtObject` doesn't
    have one) that declares the exact same property/signal/function names as
    the contract.
 2. Populate `workspaces`/`windows`/`outputs`/`focused*` from whatever IPC or

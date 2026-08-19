@@ -1,186 +1,68 @@
 # FormalShell design language
 
-References: **Omarchy 4 ("quattro" branch)** — `github.com/basecamp/omarchy`
-— is the close reference for the whole system: its token vocabulary, its
-control states, its floating-surface chrome, its craft details (the lock
-field, the panel section headers, the breathing pulse). **`https://www.mek.gallery/`**
-(screenshot studied 2026-07-27) is a deliberate accent layered on top — "a
-classic ASCII style OS" — contributing ruled tables, uppercase meta rows,
-and fg/bg inversion for selection to the surfaces where FormalShell reads as
-a table of information (menu, panel device lists, the picker grid). DankMaterialShell
-(DMS) contributes **feature ideas only** (media panel shape, notification
-center layout) — never look. Everything is monospace, radius 0, unblurred,
-unshadowed. **We reimplement**: every rule below is read from omarchy's
-source and rebuilt as our own QML — no omarchy file is ever copied verbatim,
-so no attribution header applies to this reimplementation (the existing
-DankMaterialShell attribution rule is unaffected and still governs real
-ports from DMS).
+Everything is monospace, radius 0, unblurred and unshadowed. Those four are
+not preferences to be revisited per surface; they are the language.
 
-**What this supersedes.** The previous revision of this document inverted
-the hierarchy: mek.gallery's "ruled ledger grid" (cells fused edge-to-edge,
-sharing hairline rules, no gaps anywhere) was the *base* language for every
-surface, and omarchy was cited only as the functional/IPC reference. That is
-wrong for the visual language specifically. Concretely, this revision changes:
+**Two references, in a strict order.** [Omarchy 4](https://github.com/basecamp/omarchy)
+(the `quattro` branch) is the close reference for the whole system: its token
+vocabulary, its four control states, its floating-surface chrome, and its
+craft details (the lock field, panel section headers, the breathing pulse).
+[mek.gallery](https://www.mek.gallery/) is an accent layered on top, a
+classic ASCII-style OS, contributing ruled tables, uppercase meta rows and
+inversion-for-selection to the surfaces where FormalShell reads as a table of
+information: the menu, panel device lists, the picker grid.
+DankMaterialShell contributes feature ideas only, never looks.
 
-- Surfaces are no longer edge-to-edge cell grids with zero gaps by default.
-  Floating chrome (menu, panels, notifications, OSD, tooltips) is an
-  omarchy-style **card**: a single bordered rectangle, `Style.gapsOut`-style
-  margin from the bar/screen edge, internal padding, radius 0. The "shared
-  hairline rule, no gap" idiom survives *inside* a card's content — rows of
-  a panel's device list, a menu's item list — not between top-level surfaces.
-- The interactive-state model goes from three ad hoc states
-  (`hover`/`focus` merged, `selected`, default) to omarchy's four named
-  states (`normal`, `hover-cursor`, `selected`, `focus`) with independent
-  fill and border alpha per state, matching Task 2's implementation target.
-- Borders become **specs** (color + optional gradient + per-side widths),
-  not a single scalar `Theme.borderWidth`.
-- Type and spacing become **scale roots** (`fontBaseSize`, `spacingScale`)
-  that every token derives from by multiplier, not a hand-picked pixel per
-  token.
-- The bar's individual widgets are no longer required to fuse into one
-  continuous ruled strip; omarchy's bar is discrete modules with a small
-  gap between them, each its own hover/pressed affordance. FormalShell's
-  three-region layout (left/center/right) stays — that's a functional
-  decision the spec already made — but the *rendering* of each cell adopts
-  omarchy's control-state chrome instead of forced adjacency.
-- ASCII-OS ornament (box-drawing corner marks, ruled tables, uppercase
-  letter-spaced meta rows, fg/bg inversion) is now named as an **accent**,
-  applied where a surface is naturally tabular (menu rows, panel device
-  lists, picker grid, notification center rows) — not a mandate that every
-  pixel of chrome look like a ledger.
+**Every rule here is reimplemented, never copied.** Each one is read from
+omarchy's source and rebuilt as our own QML, so no attribution header applies
+to this document's rules. The DankMaterialShell attribution rule is separate
+and still governs real ports from DMS.
 
-No feature, IPC target, provider, or state machine changes. This is a
-rewrite of *how things are drawn*, not what they do.
+## Where the numbers come from
 
-## Revision 2026-08-07: warm ink hierarchy (the mek ramp)
+The palette is measured rather than taste. mek.gallery was driven in a real
+browser and sampled across its pages (it ships a `darkreader-lock` opt-out,
+so a first naive capture was a Dark Reader recolor and was thrown away). The
+ramp: canvas `#eee9dc`, panel step `#d9d2c1`, 1px hairlines `#b6b1a3`, faint
+meta `#9c9587`, meta ink `#636059`, content ink `#2e2e2e`, fill tint
+`rgba(99,96,89,0.08)`, and exactly one loud color (`#0099ff`, links only,
+always underlined).
 
-Owner ask: next to mek.gallery the shell "just looks high contrasty".
-Measured from mek.gallery's shipped CSS (fetched 2026-08-07), the
-reference is not high contrast. It is a six-step warm ramp (canvas
-#eee9dc, panel #d9d2c1, fills rgba(99,96,89,0.08), hairlines #b6b1a3,
-meta inks #9c9587 and #636059, content ink #2e2e2e) with exactly one
-loud color (#0099ff), 1px rules, 6px corner marks on cards, and dithered
-1-bit imagery. FormalShell's failure was never temperature (Flexoki is
-already warm paper); it was a compressed ramp: borders drawn as
-foreground alphas shout as loudly as content, and selection is a photo
-negative instead of the accent. This revision changes:
+The lesson that produced §1.4 is that the reference is not high contrast. The
+shell's own failure was never temperature (Flexoki is already warm paper), it
+was a compressed ramp: borders drawn as foreground alphas shouting as loudly
+as content, and selection rendered as a photo negative instead of through the
+accent.
 
-- **Ink hierarchy becomes law (§1.4, new).** Loudness on any surface is
-  strictly content ink (`foreground`) > meta (`foregroundDim`) > faint
-  (`foregroundFaint`, new role) > rules and borders (`rule`). Structural
-  rules and control borders always draw the `rule` token at alpha 1.0;
-  the state table's border-alpha column is retired (§1.1). Fill alphas
-  are unchanged.
-- **The palette grows 8 → 12 roles (§1.5, new).** `foregroundFaint`,
-  `warning`, `onWarning`, `onUrgent`. theme.json stays the entire
-  theming contract: matugen's template re-spreads Material roles so the
-  ramp survives wallpaper theming, and any other engine (pywal, a
-  hand-written file) rendering the same keys themes the shell
-  identically; the per-key Flexoki fallback keeps pre-expansion
-  theme.json files valid.
-- **Selection inverts through accent, never a photo negative (§2.2).**
-  The cursor row, current picker cell, and bar-cell hover invert to
-  `{ bg: accent, fg: onAccent }` (`{ bg: urgent, fg: onUrgent }` on
-  urgent-carrying rows). The plain foreground/background swap is retired
-  shell-wide. §1.1's bar-cell amendment stands as a directive (hover is
-  an inversion, not a tint), now rendered through accent.
-- **Ornament (§2 items 7-8, new).** 6px corner marks become the one
-  sanctioned ornament on floating-card outer chrome; ordered Bayer
-  dither becomes the sanctioned texture for track remainders and pending
-  fills. Scanline/CRT effects stay banned.
-- **Spacing discipline (§1.3).** Every gap, padding, and row height is a
-  `Theme.space`/`Theme.fontSize` token; sibling surfaces use the same
-  token for the same structural element; a between-groups gap is at
-  least twice the within-group gap.
+Measured WCAG 2 contrast for the ramp, both modes: dark 11.98 (content ink),
+5.19 (meta), 2.61 (faint), 1.80 (rule); light 12+, 4.97, 2.64, 1.55. Dark
+`onAccent` is ink (`#100F0F` on `#4385BE` is 4.86:1, beating paper's failing
+3.83:1) while light keeps paper on accent (6.36:1). Warning pairs are 5.77:1
+dark and 4.69:1 light. Ink on urgent is 4.42:1, the best available over
+Flexoki red 400, so it is large-text AA only. `foregroundFaint` at 2.6:1 is
+legal for ornament and faint or disabled meta, never for content ink.
 
-Verified contrast (WCAG 2, both modes) for the new and changed pairs:
-dark ramp 11.98 (fg) / 5.19 (dim) / 2.61 (faint) / 1.80 (rule); light
-ramp 12+ / 4.97 / 2.64 / 1.55. Dark `onAccent` flips to ink (#100F0F on
-#4385BE is 4.86:1, beating paper's failing 3.83:1); light keeps paper on
-accent (6.36:1). Warning pairs: 5.77:1 dark, 4.69:1 light. Ink on urgent
-is 4.42:1, the best available over Flexoki red 400, large-text AA only.
-`foregroundFaint` (2.6:1) is legal for ornament and faint/disabled meta
-only, never content ink. No feature, IPC, or layout-structure change;
-drawn output only.
-
-## Revision 2026-08-09: the mek grammar (live-site study)
-
-Owner ask: match mek.gallery's look and feel, not just its palette. The
-live site was driven in a real browser on 2026-08-09 (the site ships a
-`darkreader-lock` opt-out, so the first naive capture was a Dark Reader
-recolor and was discarded) and measured from computed styles and pixel
-samples across home, /about, /pixel, /dev, and the PROJECTS dropdown. The
-ramp is unchanged from the 2026-08-07 capture: canvas #eee9dc, panel step
-#d9d2c1, 1px hairlines #b6b1a3, faint meta #9c9587, meta ink #636059,
-content ink #2e2e2e, one loud blue #0099ff (links only, always
-underlined, 137 uses), fill tint rgba(99,96,89,0.08). What the study adds
-is grammar this document does not yet encode, plus one correction to it:
-
-- **The dog-ear fold mark replaces the corner squares (§2 item 7,
-  rewritten).** A scan of the live DOM for 4-8px square elements returns
-  zero: the 6px corner marks the 2026-08-07 block cites are gone from the
-  site. Cards and ledger cells carry a small folded-corner triangle at
-  the top-left instead. That one point of the 2026-08-07 revision is
-  superseded, one fold mark at one corner is what ships; the rest of that
-  block stands.
-- **Card title-bar band (§2 item 9, new).** Every floating card opens
-  with a one-row band: uppercase meta label plus trailing colon at the
-  left, optional meta text or bare-label actions at the right, one shared
-  rule below. The menu's breadcrumb row and the panels' title row already
-  are this band; the notification center gains one.
-- **Trailing colon on headers, ` / ` on meta pairs (§2 item 10, new).**
-  Every section header on the live site ends in a colon, no exceptions
-  found. Inline meta pairs take no colon and fuse with a spaced slash,
-  which the shell already does (`PENDING / 2`, `appName / relTime`) and
-  this revision names as law.
-- **The ink button (§2 item 11, new).** A committing action's resting
-  cell is a full-bleed `foreground` fill carrying `background` ink, the
-  shape of mek's Submit. Hover and press keep the accent-pair inversion,
-  so this is a resting affordance, not a revival of the retired
-  photo-negative selection.
-- **Ink-promotion hover for bare labels (§1.1, new amendment).** A
-  label-only control promotes its ink one band on hover (`foregroundDim`
-  to `foreground`) and leaves its ground alone, which is mek's nav
-  behavior. Cells keep the fill-alpha and inversion model, and the
-  bar-cell accent-inversion directive stands.
-- **Faint placeholders (§1.4).** A field's placeholder ink is
-  `foregroundFaint`, one band under the field's own label.
-
-Study notes, recorded as reference with no rule and no palette role
-added: mek's announcement modal is a warm dark card, ground #33241e, with
-the paper #eee9dc as its content ink and #9c9587 as the meta ink on both
-grounds, so the ramp already survives a dark ground with its meta step
-intact. The site's own `prefers-color-scheme: dark` swaps nine tokens to
-a terminal facet (#000 canvas, #161617 surface, #fff ink, #0f0 accent)
-while the paper ramp tokens stay put: the shell's dark mode is that facet
-of the same language, not a divergence from it. The PROJECTS dropdown
-pixel-samples flat #d9d2c1 on every row, so there is no zebra striping to
-adopt (what reads as alternation is glyph density); a summoned surface
-sits one step below canvas with shared 1px rules, which is what §2 item 1
-already requires. Empty column ends carry faint asterisk-family dings
-(`✳ ❋`) from the MEK Dings faces; a faint glyph is permitted the same way
-here, as an empty-state ornament in `foregroundFaint`, never as a
-mandate.
-
-Measured and deliberately not adopted: the modal's `box-shadow: 4px 4px 0
-rgba(0,0,0,.25)` hard offset plate (the no-shadows hard rule stands),
-mek's custom bitmap faces (the fontconfig `monospace` alias hard rule
-stands), hidden scrollbars (a browser concern, not a QML one), and mek's
-sub-AA header contrast (#9c9587 on canvas measures about 2.2:1, while
-shell headers stay `foregroundDim` per the 2026-08-07 WCAG stance, a
-deliberate divergence). No feature, IPC, provider, or state-machine
-change, and no palette change: the twelve roles in §1.5 carry every rule
-above.
+Measured and deliberately not adopted: mek's hard offset `box-shadow` plate
+(the no-shadows rule stands), its custom bitmap faces (the fontconfig
+`monospace` alias stands), hidden scrollbars (a browser concern), and its
+sub-AA header contrast, where `#9c9587` on canvas measures about 2.2:1 while
+shell headers stay `foregroundDim`. Its dark facet is worth knowing about:
+the site swaps nine tokens to a terminal look (`#000` canvas, `#161617`
+surface, `#fff` ink, `#0f0` accent) while the paper ramp tokens stay put, so
+this shell's dark mode is a facet of the same language rather than a
+divergence from it. There is no zebra striping to adopt either: the PROJECTS
+dropdown samples flat on every row, and what reads as alternation is glyph
+density.
 
 ## 1. The token system
 
-Every value below is a **default**; nothing here freezes a magic number —
+Every value below is a **default**; nothing here freezes a magic number , 
 each is reachable through the base-size/scale roots so retheming rescales
 the whole shell from two numbers. Task 2 implements this vocabulary in
 `shell/Core/Theme.qml`; the matugen-driven palette roles (twelve since
 the 2026-08-07 revision: `background`, `backgroundAlt`, `foreground`,
 `foregroundDim`, `foregroundFaint`, `rule`, `accent`, `onAccent`,
-`urgent`, `onUrgent`, `warning`, `onWarning` — `shell/Theme/palette.js`,
+`urgent`, `onUrgent`, `warning`, `onWarning`, `shell/Theme/palette.js`,
 full table in §1.5) are the color tokens the state/border machinery
 below resolves against. Matugen wiring and `theme.json` remain the
 theming contract; §1.5 defines how the twelve roles are populated.
@@ -193,13 +75,13 @@ field) is in exactly one of four states at any moment:
 | state | meaning | default color token |
 | --- | --- | --- |
 | `normal` | idle chrome | `foreground` |
-| `hover-cursor` | mouse hover **or** panel keyboard cursor row (unified — a panel's own arrow-key cursor reads identically to a real mouse hover) | `foreground` |
+| `hover-cursor` | mouse hover **or** panel keyboard cursor row (unified, a panel's own arrow-key cursor reads identically to a real mouse hover) | `foreground` |
 | `selected` | persistent chosen/current (the enabled toggle, the current workspace, the checked radio) | `foreground` |
 | `focus` | real Qt `activeFocus`; defaults to mirroring `hover-cursor` so Tab-focus and mouse-hover read identically | inherits `hover-cursor` |
 
 Each state carries a **fill alpha**, applied against the state's
-resolved color (a palette role — `foreground` / `accent` / `urgent` /
-`background` — or a raw hex from a theme override). Borders are simpler
+resolved color (a palette role, `foreground` / `accent` / `urgent` /
+`background`, or a raw hex from a theme override). Borders are simpler
 since the 2026-08-07 revision: a control's border always draws the
 `rule` token at alpha 1.0 (§1.4's ink hierarchy makes rules the
 quietest ink on screen, so no alpha games are needed), and the old
@@ -211,14 +93,14 @@ per-state border alphas are retired:
 | `hover-cursor` | 0.08 | 2 | `rule` |
 | `selected` | 0.18 | 0 | (borderless) |
 | `focus` | = hover-cursor | = hover-cursor | = hover-cursor |
-| `pressed` (mouse-down only, not a persistent state) | 0.22 | — | — |
+| `pressed` (mouse-down only, not a persistent state) | 0.22 |, |, |
 
-Border width defaults to **2** — the spec's non-negotiable brutalist
+Border width defaults to **2**, the spec's non-negotiable brutalist
 baseline (`docs/superpowers/specs/2026-07-27-formalshell-design.md`,
-CLAUDE.md's hard rules) — not omarchy's own 1px default; the fill
+CLAUDE.md's hard rules), not omarchy's own 1px default; the fill
 alphas, the state vocabulary itself, and the per-side/gradient spec
 shape carry over from omarchy as-is. A state's border width of `0`
-drops that border entirely — `selected` is borderless by default (the
+drops that border entirely, `selected` is borderless by default (the
 fill alone reads as chosen), while a text field or a bar cell that
 wants a visible ring uses the 2px default. Exception to the
 borders-are-`rule` doctrine: a border that *means* something (the lock
@@ -229,7 +111,7 @@ applies: `pressed` > `focus` (only when the control is real-focusable) >
 `hover-cursor` > `selected` > `normal`.
 
 Where the ASCII-OS accent overrides this for a genuinely tabular surface
-(menu cursor row, picker grid, notification-center row — see §2),
+(menu cursor row, picker grid, notification-center row, see §2),
 **inversion** replaces the fill-tint for the *selected*/cursor state
 only, and since the 2026-08-07 revision the pair is always
 accent-carried: `{ bg: accent, fg: onAccent }` (`{ bg: urgent,
@@ -252,7 +134,7 @@ fades in over `Theme.motion.fast` (the fade lives on the fill layer, not
 the color swap), but the content color itself snaps instantly the moment
 the state resolves, same as every other inversion in this document (§4.3).
 Cells already carrying a full-bleed `accent`/`urgent`/`selected` fill (the
-focused workspace, a critical battery) keep that fill instead — no double
+focused workspace, a critical battery) keep that fill instead, no double
 treatment. Panels, menu, and every other non-`standalone` cell are
 unaffected; the menu's cursor row already inverted on its own, so this
 change unifies the idiom rather than introducing a second one.
@@ -296,7 +178,7 @@ A border is a small object, not a scalar width:
 - **Gradient** is a solid color by default (`enabled: false`); a two-stop
   45°-style gradient is available for a surface that wants a directional
   border (e.g. an "active window border" token shared with the compositor's
-  own border) but is off unless a theme opts in — FormalShell ships flat
+  own border) but is off unless a theme opts in, FormalShell ships flat
   borders everywhere today.
 - A renderer picks the cheap flat-`Rectangle`-with-border path when
   `gradient.enabled` is false and all four widths match; it falls back to a
@@ -323,8 +205,8 @@ Two numbers set the whole shell's size:
   | `displayLarge` | 2.333 | 30 |
 
   `family` is always the fontconfig `monospace` alias (never a hardcoded
-  family — CLAUDE.md hard rule); `display` is the *same* family, at the
-  larger multiplier — FormalShell does not bundle a second display face.
+  family, CLAUDE.md hard rule); `display` is the *same* family, at the
+  larger multiplier, FormalShell does not bundle a second display face.
 
 - **`spacingScale`** (default **1.0**, tracking `fontScale` by default so a
   larger base font gets roomier spacing automatically) multiplies a shared
@@ -353,7 +235,7 @@ Two numbers set the whole shell's size:
   Both scales can be overridden as a whole (one number denser/roomier) or
   per-token (a theme pins `display` to something huge for the lock clock
   without moving `body`). `controlPaddingX`/`controlPaddingY` match
-  `lg`/`sm` exactly (2026-08-07 spacing-consistency pass, Task 6) — Cell.qml,
+  `lg`/`sm` exactly (2026-08-07 spacing-consistency pass, Task 6), Cell.qml,
   the one shared row primitive, resolves its own padding through these
   rather than the bare scale steps, so the two numbers can't drift apart
   independently again. `popupWidth{Narrow,Default,Wide,Menu,MenuSplit,MenuApp}`
@@ -363,7 +245,7 @@ Two numbers set the whole shell's size:
   `MenuSplit` (840, 1.5x `Menu`) is the menu's own further step, for the
   clipboard/share-history route's 50/50 list-plus-preview split (§3 Menu).
   `MenuApp` (900) is the app-view registry's own step (`Menu/appviews.js`,
-  M38 D1), for a route that renders a whole view instead of a row list.
+  the launcher view registry), for a route that renders a whole view instead of a row list.
 
   **A panel that does not name its width is a defect (2026-08-17).** Every
   `Panel` sets `panelWidth` explicitly from the four steps above; silence
@@ -373,14 +255,14 @@ Two numbers set the whole shell's size:
   declaring a `Panel` root has one.
 
   **One card gutter: `panelPadding` (8), 2026-08-19.** Every floating card
-  in the shell insets its content by the same token on all four sides — the
+  in the shell insets its content by the same token on all four sides, the
   widget popouts (audio, network, bluetooth, power, calendar, weather,
   media, github, usage), the picker that reuses the panel frame, the menu,
   the notification center, the polkit dialog, and the capture toolbar. All
   of them via the same technique: the frame draws an explicit border ring,
   content insets by `borderWidth + panelPadding`, and an eraser rectangle
   papers over the row content's own trailing hairline (Cell's shared-rule
-  contract) so only the frame's outer rule shows — established by Panel.qml,
+  contract) so only the frame's outer rule shows, established by Panel.qml,
   mirrored by Menu.qml and Center.qml.
 
   This replaces the 2026-08-07 card-gutter split, which gave summoned list
@@ -392,14 +274,14 @@ Two numbers set the whole shell's size:
   glyph sat 28px in from the ring on a 280px card, and a row-nested action
   Cell (NetworkPanel's FORGET, BluetoothPanel's TRUST, MediaPanel's
   transport) doubled that again into a boxed control floating clear of the
-  border — two concentric frames rather than one card. At 8 the gutter
+  border, two concentric frames rather than one card. At 8 the gutter
   matches `controlPaddingX` exactly, so a row's inset from the ring reads as
   two equal steps instead of an arbitrary band. Checkable: `grep` the shell
   for a second card-padding token and there isn't one.
 
 Spacing discipline (2026-08-07): every gap, padding, margin, and row
 height in shell QML resolves through `Theme.space`/`Theme.fontSize`
-tokens — a raw pixel literal for any of these is a defect, with the
+tokens, a raw pixel literal for any of these is a defect, with the
 only exceptions being genuinely structural sizes a surface's own brief
 names (the lock field's 381×67, the notification image's 40×40 slot, the
 media panel's 96×96 album-art slot, screen-relative anchors). Sibling
@@ -424,7 +306,7 @@ to exactly one band:
 
 `accent`/`urgent`/`warning` sit outside the ramp: they are the loud
 exceptions (§2.4), spent only where a state genuinely demands one, and
-always as full-bleed fills or inversions carrying their `on*` ink —
+always as full-bleed fills or inversions carrying their `on*` ink , 
 never as tints. One exception: a bare label with no cell chrome of its
 own (§1.1's ink-promotion controls) may rest at `accent` ink while its
 own state is armed or current, or when it names a live destination the
@@ -464,7 +346,7 @@ fallback (`shell/Theme/palette.js`):
 Fallback hexes are kepano/flexoki scale steps (dark faint = base 700,
 light faint = base 400, warning = orange 400/600); dark `on*` inks are
 ink-on-color (Material's own dark-scheme convention, and the higher
-measured contrast — see the 2026-08-07 revision block). The previously
+measured contrast, see the 2026-08-07 revision block). The previously
 shipped mapping sent both `foregroundDim` and `rule` to matugen's
 `outline`, which flattened the ramp on every wallpaper theme; the
 re-spread above is what keeps §1.4 true under matugen. theme.json is
@@ -475,13 +357,13 @@ pre-expansion theme.json valid by filling missing roles from Flexoki.
 
 ## 2. What "classic ASCII OS" means, concretely
 
-Every rule below is checkable from a screenshot or a `grep` — not a mood
+Every rule below is checkable from a screenshot or a `grep`, not a mood
 adjective:
 
 1. **Box-drawing / ruled structure inside tabular content.** Any surface
    whose content is genuinely a list of like rows (menu items, a panel's
    device list, notification-center entries, the picker grid) draws its
-   rows/cells sharing one border between neighbors — never a double rule,
+   rows/cells sharing one border between neighbors, never a double rule,
    never a whitespace-only gap standing in for a divider. Checkable: sample
    two adjacent rows in a screenshot; the border between them is a single
    line, not two, not blank space.
@@ -503,17 +385,17 @@ adjective:
    as "urgent" or "the active thing" at a glance (critical notification,
    focused workspace, an armed toggle) the *entire* cell fills with
    `accent`/`urgent`/`warning` and swaps to the matching `onAccent`/
-   `onUrgent`/`onWarning` ink — never a colored border around an
+   `onUrgent`/`onWarning` ink, never a colored border around an
    otherwise normal fill, never a soft accent-tinted wash. Checkable:
    sample the cell's fill color in a screenshot; it equals the
    accent/urgent/warning token, not a low-alpha blend of it.
 5. **Terminal-grid feel in type.** Numeric displays that must not jitter
    (clock, countdown, battery percentage, life-progress percentage) use
    `font.family` monospace with tabular-width digits (true for any
-   monospace font by construction) — never a proportional fallback.
+   monospace font by construction), never a proportional fallback.
 6. **ASCII ornament stays confined to named accent surfaces.** Ledger-style
    headers and box-drawing interior structure are permitted on the menu,
-   panel-internal lists, the picker grid, and the screensaver's banner —
+   panel-internal lists, the picker grid, and the screensaver's banner , 
    never invented as decoration on a card's *outer* chrome (that chrome is
    omarchy's plain bordered rectangle per §3), with item 7's dog-ear fold
    mark as the single sanctioned exception.
@@ -536,7 +418,7 @@ adjective:
    needs to read as "partial" or "pending" (the unfilled remainder of a
    track, a pending/expired notification row's backdrop, a disabled
    toggle's field), a 2×2 ordered-dither checker of `foregroundFaint` on
-   transparent replaces the low-alpha tint — the 1-bit Macintosh/Amiga
+   transparent replaces the low-alpha tint, the 1-bit Macintosh/Amiga
    texture, flat and still, radius 0, no blur. Scanline, CRT-curvature,
    and phosphor-glow effects stay banned everywhere; they are costume,
    not structure. Checkable: zoom any track remainder in a screenshot
@@ -608,7 +490,7 @@ adjective:
     ... I want the dithering engine to make images look like 90s
     wallpapers/ascii pixelart", with a limited-palette pixel-art night scene
     as the reference. Both halves of that report follow from what the pass
-    used to do — posterize each RGB channel onto `levels` evenly-spaced
+    used to do, posterize each RGB channel onto `levels` evenly-spaced
     steps (3, so 0/128/255) and Bayer-bias a channel across a step
     boundary:
 
@@ -636,7 +518,7 @@ adjective:
     The dither is display-side only. Nothing derived here is ever written to
     disk, and matugen reads the untouched wallpaper FILE
     (`ThemeEngine.qml`), so a dithered rendering cannot seed the color
-    scheme — a blue wallpaper cannot become an orange scheme by way of its
+    scheme, a blue wallpaper cannot become an orange scheme by way of its
     dots.
 
     **The wallpaper is one of the content surfaces (2026-08-12).** Owner:
@@ -655,8 +537,8 @@ adjective:
     the same screen, a 4K display gets larger cells rather than four times
     as many of them (a finer grid at a higher resolution would read as
     noise, and cost four times the paint), and the source is cover-cropped
-    to the screen before the pass runs — nearest-neighbor, so the scale
-    never hands the quantizer a color the file didn't contain — so cells
+    to the screen before the pass runs, nearest-neighbor, so the scale
+    never hands the quantizer a color the file didn't contain, so cells
     stay square whatever the file's aspect ratio. Both crossfade layers
     dither, and the fade waits on the incoming layer's canvas rather than on
     its decode, so a wallpaper change never shows an undithered frame or a
@@ -675,18 +557,18 @@ adjective:
     cadence is the aesthetic, not a defect, and stops the moment
     `motion.enabled: false`, playback pauses, or the frame errors, falling
     back to the static dithered art); and the bar's now-playing cell's mini
-    cover (M20 Task 4b/5b, §3 Bar), which now animates too (M35, owner:
+    cover (§3 Bar), which now animates too (owner:
     "the bar cover doesnt appear to be animated ... like the image in the
-    bar, the panel is fine" — reversing M20's "static only, no bar-scale
+    bar, the panel is fine", reversing the earlier "static only, no bar-scale
     animated decode" call). `AnimatedCoverFrameSource.qml` is the one gate
     on the one Video decode (owned by MediaPanel's AnimatedAlbumArt.qml
     Loader): it runs while the panel wants frames OR the bar's mini cover
     does (a refcount, `VisualizerService.setBarVisible`'s own precedent),
     AND `MediaService.isPlaying`, AND animated art is resolved, AND
-    `Theme.motionEnabled` — any leg going false kills the decode outright,
+    `Theme.motionEnabled`, any leg going false kills the decode outright,
     never just a paused paint. The panel and the bar both dither-paint the
     same republished frames rather than each decoding their own, so the
-    "second, permanently-idle Video pipeline" cost M20 declined to pay
+    "second, permanently-idle Video pipeline" cost this design refused to pay
     never materializes. The mini cover keeps its colors even on a hovered
     (inverted) cell, animated or not, content ruling winning over the
     cell's own hover inversion, the same precedent the menu's app icons
@@ -697,18 +579,18 @@ adjective:
     rejected it 2026-08-10 ("the album cover's colors are ugly"). Nothing
     else auto-dithers:
     notification images, menu thumbnails, launcher icons, and the
-    wallpaper picker's grid all stay true-color — the picker in particular
+    wallpaper picker's grid all stay true-color, the picker in particular
     shows candidates as they are, since the point of that grid is choosing
     a photograph, not previewing the texture it will be shown through. The
     lock screen's backdrop is the one place a wallpaper is dithered
-    *harder* than the desktop shows it (M39: chunk 8, 6 colors), since
+    *harder* than the desktop shows it (chunk 8, 6 colors), since
     destroying the picture is the point there. Checkable: zoom the media
     panel's album art in a screenshot, individual chunk-sized dither cells
     resolve as flat squares, and every sampled cell's channels each land
     on one of the posterized steps of the source image's own color, never
     `Theme.color.background` or `Theme.color.foreground`.
 
-    The tray icons are out of the dither list. M20 Task 5 shipped a
+    The tray icons are out of the dither list. One earlier attempt shipped a
     `mode: "mask"` 1-bit silhouette treatment here, thresholding an icon's
     own alpha channel instead of luminance so a painted pixel became
     `Theme.color.foreground` (or the cell's inverted ink on a hovered
@@ -729,8 +611,8 @@ adjective:
     (`Components/PanelHero.qml`): a leading glyph in a fixed-width slot so a
     wider Nerd Font codepoint never shifts the title next to it, the panel's
     noun in sentence case (content ink, not a meta label), an uppercase
-    state line through `MetaLabel`, and — only when the panel's whole point
-    is a number — that number promoted out of the type scale entirely, to
+    state line through `MetaLabel`, and, only when the panel's whole point
+    is a number, that number promoted out of the type scale entirely, to
     `display` (26px) or `displayLarge` (30px) rather than `body`. A panel
     whose point is not a number (a device list, a picker) carries no
     oversized readout at all; inventing one where the content is a list, not
@@ -743,7 +625,7 @@ adjective:
     today's date) renders that number at `display`/`displayLarge`, never
     `body`; every other row on the same card stays at `body` or `caption`.
     Dated exception (owner, 2026-08-18): the media panel does not open with
-    this shared hero when art exists — the panel's whole point is the
+    this shared hero when art exists, the panel's whole point is the
     artwork, so its opening block is the art+identity row at the dedicated
     96x96 slot (§1.3's structural-size exception), the analogue of a number
     panel's oversized readout. The hero-slot cover (`leading` at
@@ -756,7 +638,7 @@ adjective:
     and a section's last row into the next header, exactly like any two
     adjacent rows: `Panel.qml`'s `contentColumn` carries zero spacing of its
     own, and every row's breathing room comes from the one token `Cell`
-    already resolves its padding through, `controlPaddingY` (§1.3) — a
+    already resolves its padding through, `controlPaddingY` (§1.3), a
     header cell and a content cell are the same primitive at the same
     padding, so no panel can drift its own rhythm by hand. No panel spaces a
     header away from its first row with an extra `Item`, a `Column`
@@ -774,11 +656,11 @@ floats with a margin or fuses to the screen edge.
 
 ## 3. Concrete translations
 
-- **Bar** — a single-row strip of **discrete widget cells**, each its own
-  `normal`/`hover-cursor`/`selected` control (§1.1) — `hover-cursor`
+- **Bar**, a single-row strip of **discrete widget cells**, each its own
+  `normal`/`hover-cursor`/`selected` control (§1.1), `hover-cursor`
   rendered as full accent inversion rather than a tint or border, per §1.1's
-  bar-cell amendment above — separated by `Theme.spacing.sm`-ish gaps in
-  the omarchy style — not forced edge-to-edge adjacency. The focused
+  bar-cell amendment above, separated by `Theme.spacing.sm`-ish gaps in
+  the omarchy style, not forced edge-to-edge adjacency. The focused
   workspace cell is a full-bleed `accent` fill
   (§2.4); other workspace cells are `normal`. A widget with an open panel
   gets omarchy's small **accent dot** on its inner edge (the edge facing the
@@ -787,7 +669,7 @@ floats with a margin or fuses to the screen edge.
   uppercase caption meta tag (`BAT`, `NET`) only where the value alone is
   ambiguous; the widget's primary value is normal-weight, not uppercase. A
   cell whose glyph already carries the value suppresses that label outright
-  (M23): weather and audio ship label-off, since the condition glyph and the
+  : weather and audio ship label-off, since the condition glyph and the
   mute/level glyph say exactly what the label would repeat, and the
   suppressed value moves into the cell's own `tooltipText` rather than
   disappearing. Battery keeps its label, since a charge percentage is
@@ -796,12 +678,12 @@ floats with a margin or fuses to the screen edge.
   clock carries no meta tag at all under the same rule: `19:31` is never
   ambiguous, and as the one two-line cell it was setting the whole bar's
   height to say so. This bar's one Bartender affordance is a widget rather
-  than a tray feature (M24): `chevron` is an ordinary `bar.layout` entry, and
+  than a tray feature : `chevron` is an ordinary `bar.layout` entry, and
   everything placed on its governed side of its own region collapses behind
   it. Its position is the entire configuration, so which cells hide is a
   question of where the boundary sits, not of a per-widget flag, and moving
   it one slot changes the answer. The governed side runs inward, away from the region's
-  own anchored edge (M25): the right region is pinned to the screen edge, so
+  own anchored edge : the right region is pinned to the screen edge, so
   its chevron collapses what *precedes* it and the group opens into empty
   bar, leaving the chevron and every cell outboard of it at the x they
   already had. The left region mirrors that; `center` is pinned to nothing
@@ -813,10 +695,10 @@ floats with a margin or fuses to the screen edge.
   persisted per region to `state.json`. One chevron per region, and one with
   nothing on its governed side hides nothing and is dropped rather than
   drawn as a control that answers no click. The tray sits under that rule like any other widget, with no drawer,
-  no visible limit and no per-icon buckets of its own: M23 shipped those and
-  M24 replaced them, because two chevrons on one bar made the affordance
-  ambiguous about what it governed. A tray item's context menu (M32,
-  `TrayMenu.qml`) is a card of its own now, not the platform's native
+  no visible limit and no per-icon buckets of its own: those shipped once and
+  were replaced, because two chevrons on one bar made the affordance
+  ambiguous about what it governed. A tray item's context menu
+  (`TrayMenu.qml`) is a card of its own, not the platform's native
   QMenu: right click composes `Panel.qml` under the clicked cell, so
   entries render as ledger rows sharing rules, the cursor row inverts
   through the accent pair (§2.2), a checked entry takes the same
@@ -827,35 +709,35 @@ floats with a margin or fuses to the screen edge.
   the tray icon's own pixmap, closing the menu on open; a layer-shell
   popout takes no such grab, so this surface is themeable and the bug
   class is gone by construction.
-  The now-playing cell's mini cover art (M20) is the fourth sanctioned
+  The now-playing cell's mini cover art is the fourth sanctioned
   image-icon site, after the menu's launcher rows, the bar's active-window
   cell, and notification card images: unlike those three, it renders
   through the retro color dither (§2 item 12) rather than a plain `Image`,
   so it stays inside the dither language while keeping the cover's own
   colors, unaffected by hover inversion or a theme retheme alike. It now
-  animates too (M35, §2 item 12) rather than staying static: the panel's
-  Apple Music video is still the only decode that ever runs (M20's
+  animates too (§2 item 12) rather than staying static: the panel's
+  Apple Music video is still the only decode that ever runs (the
   second-pipeline objection stands), but `AnimatedCoverFrameSource.qml`
   republishes its frames so this cell paints the same ones the panel does.
-- **Menu** — a floating card (omarchy chrome: bordered rectangle, `panelGap`
+- **Menu**, a floating card (omarchy chrome: bordered rectangle, `panelGap`
   margin, radius 0) whose *content* is the ASCII-OS accent: a full-height
   column of rows sharing one border per pair, cursor row inverted (§2.2),
   search field as the top row, breadcrumb as an uppercase meta row (§2.3),
-  and an action bar as the bottom row. Launcher app rows — and the bar's
-  active-window cell (M14) — are the sanctioned image-icon exception: the
+  and an action bar as the bottom row. Launcher app rows, and the bar's
+  active-window cell , are the sanctioned image-icon exception: the
   desktop entry's icon-theme image renders at the glyph cell's size, radius
-  0, no border — like the DMS/omarchy launchers — while every other icon in
+  0, no border, like the DMS/omarchy launchers, while every other icon in
   the shell stays a Nerd Font glyph.
   The **action bar** is Raycast's footer read through this language rather
   than copied from it: one ledger cell, the primary verb for the cursor row
-  on the left behind a full-bleed accent key cap (§2.4 — the one loud thing
+  on the left behind a full-bleed accent key cap (§2.4, the one loud thing
   in the row, because it is the one thing `Enter` will do), the
   always-applicable keys on the right as bordered caps carrying band-2 dim
   ink (§1.4). Key caps are literal characters checked against the pinned
   nerd-fonts cmap, never names: U+23CE ⏎ is present in it, the more obvious
   U+21B5 ↵ is not.
-  One level draws as a **grid** instead of rows — the wallpaper/image picker
-  (§Concrete translations' "grid of image cells sharing hairline rules") —
+  One level draws as a **grid** instead of rows, the wallpaper/image picker
+  (§Concrete translations' "grid of image cells sharing hairline rules") , 
   keeping the same card, search field, cursor and action bar. It is a view
   swap over one level, not a second surface: the picker has no window of its
   own. The clipboard and share-history levels draw as a **50/50 split**
@@ -863,44 +745,44 @@ floats with a margin or fuses to the screen edge.
   preview pane holding the cursor row's complete text or image, behind one
   shared vertical rule, on the same card at its own wider `popupWidthMenuSplit`
   step.
-- **Panels** (audio/network/bluetooth/power/calendar/weather/media) — each is one
+- **Panels** (audio/network/bluetooth/power/calendar/weather/media), each is one
   omarchy-style card anchored under its bar cell (`panelGap` margin,
   bordered, radius 0, `panelPadding` internal padding). Inside: an uppercase
   `PanelSectionHeader`-equivalent caption introduces each group ("OUTPUT
   DEVICE:", "PAIRED DEVICES:", "NOW PLAYING:", colon per §2 item 10), then
   rows share rules in the ASCII-OS table style; sliders (volume,
   brightness) are full-width tracks whose fill level is a flat `accent`
-  block — no round thumb, no gradient fill.
-- **Notifications** — each popup toast is its own small omarchy card
+  block, no round thumb, no gradient fill.
+- **Notifications**, each popup toast is its own small omarchy card
   (bordered, radius 0); the toast stack anchors to a configurable screen
-  corner (`notifications.position`, default `bottom-right`, M34) and
+  corner (`notifications.position`, default `bottom-right`) and
   renders **compact**: one meta row, body clamped to a single line, the
   image slot down to caption height, actions as bare labels, the card
   narrowed one width step (`popupWidthNarrow`). Collapsed, the stack is a
   sonner-style offset-peek idiom: the newest/highest-urgency card sits full
   size at the front, up to two older cards peek a fixed sliver out from
-  behind it — each a real card, content hidden, sized narrower by an
+  behind it, each a real card, content hidden, sized narrower by an
   integer `Theme.space` step per level (never a fractional `transform:
-  scale` — a dated, surface-scoped exception to §4.2's no-scale reading,
+  scale`, a dated, surface-scoped exception to §4.2's no-scale reading,
   the depth read entirely through stepped pixel sizing so borders stay
   exactly `borderWidth` on every level). Hovering the stack (or
   `notifications expand on/off` over IPC) expands it into today's plain
   full-width column, `panelGap` apart, and pauses every visible popup's
-  expiry for as long as it's expanded — sonner's "hover shows everything
+  expiry for as long as it's expanded, sonner's "hover shows everything
   that arrived together." The notification **center** (the summoned
   history list) keeps its own fixed right-anchored placement and today's
-  full-size card rendering regardless of the toast stack's corner — it is
+  full-size card rendering regardless of the toast stack's corner, it is
   the ASCII-OS table surface: rows share rules, app-name-plus-timestamp is
   an uppercase meta row, a selected/highlighted row inverts. Critical
   severity is a full-bleed `urgent` fill (§2.4) on either surface. Cards
   render the notification's own image, or else the sender's themed app
   icon, in a 40×40 slot (caption-height in the toast's compact mode),
-  hidden entirely when neither resolves — the shell's third sanctioned
-  image-icon exception (M15), after the menu's launcher rows and the bar's
+  hidden entirely when neither resolves, the shell's third sanctioned
+  image-icon exception , after the menu's launcher rows and the bar's
   active-window cell.
-- **OSD** — one small omarchy card, three-cell row inside it (icon | label |
+- **OSD**, one small omarchy card, three-cell row inside it (icon | label |
   value fill track), fixed widths per the existing M-plan contract.
-- **Lock/greeter** — one composed centered block (Task 6's brief), not three
+- **Lock/greeter**, one composed centered block (Task 6's brief), not three
   floating items: a genuinely large `display`/`displayLarge` clock with
   tabular digits sits directly above a **381×67-scaled** (at `fontBaseSize`
   13, scale proportionally) bordered input field with a 3px-equivalent
@@ -908,20 +790,20 @@ floats with a margin or fuses to the screen edge.
   placeholder ("ENTER PASSWORD"), `●` U+25CF masking whose letter-spacing
   **shrinks to fit** so a long password never clips silently, "CHECKING…"
   during auth, an error state that swaps both the message (italic) and the
-  border spec to the `urgent` token, and — when the platform exposes a
-  fingerprint sensor — a fingerprint glyph pinned inside the field's right
+  border spec to the `urgent` token, and, when the platform exposes a
+  fingerprint sensor, a fingerprint glyph pinned inside the field's right
   edge with symmetric horizontal reserve so centered dots stay centered.
   Wake on any click/move/key; Escape or Ctrl+U clears. The backdrop is the
   current wallpaper run through `DitherImage`'s retro pass (chunk 8, palette
-  6). It was a `MultiEffect` gaussian blur through M38 and was the shell's
-  one named blur exception; M39 spent that exception and nothing blurs
+  6). It was a `MultiEffect` gaussian blur once, the shell's
+  one named blur exception. That exception has been spent and nothing blurs
   anywhere now (owner, 2026-08-19). The greeter is the same composed
-  block, same component, identical language — no clock-less/field-only
+  block, same component, identical language, no clock-less/field-only
   divergence from the lock screen.
-- **Screensaver** — the shell's other named continuous-motion exception
+- **Screensaver**, the shell's other named continuous-motion exception
   (§2, item 6): a full-screen block-drawing ASCII banner
   (`FormalShell`, `▄ █ ▀` family, the same weight as omarchy's `logo.txt`)
-  is the subject, centered, animated by a selectable effect — any of
+  is the subject, centered, animated by a selectable effect, any of
   ttfx's 37, or `random`, the default. No cells, no rules, no meta rows on
   this surface; its entire content *is* the motion, and it exits instantly
   (no fade) on real input.
@@ -929,7 +811,7 @@ floats with a margin or fuses to the screen edge.
   This is also the one surface whose colors are **not** the shell's
   palette. It runs ttfx (`omacom-io/ttfx`, the engine omarchy's own
   screensaver uses) and paints the truecolor frames ttfx emits, so each
-  effect arrives in its own upstream gradient — decrypt amber, matrix
+  effect arrives in its own upstream gradient, decrypt amber, matrix
   green, rain blue, slide purple-red-orange. Omarchy passes no gradient
   overrides and neither do we (owner's call, 2026-08-11): a random effect
   per cycle is what makes the color change. Only the background and the
@@ -939,25 +821,25 @@ floats with a margin or fuses to the screen edge.
 
   One output animates, not all of them (`shell/Display/priority.js`).
   Every other screen covers itself with the same surface carrying the
-  converged banner, painted once, in `accent` — the effect's own gradient
+  converged banner, painted once, in `accent`, the effect's own gradient
   would mean running the effect there too. Which one comes from
   `display.outputPriority`, a preference list resolved against what is
   connected (`["HDMI", "internal"]`), re-applied on any screen change so an
   unplug hands the animation down the list and a plug takes it back. Unset,
   it's the focused output. A frame is a full-screen Canvas repaint,
   and Qt 6's Canvas has only the QImage render target, so each one costs a
-  CPU rasterize plus a whole-surface texture upload — on a hybrid laptop,
+  CPU rasterize plus a whole-surface texture upload, on a hybrid laptop,
   plus a cross-GPU copy for every output the compositor doesn't scan out on
   the card the shell renders on.
-- **Picker** — the ASCII-OS table surface applied to a grid instead of a
+- **Picker**, the ASCII-OS table surface applied to a grid instead of a
   column: image cells share hairline rules, current cell inverts (§2.2),
   keyboard-navigable. Omarchy's skewed carousel remains an explicitly later
   flourish (spec §11), not adopted here.
-- **Capture picker** — the only surface that is mostly *not* drawn: it
+- **Capture picker**, the only surface that is mostly *not* drawn: it
   renders a grim-captured freeze of each output at 1:1 and puts chrome on
   top of it, because that freeze is what the capture itself photographs.
   Chrome is a scrim over everything except the selection (four plain
-  rectangles at 0.6 on `background`, never a mask or a shader — §2's no-blur
+  rectangles at 0.6 on `background`, never a mask or a shader, §2's no-blur
   rule holds here as everywhere but the lock screen), an `accent` selection
   border at `Theme.borderWidth`, and one standalone readout cell carrying
   `W×H` plus the dim uppercase name of what is selected. A bottom-centered
@@ -967,13 +849,13 @@ floats with a margin or fuses to the screen edge.
   **The toolbar** sits along the bottom edge, under the legend: a bordered
   card (`background` fill, `rule` border at `Theme.borderWidth`, radius 0,
   `panelPadding` inset) holding one row of cells. They are the bar's
-  `standalone` cells, not the fused ledger — six discrete buttons is exactly
+  `standalone` cells, not the fused ledger, six discrete buttons is exactly
   what that chrome is for, and it brings the bar's own hover inversion
   (§1.1/§3) with it. The current tool is `selected`, so it stays inverted
   under the pointer without a second treatment (§2.4). Two dim uppercase
   `MetaLabel` group headers (`SHOT`, `REC`) separate the two halves in the
   mek meta-row idiom, and the trailing commit button is the ink cell (§2
-  item 11) — the one committing action on the surface.
+  item 11), the one committing action on the surface.
 
   The record tools swap two things and nothing else: the selection border
   moves from `accent` to `urgent` (the same role the bar's recording
@@ -994,43 +876,42 @@ floats with a margin or fuses to the screen edge.
 
 ## 4. Motion
 
-Written to the owner's M13 brief verbatim: "fast and subtle, it should just
-look better." Motion is additive polish on top of the flat-and-still
-baseline above — it never changes an end state, never causes a layout jump,
+The brief, verbatim: "fast and subtle, it should just look better." Motion is additive polish on top of the flat-and-still
+baseline above, it never changes an end state, never causes a layout jump,
 and every rule here is checkable:
 
 1. **Two durations, one curve.** `Theme.motion.fast` (100ms) paces hover
    fills; `Theme.motion.standard` (130ms) paces surface enter/exit. Both
-   sit inside a hard 90–140ms band — nothing in the shell animates slower
+   sit inside a hard 90–140ms band, nothing in the shell animates slower
    or faster. The only easing curve is `Theme.motion.easing`
    (`Easing.OutCubic`), used for enter and exit alike.
 2. **Opacity plus small translate only.** An entering surface fades from 0
    and slides `Theme.motion.slide` (6px, hard band 4–8px) into its resting
-   place — a panel drops down from under the bar, the OSD rises from the
+   place, a panel drops down from under the bar, the OSD rises from the
    bottom edge, right-anchored surfaces slide in from the right. Exit is
    the same pair reversed. No scale, no bounce, no blur, no zoom; radius
    stays 0.
 3. **Full-bleed accent/selection swaps stay instant.** The ledger
    inversion (menu cursor row, picker cell, center row), the focused
    workspace's accent fill, an armed toggle, a critical cell's urgent fill
-   — these are *states*, not transitions (§1.1/§2.2/§2.4), and they snap.
+  , these are *states*, not transitions (§1.1/§2.2/§2.4), and they snap.
    Only the low-alpha hover fill fades; the moment a cell resolves to
    `selected`/`accent`/`urgent`, the swap is immediate.
 4. **Every animation is interruptible.** Transitions are driven by
    `Behavior`s (or a single animated scalar), so reversing a state
-   mid-flight reverses the animation from wherever it is — never a queued
+   mid-flight reverses the animation from wherever it is, never a queued
    replay, never a blocked input.
-5. **`motion.enabled: false`** (settings.json) zeroes both durations —
+5. **`motion.enabled: false`** (settings.json) zeroes both durations , 
    every transition collapses to today's instant state swap, pixels
    untouched. This is the shell's reduced-motion switch; Wayland has no
    `prefers-reduced-motion` to inherit.
 6. **Sanctioned-instant surfaces.** Lock/greeter enter and exit stay
-   deliberately unanimated — a security surface snapping shut/open is
+   deliberately unanimated, a security surface snapping shut/open is
    intentional (CLAUDE.md). The screensaver left this carve-out on
    2026-08-12 (owner: "make the screensaver fade in/out too, currently
    it's instant"), superseding the earlier reading that dismissal had to
    read as regaining control instantly. It now fades **both ways**,
-   opacity only (no slide — a full-screen surface has no edge to slide in
+   opacity only (no slide, a full-screen surface has no edge to slide in
    from), at `Theme.motion.reveal` rather than `Theme.motion.standard`:
    the same 400ms band the wallpaper crossfade already uses, because a
    full-screen swap paced at 130ms reads as a flash rather than a fade.
@@ -1040,8 +921,8 @@ and every rule here is checkable:
    root.active || content.opacity > 0`, the same hold Panel.qml uses), and
    the animation freezes at the start of the exit fade instead of running
    on behind it.
-7. **Marquee-on-overflow** (owner-requested, M16 Task 11) is the fourth
-   continuous-motion carve-out, with a real gate — never a decoration
+7. **Marquee-on-overflow** (owner-requested) is the fourth
+   continuous-motion carve-out, with a real gate, never a decoration
    running for its own sake. The bar's now-playing title scrolls
    (`Theme.motion.marqueePxPerSec`, ~30px/s, no easing, a
    `Theme.motion.marqueeHoldMs` ~2s hold at the loop start) only when the
@@ -1058,7 +939,7 @@ and every rule here is checkable:
    real `cava` child process (`VisualizerService.qml`), not a QML
    animation, so the gate kills the process outright rather than pausing a
    paint: it runs only while `MediaService.isPlaying` AND the bar window
-   showing the widget is actually on screen AND `Theme.motionEnabled` —
+   showing the widget is actually on screen AND `Theme.motionEnabled` , 
    any one going false stops the process, zero CPU, same as the marquee
    gate above but enforced on a real OS process instead of a `Behavior`.
    Six per-column dithered tracks (§2 item 8's fill+dither
@@ -1066,10 +947,9 @@ and every rule here is checkable:
    to its own level. The fill's color is the column's own energy band
    (`Model.levelColorBand`): `dimForeground` below 0.4, `foreground`
    through the middle, `Theme.color.accent` only past a 0.85 peak, so the
-   color carries loudness rather than decoration. M20 Task 5b replaced
-   these bands with per-bar colors sampled from the playing track's cover
-   and the owner rejected that on the live shell 2026-08-10 ("the album
-   cover's colors are ugly just keep it like it was before") — the bands
+   color carries loudness rather than decoration. Per-bar colors sampled from
+   the playing track's cover replaced these bands once and the owner rejected it on the live shell 2026-08-10 ("the album
+   cover's colors are ugly just keep it like it was before"), the bands
    are the shipped default, and the extraction component is gone. Hover
    inversion wins here, unlike the now-playing cell's own mini cover: dim
    and content collapse to the inverted ink on their own, and a peak bar
@@ -1082,17 +962,16 @@ and every rule here is checkable:
 The "breathing" opacity pulse stays reserved for genuinely in-progress
 states (charging, an active call) at its own 900ms pacing, and the
 screensaver remains the one named, load-bearing exception to "flat and
-still" — not a crack in the doctrine, a documented carve-out. The
+still", not a crack in the doctrine, a documented carve-out. The
 wallpaper crossfade (`Background.qml`) is the second:
 `Theme.motion.reveal` (400ms, `Easing.InOutQuad`) sits outside rule 1's
-90–140ms band on purpose — a full-screen image swap reads better slower
-than a control hover — and, unlike the pulse, it does respect
+90–140ms band on purpose, a full-screen image swap reads better slower
+than a control hover, and, unlike the pulse, it does respect
 `motion.enabled: false` (zeroed to a hard cut straight onto the new
 wallpaper, same as `fast`/`standard`). The now-playing marquee is the
-fourth (rule 7 above) — gated subtle by owner request, never running
+fourth (rule 7 above), gated subtle by owner request, never running
 unwatched or undisableable. The bar's visualizer (rule 8 above) is the
 fifth, the only one of the five gated on a real child process rather than
 a QML animation.
 
-Do not restyle a surface outside a plan that schedules it (Tasks 2–7 of the
-M8b plan schedule every surface named above in turn).
+Do not restyle a surface outside a plan that schedules it.
