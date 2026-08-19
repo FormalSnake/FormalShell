@@ -219,8 +219,16 @@
 # retitled to a second, deliberately long fixture track (kill by PID,
 # respawn on the long track), `media status` is polled until the long
 # title lands, and a second screenshot lands mid-scroll
-# (media-marquee-scroll.png). mpv is killed by PID right after, before
-# niri quits, so no player process outlives the run.
+# (media-marquee-scroll.png). Then the rest of MPRIS, which no screenshot
+# can vouch for on its own: `media shuffle on`, `media loop track` and
+# `media volume 30` are set over IPC and read back out of the player itself
+# (media-controls-status.json, screenshotted as media-controls.png with the
+# two toggles inverted and the VOLUME track at 30%). A second mpv then joins
+# the bus so the panel's PLAYERS switcher exists at all, and `media select`
+# is handed the id that is NOT the one the pick landed on
+# (media-players.json), with media-select-status.json proving the whole
+# shell moved to it (media-players.png). Both mpvs are killed by PID right
+# after, before niri quits, so no player process outlives the run.
 # With --lock: first, before the nested session even starts, runs
 # `result/bin/formalshell-lock-before-sleep` with no shell instance running
 # at all and records its exit code (lock-before-sleep-rc.txt must be "0" —
@@ -715,6 +723,38 @@
 # errors and no warnings: the only place a plugin's entry QML failing to
 # load is visible from outside the process, since plugin QML lives outside
 # the repo and qmllint never sees it.
+# With --monitor (M38), points bar.layout at the opt-in "monitor" builtin,
+# opens the compact panel over `panel open monitor`, then summons the
+# launcher's FULL monitor app view (`menu summon monitor`, the first route
+# registered in Menu/appviews.js). Three frames off one timeline:
+# monitor-bar.png, monitor-panel.png and monitor-view.png, with `monitor
+# status` and `monitor gpu` dumped beside them. THE HONEST NO GPU STATE IS
+# PART OF THE PASSING RESULT: /sys/class/drm in this VM holds no cards at
+# all, so `monitor gpu` has to report available:false over an empty card
+# list (the view drawing its NO GPU cell) while `monitor status` taken in
+# the same breath carries real non-null CPU and memory numbers off the VM's
+# own /proc. A run where the monitor shows nothing at all, or one where a
+# GPU appears out of nowhere, fails here instead of producing a perfectly
+# plausible screenshot.
+# With --gpu (M38), the same surfaces against a two-card machine. Two PATH
+# shims, same hermetic-producer idea as the gh/clipssh ones below: an
+# `nvidia-smi` emitting the owner's g815 bytes verbatim (fan.speed `[N/A]`,
+# a real value NVIDIA emits on laptop GPUs, which must render unavailable
+# rather than 0), and an `sh` that intercepts exactly ONE command, the
+# monitor's own collector script, splicing tests/fixtures/gpu-hybrid.txt's
+# @drm rows in after the marker the real collector prints and passing every
+# other `sh -c` the shell runs straight through to the real shell. The
+# collector reads /sys/class/drm itself and inventing /sys entries in the
+# rig is banned (CLAUDE.md), so shimming the collector's own view is the
+# honest way to render a hybrid laptop on a machine with no GPU: the bytes
+# are real bytes captured off real hardware, and no shell code bends to
+# accommodate the test. Then the claim no screenshot can make: `monitor
+# launch` against a fixture .desktop entry whose Exec is a probe script
+# writing its own environment to a file, read back to prove all four of
+# __NV_PRIME_RENDER_OFFLOAD, __NV_PRIME_RENDER_OFFLOAD_PROVIDER,
+# __GLX_VENDOR_LIBRARY_NAME and __VK_LAYER_NV_optimus reached the child
+# (the exact set NixOS's own nvidia-offload wrapper exports, read off g815
+# on 2026-08-19) and that the entry's %U field code did not.
 #
 # D-Bus isolation (M5 hard rule): the whole nested niri invocation runs under
 # `dbus-run-session`, giving formalshell's NotificationServer (and anything
@@ -798,6 +838,8 @@ systemupdate_mode=false
 plugins_mode=false
 hotcorner_mode=false
 panel_keys_mode=false
+monitor_mode=false
+gpu_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -840,7 +882,9 @@ while [ $# -gt 0 ]; do
     --plugins) plugins_mode=true; shift ;;
     --hotcorner) hotcorner_mode=true; shift ;;
     --panel-keys) panel_keys_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--console] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys]" >&2; exit 1 ;;
+    --monitor) monitor_mode=true; shift ;;
+    --gpu) gpu_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--console] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys] [--monitor] [--gpu]" >&2; exit 1 ;;
   esac
 done
 
@@ -868,7 +912,7 @@ fi
 # this stays scoped to the one leg CLAUDE.md already calls "THE visual
 # verification loop for any bar/surface change".
 active_window_fixture_mode=true
-if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $capture_edit_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode; then
+if $dump_mode || $wallpaper_mode || $theme_toggle_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode || $clipboard_mode || $clipssh_mode || $wifi_mode || $media_mode || $lock_mode || $polkit_mode || $screensaver_mode || $screensaver_gif_mode || $picker_mode || $tray_mode || $chevron_mode || $bar_layout_mode || $screenshot_mode || $capture_mode || $capture_edit_mode || $nightlight_mode || $speedtest_mode || $instance_mode || $share_mode || $visualizer_mode || $gallery_mode || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode || $mic_mode || $systemupdate_mode || $plugins_mode || $panel_keys_mode || $monitor_mode || $gpu_mode; then
   active_window_fixture_mode=false
 fi
 # --panel appmenu is the one panel leg that needs the fixture window back:
@@ -1047,7 +1091,8 @@ fi
 if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
   || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode \
-  || $capture_edit_mode || $panel_airpods_mode || $panel_dualsense_mode || $console_mode; then
+  || $capture_edit_mode || $panel_airpods_mode || $panel_dualsense_mode || $console_mode \
+  || $monitor_mode || $gpu_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -1073,7 +1118,10 @@ if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_t
   # precisely where that toast lands. capture_edit_mode needs the same top-
   # right corner for a different reason: the shell's own SCREENSHOT SAVED
   # toast anchors there too (Toasts.qml), and the claim is reading that
-  # toast's EDIT action and thumbnail, not niri's unrelated one.
+  # toast's EDIT action and thumbnail, not niri's unrelated one. The M38
+  # legs (monitor/gpu) join for chevron_mode's reason exactly: the opt-in
+  # monitor cell leads the bar's RIGHT region, which is where that toast
+  # lands, and the panel opened under it falls back to the same corner.
   if command -v grim >/dev/null 2>&1; then
     grim_bin=$(command -v grim)
   else
@@ -1422,11 +1470,17 @@ media_status_path="$shot_dir/media-status.json"
 media_marquee_static_path="$shot_dir/media-marquee-static.png"
 media_marquee_scroll_path="$shot_dir/media-marquee-scroll.png"
 media_status_long_path="$shot_dir/media-status-long.json"
+media_controls_status_path="$shot_dir/media-controls-status.json"
+media_controls_png_path="$shot_dir/media-controls.png"
+media_players_path="$shot_dir/media-players.json"
+media_select_status_path="$shot_dir/media-select-status.json"
+media_players_png_path="$shot_dir/media-players.png"
 eds_seed_path="$shot_dir/eds-seed.txt"
 eds_seed2_path="$shot_dir/eds-seed-2.txt"
 calendar_select_path="$shot_dir/calendar-select.txt"
 calendar_status_path="$shot_dir/calendar-status.json"
 media_pid_path="$shot_dir/mpv.pid"
+media_pid2_path="$shot_dir/mpv-2.pid"
 visualizer_pid_path="$shot_dir/visualizer-mpv.pid"
 visualizer_playing_path="$shot_dir/visualizer-playing.png"
 visualizer_pgrep_playing_path="$shot_dir/visualizer-pgrep-playing.txt"
@@ -1603,6 +1657,25 @@ share_instance_status_path="$shot_dir/share-instance-status.json"
 share_absent_query1_path="$shot_dir/share-absent-query-1.json"
 share_absent_query2_path="$shot_dir/share-absent-query-2.json"
 share_menu_absent_path="$shot_dir/share-menu-absent.png"
+shell_log_path="$shot_dir/shell.log"
+monitor_status_path="$shot_dir/monitor-status.json"
+monitor_gpu_path="$shot_dir/monitor-gpu.json"
+monitor_panel_reply_path="$shot_dir/monitor-panel-reply.txt"
+monitor_panel_state_path="$shot_dir/monitor-panel-state.txt"
+monitor_menu_reply_path="$shot_dir/monitor-menu-reply.txt"
+monitor_menu_status_path="$shot_dir/monitor-menu-status.json"
+monitor_bar_png="$shot_dir/monitor-bar.png"
+monitor_panel_png="$shot_dir/monitor-panel.png"
+monitor_view_png="$shot_dir/monitor-view.png"
+gpu_cards_path="$shot_dir/gpu-cards.json"
+gpu_route_reply_path="$shot_dir/gpu-route-reply.txt"
+gpu_menu_status_path="$shot_dir/gpu-menu-status.json"
+gpu_launch_reply_path="$shot_dir/gpu-launch-reply.txt"
+gpu_offload_env_path="$shot_dir/gpu-offload-env.txt"
+gpu_probe_script="$shot_dir/gpu-offload-probe.sh"
+gpu_drm_rows_path="$shot_dir/gpu-drm-rows.txt"
+gpu_route_png="$shot_dir/gpu-route.png"
+gpu_monitor_png="$shot_dir/gpu-monitor.png"
 
 # --share's second phase (the honest-absent proof) needs a PATH that
 # genuinely cannot find `localsend_app` — not a shim with a fake one ahead
@@ -1713,6 +1786,31 @@ Size=48
 Context=Applications
 Type=Threshold
 EOF
+fi
+
+# M38 Task 10: the entry `monitor launch` offloads. Its Exec is a probe
+# script that writes its own argv and environment to a file and exits, which
+# is the only way an env var reaching a child is provable at all: the four
+# __NV_*/__GLX_*/__VK_* variables gpu.js's offloadArgv puts in front of the
+# command are invisible to a screenshot. The trailing %U is deliberate: a
+# field code the desktop spec says a launcher strips, so the recorded argv
+# is also the proof stripFieldCodes ran. `Icon` is left off (no icon theme
+# entry exists for this fixture, and the row is never rendered anyway).
+if $gpu_mode; then
+  cat > "$iso_home/.local/share/applications/formalshell-gpu-probe.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=GPU Offload Probe
+Exec=$gpu_probe_script %U
+EOF
+  cat > "$gpu_probe_script" <<EOF
+#!/usr/bin/env bash
+{
+  printf 'ARGV:%s\n' "\$*"
+  env | sort
+} > "$gpu_offload_env_path"
+EOF
+  chmod +x "$gpu_probe_script"
 fi
 
 # Calendar events fixture (M6 Task 5): a khal/vdir-style directory of one
@@ -1831,13 +1929,14 @@ if $screensaver_mode; then
   # holdSeconds shortened the same way timeoutSeconds is: the cycle proof
   # waits out a real convergence + hold, just on an affordable schedule.
   #
-  # outputPriority names two connectors this session does not have before the
-  # one it does, so the assertion on `mainOutput` below is about the list
-  # being walked in order and falling back, not merely about a single-output
-  # session having one obvious answer. "internal" is in there as the alias
-  # ("winit" is not a panel), so a run that started matching it would be
-  # reporting the alias broke.
-  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2, "outputPriority": ["HDMI-A-9", "internal", "winit"]'"$ss_effect_json$ss_ascii_json"'}'
+  # display.outputPriority names two connectors this session does not have
+  # before the one it does, so the assertion on `mainOutput` below is about
+  # the list being walked in order and falling back, not merely about a
+  # single-output session having one obvious answer. "internal" is in there
+  # as the alias ("winit" is not a panel), so a run that started matching it
+  # would be reporting the alias broke. The key is shell-wide, not
+  # screensaver-owned: the screensaver is one reader of it.
+  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2'"$ss_effect_json$ss_ascii_json"'}, "display": {"outputPriority": ["HDMI-A-9", "internal", "winit"]}'
 fi
 # picker_mode (M7 Task 6): picker.directory points at a fixture directory of
 # a handful of generated solid-color PNGs (below), so --picker's grid
@@ -1903,6 +2002,12 @@ elif $panel_mode && [ "$panel_name" = "display" ]; then
   # `panel open display` spawn below (panel_mode's own branch) is what
   # lights the open-dot in this same screenshot.
   bar_settings=', "bar": {"layout": {"right": ["display", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+elif $monitor_mode || $gpu_mode; then
+  # M38: "monitor" is an opt-in builtin (absent from DEFAULT_LAYOUT, same
+  # footing as "display" above), so naming it here is the whole install of
+  # the cell. Leading the right region rather than appended, so a wide
+  # CPU/MEM/GPU cell can't be clipped off the end of a full row.
+  bar_settings=', "bar": {"layout": {"right": ["monitor", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
 fi
 # record_mode: wf-recorder's dmabuf path has no meaning under llvmpipe
 # (the nested session renders in software, so there is no GPU buffer to
@@ -2136,6 +2241,77 @@ EOF
   chmod +x "$capture_edit_shim_dir/tensaku-edit"
 fi
 
+# --gpu (M38 Task 10): the two shims that let a machine with no GPU at all
+# render a hybrid Intel + NVIDIA laptop, same hermetic-producer idea as the
+# nix/gh/clipssh shims above.
+#
+# `nvidia-smi` is the easy half: Monitor/collect.js's @nvidia line already
+# resolves it off PATH (`command -v nvidia-smi && nvidia-smi --query-gpu=...`),
+# so a shim printing the owner's real g815 row makes the whole
+# collector -> parseNvidia -> mergeGpu -> render path real. `[N/A]` is in
+# there because nvidia-smi really does emit it for fan speed on a laptop
+# GPU, and it has to come out as unavailable rather than 0.
+#
+# The @drm half has no such seam: the collector reads /sys/class/drm itself
+# through builtins and coreutils, this VM's copy holds `version` and nothing
+# else, and inventing /sys entries in the rig is banned outright (CLAUDE.md).
+# So the shim goes one level up, onto the collector's own view: a PATH `sh`
+# that recognises exactly one command (the collector script, matched on the
+# /sys/class/drm glob no other `sh -c` in this shell contains), runs it
+# through the REAL shell so every other section stays the VM's own honest
+# /proc, and splices tests/fixtures/gpu-hybrid.txt's @drm rows in after the
+# marker that run prints. Every other `sh -c` the shell spawns (GpuService's
+# own nvidia-offload/prime-run probe included, which must keep answering
+# "neither", since the env-var offload path is what this leg proves) execs
+# straight through unchanged. The rows are the fixture file itself rather
+# than a copy pasted in here: same bytes the parser tests assert against,
+# captured off real hardware on 2026-08-19.
+#
+# Deliberately NOT shimmed: nvidia-offload and prime-run. Their absence is
+# what sends offloadArgv down the four-env-var branch the launch assertion
+# below reads back.
+if $gpu_mode; then
+  gpu_shim_dir="$shot_dir/gpu-shim"
+  mkdir -p "$gpu_shim_dir"
+  cat > "$gpu_shim_dir/nvidia-smi" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  --query-gpu=*)
+    printf '%s\n' '0, NVIDIA GeForce RTX 5070 Laptop GPU, 16, 50, 78, 8151, 12.17, [N/A]'
+    exit 0
+    ;;
+esac
+exit 1
+EOF
+  chmod +x "$gpu_shim_dir/nvidia-smi"
+
+  # The fixture's @drm section only: @nvidia comes from the shim above (the
+  # real collector line really invoking it), @gfx stays the VM's own empty
+  # answer (no supergfxctl here, which is also the g815's own state).
+  awk '/^@drm$/ { in_drm = 1; next } /^@/ { in_drm = 0 } in_drm' tests/fixtures/gpu-hybrid.txt > "$gpu_drm_rows_path"
+  if [ ! -s "$gpu_drm_rows_path" ]; then
+    echo "SMOKE_FAIL: no @drm rows in tests/fixtures/gpu-hybrid.txt, the collector shim would splice nothing" >&2; exit 1
+  fi
+  # Absolute, resolved here rather than inside the shim: a bare `sh` there
+  # would find the shim itself and recurse forever.
+  real_sh=$(command -v sh)
+  case "$real_sh" in
+    /*) ;;
+    *) real_sh=/bin/sh ;;
+  esac
+  cat > "$gpu_shim_dir/sh" <<EOF
+#!/usr/bin/env bash
+real_sh="$real_sh"
+rows_file="$gpu_drm_rows_path"
+if [ "\${1:-}" = "-c" ] && [[ "\${2:-}" == *"/sys/class/drm/card"* ]]; then
+  "\$real_sh" "\$@" | sed "/^@drm/r \$rows_file"
+  exit \$?
+fi
+exec "\$real_sh" "\$@"
+EOF
+  chmod +x "$gpu_shim_dir/sh"
+fi
+
 if $picker_mode; then
   # M16 Task 12 perf evidence: fixtures must be genuinely bigger than the
   # grid cell's decode cap (105px cell, 2x for the cover-not-fit fix, so
@@ -2349,6 +2525,9 @@ EOF
 if [ -f "$media_pid_path" ]; then
   kill "\$(cat "$media_pid_path")" 2>/dev/null || true
 fi
+if [ -f "$media_pid2_path" ]; then
+  kill "\$(cat "$media_pid2_path")" 2>/dev/null || true
+fi
 EOF
 
   # M16 Task 11's marquee proof, one script (same rationale as
@@ -2379,6 +2558,43 @@ while [ "\$SECONDS" -lt 8 ]; do
 done
 sleep 5
 niri msg action screenshot-screen --path "$media_marquee_scroll_path"
+EOF
+
+  # The rest of MPRIS, driven over IPC because a screenshot alone cannot say
+  # whether a cell that looks inverted actually reached the player: shuffle,
+  # LoopStatus and Volume are set on the live mpv and read straight back out
+  # of `media status`, which is mpv-mpris answering, not the shell repeating
+  # itself. Starts at 16s, after media-marquee.sh's own kill/respawn has
+  # settled on the long-title track (its worst case lands at 16), so these
+  # act on the player that is still there at the end of the run.
+  #
+  # Then a SECOND mpv, which is the only way the panel's PLAYERS switcher
+  # renders at all (one player and there is nothing to switch between, so the
+  # section is deliberately absent). It starts after the marquee's own scroll
+  # shot at ~21 so nothing about that frame changes. `select` is given the id
+  # that is NOT the one status just reported active, read out of the two-entry
+  # `players` dump rather than assumed from mpv's bus naming.
+  media_controls_script="$shot_dir/media-controls.sh"
+  cat > "$media_controls_script" <<EOF
+#!/usr/bin/env bash
+sleep 16
+"$qs_bin" ipc -p "$shell_path" call media shuffle on > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call media loop track > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call media volume 30 > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call media status > "$media_controls_status_path" 2>&1
+niri msg action screenshot-screen --path "$media_controls_png_path"
+sleep 4
+"$mpv_bin" --no-video --really-quiet "$media_track_path" &
+echo \$! > "$media_pid2_path"
+sleep 4
+"$qs_bin" ipc -p "$shell_path" call media players > "$media_players_path" 2>&1
+active=\$(grep -o '"id":"[^"]*"' "$media_controls_status_path" | head -1 | cut -d'"' -f4)
+other=\$(grep -o '"id":"[^"]*"' "$media_players_path" | cut -d'"' -f4 | grep -v "^\$active\$" | head -1)
+"$qs_bin" ipc -p "$shell_path" call media select "\$other" > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call media status > "$media_select_status_path" 2>&1
+niri msg action screenshot-screen --path "$media_players_png_path"
 EOF
 fi
 
@@ -4074,6 +4290,74 @@ sleep 3
 EOF
 fi
 
+# --monitor (M38 Task 10): the system monitor's three surfaces off one
+# timeline, in the order a user meets them. The bar cell is already up by
+# the time this starts (bar.layout named it, and it subscribes while
+# visible, so the collector has been ticking since startup and cpuDelta has
+# the two samples it needs for a real number). Then the compact panel under
+# that cell, then the FULL monitor inside the launcher, which is the
+# milestone's headline surface and gets its own frame rather than sharing
+# the panel's. The panel is closed before the launcher is summoned: they are
+# two different views of the same data and a screenshot showing both proves
+# neither.
+#
+# The status/gpu dumps are taken first, while nothing is open, so they
+# describe the same shell state the bar cell is rendering rather than one a
+# just-opened surface's own subscribe() perturbed.
+if $monitor_mode; then
+  monitor_drive_script="$shot_dir/monitor-drive.sh"
+  cat > "$monitor_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 6
+"$qs_bin" ipc -p "$shell_path" call monitor status > "$monitor_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call monitor gpu > "$monitor_gpu_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
+"$grim_bin" "$monitor_bar_png"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call panel open monitor > "$monitor_panel_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call panel state > "$monitor_panel_state_path" 2>&1
+"$grim_bin" "$monitor_panel_png"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon monitor > "$monitor_menu_reply_path" 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call menu status > "$monitor_menu_status_path" 2>&1
+"$grim_bin" "$monitor_view_png"
+EOF
+fi
+
+# --gpu (M38 Task 10): the same shell, the same surfaces, one shimmed
+# collector richer (see the shim block above). Three claims in one timeline:
+# `monitor gpu` reports the fixture's two cards with the shimmed nvidia-smi's
+# metrics folded into the right one; the launcher's monitor view actually
+# draws them; and `monitor launch` puts the four offload variables in front
+# of a real child process.
+#
+# The launch fires before the last screenshot rather than after, so a probe
+# that never ran shows up as a missing file in this run rather than as a
+# race with the session's own teardown. The full monitor view is summoned
+# last so this run's generic smoke.png shows the two-card rendering too.
+if $gpu_mode; then
+  gpu_drive_script="$shot_dir/gpu-drive.sh"
+  cat > "$gpu_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 6
+"$qs_bin" ipc -p "$shell_path" call monitor gpu > "$gpu_cards_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon gpu > "$gpu_route_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call menu status > "$gpu_menu_status_path" 2>&1
+"$grim_bin" "$gpu_route_png"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call monitor launch formalshell-gpu-probe card0 > "$gpu_launch_reply_path" 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call menu summon monitor > /dev/null 2>&1
+sleep 3
+"$grim_bin" "$gpu_monitor_png"
+EOF
+fi
+
 # --panel-keys (M26 Task 8): opens the audio panel and drives it with real
 # `wtype` keystrokes rather than the `panel`/IPC-only shortcuts every other
 # leg uses — this is the one thing that can actually prove row-level
@@ -4185,6 +4469,13 @@ fi
   if $capture_edit_mode; then
     shim_path_prefix="$capture_edit_shim_dir:$shim_path_prefix"
   fi
+  if $gpu_mode; then
+    # Scoped to this one spawn like every shim above, which matters more
+    # here than anywhere else: this dir carries an `sh`, and it must be the
+    # SHELL's sh and nothing else's. niri, the drive scripts and this
+    # script's own commands all keep resolving the real one.
+    shim_path_prefix="$gpu_shim_dir:$shim_path_prefix"
+  fi
   if $instance_mode; then
     # Captures the primary instance's own stdout/stderr so InstanceLock.qml's
     # "being replaced" log line is real evidence below, not inferred from the
@@ -4203,9 +4494,12 @@ fi
     # first time, M17 Task 3).
     echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell' > '$share_primary_log_path' 2>&1\""
   elif [ -n "$shim_path_prefix" ]; then
-    echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell'\""
+    echo "spawn-at-startup \"sh\" \"-c\" \"PATH='$shim_path_prefix$PATH' exec '$PWD/result/bin/formalshell' > '$shell_log_path' 2>&1\""
   else
-    echo "spawn-at-startup \"$PWD/result/bin/formalshell\""
+    # Captured, not discarded: a shell that dies on a QML error at startup
+    # otherwise fails every assertion below with "No running instances" and
+    # no way to see why.
+    echo "spawn-at-startup \"sh\" \"-c\" \"exec '$PWD/result/bin/formalshell' > '$shell_log_path' 2>&1\""
   fi
   if $active_window_fixture_mode; then
     echo "spawn-at-startup \"bash\" \"$active_window_play_script\""
@@ -4368,6 +4662,7 @@ fi
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 5 && '$qs_bin' ipc -p '$shell_path' call panel open media\""
     echo "spawn-at-startup \"sh\" \"-c\" \"sleep 6 && '$qs_bin' ipc -p '$shell_path' call media status > $media_status_path 2>&1\""
     echo "spawn-at-startup \"bash\" \"$media_marquee_script\""
+    echo "spawn-at-startup \"bash\" \"$media_controls_script\""
     # --media --panel audio: the generic panel_mode open above (sleep 3)
     # and this leg's own "panel open media" (sleep 5) both go through
     # PanelRegistry, which only ever holds one open panel — media wins
@@ -4402,6 +4697,12 @@ fi
   fi
   if $console_mode; then
     echo "spawn-at-startup \"bash\" \"$console_drive_script\""
+  fi
+  if $monitor_mode; then
+    echo "spawn-at-startup \"bash\" \"$monitor_drive_script\""
+  fi
+  if $gpu_mode; then
+    echo "spawn-at-startup \"bash\" \"$gpu_drive_script\""
   fi
   if $capture_mode; then
     echo "spawn-at-startup \"bash\" \"$capture_drive_script\""
@@ -4533,10 +4834,12 @@ fi
     screenshot_delay=10
   elif $media_mode; then
     # media-marquee.sh's own worst case (7s static shot + kill/respawn +
-    # up to 8s retitle poll + 5s into-scroll wait = 21s) lands ~21s in;
-    # this run's generic smoke.png/SMOKE_OK is taken 3s after that, so it
-    # shows the ordinary session mid-scroll on the long-title track.
-    screenshot_delay=24
+    # up to 8s retitle poll + 5s into-scroll wait = 21s) lands ~21s in, and
+    # media-controls.sh's own last step (second player at 21, its select and
+    # status at 25-27) lands ~28s in; this run's generic smoke.png/SMOKE_OK
+    # is taken after both, so it shows the panel with two players registered
+    # and the switcher pinned to the second.
+    screenshot_delay=32
   elif $clipboard_mode; then
     # clipboard-drive.sh's last step (menu summon) lands after its warmup
     # poll (typically 5-7s until the wl-paste watcher is up, 11s ceiling)
@@ -4622,6 +4925,21 @@ fi
     # run's generic smoke.png/SMOKE_OK is taken 4s after that, so it shows
     # the bar left expanded, matching chevron-expanded.png.
     screenshot_delay=14
+  elif $monitor_mode; then
+    # monitor-drive.sh's own final step (the launcher view's grim) lands
+    # around its internal sleep sum plus its own call overhead (~21s in: 14s
+    # of sleeps, 6s for the collector to have ticked twice among them, plus
+    # six `qs ipc` spawns and three grims at roughly a second apiece on
+    # llvmpipe). This run's generic smoke.png/SMOKE_OK is taken 5s past
+    # that, showing the same full monitor view still open.
+    screenshot_delay=26
+  elif $gpu_mode; then
+    # gpu-drive.sh's own final step (the two-card view's grim) lands on the
+    # same kind of budget (~21s in: 15s of sleeps plus five `qs ipc` spawns
+    # and two grims), with the offload launch 6s before it so the probe has
+    # long since written its file. This run's generic smoke.png/SMOKE_OK is
+    # taken 5s past that, on the same view.
+    screenshot_delay=26
   elif $panel_mode && [ "$panel_name" = "calendar" ]; then
     # eds-drive.sh opens the panel only after its two seed writes return
     # (~4-7s in when this run's private bus has to cold-activate EDS
@@ -4806,6 +5124,10 @@ elif $picker_mode; then
   session_timeout=60
 elif $capture_mode; then
   # screenshot_delay=30 plus tail_gap needs real margin past 33.
+  session_timeout=50
+elif $media_mode; then
+  # screenshot_delay=32 plus tail_gap: the default 40 leaves no margin once
+  # media-controls.sh's second-player leg pushes the shot out to 32.
   session_timeout=50
 elif $record_mode; then
   session_timeout=90
@@ -5514,6 +5836,56 @@ if $media_mode; then
   else
     echo "SMOKE_FAIL: no media-marquee-scroll screenshot produced" >&2; exit 1
   fi
+  # The rest of MPRIS: shuffle, LoopStatus and Volume were set over IPC and
+  # are read back here off mpv itself, so a panel cell that inverts without
+  # the D-Bus call landing fails the run instead of screenshotting well.
+  if [ -s "$media_controls_status_path" ]; then
+    cat "$media_controls_status_path"
+  else
+    echo "SMOKE_FAIL: no media status produced after the controls leg" >&2; exit 1
+  fi
+  for media_expect in '"shuffleSupported":true' '"shuffle":true' '"loopSupported":true' '"loop":"track"' '"volumeSupported":true'; do
+    if ! grep -qF "$media_expect" "$media_controls_status_path"; then
+      echo "SMOKE_FAIL: media status does not report $media_expect after the controls leg, got: $(cat "$media_controls_status_path")" >&2; exit 1
+    fi
+  done
+  # 0.3 on the wire is 30 in mpv's own units and back; the window is for that
+  # round trip's float, not a tolerance on what was asked for.
+  media_volume=$(grep -o '"volume":[0-9.eE+-]*' "$media_controls_status_path" | head -1 | cut -d: -f2)
+  if ! awk -v v="$media_volume" 'BEGIN { exit !(v > 0.28 && v < 0.32) }'; then
+    echo "SMOKE_FAIL: media volume 30 did not reach the player, status reports volume=$media_volume" >&2; exit 1
+  fi
+  if [ -f "$media_controls_png_path" ]; then
+    echo "SMOKE_MEDIA_CONTROLS $media_controls_png_path"
+  else
+    echo "SMOKE_FAIL: no media-controls screenshot produced" >&2; exit 1
+  fi
+  # Two registered players, and `select` moving the whole shell to the one
+  # the pick did not choose on its own.
+  if [ -s "$media_players_path" ]; then
+    cat "$media_players_path"
+  else
+    echo "SMOKE_FAIL: no media players list produced" >&2; exit 1
+  fi
+  if [ -s "$media_select_status_path" ]; then
+    cat "$media_select_status_path"
+  else
+    echo "SMOKE_FAIL: no media status produced after select" >&2; exit 1
+  fi
+  if ! grep -q '"playerCount":2' "$media_select_status_path"; then
+    echo "SMOKE_FAIL: second mpv never registered on MPRIS, got: $(cat "$media_select_status_path")" >&2; exit 1
+  fi
+  media_active_before=$(grep -o '"id":"[^"]*"' "$media_controls_status_path" | head -1 | cut -d'"' -f4)
+  media_active_after=$(grep -o '"id":"[^"]*"' "$media_select_status_path" | head -1 | cut -d'"' -f4)
+  media_selected_after=$(grep -o '"selectedId":"[^"]*"' "$media_select_status_path" | head -1 | cut -d'"' -f4)
+  if [ -z "$media_active_after" ] || [ "$media_active_after" != "$media_selected_after" ] || [ "$media_active_after" = "$media_active_before" ]; then
+    echo "SMOKE_FAIL: media select did not move the active player (before=$media_active_before after=$media_active_after selected=$media_selected_after)" >&2; exit 1
+  fi
+  if [ -f "$media_players_png_path" ]; then
+    echo "SMOKE_MEDIA_PLAYERS $media_players_png_path"
+  else
+    echo "SMOKE_FAIL: no media-players screenshot produced" >&2; exit 1
+  fi
   # --media --panel audio (M15 Task 4): media_status_path above already
   # proves mpv's stream is real and playing; this proves the audio panel
   # itself is what the screenshot shows (not the media panel that also
@@ -5738,8 +6110,8 @@ if $screensaver_mode; then
   if ! grep -q '"active":true' "$ss_auto_status_path"; then
     echo "SMOKE_FAIL: screensaver did not auto-activate once the media guard cleared — got: $(cat "$ss_auto_status_path")" >&2; exit 1
   fi
-  # One output animates (shell/Screensaver/outputs.js), the rest hold the
-  # converged banner. The fixture's screensaver.outputPriority lists two
+  # One output animates (shell/Display/priority.js), the rest hold the
+  # converged banner. The fixture's display.outputPriority lists two
   # connectors this session doesn't have ahead of the one it does, so this
   # asserts the configured list was walked to its third entry and landed on a
   # real connector name — never "" (nothing animating), never a stale or
@@ -7114,6 +7486,153 @@ if $panel_dualsense_mode; then
     echo "SMOKE_FAIL: no dualsense-panel screenshot produced at $dualsense_panel_png" >&2; exit 1
   fi
   echo "SMOKE_DUALSENSE $dualsense_panel_png (this VM has no hid-playstation device, so the honest NO CONTROLLER card is the correct rendering)"
+fi
+
+# --monitor (M38 Task 10): the run is honest only if both halves hold at
+# once. `monitor gpu` has to report nothing on a rig whose /sys/class/drm
+# carries `version` and no cards (a GPU appearing here would mean something
+# fabricated one), and the `monitor status` taken in the same breath has to
+# carry real numbers off the VM's own /proc (a monitor rendering nothing at
+# all screenshots just as prettily as one rendering everything).
+if $monitor_mode; then
+  if [ -s "$monitor_status_path" ]; then
+    cat "$monitor_status_path"
+  else
+    echo "SMOKE_FAIL: no monitor status produced" >&2; exit 1
+  fi
+  # cpuDelta returns null until it has two /proc/stat samples (the surfaces
+  # render that as a dash, never a fabricated 0%), so a real fraction here
+  # proves the collector is actually ticking, not merely that the service
+  # loaded.
+  if ! grep -q '"cpu":{"available":true,"aggregate":[0-9]' "$monitor_status_path"; then
+    echo "SMOKE_FAIL: monitor status carries no real CPU sample. Got: $(cat "$monitor_status_path")" >&2
+    echo "--- shell log ---" >&2; cat "$shell_log_path" >&2 2>/dev/null; exit 1
+  fi
+  if ! grep -q '"mem":{"available":true,"totalBytes":[1-9]' "$monitor_status_path"; then
+    echo "SMOKE_FAIL: monitor status carries no real memory sample. Got: $(cat "$monitor_status_path")" >&2; exit 1
+  fi
+  if [ -s "$monitor_gpu_path" ]; then
+    cat "$monitor_gpu_path"
+  else
+    echo "SMOKE_FAIL: no monitor gpu produced" >&2; exit 1
+  fi
+  if ! grep -qF '"available":false,"cards":[]' "$monitor_gpu_path"; then
+    echo "SMOKE_FAIL: monitor gpu did not report this rig's honest no-GPU state. Got: $(cat "$monitor_gpu_path")" >&2; exit 1
+  fi
+  # The cell is opt-in, so the screenshot below only means something if the
+  # layout the shell resolved is the one bar_settings asked for.
+  if [ ! -s "$dump_path" ]; then
+    echo "SMOKE_FAIL: no debug dump produced" >&2; exit 1
+  fi
+  if ! grep -qF '"right":["monitor"' "$dump_path"; then
+    echo "SMOKE_FAIL: the resolved settings do not lead bar.layout's right region with monitor, the opt-in cell was never placed: $(cat "$dump_path")" >&2; exit 1
+  fi
+  if [ -f "$monitor_bar_png" ]; then
+    echo "SMOKE_MONITOR_BAR $monitor_bar_png"
+  else
+    echo "SMOKE_FAIL: no monitor-bar screenshot produced" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$monitor_panel_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: panel open monitor did not return ok, got: $(cat "$monitor_panel_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ "$(head -n1 "$monitor_panel_state_path" 2>/dev/null | tr -d '\r')" != "monitor" ]; then
+    echo "SMOKE_FAIL: panel state did not report monitor open, got: $(cat "$monitor_panel_state_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -f "$monitor_panel_png" ]; then
+    echo "SMOKE_MONITOR_PANEL $monitor_panel_png"
+  else
+    echo "SMOKE_FAIL: no monitor-panel screenshot produced" >&2; exit 1
+  fi
+  if ! grep -q '^ok$' "$monitor_menu_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: menu summon monitor did not return ok, got: $(cat "$monitor_menu_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  # The claim the frame cannot make on its own: the launcher is sitting on
+  # the monitor route itself (an app view, Menu/appviews.js), not on a row
+  # list that happens to mention it.
+  if [ -s "$monitor_menu_status_path" ]; then
+    cat "$monitor_menu_status_path"
+  else
+    echo "SMOKE_FAIL: no menu status produced" >&2; exit 1
+  fi
+  if ! grep -qF '"isOpen":true,"level":"monitor"' "$monitor_menu_status_path"; then
+    echo "SMOKE_FAIL: the launcher is not on the monitor app view. Got: $(cat "$monitor_menu_status_path")" >&2; exit 1
+  fi
+  if [ -f "$monitor_view_png" ]; then
+    echo "SMOKE_MONITOR_VIEW $monitor_view_png (this VM has no GPU at all, so the view's NO GPU cell beside real CPU/MEM is the correct rendering)"
+  else
+    echo "SMOKE_FAIL: no monitor-view screenshot produced" >&2; exit 1
+  fi
+fi
+
+# --gpu (M38 Task 10): the two-card rendering, then the offload argv.
+if $gpu_mode; then
+  if [ -s "$gpu_cards_path" ]; then
+    cat "$gpu_cards_path"
+  else
+    echo "SMOKE_FAIL: no monitor gpu produced" >&2; exit 1
+  fi
+  if ! grep -qF '"card":"card0","driver":"nvidia"' "$gpu_cards_path"; then
+    echo "SMOKE_FAIL: the shimmed collector's dGPU never reached the card list. Got: $(cat "$gpu_cards_path")" >&2; exit 1
+  fi
+  if ! grep -qF '"card":"card1","driver":"i915"' "$gpu_cards_path"; then
+    echo "SMOKE_FAIL: the shimmed collector's iGPU never reached the card list. Got: $(cat "$gpu_cards_path")" >&2; exit 1
+  fi
+  # One grep, three claims: fan.speed's `[N/A]` became null rather than 0,
+  # nvidia-smi's marketing name is what named the card, and boot_vga (0 on
+  # this card) is what made it the discrete one, not its card NUMBER, which
+  # is the lower of the two.
+  if ! grep -qF '"fanPercent":null},"name":"NVIDIA GeForce RTX 5070 Laptop GPU","discrete":true' "$gpu_cards_path"; then
+    echo "SMOKE_FAIL: the nvidia-smi row did not merge into card0 as an unavailable fan on a discrete card. Got: $(cat "$gpu_cards_path")" >&2; exit 1
+  fi
+  if ! grep -qF '"busy":0.16' "$gpu_cards_path"; then
+    echo "SMOKE_FAIL: nvidia-smi's 16% utilization did not land as a 0..1 fraction. Got: $(cat "$gpu_cards_path")" >&2; exit 1
+  fi
+  # i915 has no unprivileged utilisation counter, so an empty metrics
+  # record beside a named card is the honest answer, never a zero.
+  if ! grep -qF '"metrics":{"available":false},"name":"Onboard - Video","discrete":false' "$gpu_cards_path"; then
+    echo "SMOKE_FAIL: the iGPU did not render as ACPI-labelled, integrated and metric-less. Got: $(cat "$gpu_cards_path")" >&2; exit 1
+  fi
+  # The external display hangs off the dGPU on this machine and the internal
+  # panel off the iGPU, which is the whole reason connectors are collected.
+  if ! grep -qF '{"name":"HDMI-A-1","connected":true}' "$gpu_cards_path"; then
+    echo "SMOKE_FAIL: card0's connected HDMI connector never reached the record. Got: $(cat "$gpu_cards_path")" >&2; exit 1
+  fi
+  if [ -s "$gpu_route_reply_path" ]; then
+    cat "$gpu_route_reply_path"
+  fi
+  if [ -s "$gpu_menu_status_path" ]; then
+    cat "$gpu_menu_status_path"
+  fi
+  if [ -f "$gpu_route_png" ]; then
+    echo "SMOKE_GPU_ROUTE $gpu_route_png"
+  else
+    echo "SMOKE_FAIL: no gpu-route screenshot produced" >&2; exit 1
+  fi
+  if ! grep -q '^ok: launched' "$gpu_launch_reply_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: monitor launch was refused, got: $(cat "$gpu_launch_reply_path" 2>/dev/null)" >&2; exit 1
+  fi
+  cat "$gpu_launch_reply_path"
+  # The assertion no screenshot can make. The probe wrote its own
+  # environment, so these four lines are the offload argv actually reaching
+  # a child process rather than a plausible-looking reply string.
+  if [ ! -s "$gpu_offload_env_path" ]; then
+    echo "SMOKE_FAIL: the offload probe never ran, no environment dump at $gpu_offload_env_path" >&2; exit 1
+  fi
+  for var in '__NV_PRIME_RENDER_OFFLOAD=1' '__NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0' '__GLX_VENDOR_LIBRARY_NAME=nvidia' '__VK_LAYER_NV_optimus=NVIDIA_only'; do
+    if ! grep -qxF "$var" "$gpu_offload_env_path"; then
+      echo "SMOKE_FAIL: the launched child's environment is missing $var. Got: $(grep -E '^(__NV|__GLX|__VK)' "$gpu_offload_env_path" | tr '\n' ' ')" >&2; exit 1
+    fi
+  done
+  # The entry's Exec carries a %U the launcher is supposed to strip: a
+  # child handed a literal field code means stripFieldCodes never ran.
+  if ! grep -q '^ARGV:$' "$gpu_offload_env_path"; then
+    echo "SMOKE_FAIL: the launched child was handed arguments, the Exec's %U field code survived. Got: $(grep '^ARGV:' "$gpu_offload_env_path")" >&2; exit 1
+  fi
+  if [ -f "$gpu_monitor_png" ]; then
+    echo "SMOKE_GPU_MONITOR $gpu_monitor_png"
+  else
+    echo "SMOKE_FAIL: no gpu-monitor screenshot produced" >&2; exit 1
+  fi
 fi
 
 if [ -f "$shot_dir/smoke.png" ]; then
