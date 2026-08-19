@@ -2,12 +2,28 @@ import QtQuick
 import qs.Core as Core
 import qs.Components
 import qs.Services
+import "../../../Menu/actions.js" as Actions
+import "../../../Monitor/procs.js" as Procs
 import "../../../Power/model.js" as Power
 
 // The full system monitor, rendered inside the launcher card (M38 Task 7).
 // Registered in Menu/appviews.js against the "monitor" route, loaded by
 // Menu.qml's app-view Loader. Nothing here knows about the menu beyond
 // being sized by it, so this file is also what a second app view copies.
+//
+// btop's layout, and for btop's reason: the machine's stats above, the
+// process table below taking whatever room is left, one surface. The table
+// shipped as a route of its own for one day (M39's "processes") and was
+// folded back in here (owner, 2026-08-19: "I never wanted a separate
+// processes list"). Two routes made the search field on THIS one inert,
+// which is the state a text cursor sitting in an empty field promises the
+// opposite of; there is one place to look at the machine now, and typing in
+// it filters the table.
+//
+// So this view uses all four of Menu/appviews.js's seams: `query` filters
+// the table, `scrollTarget` is the table, `viewKey` claims the keys a row
+// cursor needs before the menu's own handler sees them, and `viewActions`
+// replaces the row list's verbs with the ones that are true here.
 //
 // Two ledger columns behind one shared vertical rule, in DESIGN.md's cell
 // grammar: uppercase MetaLabel section headers with a trailing colon, one
@@ -42,19 +58,77 @@ import "../../../Power/model.js" as Power
 Item {
     id: root
 
-    implicitHeight: columns.height
+    // What the card wants before Menu.qml caps it (_rowsAreaHeight takes
+    // the smaller of this and its cap): the whole ledger plus a row per
+    // process, which on any real machine is far past the cap and therefore
+    // asks for the tallest card the launcher will draw. That is the point —
+    // the table is the reason this route is a view rather than a row list.
+    // Measured arithmetically off the row count rather than read back off
+    // `list.contentHeight`, which would close a loop through the height the
+    // list is then given.
+    implicitHeight: statsColumns.height + procChrome.height
+        + (root._rows.length === 0 ? emptyCell.height : root._rows.length * root._rowHeight)
 
-    Component.onCompleted: SystemMonitorService.subscribe()
-    Component.onDestruction: SystemMonitorService.unsubscribe()
+    Component.onCompleted: {
+        SystemMonitorService.subscribe();
+        ProcessService.subscribe();
+    }
+    Component.onDestruction: {
+        SystemMonitorService.unsubscribe();
+        ProcessService.unsubscribe();
+    }
 
-    // The app-view scroll seam (Menu.qml's key handler): a view that
-    // declares `scrollTarget` gets ↑↓/Page/Home/End driving its Flickable,
-    // which is what makes the launcher's own MOVE hint true on this route.
-    // Declared beside the subscription on purpose: both are this file's
-    // whole contract with the menu.
-    readonly property Flickable scrollTarget: scroller
+    // The app-view scroll seam (Menu.qml's key handler). It names the
+    // process table rather than the ledger above it: the table is the part
+    // with more content than room, and it is what the cursor lives in.
+    readonly property Flickable scrollTarget: list
+
+    // Bound by Menu.qml to the live search text.
+    property string query: ""
+
+    property string sortMode: "cpu"
+
+    // Which process the cursor is on, held as a pid rather than an index:
+    // the table re-sorts on every poll and a row that gained a percent
+    // point moves under an index-based cursor, so an index would arm a
+    // confirm on one process and fire it at another.
+    property int cursorPid: 0
+
+    // The armed action, or "" when nothing is. Cleared by anything that
+    // changes what the cursor is pointing at.
+    property string confirmAction: ""
+    property int confirmPid: 0
+
+    readonly property var _rows: Procs.sortRows(Procs.filterRows(ProcessService.rows, root.query), root.sortMode)
+    readonly property int _cursorIndex: {
+        for (var i = 0; i < root._rows.length; i++) {
+            if (root._rows[i].pid === root.cursorPid)
+                return i;
+        }
+        return root._rows.length > 0 ? 0 : -1;
+    }
+    readonly property var _cursorRow: root._cursorIndex >= 0 ? root._rows[root._cursorIndex] : null
+
+    // Retyping the filter is a new decision about what to act on, so it
+    // disarms too. A cursor move disarms in _moveCursor; a process that
+    // exits from under an armed confirm needs nothing, since _press re-arms
+    // whenever the pid under the cursor is not the pid that was armed.
+    onQueryChanged: root._disarm()
 
     readonly property real _colWidth: Math.round(root.width / 2)
+
+    // How the two halves split the card, in the order the answers matter.
+    // Neither half is allowed to hold room the other needs: the table takes
+    // what its rows actually come to, the ledger takes what is left up to
+    // its own full height, and when both want more than there is they meet
+    // at btop's half-and-half. That last clause is the normal case (400
+    // processes), and the first is what keeps a filter that narrows to one
+    // row from leaving half a card of nothing under it.
+    readonly property real _tableWanted: root._rows.length === 0
+        ? emptyCell.height
+        : root._rows.length * root._rowHeight
+    readonly property real _statsHeight: Math.max(0, Math.min(statsColumns.height,
+        Math.max(root.height - procChrome.height - root._tableWanted, Math.round(root.height * 0.5))))
 
     // --- Formatting ------------------------------------------------------
     //
@@ -907,20 +981,23 @@ Item {
     }
 
     Flickable {
-        id: scroller
-        anchors.fill: parent
+        id: statsPane
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: root._statsHeight
         contentWidth: width
-        contentHeight: columns.height
+        contentHeight: statsColumns.height
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
         // The ledger re-measures on every poll tick (a card appears, an
         // interface goes away), so content can shrink out from under a
         // scrolled-down reader and leave contentY past its own end.
-        onContentHeightChanged: scroller.returnToBounds()
+        onContentHeightChanged: statsPane.returnToBounds()
 
         Item {
-            id: columns
+            id: statsColumns
             width: root.width
             height: Math.max(leftColumn.height, rightColumn.height)
 
@@ -930,7 +1007,7 @@ Item {
             Rectangle {
                 x: leftColumn.width - Core.Theme.borderWidth
                 width: Core.Theme.borderWidth
-                height: columns.height
+                height: statsColumns.height
                 color: Core.Theme.color.rule
             }
 
@@ -973,6 +1050,426 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // --- Process table ----------------------------------------------------
+    //
+    // One line per process, in mek.gallery's ruled-row grammar: fixed
+    // gutters for the numbers (tabular by construction, since the whole
+    // shell is monospace), the argv absorbing whatever is left, and the
+    // cursor row as a full fg/bg inversion. The columns are the four facts
+    // a decision needs (which process, whose command line, what it costs),
+    // and nothing else fits on a line that has to stay scannable.
+    //
+    // Destructive by design, so every action is two presses: the first arms
+    // it and the row goes full-bleed urgent under a CONFIRM verb, the second
+    // sends the signal. Moving the cursor, retyping the filter or leaving
+    // the route disarms it. The confirm is not a modal and never steals a
+    // key: it is the same arm-then-Enter idiom the launcher's own confirm
+    // rows already use (Menu.qml's _confirmPendingId).
+
+    function _disarm() {
+        root.confirmAction = "";
+        root.confirmPid = 0;
+    }
+
+    function _moveCursor(delta) {
+        if (root._rows.length === 0)
+            return;
+        var next = Math.max(0, Math.min(root._rows.length - 1, root._cursorIndex + delta));
+        root.cursorPid = root._rows[next].pid;
+        root._disarm();
+        list.positionViewAtIndex(next, ListView.Contain);
+    }
+
+    // A process's share of one CPU carries a decimal the ledger's own
+    // whole-machine percentages do not: the difference between 0.4% and
+    // 4.0% is the difference between idle and busy on a 24-thread box, and
+    // rounding both to 0% and 4% throws away the only thing the sort is
+    // ordering by. Same null-in-dash-out rule as _pct above.
+    function _procPct(fraction) {
+        if (fraction === null || fraction === undefined || !isFinite(fraction))
+            return "—";
+        return (fraction * 100).toFixed(1) + "%";
+    }
+
+    // Column gutters measured off the font rather than pinned as literals,
+    // so a retheme that changes fontBaseSize keeps the columns aligned.
+    TextMetrics {
+        id: metrics
+        font.family: Core.Theme.fontFamily
+        font.pixelSize: Core.Theme.fontSize.body
+        text: "0"
+    }
+    readonly property real _digit: metrics.advanceWidth
+    // 7 digits covers /proc/sys/kernel/pid_max at its 4194304 ceiling.
+    readonly property real _pidWidth: root._digit * 7
+    readonly property real _nameWidth: root._digit * 20
+    readonly property real _cpuWidth: root._digit * 6
+    readonly property real _memWidth: root._digit * 7
+    readonly property real _rowHeight: metrics.height + Core.Theme.space.controlPaddingY * 2 + Core.Theme.borderWidth
+
+    // The verb a press would take right now, in the action bar's own shape.
+    // Everything the footer says about this route is derived here, so the
+    // bar can never promise a key the handler below does not answer.
+    readonly property var viewActions: {
+        var hints = [
+            { key: "↑↓", label: "Move" },
+            { key: "^⏎", label: "Kill" },
+            { key: "^R", label: "Restart" },
+            { key: Actions.KEY_ESC, label: root.confirmAction !== "" ? "Cancel" : "Back" }
+        ];
+        if (!root._cursorRow)
+            return { primary: null, hints: hints };
+        var name = root._cursorRow.name;
+        if (root.confirmAction !== "")
+            return { primary: { key: Actions.KEY_ENTER, label: "Confirm " + root.confirmAction + " " + name }, hints: hints };
+        return { primary: { key: Actions.KEY_ENTER, label: "Terminate " + name }, hints: hints };
+    }
+
+    // One press of the primary: arm the action, or run the armed one. The
+    // pointer path (the action bar's own click) and the rig's `menu
+    // activate` both land here too, so there is exactly one place that
+    // decides what Enter means on this route.
+    function _press(action) {
+        var row = root._cursorRow;
+        if (!row)
+            return false;
+        if (root.confirmAction === "" || root.confirmPid !== row.pid || root.confirmAction !== action) {
+            root.confirmAction = action;
+            root.confirmPid = row.pid;
+            return true;
+        }
+        root._disarm();
+        if (action === "RESTART")
+            ProcessService.restartPid(row.pid);
+        else
+            ProcessService.signalPid(row.pid, action);
+        return true;
+    }
+
+    // The rig's stand-in for Enter (Menu.qml's `activate`, MenuIpc's own
+    // `menu activate <index>`): index < 0 means "wherever the cursor already
+    // is", which is what the action bar's click passes.
+    function viewActivate(index) {
+        if (index >= 0 && index < root._rows.length)
+            root.cursorPid = root._rows[index].pid;
+        return root._press(root.confirmAction !== "" ? root.confirmAction : "TERM");
+    }
+
+    // Keys claimed ahead of Menu.qml's own handler. Everything not listed
+    // falls through untouched, which is what keeps Escape popping the level,
+    // backspace popping on an empty field, and every printable character
+    // going to the search field where the filter lives.
+    function viewKey(key, modifiers) {
+        var ctrl = (modifiers & Qt.ControlModifier) !== 0;
+        switch (key) {
+        case Qt.Key_Up:
+            root._moveCursor(-1);
+            return true;
+        case Qt.Key_Down:
+            root._moveCursor(1);
+            return true;
+        case Qt.Key_PageUp:
+            root._moveCursor(-Math.max(1, Math.floor(list.height / root._rowHeight) - 1));
+            return true;
+        case Qt.Key_PageDown:
+            root._moveCursor(Math.max(1, Math.floor(list.height / root._rowHeight) - 1));
+            return true;
+        case Qt.Key_Home:
+            root._moveCursor(-root._rows.length);
+            return true;
+        case Qt.Key_End:
+            root._moveCursor(root._rows.length);
+            return true;
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+            return root._press(ctrl ? "KILL" : (root.confirmAction !== "" ? root.confirmAction : "TERM"));
+        case Qt.Key_R:
+            if (!ctrl)
+                return false;
+            return root._press("RESTART");
+        case Qt.Key_S:
+            if (!ctrl)
+                return false;
+            root.sortMode = Procs.nextSort(root.sortMode);
+            return true;
+        case Qt.Key_Escape:
+            // Only when something is armed: cancelling the confirm is what
+            // the footer promises there, and every other Escape still pops
+            // the route.
+            if (root.confirmAction === "") {
+                return false;
+            }
+            root._disarm();
+            return true;
+        }
+        return false;
+    }
+
+    // The table's own two header rows, measured as one block so the list
+    // below can be told how much room is left in whole rows.
+    Column {
+        id: procChrome
+        anchors.top: statsPane.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+
+        // The seam, drawn only when the ledger above is genuinely taller
+        // than the room it got. Its last visible cell is then cut partway
+        // through, and a cut with no line under it reads as a broken frame
+        // rather than as "wheel up for the rest"; a ledger that fits ends
+        // on its own cell's bottom rule (Cell's shared-rule contract) and a
+        // second line here would double it.
+        Rectangle {
+            width: parent.width
+            height: statsColumns.height > statsPane.height ? Core.Theme.borderWidth : 0
+            color: Core.Theme.color.rule
+        }
+
+        Cell {
+            id: header
+            width: parent.width
+
+            Item {
+                width: parent.width
+                implicitHeight: headerLabel.implicitHeight
+
+                MetaLabel {
+                    id: headerLabel
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root._rows.length === ProcessService.rows.length
+                        ? "PROCESSES / " + root._rows.length
+                        : "PROCESSES / " + root._rows.length + " OF " + ProcessService.rows.length
+                    colon: true
+                }
+
+                // The last action's own answer, verbatim: a kill that failed
+                // on permissions says so in the kernel's words rather than
+                // this file's guess at what went wrong.
+                Text {
+                    anchors.left: headerLabel.right
+                    anchors.leftMargin: Core.Theme.space.lg
+                    anchors.right: sortLabel.left
+                    anchors.rightMargin: Core.Theme.space.lg
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: ProcessService.lastResult !== null
+                    text: ProcessService.lastResult
+                        ? ProcessService.lastResult.pid + " " + ProcessService.lastResult.action + ": " + ProcessService.lastResult.message
+                        : ""
+                    color: (ProcessService.lastResult && ProcessService.lastResult.ok)
+                        ? Core.Theme.color.foregroundDim
+                        : Core.Theme.color.urgent
+                    elide: Text.ElideRight
+                    font.family: Core.Theme.fontFamily
+                    font.pixelSize: Core.Theme.fontSize.caption
+                }
+
+                MetaLabel {
+                    id: sortLabel
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "SORT ↓" + root.sortMode + " ^S"
+                }
+            }
+        }
+
+        // Column labels, and the other way to sort: a click on one takes
+        // that column, which is the only thing on this route the pointer can
+        // do that the keyboard cannot say faster.
+        Cell {
+            id: columnHeader
+            width: parent.width
+            interactive: true
+            onClicked: mouse => {
+                var x = mouse.x;
+                if (x < root._pidWidth)
+                    root.sortMode = "pid";
+                else if (x < root._pidWidth + Core.Theme.space.lg + root._nameWidth)
+                    root.sortMode = "name";
+                else if (x > columnHeader.width - root._memWidth - Core.Theme.space.lg * 2)
+                    root.sortMode = "mem";
+                else if (x > columnHeader.width - root._memWidth - root._cpuWidth - Core.Theme.space.lg * 3)
+                    root.sortMode = "cpu";
+            }
+
+            Item {
+                width: parent.width
+                implicitHeight: pidHeader.implicitHeight
+
+                MetaLabel {
+                    id: pidHeader
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root._pidWidth
+                    horizontalAlignment: Text.AlignRight
+                    text: "PID"
+                    color: root.sortMode === "pid" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                }
+
+                MetaLabel {
+                    id: nameHeader
+                    anchors.left: pidHeader.right
+                    anchors.leftMargin: Core.Theme.space.lg
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root._nameWidth
+                    text: "PROCESS"
+                    color: root.sortMode === "name" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                }
+
+                MetaLabel {
+                    anchors.left: nameHeader.right
+                    anchors.leftMargin: Core.Theme.space.lg
+                    anchors.right: cpuHeader.left
+                    anchors.rightMargin: Core.Theme.space.lg
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "COMMAND"
+                    elide: Text.ElideRight
+                }
+
+                MetaLabel {
+                    id: cpuHeader
+                    anchors.right: memHeader.left
+                    anchors.rightMargin: Core.Theme.space.lg
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root._cpuWidth
+                    horizontalAlignment: Text.AlignRight
+                    text: "CPU"
+                    color: root.sortMode === "cpu" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                }
+
+                MetaLabel {
+                    id: memHeader
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: root._memWidth
+                    horizontalAlignment: Text.AlignRight
+                    text: "MEM"
+                    color: root.sortMode === "mem" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                }
+            }
+        }
+    }
+
+    // A ListView rather than a Column in a Flickable (the ledger's shape
+    // above): this table renders every process on the machine, and a
+    // delegate per row for 400 of them costs more to build than the whole
+    // launcher. ListView is itself a Flickable, so the scroll seam is
+    // unchanged.
+    ListView {
+        id: list
+        anchors.top: procChrome.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        // A whole number of rows, never the leftover space: the card's own
+        // height cap (Menu.qml's _maxTotalHeight) lands wherever it lands,
+        // and a list anchored to the bottom of it draws its last row cut in
+        // half, which reads as a broken frame rather than as more content
+        // below.
+        height: Math.max(0, Math.floor((root.height - statsPane.height - procChrome.height) / root._rowHeight) * root._rowHeight)
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        model: root._rows
+
+        delegate: Cell {
+            id: procRow
+            required property int index
+            required property var modelData
+
+            width: list.width
+            height: root._rowHeight
+            interactive: true
+            selected: procRow.index === root._cursorIndex
+            urgent: root.confirmAction !== "" && root.confirmPid === procRow.modelData.pid
+
+            onClicked: {
+                root.cursorPid = procRow.modelData.pid;
+                root._disarm();
+            }
+
+            Text {
+                id: pidText
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._pidWidth
+                horizontalAlignment: Text.AlignRight
+                text: procRow.modelData.pid
+                color: procRow.dimForeground
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
+            }
+
+            Text {
+                id: nameText
+                anchors.left: pidText.right
+                anchors.leftMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._nameWidth
+                elide: Text.ElideRight
+                text: procRow.modelData.name
+                color: procRow.foreground
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
+            }
+
+            // A kernel thread has no argv at all, which is a fact about the
+            // process rather than a gap in the reading, so the column says
+            // which of the two it is.
+            Text {
+                anchors.left: nameText.right
+                anchors.leftMargin: Core.Theme.space.lg
+                anchors.right: cpuText.left
+                anchors.rightMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: procRow.modelData.kernel ? "KERNEL" : procRow.modelData.cmd
+                color: procRow.dimForeground
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
+                font.capitalization: procRow.modelData.kernel ? Font.AllUppercase : Font.MixedCase
+            }
+
+            Text {
+                id: cpuText
+                anchors.right: memText.left
+                anchors.rightMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._cpuWidth
+                horizontalAlignment: Text.AlignRight
+                text: root._procPct(procRow.modelData.cpuFraction)
+                color: procRow.foreground
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
+            }
+
+            Text {
+                id: memText
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._memWidth
+                horizontalAlignment: Text.AlignRight
+                text: root._bytes(procRow.modelData.memBytes)
+                color: procRow.foreground
+                font.family: Core.Theme.fontFamily
+                font.pixelSize: Core.Theme.fontSize.body
+            }
+        }
+    }
+
+    // Nothing to show is two different facts, and they need two different
+    // answers: the collector has not landed a sample yet, or it has and the
+    // filter matched none of it. A sibling of the list rather than a child,
+    // which would scroll with its content.
+    Cell {
+        id: emptyCell
+        anchors.top: list.top
+        width: list.width
+        visible: root._rows.length === 0
+
+        MetaLabel {
+            text: ProcessService.available ? "NO MATCH" : "NO SAMPLE YET"
         }
     }
 }

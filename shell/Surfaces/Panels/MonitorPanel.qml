@@ -206,9 +206,10 @@ Panel {
         }
     }
 
-    // The hinge to the full view (Menu/appviews.js's "monitor" route):
-    // closing first so the launcher opens into a clean surface rather than
-    // stacking on top of an already-open popout.
+    // The hinge to the full view (Menu/appviews.js's "monitor" route),
+    // which carries the process table too: closing first so the launcher
+    // opens into a clean surface rather than stacking on top of an
+    // already-open popout.
     Cell {
         id: openFullCell
         width: parent.width
@@ -223,26 +224,6 @@ Panel {
             root.close();
             if (root.menu)
                 root.menu.open("monitor");
-        }
-    }
-
-    // The other launcher route over the same machine (M39): the ledger
-    // above reads it, this one acts on it. Same close-then-open handoff as
-    // the row above.
-    Cell {
-        id: openProcessesCell
-        width: parent.width
-        interactive: true
-
-        ActionLabel {
-            text: "OPEN PROCESSES"
-            color: openProcessesCell.foreground
-        }
-
-        onClicked: {
-            root.close();
-            if (root.menu)
-                root.menu.open("processes");
         }
     }
 }

@@ -4399,7 +4399,8 @@ sleep 3
 EOF
 fi
 
-# --processes (M39): the launcher's process route, driven end to end against
+# --processes (M39): the process table inside the launcher's monitor view
+# (M40 folded it in there from a route of its own), driven end to end against
 # two fixture processes this leg starts itself. Each is a COPY of bash under
 # a name the kernel's 15-byte comm can hold whole (smokevictim,
 # smokerestart) spinning on a builtin loop, which buys three things at once:
@@ -4414,7 +4415,7 @@ fi
 # The kill is deliberately driven through `menu activate`, not through
 # `monitor kill`: `menu activate` is the rig's stand-in for Enter (MenuIpc's
 # own note), so this exercises the whole path a keypress takes (row cursor ->
-# ProcessView._press -> ProcessService.signalPid -> kill), where the IPC
+# MonitorView._press -> ProcessService.signalPid -> kill), where the IPC
 # target would only prove the service. It is called TWICE on purpose: this
 # route arms on the first press and fires on the second, and the file
 # written between the two (`kill -0` against the victim) is what proves the
@@ -4437,7 +4438,7 @@ if $processes_mode; then
 sleep 5
 "$processes_victim_bin" -c 'while :; do :; done' & echo \$! > "$processes_victim_pid_path"
 "$processes_restart_bin" -c 'while :; do :; done' & echo \$! > "$processes_restart_pid_path"
-"$qs_bin" ipc -p "$shell_path" call menu summon processes > "$processes_menu_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon monitor > "$processes_menu_reply_path" 2>&1
 # Two poll ticks with the route open: the service polls only while something
 # is subscribed, and the first tick after a subscribe has nothing to
 # difference, so a measured CPU column needs the second.
@@ -7747,24 +7748,29 @@ if $processes_mode; then
     echo "SMOKE_FAIL: no process carries a measured CPU fraction: $(head -c 800 "$processes_all_path")" >&2; exit 1
   fi
   if ! grep -q '^ok$' "$processes_menu_reply_path" 2>/dev/null; then
-    echo "SMOKE_FAIL: menu summon processes did not return ok, got: $(cat "$processes_menu_reply_path" 2>/dev/null)" >&2; exit 1
+    echo "SMOKE_FAIL: menu summon monitor did not return ok, got: $(cat "$processes_menu_reply_path" 2>/dev/null)" >&2; exit 1
   fi
   if ! grep -q '^ok$' "$processes_filter_reply_path" 2>/dev/null; then
     echo "SMOKE_FAIL: menu filter did not return ok, got: $(cat "$processes_filter_reply_path" 2>/dev/null)" >&2; exit 1
   fi
-  if ! grep -qF '"isOpen":true,"level":"processes"' "$processes_menu_status_path" 2>/dev/null; then
-    echo "SMOKE_FAIL: the launcher is not on the processes app view. Got: $(cat "$processes_menu_status_path" 2>/dev/null)" >&2; exit 1
+  if ! grep -qF '"isOpen":true,"level":"monitor"' "$processes_menu_status_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: the launcher is not on the monitor app view. Got: $(cat "$processes_menu_status_path" 2>/dev/null)" >&2; exit 1
   fi
   # The filter's own claim: one row out of the whole table, and it is the
-  # fixture, matched on a name the kernel's comm holds whole.
+  # fixture, matched on a name the kernel's comm holds whole. Counted by
+  # the fixture's own `name` rather than off `matched`, because the client
+  # this assertion reads the dump through carries the filter string in its
+  # OWN argv ("... call monitor processes smokevictim"), so whether it is
+  # itself in the answer comes down to whether the last poll tick landed
+  # before or after it spawned. Its comm is `.quickshell-wra`, never the
+  # fixture's, so the count below is the same number either way.
   if [ -s "$processes_filtered_path" ]; then
     cat "$processes_filtered_path"
   else
     echo "SMOKE_FAIL: no filtered process dump produced" >&2; exit 1
   fi
-  if ! grep -qF '"matched":1' "$processes_filtered_path" \
-    || ! grep -qF "\"pid\":$victim_pid," "$processes_filtered_path" \
-    || ! grep -qF '"name":"smokevictim"' "$processes_filtered_path"; then
+  if [ "$(grep -oF '"name":"smokevictim"' "$processes_filtered_path" | wc -l | tr -d ' ')" != "1" ] \
+    || ! grep -qF "\"pid\":$victim_pid," "$processes_filtered_path"; then
     echo "SMOKE_FAIL: the filter did not narrow to the fixture process (pid $victim_pid): $(cat "$processes_filtered_path")" >&2; exit 1
   fi
   # The unfiltered table, at the card's own height cap with the rest of the
@@ -7792,7 +7798,7 @@ if $processes_mode; then
   if [ "$(cat "$processes_alive_fire_path" 2>/dev/null)" = "0" ]; then
     echo "SMOKE_FAIL: pid $victim_pid survived the confirming press" >&2; exit 1
   fi
-  if ! grep -qF '"matched":0' "$processes_after_path" 2>/dev/null; then
+  if grep -qF '"name":"smokevictim"' "$processes_after_path" 2>/dev/null; then
     echo "SMOKE_FAIL: the killed fixture is still in the table: $(cat "$processes_after_path" 2>/dev/null)" >&2; exit 1
   fi
   # The kill's own exit status, which the synchronous IPC reply could not
@@ -7818,7 +7824,7 @@ if $processes_mode; then
   if [ "$new_restart_pid" = "$restart_pid" ]; then
     echo "SMOKE_FAIL: pid $restart_pid is unchanged, nothing was actually restarted" >&2; exit 1
   fi
-  if ! grep -qF '"matched":1' "$processes_restart_status_path" 2>/dev/null \
+  if [ "$(grep -oF '"name":"smokerestart"' "$processes_restart_status_path" | wc -l | tr -d ' ')" != "1" ] \
     || ! grep -qF "\"pid\":$new_restart_pid," "$processes_restart_status_path"; then
     echo "SMOKE_FAIL: the re-run process ($new_restart_pid) is not in the table: $(cat "$processes_restart_status_path" 2>/dev/null)" >&2; exit 1
   fi

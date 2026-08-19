@@ -767,8 +767,8 @@ launcher is a window manager for small apps, not only a menu.
 `Surfaces/Menu/views/` is the entire cost of adding the next one, no
 `Menu.qml` edit required, because its chrome (breadcrumb, Escape/back,
 search focus, the `menu` IPC) already keys off the route id rather than
-which view happens to be loaded. `monitor` and `processes` are the two routes registered
-today (see [System monitor](#system-monitor)). A view opts into each seam by
+`monitor` is the one route registered today (see
+[System monitor](#system-monitor)). A view opts into each seam by
 declaring it and gets the row-list behaviour otherwise: `property string
 query` for the live search field (a view that declares none simply has an
 inert search box, the honest state for a view with nothing to filter),
@@ -776,7 +776,7 @@ inert search box, the honest state for a view with nothing to filter),
 `function viewKey(key, modifiers)` to claim keys ahead of the menu's own
 handler (what a view with a cursor of its own needs), and `property var
 viewActions` plus `function viewActivate(index)` to put its own verbs in the
-action bar. `MonitorView` uses the first two, `ProcessView` all four.
+action bar. `MonitorView` uses all four.
 
 **Share (LocalSend).** The root `SHARE` submenu exists only when
 `localsend_app` resolves on PATH (`command -v localsend_app`, a live `when`
@@ -890,7 +890,7 @@ headless assertion), `ping()`, plus two the smoke rig stands in with for
 input a nested session cannot prove was delivered: `activate(index)`
 (Enter on the row at `index`, or on an app view its own primary at that
 index) and `filter(text)` (typing into the search field, the only way to
-drive a route whose search field IS its filter, e.g. `processes`). `route` is a node id
+drive a route whose search field IS its filter, e.g. `monitor`). `route` is a node id
 (`"system"`) or alias, or `""` for root. An absent optional
 `~/.config/formalshell/menu.jsonc` logs at most one line per path change,
 never a warning per internal retry. Bind it directly in niri:
@@ -1653,12 +1653,13 @@ CONNECTED`, so a hybrid machine shows which card is driving it), and either
 live metrics or an honest `NO METRICS`; a machine with no cards at all renders a single `NO GPU` row
 instead of an empty section.
 
-**The process table** is its own launcher route (`menu summon processes`, or
-the `PROCESSES` row from root, aliases `ps`/`kill`/`top`/`htop`), because
-the monitor above is a read-only ledger and this is the one surface that
-acts on the machine. One line per process: pid, the kernel's own comm, the
-full command line, CPU and resident memory. `ProcessService` polls it on its
-own timer (`monitor.processIntervalMs`, default 2000, floored at 500),
+**The process table** sits under that ledger in the same view, btop's
+layout: the stats take up to about half the card and the table takes the
+rest. It shipped as a route of its own for a day and was folded in here
+(owner, 2026-08-19), which is also what gives this route's search field
+something to do. One line per process: pid, the kernel's own comm, the full
+command line, CPU and resident memory. `ProcessService` polls it on its own
+timer (`monitor.processIntervalMs`, default 2000, floored at 500),
 subscribed only while the route is open, over a two-fork collector that
 reads every `/proc/[0-9]*/stat` in one `cat` and every cmdline in one
 `grep`, never a fork per process.
