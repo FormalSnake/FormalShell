@@ -76,6 +76,10 @@ Singleton {
     function applyThemeFragment() { backend.applyThemeFragment() }
     function refreshWindows() { backend.refreshWindows() }
 
+    readonly property bool windowParkingAvailable: backend.windowParkingAvailable
+    function parkWindow(id) { backend.parkWindow(id) }
+    function unparkWindow(id) { backend.unparkWindow(id) }
+
     readonly property bool floatingPlacementAvailable: backend.floatingPlacementAvailable
     function floatWindow(id) { backend.floatWindow(id) }
     function placeFloatingWindow(id, x, y, width, height) { backend.placeFloatingWindow(id, x, y, width, height) }

@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 
 import "reducer.js" as Reducer
+import "../park.js" as Park
 import "../../Display/outputs.js" as Outputs
 
 // Niri backend over niri's two-socket JSON IPC: the event-stream socket
@@ -87,6 +88,36 @@ Scope {
             id: numId,
             x: { AdjustFixed: x - pos.x },
             y: { AdjustFixed: y - pos.y }
+        } } });
+    }
+
+    // Parking (M37). niri has no minimize, no scratchpad and no special
+    // workspace — the full `niri msg action` list on 26.04 carries no hide
+    // of any kind — so out of view means another workspace, with `focus`
+    // false so the user stays where they are.
+    readonly property bool windowParkingAvailable: true
+
+    function parkWindow(id) {
+        const target = Park.parkTarget(root.workspaces, root.windows,
+            root.focusedWorkspaceId, root.focusedOutputName, id);
+        if (target === "") {
+            console.warn("NiriBackend: nowhere to park window", id);
+            return;
+        }
+        requestSocket.request({ Action: { MoveWindowToWorkspace: {
+            window_id: Number(id),
+            reference: { Id: Number(target) },
+            focus: false
+        } } });
+    }
+
+    function unparkWindow(id) {
+        if (root.focusedWorkspaceId === "")
+            return;
+        requestSocket.request({ Action: { MoveWindowToWorkspace: {
+            window_id: Number(id),
+            reference: { Id: Number(root.focusedWorkspaceId) },
+            focus: false
         } } });
     }
 
@@ -232,6 +263,11 @@ Scope {
                 // why the panel must be able to tell those apart. Errs to other
                 // requests are indistinguishable on this shared connection, so
                 // only an outstanding Outputs request claims one.
+                // Which request an Err answers is unknowable on this shared
+                // connection, but the text niri sent back is not, and a
+                // rejected action is otherwise a completely silent no-op.
+                if (reply && reply.Err !== undefined)
+                    console.warn("NiriBackend: niri rejected a request:", JSON.stringify(reply.Err));
                 if (reply && reply.Err !== undefined && root._outputsRequested) {
                     root._outputsRequested = false;
                     root.outputs = [];

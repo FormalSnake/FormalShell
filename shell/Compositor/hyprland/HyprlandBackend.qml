@@ -187,6 +187,35 @@ Scope {
             Hyprland.dispatch("setfloating " + selector);
     }
 
+    // Parking (M37). Hyprland has the primitive niri lacks: a special
+    // workspace is out of view until something toggles it, so the park is a
+    // silent move onto one rather than niri's hunt for a spare workspace.
+    // The shell never toggles it into view itself — showing the console is
+    // always a move back to the focused workspace, so the two backends agree
+    // on where a visible console lives.
+    readonly property bool windowParkingAvailable: true
+    readonly property string _parkWorkspace: "special:formalshell-console"
+
+    function parkWindow(id) {
+        const selector = root._windowSelector(id);
+        if (Hyprland.usingLua)
+            Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector)
+                + ", workspace = " + root._luaString(root._parkWorkspace) + ", follow = false })");
+        else
+            Hyprland.dispatch("movetoworkspacesilent " + root._parkWorkspace + "," + selector);
+    }
+
+    function unparkWindow(id) {
+        if (root.focusedWorkspaceId === "")
+            return;
+        const selector = root._windowSelector(id);
+        if (Hyprland.usingLua)
+            Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector)
+                + ", workspace = " + root._luaValue(root.focusedWorkspaceId) + ", follow = false })");
+        else
+            Hyprland.dispatch("movetoworkspacesilent " + root.focusedWorkspaceId + "," + selector);
+    }
+
     function placeFloatingWindow(id, x, y, width, height) {
         const selector = root._windowSelector(id);
         const w = Math.max(1, Math.round(width));

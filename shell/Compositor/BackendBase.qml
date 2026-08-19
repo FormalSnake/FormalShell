@@ -60,6 +60,21 @@ QtObject {
     // confirmed `id` carries a non-null `rect`.
     function placeFloatingWindow(id, x, y, width, height) {}
 
+    // Parking (M37): moving a window out of view and back without touching
+    // focus, which is what a quake console's toggle is made of. False here,
+    // the null backend's answer for "no compositor detected" — ConsoleService
+    // checks it before spawning anything, so a compositor that cannot park
+    // never gets a console it would be unable to hide again.
+    readonly property bool windowParkingAvailable: false
+    // Out of view. Hyprland has a special workspace for this; niri has no
+    // hide primitive at all, so parking there means another workspace
+    // (park.js picks which). Focus stays where it is on both.
+    function parkWindow(id) {}
+    // Back to the focused workspace, still without focusing it — the caller
+    // places the window first and focuses it once it has landed, so it never
+    // appears at its old size for a frame.
+    function unparkWindow(id) {}
+
     // Re-reads `windows`; never moves or focuses anything. A backend whose
     // window model is already event-driven leaves this a no-op. It exists for
     // Hyprland, where the box in `rect` goes stale between refreshes, so
