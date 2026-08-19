@@ -116,6 +116,7 @@ Singleton {
     property var _target: null
     property int _attempts: 0
     property bool _placed: false
+    property int _placedAt: 0
 
     // Brings `id` here whether it was parked, sitting on a workspace the user
     // walked away from, or already on this one: the move is a no-op in the
@@ -133,6 +134,7 @@ Singleton {
         root._targetWorkspaceId = CompositorService.focusedWorkspaceId;
         root._attempts = 0;
         root._placed = false;
+        root._placedAt = 0;
         CompositorService.unparkWindow(id);
         CompositorService.floatWindow(id);
         settleTimer.restart();
@@ -169,12 +171,12 @@ Singleton {
         }
     }
 
-    // Two-phase on one clock, RecordingService's own webcam pattern: wait for
-    // the window to land on this workspace with a real `rect` (proof the
-    // unpark and the float took) before resizing it, then wait for the size
-    // it reports to match what was asked (proof the placement took) before
-    // focusing. Focus comes last on purpose — focusing a window still sitting
-    // on the park workspace would drag the user's view over to it.
+    // Two-phase on one clock, RecordingService's own webcam pattern: wait
+    // for the window to land on this workspace before resizing it, then wait
+    // for the size it reports to match what was asked before focusing. Focus
+    // comes last on purpose — focusing a window still sitting on the park
+    // workspace would drag the user's view over to it. Both waits are
+    // bounded, and neither is allowed to skip the placement itself.
     Timer {
         id: settleTimer
         interval: 100
@@ -192,16 +194,32 @@ Singleton {
             }
             const rect = win.rect;
             const landed = win.workspaceId === root._targetWorkspaceId;
-            if (landed && rect && !root._placed) {
+            // A rect is what niri's placement needs (it converts the absolute
+            // target into its own relative move by reading the current box),
+            // so wait for one — but only for half a second. A backend that
+            // reports no geometry at all must not silently cost the console
+            // its placement: Hyprland's dispatchers are absolute, so placing
+            // blind there is correct, and that is exactly the case that
+            // shipped broken.
+            if (landed && !root._placed && (rect || root._attempts >= 5)) {
                 root._placed = true;
-                root._attempts = 0;
+                root._placedAt = root._attempts;
                 CompositorService.placeFloatingWindow(win.id, root._target.x, root._target.y,
                     root._target.width, root._target.height);
                 return;
             }
-            if (landed && rect && root._placed
+            if (root._placed && rect
                 && Math.round(rect.width) === root._target.width
                 && Math.round(rect.height) === root._target.height) {
+                settleTimer.stop();
+                CompositorService.focusWindow(win.id);
+                return;
+            }
+            // Placed, but the window still reports no box to check it
+            // against: take the dispatch at its word rather than spinning
+            // out the full budget on a verification this backend cannot
+            // answer.
+            if (root._placed && !rect && root._attempts - root._placedAt >= 3) {
                 settleTimer.stop();
                 CompositorService.focusWindow(win.id);
                 return;

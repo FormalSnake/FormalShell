@@ -3,8 +3,10 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Core as Core
+import qs.Compositor
 import qs.Services
 import "../../Screensaver/effect.js" as Effect
+import "../../Screensaver/outputs.js" as Outputs
 import "../../Screensaver/ttfx.js" as Ttfx
 
 // Idle-driven screensaver (DESIGN.md's terminal-text-effect exception, spec
@@ -226,6 +228,10 @@ Item {
         // cycles:1 one second after a manual start, 2026-08-12).
         holdTimer.stop();
         if (root.active) {
+            // Fresh, not kept: focus moves freely while the session is awake,
+            // so the previous activation's answer says nothing about which
+            // screen was being used before this one.
+            root._resolveMainOutput(false);
             // A fresh seed per activation is what makes "random" (the
             // default) actually vary across activations instead of picking
             // once at shell startup and sticking forever. The previous-
@@ -250,6 +256,29 @@ Item {
             lockChainTimer.restart();
         else
             lockChainTimer.stop();
+    }
+
+    // ---- main output (outputs.js) -----------------------------------------
+    // The one screen that animates. Resolved at activation rather than bound
+    // live to the focused output: a focus event landing mid-run would restart
+    // ttfx on two screens at once, and nothing can move focus while the
+    // session is idle anyway.
+
+    property string mainOutput: ""
+
+    function _resolveMainOutput(keepCurrent) {
+        root.mainOutput = Outputs.resolveMainOutput(Outputs.screenNames(Quickshell.screens),
+            CompositorService.focusedOutputName, keepCurrent ? root.mainOutput : "");
+    }
+
+    // Bound rather than connected so this re-runs off screensChanged itself.
+    // Unplugging the screen that was animating is the case that matters: the
+    // Variants delegate for it is gone, and without re-resolving here nothing
+    // would be left animating at all.
+    readonly property var _screens: Quickshell.screens
+    on_ScreensChanged: {
+        if (root.active)
+            root._resolveMainOutput(true);
     }
 
     // Optional chain into Lock after continued inactivity once already
@@ -327,13 +356,25 @@ Item {
                 readonly property int _columns: surface.visible ? Math.max(1, Math.floor(width / surface._cellWidth)) : 0
                 readonly property int _rows: surface.visible ? Math.max(1, Math.floor(height / surface._cellHeight)) : 0
 
+                // Only the main output animates (outputs.js); the rest paint
+                // the converged banner once, below. "" means the resolver
+                // found no outputs to choose between, which can only happen
+                // with none connected — animating then costs nothing and is
+                // the safer way to be wrong.
+                readonly property bool animated: root.mainOutput === "" || surface.modelData.name === root.mainOutput
+                onAnimatedChanged: {
+                    surface._grid = [];
+                    surface._startRun();
+                    canvas.requestPaint();
+                }
+
                 // ---- ttfx engine ---------------------------------------
-                // One process per output, not one shared: the canvas ttfx
-                // animates is measured in this screen's own cells, so two
-                // differently-sized outputs are two different canvases. The
-                // effect name, seed and cycle counter all come from root, so
-                // every screen still animates the same effect at the same
-                // time.
+                // One process for the animating output. Its canvas is
+                // measured in that screen's own cells, so this stays inside
+                // the delegate rather than being hoisted to root — the
+                // surface that animates is decided per activation, and a
+                // hotplug can hand the run to a differently-sized screen.
+                // The effect name, seed and cycle counter all come from root.
 
                 property var _grid: []          // parsed rows of the frame on screen
                 property int _chunks: 0         // stdout segments seen this run
@@ -364,7 +405,7 @@ Item {
                     ttfxProc.running = false;
                     surface._chunks = 0;
                     surface._runFrames = 0;
-                    if (root.engine !== "ttfx" || !root.active || surface._columns <= 0 || surface._rows <= 0)
+                    if (root.engine !== "ttfx" || !root.active || !surface.animated || surface._columns <= 0 || surface._rows <= 0)
                         return;
                     // A pinned run regenerates the effect from frame 0 and
                     // races to the requested frame with pacing disabled —
@@ -463,7 +504,7 @@ Item {
 
                 Timer {
                     interval: root.frameIntervalMs
-                    running: root.engine === "builtin" && Effect.autoTimerShouldRun(root.active, root._pinnedFrame)
+                    running: root.engine === "builtin" && surface.animated && Effect.autoTimerShouldRun(root.active, root._pinnedFrame)
                     repeat: true
                     onTriggered: {
                         surface._autoFrame += 1;
@@ -529,6 +570,12 @@ Item {
                     function onEngineChanged() {
                         surface._startRun();
                     }
+                    // Watched on the banner file, so it can land mid-run —
+                    // and a paint-once surface has no next frame to pick the
+                    // new text up on.
+                    function on_BannerChanged() {
+                        canvas.requestPaint();
+                    }
                 }
 
                 // Fades both ways (DESIGN.md §4 rule 6, owner's call
@@ -557,6 +604,18 @@ Item {
                         anchors.fill: parent
                         renderStrategy: Canvas.Cooperative
 
+                        // A Canvas repaints on resize, never on a change to
+                        // something its paint happens to read. The animating
+                        // surface repaints per frame and picks a recolor up
+                        // on its own; a paint-once one would hold the old
+                        // palette for as long as it stays up (a `wallpaper
+                        // set` over IPC lands mid-idle without any input to
+                        // dismiss the screensaver first).
+                        readonly property color _accent: Core.Theme.color.accent
+                        readonly property color _background: Core.Theme.color.background
+                        on_AccentChanged: canvas.requestPaint()
+                        on_BackgroundChanged: canvas.requestPaint()
+
                         onPaint: {
                             var ctx = canvas.getContext("2d");
                             ctx.fillStyle = Core.Theme.color.background;
@@ -566,6 +625,23 @@ Item {
                                 return;
                             ctx.font = surface._fontSize + "px " + Core.Theme.fontFamily;
                             ctx.textBaseline = "top";
+                            var offsetCol = Math.floor((surface._columns - banner.width) / 2);
+                            var offsetRow = Math.floor((surface._rows - banner.height) / 2);
+
+                            // Every other output: the banner the animation
+                            // converges on, painted once. Not the effect's
+                            // own final colors — ttfx brings a different
+                            // gradient per effect and reproducing it would
+                            // mean running the effect here too, which is the
+                            // whole cost this avoids — so these carry the
+                            // theme's accent, the same colour the builtin
+                            // engine converges to.
+                            if (!surface.animated) {
+                                ctx.fillStyle = Core.Theme.color.accent;
+                                for (var br = 0; br < banner.height; br++)
+                                    ctx.fillText(banner.rows[br], offsetCol * surface._cellWidth, (offsetRow + br) * surface._cellHeight);
+                                return;
+                            }
 
                             // ttfx owns the whole canvas, colors included:
                             // each effect paints in its own upstream gradient
@@ -585,8 +661,6 @@ Item {
                                 return;
                             }
 
-                            var offsetCol = Math.floor((surface._columns - banner.width) / 2);
-                            var offsetRow = Math.floor((surface._rows - banner.height) / 2);
                             var grid = Effect.frameState(root._effectiveEffect, surface._renderFrame, banner);
                             for (var r = 0; r < grid.length; r++) {
                                 var rowCells = grid[r];

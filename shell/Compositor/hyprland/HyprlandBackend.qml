@@ -52,8 +52,15 @@ Scope {
         var ipc = t.lastIpcObject || {};
         var at = ipc.at;
         var size = ipc.size;
+        // Length-and-index, not Array.isArray: `lastIpcObject` is a
+        // QVariantMap, and its nested QVariantList values reach QML as
+        // list-like objects that index and measure fine but answer false to
+        // Array.isArray. Every window on Hyprland therefore reported a null
+        // rect while `hyprctl clients -j` had real boxes for all of them,
+        // which silently disabled the capture picker's window crop and the
+        // quake console's placement (2026-08-19).
         var hasRect = !(ipc.hidden ?? false)
-            && Array.isArray(at) && Array.isArray(size)
+            && at && size && at.length >= 2 && size.length >= 2
             && size[0] > 0 && size[1] > 0;
         return {
             id: t.address,

@@ -52,7 +52,11 @@ IpcHandler {
             isIdle: IdleService.isIdle,
             guardMediaPlayback: screensaver.guardMediaPlayback,
             mediaPlaying: MediaService.isPlaying,
-            stayAwake: IdleService.stayAwake
+            stayAwake: IdleService.stayAwake,
+            // The output animating this activation (outputs.js). "" while
+            // inactive: it is resolved from the focused output at activation,
+            // and answering with the last one would read as a live claim.
+            mainOutput: screensaver.active ? screensaver.mainOutput : ""
         });
     }
 
