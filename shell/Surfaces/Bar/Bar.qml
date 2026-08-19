@@ -417,16 +417,36 @@ PanelWindow {
                 enabled: entryLoader.modelData.collapsible
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
             }
-            // Gated on the animated width rather than on `_collapsedAway`:
-            // Row lays out (and spaces) its visible children, so a cell that
-            // went invisible the moment the chevron shut would have nothing
-            // left to animate, while one left visible at width 0 would still
-            // be charged the region's own `spacing`, and six of those is
-            // ~48px of dead bar. Width crossing 0 is the one moment both are
-            // true at once.
-            visible: entryLoader.width > 0 && (entryLoader.item
+            readonly property bool _shown: entryLoader.item
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
-                : false)
+                : false
+            // The width term is the chevron's, and it applies to governed
+            // entries only. Row lays out (and spaces) its visible children,
+            // so a cell that went invisible the moment the chevron shut
+            // would have nothing left to animate, while one left visible at
+            // width 0 would still be charged the region's own `spacing`, and
+            // six of those is ~48px of dead bar. Width crossing 0 is the one
+            // moment both are true at once.
+            //
+            // It must NOT apply to everything else, because for an entry
+            // whose width is a MEASUREMENT rather than the chevron's own
+            // number it closes a cycle: visible reads width, width reads the
+            // item's implicitWidth, and once that measurement has been 0 with
+            // this binding holding the entry hidden, nothing ever produces
+            // the width that would reopen it. It bites exactly the widgets
+            // that are empty at creation and gain content later — Indicators
+            // when its first glyph turns on, Tray registering its first item
+            // — and never the ones with content from the start, which is why
+            // the chevron's own collapse/expand has always worked. It
+            // escaped notice for the same reason: the indicators row's ONE
+            // cell with a live label, the reminder countdown, re-measures
+            // itself out of the deadlock every second and drags the rest of
+            // the row open behind it, so a live screen recording and a
+            // stay-awake toggle were invisible on their own but both
+            // appeared beside a pending reminder (g815, 2026-08-19).
+            // tests/tst_bar_entry_reveal.qml pins both halves of that.
+            visible: entryLoader._shown
+                && (!entryLoader.modelData.collapsible || entryLoader.width > 0)
             onLoaded: {
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
