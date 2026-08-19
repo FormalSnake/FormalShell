@@ -53,10 +53,10 @@ arrangement:
 Builtin widget names: `workspaces`, `activeWindow`, `clock`, `nowPlaying`,
 `battery`, `audio`, `network`, `bluetooth`, `weather`, `tray`, `bell`,
 `indicators`, `github`, `usage`, `tailscale`, `visualizer`, `microphone`,
-`keyboardLayout`, `systemUpdate`, `airpods`, `dualsense` (the last nine opt-in
-only — never part of the default arrangement; `bell` by contrast IS part of
-the defaults since M13b, so a config predating it that spells out its own
-`right` region won't show the bell until it's added there).
+`keyboardLayout`, `systemUpdate`, `airpods`, `dualsense`, `display` (the last
+ten opt-in only — never part of the default arrangement; `bell` by contrast
+IS part of the defaults since M13b, so a config predating it that spells out
+its own `right` region won't show the bell until it's added there).
 An absent region falls back to its own default arrangement above (an
 absent `bar` key entirely is the same as an absent region for all three);
 a present-but-empty region (`[]`) stays empty. An unknown widget name, or
@@ -289,6 +289,14 @@ entirely with no controller present. Goes full-bleed `warning` at ≤20%,
 `urgent` at ≤10% — the same thresholds the retired `dualsense-bar` script
 used. Click toggles the DualSense panel (see [Panels](#panels)), which is
 read-only: the shell never writes the controller's lightbar or player LEDs.
+
+**Display** (M36) — opt-in via `bar.layout` (add `"display"` to a region); a
+single monitor glyph, no value text, since the display panel is a consult
+surface (per-output on/off, scale, mirror, brightness) with no one number to
+summarize. Always visible once placed — a session always has at least one
+output, so there is no absent state to hide on. `bar.widgets.display.showLabel`
+(default on) adds an uppercase `DISPLAY` caption next to the glyph. Click
+toggles the display panel (see [Panels](#panels)).
 
 **Tooltips** — hovering a bar cell for 400ms opens one omarchy card under
 it (`shell/Components/Tooltip.qml`, namespace `formalshell:tooltip`),
@@ -987,8 +995,7 @@ binds {
 
 ## Panels
 
-Fifteen popouts, fourteen per-widget plus the IPC-only `display`, share one
-component, `shell/Components/Panel.qml`: a ledger-table popout (header
+Fifteen popouts share one component, `shell/Components/Panel.qml`: a ledger-table popout (header
 `MetaLabel` row, rows sharing hairline rules, `WlrLayershell` top layer,
 closes on Escape and on
 click-outside) anchored under the bar cell that opened it, or falling back to
@@ -1029,7 +1036,7 @@ service wrapper, the same pattern `AudioPanel` establishes for the rest:
 | `tailscale`  | `tailscale status --json` poll (shared with the bar cell) | `TailscaleWidget.qml` |
 | `appmenu`    | the focused window's desktop entry + the compositor's window list | `ActiveWindow.qml` |
 | `systemupdate` | `flake.lock` + one upstream probe per direct input | `SystemUpdateWidget.qml` |
-| `display`    | the compositor backend's own output contract  | none (IPC only)      |
+| `display`    | the compositor backend's own output contract  | `DisplayWidget.qml` (opt-in) |
 | `airpods`    | `AirpodsService` (librepods daemon `status.json` + control socket) | `AirpodsWidget.qml` |
 | `dualsense`  | `DualsenseService` (sysfs, read-only)        | `DualsenseWidget.qml` |
 
@@ -1350,8 +1357,8 @@ before anyone has asked, and `NO NETWORK` when the probes cannot reach
 upstream. An input type with no cheap probe stays `?` rather than a
 fabricated `CURRENT`, and the summary counts it separately (`2 BEHIND / 1 ?`).
 
-`DisplayPanel` (M17) is the one panel with no bar cell of its own —
-`panel open display` is the only way in — and lists every connected output
+`DisplayPanel` (M17, bar cell opt-in since M36's `DisplayWidget.qml`) lists
+every connected output
 as a row: name, an `ON`/`OFF` toggle, a status meta line
 (`2560x1440@59.95 / 1.5X`, `MIRRORS DP-1`, or just `DISABLED`), the make
 and model when the compositor reports them, and a flat accent-fill `SCALE`
@@ -1395,7 +1402,7 @@ keybinds and no way to be verified headlessly):
 ```bash
 qs ipc --any-display -p <store-path>/share/formalshell call panel open audio
 qs ipc --any-display -p <store-path>/share/formalshell call panel toggle network
-qs ipc --any-display -p <store-path>/share/formalshell call panel open display   # the display panel has no bar cell; this is its only summon path
+qs ipc --any-display -p <store-path>/share/formalshell call panel open display   # same action as clicking the display bar cell, when it's opted in
 qs ipc --any-display -p <store-path>/share/formalshell call panel close        # closes whichever panel is open
 qs ipc --any-display -p <store-path>/share/formalshell call panel state       # "" | "appmenu" | "audio" | "calendar" | "network" | "bluetooth" | "power" | "weather" | "media" | "github" | "usage" | "tailscale" | "systemupdate" | "display" | "airpods" | "dualsense" | "plugin:<id>"
 ```

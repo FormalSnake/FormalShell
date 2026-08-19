@@ -170,6 +170,11 @@
 # screenshots prove the bar side too: airpods self-hidden -> visible with
 # the fixture's own worst-bud percent, dualsense staying self-hidden with
 # no empty chrome.
+# `--panel display` (M36) leads the right region with the opt-in "display"
+# cell the same way, so the generic panel_mode spawn's `panel open display`
+# lands with the cell (and its lit open-dot) already in frame — unlike
+# airpods/dualsense this widget has no absent state to prove, so no fixture
+# or drive script of its own.
 # With --wifi (M14 Task 3), drives the real `network` IPC target against
 # nix/testvm.nix's mac80211_hwsim rig — three simulated radios: wlan0 stays
 # NetworkManager's station device, wlan1/wlan2 are hostapd APs broadcasting
@@ -1859,6 +1864,13 @@ elif $panel_airpods_mode || $panel_dualsense_mode; then
   # dualsense stays self-hidden since this VM has no hid-playstation
   # device — one screenshot per leg, two presence proofs.
   bar_settings=', "bar": {"layout": {"right": ["airpods", "dualsense", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
+elif $panel_mode && [ "$panel_name" = "display" ]; then
+  # M36: unlike every device-status cell above, DisplayWidget carries no
+  # `shown` gate at all — a session always has at least one output — so
+  # leading the right region with it is enough on its own; the generic
+  # `panel open display` spawn below (panel_mode's own branch) is what
+  # lights the open-dot in this same screenshot.
+  bar_settings=', "bar": {"layout": {"right": ["display", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
 fi
 # record_mode: wf-recorder's dmabuf path has no meaning under llvmpipe
 # (the nested session renders in software, so there is no GPU buffer to

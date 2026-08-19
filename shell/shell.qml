@@ -61,6 +61,7 @@ ShellRoot {
                 usagePanel: usagePanelInstance
                 tailscalePanel: tailscalePanelInstance
                 systemUpdatePanel: systemUpdatePanelInstance
+                displayPanel: displayPanelInstance
                 trayMenu: trayMenuInstance
                 center: notificationsCenter
             }
