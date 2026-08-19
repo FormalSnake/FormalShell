@@ -343,7 +343,6 @@ Two numbers set the whole shell's size:
   | `huge` | 18 | `labelGap` | 4 |
   | | | `panelGap` (card-to-bar margin) | 14 |
   | | | `panelPadding` (card internal padding) | 8 |
-  | | | `popupPadding` | 14 |
   | | | `popupWidthNarrow` | 280 |
   | | | `popupWidthDefault` | 320 |
   | | | `popupWidthWide` | 400 |
@@ -370,28 +369,30 @@ Two numbers set the whole shell's size:
   Checkable: `grep` `shell/Surfaces/Panels/` for `panelWidth` and every file
   declaring a `Panel` root has one.
 
-  **Card-gutter split (2026-08-07, Task 6):** `popupPadding` (14) insets a
-  *summoned list surface* — the menu, the notification center; `panelPadding`
-  (8) insets a *bar-anchored panel* — every widget popout (audio, network,
-  bluetooth, power, calendar, weather, media, github, usage) and the picker,
-  which reuses the panel frame. Both apply on all four sides of the card's
-  content, via the same technique: the frame draws an explicit border ring,
-  content insets by `border width + the surface's own padding token`, and an
-  eraser rectangle papers over the row content's own trailing hairline
-  (Cell's shared-rule contract) so only the frame's outer rule shows —
-  established by Panel.qml, mirrored by Menu.qml and (since this pass)
-  Center.qml.
+  **One card gutter: `panelPadding` (8), 2026-08-19.** Every floating card
+  in the shell insets its content by the same token on all four sides — the
+  widget popouts (audio, network, bluetooth, power, calendar, weather,
+  media, github, usage), the picker that reuses the panel frame, the menu,
+  the notification center, the polkit dialog, and the capture toolbar. All
+  of them via the same technique: the frame draws an explicit border ring,
+  content insets by `borderWidth + panelPadding`, and an eraser rectangle
+  papers over the row content's own trailing hairline (Cell's shared-rule
+  contract) so only the frame's outer rule shows — established by Panel.qml,
+  mirrored by Menu.qml and Center.qml.
 
-  **`panelPadding` is 8, not 18 (2026-08-19).** A panel's gutter stacks with
-  the `controlPaddingX` every row already carries as a Cell, so 18 put the
-  first glyph 28px in from the ring on a 280px card, and a row-nested action
-  Cell (NetworkPanel's DISCONNECT, BluetoothPanel's per-device actions,
-  MediaPanel's transport) doubled that again into a boxed control floating
-  clear of the border — two concentric frames rather than one card. At 8 the
-  gutter matches `controlPaddingX` exactly, so a row's inset from the ring
-  reads as two equal steps instead of an arbitrary band. `popupPadding`
-  stays 14: the menu and the center are list surfaces summoned to the middle
-  of the screen, not compact popouts hung off a bar cell.
+  This replaces the 2026-08-07 card-gutter split, which gave summoned list
+  surfaces 14 and bar-anchored panels 18. Two numbers for one structural
+  element could only ever read as some cards having more padding than
+  others, and the split's own ordering inverted the moment panels came down
+  to 8. The value is 8 because a card's gutter stacks with the
+  `controlPaddingX` every row already carries as a Cell: at 18 the first
+  glyph sat 28px in from the ring on a 280px card, and a row-nested action
+  Cell (NetworkPanel's FORGET, BluetoothPanel's TRUST, MediaPanel's
+  transport) doubled that again into a boxed control floating clear of the
+  border — two concentric frames rather than one card. At 8 the gutter
+  matches `controlPaddingX` exactly, so a row's inset from the ring reads as
+  two equal steps instead of an arbitrary band. Checkable: `grep` the shell
+  for a second card-padding token and there isn't one.
 
 Spacing discipline (2026-08-07): every gap, padding, margin, and row
 height in shell QML resolves through `Theme.space`/`Theme.fontSize`
@@ -947,7 +948,7 @@ floats with a margin or fuses to the screen edge.
 
   **The toolbar** sits along the bottom edge, under the legend: a bordered
   card (`background` fill, `rule` border at `Theme.borderWidth`, radius 0,
-  `popupPadding` inset) holding one row of cells. They are the bar's
+  `panelPadding` inset) holding one row of cells. They are the bar's
   `standalone` cells, not the fused ledger — six discrete buttons is exactly
   what that chrome is for, and it brings the bar's own hover inversion
   (§1.1/§3) with it. The current tool is `selected`, so it stays inverted

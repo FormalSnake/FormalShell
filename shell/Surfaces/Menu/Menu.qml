@@ -750,17 +750,17 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
     readonly property real _maxTotalHeight: root._screen ? root._screen.height * 0.6 : 400
-    // Content gets a `popupPadding` gutter (DESIGN.md's omarchy card chrome:
+    // Content gets a `panelPadding` gutter (DESIGN.md's omarchy card chrome:
     // "internal padding") on all four sides now — the frame draws its own
     // explicit ring on all four (below). Rows still draw their own
     // bottom+right per Cell's shared-rule contract (needed for the divider
     // between adjacent rows), which would otherwise double the frame's
-    // right/bottom rule `popupPadding` apart — the two eraser rectangles
+    // right/bottom rule `panelPadding` apart — the two eraser rectangles
     // below paint over just that trailing hairline with the frame's own
     // background color, leaving the frame's rule as the single visible line
     // on every edge (same technique as Panel.qml's `_contentWidth`).
-    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.popupPadding * 2
-    readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.popupPadding * 2
+    readonly property real _contentWidth: root.implicitWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.panelPadding * 2
+    readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.panelPadding * 2
     // Whichever view owns the level: the grid on the wallpaper route, the
     // row list everywhere else. The idle one is emptied rather than merely
     // hidden (see their `model` bindings), so its contentHeight is 0.
@@ -1495,7 +1495,7 @@ PanelWindow {
 
         // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
         // bordered rectangle") — explicit on all four sides, with the
-        // popupPadding gutter below insetting content uniformly. The search
+        // panelPadding gutter below insetting content uniformly. The search
         // field and result rows still close their own bottom+right per Cell's
         // shared-rule contract (needed for the divider between adjacent rows);
         // the eraser rectangles further down paint over just the trailing
@@ -1536,9 +1536,9 @@ PanelWindow {
         Cell {
             id: searchCell
             anchors.top: topRule.bottom
-            anchors.topMargin: Core.Theme.space.popupPadding
+            anchors.topMargin: Core.Theme.space.panelPadding
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             height: searchColumn.implicitHeight + Core.Theme.space.sm * 2 + Core.Theme.borderWidth
 
@@ -1672,7 +1672,7 @@ PanelWindow {
             id: variantRow
             anchors.top: searchCell.bottom
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             height: visible ? implicitHeight : 0
             visible: root._isPickerRoute && root._pickerHasVariants
@@ -1706,7 +1706,7 @@ PanelWindow {
             id: rowsView
             anchors.top: variantRow.bottom
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             // Split route (M30): the list keeps the left half of
             // _contentWidth so the preview pane below can own the right
             // half. Every other route is unchanged, full width.
@@ -1753,7 +1753,7 @@ PanelWindow {
             id: gridView
             anchors.top: variantRow.bottom
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             height: root._rowsAreaHeight
             visible: root._isPickerRoute
@@ -1829,7 +1829,7 @@ PanelWindow {
             anchors.left: rowsView.right
             anchors.leftMargin: -Core.Theme.borderWidth
             anchors.right: parent.right
-            anchors.rightMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            anchors.rightMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             height: rowsView.height
 
             Rectangle {
@@ -1843,10 +1843,10 @@ PanelWindow {
             Item {
                 id: previewContent
                 anchors.fill: parent
-                anchors.topMargin: Core.Theme.space.popupPadding
-                anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
-                anchors.rightMargin: Core.Theme.space.popupPadding
-                anchors.bottomMargin: Core.Theme.space.popupPadding
+                anchors.topMargin: Core.Theme.space.panelPadding
+                anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
+                anchors.rightMargin: Core.Theme.space.panelPadding
+                anchors.bottomMargin: Core.Theme.space.panelPadding
                 clip: true
 
                 MetaLabel {
@@ -1915,7 +1915,7 @@ PanelWindow {
             id: actionBar
             anchors.top: rowsView.bottom
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.popupPadding
+            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             primary: root._actionBar.primary
             hints: root._actionBar.hints
@@ -1928,7 +1928,7 @@ PanelWindow {
         // Erases the trailing hairline searchCell and every row draw along
         // their own right edge (Cell's shared-rule contract) — without this,
         // that continuous line and the frame's own right rule above would read
-        // as two parallel borders `popupPadding` apart.
+        // as two parallel borders `panelPadding` apart.
         Rectangle {
             anchors.top: searchCell.top
             anchors.right: actionBar.right

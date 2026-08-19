@@ -54,7 +54,6 @@ TestCase {
         compare(s.labelGap, 4);
         compare(s.panelGap, 14);
         compare(s.panelPadding, 8);
-        compare(s.popupPadding, 14);
         compare(s.trackThickness, 6);
         compare(s.popupWidthNarrow, 280);
         compare(s.popupWidthDefault, 320);

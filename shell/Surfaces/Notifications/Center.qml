@@ -179,14 +179,13 @@ PanelWindow {
         }
 
         // The card's own border ring on all four sides (DESIGN.md's omarchy
-        // card chrome, §1.3's card-gutter split): this is a summoned list
-        // surface, so rows inset by `popupPadding` — the same gutter
-        // Menu.qml's card uses, not `panelPadding` — instead of the old
+        // card chrome, §1.3): rows inset by `panelPadding`, the one gutter
+        // every floating card in the shell now shares, instead of the old
         // borderWidth-only inset that sat rows ~2px from the edge. Rows
         // still draw their own bottom+right per Cell's shared-rule contract;
         // the eraser rectangle below papers over the trailing right-edge
         // hairline that would otherwise double the frame's own right rule
-        // `popupPadding` apart (same technique as Panel.qml/Menu.qml). No
+        // `panelPadding` apart (same technique as Panel.qml/Menu.qml). No
         // bottom eraser: unlike those two cards, which wrap tightly to their
         // own content height, this surface's height is fixed to the screen,
         // so the last row's own bottom rule essentially never lands flush
@@ -228,11 +227,11 @@ PanelWindow {
             id: titleCell
             title: "NOTIFICATIONS"
             anchors.top: topRule.bottom
-            anchors.topMargin: Theme.space.popupPadding
+            anchors.topMargin: Theme.space.panelPadding
             anchors.left: parent.left
-            anchors.leftMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.leftMargin: Theme.borderWidth + Theme.space.panelPadding
             anchors.right: parent.right
-            anchors.rightMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.rightMargin: Theme.borderWidth + Theme.space.panelPadding
 
             // Bare-label actions (DESIGN.md §1.1's 2026-08-09 amendment): no
             // cell chrome, hover promotes ink foregroundDim -> foreground
@@ -274,11 +273,11 @@ PanelWindow {
             id: rowsFlickable
             anchors.top: titleCell.bottom
             anchors.left: parent.left
-            anchors.leftMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.leftMargin: Theme.borderWidth + Theme.space.panelPadding
             anchors.right: parent.right
-            anchors.rightMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.rightMargin: Theme.borderWidth + Theme.space.panelPadding
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: Theme.borderWidth + Theme.space.popupPadding
+            anchors.bottomMargin: Theme.borderWidth + Theme.space.panelPadding
             clip: true
             contentWidth: width
             contentHeight: column.implicitHeight
@@ -368,7 +367,7 @@ PanelWindow {
         // Erases the trailing hairline every row (and titleCell itself)
         // draws along its own right edge (Cell's shared-rule contract) —
         // without this, that continuous line and the frame's own right
-        // rule above would read as two parallel borders `popupPadding`
+        // rule above would read as two parallel borders `panelPadding`
         // apart (same technique as Panel.qml/Menu.qml).
         Rectangle {
             anchors.top: titleCell.top

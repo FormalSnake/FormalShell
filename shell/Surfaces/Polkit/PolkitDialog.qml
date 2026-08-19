@@ -191,12 +191,7 @@ PanelWindow {
             id: card
             anchors.centerIn: parent
             width: root._cardWidth
-            // `popupPadding`, not `panelPadding` (DESIGN.md §1.3's
-            // card-gutter split): this is a screen-centered summoned
-            // surface like the menu and the notification center, not a
-            // bar-anchored popout, so it keeps the roomier of the two
-            // gutters rather than following panels down to 8.
-            implicitHeight: column.implicitHeight + Theme.space.popupPadding * 2
+            implicitHeight: column.implicitHeight + Theme.space.panelPadding * 2
             height: implicitHeight
 
             // Enter/exit fade (DESIGN.md §4): opacity only, no slide — a
@@ -224,7 +219,7 @@ PanelWindow {
             Column {
                 id: column
                 anchors.centerIn: parent
-                width: parent.width - Theme.space.popupPadding * 2
+                width: parent.width - Theme.space.panelPadding * 2
                 spacing: Theme.space.lg
 
                 MetaLabel {

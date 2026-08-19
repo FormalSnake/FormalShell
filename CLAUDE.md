@@ -227,6 +227,21 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   say `Core.State`: QtQuick exports its own `State` type, and the bare name
   silently reads back undefined, which is exactly how M24's chevron shipped
   rendering-dead while its own IPC status reported the right answer.
+- `dev/smoke-niri.sh --console` — points `settings.json`'s `console.command`
+  at a real foot on a known blue background and drives the quake console
+  (M37) over three `console toggle` calls off one timeline: open
+  (`console-open.png` — the terminal covering the top half, the tiled
+  fixture window and the bar still visible around it), parked
+  (`console-parked.png`), and back (`console-return.png`), with a `console
+  status` dump beside each frame. The claim the screenshots cannot make
+  lives in those dumps: `windowId` has to be the SAME string in all three,
+  including the parked one. A console that closed and respawned its
+  terminal would produce three perfectly good frames and throw the session
+  away, which is the whole feature. niri has no hide primitive of any kind,
+  so parking means a move onto the trailing empty workspace
+  (`shell/Compositor/park.js`) — the extra workspace visible in the bar's
+  cell while parked is that, not a bug — while Hyprland parks on
+  `special:formalshell-console`.
 - `dev/smoke-niri.sh --bar-layout` — points `settings.json`'s `bar.layout`
   at a left region led by six `bar.modules` entries (swapped ahead of the
   reordered builtins — `activeWindow` before `workspaces`, away from

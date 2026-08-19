@@ -844,15 +844,15 @@ Scope {
                 border.width: Core.Theme.borderWidth
                 radius: 0
                 width: Core.Theme.space.popupWidthWide
-                height: listColumn.height + Core.Theme.space.popupPadding * 2
+                height: listColumn.height + Core.Theme.space.panelPadding * 2
                 x: Math.round((parent.width - width) / 2)
                 y: Math.round((parent.height - height) / 2)
 
                 Column {
                     id: listColumn
-                    x: Core.Theme.space.popupPadding
-                    y: Core.Theme.space.popupPadding
-                    width: parent.width - Core.Theme.space.popupPadding * 2
+                    x: Core.Theme.space.panelPadding
+                    y: Core.Theme.space.panelPadding
+                    width: parent.width - Core.Theme.space.panelPadding * 2
 
                     MetaLabel {
                         // These windows are selectable for a shot and refused
@@ -992,8 +992,8 @@ Scope {
                 border.color: Core.Theme.color.rule
                 border.width: Core.Theme.borderWidth
                 radius: 0
-                width: toolbarRow.width + Core.Theme.space.popupPadding * 2
-                height: toolbarRow.height + Core.Theme.space.popupPadding * 2
+                width: toolbarRow.width + Core.Theme.space.panelPadding * 2
+                height: toolbarRow.height + Core.Theme.space.panelPadding * 2
                 x: Math.round((parent.width - width) / 2)
                 y: parent.height - height - Core.Theme.space.xl
 
@@ -1040,8 +1040,8 @@ Scope {
 
                 Row {
                     id: toolbarRow
-                    x: Core.Theme.space.popupPadding
-                    y: Core.Theme.space.popupPadding
+                    x: Core.Theme.space.panelPadding
+                    y: Core.Theme.space.panelPadding
                     spacing: Core.Theme.space.md
 
                     MetaLabel {

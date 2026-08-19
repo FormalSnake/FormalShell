@@ -58,7 +58,16 @@ Scope {
         return {
             id: t.address,
             title: t.title,
-            appId: ipc.class ?? "",
+            // The wlr-foreign-toplevel handle's own app id, which arrives
+            // with the window and updates on its own events. `lastIpcObject`
+            // is the fallback, not the source: Quickshell only repopulates it
+            // from `j/clients` on connect and on configreloaded (see the
+            // comment above), so a window opened since startup reported an
+            // EMPTY app id here until something forced a refresh. Anything
+            // matching a freshly spawned window by app id — the quake
+            // console, the recorder's webcam overlay — silently never found
+            // it (2026-08-19).
+            appId: (t.wayland && t.wayland.appId) ? t.wayland.appId : (ipc.class ?? ""),
             workspaceId: t.workspace ? String(t.workspace.id) : "",
             isFocused: t.activated,
             isFloating: ipc.floating ?? false,

@@ -81,8 +81,11 @@ Item {
 
     readonly property string _displayLabel: root.checking ? "CHECKING…" : root.label
 
-    implicitWidth: Math.max(_fieldWidth, clockText.implicitWidth, dateLabel.implicitWidth) + Theme.space.huge * 2
-    implicitHeight: plateColumn.implicitHeight + Theme.space.huge * 2
+    // `panelPadding`, the one card gutter every floating surface in the
+    // shell shares (DESIGN.md §1.3) — this plate is a bordered card like
+    // any panel, so it takes the same inset rather than its own step.
+    implicitWidth: Math.max(_fieldWidth, clockText.implicitWidth, dateLabel.implicitWidth) + Theme.space.panelPadding * 2
+    implicitHeight: plateColumn.implicitHeight + Theme.space.panelPadding * 2
     width: implicitWidth
     height: implicitHeight
 
@@ -100,7 +103,7 @@ Item {
     Column {
         id: plateColumn
         anchors.centerIn: parent
-        width: root.width - Theme.space.huge * 2
+        width: root.width - Theme.space.panelPadding * 2
         spacing: Theme.space.lg
 
         Text {

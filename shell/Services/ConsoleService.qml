@@ -144,9 +144,14 @@ Singleton {
     // names it rather than blaming the compositor.
     Timer {
         id: mapTimer
-        interval: 50
+        interval: 100
         repeat: true
         onTriggered: {
+            // No-op on niri, whose window model is event-driven. On Hyprland
+            // it re-reads `j/clients`, which is the only thing that gives a
+            // freshly mapped window a `rect` at all — the poll below reads
+            // the answer on the next tick, hence 100ms rather than 50.
+            CompositorService.refreshWindows();
             root._attempts++;
             if (root.windowId !== "") {
                 mapTimer.stop();
@@ -154,7 +159,7 @@ Singleton {
                 root._reveal(root.windowId);
                 return;
             }
-            if (root._attempts >= 100) {
+            if (root._attempts >= 50) {
                 mapTimer.stop();
                 root.spawning = false;
                 console.warn("ConsoleService: no window with app id", root.appId, "opened in time");
@@ -172,13 +177,14 @@ Singleton {
     // on the park workspace would drag the user's view over to it.
     Timer {
         id: settleTimer
-        interval: 50
+        interval: 100
         repeat: true
         onTriggered: {
+            CompositorService.refreshWindows();
             root._attempts++;
             const win = (CompositorService.windows || []).find(w => w.id === root._pendingId);
             if (!win) {
-                if (root._attempts >= 40) {
+                if (root._attempts >= 20) {
                     settleTimer.stop();
                     console.warn("ConsoleService: the console window went away while being placed");
                 }
@@ -200,7 +206,7 @@ Singleton {
                 CompositorService.focusWindow(win.id);
                 return;
             }
-            if (root._attempts >= 40) {
+            if (root._attempts >= 20) {
                 settleTimer.stop();
                 console.warn("ConsoleService: the console did not settle in time, focusing it anyway");
                 CompositorService.focusWindow(win.id);
