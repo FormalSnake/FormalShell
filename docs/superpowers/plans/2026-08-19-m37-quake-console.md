@@ -71,7 +71,7 @@ never faked: `windowId` is `""` when no console window exists.
 `shell/Compositor/niri/NiriBackend.qml`,
 `shell/Compositor/hyprland/HyprlandBackend.qml`,
 `shell/Compositor/CompositorService.qml`; create
-`shell/Console/park.js`; create `tests/tst_console_park.qml`.
+`shell/Compositor/park.js`; create `tests/tst_compositor_park.qml`.
 
 **Produces:** `windowParkingAvailable` (false on the null backend),
 `parkWindow(id)`, `unparkWindow(id)` — both leave focus alone, so the
@@ -108,8 +108,10 @@ console`).
 
 ### Task 3: smoke leg and docs
 
-**Files:** modify `dev/smoke-niri.sh`, `dev/vm.sh` (artifact pull),
-`CLAUDE.md` (smoke list), `docs/USAGE.md`.
+**Files:** modify `dev/smoke-niri.sh`, `CLAUDE.md` (smoke list),
+`docs/USAGE.md`. No `dev/vm.sh` change: it already pulls any
+`SMOKE_<NAME> <path>.png` line back to the mac and folds the status dumps
+into the run's own JSON.
 
 **Produces:** `dev/smoke-niri.sh --console`, with a settings fixture
 pointing `console.command` at foot (`["foot", "--app-id=formalshell-console"]`,

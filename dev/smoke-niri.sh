@@ -395,6 +395,22 @@
 # single-chevron layout needs no argument. The two PNGs are asserted to
 # differ, which is the cheapest possible guard against the M24 failure of
 # shipping a correct IPC contract over a bar that never rendered the change.
+# With --console, points settings.json's console.command at a real foot on a
+# known background color and drives the quake console (M37) over three
+# `console toggle` calls off one timeline: open (console-open.png — foot
+# covering the top half of the screen, the fixture window and the bar still
+# there above and below it), parked (console-parked.png — the same session
+# with the console gone), and back (console-return.png). A `console status`
+# dump lands beside each frame. The assertion the screenshots cannot make is
+# in those three dumps: the `windowId` after the hide, and again after the
+# reopen, must be the SAME id as the first — a console that closed and
+# respawned its terminal would pass every visual check here and still have
+# thrown the session away, which is the entire point of the feature. The
+# parked dump also has to still carry that id: an empty one would mean the
+# hide killed the window rather than parking it. niri has no hide primitive
+# at all, so the park is a move onto the trailing empty workspace this
+# session always has (shell/Compositor/park.js), which is what makes the
+# open/parked frames differ.
 # With --picker, generates 20 fixture PNGs (imagemagick, solid colors at
 # 1920x1080 — bigger than the grid cell's decode cap and the VM's own
 # screen, so both actually downscale rather than passing an already-smaller
@@ -761,6 +777,7 @@ screensaver_gif_mode=false
 picker_mode=false
 tray_mode=false
 chevron_mode=false
+console_mode=false
 bar_layout_mode=false
 screenshot_mode=false
 capture_mode=false
@@ -802,6 +819,7 @@ while [ $# -gt 0 ]; do
     --picker) picker_mode=true; shift ;;
     --tray) tray_mode=true; shift ;;
     --chevron) chevron_mode=true; shift ;;
+    --console) console_mode=true; shift ;;
     --bar-layout) bar_layout_mode=true; shift ;;
     --screenshot) screenshot_mode=true; shift ;;
     --capture) capture_mode=true; shift ;;
@@ -822,7 +840,7 @@ while [ $# -gt 0 ]; do
     --plugins) plugins_mode=true; shift ;;
     --hotcorner) hotcorner_mode=true; shift ;;
     --panel-keys) panel_keys_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--wallpaper] [--theme-toggle] [--menu] [--notify] [--center] [--osd] [--panel <name>] [--clipboard] [--wifi] [--media] [--lock] [--polkit] [--screensaver] [--screensaver-gif] [--picker] [--tray] [--chevron] [--console] [--bar-layout] [--screenshot] [--capture] [--capture-edit] [--nightlight] [--speedtest] [--instance] [--share] [--visualizer] [--gallery] [--record] [--ocr] [--reminder] [--toggles] [--keybinds] [--mic] [--systemupdate] [--plugins] [--hotcorner] [--panel-keys]" >&2; exit 1 ;;
   esac
 done
 
@@ -896,7 +914,7 @@ fi
 # already depends on, and its own background color is a known solid fill
 # for the colour-pick leg: one real window carrying both targets, with no
 # imagemagick font lookup to gamble on.
-if $active_window_fixture_mode || $ocr_mode || $capture_edit_mode; then
+if $active_window_fixture_mode || $ocr_mode || $capture_edit_mode || $console_mode; then
   if command -v foot >/dev/null 2>&1; then
     foot_bin=$(command -v foot)
   else
@@ -1029,7 +1047,7 @@ fi
 if $lock_mode || $polkit_mode || $screensaver_gif_mode || $menu_mode || $theme_toggle_mode \
   || $record_mode || $ocr_mode || $reminder_mode || $toggles_mode || $keybinds_mode \
   || $mic_mode || $systemupdate_mode || $plugins_mode || $chevron_mode || $panel_keys_mode \
-  || $capture_edit_mode || $panel_airpods_mode || $panel_dualsense_mode; then
+  || $capture_edit_mode || $panel_airpods_mode || $panel_dualsense_mode || $console_mode; then
   # niri's own `screenshot-screen` msg action is deliberately refused while
   # the session is locked (niri-wm/niri discussion #2384: "to prevent people
   # from spamming your disk with images even when the session is locked") —
@@ -1453,6 +1471,12 @@ tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
 tray_menu_reply_path="$shot_dir/tray-menu-reply.txt"
 tray_menu_path="$shot_dir/tray-menu.png"
 tray_menuactivate_reply_path="$shot_dir/tray-menuactivate-reply.txt"
+console_status_open_path="$shot_dir/console-status-open.json"
+console_status_parked_path="$shot_dir/console-status-parked.json"
+console_status_return_path="$shot_dir/console-status-return.json"
+console_open_path="$shot_dir/console-open.png"
+console_parked_path="$shot_dir/console-parked.png"
+console_return_path="$shot_dir/console-return.png"
 chevron_status_collapsed_path="$shot_dir/chevron-status-collapsed.json"
 chevron_status_expanded_path="$shot_dir/chevron-status-expanded.json"
 chevron_expand_reply_path="$shot_dir/chevron-expand-reply.txt"
@@ -1896,8 +1920,18 @@ systemupdate_settings=""
 if $systemupdate_mode; then
   systemupdate_settings=', "systemUpdate": {"flakeDir": "'"$PWD"'"}'
 fi
+# console_mode (M37): the quake console spawns a REAL terminal — the shell
+# has no emulator of its own to embed — so the fixture is foot on a known
+# blue background, told to announce the app id ConsoleService matches on.
+# Absolute path rather than a bare "foot": this argv is spawned by the shell
+# through niri, not by this script, so it resolves against the session's PATH
+# and not against the nix develop shell this runs in.
+console_settings=""
+if $console_mode; then
+  console_settings=', "console": {"command": ["'"$foot_bin"'", "--app-id=formalshell-console", "--override=colors.background=1f6feb", "--override=colors.foreground=f4f4f4", "sh", "-c", "echo FORMALSHELL QUAKE CONSOLE; sleep 600"], "appId": "formalshell-console", "share": 0.5}'
+fi
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings$record_settings$systemupdate_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$screensaver_settings$picker_settings$bar_settings$record_settings$systemupdate_settings$console_settings}
 EOF
 
 if $bar_layout_mode; then
@@ -4001,6 +4035,33 @@ sleep 1
 EOF
 fi
 
+# --console (M37): three toggles off one timeline. The first spawns the
+# terminal, so it gets the longest settle (foot's own startup plus the map ->
+# float -> place poll); the second and third only move a window that already
+# exists. Each frame is taken a beat after its `console status` dump so the
+# JSON and the pixels describe the same moment.
+if $console_mode; then
+  console_drive_script="$shot_dir/console-drive.sh"
+  cat > "$console_drive_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+"$qs_bin" ipc -p "$shell_path" call console toggle > /dev/null 2>&1
+sleep 4
+"$qs_bin" ipc -p "$shell_path" call console status > "$console_status_open_path" 2>&1
+"$grim_bin" "$console_open_path"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call console toggle > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call console status > "$console_status_parked_path" 2>&1
+"$grim_bin" "$console_parked_path"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call console toggle > /dev/null 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call console status > "$console_status_return_path" 2>&1
+"$grim_bin" "$console_return_path"
+EOF
+fi
+
 # --panel-keys (M26 Task 8): opens the audio panel and drives it with real
 # `wtype` keystrokes rather than the `panel`/IPC-only shortcuts every other
 # leg uses — this is the one thing that can actually prove row-level
@@ -4327,6 +4388,9 @@ fi
   if $chevron_mode; then
     echo "spawn-at-startup \"bash\" \"$chevron_drive_script\""
   fi
+  if $console_mode; then
+    echo "spawn-at-startup \"bash\" \"$console_drive_script\""
+  fi
   if $capture_mode; then
     echo "spawn-at-startup \"bash\" \"$capture_drive_script\""
   fi
@@ -4420,6 +4484,12 @@ fi
     # smoke.png/SMOKE_OK comes after all four, showing the session with
     # nothing in flight and the bar's indicator row gone again.
     screenshot_delay=22
+  elif $console_mode; then
+    # console-drive.sh's own sequence lands at 16s (5 to the first toggle, 4
+    # for the spawn and placement, then two more toggles at 1-3s apiece);
+    # this run's generic smoke.png/SMOKE_OK is taken 4s after that, showing
+    # the session with the console back open over it.
+    screenshot_delay=20
   elif $center_mode; then
     screenshot_delay=15
   elif $notify_mode; then
@@ -5951,6 +6021,57 @@ if $chevron_mode; then
   # frames were byte-identical the whole time with every dump passing.
   if cmp -s "$chevron_collapsed_path" "$chevron_expanded_path"; then
     echo "SMOKE_FAIL: chevron-collapsed and chevron-expanded screenshots are byte-identical: the expand changed the state but rendered nothing" >&2; exit 1
+  fi
+fi
+
+# --console (M37): the three status dumps carry the claim the frames cannot.
+# `windowId` has to be the same string in all three: same window parked, same
+# window brought back, same shell session inside it. A console that closed
+# and respawned its terminal would show three perfectly good screenshots and
+# a different id every time.
+if $console_mode; then
+  for f in "$console_status_open_path" "$console_status_parked_path" "$console_status_return_path"; do
+    if [ ! -s "$f" ]; then
+      echo "SMOKE_FAIL: no console status produced at $f" >&2; exit 1
+    fi
+    cat "$f"; echo
+  done
+  console_open_id=$(sed -n 's/.*"windowId":"\([^"]*\)".*/\1/p' "$console_status_open_path")
+  console_parked_id=$(sed -n 's/.*"windowId":"\([^"]*\)".*/\1/p' "$console_status_parked_path")
+  console_return_id=$(sed -n 's/.*"windowId":"\([^"]*\)".*/\1/p' "$console_status_return_path")
+  if [ -z "$console_open_id" ]; then
+    echo "SMOKE_FAIL: console toggle opened no window. Got: $(cat "$console_status_open_path")" >&2; exit 1
+  fi
+  if ! grep -q '"visible":true' "$console_status_open_path"; then
+    echo "SMOKE_FAIL: console status does not report the console visible after the first toggle. Got: $(cat "$console_status_open_path")" >&2; exit 1
+  fi
+  if ! grep -q '"visible":false' "$console_status_parked_path"; then
+    echo "SMOKE_FAIL: console status still reports the console visible after the hide. Got: $(cat "$console_status_parked_path")" >&2; exit 1
+  fi
+  # Parked, not closed: the window is still there, just not on this
+  # workspace. An empty id here is the failure mode that would otherwise
+  # look identical on screen.
+  if [ "$console_parked_id" != "$console_open_id" ]; then
+    echo "SMOKE_FAIL: the hidden console is not the window that was opened (open=$console_open_id parked=$console_parked_id): the hide closed it instead of parking it" >&2; exit 1
+  fi
+  if ! grep -q '"visible":true' "$console_status_return_path"; then
+    echo "SMOKE_FAIL: console status does not report the console visible again after the third toggle. Got: $(cat "$console_status_return_path")" >&2; exit 1
+  fi
+  if [ "$console_return_id" != "$console_open_id" ]; then
+    echo "SMOKE_FAIL: the console that came back is a different window (open=$console_open_id return=$console_return_id): the session did not survive the hide" >&2; exit 1
+  fi
+  for f in "$console_open_path" "$console_parked_path" "$console_return_path"; do
+    if [ ! -f "$f" ]; then
+      echo "SMOKE_FAIL: no console screenshot produced at $f" >&2; exit 1
+    fi
+  done
+  echo "SMOKE_CONSOLE_OPEN $console_open_path"
+  echo "SMOKE_CONSOLE_PARKED $console_parked_path"
+  echo "SMOKE_CONSOLE_RETURN $console_return_path"
+  # Same guard the chevron leg keeps: a correct IPC contract over a console
+  # that never actually moved would pass every assertion above.
+  if cmp -s "$console_open_path" "$console_parked_path"; then
+    echo "SMOKE_FAIL: console-open and console-parked screenshots are byte-identical: the hide changed the state but nothing left the screen" >&2; exit 1
   fi
 fi
 

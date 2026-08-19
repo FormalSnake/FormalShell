@@ -1559,6 +1559,88 @@ qs ipc --any-display -p <store-path>/share/formalshell call clipboard remove <id
 qs ipc --any-display -p <store-path>/share/formalshell call clipboard clear
 ```
 
+## Quake console
+
+One terminal that drops down over whatever workspace you are on, and goes
+away again with the session inside it still running. The window is the
+terminal's own — this shell has no emulator to embed — so `ConsoleService`
+owns three things: spawning it once, placing it, and moving it in and out of
+view.
+
+Visibility is derived, never stored: the console is showing when the
+compositor reports its window on the focused workspace. A restarted shell
+therefore adopts the console already running instead of spawning a second
+one, and a console you moved yourself is wherever you left it.
+
+`toggle` has three arms. No window yet: spawn `console.command`, wait for a
+window announcing `console.appId` to map (5s), float it, place it, focus it.
+Window on this workspace: park it. Window anywhere else — parked, or on a
+workspace you have walked away from — bring it here and focus it. That last
+arm is what makes one keybind work from anywhere.
+
+Hiding is the one place the two compositors differ. Hyprland has a special
+workspace (`special:formalshell-console`). niri has no hide primitive at all
+— no minimize, no scratchpad, nothing in `niri msg action` — so the console
+is parked on another workspace, preferring the empty trailing one every
+niri output carries (`shell/Compositor/park.js`). While it is hidden you
+will see that extra workspace in the bar; it goes away when the console
+comes back.
+
+Placement is recomputed on every show: full width less one `space.xl`
+margin either side, top edge under the bar, covering `console.share` of what
+is left. Sizing it once at first map would leave a rescaled output with a
+console that is no longer half of anything.
+
+**Settings** (`~/.config/formalshell/settings.json`):
+
+```json
+{
+  "console": {
+    "command": ["ghostty", "--class=dev.formalshell.console"],
+    "appId": "dev.formalshell.console",
+    "share": 0.5
+  }
+}
+```
+
+`command` is argv with no shell interpolation, and it has to make the
+terminal announce `appId` — every emulator spells that flag differently
+(`foot --app-id`, `alacritty --class`, `kitty --class`, `ghostty --class`),
+which is why this is argv rather than a command name. Change one without the
+other and the console never finds its own window; it says so rather than
+spawning a second terminal on the next toggle. `share` is clamped to
+0.2..1.
+
+Seed it with whatever you want in there — `["ghostty",
+"--class=dev.formalshell.console", "-e", "claude"]` gives you omarchy's
+agent console.
+
+**IPC** (`target: "console"`):
+
+```bash
+qs ipc --any-display -p <store-path>/share/formalshell call console toggle
+qs ipc --any-display -p <store-path>/share/formalshell call console show
+qs ipc --any-display -p <store-path>/share/formalshell call console hide
+qs ipc --any-display -p <store-path>/share/formalshell call console status   # {available, appId, windowId, visible, spawning}
+```
+
+`windowId` is `""` when no console window exists: "there is no console" and
+"the console is hidden" are different answers.
+
+**Binding it.** niri's `config.kdl`:
+
+```kdl
+binds {
+    Mod+Plus { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "console" "toggle"; }
+}
+```
+
+Hyprland's `hyprland.conf`:
+
+```
+bind = SUPER, plus, exec, qs ipc --any-display -p <store-path>/share/formalshell call console toggle
+```
+
 ## Calendar
 
 `CalendarPanel`'s month grid carries a year-progress bar below it — a
