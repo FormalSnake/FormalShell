@@ -125,6 +125,7 @@ Singleton {
     property int _attempts: 0
     property bool _placed: false
     property int _placedAt: 0
+    property bool _wasParked: false
 
     // Brings `id` here whether it was parked, sitting on a workspace the user
     // walked away from, or already on this one: the move is a no-op in the
@@ -142,7 +143,11 @@ Singleton {
         root._attempts = 0;
         root._placed = false;
         root._placedAt = 0;
-        CompositorService.unparkWindow(id);
+        // Size it where nobody can see it, then bring it in. The other order
+        // shows the terminal at whatever size it opened itself at for as long
+        // as the placement takes to land — which on a first spawn is a
+        // default-sized box appearing on screen and then jumping to shape.
+        root._wasParked = CompositorService.isWindowParked(id);
         CompositorService.floatWindow(id);
         settleTimer.restart();
     }
@@ -178,12 +183,12 @@ Singleton {
         }
     }
 
-    // Two-phase on one clock, RecordingService's own webcam pattern: wait
-    // for the window to land on this workspace before resizing it, then wait
-    // for the size it reports to match what was asked before focusing. Focus
-    // comes last on purpose — focusing a window still sitting on the park
-    // workspace would drag the user's view over to it. Both waits are
-    // bounded, and neither is allowed to skip the placement itself.
+    // Place, then reveal, then focus — in that order and on one clock. The
+    // window is still out of view while it is being resized, so the console
+    // only ever appears at the size it is meant to be. Focus comes after the
+    // reveal for the same reason it always did: focusing a window still
+    // parked would drag the user's view over to it. Every wait here is
+    // bounded, and none of them is allowed to skip the placement.
     Timer {
         id: settleTimer
         interval: 100
@@ -200,7 +205,6 @@ Singleton {
                 return;
             }
             const rect = win.rect;
-            const landed = !CompositorService.isWindowParked(win.id);
             // A rect is what niri's placement needs (it converts the absolute
             // target into its own relative move by reading the current box),
             // so wait for one — but only for half a second. A backend that
@@ -208,32 +212,27 @@ Singleton {
             // its placement: Hyprland's dispatchers are absolute, so placing
             // blind there is correct, and that is exactly the case that
             // shipped broken.
-            if (landed && !root._placed && (rect || root._attempts >= 5)) {
+            if (!root._placed && (rect || root._attempts >= 5)) {
                 root._placed = true;
                 root._placedAt = root._attempts;
                 CompositorService.placeFloatingWindow(win.id, root._target.x, root._target.y,
                     root._target.width, root._target.height);
                 return;
             }
-            if (root._placed && rect
+            const sized = !!rect
                 && Math.round(rect.width) === root._target.width
-                && Math.round(rect.height) === root._target.height) {
+                && Math.round(rect.height) === root._target.height;
+            // Placed but unverifiable (no box to check against) counts as
+            // done after a beat: taking the dispatch at its word beats
+            // holding the console off screen for a verification this backend
+            // cannot answer.
+            const unverifiable = !rect && root._attempts - root._placedAt >= 3;
+            if (root._placed && (sized || unverifiable || root._attempts >= 20)) {
                 settleTimer.stop();
-                CompositorService.focusWindow(win.id);
-                return;
-            }
-            // Placed, but the window still reports no box to check it
-            // against: take the dispatch at its word rather than spinning
-            // out the full budget on a verification this backend cannot
-            // answer.
-            if (root._placed && !rect && root._attempts - root._placedAt >= 3) {
-                settleTimer.stop();
-                CompositorService.focusWindow(win.id);
-                return;
-            }
-            if (root._attempts >= 20) {
-                settleTimer.stop();
-                console.warn("ConsoleService: the console did not settle in time, focusing it anyway");
+                if (!sized && !unverifiable)
+                    console.warn("ConsoleService: the console did not settle in time, showing it anyway");
+                if (root._wasParked)
+                    CompositorService.unparkWindow(win.id);
                 CompositorService.focusWindow(win.id);
             }
         }
