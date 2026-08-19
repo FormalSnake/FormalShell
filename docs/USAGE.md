@@ -1674,6 +1674,29 @@ Hyprland's `hyprland.conf`:
 bind = SUPER, plus, exec, qs ipc --any-display -p <store-path>/share/formalshell call console toggle
 ```
 
+**Keep it out of your layout.** The shell spawns the terminal and then floats
+it, which means that for the frames in between it is an ordinary new window:
+Hyprland tiles it into whatever you were looking at and the layout reflows
+twice. One rule per compositor fixes that by having it map floating, off to
+the side, from the start. Hyprland:
+
+```
+windowrule = float, class:^(dev.formalshell.console)$
+windowrule = workspace special:formalshell-console silent, class:^(dev.formalshell.console)$
+```
+
+niri:
+
+```kdl
+window-rule {
+    match app-id="^dev[.]formalshell[.]console$"
+    open-floating true
+}
+```
+
+Neither is required — the console works without them, and everything after
+the map is the shell's own doing either way.
+
 ## Calendar
 
 `CalendarPanel`'s month grid carries a year-progress bar below it — a
