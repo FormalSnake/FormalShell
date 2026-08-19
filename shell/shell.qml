@@ -201,6 +201,7 @@ ShellRoot {
     }
     CalendarIpc { panel: calendarPanelInstance }
     ClipboardIpc {}
+    ConsoleIpc {}
     NetworkIpc { panel: networkPanelInstance }
     BluetoothIpc {}
     AirpodsIpc {}

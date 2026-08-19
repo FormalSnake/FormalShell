@@ -194,6 +194,17 @@ import QtQuick
 // panelGap off the bottom edge. The newest toast always sits nearest the
 // anchored corner and the enter/exit slide comes from the anchored side
 // edge, M34 Task 1.
+// console.command (array of strings, default ["ghostty",
+// "--class=dev.formalshell.console"]): argv for the quake console's
+// terminal, spawned once and then kept, with no shell interpolation. It has
+// to make the terminal announce console.appId, and every emulator spells
+// that flag differently (`foot --app-id`, `alacritty --class`, `kitty
+// --class`, `ghostty --class`), which is why this is argv and not a command
+// name. console.appId (string, default "dev.formalshell.console"): the app
+// id ConsoleService matches the mapped window against — change it in both
+// places or the console never finds its own window and says so.
+// console.share (number, default 0.5, clamped 0.2..1): how much of the
+// height under the bar the console covers, M37 Task 2.
 Singleton {
     id: root
 

@@ -51,7 +51,7 @@ var SPACING_BASE = {
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 8, controlPaddingY: 4, inputPaddingY: 7,
     controlHeight: 28, popupRowHeight: 28, rowGap: 8, rowPaddingX: 12,
-    labelGap: 4, panelGap: 14, panelPadding: 18, popupPadding: 14,
+    labelGap: 4, panelGap: 14, panelPadding: 8, popupPadding: 14,
     trackThickness: 6,
     popupWidthNarrow: 280, popupWidthDefault: 320, popupWidthWide: 400, popupWidthMenu: 560,
     popupWidthMenuSplit: 840

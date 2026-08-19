@@ -342,7 +342,7 @@ Two numbers set the whole shell's size:
   | `xxxl` | 14 | `rowPaddingX` | 12 |
   | `huge` | 18 | `labelGap` | 4 |
   | | | `panelGap` (card-to-bar margin) | 14 |
-  | | | `panelPadding` (card internal padding) | 18 |
+  | | | `panelPadding` (card internal padding) | 8 |
   | | | `popupPadding` | 14 |
   | | | `popupWidthNarrow` | 280 |
   | | | `popupWidthDefault` | 320 |
@@ -372,7 +372,7 @@ Two numbers set the whole shell's size:
 
   **Card-gutter split (2026-08-07, Task 6):** `popupPadding` (14) insets a
   *summoned list surface* — the menu, the notification center; `panelPadding`
-  (18) insets a *bar-anchored panel* — every widget popout (audio, network,
+  (8) insets a *bar-anchored panel* — every widget popout (audio, network,
   bluetooth, power, calendar, weather, media, github, usage) and the picker,
   which reuses the panel frame. Both apply on all four sides of the card's
   content, via the same technique: the frame draws an explicit border ring,
@@ -381,6 +381,17 @@ Two numbers set the whole shell's size:
   (Cell's shared-rule contract) so only the frame's outer rule shows —
   established by Panel.qml, mirrored by Menu.qml and (since this pass)
   Center.qml.
+
+  **`panelPadding` is 8, not 18 (2026-08-19).** A panel's gutter stacks with
+  the `controlPaddingX` every row already carries as a Cell, so 18 put the
+  first glyph 28px in from the ring on a 280px card, and a row-nested action
+  Cell (NetworkPanel's DISCONNECT, BluetoothPanel's per-device actions,
+  MediaPanel's transport) doubled that again into a boxed control floating
+  clear of the border — two concentric frames rather than one card. At 8 the
+  gutter matches `controlPaddingX` exactly, so a row's inset from the ring
+  reads as two equal steps instead of an arbitrary band. `popupPadding`
+  stays 14: the menu and the center are list surfaces summoned to the middle
+  of the screen, not compact popouts hung off a bar cell.
 
 Spacing discipline (2026-08-07): every gap, padding, margin, and row
 height in shell QML resolves through `Theme.space`/`Theme.fontSize`

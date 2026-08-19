@@ -53,7 +53,7 @@ TestCase {
         compare(s.rowPaddingX, 12);
         compare(s.labelGap, 4);
         compare(s.panelGap, 14);
-        compare(s.panelPadding, 18);
+        compare(s.panelPadding, 8);
         compare(s.popupPadding, 14);
         compare(s.trackThickness, 6);
         compare(s.popupWidthNarrow, 280);
@@ -65,7 +65,7 @@ TestCase {
     function test_spacing_tokens_rescale_with_scale_factor() {
         var s = Tokens.spacingTokens(2.0);
         compare(s.sm, 8);
-        compare(s.panelPadding, 36);
+        compare(s.panelPadding, 16);
         compare(s.trackThickness, 12);
     }
 

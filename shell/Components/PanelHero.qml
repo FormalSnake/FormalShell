@@ -52,7 +52,11 @@ Cell {
 
     Column {
         width: parent.width
-        spacing: Theme.space.xs
+        // `xxs`, the same text-block-to-track gap every panel row with its
+        // own DitherFill uses (AudioPanel's stream rows, DisplayPanel's
+        // brightness, UsagePanel's meters) — the hero's rail is that same
+        // structural element, so it takes that same token.
+        spacing: Theme.space.xxs
 
         Item {
             id: heroRow
