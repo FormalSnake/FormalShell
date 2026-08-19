@@ -21,8 +21,13 @@ import "../Console/geometry.js" as Geometry
 // it by hand, with no state.json key to drift out of sync.
 //
 // Hiding is where the two backends differ, and the difference stays behind
-// CompositorService.parkWindow: Hyprland has a special workspace, niri has
-// no hide primitive of any kind and parks on another workspace instead.
+// CompositorService.parkWindow/isWindowParked. Hyprland takes omarchy's own
+// route (default/hypr/qconsole.lua): the console never leaves its special
+// workspace, and showing it is the compositor toggling that overlay in and
+// out — which is where the drop-down animation comes from, since the
+// compositor is animating a whole workspace rather than the shell shuffling
+// a window between two. niri has no special workspace and no hide primitive
+// at all, so there the window really does move.
 //
 // The spawn -> map -> float -> place sequence is the one RecordingService's
 // webcam overlay already proves out (its own two timers, same 5s bound):
@@ -51,8 +56,12 @@ Singleton {
         return null;
     }
     readonly property string windowId: root.consoleWindow ? root.consoleWindow.id : ""
+    // The backend's answer, not a workspace-id comparison of our own: on
+    // Hyprland the console lives on its special workspace whether or not that
+    // workspace is drawn over the current one, so "which workspace" says
+    // nothing about whether you can see it.
     readonly property bool showing: !!root.consoleWindow
-        && root.consoleWindow.workspaceId === CompositorService.focusedWorkspaceId
+        && !CompositorService.isWindowParked(root.consoleWindow.id)
     property bool spawning: false
 
     function toggle() {
@@ -112,7 +121,6 @@ Singleton {
     }
 
     property string _pendingId: ""
-    property string _targetWorkspaceId: ""
     property var _target: null
     property int _attempts: 0
     property bool _placed: false
@@ -131,7 +139,6 @@ Singleton {
             return;
         }
         root._pendingId = id;
-        root._targetWorkspaceId = CompositorService.focusedWorkspaceId;
         root._attempts = 0;
         root._placed = false;
         root._placedAt = 0;
@@ -193,7 +200,7 @@ Singleton {
                 return;
             }
             const rect = win.rect;
-            const landed = win.workspaceId === root._targetWorkspaceId;
+            const landed = !CompositorService.isWindowParked(win.id);
             // A rect is what niri's placement needs (it converts the absolute
             // target into its own relative move by reading the current box),
             // so wait for one — but only for half a second. A backend that

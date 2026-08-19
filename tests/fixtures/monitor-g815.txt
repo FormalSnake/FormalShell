@@ -1,0 +1,38 @@
+@stat
+cpu  92679 652987 129272 15406530 94818 23714 3432 0 0 227063
+cpu0 2454 57118 6608 601281 11791 1236 133 0 0 38463
+cpu1 2870 59592 7420 603947 6724 999 117 0 0 39013
+cpu2 3036 60523 7554 603607 6059 958 113 0 0 38738
+cpu3 3055 44707 6013 620583 6110 1006 273 0 0 31284
+@mem
+MemTotal:       32191112 kB
+MemFree:         9172100 kB
+MemAvailable:   18139792 kB
+SwapTotal:      16095228 kB
+SwapFree:       16090556 kB
+@load
+1.50 1.05 1.40 4/2006 103726
+@uptime
+6850.34 154065.38
+@net
+    lo: 146908681    7634    0    0    0     0          0         0 146908681    7634    0    0    0     0       0          0
+enp130s0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+wlp129s0f0: 3306453649 2429346    0 1458    0     0          0         0 351143584  586369    0    0    0     0       0          0
+@temp
+coretemp|temp1_input|Package id 0|62000
+coretemp|temp2_input|Core 0|56000
+iwlwifi_1_6|temp1_input||56000
+acpitz_0|temp1_input||27800
+nvme|temp1_input|Composite|45850
+@disk
+/                           269427478528 154960060416
+/boot                          467664896    204550144
+@drm
+card|card0|nvidia|0x10de|0x2d58|0|0000:02:00.0|
+conn|card0|HDMI-A-1|connected
+card|card1|i915|0x8086|0x7d67|1|0000:00:02.0|Onboard - Video
+conn|card1|eDP-1|connected
+@nvidia
+0, NVIDIA GeForce RTX 5070 Laptop GPU, 16, 50, 78, 8151, 12.17, [N/A]
+@gfx
+@end

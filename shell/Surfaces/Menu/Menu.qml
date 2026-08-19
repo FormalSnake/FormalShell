@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Services.SystemTray
 import qs.Core as Core
 import qs.Compositor
 import qs.Components
@@ -600,7 +601,11 @@ PanelWindow {
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir); },
         shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); },
-        clipssh: function () { return Providers.clipsshRows(Providers.clipsshAliases(root._clipsshAliasesText)); }
+        clipssh: function () { return Providers.clipsshRows(Providers.clipsshAliases(root._clipsshAliasesText)); },
+        // M38 Task 3 (launcher reachability sweep): both self-targeted the
+        // same way apps/clipboard above are.
+        panels: function () { return Providers.panelsProvider(Quickshell.shellDir); },
+        tray: function () { return Providers.trayProvider(SystemTray.items.values, Quickshell.shellDir); }
     })
     readonly property var _nodes: root._tree.nodes
 

@@ -1,0 +1,12 @@
+@drm
+card|card0|nvidia|0x10de|0x2d58|0|0000:02:00.0|
+conn|card0|DP-3|disconnected
+conn|card0|eDP-2|disconnected
+conn|card0|HDMI-A-1|connected
+card|card1|i915|0x8086|0x7d67|1|0000:00:02.0|Onboard - Video
+conn|card1|DP-1|disconnected
+conn|card1|DP-2|disconnected
+conn|card1|eDP-1|connected
+@nvidia
+0, NVIDIA GeForce RTX 5070 Laptop GPU, 16, 50, 78, 8151, 12.17, [N/A]
+@gfx

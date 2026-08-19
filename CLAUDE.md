@@ -141,8 +141,13 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   the block-character `FORMALSHELL` banner converging via one of ttfx's 37
   effects, in the mono font and that effect's own upstream gradient;
   `SCREENSAVER_EFFECT`/`SCREENSAVER_ASCII_TEXT` env vars pin an
-  effect or banner for a single run). `screensaver
-  stop` dismisses it, then a final explicit `start`/screenshot
+  effect or banner for a single run). That same status is checked against
+  `niri msg -j outputs` (`screensaver-outputs.json`): only one output
+  animates and `mainOutput` has to name a real connector, never `""` and
+  never a stale name. A nested session has one output, so the multi-head
+  rules themselves — follow focus, hold the choice across a plug, move it on
+  an unplug — live in `tests/tst_screensaver_outputs.qml` instead.
+  `screensaver stop` dismisses it, then a final explicit `start`/screenshot
   (`screensaver-manual.png`)/`stop` proves the manual IPC path
   independently of the idle timer.
 - `dev/smoke-niri.sh --screensaver-gif` — records five ttfx effects as GIFs,

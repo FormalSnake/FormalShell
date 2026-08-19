@@ -1,0 +1,6 @@
+@drm
+card|card1|i915|0x8086|0x46d0|1|0000:00:02.0|Onboard - Video
+conn|card1|eDP-1|connected
+conn|card1|HDMI-A-1|disconnected
+@nvidia
+@gfx

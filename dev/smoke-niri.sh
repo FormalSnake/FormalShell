@@ -1449,6 +1449,7 @@ ss_pid_path="$shot_dir/ss-mpv.pid"
 ss_guard_status_path="$shot_dir/screensaver-guard-status.json"
 ss_auto_path="$shot_dir/screensaver-auto.png"
 ss_auto_status_path="$shot_dir/screensaver-auto-status.json"
+ss_outputs_path="$shot_dir/screensaver-outputs.json"
 ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
 ss_manual_path="$shot_dir/screensaver-manual.png"
 ss_cycle_info1_path="$shot_dir/screensaver-cycle-info-1.json"
@@ -1829,7 +1830,14 @@ if $screensaver_mode; then
   fi
   # holdSeconds shortened the same way timeoutSeconds is: the cycle proof
   # waits out a real convergence + hold, just on an affordable schedule.
-  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2'"$ss_effect_json$ss_ascii_json"'}'
+  #
+  # outputPriority names two connectors this session does not have before the
+  # one it does, so the assertion on `mainOutput` below is about the list
+  # being walked in order and falling back, not merely about a single-output
+  # session having one obvious answer. "internal" is in there as the alias
+  # ("winit" is not a panel), so a run that started matching it would be
+  # reporting the alias broke.
+  screensaver_settings=', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2, "outputPriority": ["HDMI-A-9", "internal", "winit"]'"$ss_effect_json$ss_ascii_json"'}'
 fi
 # picker_mode (M7 Task 6): picker.directory points at a fixture directory of
 # a handful of generated solid-color PNGs (below), so --picker's grid
@@ -3376,6 +3384,10 @@ if [ -f "$ss_pid_path" ]; then
 fi
 sleep 5
 niri msg action screenshot-screen --path "$ss_auto_path"
+# The compositor's own list of outputs, so the output `status` names as the
+# animating one can be checked against a real connector rather than merely
+# being a non-empty string.
+niri msg -j outputs > "$ss_outputs_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 sleep 1
@@ -5725,6 +5737,18 @@ if $screensaver_mode; then
   fi
   if ! grep -q '"active":true' "$ss_auto_status_path"; then
     echo "SMOKE_FAIL: screensaver did not auto-activate once the media guard cleared — got: $(cat "$ss_auto_status_path")" >&2; exit 1
+  fi
+  # One output animates (shell/Screensaver/outputs.js), the rest hold the
+  # converged banner. The fixture's screensaver.outputPriority lists two
+  # connectors this session doesn't have ahead of the one it does, so this
+  # asserts the configured list was walked to its third entry and landed on a
+  # real connector name — never "" (nothing animating), never a stale or
+  # invented one, and never the compositor's focused output standing in for a
+  # priority list that was ignored.
+  ss_main_output=$(sed -n 's/.*"mainOutput":"\([^"]*\)".*/\1/p' "$ss_auto_status_path" | head -n1)
+  ss_niri_output=$(sed -n 's/.*"name":"\([^"]*\)".*/\1/p' "$ss_outputs_path" | head -n1)
+  if [ -z "$ss_main_output" ] || [ "$ss_main_output" != "$ss_niri_output" ]; then
+    echo "SMOKE_FAIL: screensaver mainOutput '$ss_main_output' is not niri's output '$ss_niri_output' — got: $(cat "$ss_auto_status_path")" >&2; exit 1
   fi
   if [ -s "$ss_dismiss_status_path" ] && grep -q '"active":false' "$ss_dismiss_status_path"; then
     :

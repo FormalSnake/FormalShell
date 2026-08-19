@@ -66,14 +66,19 @@ QtObject {
     // checks it before spawning anything, so a compositor that cannot park
     // never gets a console it would be unable to hide again.
     readonly property bool windowParkingAvailable: false
-    // Out of view. Hyprland has a special workspace for this; niri has no
-    // hide primitive at all, so parking there means another workspace
-    // (park.js picks which). Focus stays where it is on both.
+    // Out of view. Hyprland hides the special workspace the window lives on;
+    // niri, with no hide primitive at all, moves the window to another
+    // workspace (park.js picks which). Focus stays where it is on both.
     function parkWindow(id) {}
-    // Back to the focused workspace, still without focusing it — the caller
-    // places the window first and focuses it once it has landed, so it never
-    // appears at its old size for a frame.
+    // Back into view where the user is looking, still without focusing it —
+    // the caller places the window first and focuses it once it has landed,
+    // so it never appears at its old size for a frame.
     function unparkWindow(id) {}
+    // Whether `id` is currently out of view. Not the same question as "which
+    // workspace is it on": Hyprland's console never leaves its special
+    // workspace, and that workspace is either drawn over the current one or
+    // not. Callers read this instead of comparing workspace ids themselves.
+    function isWindowParked(id) { return true }
 
     // Re-reads `windows`; never moves or focuses anything. A backend whose
     // window model is already event-driven leaves this a no-op. It exists for

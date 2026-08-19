@@ -259,22 +259,40 @@ Item {
     }
 
     // ---- main output (outputs.js) -----------------------------------------
-    // The one screen that animates. Resolved at activation rather than bound
-    // live to the focused output: a focus event landing mid-run would restart
-    // ttfx on two screens at once, and nothing can move focus while the
-    // session is idle anyway.
+    // The one screen that animates: `screensaver.outputPriority`'s first
+    // entry with an output actually connected, e.g. ["HDMI", "internal"] for
+    // "the desk monitor while it's plugged in". With the key unset it's the
+    // focused output, resolved at activation rather than bound live — a focus
+    // event landing mid-run would restart ttfx on two screens at once, and
+    // nothing can move focus while the session is idle anyway.
 
+    readonly property var outputPriority: Core.Config.get("screensaver.outputPriority", [])
     property string mainOutput: ""
+    property bool _loggedUnmatchedPriority: false
 
     function _resolveMainOutput(keepCurrent) {
-        root.mainOutput = Outputs.resolveMainOutput(Outputs.screenNames(Quickshell.screens),
+        var names = Outputs.screenNames(Quickshell.screens);
+        if (names.length > 0 && Outputs.priorityList(root.outputPriority).length > 0
+            && Outputs.matchPriority(names, root.outputPriority) === "" && !root._loggedUnmatchedPriority) {
+            console.warn("Screensaver: no output matches screensaver.outputPriority ("
+                + JSON.stringify(root.outputPriority) + "), falling back to the focused one of " + JSON.stringify(names));
+            root._loggedUnmatchedPriority = true;
+        }
+        root.mainOutput = root.previewMainOutput(keepCurrent);
+    }
+
+    // The same answer without becoming it, so a multi-head host can be
+    // checked over `screensaver status` with a read instead of by putting a
+    // full-screen surface over a live session.
+    function previewMainOutput(keepCurrent) {
+        return Outputs.resolveMainOutput(Outputs.screenNames(Quickshell.screens), root.outputPriority,
             CompositorService.focusedOutputName, keepCurrent ? root.mainOutput : "");
     }
 
     // Bound rather than connected so this re-runs off screensChanged itself.
-    // Unplugging the screen that was animating is the case that matters: the
-    // Variants delegate for it is gone, and without re-resolving here nothing
-    // would be left animating at all.
+    // Both directions matter: unplugging the animating screen leaves nothing
+    // animating at all without this, and plugging the priority list's first
+    // choice back in is meant to hand the animation over to it.
     readonly property var _screens: Quickshell.screens
     on_ScreensChanged: {
         if (root.active)

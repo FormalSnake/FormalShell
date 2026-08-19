@@ -203,16 +203,41 @@ Scope {
             Hyprland.dispatch("setfloating " + selector);
     }
 
-    // Parking (M37). Hyprland has the primitive niri lacks: a special
-    // workspace is out of view until something toggles it, so the park is a
-    // silent move onto one rather than niri's hunt for a spare workspace.
-    // The shell never toggles it into view itself — showing the console is
-    // always a move back to the focused workspace, so the two backends agree
-    // on where a visible console lives.
+    // Parking (M37). Hyprland has the primitive niri lacks, and it is the one
+    // omarchy's own Quake console is built on (default/hypr/qconsole.lua): a
+    // special workspace is an overlay that is simply not on screen until
+    // something toggles it. So the console LIVES there permanently and
+    // showing it is the compositor's own toggle — which is what makes it drop
+    // down and retract under the `specialWorkspace` animation instead of
+    // being carried between workspaces a window at a time. niri, with no
+    // special workspace and no hide of any kind, still moves the window.
     readonly property bool windowParkingAvailable: true
     readonly property string _parkWorkspace: "special:formalshell-console"
 
-    function parkWindow(id) {
+    // Whether the focused monitor is currently showing our special workspace.
+    // `j/monitors`' own `specialWorkspace` field is the only place Hyprland
+    // reports this; refreshMonitors() below keeps it current, and nothing but
+    // the two toggles here can change it.
+    function _specialShown() {
+        const m = Hyprland.focusedMonitor;
+        const ipc = m ? (m.lastIpcObject || {}) : {};
+        const special = ipc.specialWorkspace;
+        return !!special && String(special.name ?? "") === root._parkWorkspace;
+    }
+
+    function _toggleSpecial() {
+        if (Hyprland.usingLua)
+            Hyprland.dispatch("hl.dsp.workspace.toggle_special(" + root._luaString("formalshell-console") + ")");
+        else
+            Hyprland.dispatch("togglespecialworkspace formalshell-console");
+        Hyprland.refreshMonitors();
+    }
+
+    // Idempotent: a window already on the special workspace stays put.
+    function _moveToSpecial(id) {
+        const win = root.windows.find(w => w.id === id);
+        if (win && Number(win.workspaceId) < 0)
+            return;
         const selector = root._windowSelector(id);
         if (Hyprland.usingLua)
             Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector)
@@ -221,15 +246,29 @@ Scope {
             Hyprland.dispatch("movetoworkspacesilent " + root._parkWorkspace + "," + selector);
     }
 
+    function parkWindow(id) {
+        root._moveToSpecial(id);
+        if (root._specialShown())
+            root._toggleSpecial();
+    }
+
     function unparkWindow(id) {
-        if (root.focusedWorkspaceId === "")
-            return;
-        const selector = root._windowSelector(id);
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector)
-                + ", workspace = " + root._luaValue(root.focusedWorkspaceId) + ", follow = false })");
-        else
-            Hyprland.dispatch("movetoworkspacesilent " + root.focusedWorkspaceId + "," + selector);
+        root._moveToSpecial(id);
+        if (!root._specialShown())
+            root._toggleSpecial();
+    }
+
+    // On the special workspace and not on screen, or on some other workspace
+    // than the one being looked at. A window this backend has never heard of
+    // counts as parked: the console's toggle then asks for it to be brought
+    // here, which is the recoverable answer.
+    function isWindowParked(id) {
+        const win = root.windows.find(w => w.id === id);
+        if (!win)
+            return true;
+        if (Number(win.workspaceId) < 0)
+            return !root._specialShown();
+        return win.workspaceId !== root.focusedWorkspaceId;
     }
 
     function placeFloatingWindow(id, x, y, width, height) {

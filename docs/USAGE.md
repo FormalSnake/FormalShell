@@ -703,6 +703,39 @@ switcher (see [Picker](#picker)). It is a plain
 is no separate picker surface any more — `picker summon` and `menu summon
 wallpaper` land on this same level.
 
+**Panels and tray (M38 Task 3).** The root `PANELS` node lists one row per
+name in `shell.qml`'s `PanelIpc` registry (`appmenu`, `audio`, `calendar`,
+`network`, `bluetooth`, `airpods`, `dualsense`, `power`, `weather`, `media`,
+`github`, `usage`, `tailscale`, `systemupdate`, `display`) — every one of
+the shell's per-widget popouts, reachable here even with its own bar cell
+opted out of `bar.layout`. Enter spawns `panel open <name>` over IPC, the
+exact route the [`panel` target](#panels) itself documents. `TRAY` mirrors
+it for the live SNI tray: one row per registered item (`providers.js`'s
+`trayProvider`), Enter calling `tray activate <id>` — the same action a
+left click on that item's bar cell takes. An empty tray renders a single
+dim `NO TRAY ITEMS` row rather than an empty level. Both are plain
+`provider` entries in `default-menu.jsonc`, overridable by their `"panels"`/
+`"tray"` id like any declared node.
+
+**Console, screensaver, plugins, notifications, theme (M38 Task 3).** A
+handful of features that previously had no launcher route at all are
+injected the same way the `CAPTURE` node already was — `providers.js`'s
+`captureEntries()`, self-targeted `qs ipc` actions merged into the tree at
+build time because static jsonc can't embed the running shell's own path.
+`CAPTURE` itself gained two rows this pass, `Screenshot` (`screenshot
+full`) and `Screenshot Region` (`screenshot region`), next to its existing
+OCR/color-pick/record rows. `System` gained `Console` (`console toggle`,
+the quake console) and `Screensaver` (`screensaver start`); a new
+`System / Plugins` submenu holds `List Plugins` (`plugins list`) and
+`Reload Plugins` (`plugins reload`). A new root `NOTIFICATIONS` node holds
+`Clear All`, `Mark All Seen`, and `Dismiss Popups` — separate from the
+existing `System / Notifications` row, which stays a single leaf that opens
+the history center rather than a submenu. A new root `THEME` node holds
+`Retheme` and explicit `Dark Mode`/`Light Mode` rows (`theme mode dark`/
+`theme mode light`) alongside the pre-existing live toggle
+(`toggles.dark-mode`, in-process). `system.lock` stays `"when": "false"` —
+deliberately disabled, not part of this sweep.
+
 **Share (LocalSend).** The root `SHARE` submenu exists only when
 `localsend_app` resolves on PATH (`command -v localsend_app`, a live `when`
 condition — the same idiom `system.logout`'s `NIRI_SOCKET` guard uses),
@@ -1977,6 +2010,35 @@ tilde path silently fails to load and falls back to the bundled banner.
 ```jsonc
 { "screensaver": { "asciiPath": "/home/youruser/.config/formalshell/my-banner.txt" } }
 ```
+
+**Which screen animates.** One does; every other screen covers itself with
+the same surface holding the converged banner, painted once. A frame of the
+animation is a full-screen Canvas repaint — a CPU rasterize plus a
+whole-surface texture upload, and on a hybrid laptop also a cross-GPU copy
+for any output the compositor doesn't scan out on the card the shell renders
+on — so animating every head is what makes the screensaver stutter on a
+multi-monitor session.
+
+`screensaver.outputPriority` names which one, in preference order: the first
+entry with a connected output wins, so the list below reads "the desk
+monitor while it's plugged in, the laptop panel when it isn't". An entry
+matches a connector by exact name (`HDMI-A-1`), by the port it hangs off
+(`HDMI`, `DP-2`, anchored so `DP` never means the `eDP` the panel is on), or
+by the aliases `internal` (`eDP`/`LVDS`/`DSI`) and `external` (anything
+else). The list is re-applied whenever outputs change, so unplugging the
+main monitor hands the animation down the list and plugging it back in takes
+it again. Unset — the default — animates the focused output and leaves it
+there for the run.
+
+```jsonc
+{ "screensaver": { "outputPriority": ["HDMI", "internal"] } }
+```
+
+`screensaver status` reports the resolved `mainOutput` — while inactive, the
+one that would animate if it activated now, resolved on the call, so a
+multi-head machine can be checked with a read instead of by covering it. A
+list that matches nothing connected logs once and falls back to the focused
+output rather than leaving the screensaver still.
 
 It never activates while `screensaver.guardMediaPlayback` (default true)
 holds and `MediaService.isPlaying` is true — a live condition, not a

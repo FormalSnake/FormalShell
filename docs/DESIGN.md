@@ -931,6 +931,19 @@ floats with a margin or fuses to the screen edge.
   fallback color for glyphs ttfx leaves uncolored come from the theme. On
   a host with no ttfx on PATH the surface falls back to effect.js's five
   builtin effects, which are accent-colored as before.
+
+  One output animates, not all of them (`shell/Screensaver/outputs.js`).
+  Every other screen covers itself with the same surface carrying the
+  converged banner, painted once, in `accent` — the effect's own gradient
+  would mean running the effect there too. Which one comes from
+  `screensaver.outputPriority`, a preference list resolved against what is
+  connected (`["HDMI", "internal"]`), re-applied on any screen change so an
+  unplug hands the animation down the list and a plug takes it back. Unset,
+  it's the focused output. A frame is a full-screen Canvas repaint,
+  and Qt 6's Canvas has only the QImage render target, so each one costs a
+  CPU rasterize plus a whole-surface texture upload — on a hybrid laptop,
+  plus a cross-GPU copy for every output the compositor doesn't scan out on
+  the card the shell renders on.
 - **Picker** — the ASCII-OS table surface applied to a grid instead of a
   column: image cells share hairline rules, current cell inverts (§2.2),
   keyboard-navigable. Omarchy's skewed carousel remains an explicitly later

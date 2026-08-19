@@ -646,16 +646,21 @@ function imageRows(paths, query) {
     });
 }
 
-// Root "capture" node, merged into the default tree object like
-// customPowerButtonEntries above, and for the same reason: every action needs the
-// running shell's own path, which static jsonc can't express. Routing
+// Root nodes merged into the default tree object like
+// customPowerButtonEntries above, and for the same reason: every action needs
+// the running shell's own path, which static jsonc can't express. Routing
 // through real IPC also means a menu row and a compositor keybind exercise
-// one implementation. The parent node is declared here rather than left to
+// one implementation. Each parent is declared here rather than left to
 // buildTree's ancestor synthesis so it carries a label and an icon of its
 // own.
 //
 // "Video To GIF" takes no argument on purpose: `record gif` falls back to
 // RecordingService.lastPath, so the row needs no menu.input round trip.
+//
+// Kept the name "captureEntries" (M38 Task 3 folded the rest of the
+// launcher's self-targeted leaf rows in here too — console, plain
+// screenshots, screensaver, plugins, notifications, theme — rather than
+// giving Menu.qml a second merge call site for the identical problem).
 function captureEntries(selfPath) {
     var call = "qs ipc -p " + selfPath + " call ";
     return {
@@ -684,6 +689,162 @@ function captureEntries(selfPath) {
             label: "Video To GIF",
             icon: "\u{F0D78}", // md-file_gif_box
             action: call + "record gif"
+        },
+        "capture.screenshot": {
+            label: "Screenshot",
+            icon: "\u{F0100}", // md-camera
+            action: call + "screenshot full"
+        },
+        "capture.region": {
+            label: "Screenshot Region",
+            icon: "\u{F0489}", // md-selection
+            action: call + "screenshot region"
+        },
+
+        "system.console": {
+            label: "Console",
+            icon: "\u{F018D}", // md-console
+            action: call + "console toggle"
+        },
+        "system.screensaver": {
+            label: "Screensaver",
+            icon: "\u{F0D90}", // md-monitor_off
+            action: call + "screensaver start"
+        },
+        "system.plugins": { label: "Plugins", icon: "\u{F0431}" }, // md-puzzle
+        "system.plugins.list": {
+            label: "List Plugins",
+            icon: "\u{F0279}", // md-format_list_bulleted
+            action: call + "plugins list"
+        },
+        "system.plugins.reload": {
+            label: "Reload Plugins",
+            icon: "\u{F0453}", // md-reload
+            action: call + "plugins reload"
+        },
+
+        // Own root, not nested under "system.notifications" (that id is
+        // already an activatable leaf — @ipc:notifications.showHistory —
+        // and a "when"-less action node can't also carry children the
+        // model would ever enter).
+        "notifications": { label: "Notifications", icon: "\u{F009A}" }, // md-bell, same glyph system.notifications uses
+        "notifications.clear": {
+            label: "Clear All",
+            icon: "\u{F039F}", // md-notification_clear_all
+            action: call + "notifications clear"
+        },
+        "notifications.markAllSeen": {
+            label: "Mark All Seen",
+            icon: "\u{F012D}", // md-check_all
+            action: call + "notifications markAllSeen"
+        },
+        "notifications.dismissAll": {
+            label: "Dismiss Popups",
+            icon: "\u{F062A}", // md-close_circle_multiple
+            action: call + "notifications dismissAll"
+        },
+
+        // "theme.retheme" plus explicit dark/light rows alongside the
+        // existing in-process toggle ("toggles.dark-mode", @ipc:
+        // theme.toggleMode) — these three go through real IPC instead
+        // since ThemeIpc.mode() takes an explicit argument the internal
+        // dispatch switch has no case for.
+        "theme": { label: "Theme", icon: "\u{F0301}" }, // md-invert_colors
+        "theme.retheme": {
+            label: "Retheme",
+            icon: "\u{F0301}", // md-invert_colors
+            action: call + "theme retheme"
+        },
+        "theme.mode-dark": {
+            label: "Dark Mode",
+            icon: "\u{F0594}", // md-weather_night
+            action: call + "theme mode dark"
+        },
+        "theme.mode-light": {
+            label: "Light Mode",
+            icon: "\u{F0599}", // md-weather_sunny
+            action: call + "theme mode light"
         }
     };
+}
+
+// Panel rows (M38 Task 3): one per name in shell.qml's PanelIpc registry.
+// Static list, not a scan — the registry itself is declared in shell.qml,
+// not discoverable at runtime, so a 16th panel needs a new entry here too;
+// tst_menu_reachability.qml is the guard that fails when one is missed.
+// Self-targeted the same way captureEntries above is, and for the same
+// reason (clipboardProvider's own comment has the full mechanism): each
+// row spawns "qs ipc -p <selfPath> call panel open <name>", the exact
+// invocation PanelIpc.qml's own header names as the mechanism a bar-cell
+// click already uses. Registered as a provider (applyProviders), not
+// folded into captureEntries' root merge, since this is a submenu of rows
+// rather than a handful of individual leaves.
+var PANEL_NAMES = [
+    { id: "appmenu", label: "App Menu", icon: "\u{F003B}" }, // md-apps, same glyph the apps root node uses
+    { id: "audio", label: "Audio", icon: "\u{F057E}" }, // md-volume_high
+    { id: "calendar", label: "Calendar", icon: "\u{F00EE}" }, // md-calendar_blank
+    { id: "network", label: "Network", icon: "\u{F05A9}" }, // md-wifi
+    { id: "bluetooth", label: "Bluetooth", icon: "\u{F00AF}" }, // md-bluetooth
+    { id: "airpods", label: "AirPods", icon: "\u{F184F}" }, // md-earbuds
+    { id: "dualsense", label: "DualSense", icon: "\u{F0297}" }, // md-gamepad_variant
+    { id: "power", label: "Power", icon: "\u{F0079}" }, // md-battery
+    { id: "weather", label: "Weather", icon: "\u{F0599}" }, // md-weather_sunny
+    { id: "media", label: "Media", icon: "\u{F0387}" }, // md-music_note
+    { id: "github", label: "GitHub", icon: "\u{F408}" }, // oct-mark_github
+    { id: "usage", label: "Usage", icon: "\u{F16A3}" }, // md-robot_excited
+    { id: "tailscale", label: "Tailscale", icon: "\u{F0318}" }, // md-lan_connect
+    { id: "systemupdate", label: "System Update", icon: "\u{F03D3}" }, // md-package
+    { id: "display", label: "Display", icon: "\u{F0379}" } // md-monitor
+];
+
+function panelsProvider(selfPath) {
+    return PANEL_NAMES.map(function (p) {
+        return {
+            id: "panels." + p.id,
+            parentId: null,
+            label: p.label,
+            icon: p.icon,
+            title: "",
+            aliases: [],
+            kind: "action",
+            action: "qs ipc -p " + selfPath + " call panel open " + p.id,
+            childIds: []
+        };
+    });
+}
+
+// System tray rows (M38 Task 3): SystemTray.items has no launcher path
+// today, only a bar-cell click. Mirrors TrayIpc.qml's own activate(id)
+// exactly (same registry, same id semantics), self-targeted the same way
+// clipboardProvider is. `_shq` guards an id containing whitespace from
+// splitting into extra argv tokens on the way through sh -c. An empty tray
+// renders one dim row, the same honest-empty shape clipboardEmptyRow/
+// clipsshRows already use, never an empty level.
+function trayProvider(items, selfPath) {
+    if (!items || items.length === 0) {
+        return [{
+            id: "tray.empty",
+            parentId: null,
+            label: "NO TRAY ITEMS",
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "note",
+            dim: true,
+            childIds: []
+        }];
+    }
+    return items.map(function (item) {
+        return {
+            id: "tray." + item.id,
+            parentId: null,
+            label: item.tooltipTitle || item.title || item.id,
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "action",
+            action: "qs ipc -p " + selfPath + " call tray activate " + _shq(item.id),
+            childIds: []
+        };
+    });
 }

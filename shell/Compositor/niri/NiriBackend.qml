@@ -121,6 +121,17 @@ Scope {
         } } });
     }
 
+    // Anywhere but the workspace being looked at. niri has no overlay
+    // workspace, so "parked" and "on some other workspace" are the same fact
+    // here — including a console the user scrolled away from, which the
+    // toggle then brings back rather than hiding something already gone.
+    function isWindowParked(id) {
+        const win = root.windows.find(w => w.id === id);
+        if (!win)
+            return true;
+        return win.workspaceId !== root.focusedWorkspaceId;
+    }
+
     readonly property bool outputConfigAvailable: true
     // niri-ipc's OutputAction (lib.rs:1018) is Off/On/Mode/CustomMode/
     // Modeline/Scale/Transform/Position/Vrr — no mirror variant, because niri

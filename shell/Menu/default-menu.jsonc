@@ -48,7 +48,19 @@
     // filename like any other level. md-wallpaper U+F0E09.
     "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "icon": "󰸉", "aliases": ["picker", "background"] },
 
+    // "panels" registers a provider fn too: one row per name in
+    // shell.qml's PanelIpc registry, each spawning "panel open <name>"
+    // over IPC (providers.js's panelsProvider) -- the launcher route for
+    // every popout that otherwise only opens from its own bar cell.
+    "panels": { "label": "Panels", "provider": "panels", "icon": "󰕰" },
+    // "tray" mirrors it for the live SNI tray (providers.js's
+    // trayProvider): one row per registered item, activating it the same
+    // way a left click on its bar cell does.
+    "tray": { "label": "Tray", "provider": "tray", "icon": "󱊔" },
+
     "system": { "label": "System", "icon": "󰒓" },
+    // Deliberately disabled -- flipping it on is the owner's call, not
+    // something to change incidentally.
     "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
     "system.suspend": { "action": "systemctl suspend", "icon": "󰤄" },
     "system.reboot": { "action": "systemctl reboot", "icon": "󰜉", "confirm": true },
@@ -139,10 +151,15 @@
         "icon": "󰔎"
     }
 
-    // The root "capture" node (OCR, colour pick, record, stop, video-to-GIF)
-    // is injected at tree-build time by Menu.qml via providers.js's
-    // captureEntries(): its actions target the running shell's own path,
-    // which static jsonc can't know. Override or hide it from menu.jsonc by
-    // its "capture" id like any declared node, and individual rows by
-    // "capture.text", "capture.record", etc.
+    // The root "capture" node (OCR, colour pick, record, stop, video-to-GIF,
+    // plain screenshot/region) is injected at tree-build time by Menu.qml via
+    // providers.js's captureEntries(): its actions target the running
+    // shell's own path, which static jsonc can't know. The same function
+    // also injects "system.console", "system.screensaver",
+    // "system.plugins"/".list"/".reload", the root "notifications" node
+    // (".clear"/".markAllSeen"/".dismissAll", separate from the existing
+    // "system.notifications" leaf), and the root "theme" node
+    // (".retheme"/".mode-dark"/".mode-light") -- every one of them a
+    // self-targeted "qs ipc" leaf for the same reason. Override or hide any
+    // of them from menu.jsonc by their declared id like any other node.
 }

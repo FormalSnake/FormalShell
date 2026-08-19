@@ -79,6 +79,7 @@ Singleton {
     readonly property bool windowParkingAvailable: backend.windowParkingAvailable
     function parkWindow(id) { backend.parkWindow(id) }
     function unparkWindow(id) { backend.unparkWindow(id) }
+    function isWindowParked(id) { return backend.isWindowParked(id) }
 
     readonly property bool floatingPlacementAvailable: backend.floatingPlacementAvailable
     function floatWindow(id) { backend.floatWindow(id) }
