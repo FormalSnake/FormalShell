@@ -22,7 +22,7 @@ import "../../Compositor/appmatch.js" as AppMatch
 
 // The unified menu (DESIGN.md §Concrete translations/Menu): a single
 // keyboard-exclusive top-layer window covering the focused output, carrying
-// a dithered scrim (M39 Task 2) with the card centered on top of it. Top
+// a black scrim (M39) with the card centered on top of it. Top
 // cell is the search field (breadcrumb as its meta row); below it, rows are
 // either search.rank() matches (query non-empty) or model.visibleChildren()
 // of the current level (query empty). Whole-tree search, cursor wraps,
@@ -892,252 +892,6 @@ PanelWindow {
         root._frozenTop = null;
     }
 
-    // --- Backdrop freeze (M39 Task 2) ------------------------------------
-    //
-    // One grim frame of this output, written to tmpfs, taken BEFORE the menu
-    // maps: the capture has to predate the menu's own surface or the backdrop
-    // would be a dither of a picture of itself. That ordering is the whole
-    // reason `_shown` exists as a separate flag from `isOpen` — `isOpen` is
-    // the menu's state, `_shown` is "there is a frame in hand, put the
-    // surface up", and every one of open()/openSelect()/openInput() gets the
-    // sequencing for free by going through `isOpen` as they already did.
-    //
-    // `-t ppm`: the PNG encode is the slow half of a grim capture and nothing
-    // here needs a portable file — this lives for one summon on tmpfs, and
-    // Qt reads PPM natively. `-s 1` pins logical resolution instead of grim's
-    // default (the output's own scale factor), which on a HiDPI head writes
-    // and decodes a 4x buffer to draw the same pixels.
-    //
-    // Fail-open in every direction, because a launcher that will not open is
-    // a far worse bug than one that opens without a backdrop: no grim on
-    // PATH, a compositor with no screencopy, a capture that outlives the
-    // watchdog, or no screen resolved at all, and the menu maps anyway with
-    // nothing behind it. A Process that fails to START never emits `exited`
-    // at all (RegionPicker.qml documents this against quickshell's
-    // process.cpp), which is exactly the case the watchdog covers.
-    // A FRESH FILENAME per summon, never a fixed path and never a small set
-    // of rotating ones. Qt's pixmap loader answers a repeated URL from its
-    // own cache, and `cache: false` on the Image does not save you: with two
-    // alternating slot files the backdrop showed the two pictures those two
-    // URLs happened to hold the first time each was decoded, forever, while
-    // grim went on writing correct new frames underneath (owner, live shell,
-    // 2026-08-19: "it cycles between both" — confirmed on g815, where both
-    // slot files carried mtimes a second old while the surface was showing a
-    // fullscreen video captured minutes earlier). A URL that has never been
-    // loaded before cannot be served from a cache.
-    readonly property string _frameDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/formalshell"
-    property int _frameSeq: 0
-    property string _framePath: ""
-
-    // --- Live refresh (M39 Task 7) ----------------------------------------
-    //
-    // While the menu is up, re-capture on an interval so the backdrop tracks
-    // the desktop instead of being one still from the moment of summon
-    // (owner, 2026-08-19: "it takes a screenshot every X seconds, making it
-    // feel as real time as possible").
-    //
-    // The obvious objection is that a capture taken now contains the backdrop
-    // it is about to replace, so the pass is eating its own output. That is
-    // true and it is harmless, because the retro pass is IDEMPOTENT:
-    // quantizing an image that is already quantized onto a palette derived
-    // from itself returns the same picture. Measured, not assumed — six
-    // generations of feeding the pass its own output on a real 1920x1080
-    // desktop grab came back byte-identical, RMSE 0 between the last two.
-    //
-    // Exactly one thing in the chain is NOT idempotent: the `background` wash
-    // below. It multiplies, so re-applying it to a frame that already carries
-    // it sinks the backdrop toward black in a handful of refreshes (0.55^5 is
-    // 5% brightness). Hence `_frameGen`: the wash is spent on the summon
-    // frame alone, and from the first refresh onward it comes for free inside
-    // the captured pixels. Dropping it exactly when a washed capture reaches
-    // the screen is what makes the handover invisible rather than a flash.
-    //
-    // The card ghosts into every refresh too, and is exactly occluded by the
-    // real card above it — same geometry, opaque fill. That only holds once
-    // the entrance has finished moving the card, which is why the first
-    // refresh cannot land before then (see the interval floor below).
-    readonly property int _refreshMs: {
-        var configured = Core.Config.get("menu.backdropRefreshMs", 500);
-        if (typeof configured !== "number" || configured <= 0)
-            return 0;
-        // Never inside the entrance: a capture taken while the card is still
-        // sliding bakes a displaced ghost of it into the backdrop, and that
-        // one is not occluded by anything.
-        return Math.max(configured, Core.Theme.motion.standard + 100);
-    }
-    property int _frameGen: 0
-    property bool _refreshPending: false
-
-    // Three states, not two, and the split is what makes the entrance
-    // animate at all. `_armed` puts the surface up; `_shown` runs the
-    // entrance on it. They cannot be one flag, because a Canvas does not
-    // paint while its window is unmapped: arming and showing together meant
-    // the backdrop's first paint landed AFTER the map, by which time `reveal`
-    // had already animated to 1 against an empty canvas and the dither simply
-    // appeared, fully formed, with no dissolve (owner, live shell,
-    // 2026-08-19: "if you trigger the launcher a few times, the transition
-    // doesn't even work"). So: map first, transparent and empty; let the
-    // backdrop paint; then animate.
-    property bool _armed: false
-    property bool _shown: false
-
-    // Everything up at once, for the paths with nothing to wait for: no
-    // screen resolved, grim failed or missing, or the frame never painted.
-    function _forceShow() {
-        frameWatchdog.stop();
-        root._armed = true;
-        root._shown = true;
-    }
-
-    onIsOpenChanged: {
-        if (!root.isOpen) {
-            frameWatchdog.stop();
-            // Nothing downstream wants this frame any more, and a grim still
-            // writing into a slot the next summon may pick is a torn read
-            // waiting to happen.
-            freezeProc.running = false;
-            var wasMapped = root._armed;
-            root._armed = false;
-            root._shown = false;
-            // A summon closed before its frame ever landed never mapped, so
-            // the `visible` flip that arms the emoji type settle never
-            // happens and the pending char would sit forever (this is exactly
-            // what the smoke rig's `menu summon emoji` + immediate
-            // `menu activate 0` does). Closed-and-never-mapped is the same
-            // fact that flip stands for: this surface does not hold keyboard
-            // focus, so it is safe to type.
-            if (!wasMapped && root._pendingTypeText !== "")
-                typeSettleTimer.restart();
-            return;
-        }
-        root._framePath = "";
-        root._frameGen = 0;
-        root._refreshPending = false;
-        if (!root._screen) {
-            root._forceShow();
-            return;
-        }
-        root._startFreeze();
-        frameWatchdog.restart();
-    }
-
-    // One capture. Called for the summon frame and for every refresh after
-    // it; the only difference between the two is that a refresh has no
-    // watchdog and nothing waits on it, since a surface is already up.
-    function _startFreeze() {
-        if (!root._screen)
-            return;
-        root._frameSeq++;
-        // Read off the Process, not off `_framePath`: that one was cleared a
-        // few lines up (it is what makes frameImage drop the old picture), so
-        // using it here passed an empty string to the `rm` below and every
-        // frame this session ever captured stayed on tmpfs.
-        var retiredFrame = freezeProc.framePath;
-        freezeProc.running = false;
-        // The path this run writes, carried ON the process rather than
-        // recomputed in `onExited`: an exit can arrive after the next summon
-        // has already moved the counter on (a killed leftover reports too),
-        // and rebuilding the name from live state there would hand the
-        // backdrop a file some other run owns. RegionPicker.qml's freeze
-        // carries its own `framePath` for the same reason.
-        freezeProc.framePath = root._frameDir + "/menu-frame-" + root._frameSeq + ".ppm";
-        // `-s 0.25`: a quarter-resolution capture, which is both far faster to
-        // take and to decode than grim's default (the output's own scale), and
-        // costs nothing visible — the dither pass samples one pixel per
-        // `chunk`-sized cell, so at chunk 10 it is throwing away more detail
-        // than the downscale does. Speed is the point: the whole freeze sits
-        // in front of the launcher appearing.
-        // The `rm` retires the previous summon's file so a long session leaves
-        // one frame on tmpfs rather than hundreds — and it runs only once grim
-        // has actually succeeded (no `exec`, `&&` not `;`). Retiring it up
-        // front instead meant a summon cancelled before its capture landed —
-        // open and close inside the same second — destroyed the old frame and
-        // wrote nothing in its place, leaving the shell with no frame at all.
-        freezeProc.command = ["sh", "-c",
-            'mkdir -p "$(dirname "$2")" && grim -s 0.25 -t ppm -o "$1" "$2" && rm -f "$3"',
-            "sh", root._screen.name, freezeProc.framePath, retiredFrame];
-        freezeProc.running = true;
-    }
-
-    Process {
-        id: freezeProc
-        property string framePath: ""
-        // Never a declarative `running: true`: that latches while `command`
-        // is still binding, same trap RegionPicker.qml's freeze hit.
-        running: false
-        stderr: StdioCollector { id: freezeErr }
-        onExited: exitCode => {
-            if (!root.isOpen)
-                return;
-            if (exitCode !== 0) {
-                console.warn("Menu: backdrop freeze failed:", freezeErr.text.trim());
-                root._forceShow();
-                return;
-            }
-            var wasRefresh = root._armed;
-            root._framePath = freezeProc.framePath;
-            if (wasRefresh) {
-                // A refresh only swaps the picture. `_refreshPending` carries
-                // the wash handover to the moment this frame actually paints.
-                root._refreshPending = true;
-                return;
-            }
-            // Map now, still transparent: this is what gives the backdrop's
-            // Canvas a rendering window to paint into. The watchdog keeps
-            // running, so a frame that never paints still gets shown.
-            root._armed = true;
-        }
-    }
-
-    // The entrance fires on the backdrop's own first paint of THIS summon's
-    // frame — `painted` goes false the moment the source changes, so it can
-    // never report the previous summon's picture.
-    Connections {
-        target: backdropDither
-        function onPaintedChanged() {
-            if (!root.isOpen || !backdropDither.painted)
-                return;
-            if (root._refreshPending) {
-                root._refreshPending = false;
-                // This frame carries the wash inside its own pixels now, so
-                // the display-side wash retires here and nowhere earlier —
-                // dropping it while the previous frame was still on screen
-                // would show as a brightness pop.
-                root._frameGen++;
-            }
-            if (root._armed)
-                root._forceShow();
-        }
-    }
-
-    Timer {
-        id: refreshTimer
-        interval: root._refreshMs
-        repeat: true
-        running: root._refreshMs > 0 && root.isOpen && root._shown
-        onTriggered: {
-            if (freezeProc.running)
-                return;
-            root._startFreeze();
-        }
-    }
-
-    Timer {
-        id: frameWatchdog
-        // Covers every way the frame can fail to arrive: no grim on PATH (a
-        // Process that fails to start never emits `exited` at all — see
-        // RegionPicker.qml against quickshell's process.cpp), a compositor
-        // with no screencopy, a capture or a decode that outlives it. The
-        // launcher opening always wins over the launcher looking good.
-        interval: 250
-        onTriggered: {
-            if (!root.isOpen)
-                return;
-            console.warn("Menu: backdrop frame did not land in", frameWatchdog.interval + "ms, opening without it");
-            root._forceShow();
-        }
-    }
-
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -1874,7 +1628,7 @@ PanelWindow {
     // off the real visible flip below, exactly as before, just one exit
     // fade later. The window is transparent so the fade covers the whole
     // card; card paints its own background.
-    visible: root._armed || card.opacity > 0
+    visible: root.isOpen || card.opacity > 0
     color: "transparent"
 
     // The window spans the whole output (M39 Task 2) so it can carry the
@@ -1896,80 +1650,27 @@ PanelWindow {
 
     anchors { top: true; left: true; right: true; bottom: true }
 
-    // The backdrop (M39 Task 2): the frozen desktop run through the shell's
-    // own retro dither pass. Before this the menu was a bordered card
-    // straight onto whatever was behind it, and against a busy or
-    // background-colored wallpaper it had nothing to sit on (owner: "it can
-    // blend in"). A gaussian blur was not available — DESIGN.md allows one in
-    // the whole shell and it is the lock screen's — so the desktop is
-    // destroyed the way everything else in this shell is: quantized onto a
-    // handful of its own colors on a chunky grid.
-    //
-    // Two motions on the way in, both reversed on the way out: the layer
-    // fades, and the dither itself dissolves over it in ordered-Bayer steps
-    // (DitherImage's `reveal`). Because the pass draws the raw frame before
-    // painting cells over it, a half-revealed backdrop is literally the
-    // desktop half eaten by the dither, not a crossfade between two pictures.
-    Item {
-        id: backdrop
+    // The scrim (omarchy parity): plain black at half opacity over the live
+    // desktop, fading with the card so a summon is one motion. It replaced a
+    // dithered freeze of the screen itself, which read beautifully in a still
+    // frame and could not be made to hold still in motion: refreshing it on
+    // an interval meant the capture contained the backdrop it was replacing,
+    // and every term in that loop — the resample, the per-frame palette, the
+    // darkening wash — drifted a little each generation, so the picture
+    // crawled while nothing on screen moved (owner, 2026-08-19). A scrim has
+    // no such loop, costs nothing, and stays out of the way of the card,
+    // which is the whole job. The lock screen still dithers, because its
+    // backdrop is one still wallpaper and never re-reads the screen.
+    Rectangle {
         anchors.fill: parent
-        opacity: root._shown ? 1 : 0
-        // Deliberately NOT `visible: opacity > 0`: a Canvas inside an
-        // invisible item never paints, and this one has to paint BEFORE the
-        // entrance starts (see `_armed` above) — which is precisely while its
-        // opacity is still 0.
+        color: "black"
+        opacity: root.isOpen ? 0.5 : 0
 
         Behavior on opacity {
             NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
         }
-
-        // Loaded here rather than through DitherImage's own `source` so the
-        // decode is capped at this output's logical size: DitherImage's
-        // internal Image asks for `width * 2`, which on a full-screen frame
-        // is a 4x buffer decoded to draw the same pixels.
-        Image {
-            id: frameImage
-            anchors.fill: parent
-            visible: false
-            source: root._framePath !== "" ? "file://" + root._framePath : ""
-            asynchronous: true
-            // The path is reused every summon, so the loader must never
-            // answer from its cache — `_framePath` is cleared on each open,
-            // which is what makes the reload happen at all.
-            cache: false
-            smooth: false
-            fillMode: Image.PreserveAspectCrop
-        }
-
-        DitherImage {
-            id: backdropDither
-            anchors.fill: parent
-            mode: "retro"
-            sourceItem: frameImage
-            // Coarser and flatter than the wallpaper's own pass: this one is
-            // standing in for a blur, so the job is destroying detail, not
-            // rendering a picture worth looking at.
-            chunk: 10
-            paletteSize: 4
-            reveal: root._shown ? 1 : 0
-
-            Behavior on reveal {
-                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
-            }
-        }
-
-        // Sinks the frozen desktop toward the shell's own ground so the card
-        // reads as lit against it. Tied to `reveal` rather than given its own
-        // Behavior: the darkening is part of what the dither does here, so it
-        // arrives on the same steps and cannot drift out of sync with them.
-        Rectangle {
-            anchors.fill: parent
-            color: Core.Theme.color.background
-            // Spent on the summon frame only — see `_frameGen` above for why
-            // re-applying it to a refresh would sink the backdrop to black.
-            opacity: root._frameGen === 0 ? 0.45 * backdropDither.reveal : 0
-        }
     }
+
 
     // Click-to-dismiss on the menu's OWN output. DismissTwins below has
     // always covered every other screen; this output had no backdrop to
@@ -1994,7 +1695,7 @@ PanelWindow {
         y: root._clampTop(root._frozenTop !== null ? root._frozenTop : root._centeredTop)
         width: root._cardWidth
         height: root._cardHeight
-        opacity: root._shown ? 1 : 0
+        opacity: root.isOpen ? 1 : 0
         transform: Translate { y: (card.opacity - 1) * Core.Theme.motion.slide }
 
         Behavior on opacity {

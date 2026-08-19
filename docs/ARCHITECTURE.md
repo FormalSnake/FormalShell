@@ -272,9 +272,8 @@ shell/
                                  dithered through DitherImage's retro pass (wallpaper.dither/ditherColors)
     Menu/
       Menu.qml                  keyboard-exclusive top-layer window covering the focused output; jsonc -> tree -> cond batch -> rank/browse -> cells.
-                                 Backdrop (M39): one grim -t ppm freeze of the output taken BEFORE the surface maps (`_shown`
-                                 gates the map on it, fail-open behind a 250ms watchdog), through DitherImage's retro pass at
-                                 chunk 10 / palette 4 under a 0.45 background wash, dissolving in and out on `reveal`
+                                 Scrim (M39): plain black at 0.5, fading with the card. A dithered freeze of the screen was
+                                 tried first and could not be made to hold still under refresh — see the file's own comment
                                  Two views over one row set: a ListView, or a GridView on the "wallpaper" route (the picker),
                                  plus that route's DARK | LIGHT variant switcher when the directory has the subdirectory pair
       MenuRow.qml                Cell subtype: icon+label, confirm-gate swap, ▸/✓ trailing indicator

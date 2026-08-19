@@ -1436,9 +1436,6 @@ menu_top_before_png="$shot_dir/menu-top-before.png"
 menu_top_after_png="$shot_dir/menu-top-after.png"
 menu_top_relevel_png="$shot_dir/menu-top-relevel.png"
 toggle_path="$shot_dir/menu-toggle.txt"
-menu_frames_path="$shot_dir/menu-frames.txt"
-menu_frames_first_path="$shot_dir/menu-frames-first.txt"
-menu_frames_refresh_path="$shot_dir/menu-frames-refresh.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
 emoji_type_path="$shot_dir/emoji-wtype.txt"
@@ -1885,14 +1882,6 @@ fi
 # socket path lives under XDG_RUNTIME_DIR, which stays the outer host's
 # real one on purpose (this file's own host-session-safety comment) — no
 # dbus-run-session boundary to be inside of.
-# XDG_RUNTIME_DIR stays the outer host's on purpose (see this file's own
-# host-session-safety comment), so the menu's backdrop frames from EVERY
-# previous run of this script are still sitting there. The frame-naming
-# assertions below read that directory, and a stale file from a run three
-# builds ago is indistinguishable from one this run wrote. Clearing them is
-# the only isolation available for a directory that is deliberately shared.
-rm -f "${XDG_RUNTIME_DIR:-/tmp}/formalshell/"menu-frame*.ppm
-
 airpods_status_dir="$iso_home/.local/state/librepods"
 if $panel_airpods_mode; then
   mkdir -p "$airpods_status_dir"
@@ -2841,11 +2830,6 @@ if $menu_mode; then
 sleep $menu_t0
 "$qs_bin" ipc -p "$shell_path" call menu summon ""
 sleep 1
-ls "\${XDG_RUNTIME_DIR:-/tmp}/formalshell" > "$menu_frames_first_path" 2>&1
-# Two seconds later, with the menu still open and NO summon in between: any
-# frame written in this gap can only have come from the live refresh timer.
-sleep 2
-ls "\${XDG_RUNTIME_DIR:-/tmp}/formalshell" > "$menu_frames_refresh_path" 2>&1
 EOF
 
   # `qs ipc call`'s CLI11 arg parser auto-splits any positional argument that
@@ -2874,16 +2858,10 @@ sleep $menu_finish_delay
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 {
   "$qs_bin" ipc -p "$shell_path" call menu toggle
-  # The open half of the round trip gets a beat to finish before the close
-  # half: the menu's backdrop freeze is a real subprocess, and killing it
-  # mid-capture (which closing does, deliberately) would leave this summon
-  # with no frame to assert on further down.
-  sleep 1
   "$qs_bin" ipc -p "$shell_path" call menu status
   "$qs_bin" ipc -p "$shell_path" call menu toggle
   "$qs_bin" ipc -p "$shell_path" call menu status
 } > "$toggle_path" 2>&1
-ls -la "\${XDG_RUNTIME_DIR:-/tmp}/formalshell" > "$menu_frames_path" 2>&1
 EOF
 
   # Emoji instant paste (M13 Task 6), appended to the finish script so it
@@ -5590,43 +5568,6 @@ if $menu_mode; then
     [ -f "$toggle_path" ] && cat "$toggle_path" >&2
     exit 1
   fi
-  # Every summon writes a frame under a filename no summon has used before
-  # (M39 Task 5). That is not tidiness: Qt's pixmap loader answers a repeated
-  # URL out of its own cache regardless of the Image's `cache: false`, so a
-  # reused path renders the picture that URL held the FIRST time it was
-  # decoded and never updates again (owner, live shell, 2026-08-19: "it
-  # cycles between both"). A name that has never been loaded cannot be served
-  # from a cache, so the name changing between two summons IS the fix, and it
-  # is what this asserts. Nothing here compares frame CONTENT: the screen
-  # behind them does not change between summons in this rig, so their pixels
-  # are legitimately near-identical and would prove nothing either way.
-  menu_frame_first=$(grep -oE 'menu-frame-[0-9]+\.ppm' "$menu_frames_first_path" 2>/dev/null | head -n1 || true)
-  menu_frame_last=$(grep -oE 'menu-frame-[0-9]+\.ppm' "$menu_frames_path" 2>/dev/null | head -n1 || true)
-  if [ -z "$menu_frame_first" ] || [ -z "$menu_frame_last" ]; then
-    echo "SMOKE_FAIL: no backdrop frame file was written — first: '$menu_frame_first' last: '$menu_frame_last'" >&2
-    exit 1
-  fi
-  if [ "$menu_frame_first" = "$menu_frame_last" ]; then
-    echo "SMOKE_FAIL: backdrop frame name did not change across summons ($menu_frame_first) — a repeat summon would render Qt's cached decode of that URL" >&2
-    exit 1
-  fi
-  # One file, not a growing pile: each capture retires its predecessor.
-  if [ "$(grep -cE 'menu-frame-[0-9]+\.ppm' "$menu_frames_path" 2>/dev/null || true)" != "1" ]; then
-    echo "SMOKE_FAIL: backdrop frames are accumulating on tmpfs. Got: $(cat "$menu_frames_path" 2>/dev/null)" >&2
-    exit 1
-  fi
-  echo "SMOKE_MENU_FRAMES backdrop frame went $menu_frame_first -> $menu_frame_last across summons, one file kept"
-  # Live refresh (M39 Task 7): the two dumps above straddle two seconds of a
-  # menu that was already open and never re-summoned, so a frame number that
-  # moved across them is the refresh timer and nothing else.
-  menu_frame_refresh=$(grep -oE 'menu-frame-[0-9]+\.ppm' "$menu_frames_refresh_path" 2>/dev/null | head -n1 || true)
-  menu_seq_first=$(printf '%s' "$menu_frame_first" | tr -dc '0-9')
-  menu_seq_refresh=$(printf '%s' "$menu_frame_refresh" | tr -dc '0-9')
-  if [ -z "$menu_seq_refresh" ] || [ "$menu_seq_refresh" -le "$menu_seq_first" ]; then
-    echo "SMOKE_FAIL: backdrop did not re-capture while the menu sat open — went $menu_frame_first -> $menu_frame_refresh over two idle seconds" >&2
-    exit 1
-  fi
-  echo "SMOKE_MENU_REFRESH backdrop advanced $menu_frame_first -> $menu_frame_refresh over two seconds with the menu open and no re-summon"
   # Nix runner end states (M13b Task 4, gated shim): while the shim blocks
   # on the gate flag the debounced search is genuinely in flight, so the
   # query must answer the dim SEARCHING note row; after the release it must

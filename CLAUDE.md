@@ -44,7 +44,14 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   breadcrumb), then `close` cancels the pending select and the resulting
   `menu-selection.txt` is read back to confirm the `{cancelled:true}` write.
   Combine with `--wallpaper` to verify the menu over matugen-recolored
-  colors (`docs/screenshots/menu-niri.png` is captured this way).
+  colors (`docs/screenshots/menu-niri.png` is captured this way); that
+  combination pushes the menu leg's whole timeline back to sleep 11
+  (`menu_t0`), since the menu's backdrop now covers the entire output and
+  would otherwise be what the wallpaper leg's sleep-8 flatness patch
+  samples. The menu's own backdrop is a `grim -t ppm` freeze taken before
+  the surface maps, dithered at chunk 10 / palette 4 and dissolved in on
+  `DitherImage.reveal`; a summon that cannot get a frame opens anyway
+  behind a 250ms watchdog.
 - `dev/smoke-niri.sh --notify` — same, plus fires `notify-send -u normal`
   then `-u critical` in-session and screenshots the resulting toasts:
   bottom-right by default since M34 (`notifications.position`,
@@ -113,15 +120,28 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   over the `panel` IPC route, and screenshots it (album art cell, `NOW
   PLAYING / mpv` meta row, transport cells, flat progress fill). `media
   status` is dumped and cross-checked against the fixture track's own tags
-  before mpv is killed by PID.
+  before mpv is killed by PID. The rest of MPRIS is driven the same way,
+  since an inverted cell in a screenshot says nothing about whether the
+  D-Bus call landed: `media shuffle on`, `media loop track` and `media
+  volume 30` are set over IPC and read straight back out of mpv
+  (`media-controls-status.json`, `media-controls.png`), and a SECOND mpv
+  then joins the bus so the panel's PLAYERS switcher exists at all (it is
+  hidden by design with one player), with `media select` handed the id that
+  is NOT the one the pick chose (`media-players.json`) and the resulting
+  `media status` proving the whole shell moved to it
+  (`media-players.png`). Both players are killed by PID before niri quits.
 - `dev/smoke-niri.sh --lock` — drives the whole lock round trip over real
   PAM. First, before the nested session even starts, runs
   `result/bin/formalshell-lock-before-sleep` with **no shell instance
   running at all** and records its exit code (must be `0` — the
   `lock-before-sleep` exit-0-always contract, spec §8). Then in-session:
   `lock lock` over IPC (screenshotted as `lock-locked.png` — the shared
-  `AuthPrompt` plate: oversized clock, blurred wallpaper backdrop if
-  `--wallpaper` is combined in, one 3px-outlined field), `lock isLocked`
+  `AuthPrompt` plate: oversized clock, dithered wallpaper backdrop if
+  `--wallpaper` is combined in — that combination sets the GRADIENT fixture
+  and skips the crossfade/monotone-flatness legs entirely, because niri
+  refuses `screenshot-screen` on a session the lock leg locked at sleep 3,
+  and a monotone wallpaper dithers to a flat field that could not show
+  whether the pass ran — one 3px-outlined field), `lock isLocked`
   confirms `true`, `wtype` (a real virtual-keyboard-unstable-v1 client —
   `LockIpc.qml` deliberately has no "type this password" shortcut) types a
   wrong password and Return (screenshotted as `lock-error.png` — the field's
@@ -141,12 +161,15 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   the block-character `FORMALSHELL` banner converging via one of ttfx's 37
   effects, in the mono font and that effect's own upstream gradient;
   `SCREENSAVER_EFFECT`/`SCREENSAVER_ASCII_TEXT` env vars pin an
-  effect or banner for a single run). That same status is checked against
-  `niri msg -j outputs` (`screensaver-outputs.json`): only one output
-  animates and `mainOutput` has to name a real connector, never `""` and
-  never a stale name. A nested session has one output, so the multi-head
-  rules themselves — follow focus, hold the choice across a plug, move it on
-  an unplug — live in `tests/tst_screensaver_outputs.qml` instead.
+  effect or banner for a single run). Only one output animates, and which
+  one is `display.outputPriority`'s first connected entry — the fixture
+  sets it to two connectors this session doesn't have followed by one it
+  does, so the `mainOutput` in that same status, checked against `niri msg -j
+  outputs` (`screensaver-outputs.json`), proves the list was walked in order
+  rather than a single-output session having one obvious answer. The rest of
+  the multi-head rules (port prefixes, the `internal`/`external` aliases,
+  what a plug or unplug does to a run in flight) live in
+  `tests/tst_display_priority.qml`, since a nested session has one head.
   `screensaver stop` dismisses it, then a final explicit `start`/screenshot
   (`screensaver-manual.png`)/`stop` proves the manual IPC path
   independently of the idle timer.
@@ -263,6 +286,63 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `smoke.png`. Every other mode still omits the `bar` key entirely, so
   their own screenshots keep proving the no-config fallback renders today's
   exact default arrangement.
+- `dev/smoke-niri.sh --monitor` (M38) — points `settings.json`'s
+  `bar.layout` at the opt-in `monitor` builtin leading the right region,
+  opens its compact panel over `panel open monitor`, then summons the
+  launcher's FULL monitor route (`menu summon monitor`, the one route
+  `Menu/appviews.js`'s registry names so far). Three screenshots off one
+  timeline (`monitor-bar.png`, `monitor-panel.png`, `monitor-view.png`)
+  with `monitor status` and `monitor gpu` dumped beside them. The honest
+  no-GPU state is the actual claim: the mac VM's `/sys/class/drm` holds no
+  cards at all, so `monitor gpu` has to report `available:false` over an
+  empty card list (the view's own `NO GPU` cell) while `monitor status`,
+  taken in the same breath, carries real non-null CPU and memory numbers
+  off the VM's own `/proc` — a monitor showing nothing at all, or a GPU
+  appearing out of nowhere, fails the run instead of producing a plausible
+  screenshot.
+- `dev/smoke-niri.sh --gpu` (M38) — the same three surfaces against a
+  two-card machine the rig doesn't have. Two PATH shims draw it, the same
+  hermetic-producer line the `gh` and `clipssh` shims already draw: an
+  `nvidia-smi` emitting the owner's real g815 bytes verbatim (fan speed
+  `[N/A]`, a value nvidia-smi genuinely emits for a laptop GPU, which has
+  to render unavailable rather than 0), and a `sh` that intercepts exactly
+  the one `sh -c` invocation matching the collector's own
+  `/sys/class/drm/card*` glob, splices `tests/fixtures/gpu-hybrid.txt`'s
+  `@drm` rows into its output, and passes every other `sh -c` straight
+  through to the real shell. No `/sys` entry is invented anywhere — the
+  collector still runs against this VM's own filesystem, only its view of
+  `/sys/class/drm` is spliced. `monitor gpu` and the launcher's monitor
+  view then have to show both cards for real (card0 nvidia/discrete via
+  `boot_vga`, card1 i915/integrated with its ACPI label, the external HDMI
+  hanging off the dGPU). Then the claim no screenshot can make: `monitor
+  launch` against a fixture `.desktop` entry whose Exec is a probe script
+  that writes its own argv and environment to a file, read back to confirm
+  all four `__NV_PRIME_RENDER_OFFLOAD`/`__NV_PRIME_RENDER_OFFLOAD_PROVIDER`/
+  `__GLX_VENDOR_LIBRARY_NAME`/`__VK_LAYER_NV_optimus` variables reached the
+  child (the exact set NixOS's own `nvidia-offload` wrapper exports) and
+  that the Exec's `%U` field code did not — `nvidia-offload`/`prime-run`
+  are deliberately left unshimmed so `offloadArgv` takes that four-variable
+  branch. An environment variable is invisible to a screenshot, which is
+  why this leg reads a file back instead of trusting the frame.
+- `dev/smoke-niri.sh --processes` (M39) drives the launcher's process
+  route end to end against two fixture processes it starts itself: copies
+  of **bash** (not coreutils `sleep`, which nixpkgs builds as one
+  multi-call binary that dispatches on argv[0] and exits at once under any
+  other name) spinning on a builtin loop, so each one is findable by a
+  whole 15-byte comm, is the busiest thing on the machine, and dies on TERM
+  with no foreground child to wait out. Four frames off one timeline:
+  `processes-full.png` (the whole table, CPU-sorted, kernel threads
+  carrying `KERNEL` where an argv would be), `processes-view.png` (`menu
+  filter smokevictim` narrowed it to one row), `processes-confirm.png` (the
+  armed row full-bleed urgent under `CONFIRM TERM`), `processes-killed.png`
+  (`NO MATCH`, with the TERM's own result in the header). The kill runs
+  through `menu activate` rather than `monitor kill`, since that is the
+  rig's Enter stand-in and so exercises the whole path a keypress takes;
+  it is called TWICE on purpose, and the `kill -0` written between the two
+  calls is what proves the arming press did not already kill. The restart
+  leg proves what no screenshot can: `monitor restart` TERMs a process,
+  waits for the pid to leave /proc, and re-runs the same argv, so exactly
+  one `smokerestart` is alive afterwards under a DIFFERENT pid.
 - `dev/smoke-greeter.sh` (`just vm-greeter`) — a sibling of the other smoke
   scripts, not a flag on `smoke-niri.sh`: greetd's `default_session`
   (`nixosModules.formalshell-greeter`) is a persistent system service, not a
@@ -454,13 +534,16 @@ behavior on hosts where a real owner exists.
   `$XDG_STATE_HOME/formalshell/state.json`.
 - Brutalist defaults, non-negotiable: corner radius `0`, no blur, no
   shadows, border width `2`, font = fontconfig `monospace` alias (never a
-  hardcoded family name), icons = Nerd Font glyphs (no SVG icon sets). The
-  lock screen's blurred wallpaper backdrop (`LockSurface.qml`'s client-side
-  `MultiEffect`, DESIGN.md's one named exception) is the **only** blur
-  anywhere in the shell — never add blur to any other surface, and never
-  reintroduce a `ScreencopyView`-based capture for it (see `LockSurface.qml`'s
+  hardcoded family name), icons = Nerd Font glyphs (no SVG icon sets).
+  **Nothing in the shell blurs anything.** The lock backdrop was DESIGN.md's
+  one named blur exception until M39 replaced it with the same retro dither
+  pass the launcher backdrop and the wallpaper already use (owner,
+  2026-08-19), so there is no exception left to spend: a surface that needs
+  to destroy what is behind it dithers it. Never reintroduce a
+  `ScreencopyView`-based capture for any of them (see `LockSurface.qml`'s
   header comment: it crashes the whole shell outright, a fail-open on a
-  security-critical surface).
+  security-critical surface) — the launcher backdrop's freeze is a `grim`
+  subprocess writing a file, the same way the capture suite does it.
 - License MIT. Every file substantially ported from DankMaterialShell keeps
   a `// Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC)`
   header line.
