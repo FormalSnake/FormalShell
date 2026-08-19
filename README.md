@@ -1,352 +1,100 @@
-# FormalShell
+```
 
-[![CI](https://github.com/FormalSnake/FormalShell/actions/workflows/ci.yml/badge.svg)](https://github.com/FormalSnake/FormalShell/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  ▄▄▄▄▄▄▄                       ▄▄   ▄▄▄▄▄              ▄▄ ▄▄
+ █▀██▀▀▀                         ██ ██▀▀▀▀█▄ █▄          ██ ██
+   ██        ▄    ▄              ██ ▀██▄  ▄▀ ██          ██ ██
+   ███▀▄███▄ ████▄███▄███▄ ▄▀▀█▄ ██   ▀██▄▄  ████▄ ▄█▀█▄ ██ ██
+ ▄ ██  ██ ██ ██   ██ ██ ██ ▄█▀██ ██ ▄   ▀██▄ ██ ██ ██▄█▀ ██ ██
+ ▀██▀ ▄▀███▀▄█▀  ▄██ ██ ▀█▄▀█▄██▄██ ▀██████▀▄██ ██▄▀█▄▄▄▄██▄██
+```
 
-A from-scratch Wayland desktop shell for niri and Hyprland, built on
-[QuickShell](https://quickshell.org/) (Qt/QML): one long-running process
-hosting the bar, launcher, notifications, OSD, lock screen, screensaver,
-panels, clipboard, and more, behind a compositor-agnostic backend. Colors are
-wallpaper-derived end to end via matugen, and it ships as first-party Nix
-modules so a consuming config needs almost no glue.
+[![CI](https://img.shields.io/github/actions/workflow/status/FormalSnake/FormalShell/ci.yml?branch=main&style=for-the-badge&labelColor=161616&color=4a9eda&logo=githubactions&logoColor=white&label=CI)](https://github.com/FormalSnake/FormalShell/actions/workflows/ci.yml)
+[![Nix flake](https://img.shields.io/badge/nix-flake-4a9eda?style=for-the-badge&labelColor=161616&logo=nixos&logoColor=white)](flake.nix)
+[![QuickShell](https://img.shields.io/badge/quickshell-QML-4a9eda?style=for-the-badge&labelColor=161616&logo=qt&logoColor=white)](https://quickshell.org/)
+[![Wayland](https://img.shields.io/badge/wayland-niri%20%2B%20hyprland-4a9eda?style=for-the-badge&labelColor=161616&logo=wayland&logoColor=white)](#install)
+[![Status](https://img.shields.io/badge/status-pre--alpha-d35f5f?style=for-the-badge&labelColor=161616)](docs/SWITCHOVER.md)
+[![License](https://img.shields.io/badge/license-MIT-cccccc?style=for-the-badge&labelColor=161616)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/FormalSnake/FormalShell?style=for-the-badge&labelColor=161616&color=161616&logo=github&logoColor=white)](https://github.com/FormalSnake/FormalShell/stargazers)
 
-![FormalShell bar on niri](docs/screenshots/bar-niri.png)
+A Wayland desktop shell for [niri](https://github.com/YaLTeR/niri) and
+Hyprland, written in QML on top of [QuickShell](https://quickshell.org/).
+One process draws the bar, the launcher, the notifications, the lock screen
+and the rest of it, and every color on screen is pulled out of your wallpaper
+by matugen.
 
-**Status:** pre-alpha. M1 through M22 (walking skeleton through the greeter
-and NixOS modules, bar completeness, screensaver effect gifs, DMS parity
-gaps + EDS/GOA calendar events, quattro behavior parity for the network/
-Bluetooth/usage/clipboard/active-window surfaces, three rounds of e1504g
-daily-drive trial feedback, the mek ink ramp and bar consistency passes, and
-most recently the capture suite: a region picker with an annotation handoff,
-region OCR, a color picker, and screen recording) are complete, behind CI
-(qmllint + headless qml-tests) and nested-compositor smoke loops for every
-change. See `docs/SWITCHOVER.md` for the current hardware-vs-VM verification
-parity table before switching a real machine over, and
-`docs/superpowers/specs/2026-07-27-formalshell-design.md` for the full
-design.
+It looks like this:
 
-## Screenshots
+![FormalShell launcher, bar and toasts](docs/screenshots/menu-niri.png)
 
-Every shot below comes from `dev/smoke-niri.sh`: it builds the package,
-launches it inside an isolated **nested** niri session, screenshots that
-session, and tears it down — safe to run against a live host by design.
-Most were recaptured 2026-07-29 from **g815**, the owner's real niri
-machine, showing genuinely populated hardware (real battery, Wi-Fi,
-Bluetooth, audio, backlight) rather than the VM's empty state — those
-shots predate M13b, so their bars lack the notification bell cell. The
-greeter shot, the M10 bar shots (tray, custom modules), the three M13
-recaptures (tray with vertically centered cells, custom modules with the
-github cell and the idx-sorted workspace region, calendar with a selected
-day's inverted cell), the four M13b shots (the bell cell in its DND
-state, launcher rows with a real icon image, and the no-wallpaper theme
-toggle pair), and the four M14 shots (the bar's active-window cell showing
-a themed icon and app name instead of the raw window id, the wifi-parity
-network panel scan/connect UI, the bluetooth panel's honest `NO ADAPTER`
-state on hardware the VM doesn't have, and a clipboard image entry's
-thumbnail row) are VM-sourced — no greetd module on g815 yet, and g815
-hasn't been re-swept since M10 landed. The four M15 shots (the notification
-center's density language and `CLEAR ALL` cell, the toast stack's sanitized
-Chromium-derived body, the rebuilt omarchy-style audio mixer with a live
-`mpv` stream under `APPS`, and the weather bar cell's live glyph + temp
-next to its panel) are VM-sourced too. The bar and OSD shots were
-recaptured again for M16 Task 1's density unification (the bar's left
-region gap tightens to match center/right, the OSD's fill track fattens
-from 4px to 6px) — both Linux hosts were offline at the time, so these two
-are mac-VM-sourced now too, not g815. The power panel shot is new for M16
-Task 5 (the `DISPLAY`/brightness section and static battery stats),
-VM-sourced as well — the VM has no backlight device, so it shows the
-honest `NO BACKLIGHT` fallback rather than a real brightness row. Details
-on what each shot proves are in `CLAUDE.md`'s verification loop section
-(the `dev/smoke-niri.sh` flag each was captured with) and git history. The
-AirPods panel shot is new for M29, VM-sourced against a fixture status
-file (`dev/smoke-niri.sh --panel airpods`) standing in for the `librepods`
-daemon — real hardware has never driven this panel. The tray context menu
-shot is new for M32, VM-sourced against `dev/sni-stub.py`'s fixture
-`com.canonical.dbusmenu` tree (`dev/smoke-niri.sh --tray`): it replaced the
-old native `QMenu` popup, which took an xdg_popup grab Hyprland's
-layer-shell path tore down on the tray icon's own pixmap, closing the menu
-the instant it opened.
+Radius 0. No blur, no shadows, monospace everywhere, borders that are exactly
+two pixels. That speckle in the background is the wallpaper being served
+through a six-color ordered dither, which is what this shell does instead of a
+gaussian blur.
 
-| | | |
-| :---: | :---: | :---: |
-| <img src="docs/screenshots/bar-niri.png" width="260"><br>**Bar** — mac VM | <img src="docs/screenshots/menu-niri.png" width="260"><br>**Menu** — mac VM | <img src="docs/screenshots/notifications-niri.png" width="260"><br>**Notifications** — mac VM |
-| <img src="docs/screenshots/osd-niri.png" width="260"><br>**OSD** — mac VM | <img src="docs/screenshots/panels-niri.png" width="260"><br>**Panels** — mac VM | <img src="docs/screenshots/calendar-niri.png" width="260"><br>**Calendar** — mac VM |
-| <img src="docs/screenshots/clipboard-niri.png" width="260"><br>**Clipboard** — mac VM | <img src="docs/screenshots/media-niri.png" width="260"><br>**Now playing** — mac VM | <img src="docs/screenshots/lock-niri.png" width="260"><br>**Lock screen** — mac VM |
-| <img src="docs/screenshots/screensaver-niri.png" width="260"><br>**Screensaver** — mac VM | <img src="docs/screenshots/picker-niri.png" width="260"><br>**Picker** — mac VM | <img src="docs/screenshots/greeter-niri.png" width="260"><br>**Greeter** — mac VM |
-| <img src="docs/screenshots/tray-niri.png" width="260"><br>**Tray** — mac VM | <img src="docs/screenshots/indicators-niri.png" width="260"><br>**Bell (DND) + sanitized toasts** — mac VM | <img src="docs/screenshots/bar-layout-niri.png" width="260"><br>**Custom bar modules** — mac VM |
-| <img src="docs/screenshots/menu-apps-niri.png" width="260"><br>**Launcher app icons** — mac VM | <img src="docs/screenshots/theme-dark-niri.png" width="260"><br>**Theme toggle: dark** — mac VM | <img src="docs/screenshots/theme-light-niri.png" width="260"><br>**Theme toggle: light** — mac VM |
-| <img src="docs/screenshots/active-window-niri.png" width="260"><br>**Active window icon** — mac VM | <img src="docs/screenshots/network-panel-niri.png" width="260"><br>**Network panel** — mac VM | <img src="docs/screenshots/bluetooth-panel-niri.png" width="260"><br>**Bluetooth panel** — mac VM |
-| <img src="docs/screenshots/clipboard-image-niri.png" width="260"><br>**Clipboard image entry** — mac VM | <img src="docs/screenshots/notifications-center-niri.png" width="260"><br>**Notification center: density + CLEAR ALL** — mac VM | <img src="docs/screenshots/audio-panel-niri.png" width="260"><br>**Audio panel: omarchy mixer** — mac VM |
-| <img src="docs/screenshots/weather-niri.png" width="260"><br>**Weather: live bar cell + panel** — mac VM | <img src="docs/screenshots/power-panel-niri.png" width="260"><br>**Power panel: profile + display** — mac VM | <img src="docs/screenshots/share-menu-niri.png" width="260"><br>**Share menu (LocalSend)** — mac VM |
-| <img src="docs/screenshots/airpods-niri.png" width="260"><br>**AirPods panel: battery + listening mode** — mac VM | <img src="docs/screenshots/tray-menu-niri.png" width="260"><br>**Tray context menu: shell-owned, checkable + submenu rows** — mac VM | |
+**Pre-alpha.** It boots, it is nice to use, and it will still surprise you.
+[`docs/SWITCHOVER.md`](docs/SWITCHOVER.md) tracks what has been proven on
+real hardware versus what has only ever run in a VM. Read it before you put
+this on the laptop you need tomorrow morning.
 
-The Hyprland backend is implemented and verified against a live nested
-session's `debug` IPC dump, but nested Hyprland doesn't yet reliably reach a
-screenshot in the dev sandbox, so no `bar-hyprland.png` is published until
-that's fixed.
+## A tour
 
-Nothing from M22 is in the table yet. `dev/smoke-niri.sh --capture`
-screenshots the region picker on every run, but none of those frames are
-committed here.
+The launcher is the front door. Apps, clipboard history, a calculator, an
+emoji picker that types the emoji for you, `nix run` for anything in nixpkgs,
+your own compositor keybinds, wallpapers, toggles, and a `select`/`input`
+mode that stands in for dmenu. Everything is one fuzzy search away and there
+is a bar at the bottom telling you what Enter is about to do.
 
-Five of ttfx's screensaver effects, recorded by `dev/smoke-niri.sh
---screensaver-gif` — one nested session per effect, stepped by frame index
-rather than wall clock so the pacing survives a slower machine. `matrix` and
-`thunderstorm` are deliberately absent: both are gated on wall-clock time, so
-the same frame index means something different on the next host.
+| | |
+| :---: | :---: |
+| <img src="docs/screenshots/notifications-center-niri.png" width="420"><br>Notification center, with DND and a real history | <img src="docs/screenshots/media-niri.png" width="420"><br>Now playing, over MPRIS |
 
-| | | | | |
-| :---: | :---: | :---: | :---: | :---: |
-| <img src="docs/media/screensaver-decrypt.gif" width="140"><br>**decrypt** | <img src="docs/media/screensaver-rain.gif" width="140"><br>**rain** | <img src="docs/media/screensaver-expand.gif" width="140"><br>**expand** | <img src="docs/media/screensaver-slide.gif" width="140"><br>**slide** | <img src="docs/media/screensaver-scattered.gif" width="140"><br>**scattered** |
+Sixteen panels hang off the bar cells (audio, network, bluetooth, calendar,
+weather, power, displays, system monitor, AirPods, and friends). A panel with
+nothing to say prints `NO ADAPTER` rather than inventing a device, which is a
+rule the whole shell follows: no faked values anywhere, including in the
+screenshots above.
 
-## Features
+There is a full system monitor inside the launcher (per-core CPU, memory,
+temps, disks, network rates, GPU where the driver will talk, plus a process
+table you can kill things from), a screenshot and screen recording suite with
+its own region picker, OCR, a color picker, and reminders that survive the
+shell being restarted.
 
-Full per-surface reference (config keys, IPC targets, keybind examples) is
-in **[`docs/USAGE.md`](docs/USAGE.md)**. In brief:
+<img src="docs/screenshots/lock-niri.png" width="420"> <img src="docs/media/screensaver-decrypt.gif" width="360">
 
-- **Bar** — three regions (left/center/right): workspaces (idx-sorted,
-  empty ones hidden), active window, an SNI tray with a grouped overflow
-  drawer and click-through to item activation and DBus menus, a
-  notification bell (pending count, click opens the center, right click
-  flips DND), an indicators slot that shows up only while something is on
-  (a live recording, a pending reminder countdown, stay-awake, night
-  light), clock, battery, audio, network/Bluetooth, weather, now playing,
-  and four opt-in cells (GitHub PR/issue counter, microphone mute, keyboard
-  layout, how many of a flake's inputs are behind upstream): fully
-  reorderable from `settings.json`, plus custom `command` and `qml` widget
-  modules. Hovering a cell opens a tooltip card naming what it is and what
-  it currently reads, including honest states like `BLUETOOTH / NO ADAPTER`.
-- **Menu** — one fuzzy-searchable, keyboard-driven surface doubling as app
-  launcher (rows carry each app's themed desktop icon), system/power menu,
-  and a `select`/`input` dmenu replacement — with an inline calculator row,
-  an emoji picker (`:e`) that copies AND auto-types the pick, a nixpkgs
-  package runner (`:nix`, with honest searching/failed/empty states and a
-  launch toast), and a wallpaper route that draws the same card as a grid of
-  image cells, all built in as routes. A bottom action bar names what Enter
-  will do to the row under the cursor alongside the keys that always apply.
-  A `TOGGLES` node collects night light, stay-awake, DND and dark
-  mode as live checkmark rows; activating one flips it and leaves the menu
-  open, so the tick changes under the cursor (the ids moved, so a
-  `menu.jsonc` keyed on `theme.mode-toggle` or `system.stay-awake` now goes
-  inert rather than erroring, see [Menu](docs/USAGE.md#menu)). `:k` searches
-  your compositor's own keybinds, read from niri's `config.kdl` or from
-  `hyprctl binds -j` and listed as inert notes. App rows rank by launch
-  frecency (persisted to `state.json`), an app that already has a window
-  gets raised instead of started a second time, and a launch that puts
-  nothing on screen within two seconds gets a `LAUNCHING` notification
-  instead of a claim it worked.
-- **Notifications** — a mako-replacement stack: freedesktop server,
-  independent card toasts, a summonable history center, a narrow DND bypass.
-  Identical notifications (same app, same summary) collapse into one card
-  carrying a repeat count instead of stacking.
-- **Reminders** are a duration plus a message (`reminder set 25m "coffee"`),
-  fired through the shell's own notification stack at critical urgency so one
-  still arrives with DND on. A pending reminder shows as a countdown cell in
-  the bar's indicators slot, and persists to `state.json`: one whose time
-  passed while the shell was down fires late rather than silently.
-- **OSD** — one jitter-free bottom-center card for volume, brightness, and
-  media.
-- **Panels**: sixteen popouts (appmenu, audio, calendar, network,
-  bluetooth, power, weather, media, github, usage, tailscale, systemupdate,
-  display, airpods, dualsense, monitor) sharing one component and one IPC
-  target, plus any plugin panel under `plugin:<id>`, each taking keyboard
-  focus as it opens so a panel summoned from a keybind is usable
-  immediately. Network adds a Wi-Fi QR share (optional `qrencode`) and a
-  saved-password reveal; Bluetooth adds per-device trust; display lists
-  every connected output with on/off, scale, and mirror; airpods reads
-  per-bud battery, listening mode, Conversation Awareness, One-Bud ANC, and
-  ear detection from the `librepods` daemon (a real device, read-back
-  state, not set-only writes); dualsense is a read-only sysfs readout for a
-  controller's battery, lightbar color, and player LEDs.
-- **System monitor**: an opt-in bar cell and compact panel for CPU/memory
-  (and GPU, where the driver reports one), plus a full monitor inside the
-  launcher — per-core bars, mem/swap/load/uptime, temps, network rates,
-  disk, and full GPU detail — reachable whether or not the cell is placed
-  at all. Multi-GPU aware: amdgpu reports utilization, VRAM, and
-  temperature from sysfs; NVIDIA needs `nvidia-smi` on PATH and renders its
-  `[N/A]` fan reading as unavailable rather than 0; Intel i915/xe have no
-  unprivileged utilisation counter at all, so those cards show their
-  identity and outputs beside an honest `NO METRICS`. `Shift+Enter` on any
-  app row (or the `gpu.launch` launcher route) launches it on the
-  machine's discrete GPU with the right offload environment; `gpu.mode`
-  switches integrated/hybrid where `supergfxctl` is installed. The
-  launcher is the front door for every surface in this list — a
-  reachability test fails the build the moment a panel ships with no
-  launcher route.
-- **Clipboard** — capped, deduplicated history surfaced through the menu.
-- **Calendar** — month grid with clickable day selection, a year/life-
-  progress bar, and events from local `.ics` files and EDS/GNOME Online
-  Accounts (via the `formalshell-eds` companion CLI), with bounded RRULE
-  expansion.
-- **Now playing**: an MPRIS-backed bar cell and panel with transport, seek,
-  shuffle, repeat, the player's own volume, raise, and a switcher when
-  several players are registered at once, each control present only where
-  the player implements it. Optional Apple Music animated album art.
-- **Lock screen** — a real `WlSessionLock` + PAM over a dithered
-  current-wallpaper backdrop.
-- **Screensaver**: an idle-driven terminal-effect banner, animated by
-  ttfx (bundled) across its 37 effects, rerolling to a fresh one
-  indefinitely until real input dismisses it. Without ttfx on PATH it falls
-  back to five convergence effects written in JS. Both ends fade at 400ms.
-- **Hot corners** — throw the pointer into a screen corner to show the
-  screensaver (bottom-left) or lock (bottom-right). Each corner is a 4px
-  layer surface with a 400ms dwell; corners, size, dwell and the whole
-  feature are `hotCorners.*` keys in `settings.json`, and both top corners
-  are off by default because the bar owns that edge.
-- **Picker** — a ledger-grid wallpaper/image selector living inside the menu
-  as its own route, also usable as a generic image-select IPC surface. A
-  `Dark`/`Light` subdirectory pair in the wallpaper directory splits the grid
-  in two, switched with `Tab` or the route's own `DARK | LIGHT` cells and
-  entered on the theme's current mode; a directory without them is listed
-  flat.
-- **Capture**: `screenshot full` grabs an output with no interaction, and
-  `screenshot pick` opens the shell's own region picker over a frozen grab of
-  every output, in `smart`, `region`, `windows` or `fullscreen` mode, with a
-  second argument choosing disk plus clipboard (the default), clipboard only,
-  or disk only. The picker carries a macOS-style toolbar — screen, window or
-  region, shot or recorded, then commit — so one bind (`Mod+Shift+S`) reaches
-  every capture the shell can take. The `SCREENSHOT SAVED` notification carries an `EDIT` action
-  handing the PNG to `screenshot.editor`, default
-  [Tensaku](https://tensaku.dev), which this flake packages. `capture text`
-  OCRs a dragged region to the clipboard through tesseract, `capture color`
-  copies one pixel as `#RRGGBB`, and `record` drives wf-recorder for screen,
-  window or region video with optional desktop and microphone audio,
-  transcodable to a GIF from its own saved notification. The slurp-based selections auto-cancel
-  after 90 seconds instead of sitting invisible and stuck. One asymmetry, and
-  it is the compositor's: niri reports no position for tiled windows, so the
-  picker names them in a card rather than highlighting them, and captures the
-  chosen one through niri's own server-side crop.
-- **Motion** — fast, subtle, interruptible transitions (90-140ms, opacity
-  plus a small translate, one ease-out curve), off entirely with
-  `motion.enabled: false`.
-- **Greeter** — a greetd session rendering as the lock screen's visual twin,
-  with real PAM authentication.
-- **Theming** — wallpaper-driven matugen colors recolor every bar token and
-  niri's window borders live, no restart required; the wallpaper itself
-  renders through a 90s-era dither, a palette of six colors derived from that
-  image by median cut with an ordered dither only between neighbors, so flat
-  regions stay flat (`wallpaper.dither`, `wallpaper.ditherColors`); with no wallpaper set,
-  the dark/light toggle flips between bundled Flexoki palettes through the
-  same pipeline. `theme.json`'s twelve color roles are the whole contract —
-  matugen, pywal (a documented `pywal-theme.json.tmpl` ships alongside the
-  matugen template), or a hand-written file all theme the shell identically
-  (see [Theming](docs/USAGE.md#theming) in the usage doc).
-- **Plugins** are drop-in QML loaded from
-  `~/.config/formalshell/plugins/<id>/` behind a `manifest.json`, as a bar
-  cell, a panel, an overlay, or a headless service. A manifest that can't be
-  read drops that one plugin with a warning and leaves the bar standing.
-  There is no sandbox past load time: a plugin file that parses gets the same
-  engine access as any builtin widget, and can take this single process down
-  with it.
-- **Compositor-agnostic** — a formal `CompositorBackend` contract, with
-  working niri and Hyprland implementations.
+The lock screen is a real `WlSessionLock` with PAM behind it, and the greeter
+is its twin at the login prompt. The screensaver runs
+[ttfx](https://github.com/omacom-io/ttfx) and rerolls through its 37
+effects until you touch something. Yes, that is what the idle timeout on your
+machine should have been doing all along.
+
+Everything above is driven over IPC, so any of it can be bound to a key:
+
+```sh
+qs ipc --any-display -p <store-path>/share/formalshell call menu summon
+```
+
+[`docs/USAGE.md`](docs/USAGE.md) has the full set of verbs, config keys, and
+copy-paste binds for both compositors.
 
 ## Install
 
-FormalShell installs as a whole system, not just a user shell: one
-home-manager module for the shell itself, and two NixOS modules for the
-system-side pieces home-manager cannot provide (a PAM service, geoclue2 +
-its agent, greetd). See `docs/SWITCHOVER.md` for the current readiness
-report (a per-surface hardware-vs-VM-vs-unverified parity table and known
-gaps) before switching a real machine over — this section is the mechanics,
-that document is the honesty check. Add the flake input first:
-
-```nix
-{
-  inputs.formalshell.url = "github:FormalSnake/FormalShell";
-}
-```
-
-### `nixosModules.formalshell` — system-side prerequisites
-
-`services.formalshell.enable = true;` turns on everything M6/M7 need from
-the system side that home-manager has no access to. Each backend is its own
-sub-option, defaulted on via `lib.mkDefault` so a config that already manages
-one of these its own way can still override it without a definition conflict
-— see `nix/nixos-module.nix` for the full rationale behind each entry:
-
-| Sub-option | Backs | Default |
-| --- | --- | --- |
-| `pam.enable` | `security.pam.services.formalshell-lock` — the exact service name `Lock.qml`'s `PamContext` authenticates against | `true` |
-| `geoclue.enable` | `services.geoclue2` + its demo agent — `LocationService`'s default position source | `true` |
-| `networkmanager.enable` | `networking.networkmanager` — `NetworkPanel`'s only backend | `true` |
-| `bluetooth.enable` | `hardware.bluetooth` — `BluetoothPanel`'s backend | `true` |
-| `upower.enable` | `services.upower` — the battery bar cell and `PowerPanel` | `true` |
-| `powerProfiles.enable` | `services.power-profiles-daemon` — `PowerPanel`'s profile picker | `true` |
-| `pipewire.enable` | `services.pipewire` — the audio bar cell, audio panel, and volume OSD | `true` |
-
-**Without this module (or an equivalent hand-written
-`security.pam.services.formalshell-lock = { };`), the lock screen cannot
-authenticate at all** — `PamContext` has nothing to talk to. **Without
-`geoclue.enable`'s agent, geoclue never answers** `LocationService`'s
-position requests either.
-
-### `nixosModules.formalshell-greeter` — greetd wiring
-
-`services.formalshell-greeter` wires `services.greetd` to run
-`packages.<system>.formalshell-greeter` as the `default_session`, under a
-wlroots compositor (`compositorPackage`, default `pkgs.sway`):
-
-```nix
-{
-  services.formalshell-greeter = {
-    enable = true;
-    package = inputs.formalshell.packages.${pkgs.system}.formalshell-greeter;
-    sessionCommand = [ "niri" ]; # argv a successful login launches
-  };
-}
-```
-
-`sessionCommand` is the one option a real deployment usually needs to set —
-it's written into a static `settings.json` for the `greeter` system account
-(whose own passwd `HOME` is unwritable, hence the module's own separate
-`runtimeDir`/`stateDir`). `extraEnvironment`, `sessionLogFile`, and
-`postGreeterCommand` exist for a nonstandard seat or verification tooling; a
-normal login never touches them — see `nix/nixos-greeter-module.nix`.
-
-### `homeModules.formalshell` — the shell itself
-
-```nix
-{
-  imports = [ inputs.formalshell.homeModules.default ];
-  programs.formalshell = {
-    enable = true;
-    package = inputs.formalshell.packages.${pkgs.system}.default;
-  };
-}
-```
-
-`programs.formalshell.settings` (JSON) is written once to
-`~/.config/formalshell/settings.json` and only ever read by the shell — see
-`nix/hm-module.nix`.
-
-The package wraps its own PATH, so the binaries it invokes (matugen, grim,
-slurp, wl-clipboard, wf-recorder, tesseract, ffmpeg, ttfx, cava, ddcutil,
-qrencode, brightnessctl, wtype) ride along and don't have to be installed on
-the host. Left out on purpose are the CLIs that have to match something
-already running on the system: `nmcli`, `bluetoothctl`, `pactl` (only for
-`desktopmic` recording), `wlsunset` and `localsend_app`. Each caller either
-hides its feature when the binary is missing or fails loudly.
-
-### Minimal working `flake.nix`
+FormalShell is a Nix flake, and it installs as a system rather than as one
+user program: a home-manager module for the shell, plus NixOS modules for the
+things home-manager cannot reach (a PAM service for the lock screen, geoclue
+for weather, greetd for the greeter).
 
 ```nix
 {
   inputs.formalshell.url = "github:FormalSnake/FormalShell";
 
-  outputs = { self, nixpkgs, home-manager, formalshell, ... }: {
+  outputs = { nixpkgs, home-manager, formalshell, ... }: {
     nixosConfigurations.mymachine = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
         formalshell.nixosModules.formalshell
-        formalshell.nixosModules.formalshell-greeter
-        {
-          services.formalshell.enable = true;
-          services.formalshell-greeter = {
-            enable = true;
-            package = formalshell.packages.x86_64-linux.formalshell-greeter;
-          };
-        }
+        { services.formalshell.enable = true; }
+
         home-manager.nixosModules.home-manager
         {
           home-manager.users.me = {
@@ -363,43 +111,65 @@ hides its feature when the binary is missing or fails loudly.
 }
 ```
 
-Wired into a NixOS host config as above (home-manager as a NixOS module,
-not standalone), the one command that activates everything — the PAM
-service, greetd, and the shell itself — is:
+`services.formalshell.enable` switches on PAM, geoclue, NetworkManager,
+bluez, upower, power-profiles-daemon and pipewire, each one behind its own
+option and each defaulted with `mkDefault` so your existing config wins.
+Without at least the PAM service the lock screen has nothing to authenticate
+against, so do not skip the NixOS module.
 
-```sh
-sudo nixos-rebuild switch --flake .#mymachine
+For the login screen, add `formalshell.nixosModules.formalshell-greeter` and
+point it at your session:
+
+```nix
+services.formalshell-greeter = {
+  enable = true;
+  package = formalshell.packages.x86_64-linux.formalshell-greeter;
+  sessionCommand = [ "niri" ];
+};
 ```
 
-## Dev loop
+The package wraps its own PATH, so matugen, grim, slurp, wf-recorder,
+tesseract, ttfx and the rest ride along. The tools that have to match
+something already running on your system (`nmcli`, `bluetoothctl`, `pactl`,
+`wlsunset`) are deliberately left out.
+
+Config lives in `~/.config/formalshell/settings.json`, which the shell only
+ever reads. Anything it needs to remember goes to
+`$XDG_STATE_HOME/formalshell/state.json` instead, so your config file is
+yours.
+
+## Hacking on it
 
 ```bash
-nix develop   # qs, qt6.qtdeclarative (qmllint/qmltestrunner/qmlls), matugen, just
-just build    # nix build .#formalshell
+nix develop   # qs, qmllint, qmltestrunner, qmlls, matugen, just
+just build
 just test     # headless qmltestrunner over tests/
-just lint     # nix flake check -L (qml-tests + qmllint)
-just smoke    # nested niri + screenshot, the visual verification loop
+just lint     # nix flake check (qml-tests + qmllint)
+just smoke    # the good one
 ```
 
-The full set of smoke-mode flags (`--wallpaper`, `--menu`, `--notify`,
-`--panel <name>`, `--tray`, …), the Hyprland equivalent, and the mac-only
-nested-VM rig for testing without a Linux box are documented in `CLAUDE.md`.
+`just smoke` builds the shell, boots it inside a throwaway **nested** niri
+session, screenshots that session, and tears it down. Your real session is
+never a test target, which means you can run the lock screen and the
+notification server over and over without locking yourself out or stealing
+the D-Bus name from your actual desktop. Flags drive individual surfaces
+(`--menu`, `--notify`, `--lock`, `--tray`, `--media`, `--panel <name>`, and
+about twenty more); `CLAUDE.md` documents what each one proves. There is a
+matching rig for developing on a Mac, where the whole thing runs in a headless
+aarch64 NixOS VM and hands the screenshots back.
 
-`qs ipc call gallery open` opens the dev gallery: one sheet rendering the
-real shared components (cells, meta labels, the type/spacing/color scales,
-the panel frame itself) so a regression in any of them is visible in a
-single screenshot. It has no bar cell and is not in the `panel` registry,
-so it only ever appears when asked for by name.
+`qs ipc call gallery open` opens a dev gallery of every shared component on
+one sheet, so a regression in the design system shows up in a single frame.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT. See [`LICENSE`](LICENSE).
 
 ## Credits
 
-Built on [QuickShell](https://quickshell.org/). Architecture and UX
-(single-process shell, unified surfaces, IPC contract) are generalized from
-[Omarchy](https://github.com/basecamp/omarchy)'s `quattro` branch off
-Hyprland. Service patterns for the multi-compositor backend layer are ported
-with attribution from [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell)
-(MIT).
+Built on [QuickShell](https://quickshell.org/). The single-process
+architecture and a lot of the interaction language come from
+[Omarchy](https://github.com/basecamp/omarchy)'s `quattro` branch. The
+multi-compositor backend borrows service patterns from
+[DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) (MIT,
+with attribution in each ported file).
