@@ -225,4 +225,24 @@ Panel {
                 root.menu.open("monitor");
         }
     }
+
+    // The other launcher route over the same machine (M39): the ledger
+    // above reads it, this one acts on it. Same close-then-open handoff as
+    // the row above.
+    Cell {
+        id: openProcessesCell
+        width: parent.width
+        interactive: true
+
+        ActionLabel {
+            text: "OPEN PROCESSES"
+            color: openProcessesCell.foreground
+        }
+
+        onClicked: {
+            root.close();
+            if (root.menu)
+                root.menu.open("processes");
+        }
+    }
 }

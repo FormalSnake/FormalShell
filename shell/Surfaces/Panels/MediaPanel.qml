@@ -14,6 +14,13 @@ import qs.Services
 // accent-fill scrub track underneath, then transport as one small cluster
 // of content-sized cells rather than three glyphs adrift in oversized ones.
 //
+// The rest of what MPRIS actually defines hangs off that: shuffle and
+// LoopStatus as the outer two cells of the transport cluster, the player's
+// own Volume as a second track under it, Raise as a title-band label, and a
+// row per registered player when more than one is registered at once. Each
+// is gated on the player's own capability flag, so a player that implements
+// none of them renders exactly the panel it rendered before.
+//
 // Play/pause stays in that transport cluster rather than moving to the
 // hero's `trailing` slot: unlike Audio's MUTE, it has no sense on its own —
 // prev/next only mean anything next to it, so splitting it out would orphan
@@ -24,6 +31,25 @@ Panel {
 
     panelTitle: "NOW PLAYING"
     panelWidth: Theme.space.popupWidthDefault
+
+    // MPRIS Raise: bring the player's own window up, the one transport verb
+    // that isn't about the track. A bare label in the title band rather than
+    // a sixth cell in the transport cluster (CardTitleBar's own contract,
+    // DESIGN.md §1.1's ink promotion), and absent entirely on a player that
+    // doesn't implement it.
+    titleActions: MetaLabel {
+        visible: MediaService.canRaise
+        text: "RAISE"
+        color: raiseHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim
+
+        MouseArea {
+            id: raiseHover
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: MediaService.raise()
+        }
+    }
 
     // M35: the bar's mini cover (NowPlaying.qml) shares this panel's one
     // Video decode rather than running its own. AnimatedCoverFrameSource
@@ -160,6 +186,51 @@ Panel {
         meta: MediaService.artist !== "" ? MediaService.artist : MediaService.identity
     }
 
+    // Two players at once is the ordinary case (a browser tab plus a music
+    // app) and MPRIS names them all, so the pick MediaService makes is worth
+    // overriding by hand: one row per registered player, the active one
+    // inverted, click to pin the whole shell to it. Hidden with a single
+    // player, where a list of one would just repeat the identity line above.
+    Cell {
+        visible: MediaService.players.length > 1
+        width: parent.width
+
+        MetaLabel { text: "PLAYERS"; colon: true }
+    }
+
+    Repeater {
+        model: MediaService.players.length > 1 ? MediaService.players : []
+
+        delegate: Cell {
+            id: playerCell
+            required property var modelData
+            width: parent.width
+            selected: playerCell.modelData.id === MediaService.activeId
+
+            Text {
+                width: parent.width - (playingLabel.visible ? playingLabel.width + Theme.space.md : 0)
+                anchors.verticalCenter: parent.verticalCenter
+                text: playerCell.modelData.label
+                color: playerCell.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.body
+                elide: Text.ElideRight
+            }
+
+            MetaLabel {
+                id: playingLabel
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: playerCell.modelData.isPlaying
+                text: "PLAYING"
+                color: playerCell.dimForeground
+            }
+
+            interactive: true
+            onClicked: MediaService.select(playerCell.modelData.id)
+        }
+    }
+
     // Header-line pairing (Task 1's rhythm): elapsed left, total right, both
     // content ink since the row's whole point is these two numbers — track
     // underneath. Flat accent fill, no thumb, draggable when the player
@@ -241,6 +312,33 @@ Panel {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 0
 
+            // MPRIS Shuffle and LoopStatus flank the transport, each present
+            // only when the player implements it: three cells for a player
+            // that does neither, five for one that does both. Their on-state
+            // is the ledger's own inversion (DESIGN.md §1.1: inversion is
+            // state, the alpha hover is the pointer), which is why these two
+            // don't take the neighbouring cells' hover-inversion: an inverted
+            // shuffle cell has to mean shuffle is on, not that the pointer is
+            // over it.
+            Cell {
+                id: shuffleCell
+                visible: MediaService.shuffleSupported
+                width: implicitWidth
+                height: implicitHeight
+                selected: MediaService.shuffle
+
+                Text {
+                    anchors.centerIn: parent
+                    text: MediaService.shuffle ? "󰒝" : "󰒞"
+                    color: shuffleCell.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.heading
+                }
+
+                interactive: true
+                onClicked: MediaService.toggleShuffle()
+            }
+
             Cell {
                 id: prevCell
                 width: implicitWidth
@@ -296,6 +394,27 @@ Panel {
                 interactive: true
                 onClicked: MediaService.next()
             }
+
+            Cell {
+                id: loopCell
+                visible: MediaService.loopSupported
+                width: implicitWidth
+                height: implicitHeight
+                selected: MediaService.loopState !== "none"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: MediaService.loopState === "track"
+                        ? "󰑘"
+                        : (MediaService.loopState === "playlist" ? "󰑖" : "󰑗")
+                    color: loopCell.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.heading
+                }
+
+                interactive: true
+                onClicked: MediaService.cycleLoop()
+            }
         }
 
         Rectangle {
@@ -312,6 +431,63 @@ Panel {
             anchors.bottom: transportRow.bottom
             width: Theme.borderWidth
             color: Theme.color.rule
+        }
+    }
+
+    // The player's OWN volume (MPRIS Volume), not the sink's. AudioPanel
+    // owns that one, and a browser at 30% here is still whatever the sink
+    // says system-wide. Same header-line-plus-track rhythm as the progress
+    // row above; absent on a player that doesn't implement Volume.
+    Cell {
+        visible: MediaService.available && MediaService.volumeSupported
+        width: parent.width
+
+        Column {
+            width: parent.width
+            spacing: Theme.space.xxs
+
+            Item {
+                width: parent.width
+                height: Math.max(volumeLabel.implicitHeight, volumeReadout.implicitHeight)
+
+                MetaLabel {
+                    id: volumeLabel
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "VOLUME"
+                }
+
+                Text {
+                    id: volumeReadout
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Math.round(MediaService.volume * 100) + "%"
+                    color: Theme.color.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.body
+                }
+            }
+
+            DitherFill {
+                id: volumeTrack
+                width: parent.width
+                height: Theme.space.trackThickness
+
+                Rectangle {
+                    width: parent.width * MediaService.volume
+                    height: parent.height
+                    color: Theme.color.accent
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    function _setFromX(x) {
+                        MediaService.setVolume(x / volumeTrack.width);
+                    }
+                    onPressed: mouse => _setFromX(mouse.x)
+                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+                }
+            }
         }
     }
 }

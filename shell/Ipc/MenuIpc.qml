@@ -49,6 +49,17 @@ IpcHandler {
         return menu.activate(index) ? "ok" : "error: menu not open";
     }
 
+    // The rig's stand-in for typing into the search field, and the only way
+    // to verify a route whose search field IS its content filter (the
+    // process app view). Same division activate() draws above: real
+    // keyboard delivery into an OnDemand-focus layer surface is not
+    // provable headlessly.
+    function filter(text: string): string {
+        if (!menu)
+            return "error: menu not ready";
+        return menu.setQuery(text) ? "ok" : "error: menu not open";
+    }
+
     function close(): string {
         if (!menu)
             return "error: menu not ready";

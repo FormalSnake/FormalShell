@@ -18,12 +18,34 @@
 // them from. This module stays pure (no Qt.resolvedUrl, no imports) so it
 // is testable head-on by qmltestrunner.
 //
-// A view MAY declare `property string query`; Menu.qml binds the live
-// search text into it when it does. A view that declares none simply has an
-// inert search field, which is the honest state for a view with nothing to
-// filter.
+// Four optional seams, each one a property or function Menu.qml looks for
+// on the loaded item and skips when it is absent, so the simplest possible
+// app view is still a bare Item:
+//
+//   property string query            the live search text, bound in. A view
+//                                    declaring none leaves the field inert,
+//                                    the honest state for a view with
+//                                    nothing to filter.
+//   property Flickable scrollTarget  what ↑↓/Page/Home/End scroll, for a
+//                                    view with no cursor of its own.
+//   function viewKey(key, modifiers) offered every key press BEFORE the
+//                                    menu's own handler; returns true for
+//                                    the ones it consumed. This is what a
+//                                    view with a row cursor needs, since
+//                                    ↑↓ and Enter otherwise scroll and do
+//                                    nothing respectively.
+//   property var viewActions         { primary, hints } for the action bar
+//                                    (Menu/actions.js's shape), replacing
+//                                    the row list's verbs on this route.
+//                                    Pair it with `function viewActivate(index)`,
+//                                    which presses that primary: it backs
+//                                    both the footer's own click and the
+//                                    rig's `menu activate <index>`.
+//
+// MonitorView uses the first two, ProcessView all four.
 var VIEWS = {
-    monitor: "views/MonitorView.qml"
+    monitor: "views/MonitorView.qml",
+    processes: "views/ProcessView.qml"
 };
 
 // hasOwnProperty rather than a bare lookup: "constructor"/"toString"/

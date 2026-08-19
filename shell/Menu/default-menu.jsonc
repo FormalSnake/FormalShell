@@ -58,6 +58,16 @@
     // childless "provider" is not. md-cpu_64_bit U+F0EE0, pinned
     // nerd-fonts-jetbrains-mono cmap.
     "monitor": { "label": "System Monitor", "provider": "monitor", "icon": "󰻠", "aliases": ["sysmon", "system", "cpu", "gpu"] },
+    // "processes" is the second app-view route (Surfaces/Menu/views/
+    // ProcessView.qml, registered in Menu/appviews.js): the live process
+    // table, where the search field filters by name/argv/pid and Enter
+    // acts on the row under the view's own cursor. Split out from
+    // "monitor" rather than added to it because the monitor is a read-only
+    // ledger of the machine and this route sends signals to it, and the
+    // two want different keys, different polling and different confirms.
+    // md-format_list_bulleted U+F0279, pinned nerd-fonts-jetbrains-mono
+    // cmap.
+    "processes": { "label": "Processes", "provider": "processes", "icon": "󰉹", "aliases": ["ps", "kill", "task", "tasks", "activity", "top", "htop"] },
 
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"

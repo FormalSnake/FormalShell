@@ -4,10 +4,12 @@ import qs.Compositor
 import qs.Core as Core
 import qs.Services
 import "../Monitor/gpu.js" as Gpu
+import "../Monitor/procs.js" as Procs
 
 // `qs ipc call monitor status|gpu|launch <desktopId> <card>|mode <target>`
-// (M38 Task 5). The headless evidence path for the system monitor and
-// multi-GPU launch (plan decisions D3-D5).
+// (M38 Task 5), plus `processes <query>|kill <pid> <signal>|restart <pid>`
+// (M39). The headless evidence path for the system monitor, multi-GPU
+// launch (plan decisions D3-D5) and the process table's own actions.
 //
 // IpcHandler replies are synchronous QMetaMethod invocations
 // (ScreenshotIpc.qml's own header), so status()/gpu() can never wait out a
@@ -53,6 +55,44 @@ Scope {
                 net: SystemMonitorService.net,
                 disk: SystemMonitorService.disk
             });
+        }
+
+        // `query`: the same filter the route's search field applies (name,
+        // argv, exact pid), "" for the whole table. Sorted by CPU like the
+        // view's own default, and capped at 40 rows so a reply a human
+        // reads is not 400 processes long; `matched` reports what the cap
+        // dropped rather than letting the list read as the whole answer.
+        function processes(query: string): string {
+            ProcessService.subscribe();
+            ProcessService.unsubscribe();
+            var sampledAt = ProcessService.lastTickAt;
+            var rows = Procs.sortRows(Procs.filterRows(ProcessService.rows, query), "cpu");
+            return JSON.stringify({
+                sampledAtMs: sampledAt || null,
+                ageMs: sampledAt ? (Date.now() - sampledAt) : null,
+                available: ProcessService.available,
+                total: ProcessService.rows.length,
+                matched: rows.length,
+                lastAction: ProcessService.lastResult,
+                rows: rows.slice(0, 40)
+            });
+        }
+
+        // `signal`: TERM (the default, for ""), KILL, HUP or INT. The reply
+        // says the signal was SENT, never that the process died: the kill's
+        // own exit status lands a moment later in ProcessService.lastResult
+        // (which `processes` reports), the same synchronous-reply limit
+        // mode() below documents for supergfxctl.
+        function kill(pid: string, signal: string): string {
+            return ProcessService.signalPid(pid, signal);
+        }
+
+        // TERM, then re-run the same argv from the same cwd once the pid
+        // has actually left /proc. Re-runs a command line, not a session:
+        // the environment the process was started with does not come back
+        // (Monitor/procs.js's respawnCommand).
+        function restart(pid: string): string {
+            return ProcessService.restartPid(pid);
         }
 
         function gpu(): string {
