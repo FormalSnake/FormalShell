@@ -47,7 +47,7 @@ ShellRoot {
 
         delegate: Component {
             Bar {
-                menu: menu
+                menu: menuInstance
                 appMenuPanel: appMenuPanelInstance
                 audioPanel: audioPanelInstance
                 calendarPanel: calendarPanelInstance
@@ -83,7 +83,16 @@ ShellRoot {
 
     // One instance, not per-screen: it opens on the focused screen at
     // summon time rather than living on every output.
-    Menu { id: menu; center: notificationsCenter }
+    // `menuInstance`, not a bare `menu`: Bar.qml carries a property of that
+    // name and is instantiated inside a Variants delegate `Component`, where
+    // an object's OWN property shadows an outer id of the same name — so
+    // `Bar { menu: menu }` bound the property to itself and every launcher
+    // cell got null (probe-verified in-VM, 2026-08-19: the same binding at
+    // this file's top level resolves to the id and works, which is exactly
+    // what made it look fine here for MenuIpc/CalendarPanel/MonitorPanel).
+    // The `*Instance` name every panel in this file already uses removes the
+    // collision rather than relying on which scope wins where.
+    Menu { id: menuInstance; center: notificationsCenter }
 
     // Same reasoning as Menu: one instance, opened on the focused screen at
     // summon time.
@@ -119,7 +128,7 @@ ShellRoot {
     // focused screen at summon time.
     AppMenuPanel { id: appMenuPanelInstance }
     AudioPanel { id: audioPanelInstance }
-    CalendarPanel { id: calendarPanelInstance; menu: menu }
+    CalendarPanel { id: calendarPanelInstance; menu: menuInstance }
     NetworkPanel { id: networkPanelInstance }
     BluetoothPanel { id: bluetoothPanelInstance }
     AirpodsPanel { id: airpodsPanelInstance }
@@ -132,7 +141,7 @@ ShellRoot {
     TailscalePanel { id: tailscalePanelInstance }
     SystemUpdatePanel { id: systemUpdatePanelInstance }
     DisplayPanel { id: displayPanelInstance }
-    MonitorPanel { id: monitorPanelInstance; menu: menu }
+    MonitorPanel { id: monitorPanelInstance; menu: menuInstance }
     RegionPicker { id: regionPickerInstance }
 
     // Same "one controller, opened on the focused screen at trigger time"
@@ -170,7 +179,7 @@ ShellRoot {
     // token but its own, so CalendarPanel's two-step prompt on the same
     // signal is untouched.
     Connections {
-        target: menu
+        target: menuInstance
         function onSelectionResolved(token, value, cancelled) {
             ReminderService.resolveInput(token, value, cancelled);
         }
@@ -182,10 +191,10 @@ ShellRoot {
     // ordinary session pays nothing for it.
     Gallery { id: galleryInstance }
 
-    DebugIpc { menu: menu }
+    DebugIpc { menu: menuInstance }
     ThemeIpc {}
     WallpaperIpc {}
-    MenuIpc { menu: menu }
+    MenuIpc { menu: menuInstance }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
     // The static sixteen merged with every plugin surface that has
@@ -217,7 +226,7 @@ ShellRoot {
     // The image/wallpaper picker is the menu's "wallpaper" route (M23), not
     // a surface of its own — see PickerIpc.qml's header for why the target
     // keeps its own name and selection file regardless.
-    PickerIpc { picker: menu }
+    PickerIpc { picker: menuInstance }
     ScreenshotIpc { picker: regionPickerInstance }
     CaptureIpc {}
     RecordIpc {}

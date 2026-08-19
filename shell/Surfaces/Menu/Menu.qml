@@ -902,29 +902,73 @@ PanelWindow {
     // nothing behind it. A Process that fails to START never emits `exited`
     // at all (RegionPicker.qml documents this against quickshell's
     // process.cpp), which is exactly the case the watchdog covers.
-    readonly property string _frameFile: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/formalshell/menu-frame.ppm"
-
+    // Two slots, alternating per summon, rather than one fixed path: the
+    // previous summon's grim may still be writing when the next one starts,
+    // and a half-written PPM read back as a backdrop is a torn frame. It also
+    // means the Image's `source` genuinely differs between consecutive
+    // summons, so nothing rests on how the loader treats a repeated URL.
+    readonly property string _frameDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/formalshell"
+    property int _frameSlot: 0
     property string _framePath: ""
+
+    // Three states, not two, and the split is what makes the entrance
+    // animate at all. `_armed` puts the surface up; `_shown` runs the
+    // entrance on it. They cannot be one flag, because a Canvas does not
+    // paint while its window is unmapped: arming and showing together meant
+    // the backdrop's first paint landed AFTER the map, by which time `reveal`
+    // had already animated to 1 against an empty canvas and the dither simply
+    // appeared, fully formed, with no dissolve (owner, live shell,
+    // 2026-08-19: "if you trigger the launcher a few times, the transition
+    // doesn't even work"). So: map first, transparent and empty; let the
+    // backdrop paint; then animate.
+    property bool _armed: false
     property bool _shown: false
+
+    // Everything up at once, for the paths with nothing to wait for: no
+    // screen resolved, grim failed or missing, or the frame never painted.
+    function _forceShow() {
+        frameWatchdog.stop();
+        root._armed = true;
+        root._shown = true;
+    }
 
     onIsOpenChanged: {
         if (!root.isOpen) {
             frameWatchdog.stop();
+            // Nothing downstream wants this frame any more, and a grim still
+            // writing into a slot the next summon may pick is a torn read
+            // waiting to happen.
+            freezeProc.running = false;
+            var wasMapped = root._armed;
+            root._armed = false;
             root._shown = false;
+            // A summon closed before its frame ever landed never mapped, so
+            // the `visible` flip that arms the emoji type settle never
+            // happens and the pending char would sit forever (this is exactly
+            // what the smoke rig's `menu summon emoji` + immediate
+            // `menu activate 0` does). Closed-and-never-mapped is the same
+            // fact that flip stands for: this surface does not hold keyboard
+            // focus, so it is safe to type.
+            if (!wasMapped && root._pendingTypeText !== "")
+                typeSettleTimer.restart();
             return;
         }
-        // Cleared on every open, never only on failure: the path itself never
-        // changes, so this is the source change that makes frameImage reload
-        // rather than redisplay the previous summon's frame.
         root._framePath = "";
         if (!root._screen) {
-            root._shown = true;
+            root._forceShow();
             return;
         }
+        root._frameSlot = 1 - root._frameSlot;
         freezeProc.running = false;
+        // `-s 0.25`: a quarter-resolution capture, which is both far faster to
+        // take and to decode than grim's default (the output's own scale), and
+        // costs nothing visible — the dither pass samples one pixel per
+        // `chunk`-sized cell, so at chunk 10 it is throwing away more detail
+        // than the downscale does. Speed is the point: the whole freeze sits
+        // in front of the launcher appearing.
         freezeProc.command = ["sh", "-c",
-            'mkdir -p "$(dirname "$2")" && exec grim -s 1 -t ppm -o "$1" "$2"',
-            "sh", root._screen.name, root._frameFile];
+            'mkdir -p "$(dirname "$2")" && exec grim -s 0.25 -t ppm -o "$1" "$2"',
+            "sh", root._screen.name, root._frameDir + "/menu-frame-" + root._frameSlot + ".ppm"];
         freezeProc.running = true;
         frameWatchdog.restart();
     }
@@ -936,28 +980,45 @@ PanelWindow {
         running: false
         stderr: StdioCollector { id: freezeErr }
         onExited: exitCode => {
-            frameWatchdog.stop();
             if (!root.isOpen)
                 return;
-            if (exitCode !== 0)
+            if (exitCode !== 0) {
                 console.warn("Menu: backdrop freeze failed:", freezeErr.text.trim());
-            else
-                root._framePath = root._frameFile;
-            root._shown = true;
+                root._forceShow();
+                return;
+            }
+            root._framePath = root._frameDir + "/menu-frame-" + root._frameSlot + ".ppm";
+            // Map now, still transparent: this is what gives the backdrop's
+            // Canvas a rendering window to paint into. The watchdog keeps
+            // running, so a frame that never paints still gets shown.
+            root._armed = true;
+        }
+    }
+
+    // The entrance fires on the backdrop's own first paint of THIS summon's
+    // frame — `painted` goes false the moment the source changes, so it can
+    // never report the previous summon's picture.
+    Connections {
+        target: backdropDither
+        function onPaintedChanged() {
+            if (root.isOpen && root._armed && backdropDither.painted)
+                root._forceShow();
         }
     }
 
     Timer {
         id: frameWatchdog
-        // Long enough that a real grim on a 4K head lands inside it, short
-        // enough that a summon which will never get a frame still feels like
-        // a keypress rather than a hang.
+        // Covers every way the frame can fail to arrive: no grim on PATH (a
+        // Process that fails to start never emits `exited` at all — see
+        // RegionPicker.qml against quickshell's process.cpp), a compositor
+        // with no screencopy, a capture or a decode that outlives it. The
+        // launcher opening always wins over the launcher looking good.
         interval: 250
         onTriggered: {
             if (!root.isOpen)
                 return;
-            console.warn("Menu: backdrop freeze did not land in", frameWatchdog.interval + "ms, opening without it");
-            root._shown = true;
+            console.warn("Menu: backdrop frame did not land in", frameWatchdog.interval + "ms, opening without it");
+            root._forceShow();
         }
     }
 
@@ -1697,7 +1758,7 @@ PanelWindow {
     // off the real visible flip below, exactly as before, just one exit
     // fade later. The window is transparent so the fade covers the whole
     // card; card paints its own background.
-    visible: root._shown || card.opacity > 0
+    visible: root._armed || card.opacity > 0
     color: "transparent"
 
     // The window spans the whole output (M39 Task 2) so it can carry the
@@ -1737,7 +1798,10 @@ PanelWindow {
         id: backdrop
         anchors.fill: parent
         opacity: root._shown ? 1 : 0
-        visible: opacity > 0
+        // Deliberately NOT `visible: opacity > 0`: a Canvas inside an
+        // invisible item never paints, and this one has to paint BEFORE the
+        // entrance starts (see `_armed` above) — which is precisely while its
+        // opacity is still 0.
 
         Behavior on opacity {
             NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }

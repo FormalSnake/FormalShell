@@ -1436,6 +1436,7 @@ menu_top_before_png="$shot_dir/menu-top-before.png"
 menu_top_after_png="$shot_dir/menu-top-after.png"
 menu_top_relevel_png="$shot_dir/menu-top-relevel.png"
 toggle_path="$shot_dir/menu-toggle.txt"
+menu_frames_path="$shot_dir/menu-frames.txt"
 emoji_drive_path="$shot_dir/emoji-drive.txt"
 emoji_paste_path="$shot_dir/emoji-paste.txt"
 emoji_type_path="$shot_dir/emoji-wtype.txt"
@@ -2861,6 +2862,7 @@ cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 
   "$qs_bin" ipc -p "$shell_path" call menu toggle
   "$qs_bin" ipc -p "$shell_path" call menu status
 } > "$toggle_path" 2>&1
+ls -la "\${XDG_RUNTIME_DIR:-/tmp}/formalshell" > "$menu_frames_path" 2>&1
 EOF
 
   # Emoji instant paste (M13 Task 6), appended to the finish script so it
@@ -5567,6 +5569,22 @@ if $menu_mode; then
     [ -f "$toggle_path" ] && cat "$toggle_path" >&2
     exit 1
   fi
+  # The backdrop freeze is per-summon, not per-session (M39 Task 4; owner,
+  # live shell, 2026-08-19: "the dither ... appears to just generate once").
+  # Menu.qml alternates between two slot files precisely so a repeat summon
+  # cannot silently redisplay the previous one, so both slots existing after
+  # the summon-plus-toggle round trip above IS the proof that a second summon
+  # took its own capture. Nothing here reads the frames themselves: the
+  # screen behind them does not change between summons in this rig, so their
+  # CONTENT is legitimately near-identical and comparing it would prove
+  # nothing either way.
+  for menu_frame_slot in 0 1; do
+    if ! grep -q "menu-frame-$menu_frame_slot.ppm" "$menu_frames_path" 2>/dev/null; then
+      echo "SMOKE_FAIL: backdrop frame slot $menu_frame_slot was never written — a repeat summon did not re-capture. Got: $(cat "$menu_frames_path" 2>/dev/null)" >&2
+      exit 1
+    fi
+  done
+  echo "SMOKE_MENU_FRAMES both backdrop slots written, so each summon took its own grim freeze"
   # Nix runner end states (M13b Task 4, gated shim): while the shim blocks
   # on the gate flag the debounced search is genuinely in flight, so the
   # query must answer the dim SEARCHING note row; after the release it must
