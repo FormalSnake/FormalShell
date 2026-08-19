@@ -24,9 +24,12 @@ Cell {
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
 
-    // Visible by default (M23 precedent): the caption is content of its
-    // own — naming a glyph-only cell — not a repeat of the glyph.
-    readonly property bool _showLabel: Config.get("bar.widgets.display.showLabel", true)
+    // Label-off by default, like every sibling whose glyph already says
+    // what the cell is (M23's weather/audio rule; owner 2026-08-19: "why
+    // does it show DISPLAY in big? no other panel does this"). The name
+    // lives in tooltipText; `bar.widgets.display.showLabel` opts the
+    // caption back in per install.
+    readonly property bool _showLabel: Config.get("bar.widgets.display.showLabel", false)
 
     standalone: true
     tooltipText: "DISPLAY"
