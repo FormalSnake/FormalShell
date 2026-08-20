@@ -11,6 +11,7 @@ import QtQuick
 import qs.Core as Core
 import qs.Components
 import qs.Services
+import "../../Calendar/agenda.js" as Agenda
 import "../../Calendar/progress.js" as Progress
 import "../../Clock/model.js" as ClockModel
 
@@ -50,10 +51,21 @@ import "../../Clock/model.js" as ClockModel
 // accent dot under any in-month day that has one, sourced from
 // CalendarEventsService's local .ics reader (docs/spikes/2026-07-28-eds-
 // calendar-events.md records why EDS/GOA over D-Bus lost to that fallback);
-// the events ledger section below the grid lists the selected day's events
-// by summary, or a single dim "NO EVENTS" row when there are none — the
+// the events ledger section below the grid lists the selected day's events,
+// or a single dim "NO EVENTS" row when there are none — the
 // honest-empty-state every other panel backend already follows in the test
-// VM.
+// VM. Each row is a ledger line of its own (Calendar/agenda.js owns the
+// shaping): all-day events first and the timed ones chronologically, a
+// meta time column on the left sized to the widest label the day prints so
+// the summaries share one column, and the summary elided into whatever is
+// left. The time column is where the day's shape shows: an event already
+// over drops to foregroundFaint (§1.4 sanctions faint for spent meta, never
+// for content ink, so the summary itself keeps reading), and the one
+// currently running takes the full-bleed accent fill today's own day cell
+// uses. The section header carries the same reading as a meta pair on its
+// right — NOW while something runs, otherwise NEXT and that start time —
+// and only for today, since "next" on a day the user navigated to means
+// nothing.
 //
 // M26 Task 4: the panel opens with the shared PanelHero (weekday as title,
 // today's day-of-month as the display readout, the year row's own fraction
@@ -491,9 +503,31 @@ Panel {
     }
 
     readonly property bool _selectedIsToday: root._isSameDate(root._selected, root._today)
-    readonly property var _selectedEvents: CalendarEventsService.onDate(root._selected)
+    readonly property var _selectedEvents: Agenda.sortForDay(CalendarEventsService.onDate(root._selected))
+    // The clock's format ring encodes notation, not just layout: each
+    // 12-hour preset is its neighbour's AM/PM twin, so the agenda writes its
+    // times in whichever notation the bar clock is currently set to instead
+    // of carrying a setting of its own.
+    readonly property bool _twelveHour: ClockModel.usesMeridiem(
+        Core.State.clockFormat !== "" ? Core.State.clockFormat : ClockModel.CLOCK_FORMATS[0])
+    // `_today` is re-read every minute while the panel is open (the Timer
+    // above), so both of these, and every row's own status, move with the
+    // clock rather than freezing at whatever the open captured.
+    readonly property var _agendaNext: root._selectedIsToday ? Agenda.nextUp(root._selectedEvents, root._today) : null
+    readonly property bool _agendaNow: root._selectedIsToday && Agenda.hasRunning(root._selectedEvents, root._today)
+
+    // Off-layout gauge, not a rendered row: Column skips an invisible child
+    // entirely, so this costs no space while giving every row's time column
+    // one width to share — measured from the real label rather than a
+    // character count, which would only hold for a monospace font.
+    MetaLabel {
+        id: agendaGauge
+        visible: false
+        text: Agenda.widestLabel(root._selectedEvents, root._twelveHour)
+    }
 
     Cell {
+        id: agendaHeader
         width: parent.width
 
         MetaLabel {
@@ -501,6 +535,16 @@ Panel {
                 ? "TODAY"
                 : root._monthShort[root._selected.getMonth()] + " " + root._selected.getDate()
             colon: true
+        }
+
+        // The band's right side (DESIGN.md §2 item 9), so the header keeps
+        // the trailing colon that introduces the rows under it and this
+        // reads as its own meta row rather than fusing into the label.
+        MetaLabel {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root._agendaNow || root._agendaNext !== null
+            text: root._agendaNow ? "NOW" : "NEXT " + Agenda.clockTime(root._agendaNext.start, root._twelveHour)
         }
     }
 
@@ -512,11 +556,37 @@ Panel {
             required property var modelData
             width: parent.width
 
-            Text {
-                text: eventCell.modelData ? eventCell.modelData.summary : "NO EVENTS"
-                color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.foregroundDim
-                font.family: Core.Theme.fontFamily
-                font.pixelSize: Core.Theme.fontSize.body
+            readonly property string _status: eventCell.modelData
+                ? Agenda.status(eventCell.modelData, root._today)
+                : ""
+            accent: eventCell._status === "now"
+
+            Item {
+                width: parent.width
+                height: Math.max(eventTime.implicitHeight, eventSummary.implicitHeight)
+
+                MetaLabel {
+                    id: eventTime
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: agendaGauge.implicitWidth
+                    visible: eventCell.modelData !== null
+                    text: eventCell.modelData ? Agenda.timeLabel(eventCell.modelData, root._twelveHour) : ""
+                    color: eventCell._status === "past" ? Core.Theme.color.foregroundFaint : eventCell.dimForeground
+                }
+
+                Text {
+                    id: eventSummary
+                    anchors.left: eventCell.modelData ? eventTime.right : parent.left
+                    anchors.leftMargin: eventCell.modelData ? Core.Theme.space.controlGap : 0
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: eventCell.modelData ? eventCell.modelData.summary : "NO EVENTS"
+                    color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.foregroundDim
+                    elide: Text.ElideRight
+                    font.family: Core.Theme.fontFamily
+                    font.pixelSize: Core.Theme.fontSize.body
+                }
             }
         }
     }

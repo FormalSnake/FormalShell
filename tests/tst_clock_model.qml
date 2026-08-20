@@ -92,4 +92,20 @@ TestCase {
     function test_next_format_unknown_current_starts_at_top() {
         compare(ClockModel.nextFormat("nonsense"), ClockModel.CLOCK_FORMATS[0]);
     }
+
+    // usesMeridiem
+
+    function test_uses_meridiem_reads_the_twelve_hour_presets() {
+        compare(ClockModel.usesMeridiem("h:mm AP"), true);
+        compare(ClockModel.usesMeridiem("h:mm ap"), true);
+    }
+
+    function test_uses_meridiem_is_false_for_every_other_preset() {
+        var ring = ClockModel.formats();
+        for (var i = 0; i < ring.length; i++) {
+            if (ring[i].indexOf("AP") >= 0 || ring[i].indexOf("ap") >= 0)
+                continue;
+            compare(ClockModel.usesMeridiem(ring[i]), false, ring[i]);
+        }
+    }
 }

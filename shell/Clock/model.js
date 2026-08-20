@@ -49,6 +49,15 @@ function substituteIsoWeek(format, date) {
     return format.replace(/ww/g, week);
 }
 
+// Which notation a ring entry writes. Every 12-hour preset above is its
+// 24-hour neighbour's twin with Qt's AP specifier added, so the calendar
+// panel's agenda reads the live format here rather than carrying a second
+// notation setting of its own. Qt's single-letter A/a forms are not in the
+// ring and are not recognized.
+function usesMeridiem(format) {
+    return /AP|ap/.test(format);
+}
+
 // The entry after `current`. A format that isn't in the ring (hand-edited
 // state.json, an old preset dropped from a later release) starts the walk
 // at the top rather than throwing.
@@ -64,6 +73,7 @@ if (typeof module !== "undefined") {
         pad2: pad2,
         isoWeek: isoWeek,
         substituteIsoWeek: substituteIsoWeek,
+        usesMeridiem: usesMeridiem,
         nextFormat: nextFormat
     };
 }

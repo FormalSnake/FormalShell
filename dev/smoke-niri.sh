@@ -136,7 +136,7 @@
 # real tailscaled, stated honestly in SWITCHOVER.md.
 # `--panel calendar` additionally proves real events render from BOTH of
 # CalendarEventsService's backends (M12 Task 3): the isolated HOME always
-# carries a one-event .ics fixture dated today (see the calendar-events
+# carries a three-event .ics fixture dated today (see the calendar-events
 # fixture setup below) pointed at by settings.json's calendar.icsDir, and a
 # drive script seeds one more real VEVENT into EDS's system-calendar over
 # the run's private session bus (`formalshell-eds seed`, a genuine
@@ -148,7 +148,12 @@
 # too, then `calendar select <tomorrow>` runs after the open — the
 # screenshot must show tomorrow's cell inverted (today's cell accent-filled
 # next to it) and the events ledger listing EDS TOMORROW EVENT under the
-# dated meta header; `calendar status` must report tomorrow selected.
+# dated meta header; `calendar status` must report tomorrow selected. A
+# `calendar-today.png` frame comes off the same timeline just before that
+# select, still on the day the open reset to: today holds all four fixture
+# events, so it is the only frame showing the ledger's own ordering
+# (all-day first, then chronological) and the shared time column every row
+# sizes to.
 # `--panel airpods` (M29 Task 5) stages a schema-true status.json fixture
 # (Pro 3, ANC mode, both buds in ear, case known — the daemon's own
 # on-disk shape, plan's research block) into the isolated HOME before the
@@ -1487,6 +1492,7 @@ eds_seed_path="$shot_dir/eds-seed.txt"
 eds_seed2_path="$shot_dir/eds-seed-2.txt"
 calendar_select_path="$shot_dir/calendar-select.txt"
 calendar_status_path="$shot_dir/calendar-status.json"
+calendar_today_path="$shot_dir/calendar-today.png"
 media_pid_path="$shot_dir/mpv.pid"
 media_pid2_path="$shot_dir/mpv-2.pid"
 visualizer_pid_path="$shot_dir/visualizer-mpv.pid"
@@ -1843,10 +1849,18 @@ EOF
 fi
 
 # Calendar events fixture (M6 Task 5): a khal/vdir-style directory of one
-# .ics file with a single VEVENT dated today (computed at run time so the
-# fixture never goes stale), so --panel calendar's screenshot proves a real
-# event renders — the accent dot on today's day cell and the row in the
-# TODAY ledger section — not just that the grid itself draws.
+# .ics file with VEVENTs dated today (computed at run time so the fixture
+# never goes stale), so --panel calendar's screenshot proves real events
+# render — the accent dot on today's day cell and the rows in the TODAY
+# ledger section — not just that the grid itself draws. Three of them, one
+# all-day and two timed at fixed hours: the ledger sorts all-day first and
+# the rest chronologically, and each timed row prints its own time column
+# (Calendar/agenda.js), none of which a single all-day event can show.
+# Fixed hours rather than offsets from the run's own clock deliberately —
+# an "in progress" window computed at run time would cross midnight on a
+# late run and drop off today's ledger entirely; which rows read as spent
+# is left to whenever the run happens, and tst_calendar_agenda.qml owns the
+# past/now/upcoming rules.
 mkdir -p "$iso_home/.config/formalshell" "$iso_home/.local/share/formalshell/calendar"
 today_ics=$(date -u +%Y%m%d)
 cat > "$iso_home/.local/share/formalshell/calendar/smoke-fixture.ics" <<EOF
@@ -1855,6 +1869,18 @@ BEGIN:VEVENT
 UID:smoke-fixture-1
 SUMMARY:SMOKE FIXTURE EVENT
 DTSTART;VALUE=DATE:$today_ics
+END:VEVENT
+BEGIN:VEVENT
+UID:smoke-fixture-2
+SUMMARY:SMOKE FIXTURE STANDUP
+DTSTART:${today_ics}T091500
+DTEND:${today_ics}T094500
+END:VEVENT
+BEGIN:VEVENT
+UID:smoke-fixture-3
+SUMMARY:SMOKE FIXTURE REVIEW
+DTSTART:${today_ics}T143000
+DTEND:${today_ics}T160000
 END:VEVENT
 END:VCALENDAR
 EOF
@@ -3461,7 +3487,11 @@ fi
 # `calendar select` drive AFTER the open (open resets selection to today,
 # so the order matters): the run's screenshot then shows tomorrow's cell
 # inverted, today's cell accent-filled, and the events ledger listing the
-# tomorrow fixture under a dated meta header instead of TODAY.
+# tomorrow fixture under a dated meta header instead of TODAY. One frame
+# is taken BEFORE that select, while the open's own reset still has today
+# picked (`calendar-today.png`): today is the only day carrying more than
+# one event, so it is the only frame that can show the ledger ordering
+# all-day ahead of timed and every row's time column sharing one width.
 if $panel_mode && [ "$panel_name" = "calendar" ]; then
   eds_drive_script="$shot_dir/eds-drive.sh"
   cat > "$eds_drive_script" <<EOF
@@ -3473,6 +3503,7 @@ echo "rc=\$?" >> "$eds_seed_path"
 echo "rc=\$?" >> "$eds_seed2_path"
 "$qs_bin" ipc -p "$shell_path" call panel open calendar
 sleep 2
+niri msg action screenshot-screen --path "$calendar_today_path"
 "$qs_bin" ipc -p "$shell_path" call calendar select "\$(date -d tomorrow +%F)" > "$calendar_select_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call calendar status > "$calendar_status_path" 2>&1
 EOF
@@ -5104,10 +5135,11 @@ fi
   elif $panel_mode && [ "$panel_name" = "calendar" ]; then
     # eds-drive.sh opens the panel only after its two seed writes return
     # (~4-7s in when this run's private bus has to cold-activate EDS
-    # first), then selects tomorrow 2s after the open; 13s leaves the
-    # on-open refresh's own `formalshell-eds events` run and the select
-    # comfortable room before the shot.
-    screenshot_delay=13
+    # first), then takes its own today frame 2s after the open and selects
+    # tomorrow straight after; 16s leaves the on-open refresh's own
+    # `formalshell-eds events` run, that grim and the select comfortable
+    # room before this run's own shot, which has to land on tomorrow.
+    screenshot_delay=16
   elif $panel_airpods_mode; then
     # airpods-drive.sh's own final step (the live-fixture screenshot) lands
     # around its internal sleep sum (~8s in: open+state+dump, the first
@@ -5966,6 +5998,12 @@ if $panel_mode && [ "$panel_name" = "calendar" ]; then
     cat "$calendar_status_path"
   else
     echo "SMOKE_FAIL: calendar status does not report tomorrow ($tomorrow_iso) selected — got: $(cat "$calendar_status_path" 2>/dev/null)" >&2
+    exit 1
+  fi
+  if [ -s "$calendar_today_path" ]; then
+    echo "SMOKE_CALENDAR_TODAY $calendar_today_path"
+  else
+    echo "SMOKE_FAIL: no today-selected calendar frame produced" >&2
     exit 1
   fi
 fi
