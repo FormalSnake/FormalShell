@@ -3,7 +3,8 @@ import QtTest
 import "../shell/Monitor/gpu.js" as Gpu
 import "../shell/Menu/providers.js" as Providers
 
-// M38 Task 8 (launch on dGPU): the gpu/gpu.launch/gpu.mode routes, over the
+// M38 Task 8 (launch on dGPU): the gpu/gpu.mode routes and the offload
+// action Shift+Enter runs on an app row, over the
 // same real-hardware fixtures tst_monitor_gpu.qml already loads. Card
 // records are assembled with the exact same steps GpuService.qml's own
 // _buildCards takes (parseCards/parseMetrics/parseNvidia/mergeGpu, then
@@ -106,55 +107,26 @@ TestCase {
         compare(rows[0].label, "NO GPU");
     }
 
-    // ---- gpuLaunchEntry (the "gpu.launch" route's presence) ---------------
+    // ---- gpuLaunchAction (what Shift+Enter on an app row runs) ------------
+    //
+    // There is no "gpu.launch" route to test: the app list mirrored under it
+    // doubled every app in a root search, and the accelerator below is the
+    // whole of the feature now.
 
-    function test_gpu_launch_entry_present_on_hybrid_machine() {
-        var cards = _buildCards(hybridBlob);
-        var entries = Providers.gpuLaunchEntry(_defaultDiscrete(cards));
-        verify(entries["gpu.launch"] !== undefined);
-        compare(entries["gpu.launch"].provider, "gpuLaunch");
-    }
-
-    // The single-card machine has no discrete card at all (card1's own
-    // boot_vga=1), so the whole route must be absent -- not present with an
-    // empty child list.
-    function test_gpu_launch_entry_absent_on_single_card_machine() {
-        var cards = _buildCards(singleBlob);
-        compare(_defaultDiscrete(cards), null);
-        var entries = Providers.gpuLaunchEntry(_defaultDiscrete(cards));
-        compare(Object.keys(entries).length, 0);
-    }
-
-    function test_gpu_launch_entry_absent_on_no_gpu_machine() {
-        var cards = _buildCards(noneBlob);
-        var entries = Providers.gpuLaunchEntry(_defaultDiscrete(cards));
-        compare(Object.keys(entries).length, 0);
-    }
-
-    // ---- gpuLaunchProvider (the "gpu.launch" route's rows) -----------------
-
-    function stubEntry(id, name) {
-        return { id: id, name: name, icon: "", genericName: "" };
-    }
-
-    function test_gpu_launch_provider_rows_target_the_discrete_card() {
+    function test_gpu_launch_action_targets_the_discrete_card() {
         var cards = _buildCards(hybridBlob);
         var card = _defaultDiscrete(cards);
         compare(card.card, "card0");
-        var rows = Providers.gpuLaunchProvider([stubEntry("firefox", "Firefox")], null, [], Date.now(), "/store/share/formalshell", card.card);
-        compare(rows.length, 1);
-        compare(rows[0].id, "gpu.launch.firefox");
-        compare(rows[0].kind, "action");
-        compare(rows[0].label, "Firefox");
-        compare(rows[0].action, "qs ipc -p /store/share/formalshell call monitor launch 'firefox' 'card0'");
+        compare(Providers.gpuLaunchAction("/store/share/formalshell", "firefox", card.card),
+                "qs ipc -p /store/share/formalshell call monitor launch 'firefox' 'card0'");
     }
 
     // A desktop id carrying a single quote must not break the sh -c string
     // it lands in -- the same close/escape/reopen HyprlandBackend's
     // _quoteArg and trayProvider's rows already rely on.
-    function test_gpu_launch_provider_shell_quotes_a_tricky_desktop_id() {
-        var rows = Providers.gpuLaunchProvider([stubEntry("it's-an-app", "It's An App")], null, [], Date.now(), "/store/share/formalshell", "card0");
-        compare(rows[0].action, "qs ipc -p /store/share/formalshell call monitor launch 'it'\\''s-an-app' 'card0'");
+    function test_gpu_launch_action_shell_quotes_a_tricky_desktop_id() {
+        compare(Providers.gpuLaunchAction("/store/share/formalshell", "it's-an-app", "card0"),
+                "qs ipc -p /store/share/formalshell call monitor launch 'it'\\''s-an-app' 'card0'");
     }
 
     // ---- gpuModeEntry (the "gpu.mode" route's presence) --------------------

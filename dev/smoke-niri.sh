@@ -381,9 +381,15 @@
 # focus in this rig, same limitation `picker`'s own choose()/variant()
 # verbs exist for) drive the cursor down through it and activate one row;
 # the stub's --activate-file gains a second line for the DBusMenu Event
-# that round trip produced, asserted alongside the Activate line. The stub
-# processes are killed by PID (tray-pids.txt, same pattern as --media's mpv)
-# right before niri quits.
+# that round trip produced, asserted alongside the Activate line. Last, with
+# those same six items still registered, `debug query "Tray Fixture 2"` is
+# run twice: once at the root, where it must reach no `tray.` row at all,
+# and once after `menu summon tray`, where it must reach that exact row.
+# That is default-menu.jsonc's `routeOnly` on the tray route, driven through
+# the live provider rather than a stub tree, and the pair is what separates
+# a hidden row from a row that stopped being built. The stub processes are
+# killed by PID (tray-pids.txt, same pattern as --media's mpv) right before
+# niri quits.
 # With --chevron, writes a settings.json fixture putting `chevron` mid
 # right-region (after bluetooth/weather/tray/bell/indicators, before
 # battery/audio/network) and drives the `bar` IPC target across the collapse
@@ -1528,6 +1534,8 @@ tray_activate_reply_path="$shot_dir/tray-activate-reply.txt"
 tray_menu_reply_path="$shot_dir/tray-menu-reply.txt"
 tray_menu_path="$shot_dir/tray-menu.png"
 tray_menuactivate_reply_path="$shot_dir/tray-menuactivate-reply.txt"
+tray_query_root_path="$shot_dir/tray-query-root.json"
+tray_query_route_path="$shot_dir/tray-query-route.json"
 console_status_open_path="$shot_dir/console-status-open.json"
 console_status_parked_path="$shot_dir/console-status-parked.json"
 console_status_return_path="$shot_dir/console-status-return.json"
@@ -4264,6 +4272,14 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call tray menucursor 1 > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call tray menuactivate > "$tray_menuactivate_reply_path" 2>&1
 sleep 1
+"$qs_bin" ipc -p "$shell_path" call debug query "Tray Fixture 2" > "$tray_query_root_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon tray > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call debug query "Tray Fixture 2" > "$tray_query_route_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+sleep 1
 EOF
 
   tray_kill_script="$shot_dir/tray-kill.sh"
@@ -6515,6 +6531,30 @@ if $tray_mode; then
   tray_activate_lines=$(wc -l < "$tray_activate_path" | tr -d ' ')
   if [ "$tray_activate_lines" != "4" ]; then
     echo "SMOKE_FAIL: expected exactly Activate + opened + clicked + closed (got $tray_activate_lines lines) — got: $(cat "$tray_activate_path")" >&2; exit 1
+  fi
+  # routeOnly: the tray names its rows after the applications they belong
+  # to, so before this the same app came back two and three times in one
+  # root search. Six real SNI items are registered right now, which is what
+  # makes this worth driving here rather than leaving it to the unit test:
+  # the whole path (live provider -> tree -> rank) has to hold, not just
+  # rank's own branch. The query is run twice against the SAME shell, once
+  # from the root and once standing inside the route, because "invisible"
+  # on its own is equally consistent with a row that stopped existing.
+  if [ -s "$tray_query_root_path" ]; then
+    cat "$tray_query_root_path"
+  else
+    echo "SMOKE_FAIL: no root debug query produced" >&2; exit 1
+  fi
+  if grep -q '"tray\.' "$tray_query_root_path"; then
+    echo "SMOKE_FAIL: a root query still reaches tray rows. Got: $(cat "$tray_query_root_path")" >&2; exit 1
+  fi
+  if [ -s "$tray_query_route_path" ]; then
+    cat "$tray_query_route_path"
+  else
+    echo "SMOKE_FAIL: no in-route debug query produced" >&2; exit 1
+  fi
+  if ! grep -q '"id":"tray\.tray-fixture-2"' "$tray_query_route_path"; then
+    echo "SMOKE_FAIL: the tray route cannot search its own rows. Got: $(cat "$tray_query_route_path")" >&2; exit 1
   fi
 fi
 

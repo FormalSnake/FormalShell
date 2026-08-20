@@ -57,14 +57,40 @@ function score(node, query, depth, declIndex) {
     return tier;
 }
 
+// The id itself plus every dotted prefix of it, as a lookup set. Ids are
+// dotted paths (model.js's splitId derives parentage from exactly this), so
+// no node lookup is needed to answer "is this level at or above `id`".
+function _ancestry(id) {
+    var out = {};
+    var parts = String(id || "").split(".");
+    var prefix = "";
+    for (var i = 0; i < parts.length; i++) {
+        if (parts[i] === "") continue;
+        prefix = prefix ? prefix + "." + parts[i] : parts[i];
+        out[prefix] = true;
+    }
+    return out;
+}
+
 // Depth-first walk of `nodes` from its roots, scoring every when-visible
 // node against `query` (a node whose `when` isn't satisfied is skipped
 // along with its whole subtree). Returns matches sorted by score, ties
 // broken by shallower depth then declaration order, capped at 40.
-function rank(nodes, query, condResults) {
+//
+// `withinId` is the level the search is being run from (Menu.qml's
+// currentNodeId, null at root). It only matters for a `routeOnly` node: its
+// children are reachable from a query typed while standing inside it, and
+// invisible from anywhere else. That flag exists because a provider can
+// legitimately mirror rows another provider already lists (the tray names
+// its items after the applications they belong to), and a root search that
+// walks both returns the same app twice. The route row itself still scores,
+// so "tray" reaches the route from anywhere; what it no longer does is
+// double every app in a search for one.
+function rank(nodes, query, condResults, withinId) {
     condResults = condResults || {};
     var declIndex = 0;
     var results = [];
+    var open = _ancestry(withinId);
 
     function visit(id, depth) {
         var node = nodes[id];
@@ -75,6 +101,7 @@ function rank(nodes, query, condResults) {
         var s = score(node, query, depth, idx);
         if (s > 0) results.push({ node: node, score: s, depth: depth, declIndex: idx });
 
+        if (node.routeOnly === true && open[id] !== true) return;
         node.childIds.forEach(function (cid) { visit(cid, depth + 1); });
     }
 

@@ -66,20 +66,28 @@
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"
     // over IPC (providers.js's panelsProvider) -- the launcher route for
     // every popout that otherwise only opens from its own bar cell.
-    "panels": { "label": "Panels", "provider": "panels", "icon": "󰕰" },
+    //
+    // "routeOnly" keeps those rows out of a root query (search.js's rank):
+    // both of these providers name their rows after things the launcher
+    // already lists somewhere else, so a root search that walked them
+    // returned "Audio" or "Equibop" two and three times over. The route row
+    // itself still matches from anywhere, so "tray" still reaches the tray.
+    "panels": { "label": "Panels", "provider": "panels", "icon": "󰕰", "routeOnly": true },
     // "tray" mirrors it for the live SNI tray (providers.js's
     // trayProvider): one row per registered item, activating it the same
-    // way a left click on its bar cell does.
-    "tray": { "label": "Tray", "provider": "tray", "icon": "󱊔" },
+    // way a left click on its bar cell does. Its labels come from an item's
+    // tooltip title, which for most items is exactly the application name,
+    // hence the same "routeOnly" as panels above.
+    "tray": { "label": "Tray", "provider": "tray", "icon": "󱊔", "routeOnly": true },
     // "gpu" registers a provider fn too (providers.js's gpuProvider): one
     // inert note row per GpuService card -- name, integrated/discrete,
     // driver, connected outputs -- informational only, same non-activatable
-    // footing as "keybinds" above. "gpu.launch" (the app list again,
-    // launching on the default discrete card) and "gpu.mode" (supergfxctl
-    // integrated/hybrid switching) are NOT declared here: Menu.qml merges
-    // them in at tree-build time (providers.js's gpuLaunchEntry/
-    // gpuModeEntry), because both must be genuinely absent -- not present
-    // and empty -- on a machine with one card or no supergfxctl.
+    // footing as "keybinds" above. "gpu.mode" (supergfxctl integrated/hybrid
+    // switching) is NOT declared here: Menu.qml merges it in at tree-build
+    // time (providers.js's gpuModeEntry), because it must be genuinely
+    // absent -- not present and empty -- on a machine with no supergfxctl.
+    // Launching an app on the discrete card is Shift+Enter on the app row,
+    // not a route under here listing every app a second time.
     "gpu": { "label": "GPU", "provider": "gpu", "icon": "󰢮" },
 
     "system": { "label": "System", "icon": "󰒓" },

@@ -851,12 +851,16 @@ function trayProvider(items, selfPath) {
 }
 
 // GPU routes (M38 Task 8). "gpu" is an always-present, informational-only
-// route (one note row per GpuService card); "gpu.launch"/"gpu.mode" are
-// runtime-injected fragments merged into _defaultObj the way captureEntries/
+// route (one note row per GpuService card); "gpu.mode" is a runtime-injected
+// fragment merged into _defaultObj the way captureEntries/
 // shareClipboardEntry already are, not declared in default-menu.jsonc,
-// because both must be genuinely ABSENT rather than empty on a machine
-// with no discrete card or no supergfxctl (no jsonc placeholder for either
-// means nothing for a one-card machine to fall back to).
+// because it must be genuinely ABSENT rather than empty on a machine with
+// no supergfxctl (no jsonc placeholder means nothing for a machine without
+// it to fall back to).
+//
+// There is no "launch on GPU" route. It shipped as one and was a second
+// full copy of the app list in every root search, for a choice the
+// Shift+Enter accelerator on the app row itself already offers.
 
 function _gpuOutputsDesc(outputs) {
     var connected = (outputs || []).filter(function (o) { return o.connected; }).map(function (o) { return o.name; });
@@ -897,45 +901,12 @@ function gpuProvider(cards) {
     });
 }
 
-// The action string a gpu.launch row uses, and what Menu.qml's Shift+Enter
-// accelerator builds for an ordinary app row -- one shared quoting path so
-// the two can't drift. Self-targeted the same way panelsProvider is;
-// `_shq` guards a desktop id containing characters a bare interpolation
-// would break (flatpak's reverse-DNS ids can carry a trailing instance
-// suffix).
+// The offload launch Menu.qml's Shift+Enter accelerator runs against the
+// cursor's app row. Self-targeted the same way panelsProvider is; `_shq`
+// guards a desktop id containing characters a bare interpolation would
+// break (flatpak's reverse-DNS ids can carry a trailing instance suffix).
 function gpuLaunchAction(selfPath, desktopId, card) {
     return "qs ipc -p " + selfPath + " call monitor launch " + _shq(desktopId) + " " + _shq(card);
-}
-
-// The app list again, reusing appsProvider's row shaping, but activating a
-// row spawns gpuLaunchAction's offload launch instead of _entry.execute().
-function gpuLaunchProvider(entries, resolveIcon, launches, nowMs, selfPath, card) {
-    return appsProvider(entries, resolveIcon, launches, nowMs).map(function (row) {
-        return {
-            id: "gpu.launch." + row._entry.id,
-            parentId: null,
-            label: row.label,
-            icon: row.icon,
-            iconSource: row.iconSource,
-            title: row.title,
-            aliases: [],
-            kind: "action",
-            action: gpuLaunchAction(selfPath, row._entry.id, card),
-            childIds: []
-        };
-    });
-}
-
-// "gpu.launch" fragment, merged into _defaultObj like captureEntries above.
-// `card` is GpuService.defaultDiscrete()'s answer (a card record, or null on
-// a single-GPU or no-GPU machine) -- null means {}, so the route does not
-// exist at all rather than existing empty.
-function gpuLaunchEntry(card) {
-    if (!card)
-        return {};
-    return {
-        "gpu.launch": { label: "Launch on GPU", icon: "\u{F14DE}", provider: "gpuLaunch" } // md-rocket_launch
-    };
 }
 
 // "gpu.mode" fragment, same merge mechanism, gated on GpuService.gfxMode

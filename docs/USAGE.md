@@ -511,6 +511,13 @@ condition when the menu opens and never per keystroke. `when: "false"` hides
 a node outright; anything else has its exit code decide, which is how
 `system.logout` guards on `test -n "$NIRI_SOCKET"`.
 
+Typing at any level searches the whole tree, with one exception. A node
+marked `"routeOnly": true` is searched only while you are standing inside
+it; from the root, the route row itself matches but its children don't. The
+shipped tree uses it for `Panels` and `Tray`, both of which name their rows
+after things the launcher already lists somewhere else, so a search for
+`equibop` returns the app once instead of once per route that mentions it.
+
 Normal navigation never shows a row whose `when` hasn't resolved true, but
 `menu summon <route>` reaches a node by id and skips that check. Landing on
 a level whose own condition isn't satisfied gives you one dim
@@ -1371,10 +1378,12 @@ Metrics are uneven because the kernel is:
   those cards always show identity and outputs beside `NO METRICS`, however
   long the machine runs.
 
-`Shift+Enter` on any app row launches it on the default discrete card, and
-the `GPU` route lists the cards plus a `gpu.launch` app list that does the
-same. Both are absent entirely on a single-GPU machine rather than offering
-a control with nothing to do. Since `DesktopEntry.execute()` can't carry an
+`Shift+Enter` on any app row launches it on the default discrete card; the
+launcher's action bar names the key whenever the cursor is on an app and the
+machine has one. On a single-GPU machine the hint is absent and the
+accelerator falls through to a plain `Enter`, rather than offering a control
+with nothing to do. The `GPU` route itself is informational: one row per
+card, no app list. Since `DesktopEntry.execute()` can't carry an
 environment, the launch path builds argv itself and strips Exec field codes
 first: `nvidia-offload` if present, else `prime-run`, else the four
 variables NixOS's own wrapper exports (`__NV_PRIME_RENDER_OFFLOAD`,

@@ -82,6 +82,38 @@ TestCase {
         verify(S.score(appNode, "files", 3, 0) > S.score(startsWithNode, "files", 3, 0));
     }
 
+    // routeOnly: a route whose provider names its rows after things the
+    // launcher already lists elsewhere (the tray, the panels) is walked
+    // only from inside itself, so a root query returns the app once.
+    function _routeOnlyTree() {
+        return M.buildTree({
+            "apps": {},
+            "apps.equibop": { label: "Equibop" },
+            "tray": { label: "Tray", "routeOnly": true },
+            "tray.equibop": { label: "Equibop" }
+        }, {});
+    }
+
+    function test_route_only_subtree_is_invisible_to_a_root_query() {
+        var ranked = S.rank(_routeOnlyTree().nodes, "Equibop", {}, null);
+        var ids = ranked.map(function (n) { return n.id; });
+        compare(ids, ["apps.equibop"]);
+    }
+
+    function test_route_only_subtree_is_searchable_from_inside_the_route() {
+        var ranked = S.rank(_routeOnlyTree().nodes, "Equibop", {}, "tray");
+        var ids = ranked.map(function (n) { return n.id; });
+        compare(ids, ["apps.equibop", "tray.equibop"]);
+    }
+
+    // The route row itself is not what routeOnly hides, so the route stays
+    // reachable by name from the root the way every other route is.
+    function test_route_only_route_row_still_matches_from_the_root() {
+        var ranked = S.rank(_routeOnlyTree().nodes, "Tray", {}, null);
+        var ids = ranked.map(function (n) { return n.id; });
+        compare(ids, ["tray"]);
+    }
+
     function test_rank_caps_at_forty() {
         var def = {};
         for (var i = 0; i < 45; i++) {

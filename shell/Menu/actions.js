@@ -25,6 +25,10 @@ var KEY_ESC = "ESC";
 // The word, for the same reason Escape is: U+21E5 ⇥ is absent from the pinned
 // nerd-fonts-jetbrains-mono cmap and would render as tofu.
 var KEY_TAB = "TAB";
+// Spelt out for the same reason, and reusing the one return glyph already
+// checked above: U+21E7 ⇧ is not in every font the `monospace` alias
+// resolves to either.
+var KEY_SHIFT_ENTER = "SHIFT \u23CE";
 
 // `ctx`: { mode, node, atRoot, grid, pickerSelect, variantSwitch, confirming }.
 function primaryAction(ctx) {
@@ -64,6 +68,13 @@ function primaryAction(ctx) {
 // when its Dark/Light switcher is up, and null everywhere else — the hint
 // names the set Tab would show rather than the key's mechanism, so it reads
 // as the outcome the way every other label here does.
+//
+// `discreteGpu` is true when GpuService has a default discrete card, which
+// is the only condition under which Shift+Enter on an app row does anything
+// different from Enter (Menu.qml's _activateRowOnDiscreteGpu). It is a
+// per-row hint rather than an always-applies one, so it appears only with
+// the cursor on an app: the offload used to be advertised as a route
+// listing every app a second time, and this is what replaced it.
 function hints(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
@@ -72,6 +83,8 @@ function hints(ctx) {
     var out = [move];
     if (c.variantSwitch === "dark" || c.variantSwitch === "light")
         out.push({ key: KEY_TAB, label: c.variantSwitch === "light" ? "Show Light" : "Show Dark" });
+    if (c.discreteGpu && c.node && c.node.kind === "app" && !c.confirming)
+        out.push({ key: KEY_SHIFT_ENTER, label: "Open On GPU" });
     if (c.mode === "select")
         return out.concat([{ key: KEY_ESC, label: "Cancel" }]);
     return out.concat([{ key: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);

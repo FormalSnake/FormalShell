@@ -151,6 +151,7 @@ function buildTree(defaultObj, userObj) {
         if (entry.confirm !== undefined) node.confirm = entry.confirm;
         if (entry.dim !== undefined) node.dim = entry.dim;
         if (entry.keepOpen !== undefined) node.keepOpen = entry.keepOpen;
+        if (entry.routeOnly !== undefined) node.routeOnly = entry.routeOnly;
         nodes[id] = node;
     });
 

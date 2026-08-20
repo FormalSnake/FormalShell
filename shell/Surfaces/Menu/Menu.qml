@@ -576,10 +576,8 @@ PanelWindow {
         }
         var buttons = Providers.customPowerButtonEntries(Core.Config.get("menu.customPowerButtons", []));
         var capture = Providers.captureEntries(Quickshell.shellDir);
-        // M38 Task 8: "gpu.launch"/"gpu.mode" fragments, present only when
-        // GpuService actually has a discrete card / supergfxctl -- see
-        // gpuLaunchEntry/gpuModeEntry's own header.
-        var gpuLaunch = Providers.gpuLaunchEntry(GpuService.defaultDiscrete());
+        // M38 Task 8: the "gpu.mode" fragment, present only when
+        // supergfxctl is -- see gpuModeEntry's own header.
         var gpuMode = Providers.gpuModeEntry(Quickshell.shellDir, GpuService.gfxMode);
         // Live-while-open, unlike wallpaper/buttons above: its action
         // depends on the current newest clipboard entry, so
@@ -594,7 +592,6 @@ PanelWindow {
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
         Object.keys(capture).forEach(function (k) { merged[k] = capture[k]; });
-        Object.keys(gpuLaunch).forEach(function (k) { merged[k] = gpuLaunch[k]; });
         Object.keys(gpuMode).forEach(function (k) { merged[k] = gpuMode[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
@@ -632,17 +629,11 @@ PanelWindow {
         // same way apps/clipboard above are.
         panels: function () { return Providers.panelsProvider(Quickshell.shellDir); },
         tray: function () { return Providers.trayProvider(SystemTray.items.values, Quickshell.shellDir); },
-        // M38 Task 8: card info rows (always present) and the launch-on-
-        // dGPU app list (only reached when gpuLaunchEntry above actually
-        // injected "gpu.launch" into _defaultObj).
-        gpu: function () { return Providers.gpuProvider(GpuService.cards); },
-        gpuLaunch: function () {
-            var card = GpuService.defaultDiscrete();
-            if (!card) return [];
-            return Providers.gpuLaunchProvider(DesktopEntries.applications.values, function (name) {
-                return Quickshell.iconPath(name, true);
-            }, Core.State.appLaunches, Date.now(), Quickshell.shellDir, card.card);
-        }
+        // M38 Task 8: card info rows, always present. Launching an app on
+        // the discrete card is Shift+Enter on the app row itself
+        // (_activateRowOnDiscreteGpu below), not a route mirroring the
+        // whole app list a second time.
+        gpu: function () { return Providers.gpuProvider(GpuService.cards); }
     })
     readonly property var _nodes: root._tree.nodes
 
@@ -729,7 +720,7 @@ PanelWindow {
         var calcRow = Calc.resultNode(q);
         if (root.currentNodeId === "calc")
             return calcRow ? [calcRow] : [];
-        var ranked = Search.rank(root._nodes, q, root._condResults);
+        var ranked = Search.rank(root._nodes, q, root._condResults, root.currentNodeId);
         return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
@@ -768,7 +759,11 @@ PanelWindow {
             ? (root._pickerVariant === "dark" ? "light" : "dark")
             : null,
         confirming: root._confirmPendingId !== "" && !!root._cursorNode
-            && root._cursorNode.id === root._confirmPendingId
+            && root._cursorNode.id === root._confirmPendingId,
+        // Gates the Shift+Enter hint: on a one-card machine the accelerator
+        // falls through to a plain Enter, so advertising it would name a
+        // key that does nothing of its own.
+        discreteGpu: GpuService.defaultDiscrete() !== null
     })
 
     // Uppercased at display time only (MetaLabel's own font.capitalization,
@@ -1243,7 +1238,7 @@ PanelWindow {
         root._evalConditions();
         // iconSource rides along so the smoke rig can assert an app row's
         // themed icon resolved (or honestly didn't) without a screenshot.
-        var rows = Search.rank(root._nodes, q, root._condResults).map(function (n) {
+        var rows = Search.rank(root._nodes, q, root._condResults, root.currentNodeId).map(function (n) {
             return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "", checked: Toggles.checkedFor(n, root._stateSnapshot, root._checkedResults) };
         });
         // Same CALC prepend as _displayRows' ranked branch, so the smoke
