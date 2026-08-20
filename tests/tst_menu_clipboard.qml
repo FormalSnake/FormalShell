@@ -13,7 +13,7 @@ TestCase {
     function test_text_entry_maps_to_preview_label_action_node() {
         var nodes = Providers.clipboardProvider([
             { id: "a", kind: "text", text: "hello world", capturedAt: new Date(2026, 0, 1, 14, 2).getTime() }
-        ], "/store/share/formalshell");
+        ]);
         compare(nodes.length, 1);
         compare(nodes[0].id, "clipboard.a");
         compare(nodes[0].label, "hello world");
@@ -22,13 +22,18 @@ TestCase {
         compare(nodes[0].thumbSource, "");
         compare(nodes[0].fullText, "hello world");
         compare(nodes[0].time, "14:02");
-        compare(nodes[0].action, "qs ipc -p /store/share/formalshell call clipboard copy a");
+        // In-process, not a spawned `qs ipc` command: `qs` is quickshell's
+        // own binary and nothing puts it on a session PATH, so the spawned
+        // form was a silent exit 127 everywhere but the smoke VM.
+        compare(nodes[0].action, "@ipc:clipboard.copy:a");
+        compare(nodes[0].pasteAfter, true);
+        compare(nodes[0].verb, "Paste");
     }
 
     function test_legacy_text_entry_without_kind_still_maps_as_text() {
         // Entries persisted before history.js learned `kind` have none —
         // the provider must not mistake that for an image row.
-        var nodes = Providers.clipboardProvider([{ id: "a", text: "legacy" }], "/self");
+        var nodes = Providers.clipboardProvider([{ id: "a", text: "legacy" }]);
         compare(nodes[0].label, "legacy");
         compare(nodes[0].thumbSource, "");
     }
@@ -36,7 +41,7 @@ TestCase {
     function test_image_entry_maps_to_image_label_desc_and_thumb() {
         var nodes = Providers.clipboardProvider([
             { id: "b", kind: "image", path: "/state/clipboard-images/abc.png", mime: "image/png", capturedAt: new Date(2026, 0, 1, 9, 5).getTime() }
-        ], "/store/share/formalshell");
+        ]);
         compare(nodes.length, 1);
         compare(nodes[0].id, "clipboard.b");
         compare(nodes[0].label, "IMAGE");
@@ -44,22 +49,80 @@ TestCase {
         compare(nodes[0].thumbSource, "/state/clipboard-images/abc.png");
         compare(nodes[0].fullText, "");
         compare(nodes[0].time, "09:05");
-        compare(nodes[0].action, "qs ipc -p /store/share/formalshell call clipboard copy b");
+        compare(nodes[0].action, "@ipc:clipboard.copy:b");
+        compare(nodes[0].pasteAfter, true);
     }
 
     function test_mixed_entries_preserve_order() {
         var nodes = Providers.clipboardProvider([
             { id: "b", kind: "image", path: "/img/one.png", capturedAt: 1000 },
             { id: "a", kind: "text", text: "one", capturedAt: 999 }
-        ], "/self");
+        ]);
         compare(nodes.length, 2);
         compare(nodes[0].label, "IMAGE");
         compare(nodes[1].label, "one");
     }
 
     function test_empty_items_maps_to_empty_list() {
-        compare(Providers.clipboardProvider([], "/self").length, 0);
-        compare(Providers.clipboardProvider(undefined, "/self").length, 0);
+        compare(Providers.clipboardProvider([]).length, 0);
+        compare(Providers.clipboardProvider(undefined).length, 0);
+    }
+
+    // clipboard.paste off: the row still copies, it just stops touching the
+    // focused window, and says Copy rather than promising a paste.
+    function test_paste_disabled_drops_paste_marker_and_changes_verb() {
+        var nodes = Providers.clipboardProvider([{ id: "a", text: "hi" }], "copy", false);
+        compare(nodes[0].action, "@ipc:clipboard.copy:a");
+        compare(nodes[0].pasteAfter, false);
+        compare(nodes[0].verb, "Copy");
+    }
+
+    // Share rows hand the entry to LocalSend and never synthesize input,
+    // whatever clipboard.paste says.
+    function test_share_rows_never_paste() {
+        var nodes = Providers.clipboardProvider([{ id: "a", text: "hi" }], "share", true);
+        compare(nodes[0].id, "share.history.a");
+        compare(nodes[0].pasteAfter, false);
+        compare(nodes[0].verb, "Share");
+        verify(nodes[0].action.indexOf("@ipc:") < 0);
+    }
+
+    // pasteArgv: wtype's press/tap/release argv for a chord, releases in
+    // reverse order so the modifiers unwind the way they were pressed.
+    function test_paste_argv_default_chord() {
+        compare(Providers.pasteArgv("ctrl+v"), ["-M", "ctrl", "-k", "v", "-m", "ctrl"]);
+    }
+
+    function test_paste_argv_multiple_modifiers_release_in_reverse() {
+        compare(Providers.pasteArgv("ctrl+shift+v"),
+                ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]);
+    }
+
+    function test_paste_argv_is_case_and_space_insensitive() {
+        compare(Providers.pasteArgv(" Ctrl + V "), ["-M", "ctrl", "-k", "v", "-m", "ctrl"]);
+    }
+
+    function test_paste_argv_bare_key_needs_no_modifier() {
+        compare(Providers.pasteArgv("insert"), ["-k", "insert"]);
+    }
+
+    // A typo pastes nothing rather than some other keystroke. "super" is in
+    // here deliberately: it reads like a modifier wtype would take and is
+    // not one (probed against the binary — the windows key is "logo").
+    function test_paste_argv_rejects_unknown_modifier() {
+        compare(Providers.pasteArgv("cmd+v"), null);
+        compare(Providers.pasteArgv("super+v"), null);
+        compare(Providers.pasteArgv("meta+v"), null);
+    }
+
+    function test_paste_argv_accepts_the_windows_key_as_logo() {
+        compare(Providers.pasteArgv("logo+v"), ["-M", "logo", "-k", "v", "-m", "logo"]);
+    }
+
+    function test_paste_argv_rejects_a_chord_with_no_key() {
+        compare(Providers.pasteArgv("ctrl+shift"), null);
+        compare(Providers.pasteArgv(""), null);
+        compare(Providers.pasteArgv(undefined), null);
     }
 
     // clipboardSearch: the route-local filter (M30). Pure over already-
@@ -68,7 +131,7 @@ TestCase {
     function test_search_empty_query_returns_rows_unchanged() {
         var rows = Providers.clipboardProvider([
             { id: "a", kind: "text", text: "hello", capturedAt: 1000 }
-        ], "/self");
+        ]);
         compare(Providers.clipboardSearch(rows, ""), rows);
         compare(Providers.clipboardSearch(rows, "   "), rows);
     }
@@ -77,7 +140,7 @@ TestCase {
         var longText = "x".repeat(80) + "findme";
         var rows = Providers.clipboardProvider([
             { id: "a", kind: "text", text: longText, capturedAt: 1000 }
-        ], "/self");
+        ]);
         // The label truncates at 60 chars; the match text does not.
         verify(rows[0].label.indexOf("findme") < 0);
         compare(Providers.clipboardSearch(rows, "findme").length, 1);
@@ -86,7 +149,7 @@ TestCase {
     function test_search_is_case_insensitive() {
         var rows = Providers.clipboardProvider([
             { id: "a", kind: "text", text: "Hello World", capturedAt: 1000 }
-        ], "/self");
+        ]);
         compare(Providers.clipboardSearch(rows, "WORLD").length, 1);
         compare(Providers.clipboardSearch(rows, "world").length, 1);
     }
@@ -95,7 +158,7 @@ TestCase {
         var rows = Providers.clipboardProvider([
             { id: "a", kind: "image", path: "/img/one.png", capturedAt: 1000 },
             { id: "b", kind: "text", text: "grocery list", capturedAt: 999 }
-        ], "/self");
+        ]);
         var hits = Providers.clipboardSearch(rows, "image");
         compare(hits.length, 1);
         compare(hits[0].id, "clipboard.a");
@@ -105,7 +168,7 @@ TestCase {
         var rows = Providers.clipboardProvider([
             { id: "a", kind: "text", text: "apple", capturedAt: 1000 },
             { id: "b", kind: "text", text: "banana", capturedAt: 999 }
-        ], "/self");
+        ]);
         var hits = Providers.clipboardSearch(rows, "apple");
         compare(hits.length, 1);
         compare(hits[0].id, "clipboard.a");

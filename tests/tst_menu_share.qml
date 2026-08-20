@@ -78,7 +78,7 @@ TestCase {
     function test_share_mode_reuses_copy_rows_with_a_distinct_id_namespace() {
         var nodes = Providers.clipboardProvider([
             { id: "a", text: "hello" }
-        ], "/store/share/formalshell", "share");
+        ], "share");
         compare(nodes.length, 1);
         compare(nodes[0].id, "share.history.a");
         compare(nodes[0].label, "hello");
@@ -89,7 +89,7 @@ TestCase {
     function test_share_mode_preserves_image_rows_shape() {
         var nodes = Providers.clipboardProvider([
             { id: "b", kind: "image", path: "/img/one.png", capturedAt: new Date(2026, 0, 1, 9, 5).getTime() }
-        ], "/self", "share");
+        ], "share");
         compare(nodes[0].id, "share.history.b");
         compare(nodes[0].label, "IMAGE");
         compare(nodes[0].desc, "09:05");
@@ -98,9 +98,9 @@ TestCase {
     }
 
     function test_default_copy_mode_is_unaffected_by_the_new_parameter() {
-        var nodes = Providers.clipboardProvider([{ id: "a", text: "hello" }], "/store/share/formalshell");
+        var nodes = Providers.clipboardProvider([{ id: "a", text: "hello" }]);
         compare(nodes[0].id, "clipboard.a");
-        compare(nodes[0].action, "qs ipc -p /store/share/formalshell call clipboard copy a");
+        compare(nodes[0].action, "@ipc:clipboard.copy:a");
     }
 
     // The presence-gate itself (default-menu.jsonc's "share" node): the

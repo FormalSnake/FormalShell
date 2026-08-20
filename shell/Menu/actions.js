@@ -8,10 +8,14 @@
 //
 // Verbs come from a node's `kind` (plus `typeText`, the emoji rows' own
 // copy-and-type marker), never from its id — a verb keyed off an id prefix
-// would go quietly wrong the first time a provider renamed its rows. A row
-// that can't be activated at all (`dim: true`, the honest-empty note rows
-// every provider falls back to) gets no primary action rather than a verb
-// that would do nothing when pressed.
+// would go quietly wrong the first time a provider renamed its rows. A
+// provider that knows better than `kind` does says so in the node's own
+// `verb` field (clipboard rows: Copy, Paste or Share, none of which is
+// "Run"); that stays row data for the same reason, so the verb still has
+// exactly one source per row. A row that can't be activated at all
+// (`dim: true`, the honest-empty note rows every provider falls back to)
+// gets no primary action rather than a verb that would do nothing when
+// pressed.
 //
 // Key caps are literal characters, not names, and every one of them is
 // checked against the pinned nerd-fonts-jetbrains-mono cmap: U+23CE ⏎ is
@@ -40,6 +44,8 @@ function primaryAction(ctx) {
         return null;
     if (c.confirming)
         return { key: KEY_ENTER, label: "Confirm " + node.label };
+    if (node.verb)
+        return { key: KEY_ENTER, label: node.verb };
     switch (node.kind) {
     case "option":
         return { key: KEY_ENTER, label: "Select" };

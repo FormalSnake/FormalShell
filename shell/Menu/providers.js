@@ -83,26 +83,24 @@ function applyProviders(tree, providerFns) {
 
 // Clipboard history rows, newest first (ClipboardService.items' own order).
 // Unlike appsProvider these are plain "action" nodes — Menu.qml's existing
-// `_activateRow`/`_runAction` spawn-command path already re-copies the entry
-// via `qs ipc call clipboard copy <id>` with zero Menu.qml changes, so no
-// bespoke node kind (and no `_entry`-style back-reference) is needed here.
+// `_activateRow`/`_runAction` path activates them with no bespoke node kind
+// (and no `_entry`-style back-reference) needed here.
 //
-// `selfPath` is the running shell's own config root (`Quickshell.shellDir`,
-// e.g. `<store-path>/share/formalshell`) — without `-p <selfPath>` on the
-// call, `qs ipc`'s instance lookup falls back to the default XDG quickshell
-// config dir (command.cpp's locateConfigFile()/selectInstance()), which
-// formalshell doesn't register under, so the copy would silently hit "No
-// running instances" instead of this shell.
+// Copy-mode rows dispatch in-process (`@ipc:clipboard.copy:<id>`, the same
+// argument-carrying internal-action shape `clipssh.send:<alias>` uses)
+// rather than spawning `qs ipc -p <shellDir> call clipboard copy <id>`
+// through the compositor. That spawn is what made Enter a silent no-op on a
+// real install: `qs` is quickshell's own binary, and nothing puts it on a
+// session PATH. nix/package.nix wraps it as `formalshell` and nix/hm-module
+// installs only that, so `sh -c "qs ipc …"` exits 127 with nowhere to
+// report it. The smoke rig never saw it because nix/testvm.nix has the
+// whole quickshell package in systemPackages, so `qs` resolves there. The
+// menu runs inside the process that owns ClipboardService, so the round
+// trip bought nothing even when it worked.
 //
-// No `--any-display` alongside it, unlike the keybind form USAGE.md documents
-// for callers that may have no WAYLAND_DISPLAY at all. A row's command is
-// spawned by this shell, so it already carries this shell's display, and that
-// display is quickshell's only discriminator between two instances sharing one
-// `by-path/<md5(configFilePath)>` registry entry (selectInstance() takes the
-// oldest match and reports no ambiguity). A nested smoke session and the
-// owner's live bar share XDG_RUNTIME_DIR, so they share that entry whenever
-// they were built from the same store path, and the flag would let this
-// shell's own menu row write the other one's clipboard.
+// `pasteAfter` marks the row for Menu.qml's paste hook: on top of the copy,
+// the chord is synthesized into whatever window focus returns to, which is
+// Raycast's clipboard behaviour. Config gates it, so the caller decides.
 //
 // Image entries (M14 Task 1, history.js's `kind: "image"`) get a fixed
 // "IMAGE" label instead of a text preview, a dimmed capture time in the
@@ -116,15 +114,21 @@ function _capturedAtLabel(capturedAt) {
 }
 
 // `mode` ("copy", the default, or "share") only changes the row's id
-// prefix and activation — label/desc/thumbSource stay identical either
-// way. "share" rows need their own id namespace ("share.history.<id>"
+// prefix, verb and activation — label/desc/thumbSource stay identical
+// either way. "share" rows need their own id namespace ("share.history.<id>"
 // rather than "clipboard.<id>"): both providers read the SAME
 // ClipboardService.items list, and tree.nodes is one flat map keyed by id,
 // so reusing "clipboard.<id>" here would silently overwrite the real
 // clipboard node's own rows (or vice versa, depending on provider order).
-function clipboardProvider(items, selfPath, mode) {
+//
+// `paste` is `clipboard.paste`, threaded in rather than read here so this
+// stays pure. It only reaches copy rows: a share row hands the entry to
+// LocalSend and never touches the focused window.
+function clipboardProvider(items, mode, paste) {
     mode = mode || "copy";
-    var idPrefix = mode === "share" ? "share.history." : "clipboard.";
+    var share = mode === "share";
+    var pasteAfter = !share && paste !== false;
+    var idPrefix = share ? "share.history." : "clipboard.";
     return (items || []).map(function (entry) {
         var isImage = entry.kind === "image";
         return {
@@ -144,12 +148,56 @@ function clipboardProvider(items, selfPath, mode) {
             time: _capturedAtLabel(entry.capturedAt),
             aliases: [],
             kind: "action",
-            action: mode === "share"
+            // The action bar's verb, overriding what actions.js infers from
+            // `kind` alone: "Run" describes a clipboard row about as well as
+            // it describes an app row.
+            verb: share ? "Share" : (pasteAfter ? "Paste" : "Copy"),
+            action: share
                 ? shareEntryCommand(entry)
-                : "qs ipc -p " + selfPath + " call clipboard copy " + entry.id,
+                : "@ipc:clipboard.copy:" + entry.id,
+            pasteAfter: pasteAfter,
             childIds: []
         };
     });
+}
+
+// wtype argv for a paste chord ("ctrl+v", "ctrl+shift+v", …): every modifier
+// pressed with -M in written order, the key tapped with -k, then the
+// modifiers released with -m in reverse.
+//
+// The seven names below are wtype's whole modifier vocabulary, and they are
+// the seven it actually accepts, not the ones that read like it should:
+// `wtype -M <name>` was run against each candidate in the VM, and `super`,
+// `meta`, `control` and `command` all came back "Invalid modifier name".
+// `logo` is the one that means the windows/command key. A name outside the
+// list is a config typo, and the honest answer is to report it rather than
+// synthesize a keystroke nobody asked for, so a bad chord returns null and
+// Menu.qml warns instead of pasting something arbitrary.
+//
+// The chord is configuration and not row data because the right one depends
+// on where focus lands: Ctrl+V everywhere except terminals, which almost
+// universally want Ctrl+Shift+V.
+var PASTE_MODIFIERS = ["shift", "capslock", "ctrl", "logo", "win", "alt", "altgr"];
+
+function pasteArgv(chord) {
+    var parts = String(chord || "").toLowerCase().split("+").map(function (p) { return p.trim(); }).filter(function (p) { return p !== ""; });
+    if (parts.length === 0)
+        return null;
+    var key = parts.pop();
+    var mods = parts;
+    for (var i = 0; i < mods.length; i++) {
+        if (PASTE_MODIFIERS.indexOf(mods[i]) < 0)
+            return null;
+    }
+    if (PASTE_MODIFIERS.indexOf(key) >= 0)
+        return null;
+    var argv = [];
+    for (var m = 0; m < mods.length; m++)
+        argv.push("-M", mods[m]);
+    argv.push("-k", key);
+    for (var r = mods.length - 1; r >= 0; r--)
+        argv.push("-m", mods[r]);
+    return argv;
 }
 
 // Route-local filter for the clipboard/share-history level (M30): unlike

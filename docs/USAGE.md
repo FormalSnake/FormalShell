@@ -1431,9 +1431,34 @@ one place the service ever runs `rm`, and only on a path already confirmed
 to be under `clipboard-images/`.
 
 `menu summon clipboard` opens history as menu rows, newest first, and
-selecting one re-copies it through the same `clipboard copy <id>` verb
-below, so the row is that call rather than a second code path. Image rows
-render a thumbnail with an `IMAGE` label and the capture time.
+typing filters them by their full text rather than searching the whole
+menu tree. Image rows render a thumbnail with an `IMAGE` label and the
+capture time.
+
+Enter on a row copies the entry and then pastes it into whatever window
+focus returns to, which is what Raycast does. The paste is a synthesized
+`Ctrl+V` via `wtype`, fired once the menu surface has actually closed, so
+it needs a compositor with virtual-keyboard-unstable-v1 and `wtype`
+reachable; without either, the copy still happens and a warning is logged.
+Two keys control it:
+
+```jsonc
+{
+  "clipboard": {
+    "paste": true,           // false copies only, no keystroke
+    "pasteChord": "ctrl+v"   // "ctrl+shift+v" for a terminal-first session
+  }
+}
+```
+
+`pasteChord` is one key, optionally prefixed by modifiers from wtype's own
+vocabulary: `shift`, `capslock`, `ctrl`, `logo`, `win`, `alt`, `altgr`.
+That list is exact, and `logo` is the windows/command key: wtype rejects
+`super` and `meta`. A chord naming something wtype does not know pastes
+nothing and warns, rather than sending some other keystroke.
+
+The row copies in-process; it does not shell out to `qs ipc`. The verb
+below is the same operation for scripts and keybinds.
 
 ```sh
 fs clipboard list          # newest first, with kind/path/mime on image entries

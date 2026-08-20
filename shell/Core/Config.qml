@@ -205,6 +205,13 @@ import QtQuick
 // places or the console never finds its own window and says so.
 // console.share (number, default 0.5, clamped 0.2..1): how much of the
 // height under the bar the console covers, M37 Task 2.
+// clipboard.paste (bool, default true — Enter on a clipboard-history row
+// copies the entry and then synthesizes a paste into whatever window focus
+// returns to, Raycast's behaviour; false copies only) and
+// clipboard.pasteChord (string, default "ctrl+v" — the chord that paste
+// synthesizes, in wtype's own modifier vocabulary, e.g. "ctrl+shift+v" for
+// a terminal-first session). A chord naming a modifier wtype does not know
+// pastes nothing and warns, rather than sending some other keystroke.
 Singleton {
     id: root
 

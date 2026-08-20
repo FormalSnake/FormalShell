@@ -622,8 +622,8 @@ PanelWindow {
                 return Quickshell.iconPath(name, true);
             }, Core.State.appLaunches, Date.now()), CompositorService.windows || []);
         },
-        clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir); },
-        shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, Quickshell.shellDir, "share"); },
+        clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, "copy", Core.Config.get("clipboard.paste", true)); },
+        shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, "share"); },
         clipssh: function () { return Providers.clipsshRows(Providers.clipsshAliases(root._clipsshAliasesText)); },
         // M38 Task 3 (launcher reachability sweep): both self-targeted the
         // same way apps/clipboard above are.
@@ -1066,23 +1066,31 @@ PanelWindow {
         root._completeSelect(searchInput.text);
     }
 
-    // Emoji instant paste (M13 Task 6): an activated row carrying `typeText`
-    // (Providers.emojiRows) closes the menu like any action, then auto-types
-    // the char into whatever window focus returned to. The wtype spawn is
-    // gated on the window's actual visible flip plus a short settle — typing
-    // while this keyboard-exclusive surface still holds focus would land the
-    // char in the menu's own search field. wtype missing from PATH (the sh
-    // wrapper's exit 127) or a compositor without the virtual-keyboard
-    // protocol degrade to the copy that already ran: one warning, no error
-    // surface. Re-opening before the settle fires drops the pending char
-    // (onVisibleChanged below) — better untyped than typed at the menu.
+    // Instant paste: an activated row carrying `typeText` (Providers.
+    // emojiRows) or `pasteAfter` (the clipboard route's own rows) closes the
+    // menu like any action, then feeds the window focus returned to — the
+    // emoji char literally, a clipboard entry as the configured paste chord
+    // on top of the copy that already ran. Both are one wtype spawn, gated
+    // on the window's actual visible flip plus a short settle: synthesizing
+    // input while this keyboard-exclusive surface still holds focus would
+    // land it in the menu's own search field. That settle doubles as the
+    // clipboard route's write barrier — wl-copy is exec'd at Enter, a close
+    // animation ahead of the keystroke.
+    //
+    // wtype missing from PATH (the sh wrapper's exit 127) or a compositor
+    // without the virtual-keyboard protocol degrade to the copy that already
+    // ran: one warning, no error surface. Re-opening before the settle fires
+    // drops whatever was pending (onVisibleChanged below) — better nothing
+    // than typed at the menu.
     property string _pendingTypeText: ""
+    property bool _pendingPaste: false
 
     onVisibleChanged: {
         if (visible) {
             typeSettleTimer.stop();
             root._pendingTypeText = "";
-        } else if (root._pendingTypeText !== "") {
+            root._pendingPaste = false;
+        } else if (root._pendingTypeText !== "" || root._pendingPaste) {
             typeSettleTimer.restart();
         }
     }
@@ -1091,11 +1099,27 @@ PanelWindow {
         id: typeSettleTimer
         interval: 150
         onTriggered: {
-            // No `--` guard needed: no emoji starts with ASCII `-` (keycap
-            // sequences start with `#`/`*`/digits), and the list form keeps
-            // the char out of any shell interpolation.
-            typeProc.command = ["sh", "-c", 'command -v wtype >/dev/null 2>&1 || exit 127; exec wtype "$1"', "sh", root._pendingTypeText];
+            var text = root._pendingTypeText;
+            var paste = root._pendingPaste;
             root._pendingTypeText = "";
+            root._pendingPaste = false;
+            if (text !== "") {
+                // No `--` guard needed: no emoji starts with ASCII `-` (keycap
+                // sequences start with `#`/`*`/digits), and the list form keeps
+                // the char out of any shell interpolation.
+                typeProc.command = ["sh", "-c", 'command -v wtype >/dev/null 2>&1 || exit 127; exec wtype "$1"', "sh", text];
+                typeProc.running = true;
+                return;
+            }
+            if (!paste)
+                return;
+            var chord = Core.Config.get("clipboard.pasteChord", "ctrl+v");
+            var argv = Providers.pasteArgv(chord);
+            if (!argv) {
+                console.warn("Menu: clipboard.pasteChord is not a wtype chord:", chord, "- copied but not pasted");
+                return;
+            }
+            typeProc.command = ["sh", "-c", 'command -v wtype >/dev/null 2>&1 || exit 127; exec wtype "$@"', "sh"].concat(argv);
             typeProc.running = true;
         }
     }
@@ -1104,9 +1128,9 @@ PanelWindow {
         id: typeProc
         onExited: exitCode => {
             if (exitCode === 127)
-                console.warn("Menu: wtype not on PATH, emoji copied but not typed");
+                console.warn("Menu: wtype not on PATH, copied but not typed");
             else if (exitCode !== 0)
-                console.warn("Menu: wtype failed (exit " + exitCode + "), emoji copied but not typed");
+                console.warn("Menu: wtype failed (exit " + exitCode + "), copied but not typed");
         }
     }
 
@@ -1412,6 +1436,8 @@ PanelWindow {
                 NotificationService.notify(node.notifySummary, node.notifyBody || "");
             if (node.typeText)
                 root._pendingTypeText = node.typeText;
+            if (node.pasteAfter === true)
+                root._pendingPaste = true;
             // Toggle rows (default-menu.jsonc's "toggles" subtree) stay on
             // screen so the row's own checkmark visibly flips under the
             // cursor; every other action still closes.
@@ -1497,6 +1523,14 @@ PanelWindow {
         // the shell could not watch (see ClipsshService's header).
         if (name.indexOf("clipssh.send:") === 0) {
             ClipsshService.send(name.slice("clipssh.send:".length));
+            return;
+        }
+        // The clipboard route's own rows. In-process because this menu runs
+        // inside the process that owns the history — providers.js's header
+        // has why the spawned `qs ipc` form it replaced only ever worked on
+        // the smoke rig.
+        if (name.indexOf("clipboard.copy:") === 0) {
+            ClipboardService.copy(name.slice("clipboard.copy:".length));
             return;
         }
         switch (name) {

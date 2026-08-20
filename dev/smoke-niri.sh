@@ -331,22 +331,34 @@
 # (clip-list-1.json — proves capture + newest-first order), re-copies the
 # newest one (dedup proof: the reducer must move it to front, not insert a
 # duplicate), dumps `clipboard list` again (clip-list-2.json — item count
-# must stay 3), then activates the SECOND entry via the exact self-targeting
-# `qs ipc -p <shellDir> call clipboard copy <id>` invocation
-# Menu/providers.js's clipboardProvider builds (clip-copy.txt — must read
-# "ok", not "No running instances"; a wrong `-p` target fails silently there)
-# and reads the system clipboard back (clip-paste.txt — must have flipped to
-# the re-copied entry's text), proving the menu row's copy action actually
-# reaches the running shell end to end, not just that the rows render. Then
+# must stay 3), then calls `clipboard copy <id>` on the SECOND entry over
+# IPC (clip-copy.txt — must read "ok") and reads the system clipboard back
+# (clip-paste.txt — must have flipped to the re-copied entry's text),
+# proving the verb reaches the running shell end to end. Then
 # (M14 Task 6) an imagemagick fixture PNG is `wl-copy --type image/png`d,
 # `clipboard list` is dumped a third time (clip-list-3.json — must show the
 # new entry with `"kind":"image"` and a `path` under the isolated HOME's own
 # `clipboard-images/<sha256>.png`, proving the second watcher actually
-# content-addressed the capture), that entry's id is activated the same
-# self-targeting way (clip-image-copy.txt), and `wl-paste --type image/png`
+# content-addressed the capture), that entry's id is copied the same way
+# (clip-image-copy.txt), and `wl-paste --type image/png`
 # is hashed and compared against the fixture's own hash (clip-image-paste-
 # sha.txt) — proving the image copy-back round trip end to end, not just
-# that a path string exists. Then `menu summon clipboard` so the run's
+# that a path string exists.
+#
+# Every leg above drives the IPC verb, which is not what Enter on a row
+# does, and that gap is how the menu shipped with a dead Enter: the row used
+# to spawn `qs ipc … clipboard copy <id>` through the compositor, and `qs`
+# resolves here only because nix/testvm.nix installs the whole quickshell
+# package — nothing puts it on a real session's PATH, so it was a silent
+# exit 127. So the last leg drives the row itself: a sentinel string is
+# copied (so the clipboard provably holds something else), the route is
+# summoned, `menu filter` narrows it to one known row, `menu activate 0` is
+# the Enter stand-in, and the clipboard is read back
+# (clip-activate-paste.txt — must be the ROW's entry, not the sentinel).
+# The paste keystroke Enter also synthesizes is not observable here: a
+# nested session has no focused client for it to land in.
+#
+# Then `menu summon clipboard` so the run's
 # screenshot shows the provider's rows rendered as real menu cells — the
 # freshly-captured image now newest, so its thumbnail row is the one the
 # shot proves — left open through smoke.png/SMOKE_OK same as --panel.
@@ -1469,6 +1481,8 @@ clip_image_fixture_path="$shot_dir/clip-fixture.png"
 clip_list3_path="$shot_dir/clip-list-3.json"
 clip_image_copy_path="$shot_dir/clip-image-copy.txt"
 clip_image_paste_sha_path="$shot_dir/clip-image-paste-sha.txt"
+clip_activate_path="$shot_dir/clip-activate.txt"
+clip_activate_paste_path="$shot_dir/clip-activate-paste.txt"
 wifi_scan_status_path="$shot_dir/wifi-scan-status.json"
 wifi_wrong_path="$shot_dir/wifi-wrong.png"
 wifi_wrong_status_path="$shot_dir/wifi-wrong-status.json"
@@ -3141,6 +3155,25 @@ image_id=\$(grep -o '"id":"[^"]*","kind":"image"' "$clip_list3_path" | head -n1 
 "$qs_bin" ipc -p "$shell_path" call clipboard copy "\$image_id" > "$clip_image_copy_path" 2>&1
 sleep 1
 "$wl_paste_bin" --type image/png --no-newline | sha256sum > "$clip_image_paste_sha_path" 2>&1
+sleep 1
+# The ROW's own Enter path, which every leg above bypasses by calling the
+# clipboard copy verb directly. That gap is exactly how the menu shipped
+# with a dead Enter: the row used to spawn "qs ipc ... clipboard copy <id>"
+# through the compositor, and qs is only on a PATH here because
+# nix/testvm.nix installs the whole quickshell package. On a real install
+# nothing does, so the spawn was a silent exit 127. Enter is in-process now,
+# and this drives it the way a keypress would: summon, narrow to one known
+# row, activate index 0, read the system clipboard back.
+# No backticks anywhere in this heredoc: it is unquoted, so they would run.
+"$wl_copy_bin" "clipboard smoke sentinel"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu filter "clipboard smoke one" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$clip_activate_path" 2>&1
+sleep 2
+"$wl_paste_bin" --no-newline > "$clip_activate_paste_path" 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
 EOF
@@ -5029,10 +5062,15 @@ fi
     # clipboard-drive.sh's last step (menu summon) lands after its warmup
     # poll (typically 5-7s until the wl-paste watcher is up, 11s ceiling)
     # plus the ~14s fixture sequence (text dumps, a copy-and-paste round
-    # trip, then the image leg's own wl-copy/list/copy/wl-paste round trip,
-    # then the summon); the shot lands past the worst case, showing the
-    # freshly captured image as the newest (topmost) row.
-    screenshot_delay=28
+    # trip, then the image leg's own wl-copy/list/copy/wl-paste round trip)
+    # plus the row-activation leg (~6s of sleeps and four more qs spawns,
+    # each of which costs about a second on llvmpipe), then the summon; the
+    # shot lands past the worst case, showing the freshly captured image as
+    # the newest (topmost) row. At the 28 this inherited before the
+    # activation leg existed, the session tore down while the leg's own
+    # wl-paste was still connecting, which surfaces as wl-clipboard's "does
+    # not seem to implement seat" rather than as a clipboard mismatch.
+    screenshot_delay=40
   elif $nightlight_mode; then
     # nightlight-drive.sh's own worst-case budget (3s initial sleep + 8s
     # poll ceiling + disable/sleep1) lands ~12s in; this run's generic
@@ -5311,6 +5349,7 @@ fi
 # The 40s default comfortably outlives every mode's screenshot-then-quit
 # schedule except screensaver_mode's, whose worst-case cycle-proof poll
 # pushes the smoke.png shot itself to 80s (see screenshot_delay above),
+# clipboard_mode's, whose row-activation leg puts the shot at the ceiling,
 # share_mode's, whose own worst case (screenshot_delay=36 plus tail_gap)
 # leaves too little margin against 40s, picker_mode's, whose Dark/Light legs
 # run past the 20s GC settle window its Rss bracket already needs, and
@@ -5332,6 +5371,10 @@ elif $media_mode; then
 elif $processes_mode; then
   # screenshot_delay=40 plus tail_gap is exactly the default ceiling, so the
   # session was being SIGTERMed at the moment of its own final shot.
+  session_timeout=55
+elif $clipboard_mode; then
+  # Same ceiling collision as processes_mode: the row-activation leg pushed
+  # screenshot_delay to 40, which is the default timeout exactly.
   session_timeout=55
 elif $record_mode; then
   session_timeout=90
@@ -5886,6 +5929,26 @@ if $clipboard_mode; then
   else
     echo "SMOKE_FAIL: wl-paste --type image/png readback hash ($clip_image_paste_sha) does not match the fixture's hash ($clip_image_fixture_sha)" >&2
     exit 1
+  fi
+  # Row activation (the Enter stand-in). The sentinel copy right before it
+  # is what makes this a real assertion rather than a tautology: the system
+  # clipboard held "clipboard smoke sentinel" when the row was activated, so
+  # reading "clipboard smoke one" back can only have come from the row's own
+  # action running. What this cannot show is the paste keystroke wtype then
+  # synthesizes — a nested session with no focused client has nowhere for it
+  # to land, the same limit the tray's overflow cell and the hot corners hit.
+  if ! grep -q "^ok$" "$clip_activate_path" 2>/dev/null; then
+    echo "SMOKE_FAIL: menu activate on the clipboard row did not return ok — got: $(cat "$clip_activate_path" 2>/dev/null)" >&2; exit 1
+  fi
+  if [ -s "$clip_activate_paste_path" ]; then
+    cat "$clip_activate_paste_path"; echo
+  else
+    echo "SMOKE_FAIL: no clipboard readback produced after activating the row" >&2; exit 1
+  fi
+  if grep -q "clipboard smoke one" "$clip_activate_paste_path"; then
+    echo "SMOKE_CLIPBOARD_ACTIVATE row Enter put its own entry on the clipboard"
+  else
+    echo "SMOKE_FAIL: activating the clipboard row left the clipboard at $(cat "$clip_activate_paste_path"), not the row's own entry" >&2; exit 1
   fi
 fi
 
