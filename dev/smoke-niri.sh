@@ -49,9 +49,10 @@
 # on it now that the real IPC route is wired. After the screenshot, the
 # finish script also drives the emoji instant-paste round trip (M13 Task 6):
 # `menu summon emoji` + `menu activate 0` wl-copies GRINNING FACE and, once
-# the surface has closed, spawns wtype with the same char — asserted via a
-# wl-paste readback plus an argv-logging wtype shim on the shell's PATH
-# (real typing into a refocused window is host-trial territory). A trailing
+# the surface has closed, spawns wtype with the `clipboard.pasteChord` argv,
+# the same paste a clipboard-history row does. Asserted via a wl-paste
+# readback plus an argv-logging wtype shim on the shell's PATH (a real paste
+# into a refocused window is host-trial territory). A trailing
 # apps leg (M13b Task 1) then summons the apps route over two fixture
 # .desktop entries — one with an icon honestly installed into the isolated
 # hicolor tree, one whose icon has no theme here — screenshots the rows
@@ -2917,11 +2918,12 @@ EOF
   # re-summon at the emoji route and activate row 0 (GRINNING FACE, the
   # deterministic browse head; `menu activate` is the rig's stand-in for
   # Enter, PickerIpc.choose's division). The row's action wl-copies the
-  # char, then Menu.qml's post-close settle spawns wtype — resolved here to
-  # the argv-logging shim below, which outranks the package's own bundled
-  # wtype because package.nix wires that one in with --suffix (see its
-  # comment). The 2s sleep covers close + 150ms settle + spawn on the VM's
-  # slow rig; real typing into a refocused window is host-trial territory.
+  # char, then Menu.qml's post-close settle spawns wtype with the paste
+  # chord, resolved here to the argv-logging shim below, which outranks the
+  # package's own bundled wtype because package.nix wires that one in with
+  # --suffix (see its comment). The 2s sleep covers close + 150ms settle +
+  # spawn on the VM's slow rig; a real paste into a refocused window is
+  # host-trial territory.
   cat >> "$menu_finish_script" <<EOF
 {
   "$qs_bin" ipc -p "$shell_path" call menu summon emoji
@@ -5720,8 +5722,8 @@ if $menu_mode; then
   echo "nix toast screenshot: $nix_toast_png"
   # Emoji instant paste (M13 Task 6): summon + activate must both answer
   # ok, the row's copy action must land on the real session clipboard, and
-  # the post-close settle must have spawned wtype with the same raw char
-  # (the argv-logging shim's file).
+  # the post-close settle must have spawned wtype with the default paste
+  # chord's argv (the argv-logging shim's file), never the char itself.
   if [ -s "$emoji_drive_path" ] && [ "$(grep -c '^ok$' "$emoji_drive_path")" = "2" ]; then
     cat "$emoji_drive_path"
   else
@@ -5738,13 +5740,20 @@ if $menu_mode; then
     [ -f "$emoji_paste_path" ] && cat "$emoji_paste_path" >&2
     exit 1
   fi
-  if [ -s "$emoji_type_path" ] && grep -qF '😀' "$emoji_type_path"; then
-    cat "$emoji_type_path"
-  else
-    echo "SMOKE_FAIL: wtype was not invoked with 😀 after the menu closed" >&2
-    [ -f "$emoji_type_path" ] && cat "$emoji_type_path" >&2
-    exit 1
-  fi
+  # The shim logs one argv entry per line; flatten it so the whole chord is
+  # matched in order (press ctrl, tap v, release ctrl) rather than as three
+  # loose tokens.
+  emoji_type_argv=$(tr '\n' ' ' < "$emoji_type_path" 2>/dev/null)
+  case "$emoji_type_argv" in
+    *"-M ctrl -k v -m ctrl"*)
+      echo "emoji paste chord argv: $emoji_type_argv"
+      ;;
+    *)
+      echo "SMOKE_FAIL: wtype was not invoked with the ctrl+v paste chord after the menu closed" >&2
+      [ -f "$emoji_type_path" ] && cat "$emoji_type_path" >&2
+      exit 1
+      ;;
+  esac
   # Card-top freeze and release (M16 Task 2, M23): three PNGs, taken at rest,
   # filtered down to one row, and then a level deeper. SMOKE_-tagged (not
   # the plain "menu apps screenshot:" style above) so dev/vm.sh's own

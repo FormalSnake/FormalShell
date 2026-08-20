@@ -40,9 +40,19 @@ TestCase {
         compare(rows[0].label, "THUMBS UP");
         compare(rows[0].kind, "action");
         compare(rows[0].action, "wl-copy -- '👍'");
-        // typeText marks the row for Menu.qml's post-close wtype hook
-        // (M13 Task 6) — the raw char, never shell-quoted.
-        compare(rows[0].typeText, "👍");
+        // pasteAfter marks the row for Menu.qml's post-close paste hook,
+        // the same field and config key a clipboard-history row uses.
+        compare(rows[0].pasteAfter, true);
+        compare(rows[0].verb, "Paste");
+    }
+
+    // clipboard.paste off: the row still copies, it just stops touching the
+    // window focus returns to, and says Copy instead of Paste.
+    function test_paste_off() {
+        var rows = Providers.emojiRows(list, "thumbs up", false);
+        compare(rows[0].pasteAfter, false);
+        compare(rows[0].verb, "Copy");
+        compare(rows[0].action, "wl-copy -- '👍'");
     }
 
     function test_exact_beats_earlier_substring() {

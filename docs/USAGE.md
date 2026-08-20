@@ -713,9 +713,12 @@ result. A parse failure is silent: no row, no error row.
 **Emoji.** `menu summon emoji`, or `:e <query>` from anywhere, fuzzy
 searches a vendored Unicode dataset (Emoji 17.0, regenerate with
 `dev/gen-emoji.sh`, never edit by hand). Enter copies the char and, after
-the surface closes and a 150ms settle, types it into whatever window focus
-returned to with `wtype`. No `wtype` or no virtual-keyboard protocol
-degrades to the copy that already happened, with one console warning.
+the surface closes and a 150ms settle, pastes it into whatever window focus
+returned to. That is the same paste the clipboard history does, on the same
+`clipboard.paste` and `clipboard.pasteChord` keys (see
+[Clipboard](#clipboard)): set `paste` to false and Enter copies only.
+No `wtype` or no virtual-keyboard protocol degrades to the copy that
+already happened, with one console warning.
 
 **Nix package runner.** `menu summon nix`, or `:nix <query>`, runs a
 debounced `nix search nixpkgs <query> --json` as you type, showing attr name
@@ -1456,6 +1459,9 @@ vocabulary: `shift`, `capslock`, `ctrl`, `logo`, `win`, `alt`, `altgr`.
 That list is exact, and `logo` is the windows/command key: wtype rejects
 `super` and `meta`. A chord naming something wtype does not know pastes
 nothing and warns, rather than sending some other keystroke.
+
+Both keys also govern the launcher's emoji rows, which copy and paste the
+same way.
 
 The row copies in-process; it does not shell out to `qs ipc`. The verb
 below is the same operation for scripts and keybinds.

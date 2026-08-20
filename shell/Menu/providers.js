@@ -371,10 +371,17 @@ function emojiSearch(list, query) {
 // icon slot, the uppercase name is the label. Single quotes are required
 // around the char: keycap sequences start with ASCII `#`/`*`/digits (comment
 // and glob hazards unquoted), and no emoji contains an ASCII apostrophe.
-// `typeText` marks the row for Menu.qml's instant-paste hook (M13 Task 6):
-// on top of the copy, the char is auto-typed via wtype into whatever window
-// focus returns to once the menu surface has actually closed.
-function emojiRows(list, query) {
+//
+// `pasteAfter` marks the row for Menu.qml's paste hook, the same field and
+// the same `clipboard.paste`/`clipboard.pasteChord` config a clipboard
+// history row uses (`paste` threaded in rather than read here, so this stays
+// pure): once the surface has closed, the chord is synthesized into whatever
+// window focus returns to, on top of the copy that already ran. The old path
+// typed the char itself with `wtype <char>`, which only lands where the
+// focused client accepts a remapped keysym off a virtual keyboard; a paste
+// works wherever the user's own paste chord already works.
+function emojiRows(list, query, paste) {
+    var pasteAfter = paste !== false;
     return emojiSearch(list, query).map(function (e) {
         return {
             id: "emoji." + e.ch,
@@ -384,8 +391,9 @@ function emojiRows(list, query) {
             title: "",
             aliases: [],
             kind: "action",
+            verb: pasteAfter ? "Paste" : "Copy",
             action: "wl-copy -- '" + e.ch + "'",
-            typeText: e.ch,
+            pasteAfter: pasteAfter,
             childIds: []
         };
     });

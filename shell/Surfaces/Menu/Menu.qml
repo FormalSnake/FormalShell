@@ -681,10 +681,11 @@ PanelWindow {
         // Task 6). Neither ever falls through to whole-tree ranking: 3,944
         // emoji in the tree would drown every root search.
         var emojiQuery = Providers.emojiTriggerQuery(q);
+        var emojiPaste = Core.Config.get("clipboard.paste", true);
         if (root.currentNodeId === "emoji")
-            return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q);
+            return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q, emojiPaste);
         if (emojiQuery !== null)
-            return Providers.emojiRows(root._emojiList, emojiQuery);
+            return Providers.emojiRows(root._emojiList, emojiQuery, emojiPaste);
         // The nix route/":nix" trigger works the same way, except the rows
         // come from the debounced-Process cache (see the state block above)
         // rather than a pure function over local data.
@@ -1066,31 +1067,28 @@ PanelWindow {
         root._completeSelect(searchInput.text);
     }
 
-    // Instant paste: an activated row carrying `typeText` (Providers.
-    // emojiRows) or `pasteAfter` (the clipboard route's own rows) closes the
-    // menu like any action, then feeds the window focus returned to — the
-    // emoji char literally, a clipboard entry as the configured paste chord
-    // on top of the copy that already ran. Both are one wtype spawn, gated
-    // on the window's actual visible flip plus a short settle: synthesizing
-    // input while this keyboard-exclusive surface still holds focus would
-    // land it in the menu's own search field. That settle doubles as the
-    // clipboard route's write barrier — wl-copy is exec'd at Enter, a close
-    // animation ahead of the keystroke.
+    // Instant paste: an activated row carrying `pasteAfter` (the clipboard
+    // route's rows and the emoji route's, both gated on `clipboard.paste`)
+    // closes the menu like any action, then synthesizes the configured paste
+    // chord into whatever window focus returns to, on top of the copy that
+    // already ran. One wtype spawn, gated on the window's actual visible flip
+    // plus a short settle: synthesizing input while this keyboard-exclusive
+    // surface still holds focus would land it in the menu's own search field.
+    // That settle doubles as the write barrier, since the copy is exec'd at
+    // Enter, a close animation ahead of the keystroke.
     //
     // wtype missing from PATH (the sh wrapper's exit 127) or a compositor
     // without the virtual-keyboard protocol degrade to the copy that already
     // ran: one warning, no error surface. Re-opening before the settle fires
-    // drops whatever was pending (onVisibleChanged below) — better nothing
+    // drops whatever was pending (onVisibleChanged below), better nothing
     // than typed at the menu.
-    property string _pendingTypeText: ""
     property bool _pendingPaste: false
 
     onVisibleChanged: {
         if (visible) {
             typeSettleTimer.stop();
-            root._pendingTypeText = "";
             root._pendingPaste = false;
-        } else if (root._pendingTypeText !== "" || root._pendingPaste) {
+        } else if (root._pendingPaste) {
             typeSettleTimer.restart();
         }
     }
@@ -1099,18 +1097,8 @@ PanelWindow {
         id: typeSettleTimer
         interval: 150
         onTriggered: {
-            var text = root._pendingTypeText;
             var paste = root._pendingPaste;
-            root._pendingTypeText = "";
             root._pendingPaste = false;
-            if (text !== "") {
-                // No `--` guard needed: no emoji starts with ASCII `-` (keycap
-                // sequences start with `#`/`*`/digits), and the list form keeps
-                // the char out of any shell interpolation.
-                typeProc.command = ["sh", "-c", 'command -v wtype >/dev/null 2>&1 || exit 127; exec wtype "$1"', "sh", text];
-                typeProc.running = true;
-                return;
-            }
             if (!paste)
                 return;
             var chord = Core.Config.get("clipboard.pasteChord", "ctrl+v");
@@ -1128,9 +1116,9 @@ PanelWindow {
         id: typeProc
         onExited: exitCode => {
             if (exitCode === 127)
-                console.warn("Menu: wtype not on PATH, copied but not typed");
+                console.warn("Menu: wtype not on PATH, copied but not pasted");
             else if (exitCode !== 0)
-                console.warn("Menu: wtype failed (exit " + exitCode + "), copied but not typed");
+                console.warn("Menu: wtype failed (exit " + exitCode + "), copied but not pasted");
         }
     }
 
@@ -1434,8 +1422,6 @@ PanelWindow {
             // shell-local toast the moment Enter lands.
             if (node.notifySummary)
                 NotificationService.notify(node.notifySummary, node.notifyBody || "");
-            if (node.typeText)
-                root._pendingTypeText = node.typeText;
             if (node.pasteAfter === true)
                 root._pendingPaste = true;
             // Toggle rows (default-menu.jsonc's "toggles" subtree) stay on
@@ -1653,7 +1639,7 @@ PanelWindow {
     // Held visible through the exit fade (DESIGN.md §4): close() drops
     // isOpen, card's opacity Behavior runs to 0, then the window unmaps.
     // Keyboard exclusivity releases on isOpen itself, so nothing types into
-    // a fading-out menu — and the emoji typeText settle timer still keys
+    // a fading-out menu, and the paste settle timer still keys
     // off the real visible flip below, exactly as before, just one exit
     // fade later. The window is transparent so the fade covers the whole
     // card; card paints its own background.

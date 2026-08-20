@@ -6,12 +6,11 @@
 // so the verb a row answers to is decided in exactly one place and a test
 // can reach it; Menu.qml owns the state and MenuActionBar.qml paints it.
 //
-// Verbs come from a node's `kind` (plus `typeText`, the emoji rows' own
-// copy-and-type marker), never from its id — a verb keyed off an id prefix
-// would go quietly wrong the first time a provider renamed its rows. A
-// provider that knows better than `kind` does says so in the node's own
-// `verb` field (clipboard rows: Copy, Paste or Share, none of which is
-// "Run"); that stays row data for the same reason, so the verb still has
+// Verbs come from a node's `kind`, never from its id: a verb keyed off an
+// id prefix would go quietly wrong the first time a provider renamed its
+// rows. A provider that knows better than `kind` does says so in the node's
+// own `verb` field (clipboard and emoji rows: Copy, Paste or Share, none of
+// which is "Run"); that stays row data for the same reason, so the verb has
 // exactly one source per row. A row that can't be activated at all
 // (`dim: true`, the honest-empty note rows every provider falls back to)
 // gets no primary action rather than a verb that would do nothing when
@@ -58,8 +57,6 @@ function primaryAction(ctx) {
     case "link":
         return { key: KEY_ENTER, label: "Enter" };
     case "action":
-        if (node.typeText)
-            return { key: KEY_ENTER, label: "Copy And Type" };
         return { key: KEY_ENTER, label: "Run" };
     }
     return null;
