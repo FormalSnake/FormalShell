@@ -820,9 +820,8 @@ floats with a margin or fuses to the screen edge.
   builtin effects, which are accent-colored as before.
 
   One output animates, not all of them (`shell/Display/priority.js`).
-  Every other screen covers itself with the same surface carrying the
-  converged banner, painted once, in `accent`, the effect's own gradient
-  would mean running the effect there too. Which one comes from
+  Every other screen covers itself with the same surface painting
+  nothing but `background` (owner's call, 2026-08-21). Which one comes from
   `display.outputPriority`, a preference list resolved against what is
   connected (`["HDMI", "internal"]`), re-applied on any screen change so an
   unplug hands the animation down the list and a plug takes it back. Unset,

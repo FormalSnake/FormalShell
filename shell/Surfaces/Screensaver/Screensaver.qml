@@ -364,8 +364,8 @@ Item {
                 readonly property int _columns: surface.visible ? Math.max(1, Math.floor(width / surface._cellWidth)) : 0
                 readonly property int _rows: surface.visible ? Math.max(1, Math.floor(height / surface._cellHeight)) : 0
 
-                // Only the main output animates (outputs.js); the rest paint
-                // the converged banner once, below. "" means the resolver
+                // Only the main output animates (outputs.js); every other
+                // screen stays a bare background field. "" means the resolver
                 // found no outputs to choose between, which can only happen
                 // with none connected — animating then costs nothing and is
                 // the safer way to be wrong.
@@ -613,12 +613,13 @@ Item {
                         renderStrategy: Canvas.Cooperative
 
                         // A Canvas repaints on resize, never on a change to
-                        // something its paint happens to read. The animating
-                        // surface repaints per frame and picks a recolor up
-                        // on its own; a paint-once one would hold the old
-                        // palette for as long as it stays up (a `wallpaper
-                        // set` over IPC lands mid-idle without any input to
-                        // dismiss the screensaver first).
+                        // something its paint happens to read. Frames repaint
+                        // themselves, but the converged banner sits still for
+                        // holdSeconds before the next cycle, and a recolor
+                        // landing in that window would hold the old palette
+                        // until it expired (a `wallpaper set` over IPC lands
+                        // mid-idle with no input to dismiss the screensaver
+                        // first).
                         readonly property color _accent: Core.Theme.color.accent
                         readonly property color _background: Core.Theme.color.background
                         on_AccentChanged: canvas.requestPaint()
@@ -628,6 +629,12 @@ Item {
                             var ctx = canvas.getContext("2d");
                             ctx.fillStyle = Core.Theme.color.background;
                             ctx.fillRect(0, 0, width, height);
+                            // Only the main output carries the effect;
+                            // every other screen is left as a bare
+                            // background field (owner's call,
+                            // 2026-08-21).
+                            if (!surface.animated)
+                                return;
                             var banner = root._banner;
                             if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
                                 return;
@@ -635,21 +642,6 @@ Item {
                             ctx.textBaseline = "top";
                             var offsetCol = Math.floor((surface._columns - banner.width) / 2);
                             var offsetRow = Math.floor((surface._rows - banner.height) / 2);
-
-                            // Every other output: the banner the animation
-                            // converges on, painted once. Not the effect's
-                            // own final colors — ttfx brings a different
-                            // gradient per effect and reproducing it would
-                            // mean running the effect here too, which is the
-                            // whole cost this avoids — so these carry the
-                            // theme's accent, the same colour the builtin
-                            // engine converges to.
-                            if (!surface.animated) {
-                                ctx.fillStyle = Core.Theme.color.accent;
-                                for (var br = 0; br < banner.height; br++)
-                                    ctx.fillText(banner.rows[br], offsetCol * surface._cellWidth, (offsetRow + br) * surface._cellHeight);
-                                return;
-                            }
 
                             // ttfx owns the whole canvas, colors included:
                             // each effect paints in its own upstream gradient
