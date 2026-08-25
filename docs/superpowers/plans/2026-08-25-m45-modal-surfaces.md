@@ -71,7 +71,13 @@ spec), niri (M46).
   props, `Theme.fontFamily`, `MetaLabel.qml`, `DogEar.qml`, spacing steps
   nothing reads (`rg` proves each), and rewrites every remaining reader
   (bar widgets without panels, plugin overlay, capture) onto the new API.
-  `tst_cell_states.qml` loses the mapped-prop cases.
+  `tst_cell_states.qml` loses the mapped-prop cases. The same sweep puts
+  every panel hero's meta line in sentence case (network `Disconnected`,
+  audio `Active`/`Muted`, calendar `Week 35`, system update `2 behind`,
+  airpods and dualsense state lines): DESIGN.md §5 allows uppercase only
+  in `SectionLabel` and the breadcrumb, and the strings live in model JS
+  with tests that move with them. `Theme.qml`'s two "Flexoki" comments and
+  `docs/ARCHITECTURE.md:104`'s "shared ledger cell" line go too.
 
 ## Tasks
 
