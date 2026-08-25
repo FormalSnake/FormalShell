@@ -18,6 +18,11 @@ Item {
     property string errorText: ""
 
     signal accepted()
+    // Fired on every key reaching the field, before the field's own
+    // handling and without accepting the event, so nothing here swallows a
+    // keystroke the field would otherwise take. The lock screen's idle-wake
+    // rides on it.
+    signal activity()
 
     function forceFocus() {
         input.forceActiveFocus();
@@ -75,6 +80,7 @@ Item {
             selectByMouse: true
             selectionColor: Theme.color.primary
             selectedTextColor: Theme.color.primaryForeground
+            Keys.onPressed: event => root.activity()
             onAccepted: root.accepted()
         }
     }

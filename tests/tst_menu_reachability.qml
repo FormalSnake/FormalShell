@@ -136,4 +136,12 @@ TestCase {
         var tree = _realTree();
         compare(tree.nodes["system.lock"].when, "false");
     }
+
+    // In-process through LockService, not a spawned `qs ipc call`: that form
+    // only ever resolves on the smoke rig, where the whole quickshell
+    // package is installed (the same trap the clipboard rows fell into).
+    function test_system_lock_routes_in_process() {
+        var tree = _realTree();
+        compare(tree.nodes["system.lock"].action, "@ipc:lock.lock");
+    }
 }

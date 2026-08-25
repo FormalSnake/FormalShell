@@ -26,9 +26,10 @@ import qs.Components
 // shows on the desktop layer) and never the screen. Never reintroduce
 // ScreencopyView here or anywhere lock-adjacent.
 //
-// What it does to that image used to be a gaussian blur, DESIGN.md rule 8's
-// one exception anywhere in the shell. M39 spent that exception: it is a
-// dither pass now, and no surface here blurs anything.
+// That image draws plain under a 0.5 black scrim. `lock.dither` (default
+// false, M45 D2) puts the retro dither pass back over it for anyone who
+// wants it; nothing here has ever blurred, and DESIGN.md's one named blur
+// exception is spent and gone.
 //
 // `Core.State` (qualified), not the bare `State` this file's other
 // unqualified `import qs.Core` would suggest: QtQuick's own built-in `State`
@@ -39,7 +40,7 @@ import qs.Components
 // file that reads this singleton (`Background.qml`, `ThemeEngine.qml`)
 // already imports `qs.Core as Core` for this exact reason; this file adds
 // that same aliased import alongside its existing bare one rather than
-// re-qualifying its many existing `Theme.*`/`MetaLabel` references.
+// re-qualifying its own existing `Theme.*` references.
 WlSessionLockSurface {
     id: surfaceRoot
 
@@ -68,6 +69,8 @@ WlSessionLockSurface {
 
     property date _now: new Date()
 
+    readonly property bool _dither: Core.Config.get("lock.dither", false)
+
     // Matches every other top-layer surface's own opaque-frame precaution
     // (Panel.qml/Center.qml): WlSessionLockSurface.color's own doc warns
     // transparent backgrounds behave weirdly on some compositors, so this
@@ -84,24 +87,16 @@ WlSessionLockSurface {
         color: Theme.color.background
     }
 
-    // Dithered wallpaper backdrop (spec §8; M39 Task 3 replaced the gaussian
-    // blur this used to carry): wallpaperImage stays hidden (visible: false)
-    // and only ever feeds DitherImage below as its source — the solid
-    // Rectangle above is what shows through when Core.State.wallpaper is
-    // unset.
-    //
-    // The blur was DESIGN.md rule 8's one named exception in the whole shell,
-    // and it is now spent nowhere: the lock backdrop destroys the wallpaper
-    // the same way the launcher's does and the desktop wallpaper already
-    // does, by quantizing it onto a handful of its own colors on a chunky
-    // grid (owner, 2026-08-19). Coarser than the desktop's own pass and
-    // finer than the launcher's — the wallpaper is the only thing on this
-    // surface worth looking at, so it keeps enough palette to still read as
-    // the picture it is.
+    // The wallpaper backdrop (spec "Lock and greeter"): plain by default,
+    // and the source DitherImage samples when `lock.dither` is on. Hidden in
+    // that case rather than removed, exactly as Background.qml hides its own
+    // crossfade layers: a Canvas samples an invisible Image fine, and this
+    // way the file decodes once either way. The solid Rectangle above is
+    // what shows through when Core.State.wallpaper is unset.
     Image {
         id: wallpaperImage
         anchors.fill: parent
-        visible: false
+        visible: !surfaceRoot._dither && Core.State.wallpaper !== "" && !surfaceRoot.blanked
         source: Core.State.wallpaper !== "" ? "file://" + Core.State.wallpaper : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
@@ -119,9 +114,20 @@ WlSessionLockSurface {
         anchors.fill: parent
         mode: "retro"
         sourceItem: wallpaperImage
-        visible: Core.State.wallpaper !== "" && !surfaceRoot.blanked
+        visible: surfaceRoot._dither && Core.State.wallpaper !== "" && !surfaceRoot.blanked
         chunk: 8
         paletteSize: 6
+    }
+
+    // The modal scrim (spec "Depth"): plain black at half opacity, the same
+    // one the launcher draws, so the column above reads against any
+    // wallpaper. Hidden while blanked, where the point is that nothing at
+    // all is on screen.
+    Rectangle {
+        anchors.fill: parent
+        visible: Core.State.wallpaper !== "" && !surfaceRoot.blanked
+        color: "black"
+        opacity: 0.5
     }
 
     // Mouse-move activity detector for `activity()` (see its declaration
@@ -140,8 +146,7 @@ WlSessionLockSurface {
         anchors.centerIn: parent
         visible: !surfaceRoot.blanked
         now: surfaceRoot._now
-        label: surfaceRoot.authError !== "" ? surfaceRoot.authError : "PASSWORD"
-        errorState: surfaceRoot.authError !== ""
+        errorText: surfaceRoot.authError
         checking: surfaceRoot.authenticating
         fingerprintEnrolled: surfaceRoot.fingerprintEnrolled
         onAccepted: password => surfaceRoot.submit(password)

@@ -269,7 +269,7 @@ shell/
         PluginBarModule.qml          kind:"bar" plugin host: Loader-hosted entry file, forwards its `shown`
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper,
-                                 dithered through DitherImage's retro pass (wallpaper.dither/ditherColors)
+                                 plain, or through DitherImage's retro pass when wallpaper.dither is on
     Menu/
       Menu.qml                  keyboard-exclusive top-layer window covering the focused output; jsonc -> tree -> cond batch -> rank/browse -> cells.
                                  Scrim: plain black at 0.5, fading with the card. A dithered freeze of the screen was
@@ -1119,10 +1119,18 @@ the user has since skipped past can never overwrite a newer result.
 
 ```
 Ipc/LockIpc.qml (target "lock") lock()
-  |  reads lockScreen.locked straight back after calling lock(): catches
-  |  WlSessionLock::realizeLockTarget()'s silent fail-open paths (no
-  |  ext-session-lock-v1 support, no surface, no WlSessionLockSurface) that
-  |  would otherwise report "ok" while the session stayed unlocked
+  v
+Services/LockService.qml  (the one lock trigger: this route, the `lock` hot
+                           corner, screensaver.lockAfterSeconds and the
+                           launcher's Lock row all land here)
+  |  lock.command set: CompositorService.spawn(argv), the surface below is
+  |  never mapped and `isLocked` reports null, since a foreign locker never
+  |  reports back
+  |  lock.command empty: raise the surface, then read lockScreen.locked
+  |  straight back, which catches WlSessionLock::realizeLockTarget()'s silent
+  |  fail-open paths (no ext-session-lock-v1 support, no surface, no
+  |  WlSessionLockSurface) that would otherwise report "ok" while the session
+  |  stayed unlocked
   v
 Surfaces/Lock/Lock.qml  (one Item wrapping WlSessionLock + both PamContexts;
                           see its own header comment for why a bare

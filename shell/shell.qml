@@ -106,18 +106,24 @@ ShellRoot {
     // Lock.qml's header comment) — one instance here covers every output.
     Lock { id: lock }
 
+    // LockService is the one lock trigger every caller goes through (IPC,
+    // the hot corner, the screensaver chain, the launcher's Lock row), and
+    // the built-in surface handle it needs exists only here.
+    Binding { target: LockService; property: "lockScreen"; value: lock }
+
     // Same "one controller, many surfaces" reasoning as Lock, minus the
     // WlSessionLock auto-management (see Screensaver.qml's own header
     // comment) — one instance here, its internal Variants loop covers every
     // output.
-    Screensaver { id: screensaver; lockScreen: lock }
+    Screensaver { id: screensaver }
 
-    // Corner triggers for the two surfaces above. Same split again — one
-    // controller here, its own Variants loop covering every output — and it
-    // takes handles on both rather than going through their IPC targets, so
-    // a corner behaves identically to `lock lock` / `screensaver start`
-    // without a round trip through the socket.
-    HotCorners { lockScreen: lock; screensaver: screensaver }
+    // Corner triggers for the two surfaces above. Same split again: one
+    // controller here, its own Variants loop covering every output. It takes
+    // the screensaver handle directly and locks through LockService rather
+    // than going through either IPC target, so a corner behaves identically
+    // to `lock lock` / `screensaver start` without a round trip through the
+    // socket.
+    HotCorners { screensaver: screensaver }
 
     // Same "one controller, shown on the focused screen at trigger time"
     // reasoning as Osd — but this one's trigger is a real polkit
@@ -221,7 +227,7 @@ ShellRoot {
     MediaIpc {}
     TrayIpc { trayMenu: trayMenuInstance }
     BarIpc {}
-    LockIpc { lockScreen: lock }
+    LockIpc {}
     ScreensaverIpc { screensaver: screensaver }
     // The image/wallpaper picker is the menu's "wallpaper" route (M23), not
     // a surface of its own — see PickerIpc.qml's header for why the target

@@ -160,7 +160,8 @@ var ICONS = {
     "arrow-left-right": "\u{F04E1}", // md-swap_horizontal
     "laptop": "\u{F0322}",           // md-laptop
     "git-fork": "\u{F00FB}",         // md-call_split
-    "bot": "\u{F16A3}"               // md-robot_excited
+    "bot": "\u{F16A3}"               // md-robot_excited,
+    "fingerprint": "\u{F0237}"
 };
 
 var FAMILY = "";

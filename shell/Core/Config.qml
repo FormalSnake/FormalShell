@@ -13,7 +13,12 @@ import QtQuick
 // timeout, seconds, fed straight to IdleMonitor.timeout), lock.
 // fingerprintPamService (string, default "" — the PAM service name for
 // Lock.qml's parallel fingerprint flow; empty means no reader enrolled, so
-// it never starts, M7 Task 4). screensaver.timeoutSeconds (number, default
+// it never starts, M7 Task 4), lock.command (array of strings, default [],
+// an external locker LockService spawns instead of raising the built-in
+// surface: ["hyprlock"], ["loginctl", "lock-session"]; empty keeps the
+// built-in one, M45) and lock.dither (bool, default false, the retro
+// dither pass over the lock backdrop; off means the plain wallpaper
+// draws, M45). screensaver.timeoutSeconds (number, default
 // 300 — IdleService's IdleMonitor.timeout), screensaver.guardMediaPlayback
 // (bool, default true — Screensaver.qml's live guard against auto-activating
 // while MediaService.isPlaying), screensaver.lockAfterSeconds (number,
@@ -38,12 +43,12 @@ import QtQuick
 // (number, default 400, clamped 0..10000 — how long the pointer must dwell
 // in the corner before the action fires; a click fires immediately
 // regardless). Resolved by shell/HotCorners/corners.js.
-// wallpaper.dither (bool, default true — Background.qml renders the
+// wallpaper.dither (bool, default false since M45: true renders the
 // wallpaper through the same image-derived-palette retro pass the album
-// covers use (DESIGN.md §2 item 12), on a grid sized in screen pixels rather
-// than source pixels; false puts the plain undithered Images back on screen,
-// M23) and wallpaper.ditherColors (number, default 6 — the upper bound on
-// colors that pass derives from the wallpaper, and the intensity knob: a
+// covers use (DESIGN.md §2 item 12), on a grid sized in screen pixels
+// rather than source pixels, and off draws the plain undithered
+// Images) and wallpaper.ditherColors (number, default 6, the upper bound
+// on colors that pass derives from the wallpaper, and the intensity knob: a
 // bigger palette leaves fewer cells sitting between two entries, so less of
 // the screen patterns at all).
 // picker.directory (string,

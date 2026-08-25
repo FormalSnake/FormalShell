@@ -494,9 +494,10 @@ times as many. The image is cover-cropped first with nearest-neighbor, so
 the scale never introduces a color the file didn't have.
 
 matugen reads the wallpaper file itself, never this rendering, so the dither
-can't influence the color scheme. It is on by default. Turn it off for a
-true-color wallpaper, or raise the palette for a subtler pass, since more
-colors means less of the image dithers at all:
+can't influence the color scheme. It is off by default: the wallpaper draws
+as the file has it. Turn it on for the limited-palette look, and raise the
+palette for a subtler pass, since more colors means less of the image dithers
+at all:
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -507,6 +508,9 @@ colors means less of the image dithers at all:
 # home-manager
 programs.formalshell.settings.wallpaper = { dither = true; ditherColors = 12; };
 ```
+
+`lock.dither` is the same pass over the lock screen's own backdrop, with the
+same default.
 
 ### Motion
 
@@ -1788,21 +1792,21 @@ home-manager module cannot create a PAM service; only system config can.
 `nixosModules.formalshell` does it for you, see
 [`README.md`](../README.md#install).
 
-The backdrop is the current wallpaper through the same dither pass the
-wallpaper itself uses. It has never captured the screen: a screencopy-based
-backdrop was tried first and crashes the whole shell, which on a
+The backdrop is the current wallpaper, drawn plain under a black scrim at
+half opacity. `lock.dither` puts the retro dither pass over it for anyone who
+wants it; it is off by default. The backdrop has never captured the screen: a
+screencopy-based one was tried first and crashes the whole shell, which on a
 security-critical surface means failing open, so it is not coming back.
 
-Everything on top is flat: one bordered card with an oversized clock, the
-uppercase date, a rule, and a single field with centered placeholder text
-and shrink-to-fit masking so a long password never clips silently. Failed
-auth turns the field's border urgent and shows an italic uppercase message
-(`WRONG PASSWORD`, `PAM ERROR`, `ACCOUNT LOCKED`), with no shake and no
-bounce. The greeter instantiates the exact same plate.
+On top of it is a centred column: the clock at three times the largest type
+size, the date as a section label, and one input. Failed auth turns the
+input's border destructive and prints the reason under it (`Wrong password`,
+`PAM error`, `Account locked`), with no shake and no bounce. The greeter
+draws the exact same column.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
-{ "lock": { "blankAfterSeconds": 30, "fingerprintPamService": "" } }
+{ "lock": { "blankAfterSeconds": 30, "fingerprintPamService": "", "dither": false } }
 ```
 
 ```nix
@@ -1810,6 +1814,7 @@ bounce. The greeter instantiates the exact same plate.
 programs.formalshell.settings.lock = {
   blankAfterSeconds = 30;
   fingerprintPamService = "";
+  dither = false;
 };
 ```
 
@@ -1822,15 +1827,45 @@ reader and runs as a parallel PAM flow with its own conversation, so a
 pending scan never blocks the password field and either can succeed. Empty
 by default, in which case no fingerprint glyph appears at all.
 
+### Using another locker
+
+`lock.command` is an argv list naming an external locker. Set it and every
+lock trigger in the shell spawns that instead of raising the built-in
+surface: `lock lock` over IPC, `formalshell-lock-before-sleep`, the `lock`
+hot corner, the `screensaver.lockAfterSeconds` chain and the launcher's Lock
+row all go through one place. Empty (the default) keeps the built-in one.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "lock": { "command": ["hyprlock"] } }
+{ "lock": { "command": ["swaylock", "-f", "-c", "000000"] } }
+{ "lock": { "command": ["loginctl", "lock-session"] } }
+```
+
+```nix
+# home-manager
+programs.formalshell.settings.lock.command = [ "hyprlock" ];
+```
+
+A foreign locker owns the session on its own terms and never reports back, so
+`lock isLocked` answers `unknown` and `lock status` reports `external: true`
+with a null `locked` while one is configured. Nothing else changes: the
+keybind, the corner and the menu row all still work.
+
 `formalshell-lock-before-sleep` wraps `lock lock` and always exits 0, so a
 lock failure can never block suspend. `programs.formalshell.systemd.lockBeforeSleep`
 (on by default) wires it to a user oneshot bound to `sleep.target`.
 
 ```sh
 fs lock lock
-fs lock isLocked   # "true" | "false"
-fs lock status     # {"locked":…,"secure":…,"authError":…,"blanked":…}
+fs lock isLocked   # "true" | "false" | "unknown" (an external locker)
+fs lock status     # {"external":…,"locked":…,"secure":…,"authError":…,"blanked":…}
 ```
+
+The greeter is optional in the same way. It ships as its own nix module
+(`nixosModules.formalshell-greeter`, see
+[`README.md`](../README.md#install)), so anyone already happy with SDDM or
+GDM simply never enables it and loses nothing else in the shell.
 
 There is deliberately no `unlock` verb. A headless "type this password"
 shortcut would bypass exactly the input and PAM wiring a real unlock

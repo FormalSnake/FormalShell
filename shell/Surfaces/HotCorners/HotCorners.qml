@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Core as Core
+import qs.Services
 import "../../HotCorners/corners.js" as Corners
 
 // Pointer-driven corner triggers: throw the cursor into a screen corner and
@@ -20,9 +21,9 @@ import "../../HotCorners/corners.js" as Corners
 Item {
     id: root
 
-    // Wired from shell.qml, same convention as Screensaver's own lockScreen:
-    // null leaves the matching action inert rather than erroring.
-    property var lockScreen: null
+    // Wired from shell.qml: null leaves the screensaver action inert rather
+    // than erroring. Locking needs no handle, it goes through LockService
+    // like every other lock trigger.
     property var screensaver: null
 
     readonly property var config: Corners.resolve(Core.Config.get("hotCorners", undefined))
@@ -37,8 +38,11 @@ Item {
     // re-arming rule below, which needs to tell "the pointer left the corner"
     // from "our own action's surface took the pointer away from it".
     function actionActive(action) {
+        // `isLocked` is null while an external locker owns the session
+        // (LockService's header): unknown is not active, so a corner entry
+        // still fires and the locker itself refuses a second instance.
         if (action === "lock")
-            return root.lockScreen !== null && root.lockScreen.locked;
+            return LockService.isLocked() === true;
         if (action === "screensaver")
             return root.screensaver !== null && root.screensaver.active;
         return false;
@@ -47,8 +51,8 @@ Item {
     function trigger(action) {
         if (root.actionActive(action))
             return;
-        if (action === "lock" && root.lockScreen)
-            root.lockScreen.lock();
+        if (action === "lock")
+            LockService.lock();
         else if (action === "screensaver" && root.screensaver)
             root.screensaver.start();
     }

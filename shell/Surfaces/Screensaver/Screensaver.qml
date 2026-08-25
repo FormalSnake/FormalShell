@@ -38,11 +38,6 @@ Item {
     // suppress the NEXT idle cycle once real activity resets things.
     property bool _suppressed: false
 
-    // Wired from shell.qml — the single Lock instance, same convention as
-    // CalendarPanel's `menu` property. null (the default) leaves the
-    // optional chain-into-lock inert.
-    property var lockScreen: null
-
     readonly property int lockAfterSeconds: Core.Config.get("screensaver.lockAfterSeconds", 0)
     readonly property bool guardMediaPlayback: Core.Config.get("screensaver.guardMediaPlayback", true)
 
@@ -299,8 +294,8 @@ Item {
         running: false
         repeat: false
         onTriggered: {
-            if (root.active && root.lockScreen)
-                root.lockScreen.lock();
+            if (root.active)
+                LockService.lock();
         }
     }
 

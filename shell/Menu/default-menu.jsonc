@@ -93,7 +93,7 @@
     "system": { "label": "System", "icon": "󰒓" },
     // Deliberately disabled -- flipping it on is the owner's call, not
     // something to change incidentally.
-    "system.lock": { "action": "qs ipc call lock lock", "when": "false" },
+    "system.lock": { "action": "@ipc:lock.lock", "when": "false" },
     "system.suspend": { "action": "systemctl suspend", "icon": "󰤄" },
     "system.reboot": { "action": "systemctl reboot", "icon": "󰜉", "confirm": true },
     "system.shutdown": { "action": "systemctl poweroff", "icon": "󰤂", "confirm": true },

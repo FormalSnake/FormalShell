@@ -28,13 +28,11 @@ import qs.Core as Core
 // session. The queued request replaces any earlier one and is applied the
 // moment the in-flight promote actually lands.
 //
-// Dithered by default (M23, owner: "it would be cool for the rendered
-// wallpaper to also be dithered ... similar to album covers"): both
-// crossfade layers render through the same `DitherImage` retro pass the
-// album covers use (DESIGN.md §2 item 12), sampling the two Images above
-// rather than decoding the file a second time each. `wallpaper.dither:
-// false` in settings.json puts the plain Images back on screen; the
-// crossfade and its promote bookkeeping are identical either way, the
+// Plain by default (M45 D2, owner 2026-08-25): the wallpaper draws as the
+// file has it. `wallpaper.dither: true` in settings.json renders both
+// crossfade layers through the `DitherImage` retro pass instead, sampling
+// the two Images above rather than decoding the file a second time each.
+// The crossfade and its promote bookkeeping are identical either way, the
 // dither layers just take over what is visible and add themselves to the
 // two gates below.
 //
@@ -63,7 +61,7 @@ PanelWindow {
     property bool _hasQueued: false
     property string _queuedUrl: ""
 
-    readonly property bool _dither: Core.Config.get("wallpaper.dither", true)
+    readonly property bool _dither: Core.Config.get("wallpaper.dither", false)
     // Upper bound on colors DitherImage derives from the wallpaper, and the
     // one knob for how much dithering there is: a bigger palette quantizes
     // the photograph more finely, so fewer cells sit between two entries and

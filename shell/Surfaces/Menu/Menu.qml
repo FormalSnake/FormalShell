@@ -1500,6 +1500,12 @@ PanelWindow {
             return;
         }
         switch (name) {
+        // In-process for the same reason the clipboard rows are: a spawned
+        // `qs ipc call` only ever resolves on the smoke rig, where the whole
+        // quickshell package is installed.
+        case "lock.lock":
+            LockService.lock();
+            break;
         case "theme.toggleMode":
             Core.State.toggleMode();
             break;

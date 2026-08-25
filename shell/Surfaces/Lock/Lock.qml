@@ -31,18 +31,17 @@ import qs.Core as Core
 //
 // M7 Task 4 (lock hardening) adds three things on top of Task 3's base
 // lock: idle blanking with a wall-clock resume guard, a parallel
-// fingerprint PAM flow, and a three-way uppercase error split (wrong
-// password / pam error / account locked) instead of one blanket message —
+// fingerprint PAM flow, and a three-way error split (wrong password / pam
+// error / account locked) instead of one blanket message,
 // see `blanked`, `pamFingerprint` and `_resultError()` below.
 Item {
     id: root
 
-    // Uppercase failure text for the input cell's meta row; "" means no
-    // error is showing. Cleared the moment a fresh lock() starts. Mapped
-    // from PamResult by _resultError() so wrong password, a pam-level
-    // error and an exhausted retry count each read distinctly rather than
-    // one blanket "AUTHENTICATION FAILED" — spec's "explicit, uppercase
-    // failure states... never a silent no-op."
+    // Failure text for the field's error caption; "" means no error is
+    // showing. Cleared the moment a fresh lock() starts. Mapped from
+    // PamResult by _resultError() so wrong password, a pam-level error and
+    // an exhausted retry count each read distinctly rather than one blanket
+    // "Authentication failed".
     property string authError: ""
     property bool authenticating: false
 
@@ -131,9 +130,9 @@ Item {
 
     function _resultError(result) {
         switch (result) {
-        case PamResult.MaxTries: return "ACCOUNT LOCKED";
-        case PamResult.Failed: return "WRONG PASSWORD";
-        default: return "PAM ERROR";
+        case PamResult.MaxTries: return "Account locked";
+        case PamResult.Failed: return "Wrong password";
+        default: return "PAM error";
         }
     }
 
@@ -185,7 +184,7 @@ Item {
         if (!pam.start()) {
             root.authenticating = false;
             root._pendingPassword = "";
-            root.authError = "PAM ERROR";
+            root.authError = "PAM error";
         }
     }
 

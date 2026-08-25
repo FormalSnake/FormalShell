@@ -6,7 +6,8 @@
 #
 # dev/smoke-niri.sh is the reference for what each leg proves and stays the
 # richer script until M46 deletes the niri backend. Legs here: the base bar
-# shot, --dump, --menu, --notify, --panel <name>, --console.
+# shot, --dump, --menu, --notify, --panel <name>, --console, --wallpaper,
+# --lock.
 #
 # Two ways the session comes up, decided by what the machine can actually
 # do (render_node_present and vkms_card_device below), never by a flag:
@@ -47,6 +48,8 @@ notify_mode=false
 panel_mode=false
 panel_name=""
 console_mode=false
+wallpaper_mode=false
+lock_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -54,7 +57,9 @@ while [ $# -gt 0 ]; do
     --notify) notify_mode=true; shift ;;
     --panel) panel_mode=true; panel_name="${2:-}"; shift 2 ;;
     --console) console_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--menu] [--notify] [--panel <name>] [--console]" >&2; exit 1 ;;
+    --wallpaper) wallpaper_mode=true; shift ;;
+    --lock) lock_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--menu] [--notify] [--panel <name>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
   esac
 done
 
@@ -66,7 +71,8 @@ fi
 # screenshot exists to show a summoned surface instead, the same split
 # dev/smoke-niri.sh draws.
 fixture_window_mode=true
-if $dump_mode || $menu_mode || $notify_mode || $panel_mode || $console_mode; then
+if $dump_mode || $menu_mode || $notify_mode || $panel_mode || $console_mode \
+  || $wallpaper_mode || $lock_mode; then
   fixture_window_mode=false
 fi
 
@@ -113,11 +119,22 @@ if $notify_mode; then
   fi
 fi
 
-if $fixture_window_mode; then
+if $fixture_window_mode || $wallpaper_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
     convert_bin="nix run nixpkgs#imagemagick -- convert"
+  fi
+fi
+
+# A real virtual-keyboard-unstable-v1 client. LockIpc deliberately has no
+# "type this password" verb (see its header), so the only way to prove the
+# unlock path is to actually type into it.
+if $lock_mode; then
+  if command -v wtype >/dev/null 2>&1; then
+    wtype_bin=$(command -v wtype)
+  else
+    wtype_bin=$(nix build 'nixpkgs#wtype^out' --no-link --print-out-paths)/bin/wtype
   fi
 fi
 
@@ -214,7 +231,30 @@ console_status_return_path="$shot_dir/console-status-return.json"
 console_open_path="$shot_dir/console-open.png"
 console_parked_path="$shot_dir/console-parked.png"
 console_return_path="$shot_dir/console-return.png"
+theme_status_path="$shot_dir/theme-status.json"
+wallpaper_get_path="$shot_dir/wallpaper-get.txt"
+wallpaper_solid_path="$shot_dir/wallpaper-solid.png"
+wallpaper_gradient_path="$shot_dir/wallpaper-gradient.png"
+lock_locked_path="$shot_dir/lock-locked.png"
+lock_typing_path="$shot_dir/lock-typing.png"
+lock_error_path="$shot_dir/lock-error.png"
+lock_unlocked_path="$shot_dir/lock-unlocked.png"
+lock_islocked1_path="$shot_dir/lock-islocked-1.txt"
+lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
+lock_status_path="$shot_dir/lock-status.json"
+lock_call_rc_path="$shot_dir/lock-call-rc.txt"
+lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
 cfg="$shot_dir/hyprland.conf"
+
+# lock-before-sleep's exit-0-always proof (spec §8), run BEFORE the session
+# below ever starts a shell instance: the exact "no running instance" case a
+# real lock-before-sleep systemd unit has to survive. A bare `qs ipc call
+# lock lock` exits 255 here; the wrapper must not.
+if $lock_mode; then
+  lock_before_sleep_rc=0
+  "$PWD/result/bin/formalshell-lock-before-sleep" || lock_before_sleep_rc=$?
+  echo "$lock_before_sleep_rc" > "$lock_before_sleep_rc_path"
+fi
 
 # Isolated HOME for the Hyprland process and everything it spawns, see the
 # host-session safety note in the header.
@@ -242,8 +282,20 @@ if $panel_mode && [ "$panel_name" = "systemupdate" ]; then
   systemupdate_settings=', "systemUpdate": {"flakeDir": "'"$PWD"'"}'
 fi
 
+# The retro dither is opt-in since M45, so the default run writes no
+# `wallpaper.dither` key at all and the --wallpaper leg asserts the plain
+# image reached the screen. SMOKE_WALLPAPER_DITHER=1 turns the opt-in on for
+# one run and flips that leg's own assertion with it, so both sides of the
+# setting are provable without a second flag.
+wallpaper_dither=false
+wallpaper_settings=""
+if $wallpaper_mode && [ "${SMOKE_WALLPAPER_DITHER:-0}" = "1" ]; then
+  wallpaper_dither=true
+  wallpaper_settings=', "wallpaper": {"dither": true}'
+fi
+
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings$wallpaper_settings}
 EOF
 
 # The calendar leg's own events, dated at run time so the fixture never goes
@@ -303,6 +355,25 @@ Size=48
 Context=Applications
 Type=Threshold
 EOF
+fi
+
+# --wallpaper's two fixtures. 1920x1080, not something small: a source below
+# the screen's own size never exercises Background/LockSurface's sourceSize
+# cap at all (Qt only scales a decode down), so a fixture has to at least
+# meet the screen to prove the cap engages.
+#
+# The first is monotone and the second a left-to-right gradient, and the pair
+# is what makes the dither assertions readable in both directions: a solid
+# source has one color whether or not a pass ran, so it can only ever prove
+# flatness, while a gradient carries far more colors than any derived palette
+# is allowed and so is the only one that can tell a plain image from a
+# quantized one. The gradient is generated portrait and rotated so the ramp
+# runs along the axis a full-width sample crosses.
+if $wallpaper_mode; then
+  wp_path="$shot_dir/wp.png"
+  $convert_bin -size 1920x1080 xc:'#7a3fb0' "$wp_path"
+  wp2_path="$shot_dir/wp2.png"
+  $convert_bin -size 1080x1920 gradient:'#3fb07a-#0b2d20' -rotate 90 "$wp2_path"
 fi
 
 # Every leg is a standalone script rather than an inline exec-once string:
@@ -441,11 +512,94 @@ sleep 3
 EOF
 fi
 
+# The lock leg's own clock. It starts late under --wallpaper so the two
+# wallpaper frames land first (see the lock drive script's comment).
+lock_t0=5
+if $wallpaper_mode; then
+  lock_t0=16
+fi
+
+# --wallpaper: set the solid fixture, dump `theme status` (the matugen
+# recolour), photograph it while it is still the only thing on screen, then
+# crossfade to the gradient and photograph that. Two frames, because the two
+# dither assertions below read opposite things and neither can be made off
+# the other's source.
+if $wallpaper_mode; then
+  wallpaper_script="$shot_dir/wallpaper-drive.sh"
+  write_script "$wallpaper_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call wallpaper set "$wp_path" > /dev/null 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_status_path" 2>&1
+sleep 2
+"$grim_bin" "$wallpaper_solid_path" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call wallpaper set "$wp2_path" > /dev/null 2>&1
+sleep 4
+"$qs_bin" ipc -p "$shell_path" call wallpaper get > "$wallpaper_get_path" 2>&1
+sleep 1
+"$grim_bin" "$wallpaper_gradient_path" > /dev/null 2>&1
+EOF
+fi
+
+# --lock's whole sequence lives in one script: everything in it is strictly
+# ordered (lock, prove it over IPC, photograph, type a wrong password,
+# photograph the error state, type the real one, photograph unlocked, prove
+# the flip back over IPC) with nothing needing to interleave.
+#
+# grim, not any compositor-side capture: the frames have to be taken while
+# the session is genuinely locked, and grim talks wlr-screencopy as an
+# ordinary client.
+#
+# Held back to $lock_t0 under --wallpaper so the two wallpaper frames above
+# are taken before the lock surface covers the output, which puts a real
+# matugen-recoloured gradient behind the lock plate in the bargain.
+if $lock_mode; then
+  lock_script="$shot_dir/lock-drive.sh"
+  write_script "$lock_script" <<EOF
+#!/usr/bin/env bash
+sleep $lock_t0
+"$qs_bin" ipc -p "$shell_path" call lock lock > /dev/null 2>&1
+echo \$? > "$lock_call_rc_path"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked1_path" 2>&1
+sleep 3
+"$grim_bin" "$lock_locked_path" > /dev/null 2>&1
+sleep 2
+"$wtype_bin" "wrong-password"
+sleep 1
+"$grim_bin" "$lock_typing_path" > /dev/null 2>&1
+"$wtype_bin" -k Return
+# The PAM round trip for a wrong password forks and execs through the whole
+# auth stack, which on this VM is slower than a first glance suggests: a 2s
+# buffer intermittently caught the frame before authError had updated.
+sleep 5
+"$grim_bin" "$lock_error_path" > /dev/null 2>&1
+sleep 2
+"$wtype_bin" "formalshell-test"
+"$wtype_bin" -k Return
+sleep 3
+"$grim_bin" "$lock_unlocked_path" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked2_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call lock status > "$lock_status_path" 2>&1
+EOF
+fi
+
 screenshot_delay=8
 session_timeout=40
 if $console_mode; then
   screenshot_delay=24
   session_timeout=60
+fi
+if $wallpaper_mode; then
+  screenshot_delay=16
+  session_timeout=50
+fi
+if $lock_mode; then
+  screenshot_delay=$((lock_t0 + 21))
+  session_timeout=$((lock_t0 + 45))
 fi
 tail_gap=1
 if $menu_mode; then
@@ -522,6 +676,12 @@ EOF
   fi
   if $console_mode; then
     echo "exec-once = bash $console_script"
+  fi
+  if $wallpaper_mode; then
+    echo "exec-once = bash $wallpaper_script"
+  fi
+  if $lock_mode; then
+    echo "exec-once = bash $lock_script"
   fi
   echo "exec-once = bash $shot_script"
 } > "$cfg"
@@ -666,6 +826,116 @@ if $console_mode; then
   echo "SMOKE_CONSOLE_RETURN $console_return_path"
   if cmp -s "$console_open_path" "$console_parked_path"; then
     fail "console-open and console-parked screenshots are byte-identical: the special workspace never left the screen"
+  fi
+fi
+
+if $wallpaper_mode; then
+  if [ ! -s "$theme_status_path" ]; then
+    fail "no theme status produced"
+  fi
+  cat "$theme_status_path"; echo
+  if [ ! -s "$wallpaper_get_path" ] || ! grep -qF "$wp2_path" "$wallpaper_get_path"; then
+    fail "wallpaper get did not report the second wallpaper. Got: $(cat "$wallpaper_get_path" 2>/dev/null)"
+  fi
+  for f in "$wallpaper_solid_path" "$wallpaper_gradient_path"; do
+    [ -f "$f" ] || fail "no wallpaper screenshot produced at $f"
+  done
+
+  # Reads whole pixels out of a cropped patch. The trailing [,)] tolerates an
+  # alpha component, which grim's PNG may or may not carry; a pattern
+  # anchored on ")" would silently parse nothing.
+  read_patch() {
+    $convert_bin "$1" -crop "$2" +repage txt:- 2>/dev/null \
+      | sed -n 's/^[0-9]*,[0-9]*: (\([0-9]*\),\([0-9]*\),\([0-9]*\)[,)].*/\1 \2 \3/p'
+  }
+
+  # Half one, and the same claim whether or not the pass ran: a monotone
+  # source's own color is its whole derived palette, so every cell matches an
+  # entry exactly and nothing has a second-nearest to dither against. A 64x64
+  # patch of bare wallpaper, well clear of the bar, must be #7a3fb0
+  # (122,63,176) and nothing else. This is the owner's 2026-08-12 report as
+  # an assertion: the posterize grid that preceded the derived palette
+  # speckled exactly here.
+  wallpaper_solid_pixels=$(read_patch "$wallpaper_solid_path" 64x64+100+500)
+  if [ -z "$wallpaper_solid_pixels" ]; then
+    fail "could not read any pixel out of the solid-wallpaper patch"
+  fi
+  wallpaper_solid_off=$(printf '%s\n' "$wallpaper_solid_pixels" \
+    | awk '{ if ($1 != 122 || $2 != 63 || $3 != 176) { print; exit } }')
+  if [ -n "$wallpaper_solid_off" ]; then
+    fail "monotone wallpaper pixel ($wallpaper_solid_off) is not the source color 7a3fb0"
+  fi
+  echo "SMOKE_WALLPAPER_FLAT 64x64 patch of the monotone wallpaper is 7a3fb0 end to end"
+  echo "SMOKE_WALLPAPER_SOLID $wallpaper_solid_path"
+
+  # Half two, and the half that reads the setting: a full-width strip of the
+  # gradient crosses the whole ramp. With the pass off (M45's default, and
+  # what this run's settings.json leaves unset) the strip has to carry far
+  # more colors than any derived palette is allowed, which is what proves the
+  # plain image reached the screen. With SMOKE_WALLPAPER_DITHER=1 the same
+  # strip has to land inside the palette cap instead, and carry more than a
+  # couple of colors, which is what proves the opt-in still quantizes AND
+  # dithers. Read as whole rows because the strip spans every column; a small
+  # square could legitimately sit inside one flat palette cell.
+  wallpaper_patch_pixels=$(read_patch "$wallpaper_gradient_path" 1920x40+0+500)
+  if [ -z "$wallpaper_patch_pixels" ]; then
+    fail "could not read any pixel out of the gradient-wallpaper patch"
+  fi
+  wallpaper_patch_colors=$(printf '%s\n' "$wallpaper_patch_pixels" | sort -u | wc -l | tr -d ' ')
+  if $wallpaper_dither; then
+    if [ "${wallpaper_patch_colors:-0}" -lt 3 ]; then
+      fail "wallpaper.dither is on and the gradient strip carries only $wallpaper_patch_colors color(s), so nothing dithered"
+    fi
+    if [ "$wallpaper_patch_colors" -gt 6 ]; then
+      fail "wallpaper.dither is on and the gradient strip carries $wallpaper_patch_colors colors, more than the 6-entry derived palette allows, so the pass did not quantize"
+    fi
+    echo "SMOKE_WALLPAPER_DITHER $wallpaper_patch_colors palette colors across a 1920x40 strip, wallpaper.dither on"
+  else
+    if [ "${wallpaper_patch_colors:-0}" -le 16 ]; then
+      fail "wallpaper.dither is off and the gradient strip carries only $wallpaper_patch_colors colors, so something quantized it anyway"
+    fi
+    echo "SMOKE_WALLPAPER_PLAIN $wallpaper_patch_colors distinct colors across a 1920x40 strip, wallpaper.dither off"
+  fi
+  echo "SMOKE_WALLPAPER_GRADIENT $wallpaper_gradient_path"
+fi
+
+if $lock_mode; then
+  if [ ! -s "$lock_before_sleep_rc_path" ] || ! grep -q "^0$" "$lock_before_sleep_rc_path"; then
+    fail "formalshell-lock-before-sleep did not exit 0 with no shell instance running. Got: $(cat "$lock_before_sleep_rc_path" 2>/dev/null)"
+  fi
+  if [ ! -s "$lock_call_rc_path" ] || ! grep -q "^0$" "$lock_call_rc_path"; then
+    fail "lock lock IPC call exited non-zero. Got: $(cat "$lock_call_rc_path" 2>/dev/null)"
+  fi
+  if [ ! -s "$lock_islocked1_path" ] || ! grep -q "^true$" "$lock_islocked1_path"; then
+    fail "lock isLocked did not report true right after lock(). Got: $(cat "$lock_islocked1_path" 2>/dev/null)"
+  fi
+  for f in "$lock_locked_path" "$lock_typing_path" "$lock_error_path" "$lock_unlocked_path"; do
+    [ -f "$f" ] || fail "no lock screenshot produced at $f"
+  done
+  echo "SMOKE_LOCK_LOCKED $lock_locked_path"
+  echo "SMOKE_LOCK_TYPING $lock_typing_path"
+  echo "SMOKE_LOCK_ERROR $lock_error_path"
+  echo "SMOKE_LOCK_UNLOCKED $lock_unlocked_path"
+  if [ ! -s "$lock_islocked2_path" ] || ! grep -q "^false$" "$lock_islocked2_path"; then
+    fail "lock isLocked did not flip back to false after the real password. Got: $(cat "$lock_islocked2_path" 2>/dev/null)"
+  fi
+  if [ ! -s "$lock_status_path" ]; then
+    fail "no lock status produced"
+  fi
+  cat "$lock_status_path"; echo
+  if ! grep -q '"locked":false' "$lock_status_path"; then
+    fail "lock status did not report locked:false after unlock. Got: $(cat "$lock_status_path")"
+  fi
+  # The swappable-locker half (M45 D2): this run writes no `lock.command`, so
+  # the built-in surface is the one that came up and `external` has to say so.
+  if ! grep -q '"external":false' "$lock_status_path"; then
+    fail "lock status did not report external:false with no lock.command set. Got: $(cat "$lock_status_path")"
+  fi
+  # A locked frame and an unlocked one cannot be the same picture. The
+  # cheapest guard there is against a leg that photographed the desktop four
+  # times while every IPC answer stayed perfectly plausible.
+  if cmp -s "$lock_locked_path" "$lock_unlocked_path"; then
+    fail "lock-locked and lock-unlocked screenshots are byte-identical: the lock surface never mapped"
   fi
 fi
 

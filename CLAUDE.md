@@ -21,8 +21,19 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 - `dev/smoke.sh` (`just vm-smoke <flags>`) is the rig now: nested Hyprland
   by default, `--compositor niri` runs the old `dev/smoke-niri.sh` instead.
   Legs ported so far: base, `--menu`, `--notify`, `--panel <name>`,
-  `--console`; every other leg documented below still lives only in the
-  niri script until M46 deletes it. In the VM, nested Hyprland runs on a
+  `--console`, `--wallpaper`, `--lock`; every other leg documented below
+  still lives only in the niri script until M46 deletes it. `--wallpaper`
+  here reads the dither setting rather than assuming it: the run writes no
+  `wallpaper.dither` key, so it asserts the plain image reached the screen
+  (a full-width strip of the gradient fixture carries far more colors than
+  any derived palette allows) while the monotone fixture still has to paint
+  its own exact color end to end. `SMOKE_WALLPAPER_DITHER=1` turns the
+  opt-in on for one run and flips that same assertion to the palette-capped
+  one, so both sides of the key are provable without a second flag.
+  `--lock` and `--wallpaper` combine rather than excluding each other: the
+  two wallpaper frames are taken first and the lock leg's whole timeline
+  shifts to `lock_t0`, which leaves a real matugen-recoloured gradient
+  behind the lock column. In the VM, nested Hyprland runs on a
   `vkms` software KMS card: the pixman-rendered sway parent advertises no
   `zwp_linux_dmabuf_v1` and hands it no render node, which aquamarine needs
   to create its backend at all, so `vkms` gives it a real (if virtual) GBM
@@ -162,17 +173,16 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `result/bin/formalshell-lock-before-sleep` with **no shell instance
   running at all** and records its exit code (must be `0` — the
   `lock-before-sleep` exit-0-always contract, spec §8). Then in-session:
-  `lock lock` over IPC (screenshotted as `lock-locked.png` — the shared
-  `AuthPrompt` plate: oversized clock, dithered wallpaper backdrop if
-  `--wallpaper` is combined in — that combination sets the GRADIENT fixture
-  and skips the crossfade/monotone-flatness legs entirely, because niri
-  refuses `screenshot-screen` on a session the lock leg locked at sleep 3,
-  and a monotone wallpaper dithers to a flat field that could not show
-  whether the pass ran — one 3px-outlined field), `lock isLocked`
+  `lock lock` over IPC (screenshotted as `lock-locked.png`: the shared
+  `AuthPrompt` column, oversized clock over the wallpaper under a 0.5 black
+  scrim, with `--wallpaper` combined in setting the GRADIENT fixture and
+  skipping the crossfade/monotone-flatness legs entirely, because niri
+  refuses `screenshot-screen` on a session the lock leg locked at sleep 3.
+  `dev/smoke.sh`'s own port has no such exclusion), `lock isLocked`
   confirms `true`, `wtype` (a real virtual-keyboard-unstable-v1 client —
   `LockIpc.qml` deliberately has no "type this password" shortcut) types a
-  wrong password and Return (screenshotted as `lock-error.png` — the field's
-  border swaps to `urgent`, italic uppercase `WRONG PASSWORD` message), then
+  wrong password and Return (screenshotted as `lock-error.png`: the input's
+  border swaps to `destructive` under a `Wrong password` caption), then
   retypes the VM's real throwaway test
   password (`nix/testvm.nix`'s `users.users.test.password`) and Return
   (screenshotted as `lock-unlocked.png`), with `lock isLocked`/`lock status`

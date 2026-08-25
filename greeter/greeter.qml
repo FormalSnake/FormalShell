@@ -23,13 +23,13 @@ import qs.Components
 // greeter), OnDemand defers to the compositor's normal focus semantics
 // instead of every surface individually claiming exclusive keyboard input.
 //
-// No Core.State reference anywhere below (unlike LockSurface's blurred-
-// wallpaper backdrop): State.qml derives its path from $HOME and, on
+// No Core.State reference anywhere below (unlike LockSurface's wallpaper
+// backdrop): State.qml derives its path from $HOME and, on
 // FileNotFound, WRITES a fresh state.json — exactly the "cannot read a
 // real user's $XDG_STATE_HOME/state.json and must not try" the plan warns
 // about, except here it'd be the `greeter` system user's own $HOME getting
-// a stray write. Flat Theme.color.background only; DESIGN.md's blur
-// exception (rule 8) stays lock-screen-only, not extended here.
+// a stray write. Flat Theme.color.background only, with no wallpaper and
+// so no scrim over one.
 //
 // Theme/settings sourcing: Core.Theme and Core.Config are reused
 // unmodified, not re-implemented for a "system path". Both already fail
@@ -67,21 +67,20 @@ ShellRoot {
     // this surface's own respond() call answering it — the one moment the
     // input cell is actually asking for something typeable.
     property bool _awaitingResponse: false
-    // Uppercase-rendered (MetaLabel does the case transform) failure text
-    // for the input cell's meta row; "" means no error is showing. Mirrors
-    // Lock.qml's authError convention, but greetd hands back a plain
-    // string rather than a PamResult enum, so it's shown verbatim rather
-    // than mapped through a second table of messages.
+    // Failure text for the field's error caption; "" means no error is
+    // showing. Mirrors Lock.qml's authError convention, but greetd hands
+    // back a plain string rather than a PamResult enum, so it is shown
+    // verbatim rather than mapped through a second table of messages.
     property string authError: ""
 
+    // The section label above the field. The error is not routed through
+    // here: it is the field's own error caption (AuthPrompt's `errorText`).
     readonly property string _promptLabel: {
-        if (root.authError !== "")
-            return root.authError;
         if (root._awaitingResponse)
-            return root._promptMessage !== "" ? root._promptMessage : "PASSWORD";
+            return root._promptMessage !== "" ? root._promptMessage : "Password";
         if (Greetd.state === GreetdState.Inactive)
-            return "USER";
-        return "AUTHENTICATING";
+            return "User";
+        return "Authenticating";
     }
 
     readonly property bool _inputEnabled: Greetd.available
@@ -125,7 +124,7 @@ ShellRoot {
         // phase reset needed here, _promptLabel/_inputEnabled above react
         // to Greetd.state directly.
         function onAuthFailure(message) {
-            root.authError = message !== "" ? message : "AUTHENTICATION FAILED";
+            root.authError = message !== "" ? message : "Authentication failed";
             root._awaitingResponse = false;
         }
 
@@ -142,7 +141,7 @@ ShellRoot {
         // displays normally.
         function onError(message) {
             if (root.authError === "")
-                root.authError = message !== "" ? message : "GREETD ERROR";
+                root.authError = message !== "" ? message : "greetd error";
             root._awaitingResponse = false;
         }
 
@@ -183,30 +182,21 @@ ShellRoot {
                     color: Core.Theme.color.background
                 }
 
-                // The greeter's twin of LockSurface.qml's own AuthPrompt use
-                // (M8b Task 6): identical component, identical composed
-                // clock/date/field block — no clock-less/field-only
-                // divergence from the lock screen. `unavailableText` covers
-                // the one state the lock screen never has (no greetd socket
-                // to talk to at all).
+                // The greeter's twin of LockSurface.qml's own AuthPrompt
+                // use: identical component, identical clock/date/field
+                // column, no clock-less or field-only divergence from the
+                // lock screen. `unavailableText` covers the one state the
+                // lock screen never has (no greetd socket at all).
                 AuthPrompt {
                     id: authPrompt
                     anchors.centerIn: parent
                     now: surface._now
                     label: root._promptLabel
-                    errorState: root.authError !== ""
+                    errorText: root.authError
                     checking: Greetd.state !== GreetdState.Inactive && !root._awaitingResponse
-                    // Unlike the lock screen's static "PASSWORD", greeter's
-                    // label carries the live greetd/PAM prompt message (or
-                    // "AUTHENTICATING") for as long as a conversation is in
-                    // flight — including the `_awaitingResponse` step
-                    // AuthPrompt's own default (errorState || checking)
-                    // would otherwise hide it during, which is exactly when
-                    // the real prompt text needs to be on screen.
-                    showLabel: root.authError !== "" || Greetd.state !== GreetdState.Inactive
                     masked: root._awaitingResponse && !root._promptEcho
                     inputEnabled: root._inputEnabled
-                    unavailableText: Greetd.available ? "" : "GREETD SOCKET UNAVAILABLE"
+                    unavailableText: Greetd.available ? "" : "No greetd socket to talk to"
                     onAccepted: value => root.submit(value)
                 }
 
