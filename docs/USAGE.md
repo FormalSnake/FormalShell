@@ -330,12 +330,16 @@ dash on the first tick, because a delta needs two samples.
 
 ### Tooltips
 
-Hovering a cell for 400ms opens a card under it with one uppercase row
-naming what the cell is and what it currently reads. It tracks the value
-live rather than freezing at hover time, hides itself while any panel is
-open, and passes clicks and hovers straight through to whatever is
-underneath. The 400ms is a delay rather than an animation, so
-`motion.enabled: false` keeps it.
+Hovering a cell for 400ms opens a card 6px under it naming what the cell is
+and what it currently reads. It tracks the value live rather than freezing
+at hover time, flips above the cell when there is no room below it, and
+passes clicks and hovers straight through to whatever is underneath. The
+400ms is a delay rather than an animation, so `motion.enabled: false` keeps
+it.
+
+The card anchors to whatever owns it, in any window: a bar cell, a row
+inside a panel, or a panel header's own icon button (the close button reads
+`Close`). A panel being open no longer suppresses it.
 
 Cells that carry one: workspaces (`WORKSPACE 2 / 3 WINDOWS`), audio, battery
 (percent plus `FULL IN 1H 20M` or `2H 5M LEFT` when UPower has an estimate),
@@ -958,16 +962,20 @@ fs notifications dismissAll     # clear popups
 fs notifications clearPending
 fs notifications clear          # both of the above
 fs notifications invokeLast     # fire the newest entry's default action
+fs notifications dismissOne     # drop the front popup, leave the rest
 fs notifications expand on      # reflow the stack, pause expiry
 fs notifications expand off
 ```
 
 ## OSD
 
-One bottom-centered card for volume, brightness and media, three fixed
-columns of icon, label and value. The column widths are measured once
-against a calibration set rather than the live value, so a ticking
-percentage or a swapped track title never reflows the card.
+One bottom-centred pill for volume, brightness and media: an icon, a
+progress track and the percentage in mono. It is the same width whatever it
+is showing, and the readout column is measured against `100%` rather than
+the live value, so a ticking percentage or a swapped track title never
+reflows the card. A muted sink keeps its pre-mute number on the readout but
+draws the crossed speaker and an empty track, since the icon answers
+"will I hear this" and the number answers "where is the slider".
 
 Volume and mute show themselves on any change to the default sink, whether
 it came from here, `wpctl`, `pavucontrol` or a hardware key. Brightness and
@@ -1348,9 +1356,9 @@ fs gallery toggle
 fs gallery status
 ```
 
-The one component it can't paint is the tooltip, which hides itself while
-any panel is open. That row says so rather than standing a lookalike in its
-place.
+The tooltip paints here like everything else: hovering the TOOLTIP row
+opens the real card over this panel, through the same lazy loader every
+other cell uses.
 
 ## System monitor
 

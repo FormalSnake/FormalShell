@@ -24,13 +24,11 @@ import qs.Components
 // are all this surface's own, straight out of Panel.qml. Every other
 // popout takes the same route for the same reason.
 //
-// The one component this surface cannot paint is Tooltip: Tooltip.qml
-// hides itself for as long as `PanelRegistry.current` is non-null (its own
-// `_visible`), and opening this Panel is exactly what sets that. So the
-// TOOLTIP row carries a real `tooltipText` — hovering it drives the real
-// component through Cell.qml's own lazy Loader — and the row under it says
-// plainly that it will not show here, instead of standing a lookalike card
-// in its place.
+// Tooltip paints here like everything else since M44: the card no longer
+// suppresses itself while a panel is open, and it anchors to the row that
+// owns it rather than to the bar. The TOOLTIP row carries a real
+// `tooltipText`, so hovering it drives the real component through Cell.qml's
+// own lazy Loader rather than standing a lookalike card in its place.
 Panel {
     id: root
 
@@ -433,7 +431,7 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "TOOLTIP HIDES WHILE ANY PANEL IS OPEN" }
+                        MetaLabel { text: "TOOLTIP OPENS UNDER THE ROW ABOVE, OVER THIS PANEL" }
                     }
                 }
             }

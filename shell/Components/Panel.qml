@@ -391,6 +391,7 @@ PanelWindow {
                 IconButton {
                     id: closeButton
                     name: "x"
+                    tooltipText: "Close"
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     onClicked: root.close()

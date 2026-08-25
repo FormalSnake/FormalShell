@@ -18,7 +18,41 @@ Item {
     property bool cursor: false
     property bool hovered: pointer.containsMouse
 
+    // Hover tooltip, the same contract Cell.qml carries: one short line
+    // naming what this control does, after Tooltip.qml's own delay, dropped
+    // the instant the pointer leaves. Empty (the default) means no tooltip.
+    // Duplicated rather than shared because a QML type inherits from one
+    // base and Cell and Button have nothing else in common.
+    property string tooltipText: ""
+
     signal clicked()
+
+    function _openTooltip() {
+        if (!root.hovered || root.tooltipText === "")
+            return;
+        tooltipLoader.active = true;
+        tooltipLoader.item.anchorItem = root;
+        tooltipLoader.item.text = root.tooltipText;
+        tooltipLoader.item.show();
+    }
+
+    onHoveredChanged: {
+        if (root.hovered)
+            root._openTooltip();
+        else if (tooltipLoader.item)
+            tooltipLoader.item.hide();
+    }
+
+    // Live while shown, never re-opened: a re-open would restart the show
+    // delay and blink the card on every change. The else branch covers the
+    // one case a text change IS an open, where the control had nothing to
+    // say when the pointer arrived and now does.
+    onTooltipTextChanged: {
+        if (tooltipLoader.item)
+            tooltipLoader.item.text = root.tooltipText;
+        else
+            root._openTooltip();
+    }
 
     readonly property bool _filled: root.variant === "default" || root.variant === "destructive"
     readonly property color _fill: root.variant === "default"
@@ -112,5 +146,15 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
+    }
+
+    // Loaded by URL and activated imperatively, for the reasons Cell.qml's
+    // own loader spells out: Tooltip.qml pulls in Quickshell, which
+    // tests/tst_button.qml has no module for, and the load has to have
+    // completed by the next statement in _openTooltip().
+    Loader {
+        id: tooltipLoader
+        active: false
+        source: "Tooltip.qml"
     }
 }

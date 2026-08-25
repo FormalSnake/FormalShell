@@ -119,6 +119,9 @@ shell/
     dither.js                    pure JS, .pragma library: palette() (median cut, up to paletteSize
                                   colors from the image itself), quantize() (nearest entry, ordered-
                                   dithered against the second nearest only), BAYER/hex/hexPalette
+    tooltip.js                   pure JS, .pragma library: placement(): where Tooltip.qml's card sits
+                                  relative to the item that owns it, below by default, flipped above
+                                  with no room, clamped inside the output on both axes
     qmldir
   Menu/
     model.js                     pure JS, .pragma library: parseJsonc()/buildTree()/visibleChildren()
@@ -210,7 +213,7 @@ shell/
     ThemeIpc.qml                IpcHandler target "theme", retheme()/mode()/status()
     WallpaperIpc.qml            IpcHandler target "wallpaper", set()/get()
     MenuIpc.qml                 IpcHandler target "menu", toggle()/summon()/close()/refresh()/ping()/select()/input()
-    NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/invokeLast()/expand(on|off)
+    NotificationsIpc.qml        IpcHandler target "notifications", dndState()/toggleDnd()/setDnd()/showHistory()/clear()/clearPending()/markAllSeen()/dismissAll()/dismissOne()/invokeLast()/expand(on|off)
     OsdIpc.qml                  IpcHandler target "osd", volume()/brightness()/media()/close()/state()
     PanelIpc.qml                 IpcHandler target "panel", open(name)/close()/toggle(name)/state(): registry maps name -> Panel instance
     ClipboardIpc.qml             IpcHandler target "clipboard", list()/copy(id)/remove(id)/clear()
@@ -298,10 +301,11 @@ shell/
                                      a dim READ ONLY title-band tag since the owner's host units own writes
     Notifications/
       Toasts.qml                 per-screen PanelWindow, Overlay layer; sonner-style depth stack off NotificationService.popups, anchored per notifications.position (default bottom-right), hover/IPC expand into a full column
-      Center.qml                  single-instance PanelWindow, Top layer; right-anchored PENDING/EARLIER sections + DND cell
-      NotificationCard.qml        shared Cell: meta row (app name/relative time) + summary/body, critical = accent fill
+      Center.qml                  single-instance PanelWindow, Top layer; right-anchored full-height Card, PENDING/SEEN sections, DND Switch
+      NotificationCard.qml        shared Card: app icon, app name + time, summary/body, action Buttons; critical = destructive border and icon, never a fill
     Osd/
-      Osd.qml                     single-instance PanelWindow, Overlay layer, bottom-center; icon|label|value, no keyboard focus
+      Osd.qml                     single-instance PanelWindow, Overlay layer, bottom-centre; Card pill of Icon | Track | percentage, no keyboard focus
+      icon.js                     pure JS, .pragma library: which Icon name each kind draws (volume ramp, mute, brightness, media)
     Lock/
       Lock.qml                    WlSessionLock wrapper + both PamContexts (password, parallel fingerprint) + idle-blank/resume-guard state
       LockSurface.qml              per-output Component WlSessionLock instantiates itself; dithered-wallpaper backdrop, oversized clock, one input cell
@@ -346,6 +350,8 @@ tests/
   tst_keyboard_layout.qml        qmltestrunner tests for Compositor/keyboard.js
   tst_app_match.qml              qmltestrunner tests for Compositor/appmatch.js
   tst_hyprland_workspaces.qml    qmltestrunner tests for Compositor/hyprland/model.js
+  tst_osd_icon.qml               qmltestrunner tests for Surfaces/Osd/icon.js
+  tst_tooltip_placement.qml      qmltestrunner tests for Components/tooltip.js
 dev/
   smoke-niri.sh                 nested-niri build+screenshot loop, dbus-run-session isolated; one mode
                                  flag per surface (--wallpaper, --menu, --notify, --osd, --panel <name>,
@@ -752,16 +758,17 @@ Osd.qml: Connections { onChanged: showVolume() }
   v
 Osd.qml: kind = "volume"|"brightness"|"media", hideTimer restarts (1.6s)
   -> visible = kind !== ""
-  -> icon|label|value Cells re-render off AudioService/BrightnessService
-     properties directly (no local copy: a still-open card tracks live
-     changes, e.g. a second wpctl call while the card is showing)
+  -> the Icon (Osd/icon.js), the Track and the readout re-render off
+     AudioService/BrightnessService properties directly (no local copy: a
+     still-open card tracks live changes, e.g. a second wpctl call while
+     the card is showing)
 ```
 
-Column widths (`_iconWidth`/`_labelWidth`/`_valueWidth`) are computed once
-off a hidden calibration `Item` (every glyph/label the card can ever show,
-rendered at the live font) rather than off whatever value happens to be
-showing, this is the no-jitter contract: volume ticking 3% → 97% or a long
-media title swapping in never reflows the card.
+The card is `popupWidthNarrow` wide whatever it is showing, and the readout
+column is measured off a hidden `100%` rendered at the live font rather than
+off whatever value happens to be showing. That is the no-jitter contract:
+volume ticking 3% → 97% or a long media title swapping in never moves the
+track's right edge.
 
 `BrightnessService` has no polling loop by design (`brightnessctl -m`
 queried once at startup, re-read straight from each `set()`/`step()` reply),
@@ -770,14 +777,15 @@ then poke the OSD to catch up: `brightnessctl set 5%+ && qs ipc call osd
 brightness`. On the mac VM rig, where the guest has a pipewire virtual sink
 but no backlight device, `AudioService.available` is honestly `true` and
 `BrightnessService.available` is honestly `false`, the brightness leg of
-`dev/smoke-niri.sh --osd` still proves the surface renders that kind
-correctly (`BRIGHTNESS` label, `0%`, empty fill), not that hardware exists.
+`dev/smoke.sh --osd` still proves the surface renders that kind
+correctly (the `sun` icon, `0%`, an empty track), not that hardware exists.
 One VM-specific gotcha: the guest's null-audio-sink volume persists across
-nested niri sessions (pipewire itself isn't restarted between runs), so a
-`wpctl set-volume … 30%` that re-sets an already-30% sink is a no-op , 
-`AudioService.changed` only fires on an actual value change, so a repeat
-`--osd` run's auto-show leg can legitimately capture nothing new. This isn't
-a bug in the trigger; it's a property of testing against durable state.
+nested sessions (pipewire itself isn't restarted between runs), so a
+`wpctl set-volume … 30%` that re-sets an already-30% sink is a no-op, and
+`AudioService.changed` only fires on an actual value change. That is a
+property of testing against durable state, not a bug in the trigger, so the
+`--osd` leg sets the sink to a second value first and the auto-show one is
+always a real change.
 
 ## Panel host + `panel` IPC data flow
 

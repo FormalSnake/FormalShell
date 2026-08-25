@@ -8,6 +8,27 @@
 # richer script until M46 deletes the niri backend. Legs here: the base bar
 # shot, --dump, --menu, --notify, --center, --panel <name>, --panel-at <n>,
 # --console, --wallpaper, --lock.
+# shot, --dump, --menu, --notify, --osd, --panel <name> (with --tooltip),
+# --console.
+#
+# --osd drives the bottom-centre pill three ways off one timeline: a manual
+# `osd volume` (osd-manual.png), a real `wpctl set-volume` (the
+# AudioService.changed auto-show trigger, this run's own SMOKE_OK frame),
+# then `osd brightness` (osd-brightness.png). The VM has a pipewire null
+# sink but no backlight device, so the brightness frame proves the surface
+# renders that kind honestly (0%, empty track), not that hardware exists.
+# The sink is set to a second value first, because pipewire outlives the
+# session: re-setting an already-30% sink changes nothing, `changed` never
+# fires, and the auto-show leg would photograph an empty screen.
+#
+# --tooltip rides on --panel <name>: after the panel's own frame is taken,
+# it parks the pointer on the panel header's close button (wlrctl, a real
+# zwlr_virtual_pointer_v1 client, this rig's only synthetic pointer) and
+# proves the tooltip both maps and anchors there. `hyprctl -j layers` is
+# dumped either side of the park, and the formalshell:tooltip namespace has
+# to be absent before and present after: a tooltip that still suppressed
+# itself under an open panel (the pre-M44 rule) would leave the second dump
+# looking like the first.
 #
 # Two ways the session comes up, decided by what the machine can actually
 # do (render_node_present and vkms_card_device below), never by a flag:
@@ -50,6 +71,10 @@ panel_mode=false
 panel_name=""
 panel_at_mode=false
 panel_at_index=""
+osd_mode=false
+panel_mode=false
+panel_name=""
+tooltip_mode=false
 console_mode=false
 wallpaper_mode=false
 lock_mode=false
@@ -64,7 +89,11 @@ while [ $# -gt 0 ]; do
     --console) console_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--panel <name>] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
+    --osd) osd_mode=true; shift ;;
+    --panel) panel_mode=true; panel_name="${2:-}"; shift 2 ;;
+    --tooltip) tooltip_mode=true; shift ;;
+    --console) console_mode=true; shift ;;
   esac
 done
 
@@ -89,12 +118,18 @@ if $panel_at_mode; then
   panel_at_expected="${panel_at_defaults[$((panel_at_index - 1))]}"
 fi
 
+# The tooltip leg anchors to a panel header's own close button, so it has
+# nothing to park on without a panel open.
+if $tooltip_mode && ! $panel_mode; then
+  echo "usage: $0 --panel <name> --tooltip" >&2; exit 1
+fi
+
 # Only the base leg gets the focused fixture window: every other leg's own
 # screenshot exists to show a summoned surface instead, the same split
 # dev/smoke-niri.sh draws.
 fixture_window_mode=true
-if $dump_mode || $menu_mode || $notify_mode || $center_mode || $panel_mode || $panel_at_mode \
-  || $console_mode || $wallpaper_mode || $lock_mode; then
+if $dump_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode \
+  || $panel_at_mode || $console_mode || $wallpaper_mode || $lock_mode; then
   fixture_window_mode=false
 fi
 
@@ -138,6 +173,22 @@ if $notify_mode || $center_mode; then
     notify_send_bin=$(command -v notify-send)
   else
     notify_send_bin=$(nix build --no-link --print-out-paths 'nixpkgs#libnotify^out')/bin/notify-send
+  fi
+fi
+
+if $tooltip_mode; then
+  if command -v wlrctl >/dev/null 2>&1; then
+    wlrctl_bin=$(command -v wlrctl)
+  else
+    wlrctl_bin=$(nix build --no-link --print-out-paths 'nixpkgs#wlrctl^out')/bin/wlrctl
+  fi
+fi
+
+if $osd_mode; then
+  if command -v wpctl >/dev/null 2>&1; then
+    wpctl_bin=$(command -v wpctl)
+  else
+    wpctl_bin=$(nix build --no-link --print-out-paths 'nixpkgs#wireplumber^out')/bin/wpctl
   fi
 fi
 
@@ -256,6 +307,14 @@ panel_at_toggle_path="$shot_dir/panel-at-toggle.txt"
 panel_at_state_path="$shot_dir/panel-at-state.txt"
 panel_at_path="$shot_dir/panel-at.json"
 panel_at_shot_path="$shot_dir/panel-at.png"
+osd_manual_path="$shot_dir/osd-manual.png"
+osd_brightness_path="$shot_dir/osd-brightness.png"
+panel_open_path="$shot_dir/panel-open.txt"
+panel_state_path="$shot_dir/panel-state.txt"
+tooltip_dispatch_path="$shot_dir/tooltip-dispatch.txt"
+tooltip_layers_before_path="$shot_dir/tooltip-layers-before.json"
+tooltip_layers_after_path="$shot_dir/tooltip-layers-after.json"
+tooltip_path="$shot_dir/panel-tooltip.png"
 console_status_open_path="$shot_dir/console-status-open.json"
 console_status_parked_path="$shot_dir/console-status-parked.json"
 console_status_return_path="$shot_dir/console-status-return.json"
@@ -538,6 +597,58 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_closed_path" 2>&1
+if $osd_mode; then
+  # Each trigger is screenshotted a second later, well inside the pill's
+  # 1.6s auto-hide window, with enough gap between them that the previous
+  # card is long gone before the next fires. The sleep-7 set is not
+  # photographed: it exists so the sleep-9 one is always a real change, see
+  # the header.
+  osd_script="$shot_dir/osd-drive.sh"
+  write_script "$osd_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$qs_bin" ipc -p "$shell_path" call osd volume > /dev/null 2>&1
+sleep 1
+"$grim_bin" "$osd_manual_path" > /dev/null 2>&1
+sleep 2
+"$wpctl_bin" set-volume @DEFAULT_AUDIO_SINK@ 80% > /dev/null 2>&1
+sleep 2
+"$wpctl_bin" set-volume @DEFAULT_AUDIO_SINK@ 30% > /dev/null 2>&1
+sleep 4
+"$qs_bin" ipc -p "$shell_path" call osd brightness > /dev/null 2>&1
+sleep 1
+"$grim_bin" "$osd_brightness_path" > /dev/null 2>&1
+EOF
+fi
+
+if $tooltip_mode; then
+  # 1886x74 is the panel header's close button, and it is the same point
+  # whatever the panel's width: Panel.qml pins the frame's RIGHT edge at
+  # screen.width - barMargin, the Card insets by panelPadding, and the
+  # button is controlHeight square against that inset edge, verticalCentred
+  # in a header that starts panelPadding below a frame top of
+  # barHeight + barMargin.
+  #
+  # wlrctl, not `hyprctl dispatch movecursor`: the dispatcher warps the
+  # cursor (`hyprctl cursorpos` reads the target back, and `grim -c` draws
+  # it on the button) without sending the surface under it a pointer enter,
+  # so nothing hover-driven ever fires. wlrctl is a real
+  # zwlr_virtual_pointer_v1 client, the same line the lock leg's wtype draws
+  # for the keyboard. Its protocol is relative only, so the pointer is first
+  # slammed into the top-left corner, which the compositor clamps, and the
+  # target is then one move from a known origin.
+  tooltip_script="$shot_dir/tooltip-drive.sh"
+  write_script "$tooltip_script" <<EOF
+#!/usr/bin/env bash
+sleep 9
+"$hyprctl_bin" -j layers > "$tooltip_layers_before_path" 2>&1
+"$wlrctl_bin" pointer move -4000 -4000 > "$tooltip_dispatch_path" 2>&1
+sleep 1
+"$wlrctl_bin" pointer move 1886 74 >> "$tooltip_dispatch_path" 2>&1
+sleep 2
+"$hyprctl_bin" cursorpos >> "$tooltip_dispatch_path" 2>&1
+"$hyprctl_bin" -j layers > "$tooltip_layers_after_path" 2>&1
+"$grim_bin" -c "$tooltip_path" > /dev/null 2>&1
 EOF
 fi
 
@@ -681,6 +792,10 @@ session_timeout=40
 if $console_mode; then
   screenshot_delay=24
   session_timeout=60
+elif $osd_mode; then
+  # The auto-show trigger lands at 9, and this run's own SMOKE_OK frame is
+  # the one it produces.
+  screenshot_delay=10
 fi
 if $wallpaper_mode; then
   screenshot_delay=16
@@ -702,6 +817,12 @@ if $menu_mode; then
   # menu-finish.sh's own read-back lands at 10, so the session has to
   # outlive that, not just the screenshot.
   tail_gap=4
+elif $osd_mode; then
+  # The brightness frame lands at 14.
+  tail_gap=5
+elif $tooltip_mode; then
+  # The tooltip frame lands at 12, a beat past the card's 400ms delay.
+  tail_gap=8
 fi
 
 shot_script="$shot_dir/shot.sh"
@@ -770,11 +891,17 @@ EOF
   if $center_mode; then
     echo "exec-once = bash $center_script"
   fi
+  if $osd_mode; then
+    echo "exec-once = bash $osd_script"
+  fi
   if $panel_mode; then
     echo "exec-once = bash $panel_script"
   fi
   if $panel_at_mode; then
     echo "exec-once = bash $panel_at_script"
+  fi
+  if $tooltip_mode; then
+    echo "exec-once = bash $tooltip_script"
   fi
   if $console_mode; then
     echo "exec-once = bash $console_script"
@@ -927,6 +1054,17 @@ if $center_mode; then
   echo "SMOKE_CENTER $center_path"
 fi
 
+if $osd_mode; then
+  if [ ! -f "$osd_manual_path" ]; then
+    fail "no osd-manual screenshot produced"
+  fi
+  echo "SMOKE_OSD_MANUAL $osd_manual_path"
+  if [ ! -f "$osd_brightness_path" ]; then
+    fail "no osd-brightness screenshot produced"
+  fi
+  echo "SMOKE_OSD_BRIGHTNESS $osd_brightness_path"
+fi
+
 if $panel_mode; then
   if [ ! -s "$panel_open_path" ] || ! grep -q "^ok$" "$panel_open_path"; then
     fail "panel open $panel_name did not answer ok, got: $(cat "$panel_open_path" 2>/dev/null)"
@@ -958,6 +1096,33 @@ if $panel_at_mode; then
     fail "no panel-at screenshot produced"
   fi
   echo "SMOKE_PANEL_AT $panel_at_shot_path"
+fi
+
+if $tooltip_mode; then
+  for f in "$tooltip_layers_before_path" "$tooltip_layers_after_path"; do
+    if [ ! -s "$f" ]; then
+      fail "no layer dump produced at $f"
+    fi
+  done
+  # The surface does not exist at all until a cell's own lazy Loader arms
+  # it, so its absence here is what makes the second dump mean something.
+  if grep -q 'formalshell:tooltip' "$tooltip_layers_before_path"; then
+    fail "a tooltip layer surface was already mapped before the pointer parked on anything"
+  fi
+  if ! grep -q 'formalshell:tooltip' "$tooltip_layers_after_path"; then
+    echo "--- pointer moves, then cursorpos ---" >&2
+    cat "$tooltip_dispatch_path" >&2 2>/dev/null || true
+    echo "--- layer namespaces after the park ---" >&2
+    grep -o '"namespace": "[^"]*"' "$tooltip_layers_after_path" >&2 || true
+    fail "no formalshell:tooltip layer surface after parking the pointer on the panel header's close button"
+  fi
+  # Printed on the happy path too: it is the only evidence of WHERE the
+  # pointer ended up, which the frame alone cannot be trusted for.
+  cat "$tooltip_dispatch_path" 2>/dev/null || true
+  if [ ! -f "$tooltip_path" ]; then
+    fail "no panel-tooltip screenshot produced"
+  fi
+  echo "SMOKE_TOOLTIP $tooltip_path"
 fi
 
 if $console_mode; then
