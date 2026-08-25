@@ -41,8 +41,6 @@ Cell {
         return null;
     }
 
-    standalone: true
-
     // The glyph alone says "wifi", never which network or how well. Same
     // precedence the glyph uses (wired beats wifi beats nothing). The
     // trailing segment states the M26 Task 9 right-click action —
