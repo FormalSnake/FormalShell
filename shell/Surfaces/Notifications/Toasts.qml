@@ -5,6 +5,7 @@ import qs.Core
 import qs.Components
 import qs.Notifications
 import "../../Notifications/model.js" as Model
+import "../../Notifications/stack.js" as Stack
 
 // The popup toast stack (DESIGN.md §Notifications, M8b Task 5; sonner-style
 // collapsed depth stack, M34 Task 2): a fixed pool of card slots
@@ -19,8 +20,12 @@ import "../../Notifications/model.js" as Model
 // before the slot frees up — Panel.qml's "visible-until-opacity-0 hold"
 // generalized to a pool instead of a single surface.
 //
-// Two geometries share the same pool, picked by `_expanded`
-// (`_geomFor`/`_computeLayout` below): COLLAPSED is sonner's depth stack —
+// Two geometries share the same pool, picked by `_expanded`. Where each
+// card lands in either one is `Notifications/stack.js`, pure so the depth
+// stack's own contract can be asserted without a compositor
+// (tst_toast_stack.qml); `_computeLayout` below is the adapter that hands
+// it the slot indices and their measured heights, and `_geomFor` is what
+// the delegates read. COLLAPSED is sonner's depth stack:
 // the front card full-size, up to two older ones peeking a fixed sliver
 // out from behind it, each SIZED narrower by an integer `Theme.space`
 // step per level (owner amendment, 2026-08-18: never a fractional
@@ -139,21 +144,21 @@ PanelWindow {
 
     // --- the depth-stack pool -------------------------------------------
 
-    // The inner NotificationCard is ALWAYS this width — never bound to
+    // The inner NotificationCard is ALWAYS this width, never bound to
     // anything rank/mode-dependent. If it were, its own implicit height
     // (text reflow) would feed into `_layout` below (used for exactly
     // that: reading each card's natural height), which would then feed
-    // back into this same card's width — a real binding loop, not just a
-    // theoretical one. A collapsed peek level narrows visually instead:
-    // `cardFrame` clips to the narrower rank width while `card` itself
-    // stays put underneath at full width, `inset` (below) shifting it so
-    // the SAME centered slice always shows through — the physical
-    // equivalent of a viewport moving over a card that never resizes.
+    // back into this same card's width: a real binding loop, not just a
+    // theoretical one. A collapsed peek level draws `peekShell` instead,
+    // which is the card's own chrome at the narrower rank width with no
+    // content in it, and which takes its height from the fixed-width card
+    // it stands in for. Only a rank whose card is actually readable
+    // (`contentVisible`) paints the card itself.
     readonly property real _cardWidth: Theme.space.popupWidthNarrow
-    // The outer frame's width, front/expanded alike — matches the
-    // pre-M34 `card.width + Theme.borderWidth` shape (the left rule's own
-    // reserve; Cell already draws its own bottom/right rule).
-    readonly property real _frameWidth: root._cardWidth + Theme.borderWidth
+    // The frame is the card, front/expanded alike: the Card primitive
+    // draws its border inside its own bounds, so nothing outside it needs
+    // reserving.
+    readonly property real _frameWidth: root._cardWidth
     readonly property int _maxPeekLevels: 2
     readonly property real _peekInset: Theme.space.lg
     readonly property real _peekOffset: Theme.space.sm
@@ -173,7 +178,7 @@ PanelWindow {
 
     readonly property bool _hasDepartingSlots: root._slots.some(function (s) { return s && s.departing; })
 
-    readonly property var _fallbackGeom: ({ x: 0, y: 0, width: root._frameWidth, inset: 0, z: 0, contentVisible: false })
+    readonly property var _fallbackGeom: ({ x: 0, y: 0, width: root._frameWidth, z: 0, contentVisible: false })
 
     readonly property var _emptyEntry: ({
         id: "", appName: "", appIcon: "", summary: "", body: "", urgency: 1,
@@ -252,48 +257,38 @@ PanelWindow {
     // a binding loop against this same computation.
     readonly property var _layout: root._computeLayout()
 
+    // Slot index per entry, `null` where a group has no slot of its own
+    // (Stack.layout keeps that entry's rank, it just draws nothing).
+    function _slotKeys(entries) {
+        return entries.map(function (e) {
+            var idx = root._slotIndexForKey(Model.groupKey(e));
+            return idx < 0 ? null : idx;
+        });
+    }
+
     function _computeLayout() {
-        var out = {};
-        var spec = root._positionSpec;
+        var collapsed = root._slotKeys(root._stackOrder);
+        var expanded = root._slotKeys(root._entries);
 
-        var frontIdx = root._stackOrder.length > 0 ? root._slotIndexForKey(Model.groupKey(root._stackOrder[0])) : -1;
-        var frontItem = frontIdx >= 0 ? poolRepeater.itemAt(frontIdx) : null;
-        var frontHeight = frontItem ? frontItem.height : 0;
+        var heights = {};
+        collapsed.concat(expanded).forEach(function (key) {
+            if (key === null || heights[key] !== undefined)
+                return;
+            var item = poolRepeater.itemAt(key);
+            heights[key] = item ? item.height : 0;
+        });
 
-        for (var r = 0; r < root._stackOrder.length; r++) {
-            var idx = root._slotIndexForKey(Model.groupKey(root._stackOrder[r]));
-            if (idx < 0)
-                continue;
-            var clamped = Math.min(r, root._maxPeekLevels);
-            var ins = clamped * root._peekInset;
-            var cx = ins;
-            // The reveal recedes AWAY from the anchor edge, same as
-            // sonner's own translateY: the anchor edge already carries the
-            // front card flush against it (panelGap margin), so a peek can
-            // only sit further from that edge, its top-`peekOffset` (top
-            // anchor) or bottom-`peekOffset` (bottom anchor) sliver poking
-            // out from behind whichever card is in front of it.
-            var cy = spec.top ? clamped * root._peekOffset : (root._maxPeekLevels - clamped) * root._peekOffset;
-            var cw = root._frameWidth - ins * 2;
-            out[idx] = { collapsed: { x: cx, y: cy, width: cw, inset: ins, z: root._stackOrder.length - r, contentVisible: r === 0 } };
-        }
-
-        var y = 0;
-        for (var i = 0; i < root._entries.length; i++) {
-            var eidx = root._slotIndexForKey(Model.groupKey(root._entries[i]));
-            if (eidx < 0)
-                continue;
-            if (!out[eidx])
-                out[eidx] = {};
-            out[eidx].expanded = { x: 0, y: y, width: root._frameWidth, inset: 0, z: root._entries.length - i, contentVisible: true };
-            var eitem = poolRepeater.itemAt(eidx);
-            var eh = eitem ? eitem.height : 0;
-            y += eh + Theme.space.panelGap;
-        }
-
-        out._collapsedTotalHeight = frontHeight + root._maxPeekLevels * root._peekOffset;
-        out._expandedTotalHeight = root._entries.length > 0 ? Math.max(0, y - Theme.space.panelGap) : 0;
-        return out;
+        return Stack.layout({
+            collapsed: collapsed,
+            expanded: expanded,
+            heights: heights,
+            frameWidth: root._frameWidth,
+            peekInset: root._peekInset,
+            peekOffset: root._peekOffset,
+            maxPeekLevels: root._maxPeekLevels,
+            gap: Theme.space.panelGap,
+            top: root._positionSpec.top
+        });
     }
 
     function _geomFor(index) {
@@ -302,10 +297,10 @@ PanelWindow {
             return root._fallbackGeom;
         if (slot.departing)
             return slot.frozen || root._fallbackGeom;
-        var entry = root._layout[index];
+        var entry = root._layout.byKey[index];
         if (!entry)
             return root._fallbackGeom;
-        return root._expanded ? entry.expanded : entry.collapsed;
+        return (root._expanded ? entry.expanded : entry.collapsed) || root._fallbackGeom;
     }
 
     // A departing card keeps whatever bounds it had when it left, and the
@@ -326,7 +321,7 @@ PanelWindow {
     }
 
     readonly property real _targetHeight: Math.max(
-        root._expanded ? (root._layout._expandedTotalHeight || 0) : (root._layout._collapsedTotalHeight || 0),
+        root._expanded ? root._layout.expandedHeight : root._layout.collapsedHeight,
         root._departingExtent())
 
     // --- hover / IPC expand ----------------------------------------------
@@ -398,15 +393,8 @@ PanelWindow {
                 y: cardFrame._geom.y
                 z: cardFrame._geom.z
                 width: cardFrame._geom.width
-                implicitHeight: card.height + Theme.borderWidth
+                implicitHeight: card.height
                 height: implicitHeight
-                // A peek level clips down to its narrower rank width; the
-                // card underneath keeps its own fixed full width and just
-                // shifts by `inset` (below) so the same centered slice
-                // shows through, sonner's "sized narrower... horizontally
-                // centered" read entirely as a viewport, never a resize of
-                // the card itself.
-                clip: true
 
                 Behavior on x {
                     NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
@@ -439,40 +427,21 @@ PanelWindow {
                         root._clearSlot(cardFrame.index);
                 }
 
-                Rectangle {
-                    anchors.fill: parent
-                    color: Theme.color.background
-                }
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: Theme.borderWidth
-                    color: Theme.color.border
-                }
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    width: Theme.borderWidth
-                    color: Theme.color.border
-                }
-
                 NotificationCard {
                     id: card
                     anchors.top: parent.top
                     anchors.left: parent.left
-                    anchors.topMargin: Theme.borderWidth
-                    // Shifts LEFT (negative once inset > 0) so cardFrame's
-                    // clip removes `inset` px from each side of this fixed-
-                    // width card — see the clip note on cardFrame above.
-                    anchors.leftMargin: Theme.borderWidth - cardFrame._geom.inset
 
                     entry: cardFrame._slot ? cardFrame._slot.entry : root._emptyEntry
                     now: root._now
-                    compact: true
                     width: root._cardWidth
-                    contentVisible: cardFrame._geom.contentVisible
+                    // A peek level is a sliver of card, not a squeezed
+                    // layout: the content stays laid out (opacity only, per
+                    // M34) so this card's own implicit height never jumps
+                    // the moment it becomes the front one, and `peekShell`
+                    // below paints the narrower chrome in its place.
+                    opacity: cardFrame._geom.contentVisible ? 1 : 0
+                    enabled: cardFrame._geom.contentVisible
 
                     // Gated on !root._expanded: `stackHover`'s HoverHandler
                     // covers this same card's whole bounding box, so a card
@@ -508,11 +477,18 @@ PanelWindow {
                     }
                 }
 
-                // Dog-ear fold mark (DESIGN.md §2 item 7) — each toast is
-                // its own small card, so each gets its own mark, peek
-                // levels included: they're real cards, just with their
-                // content hidden.
-                DogEar {}
+                // A peek level's own card: the same chrome `card` draws,
+                // at this rank's narrower width, with nothing in it. It
+                // takes its height from the fixed-width card it stands for,
+                // which is what keeps the rank width out of that card's own
+                // text reflow (see `_cardWidth` above).
+                Card {
+                    anchors.fill: parent
+                    visible: !cardFrame._geom.contentVisible
+                    color: card.color
+                    radius: card.radius
+                    border.color: card.border.color
+                }
             }
         }
     }
