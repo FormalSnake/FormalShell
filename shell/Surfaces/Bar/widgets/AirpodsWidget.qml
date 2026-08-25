@@ -3,25 +3,21 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// Bar cell for AirpodsService (DESIGN.md §Bar, M29 Task 3, plan at
-// docs/superpowers/plans/2026-08-18-m29-device-panels.md): earbuds glyph
-// plus the worst known bud level as NN% — case battery is excluded from
-// the headline number (it isn't a bud, and a fully-charged case sitting
-// next to a near-dead bud would read backwards), but joins left/right in
-// tooltipText's full breakdown. Hidden entirely (Bar.qml's `shown`
-// pattern, its own header comment explains why not a bare `visible`) while
-// AirpodsService.available is false or neither bud has reported a level
-// yet — an opt-in cell that costs nothing on a host with no daemon. Glyph
-// codepoint is the same one AirpodsPanel.qml's hero already carries
-// (pinned nerd-fonts-jetbrains-mono cmap, verified via fonttools ttx in
-// M29 Task 2): md-earbuds U+F184F. Click toggles the airpods panel
+// Bar cell for AirpodsService (DESIGN.md §3 "Bar"): a headphones icon plus
+// the worst known bud level in mono. The case battery is excluded from the
+// headline number (it is not a bud, and a full case beside a near-dead bud
+// would read backwards), but joins left/right in tooltipText's full
+// breakdown. Hidden entirely (Bar.qml's `shown` pattern, its own header
+// comment explains why not a bare `visible`) while AirpodsService.available
+// is false or neither bud has reported a level yet, so an opt-in cell costs
+// nothing on a host with no daemon. Click toggles the airpods panel
 // anchored under this cell, marked open by the same `panelOpen` underline
-// as every other panel-bearing cell (BluetoothWidget.qml). Registers/unregisters as an
-// AirpodsService consumer for as long as this cell exists at all — it
-// only exists while "airpods" is actually in bar.layout, which is what
-// keeps that service's rewatch loop from spinning on a host that never
-// opted in (DualsenseWidget.qml's own consumer registration, same
-// reason).
+// as every other panel-bearing cell.
+//
+// Registers as an AirpodsService consumer for as long as this cell exists
+// at all, and it only exists while "airpods" is actually in bar.layout,
+// which is what keeps that service's rewatch loop from spinning on a host
+// that never opted in (DualsenseWidget.qml registers for the same reason).
 Cell {
     id: root
 
@@ -44,15 +40,14 @@ Cell {
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
 
     // Visible by default (M23 precedent, Battery/Github/Usage/SystemUpdate):
-    // the percentage is content, not a repeat of the glyph.
+    // the percentage is content, not a repeat of the icon.
     readonly property bool _showLabel: Config.get("bar.widgets.airpods.showLabel", true)
 
-    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment.
     readonly property bool shown: AirpodsService.available && (root._leftKnown || root._rightKnown)
 
     visible: root.shown
-    standalone: true
 
     Component.onCompleted: AirpodsService.acquire()
     Component.onDestruction: AirpodsService.release()
@@ -68,42 +63,31 @@ Cell {
         return "AIRPODS / " + parts.join(" / ");
     }
 
-    // The worst-bud percentage resizes this cell as it ticks — glide the
+    // The worst-bud percentage resizes this cell as it ticks: glide the
     // width instead of shoving the bar's other widgets instantly
-    // (DESIGN.md §4, M16 Task 2's contract, extended to every numeric bar
-    // cell by M26 Task 7).
+    // (DESIGN.md §1 "Motion").
     Behavior on implicitWidth {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
     }
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.xxs
+        spacing: Theme.space.xs
 
-        // Fixed-width slot (M26 Task 7), matching this cell's siblings even
-        // though this glyph itself never swaps — one idiom for the bar's
-        // leading icon column rather than two.
-        Item {
-            id: glyphSlot
+        Icon {
             anchors.verticalCenter: parent.verticalCenter
-            width: Theme.space.huge
-            height: glyphText.implicitHeight
-
-            Text {
-                id: glyphText
-                anchors.centerIn: parent
-                text: "󱡏"
-                color: root.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-            }
+            name: "headphones"
+            color: root.foreground
         }
 
-        MetaLabel {
+        Text {
             visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
             text: root._worstLevel + "%"
-            color: root.dimForeground
+            color: root.foreground
+            font.family: Theme.fontFamilyMono
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
         }
     }
 

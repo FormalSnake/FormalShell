@@ -4,38 +4,39 @@ import qs.Components
 import qs.Services
 import "../../Airpods/model.js" as AirpodsModel
 
-// AirPods panel (M29 Task 2, plan at
-// docs/superpowers/plans/2026-08-18-m29-device-panels.md): a dedicated
-// popout for the omarchy-pods librepods daemon, replacing the old M17
-// "AIRPODS NOISE" group bolted onto the bottom of BluetoothPanel. Bound
-// directly to AirpodsService (Services/AirpodsService.qml, M29 Task 1),
-// which itself watches the daemon's status.json and owns the control
-// socket — this panel reads `status` and calls `send(verb)`, and registers
-// as a rewatch consumer for as long as it's open (acquire()/release(),
-// DualsensePanel.qml's own onIsOpenChanged idiom) so a daemonless host
-// never pays for a panel that's opened but never used to find one.
+// AirPods panel (DESIGN.md §3 "Panel", spec "Panels"): the popout behind
+// AirpodsWidget's bar cell, bound to AirpodsService, which watches the
+// omarchy-pods librepods daemon's status.json and owns its control socket.
+// This panel reads `status` and calls `send(verb)`, and registers as a
+// rewatch consumer for as long as it is open (acquire()/release()), so a
+// daemonless host never pays for a panel that is opened but never used to
+// find one.
 //
-// Honest states first: no status.json at all (the daemon isn't running, or
-// quit and removed it) renders one dim "NO DAEMON" cell; a live daemon that
-// has never seen a battery packet and reports the link down renders
-// "NO AIRPODS" — the file existing only proves the daemon is up, not that
-// earbuds are anywhere near it. Past those two gates, PanelHero opens on
-// the device's own name and AirpodsModel.stateLine(); battery is a list of
-// up to three rows, never an invented single readout (DESIGN.md §2.13).
-// LISTENING MODE and the two Pro toggles are gated on `connected` — control
-// verbs only mean something with the L2CAP link up — while EAR DETECTION
-// is host-side daemon policy (plan's research block) and stays visible
-// whenever anything about the device is known at all, in-case included.
+// Honest states first: no status.json at all (the daemon is not running, or
+// quit and removed it) renders one dim NO DAEMON row; a live daemon that
+// has never seen a battery packet and reports the link down renders NO
+// AIRPODS, since the file existing only proves the daemon is up, not that
+// earbuds are anywhere near it. Past those two gates the hero opens on the
+// device's own name and AirpodsModel.stateLine(), and BATTERY is a row per
+// component with a known level, never an invented single readout.
 //
-// One flat keyboard cursor (`_cursorKey`) walks every actionable row —
-// listening modes, the two toggles, ear detection — mirroring
-// BluetoothPanel's address-keyed cursor and AudioPanel's cursorKey one;
-// the adaptive-noise track is mouse/wheel only, PowerPanel's brightness-row
-// precedent for a slider that isn't a discrete choice.
+// LISTENING MODE and the two Pro toggles are gated on `connected`: control
+// verbs only mean something with the L2CAP link up. Ear detection is
+// host-side daemon policy and stays visible whenever anything about the
+// device is known at all, in-case included.
+//
+// Keyboard (spec "Keyboard model"): one cursor walks every actionable row
+// in visual order, the listening modes, the adaptive track, the two
+// toggles, then ear detection. Enter applies the mode or flips the toggle
+// under it; Left/Right steps the adaptive level by 5, the same move the
+// track's own wheel makes. The cursor is keyed by row identity rather than
+// by index (AudioPanel's idiom): a mode list that grows an Adaptive entry
+// mid-session must not slide the highlight onto a different row.
 Panel {
     id: root
 
-    panelTitle: "AIRPODS"
+    panelIcon: "headphones"
+    panelTitle: "AirPods"
     panelWidth: Theme.space.popupWidthDefault
 
     readonly property var _status: AirpodsService.status
@@ -56,6 +57,8 @@ Panel {
         if (root._controlsVisible) {
             for (var i = 0; i < root._modes.length; i++)
                 out.push({ key: "mode:" + root._modes[i].key, kind: "mode", mode: root._modes[i] });
+            if (root._adaptiveVisible)
+                out.push({ key: "adaptive", kind: "adaptive" });
             if (root._togglesVisible) {
                 out.push({ key: "ca", kind: "ca" });
                 out.push({ key: "onebud", kind: "onebud" });
@@ -68,30 +71,28 @@ Panel {
 
     property string _cursorKey: ""
 
-    function _cursorIndex() {
+    function _entryAt(index) {
+        return (index >= 0 && index < root._cursorEntries.length) ? root._cursorEntries[index] : null;
+    }
+
+    function _keyAt(index) {
+        var entry = root._entryAt(index);
+        return entry ? entry.key : "";
+    }
+
+    function _indexForKey(key) {
         for (var i = 0; i < root._cursorEntries.length; i++)
-            if (root._cursorEntries[i].key === root._cursorKey)
+            if (root._cursorEntries[i].key === key)
                 return i;
         return -1;
     }
 
-    function _cursorEntry() {
-        var idx = root._cursorIndex();
-        return idx >= 0 ? root._cursorEntries[idx] : null;
-    }
-
-    function _moveCursor(delta) {
-        var entries = root._cursorEntries;
-        if (entries.length === 0) {
-            root._cursorKey = "";
+    function _pointAt(key) {
+        var index = root._indexForKey(key);
+        if (index < 0)
             return;
-        }
-        var idx = root._cursorIndex();
-        if (idx < 0)
-            idx = delta > 0 ? 0 : entries.length - 1;
-        else
-            idx = Math.max(0, Math.min(entries.length - 1, idx + delta));
-        root._cursorKey = entries[idx].key;
+        root.cursorActive = true;
+        root.cursorIndex = index;
     }
 
     function _toggleCa() {
@@ -102,6 +103,10 @@ Panel {
         AirpodsService.send(root._status.oneBudAnc ? "onebud:off" : "onebud:on");
     }
 
+    function _setAdaptive(level) {
+        AirpodsService.send("adaptive:" + Math.round(Math.max(0, Math.min(100, level))));
+    }
+
     // 0 (pause when one out) -> 1 (when both out) -> 2 (never) -> 0, the
     // same cycle the daemon's three `ear:*` verbs name in order.
     function _cycleEar() {
@@ -110,8 +115,21 @@ Panel {
         AirpodsService.send(verbs[next]);
     }
 
-    function _activateCursor() {
-        var entry = root._cursorEntry();
+    cursorCount: root._cursorEntries.length
+    // Left/Right belongs to the adaptive track under the cursor, not to the
+    // list: a single column already walks with Up/Down.
+    cursorStepsHorizontally: true
+
+    onCursorIndexChanged: root._cursorKey = root._keyAt(root.cursorIndex)
+
+    on_CursorEntriesChanged: {
+        var index = root._indexForKey(root._cursorKey);
+        if (index >= 0 && index !== root.cursorIndex)
+            root.cursorIndex = index;
+    }
+
+    onCursorActivated: index => {
+        var entry = root._entryAt(index);
         if (!entry)
             return;
         if (entry.kind === "mode")
@@ -124,9 +142,18 @@ Panel {
             root._cycleEar();
     }
 
+    onCursorStepped: (index, direction) => {
+        var entry = root._entryAt(index);
+        if (!entry || entry.kind !== "adaptive")
+            return;
+        root._setAdaptive(root._status.adaptiveNoiseLevel + direction * 5);
+    }
+
     onIsOpenChanged: {
         if (root.isOpen) {
-            root._cursorKey = root._cursorEntries.length > 0 ? root._cursorEntries[0].key : "";
+            root.cursorIndex = 0;
+            root.cursorSection = 0;
+            root._cursorKey = root._keyAt(0);
             AirpodsService.acquire();
         } else {
             root._cursorKey = "";
@@ -134,65 +161,34 @@ Panel {
         }
     }
 
-    // Panel.qml's shared keyboard-nav hook (M6 Task 7, BluetoothPanel.qml's
-    // consumer pattern): Up/Down move the cursor, Enter activates it, first
-    // Up/Down only reveals the cursor where it already sits (M26 Task 8).
-    Connections {
-        target: root
-
-        function onKeyPressed(event) {
-            if (!root.isOpen)
-                return;
-            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                root.cursorActive = true;
-                event.accepted = true;
-                return;
-            }
-            switch (event.key) {
-            case Qt.Key_Up:
-                root._moveCursor(-1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Down:
-                root._moveCursor(1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                root._activateCursor();
-                event.accepted = true;
-                break;
-            }
-        }
-    }
-
     Cell {
         visible: root._noDaemon
         width: parent.width
 
-        MetaLabel { text: "NO DAEMON" }
+        SectionLabel { text: "NO DAEMON" }
     }
 
     Cell {
         visible: root._noAirpods
         width: parent.width
 
-        MetaLabel { text: "NO AIRPODS" }
+        SectionLabel { text: "NO AIRPODS" }
     }
 
     PanelHero {
+        id: deviceHero
         visible: root._heroVisible
         width: parent.width
-        glyph: "󱡏"
         title: root._heroTitle
         meta: AirpodsModel.stateLine(root._status)
-    }
 
-    Cell {
-        visible: root._batteryRows.length > 0
-        width: parent.width
-
-        MetaLabel { text: "BATTERY"; colon: true }
+        leading: Component {
+            Icon {
+                name: "headphones"
+                size: Theme.fontSize.heading
+                color: deviceHero.foreground
+            }
+        }
     }
 
     Component {
@@ -207,61 +203,67 @@ Panel {
                 width: parent.width
                 spacing: Theme.space.xxs
 
-                Row {
+                Item {
                     width: parent.width
-                    spacing: Theme.space.sm
+                    height: Math.max(battLabel.implicitHeight, battValueRow.implicitHeight)
 
                     Text {
-                        width: parent.width - valueRow.width - parent.spacing
+                        id: battLabel
+                        anchors.left: parent.left
+                        anchors.right: battValueRow.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
                         text: battCell.modelData.label
                         color: battCell.foreground
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontFamilySans
                         font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
                         elide: Text.ElideRight
                     }
 
                     Row {
-                        id: valueRow
-                        spacing: Theme.space.sm
+                        id: battValueRow
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.iconGap
 
-                        Text {
-                            text: battCell.modelData.level + "%"
-                            color: battCell.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.body
-                        }
-
-                        MetaLabel {
+                        SectionLabel {
+                            anchors.verticalCenter: parent.verticalCenter
                             visible: battCell.modelData.hint !== ""
                             text: battCell.modelData.hint
+                            color: battCell.dimForeground
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: battCell.modelData.level + "%"
+                            color: battCell.foreground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
                         }
                     }
                 }
 
-                DitherFill {
+                Track {
                     width: parent.width
-                    height: Theme.space.trackThickness
-
-                    Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, battCell.modelData.level / 100))
-                        height: parent.height
-                        color: Theme.color.primary
-                    }
+                    value: battCell.modelData.level / 100
                 }
             }
         }
     }
 
-    Repeater {
-        model: root._batteryRows
-        delegate: batteryRow
-    }
-
-    Cell {
-        visible: root._controlsVisible
+    Column {
         width: parent.width
+        visible: root._batteryRows.length > 0
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "LISTENING MODE"; colon: true }
+        SectionLabel { text: "BATTERY" }
+
+        Repeater {
+            model: root._batteryRows
+            delegate: batteryRow
+        }
     }
 
     Component {
@@ -273,217 +275,272 @@ Panel {
             readonly property string _key: "mode:" + modeCell.modelData.key
             width: parent.width
             selected: modeCell.modelData.active
-            hovered: root.cursorActive && root._cursorKey === modeCell._key
-            onContainsPointerChanged: if (modeCell.containsPointer) {
-                root.cursorActive = true;
-                root._cursorKey = modeCell._key;
-            }
-
-            ActionLabel {
-                text: modeCell.modelData.label
-                color: modeCell.foreground
-            }
-
+            cursor: root.cursorActive && root._cursorKey === modeCell._key
             interactive: true
+            onContainsPointerChanged: if (modeCell.containsPointer) root._pointAt(modeCell._key)
             onClicked: AirpodsService.send(modeCell.modelData.verb)
-        }
-    }
 
-    Repeater {
-        model: root._controlsVisible ? root._modes : []
-        delegate: modeRow
-    }
-
-    Cell {
-        visible: root._adaptiveVisible
-        width: parent.width
-
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            Row {
+            Item {
                 width: parent.width
-                spacing: Theme.space.sm
+                height: modeLabel.implicitHeight
 
                 Text {
-                    width: parent.width - adaptivePercent.width - parent.spacing
-                    text: "Adaptive Noise"
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamily
+                    id: modeLabel
+                    anchors.left: parent.left
+                    anchors.right: modeCheck.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modeCell.modelData.label
+                    color: modeCell.foreground
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
                 }
 
-                Text {
-                    id: adaptivePercent
-                    text: root._status.adaptiveNoiseLevel + "%"
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-            }
-
-            DitherFill {
-                id: adaptiveTrack
-                width: parent.width
-                height: Theme.space.trackThickness
-
-                Rectangle {
-                    width: parent.width * Math.max(0, Math.min(1, root._status.adaptiveNoiseLevel / 100))
-                    height: parent.height
+                Icon {
+                    id: modeCheck
+                    name: "check"
+                    size: Theme.fontSize.body
+                    visible: modeCell.selected
                     color: Theme.color.primary
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    function _setFromX(x) {
-                        var level = Math.round(Math.max(0, Math.min(1, x / adaptiveTrack.width)) * 100);
-                        AirpodsService.send("adaptive:" + level);
-                    }
-                    onPressed: mouse => _setFromX(mouse.x)
-                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                    onWheel: wheel => {
-                        var level = Math.max(0, Math.min(100, root._status.adaptiveNoiseLevel + (wheel.angleDelta.y > 0 ? 5 : -5)));
-                        AirpodsService.send("adaptive:" + level);
-                        wheel.accepted = true;
-                    }
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                 }
             }
         }
     }
 
-    // The two Pro-only toggles (DESIGN.md §1.1's bare-label ink-promotion
-    // amendment for the ON/OFF piece; the row itself is a full cursor-
-    // navigable Cell so the fill it lights up on hover is also the whole
-    // hit area, §1.1's 2026-08-14 amendment). Two hand-written cells, not
-    // a shared delegate — there are exactly two of them and they differ in
-    // copy, key and armed source, not in shape.
-    Cell {
-        id: caCell
-        visible: root._togglesVisible
+    Column {
         width: parent.width
-        hovered: root.cursorActive && root._cursorKey === "ca"
-        onContainsPointerChanged: if (caCell.containsPointer) {
-            root.cursorActive = true;
-            root._cursorKey = "ca";
+        visible: root._controlsVisible
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "LISTENING MODE" }
+
+        Repeater {
+            model: root._controlsVisible ? root._modes : []
+            delegate: modeRow
         }
 
-        Row {
+        // The adaptive level belongs to the Adaptive mode above it, so it
+        // sits inside that section rather than opening one of its own.
+        Cell {
+            id: adaptiveCell
+            visible: root._adaptiveVisible
             width: parent.width
-            spacing: Theme.space.sm
+            cursor: root.cursorActive && root._cursorKey === "adaptive"
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (adaptiveCell.containsPointer) root._pointAt("adaptive")
 
             Column {
-                width: parent.width - caState.width - parent.spacing
-                spacing: Theme.space.xxs
-
-                Text {
-                    width: parent.width
-                    text: "Conversation awareness"
-                    color: caCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                    elide: Text.ElideRight
-                }
-
-                MetaLabel {
-                    width: parent.width
-                    text: "LOWERS VOLUME WHEN YOU TALK"
-                    color: caCell.dimForeground
-                    elide: Text.ElideRight
-                }
-            }
-
-            MetaLabel {
-                id: caState
-                text: root._status.conversationalAwareness ? "ON" : "OFF"
-                color: root._status.conversationalAwareness ? Theme.color.primary : caCell.dimForeground
-            }
-        }
-
-        interactive: true
-        onClicked: root._toggleCa()
-    }
-
-    Cell {
-        id: oneBudCell
-        visible: root._togglesVisible
-        width: parent.width
-        hovered: root.cursorActive && root._cursorKey === "onebud"
-        onContainsPointerChanged: if (oneBudCell.containsPointer) {
-            root.cursorActive = true;
-            root._cursorKey = "onebud";
-        }
-
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
-
-            Column {
-                width: parent.width - oneBudState.width - parent.spacing
-                spacing: Theme.space.xxs
-
-                Text {
-                    width: parent.width
-                    text: "One-bud ANC"
-                    color: oneBudCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                    elide: Text.ElideRight
-                }
-
-                MetaLabel {
-                    width: parent.width
-                    text: "KEEPS ANC WITH ONE POD IN"
-                    color: oneBudCell.dimForeground
-                    elide: Text.ElideRight
-                }
-            }
-
-            MetaLabel {
-                id: oneBudState
-                text: root._status.oneBudAnc ? "ON" : "OFF"
-                color: root._status.oneBudAnc ? Theme.color.primary : oneBudCell.dimForeground
-            }
-        }
-
-        interactive: true
-        onClicked: root._toggleOneBud()
-    }
-
-    Cell {
-        id: earCell
-        visible: root._heroVisible
-        width: parent.width
-        hovered: root.cursorActive && root._cursorKey === "ear"
-        onContainsPointerChanged: if (earCell.containsPointer) {
-            root.cursorActive = true;
-            root._cursorKey = "ear";
-        }
-
-        // Stacked, not a label/value Row: the longest earDetectionLabel()
-        // string ("PAUSE WHEN ONE IS OUT") doesn't fit beside the header at
-        // panelWidth, and a right-aligned Text wider than its own box
-        // overflows LEFT, straight back over the label — caught in this
-        // row's own M29 smoke screenshot.
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            MetaLabel {
-                text: "EAR DETECTION"
-                colon: true
-            }
-
-            Text {
                 width: parent.width
-                text: AirpodsModel.earDetectionLabel(root._status.earDetection)
-                color: earCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
+                spacing: Theme.space.xxs
+
+                Item {
+                    width: parent.width
+                    height: Math.max(adaptiveLabel.implicitHeight, adaptivePercent.implicitHeight)
+
+                    Text {
+                        id: adaptiveLabel
+                        anchors.left: parent.left
+                        anchors.right: adaptivePercent.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Adaptive noise"
+                        color: adaptiveCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        id: adaptivePercent
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root._status.adaptiveNoiseLevel + "%"
+                        color: adaptiveCell.foreground
+                        font.family: Theme.fontFamilyMono
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                    }
+                }
+
+                Track {
+                    id: adaptiveTrack
+                    width: parent.width
+                    value: root._status.adaptiveNoiseLevel / 100
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        function _setFromX(x) {
+                            root._setAdaptive((x / adaptiveTrack.width) * 100);
+                        }
+                        onPressed: mouse => _setFromX(mouse.x)
+                        onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+                        onWheel: wheel => {
+                            root._setAdaptive(root._status.adaptiveNoiseLevel + (wheel.angleDelta.y > 0 ? 5 : -5));
+                            wheel.accepted = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Column {
+        width: parent.width
+        visible: root._heroVisible
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "OPTIONS" }
+
+        Cell {
+            id: caCell
+            visible: root._togglesVisible
+            width: parent.width
+            cursor: root.cursorActive && root._cursorKey === "ca"
+            interactive: true
+            onContainsPointerChanged: if (caCell.containsPointer) root._pointAt("ca")
+            onClicked: root._toggleCa()
+
+            Item {
+                width: parent.width
+                height: Math.max(caColumn.implicitHeight, caButton.height)
+
+                Column {
+                    id: caColumn
+                    anchors.left: parent.left
+                    anchors.right: caButton.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.space.xxs
+
+                    Text {
+                        width: parent.width
+                        text: "Conversation awareness"
+                        color: caCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "Lowers volume when you talk"
+                        color: caCell.dimForeground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.bodySmall
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Button {
+                    id: caButton
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    variant: root._status.conversationalAwareness ? "default" : "outline"
+                    text: root._status.conversationalAwareness ? "On" : "Off"
+                    onClicked: root._toggleCa()
+                }
             }
         }
 
-        interactive: true
-        onClicked: root._cycleEar()
+        Cell {
+            id: oneBudCell
+            visible: root._togglesVisible
+            width: parent.width
+            cursor: root.cursorActive && root._cursorKey === "onebud"
+            interactive: true
+            onContainsPointerChanged: if (oneBudCell.containsPointer) root._pointAt("onebud")
+            onClicked: root._toggleOneBud()
+
+            Item {
+                width: parent.width
+                height: Math.max(oneBudColumn.implicitHeight, oneBudButton.height)
+
+                Column {
+                    id: oneBudColumn
+                    anchors.left: parent.left
+                    anchors.right: oneBudButton.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.space.xxs
+
+                    Text {
+                        width: parent.width
+                        text: "One-bud ANC"
+                        color: oneBudCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "Keeps ANC with one pod in"
+                        color: oneBudCell.dimForeground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.bodySmall
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Button {
+                    id: oneBudButton
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    variant: root._status.oneBudAnc ? "default" : "outline"
+                    text: root._status.oneBudAnc ? "On" : "Off"
+                    onClicked: root._toggleOneBud()
+                }
+            }
+        }
+
+        Cell {
+            id: earCell
+            visible: root._heroVisible
+            width: parent.width
+            cursor: root.cursorActive && root._cursorKey === "ear"
+            interactive: true
+            onContainsPointerChanged: if (earCell.containsPointer) root._pointAt("ear")
+            onClicked: root._cycleEar()
+
+            Item {
+                width: parent.width
+                height: Math.max(earLabel.implicitHeight, earValue.implicitHeight)
+
+                SectionLabel {
+                    id: earLabel
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "EAR DETECTION"
+                }
+
+                // Bounded on both sides, not just right-anchored: the
+                // longest earDetectionLabel() string does not fit beside
+                // the label at this width, and a right-aligned Text wider
+                // than its own box overflows left, back over the label.
+                Text {
+                    id: earValue
+                    anchors.left: earLabel.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    horizontalAlignment: Text.AlignRight
+                    text: AirpodsModel.earDetectionLabel(root._status.earDetection)
+                    color: earCell.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
+                }
+            }
+        }
     }
 }

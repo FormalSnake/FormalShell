@@ -4,42 +4,80 @@ import qs.Components
 import qs.Services
 import "../../Dualsense/model.js" as DualsenseModel
 
-// DualSense panel (M29 Task 4, plan at
-// docs/superpowers/plans/2026-08-18-m29-device-panels.md): a sysfs-only
-// readout for a Sony DualSense controller, bound directly to
-// DualsenseService (Services/DualsenseService.qml). No controls anywhere —
-// the owner's host units already own the lightbar/player-LED writes, so
-// this panel only ever displays what sysfs reports, and the title band
-// carries a dim "READ ONLY" tag so that absence reads as designed rather
-// than as a missing feature.
+// DualSense panel (DESIGN.md §3 "Panel", spec "Panels"): a sysfs-only
+// readout for a Sony DualSense controller, bound to DualsenseService. No
+// controls anywhere, because the owner's host units already own the
+// lightbar and player-LED writes, so this panel only ever displays what
+// sysfs reports; the header carries a READ ONLY chip so that absence reads
+// as designed rather than as a missing feature.
 //
 // Honest state first: no matching power_supply node at all renders one dim
-// "NO CONTROLLER" cell. Past that gate, PanelHero opens on the battery
-// percent as its readout (DESIGN.md §2.13 — unlike AirpodsPanel, this
-// panel's whole point IS one number) and DualsenseModel.stateLine() as its
-// meta; LIGHTBAR and PLAYER LEDS each render only while their own sysfs
-// node was actually readable, independent of each other.
+// NO CONTROLLER row. Past that gate the hero carries the battery percent as
+// its oversized readout (unlike AirPods, this panel's whole subject IS one
+// number) with DualsenseModel.stateLine() as its meta and the charge level
+// as its rail. LIGHTBAR and PLAYER LEDS each render only while their own
+// sysfs node was actually readable, independent of each other.
+//
+// Keyboard (spec "Keyboard model"): the cursor walks the readout rows and
+// nothing more. There is deliberately no cursorActivated handler, since
+// nothing here is actionable, the same shape MonitorPanel's metric rows
+// take; Escape closes and the ring says which row the eye is on.
 Panel {
     id: root
 
-    panelTitle: "DUALSENSE"
+    panelIcon: "gamepad-2"
+    panelTitle: "DualSense"
     panelWidth: Theme.space.popupWidthNarrow
 
-    titleActions: MetaLabel { text: "READ ONLY" }
+    // A chip, not a control: this panel writes nothing, and the header is
+    // where that has to be said before the rows are read.
+    titleActions: [
+        Cell {
+            radius: Theme.radiusSm
+
+            SectionLabel { text: "READ ONLY" }
+        }
+    ]
 
     readonly property var _battery: DualsenseService.battery
     readonly property bool _present: DualsenseService.present
     readonly property var _lightbar: DualsenseService.lightbar
     readonly property var _playerLeds: DualsenseService.playerLeds
 
+    readonly property var _rows: {
+        var out = [];
+        if (!root._present)
+            return out;
+        out.push("battery");
+        if (root._lightbar !== null)
+            out.push("lightbar");
+        if (root._playerLeds !== null)
+            out.push("leds");
+        return out;
+    }
+
+    function _rowIndex(key) {
+        return root._rows.indexOf(key);
+    }
+
+    function _pointAt(index) {
+        if (index < 0)
+            return;
+        root.cursorActive = true;
+        root.cursorIndex = index;
+    }
+
+    cursorCount: root._rows.length
+
     onIsOpenChanged: {
         if (root.isOpen) {
+            root.cursorIndex = 0;
+            root.cursorSection = 0;
             DualsenseService.acquire();
             // Freshen the reading the moment the panel opens rather than
-            // waiting up to 30s for the shared timer's next tick —
-            // `probe()` itself no-ops while a run is already in flight, so
-            // this never doubles up with `acquire()`'s own first-consumer
-            // probe.
+            // waiting up to 30s for the shared timer's next tick.
+            // `probe()` no-ops while a run is already in flight, so this
+            // never doubles up with `acquire()`'s own first-consumer probe.
             DualsenseService.probe();
         } else {
             DualsenseService.release();
@@ -50,74 +88,131 @@ Panel {
         visible: !root._present
         width: parent.width
 
-        MetaLabel { text: "NO CONTROLLER" }
+        SectionLabel { text: "NO CONTROLLER" }
     }
 
     PanelHero {
+        id: batteryHero
         visible: root._present
         width: parent.width
-        glyph: "󰊗"
         title: "DualSense"
         meta: DualsenseModel.stateLine(root._battery)
         readout: root._present ? root._battery.percent + "%" : ""
         readoutSize: "displayLarge"
         rail: root._present ? root._battery.percent / 100 : -1
-    }
+        cursor: root.cursorActive && root.cursorIndex === 0
+        interactive: true
+        acceptedButtons: Qt.NoButton
+        onContainsPointerChanged: if (batteryHero.containsPointer) root._pointAt(0)
 
-    Cell {
-        visible: root._present && root._lightbar !== null
-        width: parent.width
-
-        Row {
-            spacing: Theme.space.sm
-
-            MetaLabel { text: "LIGHTBAR"; colon: true }
-
-            Rectangle {
-                width: Theme.fontSize.body
-                height: Theme.fontSize.body
-                anchors.verticalCenter: parent.verticalCenter
-                radius: 0
-                color: root._lightbar || Theme.color.background
-                border.width: Theme.borderWidth
-                border.color: Theme.color.border
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root._lightbar || ""
-                color: Theme.color.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
+        leading: Component {
+            Icon {
+                name: "gamepad-2"
+                size: Theme.fontSize.heading
+                color: batteryHero.foreground
             }
         }
     }
 
-    Cell {
-        visible: root._present && root._playerLeds !== null
+    Column {
         width: parent.width
+        visible: root._present && root._lightbar !== null
+        spacing: Theme.space.rowGap
 
-        Row {
-            spacing: Theme.space.sm
+        SectionLabel { text: "LIGHTBAR" }
 
-            MetaLabel { text: "PLAYER LEDS"; colon: true }
+        Cell {
+            id: lightbarCell
+            width: parent.width
+            cursor: root.cursorActive && root.cursorIndex === root._rowIndex("lightbar")
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (lightbarCell.containsPointer) root._pointAt(root._rowIndex("lightbar"))
 
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Theme.space.xs
+            Item {
+                width: parent.width
+                height: Math.max(lightbarSwatch.height, lightbarValue.implicitHeight)
 
-                Repeater {
-                    model: 5
+                Rectangle {
+                    id: lightbarSwatch
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.fontSize.body
+                    height: Theme.fontSize.body
+                    radius: Theme.radiusSm
+                    color: root._lightbar || Theme.color.background
+                    border.width: Theme.borderWidth
+                    border.color: Theme.color.border
+                }
 
-                    Text {
-                        required property int index
-                        text: "●"
-                        color: root._playerLeds !== null && index < root._playerLeds
-                            ? Theme.color.foreground
-                            : Theme.color.mutedForeground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
+                // A hex triplet is an identifier, so it takes the mono face
+                // (spec "Type").
+                Text {
+                    id: lightbarValue
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root._lightbar || ""
+                    color: lightbarCell.foreground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                }
+            }
+        }
+    }
+
+    Column {
+        width: parent.width
+        visible: root._present && root._playerLeds !== null
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "PLAYER LEDS" }
+
+        Cell {
+            id: ledsCell
+            width: parent.width
+            cursor: root.cursorActive && root.cursorIndex === root._rowIndex("leds")
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (ledsCell.containsPointer) root._pointAt(root._rowIndex("leds"))
+
+            Item {
+                width: parent.width
+                height: Math.max(ledsRow.height, ledsValue.implicitHeight)
+
+                // The pips a real DualSense always exposes all five of
+                // (DESIGN.md §3's own dot idiom): lit ones carry `primary`,
+                // the rest stay muted.
+                Row {
+                    id: ledsRow
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.space.sm
+
+                    Repeater {
+                        model: 5
+
+                        Rectangle {
+                            required property int index
+                            width: Theme.space.md
+                            height: Theme.space.md
+                            radius: width / 2
+                            color: root._playerLeds !== null && index < root._playerLeds
+                                ? Theme.color.primary
+                                : Theme.color.mutedForeground
+                        }
                     }
+                }
+
+                Text {
+                    id: ledsValue
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root._playerLeds !== null ? root._playerLeds + " / 5" : ""
+                    color: ledsCell.foreground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
                 }
             }
         }
