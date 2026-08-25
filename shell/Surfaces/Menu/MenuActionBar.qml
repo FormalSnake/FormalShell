@@ -1,21 +1,16 @@
 import QtQuick
 import qs.Core
-import qs.Components
 
-// The launcher's bottom action bar (M23) — the Raycast footer, in ledger
-// terms: one Cell spanning the card's content width, carrying the primary
-// action for the row under the cursor on the left and the always-applicable
-// keys on the right. Menu/actions.js decides the wording; this file only
-// paints it.
+// The command palette's footer (M43 D2): one `caption` `mutedForeground`
+// line reading `↑↓ move  ⏎ open  esc back`. No key caps, no fills, no
+// frame: the footer is a legend, and the only loud thing in a modal surface
+// is the cursor row.
 //
-// The primary-action key cap is a full-bleed primary block (DESIGN.md
-// §2.4: primary reads as a fill with primaryForeground ink, never a
-// tinted label) and its verb sits in band 1; every hint cap is a bordered
-// box carrying `border` at band 2 dim, so the one action Enter will
-// actually take is the only loud thing in the row. Clicking that cap does
-// exactly what Enter does, the hints are legends, not buttons, and stay
-// inert.
-Cell {
+// Chords are values, so each key is mono and its verb is sans
+// (spec "Type"). Menu/actions.js decides the wording; this file only lays
+// it out. The primary verb is the one segment that answers a click, doing
+// exactly what Enter does; every hint stays inert.
+Item {
     id: root
 
     property var primary: null
@@ -23,104 +18,73 @@ Cell {
 
     signal primaryActivated
 
-    // Sized off the hint row, never off the primary row: the primary half
-    // hides itself whenever the cursor sits on something that can't be
-    // activated, and a bar that changed height as the cursor moved would
-    // resize the whole card under it.
-    height: hintsRow.implicitHeight + Theme.space.controlPaddingY * 2 + Theme.borderWidth
-
-    Row {
-        id: barRow
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.labelGap
-
-        // Nothing to activate (an honest-empty note row under the cursor,
-        // an empty result set) simply leaves the left half blank rather
-        // than offering a verb that would do nothing.
-        visible: !!root.primary
-
-        Rectangle {
-            id: primaryCap
-            anchors.verticalCenter: parent.verticalCenter
-            width: primaryKey.implicitWidth + Theme.space.sm * 2
-            height: primaryKey.implicitHeight + Theme.space.xxs * 2
-            color: Theme.color.primary
-
-            Text {
-                id: primaryKey
-                anchors.centerIn: parent
-                text: root.primary ? root.primary.key : ""
-                color: Theme.color.primaryForeground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.caption
-            }
-        }
-
-        ActionLabel {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.primary ? root.primary.label : ""
-            color: root.foreground
-        }
+    // The verb sits after the move hint, so the line reads move, act,
+    // leave. Sized off the whole line rather than off the verb alone: the
+    // verb disappears whenever the cursor sits on something that can't be
+    // activated, and a footer that changed height as the cursor moved would
+    // resize the card under it.
+    readonly property var _segments: {
+        var out = (root.hints || []).map(function (h) {
+            return { key: h.key, label: h.label, primary: false };
+        });
+        if (!root.primary)
+            return out;
+        out.splice(out.length > 0 ? 1 : 0, 0, {
+            key: root.primary.key,
+            label: root.primary.label,
+            primary: true
+        });
+        return out;
     }
 
+    implicitHeight: line.implicitHeight
+    height: root.implicitHeight
+
     Row {
-        id: hintsRow
-        anchors.right: parent.right
+        id: line
+        anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.lg
+        spacing: Theme.space.md
 
         Repeater {
-            model: root.hints
+            model: root._segments
 
-            delegate: Row {
-                id: hint
+            delegate: Item {
+                id: segment
                 required property var modelData
 
-                spacing: Theme.space.labelGap
+                implicitWidth: pair.implicitWidth
+                implicitHeight: pair.implicitHeight
 
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: hintKey.implicitWidth + Theme.space.sm * 2
-                    height: hintKey.implicitHeight + Theme.space.xxs * 2
-                    color: "transparent"
-                    border.width: Theme.borderWidth
-                    border.color: Theme.color.border
-                    radius: Theme.radius
+                Row {
+                    id: pair
+                    spacing: Theme.space.xs
 
                     Text {
-                        id: hintKey
-                        anchors.centerIn: parent
-                        text: hint.modelData.key
-                        color: root.dimForeground
-                        font.family: Theme.fontFamily
+                        text: segment.modelData.key
+                        color: Theme.color.mutedForeground
+                        font.family: Theme.fontFamilyMono
                         font.pixelSize: Theme.fontSize.caption
+                        font.capitalization: Font.AllLowercase
+                    }
+
+                    Text {
+                        text: segment.modelData.label
+                        color: Theme.color.mutedForeground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.caption
+                        font.capitalization: Font.AllLowercase
                     }
                 }
 
-                MetaLabel {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: hint.modelData.label
-                    color: root.dimForeground
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: segment.modelData.primary === true
+                    hoverEnabled: enabled
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.primaryActivated()
                 }
             }
         }
-    }
-
-    // Cell's `hit` escape hatch rather than its own `interactive`, which is
-    // the whole-cell target: only the primary half of this bar is a button,
-    // and the hint caps to its right are a legend that has to stay inert.
-    hit: MouseArea {
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        // barRow plus the cell's padding on both sides: this layer spans the
-        // cell, not the padded content box barRow sits in, so the left inset
-        // has to be paid for here too.
-        width: barRow.width + Theme.space.controlPaddingX * 2
-        enabled: !!root.primary
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: root.primaryActivated()
     }
 }

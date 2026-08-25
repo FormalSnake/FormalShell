@@ -130,7 +130,37 @@ var ICONS = {
     "printer": "\u{F042A}",
     "usb": "\u{F0553}",
     "plug": "\u{F06A5}",
-    "plug-zap": "\u{F02D7}"
+    "plug-zap": "\u{F02D7}",
+
+    // M43: the launcher's route icons (shell/Menu/icons.js). Every
+    // codepoint below is the one the same route already carried as a raw
+    // glyph in default-menu.jsonc or providers.js, so the nerd set draws
+    // exactly what it drew before the names went in.
+    "layout-grid": "\u{F003B}",      // md-apps
+    "calculator": "\u{F00EC}",       // md-calculator
+    "smile": "\u{F0C68}",            // md-emoticon
+    "snowflake": "\u{F313}",         // linux-nixos
+    "inbox": "\u{F1294}",            // md-tray
+    "gpu": "\u{F08AE}",              // md-expansion_card
+    "log-out": "\u{F0343}",          // md-logout
+    "alarm-clock": "\u{F088C}",      // md-reminder
+    "timer": "\u{F051B}",            // md-timer_outline
+    "history": "\u{F02DA}",          // md-history
+    "toggle-left": "\u{F0521}",      // md-toggle_switch
+    "lightbulb": "\u{F1A4C}",        // md-lightbulb_night
+    "coffee": "\u{F0176}",           // md-coffee
+    "scan-text": "\u{F113A}",        // md-ocr
+    "pipette": "\u{F020B}",          // md-eyedropper_variant
+    "square": "\u{F04DB}",           // md-stop
+    "film": "\u{F0D78}",             // md-file_gif_box
+    "crop": "\u{F0489}",             // md-selection
+    "puzzle": "\u{F0431}",           // md-puzzle
+    "check-check": "\u{F012D}",      // md-check_all
+    "palette": "\u{F0301}",          // md-invert_colors
+    "arrow-left-right": "\u{F04E1}", // md-swap_horizontal
+    "laptop": "\u{F0322}",           // md-laptop
+    "git-fork": "\u{F00FB}",         // md-call_split
+    "bot": "\u{F16A3}"               // md-robot_excited
 };
 
 var FAMILY = "";

@@ -20,12 +20,14 @@ import "../../Menu/appviews.js" as AppViews
 import "../../Compositor/keybinds.js" as Keybinds
 import "../../Compositor/appmatch.js" as AppMatch
 
-// The unified menu (DESIGN.md §Concrete translations/Menu): a single
-// keyboard-exclusive top-layer window covering the focused output, carrying
-// a black scrim (M39) with the card centered on top of it. Top
-// cell is the search field (breadcrumb as its meta row); below it, rows are
-// either search.rank() matches (query non-empty) or model.visibleChildren()
-// of the current level (query empty). Whole-tree search, cursor wraps,
+// The unified menu, drawn as shadcn's Command palette (DESIGN.md §3
+// Launcher): a single keyboard-exclusive top-layer window covering the
+// focused output, carrying a plain black scrim with the card sitting at 30%
+// of the output height on top of it. Top of the card is the input row (a
+// search icon, the field, a rule under it), then the breadcrumb chips, then
+// rows that are either search.rank() matches (query non-empty) or
+// model.visibleChildren() of the current level (query empty), then the
+// footer hint line. Whole-tree search, cursor wraps,
 // Escape/backspace-on-empty pop one level, confirm-gated actions need a
 // second Enter.
 //
@@ -767,23 +769,30 @@ PanelWindow {
         discreteGpu: GpuService.defaultDiscrete() !== null
     })
 
-    // Uppercased at display time only (MetaLabel's own font.capitalization,
-    // the one shared uppercase/meta convention) — the JS-level
-    // `.toUpperCase()` this used to carry was pure redundancy, since
-    // `breadcrumb` has no other consumer (audit "uppercase/meta treatment").
-    readonly property string breadcrumb: {
+    // The path from the root to the current level, one chip per part
+    // (M43 D2). Empty at the root, where the chip row is hidden outright:
+    // the search field is already the whole surface there. The select and
+    // input modes have no tree level, so they name themselves instead and
+    // hand their prompt to the field's placeholder (D5).
+    readonly property var breadcrumb: {
         if (root._mode === "select")
-            return "SELECT / " + root._selectPrompt;
+            return ["Select"];
         if (root._mode === "input")
-            return "INPUT / " + root._selectPrompt;
+            return ["Input"];
         var parts = [];
         var id = root.currentNodeId;
         while (id !== null && root._nodes[id]) {
             parts.unshift(root._nodes[id].label);
             id = root._nodes[id].parentId;
         }
-        return ["MENU"].concat(parts).join(" / ");
+        return parts;
     }
+
+    readonly property bool _breadcrumbVisible: root.breadcrumb.length > 0
+
+    // What the empty field says it is for. In select/input that is the
+    // caller's own prompt, which is the whole of what those modes ask (D5).
+    readonly property string _placeholder: root._mode === "menu" ? "Search" : root._selectPrompt
 
     readonly property var _screen: {
         var name = CompositorService.focusedOutputName;
@@ -812,17 +821,18 @@ PanelWindow {
     readonly property real _outputHeight: root.height > 0 ? root.height : (root._screen ? root._screen.height : 0)
 
     readonly property real _maxTotalHeight: root._outputHeight > 0 ? root._outputHeight * (root._isAppView ? 0.82 : 0.6) : 400
-    // Content gets a `panelPadding` gutter (DESIGN.md's omarchy card chrome:
-    // "internal padding") on all four sides now — the frame draws its own
-    // explicit ring on all four (below). Rows still draw their own
-    // bottom+right per Cell's shared-rule contract (needed for the divider
-    // between adjacent rows), which would otherwise double the frame's
-    // right/bottom rule `panelPadding` apart — the two eraser rectangles
-    // below paint over just that trailing hairline with the frame's own
-    // background color, leaving the frame's rule as the single visible line
-    // on every edge (same technique as Panel.qml's `_contentWidth`).
-    readonly property real _contentWidth: root._cardWidth - Core.Theme.borderWidth * 2 - Core.Theme.space.panelPadding * 2
-    readonly property real _chrome: Core.Theme.borderWidth * 2 + Core.Theme.space.panelPadding * 2
+    // `Card` insets its own slot by `panelPadding` on all four sides, so
+    // every child below anchors straight to the slot's edges and this is
+    // the width they get.
+    readonly property real _contentWidth: root._cardWidth - Core.Theme.space.panelPadding * 2
+    readonly property real _chrome: Core.Theme.space.panelPadding * 2
+    // Everything above the view: the input row, the rule under it, and the
+    // two optional bands (the breadcrumb chips, the picker's variant
+    // switcher), each with the `sm` gap that precedes it when it is there
+    // at all.
+    readonly property real _headerHeight: searchRow.height + searchRule.height
+        + (breadcrumbRow.height > 0 ? Core.Theme.space.sm + breadcrumbRow.height : 0)
+        + (variantRow.height > 0 ? Core.Theme.space.sm + variantRow.height : 0)
     // Whichever view owns the level: the grid on the wallpaper route, the
     // loaded component on an app-view route, the row list everywhere else.
     // The idle ones are emptied or unloaded rather than merely hidden (see
@@ -833,59 +843,37 @@ PanelWindow {
     readonly property real _viewContentHeight: root._isPickerRoute
         ? gridView.contentHeight
         : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight)
-    readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - searchCell.height - variantRow.height - actionBar.height)
+    readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - root._headerHeight
+        - Core.Theme.space.sm * 2 - actionBar.height)
     // Fixed height on the split route (M30, omarchy parity): the preview
     // pane needs to be genuinely useful, not sized to whatever row count a
     // filter happens to leave — so this route always takes the full cap
     // instead of shrinking to content height like every other level does.
     readonly property real _rowsAreaHeight: root._isSplitRoute ? root._rowsAreaCap : Math.min(root._viewContentHeight, root._rowsAreaCap)
 
-    // Card-top freeze (omarchy parity, M16 Task 2): a filter keystroke pins
-    // the top margin at whatever it currently resolves to, so every
-    // row-count change while that query stands grows/shrinks the card
-    // downward instead of re-centering it on each keystroke. null means
-    // "not frozen" — margins.top below falls back to the live centered
-    // formula.
-    //
-    // The freeze is released the moment the card is back at a RESTING row
-    // set: the query cleared, a level entered or popped, a fresh summon.
-    // It used to latch for the whole session, which is what left the card
-    // stranded (owner, live shell: "a long list moves it up, then it never
-    // goes back to center — sometimes it stays at the bottom of the screen
-    // or at the top"). Releasing costs nothing visually, because the value
-    // being released to is the same centered position the freeze was
-    // captured from.
-    property var _frozenTop: null
-
+    // The card's top edge sits at 30% of the output height (spec
+    // "Launcher"), which is where the eye already is and which leaves the
+    // list room to grow downward without the card moving. It replaced a
+    // centered card plus a per-keystroke top freeze: a fixed top does the
+    // same job for free, because a row count that changes only ever moves
+    // the bottom edge.
+    readonly property real _topFraction: 0.3
     readonly property real _topInset: Core.Theme.space.panelGap
-    readonly property real _centeredTop: (root._outputHeight - root._cardHeight) / 2
+    readonly property real _preferredTop: root._outputHeight * root._topFraction
 
-    // Whatever the freeze or the centered formula produces, the card is
-    // always fully on screen with a `panelGap` margin. Without this, the
-    // freeze itself is what pushes it off: pin the top for a three-row
-    // level, then filter to forty rows, and the card grows straight past
-    // the bottom edge (and, filtering the other way from a long list, ends
-    // up hugging the top).
+    // Keeps the card fully on screen with a `panelGap` margin whatever the
+    // row count does to its height.
     function _clampTop(top) {
         if (root._outputHeight <= 0)
             return 0;
         var maxTop = root._outputHeight - root._cardHeight - root._topInset;
-        // Taller than the screen can hold even with no margin at all: center
-        // the overflow instead of returning a negative top, which would push
+        // Taller than the screen can hold even with no margin at all: sit at
+        // the inset rather than returning a negative top, which would push
         // the search field off the top edge. _maxTotalHeight caps the rows
         // area at 60% of the screen, so this is a guard, not a normal path.
         if (maxTop < root._topInset)
-            return Math.max(0, Math.round(root._centeredTop));
+            return Math.round(root._topInset);
         return Math.round(Math.max(root._topInset, Math.min(top, maxTop)));
-    }
-
-    function _freezeTop() {
-        if (root._frozenTop === null && root._screen)
-            root._frozenTop = root._clampTop(root._centeredTop);
-    }
-
-    function _releaseTopFreeze() {
-        root._frozenTop = null;
     }
 
     readonly property string _stateDir: {
@@ -973,7 +961,6 @@ PanelWindow {
 
     function open(route) {
         root._abandonPendingSelect();
-        root._releaseTopFreeze();
         // Fresh session: last session's condition results must not leak
         // into this one (a `when`/`checked` shell command can change
         // between opens — bluetooth power, mode toggle, device presence).
@@ -1009,7 +996,6 @@ PanelWindow {
 
     function openSelect(prompt, options, token) {
         root._beginSelectionRequest();
-        root._releaseTopFreeze();
         root._mode = "select";
         root._selectPrompt = prompt;
         root._selectOptions = options;
@@ -1023,7 +1009,6 @@ PanelWindow {
 
     function openInput(prompt, token) {
         root._beginSelectionRequest();
-        root._releaseTopFreeze();
         root._mode = "input";
         root._selectPrompt = prompt;
         root._selectOptions = [];
@@ -1040,7 +1025,6 @@ PanelWindow {
         root._leavePickerRoute();
         root.isOpen = false;
         root._confirmPendingId = "";
-        root._releaseTopFreeze();
         // The next summon maps the card wherever it centers, possibly under a
         // pointer that never moved: a sample left over from this session would
         // read that as a move.
@@ -1284,10 +1268,6 @@ PanelWindow {
         if (id === root._pickerRouteId)
             root._enterPickerRoute();
         root._evalConditions();
-        // A level change is a resting row set, so the card re-centers for
-        // it rather than keeping whatever top the previous level's
-        // filtering froze (see margins.top below for the whole rule).
-        root._releaseTopFreeze();
     }
 
     function _pop() {
@@ -1647,16 +1627,17 @@ PanelWindow {
     color: "transparent"
 
     // The window spans the whole output (M39 Task 2) so it can carry the
-    // scrim below; the card is one positioned Item inside it rather than the
+    // scrim below; the card is one positioned item inside it rather than the
     // window's own content. These two are what `implicitWidth`/
     // `implicitHeight` used to be, and every consumer of the old window size
-    // (_contentWidth, _centeredTop, _clampTop) reads them instead — the
+    // (_contentWidth, _preferredTop, _clampTop) reads them instead: the
     // window's own width/height now say "the output", which is a different
     // fact and never the one that math wanted.
     readonly property real _cardWidth: root._isAppView
         ? Core.Theme.space.popupWidthMenuApp
         : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
-    readonly property real _cardHeight: root._chrome + searchCell.height + variantRow.height + root._rowsAreaHeight + actionBar.height
+    readonly property real _cardHeight: root._chrome + root._headerHeight
+        + Core.Theme.space.sm * 2 + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -1698,16 +1679,16 @@ PanelWindow {
         onPressed: root.close()
     }
 
-    // Enter/exit (DESIGN.md §4): the whole card fades and slides down into
-    // its centered spot, one animated scalar so a resummon mid-exit
-    // reverses in place.
-    Item {
+    // Enter/exit (DESIGN.md §1 Motion): the whole card fades and slides
+    // down into place, one animated scalar so a resummon mid-exit reverses
+    // where it stands. `Card` paints the translucent `card` fill Hyprland's
+    // blur reads through, the 1px border and the `radiusXl` corners, and
+    // insets its own slot by `panelPadding`, so every child below anchors
+    // straight to that slot's edges.
+    Card {
         id: card
         x: Math.round((root._outputWidth - root._cardWidth) / 2)
-        // Frozen while a filter query stands (_freezeTop), centered
-        // otherwise, clamped on screen either way — see the _frozenTop
-        // block above for the whole rule.
-        y: root._clampTop(root._frozenTop !== null ? root._frozenTop : root._centeredTop)
+        y: root._clampTop(root._preferredTop)
         width: root._cardWidth
         height: root._cardHeight
         opacity: root.isOpen ? 1 : 0
@@ -1717,247 +1698,241 @@ PanelWindow {
             NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
         }
 
-        // Translucent, so Hyprland's blur reads through the launcher card
-        // (DESIGN.md §1 "Translucency and blur"); the scrim behind it stays
-        // opaque black at 0.5.
-        Rectangle {
-            anchors.fill: parent
-            color: Core.Theme.surface(Core.Theme.color.card)
-        }
-
         // Swallows presses that land on the card's own padding gutters
-        // rather than on a cell, so a click inside the frame never falls
-        // through to the dismiss area above. First interactive child, so
-        // every Cell declared after it still wins its own clicks.
+        // rather than on a row, so a click inside the frame never falls
+        // through to the dismiss area above. Negative margins put it back
+        // over the gutters `Card` insets this slot by; first interactive
+        // child, so every row declared after it still wins its own clicks.
         MouseArea {
             anchors.fill: parent
+            anchors.margins: -card.padding
             acceptedButtons: Qt.AllButtons
         }
 
-        // The card's own border ring (DESIGN.md's omarchy card chrome: "a single
-        // bordered rectangle") — explicit on all four sides, with the
-        // panelPadding gutter below insetting content uniformly. The search
-        // field and result rows still close their own bottom+right per Cell's
-        // shared-rule contract (needed for the divider between adjacent rows);
-        // the eraser rectangles further down paint over just the trailing
-        // hairline that would otherwise double these two rules.
-        Rectangle {
-            id: topRule
+        // The input row (spec "Launcher"): a search icon, the field, and a
+        // 1px rule underneath. No frame of its own, so the card's own
+        // border is the only one on the surface.
+        Item {
+            id: searchRow
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: Core.Theme.borderWidth
-            color: Core.Theme.color.border
-        }
+            height: Core.Theme.space.controlHeight
 
-        Rectangle {
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            width: Core.Theme.borderWidth
-            color: Core.Theme.color.border
-        }
+            Icon {
+                id: searchIcon
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                name: "search"
+                size: Core.Theme.fontSize.body
+                color: Core.Theme.color.mutedForeground
+            }
 
-        Rectangle {
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.right: parent.right
-            width: Core.Theme.borderWidth
-            color: Core.Theme.color.border
-        }
+            TextInput {
+                id: searchInput
+                anchors.left: searchIcon.right
+                anchors.leftMargin: Core.Theme.space.iconGap
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                color: Core.Theme.color.foreground
+                font.family: Core.Theme.fontFamilySans
+                font.pixelSize: Core.Theme.fontSize.body
+                focus: true
+                selectByMouse: true
+                cursorVisible: true
 
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: Core.Theme.borderWidth
-            color: Core.Theme.color.border
-        }
-
-        Cell {
-            id: searchCell
-            anchors.top: topRule.bottom
-            anchors.topMargin: Core.Theme.space.panelPadding
-            anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
-            width: root._contentWidth
-            height: searchColumn.implicitHeight + Core.Theme.space.sm * 2 + Core.Theme.borderWidth
-
-            Column {
-                id: searchColumn
-                width: parent.width
-                spacing: Core.Theme.space.xxs
-
-                MetaLabel {
-                    text: root.breadcrumb
-                    colon: true
+                Text {
+                    anchors.fill: parent
+                    visible: searchInput.text.length === 0
+                    text: root._placeholder
+                    color: Core.Theme.color.mutedForeground
+                    font: searchInput.font
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
                 }
 
-                TextInput {
-                    id: searchInput
-                    width: searchColumn.width
-                    color: Core.Theme.color.foreground
-                    font.family: Core.Theme.fontFamily
-                    font.pixelSize: Core.Theme.fontSize.body
-                    focus: true
-                    selectByMouse: true
-                    cursorVisible: true
-
-                    onTextChanged: {
-                        root._cursorIndex = 0;
-                        root._confirmPendingId = "";
-                        // Typing re-ranks the rows under a pointer that hasn't
-                        // moved — the churn the gate exists for.
-                        pointerGate.reset();
-                        // A standing filter query freezes the card's top; an
-                        // empty one is a resting row set again and releases
-                        // it, so backspacing out of a long search re-centers
-                        // the card instead of leaving it stranded wherever
-                        // that search's height put it. open()'s own
-                        // prefill/reset writes land before isOpen flips
-                        // true, so they're exempt either way.
-                        if (root.isOpen) {
-                            if (searchInput.text.length === 0)
-                                root._releaseTopFreeze();
-                            else
-                                root._freezeTop();
-                        }
-                        // Arm the debounced nix search from the event, never
-                        // from the _displayRows binding (side effect).
-                        if (root._mode === "menu") {
-                            var nixQuery = Providers.nixTriggerQuery(searchInput.text);
-                            if (nixQuery === null && root.currentNodeId === "nix")
-                                nixQuery = searchInput.text;
-                            if (nixQuery !== null)
-                                root._requestNixSearch(nixQuery);
-                        }
+                onTextChanged: {
+                    root._cursorIndex = 0;
+                    root._confirmPendingId = "";
+                    // Typing re-ranks the rows under a pointer that hasn't
+                    // moved, the churn the gate exists for.
+                    pointerGate.reset();
+                    // Arm the debounced nix search from the event, never
+                    // from the _displayRows binding (side effect).
+                    if (root._mode === "menu") {
+                        var nixQuery = Providers.nixTriggerQuery(searchInput.text);
+                        if (nixQuery === null && root.currentNodeId === "nix")
+                            nixQuery = searchInput.text;
+                        if (nixQuery !== null)
+                            root._requestNixSearch(nixQuery);
                     }
+                }
 
-                    Keys.onPressed: event => {
-                        // An app view with its own cursor gets first refusal
-                        // on every key (root._appViewKey's own note).
-                        if (root._appViewKey(event.key, event.modifiers)) {
+                Keys.onPressed: event => {
+                    // An app view with its own cursor gets first refusal
+                    // on every key (root._appViewKey's own note).
+                    if (root._appViewKey(event.key, event.modifiers)) {
+                        event.accepted = true;
+                        return;
+                    }
+                    switch (event.key) {
+                    // An app view has no row cursor, so the same two keys
+                    // scroll its content by a row instead. Claimed
+                    // either way: letting them through would only reach
+                    // the search field's own text cursor.
+                    case Qt.Key_Up:
+                        if (root._isAppView)
+                            root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
+                        else
+                            root._moveCursor(root._isPickerRoute ? -root.pickerColumns : -1);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Down:
+                        if (root._isAppView)
+                            root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
+                        else
+                            root._moveCursor(root._isPickerRoute ? root.pickerColumns : 1);
+                        event.accepted = true;
+                        break;
+                    // Left/Right belong to the search field's own text
+                    // cursor everywhere except the grid, so they're
+                    // claimed only there, never accepted otherwise.
+                    case Qt.Key_Left:
+                        if (root._isPickerRoute) {
+                            root._moveCursor(-1);
                             event.accepted = true;
-                            return;
                         }
-                        switch (event.key) {
-                        // An app view has no row cursor, so the same two keys
-                        // scroll its content by a row instead. Claimed
-                        // either way: letting them through would only reach
-                        // the search field's own text cursor.
-                        case Qt.Key_Up:
-                            if (root._isAppView)
-                                root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
-                            else
-                                root._moveCursor(root._isPickerRoute ? -root.pickerColumns : -1);
+                        break;
+                    case Qt.Key_Right:
+                        if (root._isPickerRoute) {
+                            root._moveCursor(1);
                             event.accepted = true;
-                            break;
-                        case Qt.Key_Down:
-                            if (root._isAppView)
-                                root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
-                            else
-                                root._moveCursor(root._isPickerRoute ? root.pickerColumns : 1);
-                            event.accepted = true;
-                            break;
-                        // Left/Right belong to the search field's own text
-                        // cursor everywhere except the grid, so they're
-                        // claimed only there — never accepted otherwise.
-                        case Qt.Key_Left:
-                            if (root._isPickerRoute) {
-                                root._moveCursor(-1);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_Right:
-                            if (root._isPickerRoute) {
-                                root._moveCursor(1);
-                                event.accepted = true;
-                            }
-                            break;
-                        // Page/Home/End are the search field's own text
-                        // navigation everywhere else, so they are claimed
-                        // only where an app view declares something to
-                        // scroll. A page keeps one row of overlap, so the
-                        // reader carries context across the jump.
-                        case Qt.Key_PageUp:
-                        case Qt.Key_PageDown:
-                            if (root._appViewScroll) {
-                                var page = Math.max(Core.Theme.space.popupRowHeight,
-                                    root._appViewScroll.height - Core.Theme.space.popupRowHeight);
-                                root._scrollAppViewBy(event.key === Qt.Key_PageUp ? -page : page);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_Home:
-                            if (root._appViewScroll) {
-                                root._scrollAppViewTo(0);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_End:
-                            if (root._appViewScroll) {
-                                root._scrollAppViewTo(root._appViewScroll.contentHeight);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_Return:
-                        case Qt.Key_Enter:
-                            if (root._mode === "input")
-                                root._submitInput();
-                            else if ((event.modifiers & Qt.ShiftModifier) !== 0)
-                                root._activateRowOnDiscreteGpu(root._cursorIndex);
-                            else
-                                root._activateRow(root._cursorIndex);
-                            event.accepted = true;
-                            break;
-                        case Qt.Key_Escape:
-                            // select/input have no tree level to pop out of —
-                            // Escape just cancels the request and closes (close()
-                            // writes the {cancelled:true} record via
-                            // _abandonPendingSelect()).
-                            if (root._mode !== "menu")
-                                root.close();
-                            else
-                                root._pop();
-                            event.accepted = true;
-                            break;
-                        case Qt.Key_Backspace:
-                            if (root._mode === "menu" && searchInput.text.length === 0) {
-                                root._pop();
-                                event.accepted = true;
-                            }
-                            break;
-                        // Two variants, so Tab and Shift+Tab are the same
-                        // switch. Claimed only where the switcher is actually
-                        // up, so Tab keeps whatever it does everywhere else.
-                        case Qt.Key_Tab:
-                        case Qt.Key_Backtab:
-                            if (root._isPickerRoute && root._pickerHasVariants) {
-                                root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
-                                event.accepted = true;
-                            }
-                            break;
                         }
+                        break;
+                    // Page/Home/End are the search field's own text
+                    // navigation everywhere else, so they are claimed
+                    // only where an app view declares something to
+                    // scroll. A page keeps one row of overlap, so the
+                    // reader carries context across the jump.
+                    case Qt.Key_PageUp:
+                    case Qt.Key_PageDown:
+                        if (root._appViewScroll) {
+                            var page = Math.max(Core.Theme.space.popupRowHeight,
+                                root._appViewScroll.height - Core.Theme.space.popupRowHeight);
+                            root._scrollAppViewBy(event.key === Qt.Key_PageUp ? -page : page);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_Home:
+                        if (root._appViewScroll) {
+                            root._scrollAppViewTo(0);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_End:
+                        if (root._appViewScroll) {
+                            root._scrollAppViewTo(root._appViewScroll.contentHeight);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_Return:
+                    case Qt.Key_Enter:
+                        if (root._mode === "input")
+                            root._submitInput();
+                        else if ((event.modifiers & Qt.ShiftModifier) !== 0)
+                            root._activateRowOnDiscreteGpu(root._cursorIndex);
+                        else
+                            root._activateRow(root._cursorIndex);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Escape:
+                        // select/input have no tree level to pop out of:
+                        // Escape just cancels the request and closes (close()
+                        // writes the {cancelled:true} record via
+                        // _abandonPendingSelect()).
+                        if (root._mode !== "menu")
+                            root.close();
+                        else
+                            root._pop();
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Backspace:
+                        if (root._mode === "menu" && searchInput.text.length === 0) {
+                            root._pop();
+                            event.accepted = true;
+                        }
+                        break;
+                    // Two variants, so Tab and Shift+Tab are the same
+                    // switch. Claimed only where the switcher is actually
+                    // up, so Tab keeps whatever it does everywhere else.
+                    case Qt.Key_Tab:
+                    case Qt.Key_Backtab:
+                        if (root._isPickerRoute && root._pickerHasVariants) {
+                            root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
+                            event.accepted = true;
+                        }
+                        break;
                     }
                 }
             }
         }
 
-        // The wallpaper route's DARK | LIGHT switcher — two ledger cells
-        // sharing the grid's own width, the live one carrying `selected`
-        // (§2.2's fg/bg inversion, the same thing that marks the cursor row),
-        // so which set is on screen is stated rather than remembered. Absent
-        // entirely — zero height, no reserved gutter — for a directory with no
+        Rectangle {
+            id: searchRule
+            anchors.top: searchRow.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: Core.Theme.borderWidth
+            color: Core.Theme.color.border
+        }
+
+        // The breadcrumb (spec "Launcher"): one chip per level below the
+        // root, hidden outright at the root, where the field is already the
+        // whole surface. The chips state the path; they are not a control,
+        // so nothing in the row answers a click.
+        Row {
+            id: breadcrumbRow
+            anchors.top: searchRule.bottom
+            anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.sm : 0
+            anchors.left: parent.left
+            spacing: Core.Theme.space.xs
+            visible: root._breadcrumbVisible
+            height: root._breadcrumbVisible ? implicitHeight : 0
+
+            Repeater {
+                model: root.breadcrumb
+
+                delegate: Cell {
+                    id: crumb
+                    required property string modelData
+
+                    radius: Core.Theme.radiusSm
+                    selected: true
+
+                    Text {
+                        text: crumb.modelData
+                        color: crumb.foreground
+                        font.family: Core.Theme.fontFamilySans
+                        font.pixelSize: Core.Theme.fontSize.caption
+                    }
+                }
+            }
+        }
+
+        // The wallpaper route's DARK | LIGHT switcher, two cells sharing the
+        // grid's own width, the live one carrying `selected`, so which set
+        // is on screen is stated rather than remembered. Absent entirely
+        // (zero height, no reserved gutter) for a directory with no
         // Dark/Light pair, and on every other route.
         //
-        // Both views below anchor to this rather than to searchCell, so the
+        // Both views below anchor to this rather than to the header, so the
         // switcher pushes the grid down without either of them knowing
         // whether it is there.
         Row {
             id: variantRow
-            anchors.top: searchCell.bottom
+            anchors.top: breadcrumbRow.bottom
+            anchors.topMargin: visible ? Core.Theme.space.sm : 0
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             height: visible ? implicitHeight : 0
             visible: root._isPickerRoute && root._pickerHasVariants
@@ -1975,7 +1950,7 @@ PanelWindow {
                     width: variantRow.width / 2
                     selected: root._pickerVariant === variantCell.modelData.variant
 
-                    MetaLabel {
+                    SectionLabel {
                         anchors.centerIn: parent
                         text: variantCell.modelData.label
                         color: variantCell.foreground
@@ -1990,8 +1965,8 @@ PanelWindow {
         ListView {
             id: rowsView
             anchors.top: variantRow.bottom
+            anchors.topMargin: Core.Theme.space.sm
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             // Split route (M30): the list keeps the left half of
             // _contentWidth so the preview pane below can own the right
             // half. Every other route is unchanged, full width.
@@ -2037,8 +2012,8 @@ PanelWindow {
         GridView {
             id: gridView
             anchors.top: variantRow.bottom
+            anchors.topMargin: Core.Theme.space.sm
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             height: root._rowsAreaHeight
             visible: root._isPickerRoute
@@ -2116,8 +2091,8 @@ PanelWindow {
         Loader {
             id: appView
             anchors.top: variantRow.bottom
+            anchors.topMargin: Core.Theme.space.sm
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             height: root._rowsAreaHeight
             visible: root._isAppView
@@ -2152,7 +2127,6 @@ PanelWindow {
             anchors.left: rowsView.right
             anchors.leftMargin: -Core.Theme.borderWidth
             anchors.right: parent.right
-            anchors.rightMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             height: rowsView.height
 
             Rectangle {
@@ -2172,7 +2146,7 @@ PanelWindow {
                 anchors.bottomMargin: Core.Theme.space.panelPadding
                 clip: true
 
-                MetaLabel {
+                SectionLabel {
                     id: previewMeta
                     anchors.top: parent.top
                     anchors.left: parent.left
@@ -2190,7 +2164,7 @@ PanelWindow {
                     text: root._cursorNode ? (root._cursorNode.fullText || "") : ""
                     wrapMode: Text.WrapAnywhere
                     color: Core.Theme.color.foreground
-                    font.family: Core.Theme.fontFamily
+                    font.family: Core.Theme.fontFamilyMono
                     font.pixelSize: Core.Theme.fontSize.body
                 }
 
@@ -2230,21 +2204,20 @@ PanelWindow {
             }
         }
 
-        // The Raycast-style action bar (M23): what Enter does to the row
-        // under the cursor, plus the keys that always apply. Menu/actions.js
-        // owns the wording; this is the card's last element, so the two
-        // eraser rectangles below close over it rather than over the views.
+        // The footer hint line (spec "Launcher"): what Enter does to the
+        // row under the cursor, plus the keys that always apply.
+        // Menu/actions.js owns the wording.
         MenuActionBar {
             id: actionBar
             anchors.top: rowsView.bottom
+            anchors.topMargin: Core.Theme.space.sm
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
             width: root._contentWidth
             primary: root._actionBar.primary
             hints: root._actionBar.hints
 
-            // Clicking the primary is the pointer acting, exactly like
-            // clicking the row itself — same path, same gate re-arm. On an
+            // Clicking the primary verb is the pointer acting, exactly like
+            // clicking the row itself: same path, same gate re-arm. On an
             // app view it presses that view's own primary instead, at
             // whatever its cursor already is (index -1).
             onPrimaryActivated: {
@@ -2257,51 +2230,20 @@ PanelWindow {
             }
         }
 
-        // The app view's overflow hint, in the action bar's left half.
-        // That half is the row cursor's verb, which an app view has no
-        // cursor to fill, so the row is free chrome there. Drawn over the
-        // bar rather than passed in as its `primary` because a primary
-        // renders an accent key cap promising Enter an action it does not
-        // have on these routes, and drawn in the footer rather than over
-        // the view because a hint sitting on the content it announces hides
-        // the rows the reader is reaching for. controlPaddingX is Cell's
-        // own content inset, so this lands exactly where a primary would.
-        MetaLabel {
-            anchors.left: actionBar.left
-            anchors.leftMargin: Core.Theme.space.controlPaddingX
+        // The app view's overflow hint, at the footer's right end, where the
+        // hint line cannot reach it. In the footer rather than over the view
+        // because a hint sitting on the content it announces hides the rows
+        // the reader is reaching for.
+        Text {
+            anchors.right: actionBar.right
             anchors.verticalCenter: actionBar.verticalCenter
-            // Yields to a real primary verb rather than drawing over it:
-            // a query typed on an app-view route still ranks the whole tree,
-            // which lights the left half up with an actual action.
-            visible: root._appViewScrollHint !== "" && !root._actionBar.primary
+            visible: root._appViewScrollHint !== ""
             text: root._appViewScrollHint
+            color: Core.Theme.color.mutedForeground
+            font.family: Core.Theme.fontFamilySans
+            font.pixelSize: Core.Theme.fontSize.caption
+            font.capitalization: Font.AllLowercase
         }
-
-        // Erases the trailing hairline searchCell and every row draw along
-        // their own right edge (Cell's shared-rule contract) — without this,
-        // that continuous line and the frame's own right rule above would read
-        // as two parallel borders `panelPadding` apart.
-        Rectangle {
-            anchors.top: searchCell.top
-            anchors.right: actionBar.right
-            anchors.bottom: actionBar.bottom
-            width: Core.Theme.borderWidth
-            color: Core.Theme.color.background
-        }
-
-        // Same erasure for the bottom: the action bar's own bottom rule sits
-        // flush with the card's content bottom, which would otherwise double
-        // the frame's own bottom rule.
-        Rectangle {
-            anchors.left: actionBar.left
-            anchors.right: actionBar.right
-            anchors.bottom: actionBar.bottom
-            height: Core.Theme.borderWidth
-            color: Core.Theme.color.background
-        }
-
-        // Dog-ear fold mark (DESIGN.md §2 item 7).
-        DogEar {}
     }
 
     // Multi-monitor dismiss (M16 Task 7): a click on another screen closes

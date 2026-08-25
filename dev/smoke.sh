@@ -203,6 +203,7 @@ hypr_log_path="$shot_dir/hyprland.log"
 dump_path="$shot_dir/dump.json"
 query_path="$shot_dir/query.json"
 selection_path="$shot_dir/menu-selection.txt"
+menu_root_path="$shot_dir/menu-root.png"
 toasts_expanded_path="$shot_dir/toasts-expanded.png"
 toasts_expand_status_path="$shot_dir/toasts-expand-status.txt"
 panel_open_path="$shot_dir/panel-open.txt"
@@ -360,6 +361,7 @@ sleep 3
 "$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call debug query 'e' > "$query_path" 2>&1
+"$grim_bin" "$menu_root_path" > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
@@ -581,6 +583,15 @@ if $menu_mode; then
   else
     fail "no menu query result produced"
   fi
+  # The run's own smoke.png lands in select mode, whose three option rows
+  # carry no route icons and no breadcrumb path. This second frame is the
+  # root level, where the row icons and the tree's own chrome are. Printed
+  # before the selection read-back, whose `cat` has no trailing newline and
+  # would otherwise swallow this line's own start-of-line anchor.
+  if [ ! -f "$menu_root_path" ]; then
+    fail "no root-level menu screenshot produced"
+  fi
+  echo "SMOKE_MENU_ROOT $menu_root_path"
   if [ -s "$selection_path" ] && grep -q '"cancelled":true' "$selection_path"; then
     cat "$selection_path"
   else
