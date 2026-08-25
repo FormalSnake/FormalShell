@@ -346,12 +346,20 @@ tests/
   tst_osd_icon.qml               qmltestrunner tests for Surfaces/Osd/icon.js
   tst_tooltip_placement.qml      qmltestrunner tests for Components/tooltip.js
 dev/
-  smoke.sh                      nested-Hyprland build+screenshot loop, the rig since M41; --panel <name>
-                                 covers every name PanelIpc registers, one run per panel
-  smoke.d/<leg>.sh              one file per leg: its flag, its fixture additions, its in-session
-                                 timeline and its assertions, each documented in its own header block,
+  smoke.sh                      the rig scaffold: isolated HOME, settings fixture, private bus, session
+                                 mode (nested on a host, vkms in the VM), build, launch, SMOKE_OK frame,
+                                 teardown. It sources every leg, so adding one never edits it
+  smoke.d/<leg>.sh              one file per leg (45 of them): its flag, its fixture additions, its
+                                 in-session timeline and its assertions, documented in its own header,
                                  which is the authoritative description of that leg
+  smoke.d/README.md             the file contract every leg is written against
   smoke-hyprland.sh             a shim that execs smoke.sh, the name older notes point at
+  smoke-greeter.sh              the greeter's own loop (just vm-greeter): greetd's default_session is a
+                                 standing service, so it drives that rather than composing a session
+  vm.sh                         the mac rig driver: start/stop/status/sync/run/smoke/shell against the
+                                 headless aarch64 testvm, pulling screenshots and JSON into artifacts/
+  vm-lock.sh                    serialises VM commands from parallel worktrees on a lockfile, since sync
+                                 rsyncs over the VM's single checkout with --delete
   sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items: registers for real on the session bus, never faked
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,

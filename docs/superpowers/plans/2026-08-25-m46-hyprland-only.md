@@ -1,7 +1,7 @@
 # M46: Hyprland only
 
 **Date:** 2026-08-25
-**Status:** approved, pre-implementation
+**Status:** implemented 2026-08-25
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 ("Hyprland first", "Keyboard model", "Deletions"). Spec wins on conflict.
 **Builds on:** M41's rig (`dev/smoke.sh`, Hyprland on `vkms` in the VM,
@@ -118,3 +118,16 @@ rewritten. Commit: `docs: hyprland screenshots and the leg index`.
 script had is either in `dev/smoke.d/` and green or named in CLAUDE.md as
 unportable with the reason, the example config verifies, screenshots are
 Hyprland captures, `just test` and `just vm-lint` pass.
+
+## Landed
+
+1. `5d8db96` refactor(dev): one file per smoke leg
+2. `dbc778d` feat(dev): port the gpu, clipssh and dump smoke legs to hyprland
+3. `cf04fba` docs(m46): carry the picker select round trip
+4. `104690b` feat(dev): port the screensaver, tray and bar smoke legs to hyprland
+5. `379167b` feat(dev): port the capture smoke legs to hyprland
+6. `3f5ebb9` feat(dev): port the media, toggle and keybind smoke legs to hyprland
+7. `f6e785c` feat(compositor): hyprland only
+8. `8a2ffe7` feat(hyprland): shell colours and the full keybind set
+9. Task 8, this docs pass: `docs: hyprland screenshots` and
+  `docs: verification index for the per-leg rig`

@@ -1,7 +1,7 @@
 # M44: toasts, notification centre, OSD, tooltip anchor
 
 **Date:** 2026-08-25
-**Status:** approved, pre-implementation
+**Status:** implemented 2026-08-25
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 ("Toasts", "Notification centre", "OSD", "Tooltip", "Keyboard model");
 `docs/DESIGN.md` §3. Spec wins on conflict.
@@ -84,3 +84,11 @@ Commit: `feat(osd): shadcn pill, tooltip anchoring`.
 
 Three commits in, files pass D1, `--notify`/`--center`/`--osd` green with
 PNGs read, `CardTitleBar` gone, `just test` and `just vm-lint` pass.
+
+## Landed
+
+1. `c8738e1` feat(notifications): centre on the shadcn primitives, dismissOne
+2. `18d5689` feat(osd): shadcn pill, tooltip anchoring
+3. `f470e22` fix(dev): keep the osd and tooltip flags ahead of the usage case
+4. `10c72f3` fix(dev): terminate the centre drive script heredoc
+5. `882249f` feat(notifications): shadcn toast cards on the sonner stack

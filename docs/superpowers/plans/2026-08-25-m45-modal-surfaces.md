@@ -1,7 +1,7 @@
 # M45: lock, greeter, picker, polkit, console, capture, hot corners, sweep
 
 **Date:** 2026-08-25
-**Status:** approved, pre-implementation
+**Status:** implemented 2026-08-25
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 ("Lock and greeter", "Picker", "Depth", "Configuration"); `docs/DESIGN.md`
 §3, §5. Spec wins on conflict.
@@ -117,3 +117,11 @@ Commit: `refactor(components): drop the ledger compatibility props`.
 Three commits in, every file under `shell/` passes D1, the listed rig legs
 are green with PNGs read, `hotCorners` accepts an action string with a
 test, `just test` and `just vm-lint` pass.
+
+## Landed
+
+1. `d483e30` docs(m45): swappable locker via lock.command
+2. `40b950b` feat(lock): shadcn auth prompt, swappable locker, dither opt-in
+3. `bf82e71` docs(m45): hero meta case in the sweep
+4. `996480b` feat(surfaces): picker, polkit, capture and hot corner actions
+5. `1b5bf93` refactor(components): drop the ledger compatibility props

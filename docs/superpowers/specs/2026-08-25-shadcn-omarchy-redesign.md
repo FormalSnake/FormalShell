@@ -403,6 +403,9 @@ Changed: `wallpaper.dither` defaults to false. Removed:
 - M46 niri removal: backend, templates, rig, docs, screenshots, example
   Hyprland config, keybind cheat sheet.
 
+All six milestones landed on 2026-08-25; each plan's own "Landed" section
+lists its commits.
+
 ## Risks
 
 - Nested Hyprland in the VM was flakier than niri. If M41's gate cannot be
