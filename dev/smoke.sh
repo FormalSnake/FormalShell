@@ -6,8 +6,8 @@
 #
 # dev/smoke-niri.sh is the reference for what each leg proves and stays the
 # richer script until M46 deletes the niri backend. Legs here: the base bar
-# shot, --dump, --menu, --notify, --panel <name>, --panel-at <n>, --console,
-# --wallpaper, --lock.
+# shot, --dump, --menu, --notify, --center, --panel <name>, --panel-at <n>,
+# --console, --wallpaper, --lock.
 #
 # Two ways the session comes up, decided by what the machine can actually
 # do (render_node_present and vkms_card_device below), never by a flag:
@@ -45,6 +45,7 @@ cd "$(dirname "$0")/.."
 dump_mode=false
 menu_mode=false
 notify_mode=false
+center_mode=false
 panel_mode=false
 panel_name=""
 panel_at_mode=false
@@ -57,12 +58,13 @@ while [ $# -gt 0 ]; do
     --dump) dump_mode=true; shift ;;
     --menu) menu_mode=true; shift ;;
     --notify) notify_mode=true; shift ;;
+    --center) center_mode=true; shift ;;
     --panel) panel_mode=true; panel_name="${2:-}"; shift 2 ;;
     --panel-at) panel_at_mode=true; panel_at_index="${2:-}"; shift 2 ;;
     --console) console_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--menu] [--notify] [--panel <name>] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--panel <name>] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
   esac
 done
 
@@ -91,7 +93,7 @@ fi
 # screenshot exists to show a summoned surface instead, the same split
 # dev/smoke-niri.sh draws.
 fixture_window_mode=true
-if $dump_mode || $menu_mode || $notify_mode || $panel_mode || $panel_at_mode \
+if $dump_mode || $menu_mode || $notify_mode || $center_mode || $panel_mode || $panel_at_mode \
   || $console_mode || $wallpaper_mode || $lock_mode; then
   fixture_window_mode=false
 fi
@@ -131,7 +133,7 @@ if $fixture_window_mode || $console_mode; then
   fi
 fi
 
-if $notify_mode; then
+if $notify_mode || $center_mode; then
   if command -v notify-send >/dev/null 2>&1; then
     notify_send_bin=$(command -v notify-send)
   else
@@ -243,6 +245,11 @@ selection_path="$shot_dir/menu-selection.txt"
 menu_root_path="$shot_dir/menu-root.png"
 toasts_expanded_path="$shot_dir/toasts-expanded.png"
 toasts_expand_status_path="$shot_dir/toasts-expand-status.txt"
+center_path="$shot_dir/center.png"
+center_status_before_path="$shot_dir/center-status-before.json"
+center_status_open_path="$shot_dir/center-status-open.json"
+center_status_closed_path="$shot_dir/center-status-closed.json"
+center_dismiss_one_path="$shot_dir/center-dismiss-one.txt"
 panel_open_path="$shot_dir/panel-open.txt"
 panel_state_path="$shot_dir/panel-state.txt"
 panel_at_toggle_path="$shot_dir/panel-at-toggle.txt"
@@ -495,6 +502,45 @@ sleep 1
 EOF
 fi
 
+if $center_mode; then
+  # A normal notify-send of this leg's own, then a long enough wait for the
+  # model's 8s popup timeout to move it (and --notify's, when the two flags
+  # combine) into the `pending` tier the centre lists. The wait is 14s rather
+  # than the 9 that timeout alone would need: on the VM's software renderer
+  # the shell reaches the bus several seconds after the drive script starts,
+  # so a notification's own clock begins well after its notify-send. Combine with --notify
+  # and the critical popup is still sticky in the popup layer, which is what
+  # makes the suppression claim readable: Center.qml is a fixed
+  # right-anchored full-height card wherever notifications.position puts the
+  # toast stack, so Toasts.qml drops its whole stack for as long as the
+  # centre is open and center.png shows the centre alone.
+  #
+  # `notifications status` brackets a showHistory round trip (the IPC
+  # stand-in for the bell cell's own click, which calls the same
+  # center.open()/close()), and `dismissOne` is asserted here rather than in
+  # --notify: it drops the front toast, which would change what that leg's
+  # own frames show.
+  center_script="$shot_dir/center-drive.sh"
+  write_script "$center_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$notify_send_bin" -u normal 'Second' 'World'
+sleep 14
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_before_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_open_path" 2>&1
+"$grim_bin" "$center_path" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call notifications dismissOne > "$center_dismiss_one_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_closed_path" 2>&1
+EOF
+fi
+
 if $panel_mode; then
   # No bar-cell click happened, so Panel.qml's anchorX stays unset and the
   # frame falls back under the bar's right region. The panel has no
@@ -644,6 +690,13 @@ if $lock_mode; then
   screenshot_delay=$((lock_t0 + 21))
   session_timeout=$((lock_t0 + 45))
 fi
+if $center_mode; then
+  # center-drive.sh's own last status dump lands at 23s; this run's generic
+  # smoke.png is taken after it, showing the session with the centre closed
+  # again and the front toast gone.
+  screenshot_delay=25
+  session_timeout=70
+fi
 tail_gap=1
 if $menu_mode; then
   # menu-finish.sh's own read-back lands at 10, so the session has to
@@ -713,6 +766,9 @@ EOF
   fi
   if $notify_mode; then
     echo "exec-once = bash $notify_script"
+  fi
+  if $center_mode; then
+    echo "exec-once = bash $center_script"
   fi
   if $panel_mode; then
     echo "exec-once = bash $panel_script"
@@ -819,6 +875,56 @@ if $notify_mode; then
     fail "no toasts-expanded screenshot produced"
   fi
   echo "SMOKE_TOASTS_EXPANDED $toasts_expanded_path"
+fi
+
+if $center_mode; then
+  for f in "$center_status_before_path" "$center_status_open_path" "$center_status_closed_path"; do
+    if [ -s "$f" ]; then
+      cat "$f"; echo
+    else
+      fail "no notifications status produced at $f"
+    fi
+  done
+  # "pending":0 would mean the expired notify-sends never reached the tier
+  # the bell cell counts, and the summon would have shown an empty list.
+  if grep -q '"pending":0,' "$center_status_before_path"; then
+    fail "pending count was zero before the centre summon: $(cat "$center_status_before_path")"
+  fi
+  if ! grep -q '"centerOpen":false' "$center_status_before_path"; then
+    fail "centre reported open before the summon: $(cat "$center_status_before_path")"
+  fi
+  if ! grep -q '"centerOpen":true' "$center_status_open_path"; then
+    fail "showHistory did not open the centre: $(cat "$center_status_open_path")"
+  fi
+  if ! grep -q '"centerOpen":false' "$center_status_closed_path"; then
+    fail "second showHistory did not close the centre: $(cat "$center_status_closed_path")"
+  fi
+  if [ ! -s "$center_dismiss_one_path" ]; then
+    fail "no notifications dismissOne answer produced"
+  fi
+  cat "$center_dismiss_one_path"
+  if $notify_mode; then
+    # --notify's critical toast is sticky (expiresAt 0), so it is still the
+    # only thing in the popup tier when dismissOne runs, and the tier has to
+    # be empty afterwards.
+    if ! grep -q "^ok$" "$center_dismiss_one_path"; then
+      fail "dismissOne did not drop the sticky critical toast, got: $(cat "$center_dismiss_one_path")"
+    fi
+    if ! grep -q '"popups":0' "$center_status_closed_path"; then
+      fail "a toast survived dismissOne: $(cat "$center_status_closed_path")"
+    fi
+  else
+    # Run alone, every popup this leg fired has expired into pending by the
+    # time dismissOne runs, and an empty popup tier answers `none` rather
+    # than erroring.
+    if ! grep -q "^none$" "$center_dismiss_one_path"; then
+      fail "dismissOne on an empty popup tier did not answer none, got: $(cat "$center_dismiss_one_path")"
+    fi
+  fi
+  if [ ! -f "$center_path" ]; then
+    fail "no notification centre screenshot produced"
+  fi
+  echo "SMOKE_CENTER $center_path"
 fi
 
 if $panel_mode; then

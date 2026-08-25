@@ -2,7 +2,6 @@ ActionLabel ActionLabel.qml
 AuthPrompt AuthPrompt.qml
 Button Button.qml
 Card Card.qml
-CardTitleBar CardTitleBar.qml
 Cell Cell.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
@@ -18,5 +17,6 @@ Panel Panel.qml
 PanelHero PanelHero.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
+Switch Switch.qml
 Tooltip Tooltip.qml
 Track Track.qml
