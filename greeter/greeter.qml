@@ -87,11 +87,10 @@ ShellRoot {
         && (Greetd.state === GreetdState.Inactive || root._awaitingResponse)
 
     // greeter.sessionCommand (Core/Config.qml's settings.json, argv array):
-    // the session a successful login launches. ["niri"] is the one
-    // compositor every other smoke rig in this repo already exercises —
-    // Task 4's nixosModules.formalshell-greeter is where a real deployment
-    // gets a proper option instead of this settings.json key.
-    readonly property var _sessionCommand: Core.Config.get("greeter.sessionCommand", ["niri"])
+    // the session a successful login launches. ["Hyprland"] is the shell's
+    // only supported compositor; nixosModules.formalshell-greeter is where a
+    // real deployment gets a proper option instead of this settings.json key.
+    readonly property var _sessionCommand: Core.Config.get("greeter.sessionCommand", ["Hyprland"])
 
     // The sole entry point into the greetd conversation, dispatched by
     // Greetd.state exactly like Lock.qml dispatches on PamContext.active —

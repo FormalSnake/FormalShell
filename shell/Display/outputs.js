@@ -1,28 +1,27 @@
 .pragma library
 .import "../Monitor/gpu.js" as Gpu
 
-// Pure output/display model for DisplayPanel (M17): both compositors' wire
-// shapes normalized onto one row contract, plus every derivation the panel
-// renders, sort order, the mode/scale/status labels, what a mirror would
-// actually do, and whether an output may be switched off at all. No
+// Pure output/display model for DisplayPanel (M17): Hyprland's wire shape
+// normalized onto one row contract, plus every derivation the panel renders,
+// sort order, the mode/scale/status labels, what a mirror would actually do,
+// and whether an output may be switched off at all. No
 // Quickshell, no Process, no socket access here, so all of it is testable
 // head-on (tests/tst_outputs.qml), same split as Network/speedtest.js and
 // Usage/usage.js.
 //
-// Row contract, produced by both normalizers and consumed by everything else:
+// Row contract, produced by the normalizer and consumed by everything else:
 //
 //   { name, make, model, x, y, width, height, refresh, scale, enabled, mirrorOf }
 //
 // `name` is the compositor's own output name and stays an opaque string end
-// to end: nothing here parses or compares it numerically, and neither backend
-// converts it either (niri keys its Outputs map by name, Hyprland's `monitor`
-// keyword takes the name verbatim), unlike the Number(id) window/workspace
-// conversion each backend does at its own wire edge.
+// to end: nothing here parses or compares it numerically, and the backend does
+// not convert it either (Hyprland's `monitor` keyword takes the name
+// verbatim).
 //
 // `width`/`height`/`refresh` describe the CURRENT mode in physical pixels and
-// Hz. A disabled output reports zeros for all three: neither compositor has a
-// mode to report for one, and inventing its last known mode would be exactly
-// the stubbed value the honest-state rule forbids. `mirrorOf` is "" when the
+// Hz. A disabled output reports zeros for all three: Hyprland has no mode to
+// report for one, and inventing its last known mode would be exactly the
+// stubbed value the honest-state rule forbids. `mirrorOf` is "" when the
 // output isn't mirroring anything.
 
 // The scale slider's range and quantization. 0.25 is binary-exact, so
@@ -103,8 +102,7 @@ function formatScale(scale) {
 // counted in 1/120ths, so the acceptable scales are exactly the divisors of
 // gcd(width*120, height*120), and a requested scale rounds UP to the nearest
 // one. Read off omarchy's own clean_scale()
-// (bin/omarchy-hyprland-monitor-scaling there) and reimplemented. niri has no
-// such constraint, so only hyprlandMonitorArg() below applies it.
+// (bin/omarchy-hyprland-monitor-scaling there) and reimplemented.
 function cleanScale(scale, width, height) {
     var requested = clampScale(scale);
     var w = _int(width);
@@ -154,8 +152,8 @@ function enabledCount(rows) {
 }
 
 // A display may always be switched on; switching one off is refused when it
-// is the last enabled output, both compositors would happily leave the
-// session with nothing on screen and no surface left to undo it from.
+// is the last enabled output, which would leave the session with nothing on
+// screen and no surface left to undo it from.
 function canToggle(rows, name) {
     var row = findOutput(rows, name);
     if (!row)
@@ -226,47 +224,7 @@ function mirrorSource(rows) {
     return row ? row.mirrorOf : "";
 }
 
-// ---- Backend normalizers -----------------------------------------------
-
-// niri's Response::Outputs payload, already unwrapped from its Reply envelope:
-// a map keyed by output name, each value a niri-ipc `Output`
-// (niri-ipc/src/lib.rs:1204). `logical` is null exactly when the output is
-// disabled ("None if the output is not mapped to any logical output"), which
-// is the enabled flag; `current_mode` indexes `modes` and is null for the
-// same reason. Refresh rates arrive in millihertz.
-function normalizeNiriOutputs(byName) {
-    if (!byName || typeof byName !== "object")
-        return [];
-
-    var rows = [];
-    for (var key in byName) {
-        var output = byName[key];
-        if (!output || typeof output !== "object")
-            continue;
-
-        var logical = output.logical;
-        var isEnabled = logical !== null && logical !== undefined;
-        var modes = Array.isArray(output.modes) ? output.modes : [];
-        var mode = typeof output.current_mode === "number" ? modes[output.current_mode] : null;
-
-        rows.push({
-            name: _text(output.name) !== "" ? _text(output.name) : String(key),
-            make: _text(output.make),
-            model: _text(output.model),
-            x: isEnabled ? _int(logical.x) : 0,
-            y: isEnabled ? _int(logical.y) : 0,
-            width: mode ? _int(mode.width) : 0,
-            height: mode ? _int(mode.height) : 0,
-            refresh: mode ? _int(mode.refresh_rate) / 1000 : 0,
-            scale: isEnabled ? _positive(logical.scale, 1) : 1,
-            enabled: isEnabled,
-            // niri-ipc's OutputAction has no mirror variant at all, so no niri
-            // output is ever mirroring, see NiriBackend's mirrorSupported.
-            mirrorOf: ""
-        });
-    }
-    return sortOutputs(rows);
-}
+// ---- Backend normalizer ------------------------------------------------
 
 // `hyprctl monitors all -j`'s raw stdout, the only Hyprland enumeration that
 // includes disabled monitors (plain `monitors` omits them entirely, which is

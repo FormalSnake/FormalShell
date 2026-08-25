@@ -7,19 +7,18 @@ import "../../Display/outputs.js" as Outputs
 import "model.js" as Model
 
 // Hyprland backend over Quickshell's native Hyprland IPC module. Hyprland.workspaces/
-// toplevels/monitors are already-reactive ObjectModels (unlike niri's raw socket, no
-// event-reducer needed here) - this file only maps their shapes onto the contract and
-// dispatches actions. Every dispatch branches on Hyprland.usingLua (Hyprland >=0.55's
+// toplevels/monitors are already-reactive ObjectModels, so this file only maps their
+// shapes onto the contract and dispatches actions. Every dispatch branches on Hyprland.usingLua (Hyprland >=0.55's
 // Lua config migration changed dispatcher call syntax; there is no upstream shim), e.g.
 // focusWorkspace: Lua -> hl.dsp.focus({workspace=...}), legacy -> "workspace <id>".
 // Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC).
 Scope {
     id: root
 
-    // No exposed "connected" bool on Hyprland's IPC singleton (unlike niri's socket
-    // state) - CompositorService only instantiates this backend once
-    // HYPRLAND_INSTANCE_SIGNATURE is already detected, so a populated monitor list is
-    // the available signal: it means the IPC round-trip actually returned data.
+    // No exposed "connected" bool on Hyprland's IPC singleton, so a populated monitor
+    // list is the available signal: it means the IPC round-trip actually returned data.
+    // A session that is not Hyprland never gets one, which is this backend's own honest
+    // unavailable state.
     readonly property bool available: Hyprland.monitors.values.length > 0
 
     // Shape and the special-workspace exclusion both live in model.js; see its
@@ -108,9 +107,9 @@ Scope {
         return "address:" + (addr.indexOf("0x") === 0 ? addr : "0x" + addr);
     }
 
-    // Hyprland's exec dispatcher takes one shell command string, not an argv array
-    // (unlike niri's structured Spawn action) - quote each arg so it survives that
-    // shell unmodified rather than being word-split or glob-expanded.
+    // Hyprland's exec dispatcher takes one shell command string, not an argv array, so
+    // quote each arg to survive that shell unmodified rather than being word-split or
+    // glob-expanded.
     function _quoteArg(arg) {
         return "'" + String(arg).replace(/'/g, "'\\''") + "'";
     }
@@ -173,10 +172,6 @@ Scope {
             Hyprland.dispatch("dpms on");
     }
 
-    // No niri-border.kdl equivalent on Hyprland (M3 ships the fragment for
-    // niri only), no-op, matching BackendBase's contract default.
-    function applyThemeFragment() {}
-
     // Webcam overlay placement (M27 Task 5), the exact dual dispatch
     // omarchy-capture-webcam-resize's own hypr_dispatch already establishes
     // (Lua hl.dsp.window.* first, legacy dispatcher string on Hyprland <0.55,
@@ -196,14 +191,13 @@ Scope {
             Hyprland.dispatch("setfloating " + selector);
     }
 
-    // Parking (M37). Hyprland has the primitive niri lacks, and it is the one
-    // omarchy's own Quake console is built on (default/hypr/qconsole.lua): a
-    // special workspace is an overlay that is simply not on screen until
-    // something toggles it. So the console LIVES there permanently and
-    // showing it is the compositor's own toggle, which is what makes it drop
-    // down and retract under the `specialWorkspace` animation instead of
-    // being carried between workspaces a window at a time. niri, with no
-    // special workspace and no hide of any kind, still moves the window.
+    // Parking (M37), the primitive omarchy's own Quake console is built on
+    // (default/hypr/qconsole.lua): a special workspace is an overlay that is
+    // simply not on screen until something toggles it. So the console LIVES
+    // there permanently and showing it is the compositor's own toggle, which
+    // is what makes it drop down and retract under the `specialWorkspace`
+    // animation instead of being carried between workspaces a window at a
+    // time.
     readonly property bool windowParkingAvailable: true
     readonly property string _parkWorkspace: "special:formalshell-console"
 
@@ -287,18 +281,17 @@ Scope {
     // dispatcher, and Quickshell exposes only dispatch() plus the request
     // socket's path (qml.hpp:52 there), makeRequest() itself is C++-private.
     // hyprctl is guaranteed present wherever HYPRLAND_INSTANCE_SIGNATURE is
-    // set, and that env guard matters: CompositorService instantiates every
-    // backend regardless of which one it goes on to select, so without it a
-    // niri session would spawn a doomed hyprctl on startup, the same reason
-    // NiriBackend's own _connect() bails on an empty socket path.
+    // set, and that env guard matters: this backend is instantiated
+    // unconditionally, so without it a session that is not Hyprland would
+    // spawn a doomed hyprctl on startup and on every refresh after.
     function refreshOutputs() {
         if (!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || outputsProc.running)
             return;
         outputsProc.running = true;
     }
 
-    // Output names are plain strings on the wire on both compositors, the
-    // `monitor` keyword takes the name verbatim, so none of the requests
+    // Output names are plain strings on the wire and the `monitor` keyword
+    // takes the name verbatim, so none of the requests
     // below carry any id conversion, unlike the window selectors above.
     function setOutputEnabled(name, enabled) {
         // Re-enabling deliberately re-derives the mode, position and scale
@@ -362,10 +355,9 @@ Scope {
         }
     }
 
-    // Hyprland applies a monitor keyword before hyprctl exits, so unlike
-    // niri's idle-scheduled Output request this needs no settling delay, but
-    // the re-read waits until the whole queue has drained, so a mirror of
-    // three outputs reports once, not once per leg.
+    // Hyprland applies a monitor keyword before hyprctl exits, so no settling
+    // delay is needed, but the re-read waits until the whole queue has
+    // drained, so a mirror of three outputs reports once, not once per leg.
     Process {
         id: keywordProc
         onExited: {

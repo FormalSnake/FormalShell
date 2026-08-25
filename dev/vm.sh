@@ -3,7 +3,7 @@
 # (docs/superpowers/plans/2026-07-28-mac-e2e-rig.md): boots
 # packages.aarch64-darwin.testvm (nix/testvm.nix) in the background, syncs
 # the working tree into it, and runs commands/smoke tests inside with the
-# nested-niri session env wired up.
+# nested session env wired up.
 #
 # The working tree — not a commit — is what gets tested: `sync` rsyncs it
 # straight into the VM over the ssh port-forward.
@@ -49,7 +49,7 @@ wait_for_ssh() {
 
 # Runs a command inside the VM with cwd at the synced repo and the nested
 # smoke scripts' expected session env exported. WAYLAND_DISPLAY is read
-# live from the systemd --user environment (same fallback dev/smoke-niri.sh
+# live from the systemd --user environment (same fallback dev/smoke.sh
 # itself uses) rather than hardcoded, since it is the parent compositor's
 # own -- not guaranteed to be wayland-1 forever.
 vm_run() {
@@ -168,29 +168,8 @@ cmd_run() {
 # sync, run the smoke rig with the given flags, then pull the SMOKE_OK
 # screenshot plus any other stdout (the dump/status/query JSON the smoke
 # script cats inline) back to ./artifacts/ on the mac.
-#
-# --compositor picks the rig: hyprland (dev/smoke.sh, the default and the
-# backend M41 onwards ships) or niri (dev/smoke-niri.sh, still the richer
-# script until M46 deletes that backend). It is consumed here, never passed
-# through to the script.
 cmd_smoke() {
   local script="./dev/smoke.sh"
-  local flags=()
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --compositor)
-        case "${2:-}" in
-          hyprland) script="./dev/smoke.sh" ;;
-          niri) script="./dev/smoke-niri.sh" ;;
-          *) echo "usage: $0 smoke [--compositor hyprland|niri] [flags...]" >&2; exit 1 ;;
-        esac
-        shift 2
-        ;;
-      *) flags+=("$1"); shift ;;
-    esac
-  done
-  set -- ${flags[@]+"${flags[@]}"}
-
   cmd_sync
   local out status=0
   out=$(vm_run "$script $*" 2>&1) || status=$?
@@ -278,7 +257,7 @@ case "${1:-}" in
   smoke) shift; cmd_smoke "$@" ;;
   shell) cmd_shell ;;
   *)
-    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [--compositor hyprland|niri] [flags...]|shell}" >&2
+    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|shell}" >&2
     exit 1
     ;;
 esac

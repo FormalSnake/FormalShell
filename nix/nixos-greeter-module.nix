@@ -109,7 +109,7 @@ in
 
     sessionCommand = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [ "niri" ];
+      default = [ "Hyprland" ];
       description = ''
         Argv a successful login launches (greetd-ipc(7)'s start_session),
         written into a static settings.json for the `greeter` system

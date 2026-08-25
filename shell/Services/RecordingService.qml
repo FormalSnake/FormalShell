@@ -21,9 +21,9 @@ import "../Capture/model.js" as Capture
 // wf-recorder rather than gpu-screen-recorder: gpu-screen-recorder captures
 // through the KMS backend, which has no meaning inside a nested compositor
 // or on llvmpipe, so it could never be verified in the smoke rig.
-// wf-recorder speaks wlr-screencopy-unstable-v1, which niri implements
-// under its nested winit backend, so the same code path the owner runs is
-// the one the rig exercises.
+// wf-recorder speaks wlr-screencopy-unstable-v1, which Hyprland implements
+// nested as well as on real hardware, so the same code path the owner runs
+// is the one the rig exercises.
 //
 // Audio, honestly scoped:
 //   none        no audio flag at all.
@@ -64,11 +64,10 @@ import "../Capture/model.js" as Capture
 // camera has actually mapped and settled into its corner -- filming it
 // slide into place is worse than a beat of extra wait. Placement goes
 // through CompositorService.floatWindow/placeFloatingWindow
-// (CompositorService.qml, backends in shell/Compositor/{niri,hyprland}),
-// each backend's own primitive for "float this window, then resize and move
-// it to an absolute pixel rect". A backend with no such primitive
-// (floatingPlacementAvailable false -- the null backend's answer whenever no
-// compositor was detected at all) never sees mpv spawned in the first
+// (CompositorService.qml, backend in shell/Compositor/hyprland), the
+// backend's own primitive for "float this window, then resize and move it to
+// an absolute pixel rect". A backend with no such primitive
+// (floatingPlacementAvailable false) never sees mpv spawned in the first
 // place: half a webcam overlay, a camera window that tiles across the
 // recording, is worse than none. Two bounded polls stand in for upstream's
 // blind "wait for the client, then sleep 600ms" (bin/omarchy-capture-

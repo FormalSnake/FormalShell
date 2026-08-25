@@ -2,9 +2,9 @@
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --keybinds: the launcher's parsed-binds route. The fixture is a real set of
 # `bind =` lines written into this session's own hyprland.conf, and the route
-# answers `hyprctl binds -j`, so what is asserted is that hyprland's own
-# expanded bind table came back as rows carrying the fixture's chords and
-# their actions.
+# answers `hyprctl binds`, so what is asserted is that hyprland's own expanded
+# bind table came back as rows carrying the fixture's chords and their
+# actions.
 #
 # Two passes on the query, the same idiom the nix route uses: the hyprctl
 # Process is async, so the first pass can land before it has exited. The rows
@@ -17,23 +17,18 @@
 # is what makes the commented-out assertion mean anything: the scaffold's
 # base config declares no binds at all, so these are the whole table.
 #
-# ⚠️ RED against Hyprland 0.56.0, and deliberately so. `hyprctl binds -j`
-# emits INVALID JSON there: from `modmask` on, every value sits under the
-# previous key's name (the fixture's modmask 65 comes back as `"submap":
-# "65"`, its key `slash` as `"keycode": slash` unquoted) and
-# `allow_input_capture` has no value at all. JSON.parse throws on it, so
-# keybinds.js's parseHyprlandBinds returns [] and the route answers NO BINDS.
-# `hyprctl binds` (plain text, dumped beside it here) carries the same table
-# correctly, which is what the route has to read instead. Until it does, this
-# leg fails at that check with the compositor's own output attached.
+# The plain table, never `-j`: Hyprland 0.56.0's JSON encoder puts every value
+# from `modmask` on under the PREVIOUS key's name (the fixture's modmask 65
+# comes back as `"submap": "65"`, its key `slash` as `"keycode": slash`
+# unquoted) and emits `allow_input_capture` with no value at all, so the reply
+# is not JSON and JSON.parse throws on it. keybinds.js reads the text table
+# for that reason, and this leg dumps the same table beside the route's rows.
 leg_keybinds_flag="--keybinds"
 leg_keybinds_order=240
-leg_keybinds_needs="jq"
 
 # Hyprland's own bind table, dumped beside the shell's rows: it separates a
 # compositor that never registered the fixture from a route that failed to
-# read one that did. Both encodings, because right now they disagree.
-keybinds_hyprctl_path="$shot_dir/keybinds-hyprctl.json"
+# read one that did.
 keybinds_hyprctl_plain_path="$shot_dir/keybinds-hyprctl-plain.txt"
 keybinds_query1_path="$shot_dir/keybinds-query-1.json"
 keybinds_query2_path="$shot_dir/keybinds-query-2.json"
@@ -66,7 +61,6 @@ leg_keybinds_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$hyprctl_bin" binds -j > "$keybinds_hyprctl_path" 2>&1
 "$hyprctl_bin" binds > "$keybinds_hyprctl_plain_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug query ":k" > /dev/null 2>&1
 sleep 1
@@ -82,7 +76,7 @@ EOF
 
 leg_keybinds_assert() {
   local f row rows
-  for f in "$keybinds_hyprctl_path" "$keybinds_hyprctl_plain_path" \
+  for f in "$keybinds_hyprctl_plain_path" \
     "$keybinds_query1_path" "$keybinds_query2_path" "$keybinds_menu_status_path"; do
     [ -s "$f" ] || fail "no keybinds artifact produced at $f"
   done
@@ -93,14 +87,10 @@ leg_keybinds_assert() {
   if [ "$(grep -c '^bindd\?$' "$keybinds_hyprctl_plain_path" | tr -d ' ')" != "5" ]; then
     fail "hyprland's own bind table does not hold the fixture's 5 binds: $(cat "$keybinds_hyprctl_plain_path")"
   fi
-  cat "$keybinds_hyprctl_path"; echo
-  if ! "$jq_bin" -e 'type == "array" and length == 5' "$keybinds_hyprctl_path" >/dev/null 2>&1; then
-    fail "hyprctl binds -j is not a 5-entry JSON array. Hyprland 0.56.0 emits invalid JSON here: from modmask on every value sits under the previous key's name, and allow_input_capture has no value at all, so JSON.parse throws and keybinds.js's parseHyprlandBinds returns []. The plain-text table above carries the same binds correctly. Point Menu.qml's hyprBindsProc and parseHyprlandBinds at that encoding to unblock this leg."
-  fi
   cat "$keybinds_query1_path"; echo
-  # All four are real answers elsewhere; here they would mean the route never
-  # got hyprland's bind table, which is the one thing this leg exists to prove.
-  for row in keybinds.noconfig keybinds.nobinds keybinds.failed keybinds.unsupported; do
+  # Both are real answers elsewhere; here they would mean the route never got
+  # hyprland's bind table, which is the one thing this leg exists to prove.
+  for row in keybinds.nobinds keybinds.failed; do
     if grep -qF "\"id\":\"$row\"" "$keybinds_query1_path"; then
       fail "keybinds route answered $row: hyprland's bind table was not what it read"
     fi

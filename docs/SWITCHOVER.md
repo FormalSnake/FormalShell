@@ -8,9 +8,10 @@ surface can work at all. The install mechanics live in
 
 Two things shape everything below. First, the verification rig is a nested
 compositor under software rendering, so it proves that a surface works, not
-that it works against your hardware. Second, every real-hardware sweep so
-far has been niri only. The Hyprland backend implements the same contract
-and passes its own checks, but it has never run on a real machine.
+that it works against your hardware. Second, Hyprland is the only supported
+compositor as of 2026-08-25, and the real-hardware sweeps predate that: they
+were run against the backend that has since been deleted. The rig covers
+Hyprland end to end, but no machine has daily-driven it.
 
 ## Host prerequisites
 
@@ -39,8 +40,11 @@ your system is actually running.
 
 ## What has run on real hardware
 
-Swept on two niri machines, e1504g and g815, most recently at commit
-`52e2db0`:
+Swept on two machines, e1504g and g815, most recently at commit `52e2db0`,
+under the compositor backend that has since been removed. What those sweeps
+prove is the shell's own formatting of real hardware values, which is
+backend-independent; what they do not prove is anything about Hyprland on
+that hardware:
 
 Bar, menu, notifications, clipboard, picker, screensaver, now playing,
 theming through matugen, the OSD, and the network, audio, bluetooth, power
@@ -75,30 +79,30 @@ launcher's view routes. Treat them as VM-only.
 Two of those deserve calling out. **The GOA OAuth path has never run
 anywhere**, since the VM's evidence is a local EDS calendar; a real Google
 or Nextcloud account through GNOME Online Accounts is exactly what a real
-host has to prove. **Screen recording has no evidence of any kind**: nested
-niri under llvmpipe advertises `zwp_linux_dmabuf_v1` version 3 and
-wf-recorder binds version 4 unconditionally, so the bind is rejected before
-a recording can start. That is an environment limit with no workaround
-inside this repo, so the recorder child, both audio modes, the GIF
-transcode and the bar's recording cell all reach a real host unproven.
+host has to prove. **Screen recording is proven only under software
+rendering**: the rig's `--record` leg runs a real wf-recorder child with
+`recording.noDmabuf` set, because there is no GPU buffer to import in that
+session. The recorder child, the finalize pass and the GIF transcode are all
+real there; the dmabuf path a real GPU would take is not.
 
 ## Rough edges to know about
 
-**The Hyprland backend is flaky in the sandboxed dev loop** and has never
-run on real hardware. Both backends implement the same `CompositorBackend`
-contract, but only niri has mileage.
+**Hyprland has never run this shell on real hardware.** The rig nests it on
+a `vkms` software KMS card in the VM and directly on a host with a real GPU,
+which covers every surface; a machine you depend on is still the first real
+test.
 
 **The greeter has no session or user picker**, and that is greetd's wire
 protocol rather than a gap here: it has no enumeration call anywhere in it.
 The session launched on a successful login is the fixed `sessionCommand`
 from your Nix config, and the username is free-text entry.
 
-**Window capture looks different on niri.** niri reports a pixel box only
-for floating windows, so a tiled window has no rectangle to highlight. The
-picker names those windows in a card instead and captures through niri's
-own server-side crop. Selection works on both backends; only the
-affordance differs, and the branch is on whether a rectangle exists rather
-than on a compositor name.
+**A window the compositor reports no box for cannot be captured.** Hyprland
+reports one for every window it does not hide, so this is normally nothing;
+an unfocused member of a tabbed group is the case that hits it. Those
+windows are listed in a card saying so rather than disappearing from a mode
+that lists their neighbours, and the branch is on whether a rectangle exists
+rather than on a compositor name.
 
 **A `menu.jsonc` written before the toggle hub goes inert silently.**
 `theme` became `toggles`, `theme.mode-toggle` became `toggles.dark-mode`,

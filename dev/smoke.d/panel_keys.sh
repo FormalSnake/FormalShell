@@ -12,7 +12,7 @@
 # this VM's bar redraws something (a clock digit, an animated glyph) on almost
 # any 1-2s window, so two frames differ whether or not a key landed.
 #
-# The niri rig recorded the opposite outcome for the same sequence: four
+# The old rig recorded the opposite outcome for the same sequence: four
 # independently timed probes there never got a Down/Down/Return through to an
 # IPC-opened panel, because Panel.qml's focus-prime dance is built for a real
 # bar-cell click and that rig had no pointer to supply one. Hyprland hands the

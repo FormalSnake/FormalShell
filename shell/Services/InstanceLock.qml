@@ -17,7 +17,7 @@ import Quickshell.Io
 // The $WAYLAND_DISPLAY suffix is what makes "session" mean *compositor*
 // rather than *login*. dev/smoke-*.sh nest a test compositor inside the
 // owner's live session and deliberately keep the host's XDG_RUNTIME_DIR (the
-// nested niri connects to the host's Wayland socket through it), so a fixed
+// nested compositor connects to the host's Wayland socket through it), so a fixed
 // socket name put the nested shell and the owner's real bar on the same lock:
 // the nested one greeted the live bar, sent it a takeover, and Qt.quit() took
 // the owner's desktop bar down on every smoke run. Keying on the display the

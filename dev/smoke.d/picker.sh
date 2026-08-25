@@ -47,7 +47,7 @@ picker_dir="$iso_home/.local/share/formalshell/pictures"
 leg_picker_fixture() {
   # The route points at a directory of generated solid-colour fixtures, so
   # the grid renders real images and `choose` picks a real file rather than
-  # a path that merely happens to parse. 960x540 rather than the niri leg's
+  # a path that merely happens to parse. 960x540 rather than the old leg's
   # 1920x1080: that size is there to feed a resident-memory bracket this
   # port leaves behind, and anything past the grid cell's own ~210px decode
   # cap already exercises the cap.

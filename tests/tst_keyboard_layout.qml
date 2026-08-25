@@ -5,16 +5,7 @@ import "../shell/Compositor/keyboard.js" as Keyboard
 TestCase {
     name: "KeyboardLayout"
 
-    // Shape lifted from the pinned niri source rather than invented: `niri
-    // msg --json keyboard-layouts` prints the bare KeyboardLayouts struct
-    // (src/ipc/client.rs:390-400), and the names are xkb.layout_name()
-    // output (src/ipc/server.rs:535-546), not xkb codes.
-    readonly property string niriFixture: JSON.stringify({
-        names: ["English (US)", "German"],
-        current_idx: 1
-    })
-
-    // Hyprland field names are the UNVERIFIED half (see keyboard.js's
+    // Hyprland field names are UNVERIFIED (see keyboard.js's
     // header): `layout` is a comma-separated xkb code list, `active_keymap`
     // is the human name of the live one.
     readonly property string hyprlandFixture: JSON.stringify({
@@ -65,28 +56,6 @@ TestCase {
         compare(l.current, "");
     }
 
-    function test_niri_output_parses_names_and_the_active_index() {
-        var l = Keyboard.parseNiriLayouts(niriFixture);
-        compare(l.available, true);
-        compare(l.names.length, 2);
-        compare(l.names[0], "English (US)");
-        compare(l.currentIdx, 1);
-        compare(l.current, "German");
-    }
-
-    function test_niri_out_of_range_index_reports_no_current_layout_not_the_first() {
-        var l = Keyboard.parseNiriLayouts(JSON.stringify({ names: ["English (US)"], current_idx: 7 }));
-        compare(l.available, true);
-        compare(l.currentIdx, -1);
-        compare(l.current, "");
-    }
-
-    function test_niri_unparsable_output_is_unavailable_never_a_guessed_layout() {
-        compare(Keyboard.parseNiriLayouts("").available, false);
-        compare(Keyboard.parseNiriLayouts("Keyboard layouts:\n * 0 English (US)\n").available, false);
-        compare(Keyboard.parseNiriLayouts(JSON.stringify({ ok: true })).available, false);
-    }
-
     function test_hyprland_reads_the_main_keyboard_not_the_first_listed() {
         var l = Keyboard.parseHyprlandLayouts(hyprlandFixture);
         compare(l.available, true);
@@ -116,13 +85,17 @@ TestCase {
     }
 
     function test_has_choice_gates_the_cell_on_more_than_one_layout() {
-        compare(Keyboard.hasChoice(Keyboard.parseNiriLayouts(niriFixture)), true);
-        compare(Keyboard.hasChoice(Keyboard.parseNiriLayouts(JSON.stringify({ names: ["English (US)"], current_idx: 0 }))), false);
+        compare(Keyboard.hasChoice(Keyboard.parseHyprlandLayouts(hyprlandFixture)), true);
+        compare(Keyboard.hasChoice(Keyboard.parseHyprlandLayouts(JSON.stringify({
+            keyboards: [{ name: "kb", layout: "us", active_keymap: "English (US)", main: true }]
+        }))), false);
         compare(Keyboard.hasChoice(Keyboard.unavailable()), false);
     }
 
+    // The active layout leads, with a known index or without one.
     function test_tooltip_lists_every_layout_with_the_active_one_first() {
-        compare(Keyboard.tooltipText(Keyboard.parseNiriLayouts(niriFixture)), "GERMAN / ENGLISH (US)");
+        compare(Keyboard.tooltipText({ available: true, names: ["English (US)", "German"], currentIdx: 1, current: "German" }),
+            "GERMAN / ENGLISH (US)");
     }
 
     function test_tooltip_without_a_known_index_leads_with_the_active_keymap() {

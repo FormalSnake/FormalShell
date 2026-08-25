@@ -102,8 +102,8 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu summon share > /dev/null 2>&1
 sleep 1
 # grim, not a compositor-side capture: the frame has to leave the clipboard
-# alone. niri's own screenshot action copied the image too, which superseded
-# the fixture text the row is about to share.
+# alone. A compositor-side screenshot action that copies the image too would
+# supersede the fixture text the row is about to share.
 "$grim_bin" "$share_menu_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu activate 0 > /dev/null 2>&1
 SECONDS=0

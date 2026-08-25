@@ -95,8 +95,8 @@
     "system.reboot": { "action": "systemctl reboot", "confirm": true },
     "system.shutdown": { "action": "systemctl poweroff", "confirm": true },
     "system.logout": {
-        "action": "niri msg action quit --skip-confirmation",
-        "when": "test -n \"$NIRI_SOCKET\""
+        "action": "hyprctl dispatch exit",
+        "when": "test -n \"$HYPRLAND_INSTANCE_SIGNATURE\""
     },
     "system.notifications": {
         "label": "Notifications",

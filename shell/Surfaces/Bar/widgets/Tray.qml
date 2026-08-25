@@ -25,8 +25,8 @@ import qs.Components
 // pointer+keyboard rather than keyboard-only, so a click anywhere outside
 // the accept set, including the tray icon's own pixmap, inside the same
 // Cell's hit area the surrounding padding shares, tore the grab down and
-// closed the menu instantly (niri tracked this correctly; the same shell
-// worked before the owner's hosts moved niri→Hyprland, 2026-08-17). A
+// closed the menu instantly (the same shell worked before the owner's hosts
+// moved to Hyprland, 2026-08-17). A
 // layer-shell popout takes no such grab, so this class of bug is gone by
 // construction rather than patched.
 // Hidden entirely (Row.implicitWidth is naturally 0 with an empty Repeater)

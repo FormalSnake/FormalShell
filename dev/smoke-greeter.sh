@@ -4,12 +4,12 @@
 # login — typed via wtype into the greeter's own Wayland session, not an IPC
 # shortcut, since Quickshell.Services.Greetd exposes no such thing (see
 # greeter/greeter.qml's own header comment; same "verify the action, not the
-# input method" idiom dev/smoke-niri.sh's --lock mode already uses). Prints
+# input method" idiom dev/smoke.sh's --lock leg already uses). Prints
 # the pre-auth (clock + input cell) and post-auth screenshots plus the
 # session log, proving the real create_session/auth_message/start_session
 # exchange happened rather than just "it renders".
 #
-# Unlike dev/smoke-niri.sh's own ephemeral nested compositor (composed fresh
+# Unlike dev/smoke.sh's own ephemeral nested compositor (composed fresh
 # every run by that script), greetd's default_session is a persistent system
 # service declared once in nix/testvm.nix — driving it means finding the
 # ALREADY-RUNNING greeter session rather than spawning a new one, and
@@ -70,7 +70,7 @@ greeter_env=(sudo env "XDG_RUNTIME_DIR=$runtime_dir" "WAYLAND_DISPLAY=$wayland_d
 
 # formalshell-greeter needs a moment after connecting to map its PanelWindow
 # surfaces and pull the first Greetd.state — matches the fixed post-connect
-# settle windows dev/smoke-niri.sh's own modes use before their first shot.
+# settle windows dev/smoke.sh's own legs use before their first shot.
 sleep 3
 "${greeter_env[@]}" grim "$pre_auth_png"
 
@@ -78,7 +78,7 @@ sleep 3
 "${greeter_env[@]}" wtype -s "$wtype_settle_ms" -k Return
 # The create_session -> auth_message round trip (real PAM conversation)
 # measured comparably slow to --lock's own PAM round trip in
-# dev/smoke-niri.sh; 3s margin before typing the password avoids racing the
+# dev/smoke.sh; 3s margin before typing the password avoids racing the
 # prompt switching from "USER" to the password step.
 sleep 3
 

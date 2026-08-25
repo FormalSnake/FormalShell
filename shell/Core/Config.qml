@@ -59,7 +59,7 @@ import QtQuick
 // is listed flat exactly as before. `picker select`'s generic image-selector
 // mode takes an arbitrary directory as an IPC argument instead, M7 Task 6,
 // folded into the menu in M23).
-// greeter.sessionCommand (array of strings, default ["niri"], greeter.qml's
+// greeter.sessionCommand (array of strings, default ["Hyprland"], greeter.qml's
 // Greetd.launch() argv once a login succeeds; the `greeter` system user has
 // no real settings.json of its own, so this is really just this key's
 // documented fallback today, a real deployment's session choice belongs in
@@ -171,11 +171,6 @@ import QtQuick
 // reminder set with no message of its own fires with. ReminderService
 // fills it in at set time, so a stored entry always carries a real message
 // and the fire path needs no fallback branch of its own.
-// keybinds.niriConfigPath (string, default ""): an explicit niri
-// config.kdl for the menu's keybinds route to parse. "" walks the normal
-// chain: $NIRI_CONFIG, $XDG_CONFIG_HOME/niri/config.kdl,
-// /etc/niri/config.kdl. Hyprland ignores it, that leg reads
-// `hyprctl binds -j`.
 // plugins.disabled (array of strings, default []): ids of drop-in plugins
 // under ~/.config/formalshell/plugins/<id>/ that PluginService skips at
 // scan time, so one can be parked without deleting its directory. There is

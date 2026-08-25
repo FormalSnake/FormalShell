@@ -25,7 +25,7 @@
 #           can never take a real GPU out from under a real session, and
 #           opening it unprivileged needs seatd (nix/testvm.nix).
 #
-# D-Bus isolation (M5 hard rule, same as dev/smoke-niri.sh): the whole
+# D-Bus isolation (M5 hard rule): the whole
 # Hyprland invocation runs under `dbus-run-session --`, giving the shell's
 # NotificationServer a private session bus instead of the host's. The host's
 # is owned by DMS, and acquiring org.freedesktop.Notifications on it would
@@ -161,8 +161,8 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
 done
 
 # Only the base run gets the focused fixture window: every other leg's own
-# screenshot exists to show a summoned surface instead, the same split
-# dev/smoke-niri.sh draws. A leg that photographs the ordinary desktop
+# screenshot exists to show a summoned surface instead. A leg that
+# photographs the ordinary desktop
 # anyway declares leg_<name>_fixture_window=keep.
 fixture_window_mode=true
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
@@ -493,7 +493,7 @@ write_script "$shell_start_script" <<EOF
 # with a main device Mesa cannot open for a client ("failed to get driver
 # name for fd -1"), and Qt's EGL init takes the whole shell down with it.
 # Forcing the software driver puts the shell back on the wl_shm/llvmpipe
-# path it already renders on under niri. Scoped to this process: Hyprland's
+# path it renders on anyway. Scoped to this process: Hyprland's
 # own EGL runs on gbm over that same card and must keep doing so.
 export LIBGL_ALWAYS_SOFTWARE=1
 # Captured, not discarded: a shell that dies on a QML error at startup would

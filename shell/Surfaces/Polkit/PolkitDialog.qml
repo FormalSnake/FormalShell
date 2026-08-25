@@ -167,8 +167,8 @@ PanelWindow {
     // field is the sibling case (typed input from the first frame) and
     // makes the identical choice. Reproduced directly: OnDemand here never
     // actually received wtype's synthetic keystrokes in the smoke rig even
-    // though the card rendered, niri never shifted real keyboard focus to
-    // an on-demand layer surface with no preceding pointer interaction.
+    // though the card rendered: no real keyboard focus ever reached an
+    // on-demand layer surface with no preceding pointer interaction.
     WlrLayershell.keyboardFocus: root._active ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     anchors { top: true; left: true; right: true; bottom: true }

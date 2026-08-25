@@ -11,8 +11,8 @@
 # full-screen Overlay surface that outlives its own cancel is the worst
 # failure this surface has.
 #
-# The window split is the other way round from niri, and that is the port:
-# Hyprland reports a box for every window, so the fixture window has to
+# The window split is what the port turns on: Hyprland reports a box for
+# every window it does not hide, so the fixture window has to
 # arrive DRAWABLE and the named-only card stays empty (RegionPicker.qml's
 # _unboxedWindows: "Empty on Hyprland"). Asserting a positive count either
 # way is the point, since a picker that never enumerated windows at all
@@ -21,7 +21,7 @@
 # `key` is the rig's stand-in for real key delivery into an Exclusive-focus
 # layer surface, the same split every other surface's IPC actions use.
 #
-# The recorder itself gets further here than it ever did under niri, where
+# The recorder itself gets further here than it did on the old rig, where
 # the dmabuf bind was rejected outright: it starts, captures and writes a
 # real container. What it does not do on this software-rendered session is
 # answer SIGTERM on its `-g` crop path, so the run ends in the truncated

@@ -98,7 +98,7 @@ leg_screensaver_fixture() {
   # walked in order rather than a single-output session having one obvious
   # answer. "internal" is in there as the alias that must NOT match (nothing
   # here hangs off eDP/LVDS/DSI), so a run that started matching it would be
-  # reporting the alias broke. Where the niri rig could name its nested
+  # reporting the alias broke. Where the old rig could name its nested
   # output literally ("winit"), Hyprland's own name depends on which backend
   # brought the session up, so the entry that lands is the "external" alias.
   # The key is shell-wide, not screensaver-owned: the screensaver is one

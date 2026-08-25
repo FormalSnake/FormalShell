@@ -3,16 +3,12 @@
 // Pure model for the bar's workspace cells (M13 Task 1): which workspaces
 // render and in what order. No Quickshell access, so it's testable head-on.
 // A workspace renders only if it holds at least one window or is
-// active/focused, niri declares every persistent named workspace on every
-// output all the time, so without the occupancy filter a nine-workspace
-// config shows nine cells with two windows open. Occupancy is counted from
-// the windows list by workspace id because the backends' workspace payloads
-// carry no occupancy field of their own (niri-ipc's Workspace has only
-// active_window_id, which the reducer's ignored WorkspaceActiveWindowChanged
-// event would have to maintain; counting windows works identically for
-// Hyprland). Order is the backend's own per-output ordinal `idx` (niri's
-// Workspace.idx, Hyprland's numeric id), ids stay opaque strings, never
-// parsed. Workspaces on `outputName` win; when none match (compositor output
+// active/focused: a compositor that declares persistent workspaces up front
+// would otherwise show nine cells with two windows open. Occupancy is counted
+// from the windows list by workspace id because the backend's workspace
+// payload carries no occupancy field of its own. Order is the backend's own
+// per-output ordinal `idx` (Hyprland's numeric id), ids stay opaque strings,
+// never parsed. Workspaces on `outputName` win; when none match (compositor output
 // name vs Quickshell screen name mismatch) every workspace is considered,
 // grouped by output name so the fallback stays deterministic.
 

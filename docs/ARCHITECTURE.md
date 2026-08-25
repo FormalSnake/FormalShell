@@ -11,9 +11,7 @@ qs -p <store-path>/share/formalshell
 (the nix package wraps this as the `formalshell` binary, `nix/package.nix`;
 the home-manager module runs it as a `systemd --user` service bound to
 `graphical-session.target`, `nix/hm-module.nix`). There is no compiled
-companion binary and nothing runs under Node/npm/bun: all logic is QML/JS,
-including the niri IPC client, which talks to niri's Unix sockets directly
-via `Quickshell.Io.Socket`.
+companion binary and nothing runs under Node/npm/bun: all logic is QML/JS.
 
 The third-party CLIs the shell shells out to are not companion binaries, they
 are runtime dependencies wired onto that wrapper's PATH in `nix/package.nix`:
@@ -77,25 +75,21 @@ shell/
     ThemeEngine.qml             singleton: serialized matugen Process queue
     templates/
       theme.json.tmpl           matugen template rendering theme.json
-      niri-border.kdl.tmpl      matugen template rendering the niri layout{} border fragment
+      hyprland-colors.conf.tmpl matugen template rendering the hyprlang colour variables
     qmldir
   Compositor/
     BackendBase.qml           the CompositorBackend contract (base component)
-    CompositorService.qml     singleton facade; picks a backend, forwards everything
+    CompositorService.qml     singleton facade over the one backend, forwards everything
     appmatch.js               pure JS, .pragma library: matchWindows()/nextWindow()/decorateAppRows():
                                which running windows belong to a DesktopEntry (startupClass then id,
                                first tier wins, no fuzzy tier), backing the menu's launch-or-focus
-    keybinds.js                pure JS, .pragma library: parseNiriBinds() (a real KDL scanner:
-                               quoted braces, block/slashdash comments, raw and multi-line strings)
-                               + parseHyprlandBinds() + search()/rows(); inert "note" rows only
-    keyboard.js                pure JS, .pragma library: parseNiriLayouts()/parseHyprlandLayouts()
-                               normalized to one {available, names, currentIdx, current} shape
+    keybinds.js                pure JS, .pragma library: parseHyprlandBinds() (the `hyprctl binds`
+                               text table, never `-j`) + search()/rows(); inert "note" rows only
+    keyboard.js                pure JS, .pragma library: parseHyprlandLayouts() normalized to one
+                               {available, names, currentIdx, current} shape
     focus.js                   pure JS, .pragma library: holds the last focused window across the
                                gap a shell layer surface taking keyboard focus opens
     qmldir
-    niri/
-      reducer.js               pure JS: niri EventStream -> contract state
-      NiriBackend.qml           two-socket JSON IPC client; applyThemeFragment() reloads config
     hyprland/
       model.js                  pure JS: Hyprland workspaces onto the contract, dropping the
                                  negative-id special:* overlays the quake console parks on
@@ -261,8 +255,8 @@ shell/
         Tray.qml                   SNI tray over Quickshell.Services.SystemTray, a plain strip (exposes `shown`)
         Indicators.qml              recording / reminder / stay-awake / night-light glyphs, hidden entirely when none holds (exposes `shown`)
         MicWidget.qml               opt-in: default-source mute glyph, honest NO MIC label with no capture device
-        KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `niri msg --json keyboard-layouts` /
-                                     `hyprctl devices -j` through Compositor/keyboard.js (exposes `shown`)
+        KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `hyprctl devices -j`
+                                     through Compositor/keyboard.js (exposes `shown`)
         SystemUpdateWidget.qml      opt-in: flake-inputs-behind glyph + count, full-bleed warning while behind
         AirpodsWidget.qml            opt-in: earbuds glyph + worst-bud %, hidden with no daemon/no known level (exposes `shown`)
         DualsenseWidget.qml          opt-in: gamepad glyph + battery %, warning/urgent thresholds, hidden with no controller (exposes `shown`)
@@ -313,7 +307,7 @@ shell/
       Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay; a Canvas drawing the banner off ttfx, or off effect.js with no ttfx on PATH
     Capture/
       RegionPicker.qml              full-screen Overlay region picker over grim-frozen output frames;
-                                     window rectangles on Hyprland, a named-window list card on niri
+                                     window rectangles, plus a named list card for any window with no box
     Plugins/
       PluginPanel.qml               kind:"panel" plugin host (a real Panel), registers itself in
                                      PluginService.surfaces as "plugin:<id>"
@@ -324,7 +318,6 @@ greeter/
   greeter.qml                  greetd entry point (Quickshell.Services.Greetd); no WlSessionLock,
                                no Core.State reference: see the file's own header comment
 tests/
-  tst_niri_reducer.qml         qmltestrunner tests for reducer.js
   tst_matugen_builder.qml      qmltestrunner tests for Theme/matugen.js
   tst_palette.qml              qmltestrunner tests for Theme/palette.js
   tst_menu_model.qml            qmltestrunner tests for Menu/model.js
@@ -355,13 +348,10 @@ tests/
 dev/
   smoke.sh                      nested-Hyprland build+screenshot loop, the rig since M41; --panel <name>
                                  covers every name PanelIpc registers, one run per panel
-  smoke-niri.sh                 nested-niri build+screenshot loop, dbus-run-session isolated; one mode
-                                 flag per surface (--wallpaper, --menu, --notify, --osd, --panel <name>,
-                                 --lock, --screensaver, --picker, --tray, --bar-layout, --screenshot,
-                                 --capture, --record, --ocr, --reminder, --toggles, --keybinds, --mic,
-                                 --systemupdate, --plugins, …), each documented in the script's own
-                                 header block, which is the authoritative list
-  smoke-hyprland.sh             same, nested Hyprland
+  smoke.d/<leg>.sh              one file per leg: its flag, its fixture additions, its in-session
+                                 timeline and its assertions, each documented in its own header block,
+                                 which is the authoritative description of that leg
+  smoke-hyprland.sh             a shim that execs smoke.sh, the name older notes point at
   sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items: registers for real on the session bus, never faked
 nix/
   package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
@@ -384,7 +374,8 @@ nix/
 
 Every widget under `Surfaces/` reads only `Theme` and `CompositorService` , 
 never a backend directly, and never a raw compositor socket. That boundary is
-what lets `Bar.qml` and its widgets be identical on niri and Hyprland.
+what keeps `Bar.qml` and its widgets ignorant of which compositor is under
+them, and what makes a second backend a new file rather than a sweep.
 
 **Pure model, thin QML wiring.** Most feature directories at the top of
 `shell/` are one `.pragma library` JS module holding all of the domain's
@@ -416,8 +407,10 @@ why `toggles.js` is handed a state snapshot instead of importing
 
 ## The CompositorBackend contract
 
-Defined once, in `shell/Compositor/BackendBase.qml`, and referenced verbatim
-by every backend and by the facade:
+Defined once, in `shell/Compositor/BackendBase.qml`. Hyprland is the only
+implementation, and the contract stays a contract anyway: every surface is
+written against it rather than against `HyprlandBackend`, so a second backend
+is a new file under `shell/Compositor/<name>/` and nothing else.
 
 ```qml
 // BackendBase.qml: QtObject base every backend extends
@@ -435,76 +428,41 @@ function closeWindow(id) {}
 function spawn(argv) {}                   // argv: list<string>, no shell interpolation
 function powerOffMonitors() {}
 function powerOnMonitors() {}
-function applyThemeFragment() {}          // niri-only; no-op on backends without one
 ```
 
 `CompositorService` (the singleton facade, `import qs.Compositor`) exposes
-the identical property/method surface, delegating to whichever backend is
-active, plus:
+the identical property/method surface, delegating to the one backend, plus:
 
-- `readonly property string compositor`, `"niri" | "hyprland" | "unknown"`,
-  detected via `Quickshell.env("NIRI_SOCKET")` then
-  `Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")`. (Env-based detection is
-  sufficient inside nested test sessions; walking `/proc/net/unix` by socket
-  owner, the way DMS's `CompositorService.qml:927` does, is a hardening
-  follow-up, not built yet.)
+- `readonly property string compositor`, the constant `"hyprland"`. There is
+  nothing to detect: a session that is not Hyprland gets the backend's own
+  `available: false` and the honest unavailable state every surface already
+  renders off it, and `debug dump` reports both side by side.
 - `readonly property var ext`, `{ overview: { available:bool, isOpen:bool,
-  toggle() } }`, all-defaults-false when the active backend doesn't support
-  an overview.
-
-When no compositor is detected, the facade falls back to a bare
-`BackendBase {}` instance (`available: false`, empty lists) so the shell
-still builds and runs with nothing wired up, this is what makes Task 2's
-placeholder bar buildable before any backend existed.
+  toggle() } }`, all-defaults-false when the backend doesn't support an
+  overview.
 
 Ids are **opaque strings everywhere above this line**. The one place that
-changes is each backend's own IPC boundary: niri's `NiriBackend.qml`
-converts a string id back with `Number(id)` only inside the wire-format
-request payload it sends to niri's socket; Hyprland window ids are hex
-addresses and are kept verbatim. Nothing else in the tree parses, compares
+changes is the backend's own IPC boundary, and on Hyprland even that is a
+pass-through: window ids are hex addresses kept verbatim, and a dispatcher
+takes them as an `address:0x…` selector. Nothing in the tree parses, compares
 numerically, or assumes stability of an id.
 
-## Reducer data flow (niri)
+`HyprlandBackend.qml` needs no hand-rolled event reducer: it reads
+`Quickshell.Hyprland`'s own reactive `workspaces`/`toplevels`/`monitors`
+models directly and maps them onto the contract shapes, so there's no event
+stream or JSON parsing to test in isolation. `model.js` holds the one part
+that is worth testing without a compositor (the workspace mapping and its
+special-workspace exclusion, `tests/tst_hyprland_workspaces.qml`).
 
-niri requires two separate socket connections, the event stream socket
-monopolizes its connection, so requests go over a second one:
-
-```
-niri socket (NIRI_SOCKET)
-  eventSocket: write "EventStream" once on connect
-    -> SplitParser, one JSON object per line
-    -> skip the initial {"Ok":"Handled"} ack line
-    -> JSON.parse(line)                                    (shell/Compositor/niri/NiriBackend.qml)
-    -> Reducer.reduce(state, event)                         (shell/Compositor/niri/reducer.js, pure)
-    -> copy normalized fields onto NiriBackend's contract properties
-    -> CompositorService picks them up via property delegation
-    -> Bar widgets re-render (property bindings, no manual signal wiring)
-
-  requestSocket: write(JSON.stringify(actionPayload) + "\n")
-    used by focusWorkspace/focusWindow/closeWindow/spawn/powerOffMonitors/powerOnMonitors
-```
-
-`reducer.js` is a `.pragma library` module: `initialState()` returns the
-zeroed contract shape, `reduce(state, event)` is a pure function (no
-mutation of its input, `tests/tst_niri_reducer.qml` asserts this directly)
-that pattern-matches on the event's single top-level key (`WorkspacesChanged`,
-`WorkspaceActivated`, `WindowClosed`, `WindowFocusChanged`, `OverviewOpenedOrClosed`,
-`ConfigLoaded`, …) and returns a new state. **Unknown event keys return the
-state unchanged**, niri's forward-compatibility mandate, so a newer niri
-adding event types doesn't break the reducer. Both sockets reconnect on
-error/close via a 2s `Timer`.
-
-`focusedOutputName` is derived from the focused workspace's own `output`
-(`WorkspacesChanged` hydrates it, `WorkspaceActivated { focused: true }`
-moves it), because niri's event stream carries no focused-output event and
-the `Outputs` request carries no focus flag. Everything that opens "on the
-focused screen", panels, menu, OSD, notification center, polkit dialog,
+`focusedOutputName` comes from the focused monitor. Everything that opens "on
+the focused screen", panels, menu, OSD, notification center, polkit dialog,
 capture picker, resolves through it.
 
-Hyprland has no equivalent hand-rolled reducer: `HyprlandBackend.qml` reads
-`Quickshell.Hyprland`'s own reactive `workspaces`/`toplevels`/`monitors`
-models directly and maps them onto the same contract shapes, so there's no
-event stream or JSON parsing to test in isolation.
+The one place the backend is NOT event-driven is `outputs`: Hyprland's
+monitor events never mention disabled monitors, which is exactly what
+`DisplayPanel` exists to switch back on, so `refreshOutputs()` re-reads
+`hyprctl monitors all -j` and `outputsState` records whether that read
+answered at all.
 
 ## Debug IPC
 
@@ -536,20 +494,21 @@ Theme.ThemeEngine (running/pending queue; a retheme() mid-run just sets pending)
   |  Process: matugen image <wallpaper> -m <mode> -c matugen-merged.toml --prefer darkness|lightness
   |    (no wallpaper set: skip matugen, write Theme.palette.js#fallback() as theme.json directly)
   v
-matugen renders templates/theme.json.tmpl + templates/niri-border.kdl.tmpl
-  -> <state-dir>/{theme.json,niri-border.kdl}.tmp
-  |  atomic `mv` into place on success
+matugen renders templates/theme.json.tmpl + templates/hyprland-colors.conf.tmpl
+  -> <state-dir>/{theme.json,formalshell-colors.conf}.tmp
+  |  atomic `mv` into place on success: theme.json into the state dir,
+  |    formalshell-colors.conf into ~/.config/hypr/
   |  (same run also renders templates/gtk-colors.css.tmpl ->
   |   ~/.config/gtk-{3,4}.0/formalshell-colors.css and
   |   templates/qtct-colors.conf.tmpl -> ~/.config/qt{5,6}ct/colors/matugen.conf,
   |   written directly: apps read those at launch, nothing watches them)
   v
-$XDG_STATE_HOME/formalshell/theme.json          $XDG_STATE_HOME/formalshell/niri-border.kdl
-  |  FileView watch (Core/Theme.qml)               |  niri `include`s this path from its own config
+$XDG_STATE_HOME/formalshell/theme.json          ~/.config/hypr/formalshell-colors.conf
+  |  FileView watch (Core/Theme.qml)               |  the user's hyprland.conf sources this path
   v                                                  v
-Theme.color.* properties update live              CompositorService.applyThemeFragment()
-  -> every Bar/widget token recolors                -> niri: LoadConfigFile action reloads the
-     (plain property bindings, no restart)              running config, border colors apply live
+Theme.color.* properties update live              Hyprland reloads on config write, so
+  -> every Bar/widget token recolors                 col.active_border and friends apply live
+     (plain property bindings, no restart)           with no action from the shell
 ```
 
 `Core/Theme.qml` parses `theme.json`, validates it with `palette.js#validate()`,
@@ -653,15 +612,15 @@ checkmark flips in place. Every other action row still closes.
 **Route-local rows.** Two routes build their rows outside the
 `buildTree`/`applyProviders` pipeline above, because their content is a
 parse of something the compositor owns. The `keybinds` route (`menu summon
-keybinds`, or `:k <query>` from anywhere) reads niri's `config.kdl` through
-a documented lookup chain (`keybinds.niriConfigPath` in settings, then
-`$NIRI_CONFIG`, then `$XDG_CONFIG_HOME/niri/config.kdl`, then
-`/etc/niri/config.kdl`) or Hyprland's `hyprctl binds -j`, and hands it to
-`Compositor/keybinds.js`, whose niri leg is a real KDL scanner (quoted
-braces, block and slashdash comments, raw and multi-line strings) rather
-than a line regex. Its rows are inert notes, so there is no activation path
-to get wrong, and every dead end is a named row rather than an empty list:
-`NO CONFIG`, `NO BINDS`, `BINDS UNAVAILABLE`.
+keybinds`, or `:k <query>` from anywhere) runs `hyprctl binds`, whose table
+already has hyprland's own sources and submaps expanded, and hands it to
+`Compositor/keybinds.js`. Deliberately not `-j`: Hyprland 0.56.0's JSON
+encoder writes every value from `modmask` on under the previous key's name
+and emits `allow_input_capture` with no value, so the reply is not JSON at
+all. The text table is one block per bind, headed by `bind` or `bindd`, with
+tab-indented `name: value` fields. Its rows are inert notes, so there is no
+activation path to get wrong, and every dead end is a named row rather than
+an empty list: `NO BINDS`, `BINDS UNAVAILABLE`.
 
 **Launch-or-focus.** `Compositor/appmatch.js` decorates each `kind:"app"`
 row with the windows already running for that desktop entry
@@ -946,8 +905,8 @@ That native QMenu was an xdg_popup with its own keyboard+pointer grab
 to the grab's accept set on the path Qt takes to map it, and a click
 anywhere outside that set, including the tray icon's own pixmap, inside
 the same Cell's hit area the surrounding padding shares, tore the grab
-down and closed the menu instantly (niri tracked this correctly; the
-owner's hosts moved niri→Hyprland 2026-08-17 and hit it there). One shared
+down and closed the menu instantly (the same shell worked before the
+owner's hosts moved to Hyprland, 2026-08-17). One shared
 `TrayMenu` instance (`shell.qml`, wired through `Bar.qml` like every other
 panel) drives `Quickshell.QsMenuOpener` over the clicked item's own
 `DBusMenuHandle` (`item.menu`): assigning it to `QsMenuOpener.menu` fires
@@ -1376,9 +1335,6 @@ Ipc/ScreenshotIpc.qml (target "screenshot", a Scope so its Processes have a home
     |  a one-argument `pick` finds no method rather than defaulting the second
     v
   picked(rect)        -> grim -g against the still-mapped freeze, chrome hidden
-  pickedWindow(id)    -> niri's ScreenshotWindow action, cropped server-side
-                         (niri puts the PNG on the clipboard itself, so this
-                          path never runs wl-copy)
   cancelled(reason)   -> SCREENSHOT CANCELLED, the shared watchdog stopped
     |
     +-- key(name)/pickerStatus(): the picker's keyboard model driven from
@@ -1431,33 +1387,25 @@ surface maps, the surface renders those frames 1:1, and the capture then
 grims the surface itself with the chrome hidden for one frame, so content
 cannot shift mid-pick and the overlay cannot photograph its own scrim. No
 `ScreencopyView` is involved (see `LockSurface.qml`'s header for why).
-Owning its own highlight state is what makes one code path work on both
-backends: omarchy's upstream picker moves the selection by warping the
-cursor so slurp's hover highlight follows, and binds its keys from Hyprland
-Lua, neither of which niri offers.
+Owning its own highlight state is what keeps it to one code path: omarchy's
+upstream picker moves the selection by warping the cursor so slurp's hover
+highlight follows, and binds its keys from Hyprland Lua at runtime, which the
+shell cannot install into a compositor.
 
-**The one deliberate asymmetry between backends is here.** niri reports a
-pixel box only for floating windows: `Tile::ipc_layout_template` hardcodes
-`tile_pos_in_workspace_view: None` (niri v26.04, `src/layout/tile.rs:869`),
-`floating.rs:336` fills it in, and the scrolling layout overrides only
-`pos_in_scrolling_layout` and inherits that `None`. So a tiled niri window
-has no rectangle to draw, while every Hyprland window has one. Window
-*selection* works on both; only the affordance differs. A window with a rect
-is highlighted on screen, a window without one is named in a labelled list
-card (title over dim app id) and captured by id through niri's
-`ScreenshotWindow` action, which crops server-side. **The branch is on
-`rect === null`, never on a compositor name**, so a future niri that starts
-reporting tiled geometry turns into the Hyprland behavior with no redesign.
+**A window with no box is named, never taken.** Hyprland reports a rect for
+every window it does not hide, so this is normally empty; an unfocused member
+of a tabbed group is the case that fills it. Those windows are listed in a
+labelled card (title over dim app id) saying they cannot be captured, rather
+than vanishing from a mode that lists their neighbours. **The branch is on
+`rect === null`, never on a compositor name.**
 
 `active` is `recProc.running` and nothing else: never persisted (a crashed
 shell would leave a stale `true` in state.json) and never derived from
 `pgrep`. `Surfaces/Bar/widgets/Indicators.qml` binds it directly, which is
 also what forces the singleton's lazy construction. The recording scope
 vocabulary is `screen` and `region`, with no window scope at all: wf-recorder
-takes an output or a geometry, and on niri a tiled window supplies neither.
-There is no webcam overlay: compositing a camera into the frame needs the
-camera window pinned to a corner by a compositor window rule, which this
-shell neither installs nor can install portably across niri and Hyprland.
+takes an output or a geometry, and a window supplies a geometry only while
+the compositor reports a box for it.
 
 ## Reminder lifecycle
 
@@ -1628,12 +1576,13 @@ establishes.
    string at the boundary.
 3. Implement the six action functions against that compositor's real
    dispatch mechanism.
-4. Wire detection into `CompositorService.qml`'s `compositor` property and
-   its backend-selection block.
-5. Verify with a nested smoke script mirroring `dev/smoke.sh`: build,
-   launch nested, screenshot, and (if the compositor has an IPC CLI) assert
-   the `debug dump` JSON has `available: true` and ≥1 workspace. Hyprland is
-   the only supported target since the 2026-08-25 redesign
+4. Give `CompositorService.qml` a way to pick between the two. It holds one
+   backend today and reports the constant `"hyprland"`; adding a second means
+   restoring a detection block, and `compositor` becomes the answer it gives.
+5. Verify with a smoke leg under `dev/smoke.d/`: build, launch nested,
+   screenshot, and assert the `debug dump` JSON has `available: true` and at
+   least one workspace. Hyprland is the only supported target since the
+   2026-08-25 redesign
    (`docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`, "Hyprland
-   first"); niri stays wired up as a rig-only backend until M46 deletes it,
-   so it is not the one to mirror for new work.
+   first"), so nothing here is speculative scaffolding: it is what the
+   contract already costs, written down.

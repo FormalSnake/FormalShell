@@ -260,52 +260,18 @@ PanelWindow {
         onLoadFailed: root._clipsshAliasesText = ""
     }
 
-    // Compositor keybinds for the menu's keybinds route. The niri leg reads
-    // config.kdl off the first path that loads: the settings override,
-    // $NIRI_CONFIG, then the two standard locations. watchChanges means
-    // saving the config updates a level that is already open. Hyprland
-    // ignores all of that and answers `hyprctl binds -j`, already expanded
-    // across submaps and sourced files.
+    // Compositor keybinds for the menu's keybinds route: `hyprctl binds`,
+    // already expanded across submaps and sourced files, so nothing here
+    // reads a config file or walks a lookup chain. The plain table, not `-j`:
+    // see parseHyprlandBinds for what Hyprland 0.56.0's JSON encoder does to
+    // that reply.
     property string _keybindsText: ""
     property bool _keybindsResolved: false
     property bool _keybindsFailed: false
-    property int _keybindsPathIndex: 0
-
-    readonly property var _keybindsPaths: {
-        var candidates = [
-            Core.Config.get("keybinds.niriConfigPath", ""),
-            Quickshell.env("NIRI_CONFIG") || "",
-            root._xdgConfigDir + "/niri/config.kdl",
-            "/etc/niri/config.kdl"
-        ];
-        return candidates.filter(function (p) { return p !== ""; });
-    }
-
-    FileView {
-        id: niriConfigFile
-        printErrors: false
-        path: root._keybindsPaths[root._keybindsPathIndex] || ""
-        watchChanges: true
-        onFileChanged: reload()
-        onLoaded: {
-            root._keybindsText = niriConfigFile.text();
-            root._keybindsResolved = true;
-        }
-        // One candidate at a time; running out of them is an honest NO
-        // CONFIG row, never a warning.
-        onLoadFailed: {
-            if (root._keybindsPathIndex + 1 < root._keybindsPaths.length) {
-                root._keybindsPathIndex++;
-            } else {
-                root._keybindsText = "";
-                root._keybindsResolved = true;
-            }
-        }
-    }
 
     Process {
         id: hyprBindsProc
-        command: ["hyprctl", "binds", "-j"]
+        command: ["hyprctl", "binds"]
 
         stdout: StdioCollector {
             id: hyprBindsCollector
@@ -317,30 +283,19 @@ PanelWindow {
         }
     }
 
-    // Never spawns hyprctl in a niri session: a doomed process per summon is
-    // the trap HyprlandBackend.qml's own compositor guard exists for.
     function _refreshKeybinds() {
-        if (CompositorService.compositor === "niri") {
-            root._keybindsPathIndex = 0;
-            niriConfigFile.reload();
-            return;
-        }
-        if (CompositorService.compositor === "hyprland" && !hyprBindsProc.running)
+        if (!hyprBindsProc.running)
             hyprBindsProc.running = true;
     }
 
     // Every end state of the keybinds route resolves here, the same
     // one-function shape _nixRowsFor above uses. No SEARCHING equivalent:
-    // the load is a local file read or a sub-100ms hyprctl, so the one
-    // empty frame before it lands has nothing to explain.
+    // the load is a sub-100ms hyprctl, so the one empty frame before it lands
+    // has nothing to explain.
     function _keybindRowsFor(q) {
-        if (CompositorService.compositor === "unknown") return [Keybinds.unsupportedRow()];
         if (!root._keybindsResolved) return [];
         if (root._keybindsFailed) return [Keybinds.failedRow()];
-        if (root._keybindsText === "") return [Keybinds.noConfigRow()];
-        var binds = CompositorService.compositor === "hyprland"
-            ? Keybinds.parseHyprlandBinds(root._keybindsText)
-            : Keybinds.parseNiriBinds(root._keybindsText);
+        var binds = Keybinds.parseHyprlandBinds(root._keybindsText);
         if (binds.length === 0) return [Keybinds.noBindsRow()];
         return Keybinds.rows(binds, q);
     }
@@ -1116,7 +1071,7 @@ PanelWindow {
     // fire-and-forget, it hands the entry's Exec line off and reports
     // nothing back, so the only truthful confirmation a launch can ever
     // get is the app's own window turning up. CompositorService.windows is
-    // the live toplevel list on both backends, so this watches instead of
+    // the live toplevel list, so this watches instead of
     // claiming: baseline the window count (and the focused window id) the
     // moment Enter lands, and if something new arrives within
     // `_launchGraceMs`, THE WINDOW is the feedback and no toast fires at
@@ -1131,7 +1086,8 @@ PanelWindow {
     // Exec line that died immediately are indistinguishable from out here,
     // so one honest in-progress wording covers all three. The one case that
     // fires immediately is a backend that isn't connected
-    // (CompositorService.available false, e.g. an unrecognized compositor):
+    // (CompositorService.available false, e.g. a session that is not
+    // Hyprland):
     // there is nothing to observe at any point, so waiting out the grace
     // period would only delay the same sentence.
     //

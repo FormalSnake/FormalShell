@@ -20,14 +20,12 @@ import "../Console/geometry.js" as Geometry
 // than spawning a second one), a compositor-side move, and the user parking
 // it by hand, with no state.json key to drift out of sync.
 //
-// Hiding is where the two backends differ, and the difference stays behind
-// CompositorService.parkWindow/isWindowParked. Hyprland takes omarchy's own
-// route (default/hypr/qconsole.lua): the console never leaves its special
-// workspace, and showing it is the compositor toggling that overlay in and
-// out, which is where the drop-down animation comes from, since the
-// compositor is animating a whole workspace rather than the shell shuffling
-// a window between two. niri has no special workspace and no hide primitive
-// at all, so there the window really does move.
+// Hiding stays behind CompositorService.parkWindow/isWindowParked, which
+// takes omarchy's own route (default/hypr/qconsole.lua): the console never
+// leaves its special workspace, and showing it is the compositor toggling
+// that overlay in and out, which is where the drop-down animation comes
+// from, since the compositor is animating a whole workspace rather than the
+// shell shuffling a window between two.
 //
 // The spawn -> map -> float -> place sequence is the one RecordingService's
 // webcam overlay already proves out (its own two timers, same 5s bound):
@@ -161,10 +159,9 @@ Singleton {
         interval: 100
         repeat: true
         onTriggered: {
-            // No-op on niri, whose window model is event-driven. On Hyprland
-            // it re-reads `j/clients`, which is the only thing that gives a
-            // freshly mapped window a `rect` at all, the poll below reads
-            // the answer on the next tick, hence 100ms rather than 50.
+            // Re-reads `j/clients`, which is the only thing that gives a
+            // freshly mapped window a `rect` at all; the poll below reads the
+            // answer on the next tick, hence 100ms rather than 50.
             CompositorService.refreshWindows();
             root._attempts++;
             if (root.windowId !== "") {
@@ -205,13 +202,11 @@ Singleton {
                 return;
             }
             const rect = win.rect;
-            // A rect is what niri's placement needs (it converts the absolute
-            // target into its own relative move by reading the current box),
-            // so wait for one, but only for half a second. A backend that
+            // Wait for a rect, but only for half a second. A backend that
             // reports no geometry at all must not silently cost the console
             // its placement: Hyprland's dispatchers are absolute, so placing
-            // blind there is correct, and that is exactly the case that
-            // shipped broken.
+            // blind is correct, and that is exactly the case that shipped
+            // broken.
             if (!root._placed && (rect || root._attempts >= 5)) {
                 root._placed = true;
                 root._placedAt = root._attempts;

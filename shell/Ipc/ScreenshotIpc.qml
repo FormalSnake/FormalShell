@@ -2,7 +2,6 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-import qs.Compositor
 import qs.Core
 import qs.Notifications
 import qs.Services
@@ -144,32 +143,6 @@ Scope {
                 + Math.round(rect.width) + "x" + Math.round(rect.height));
         }
 
-        // niri crops server-side from the window's own buffer, so no rect and
-        // no freeze is involved (see RegionPicker.qml's header for why a tiled
-        // niri window has no rect to crop to in the first place). niri also
-        // puts the PNG on the clipboard itself, which is why this path never
-        // runs wl-copy.
-        function onPickedWindow(windowId) {
-            watchdog.stop();
-            // Only niri has a server-side per-window capture. Everywhere else
-            // a window with no rect is a window this shell cannot crop to,
-            // and running `niri msg` off a Hyprland session just reports that
-            // niri is not installed, which tells the user nothing about their
-            // own screenshot. RegionPicker.open() now refreshes the window
-            // model first, so reaching this on Hyprland means the box really
-            // is unavailable rather than merely stale.
-            if (CompositorService.compositor !== "niri") {
-                const why = "no geometry for that window; pick a region instead";
-                root._busy = false;
-                root._pendingPath = "";
-                root._lastError = why;
-                console.warn("ScreenshotIpc:", why);
-                NotificationService.notify("SCREENSHOT FAILED", why);
-                return;
-            }
-            root._grabNiriWindow(windowId);
-        }
-
         // The picker's toolbar can turn a pick into a recording, so this
         // target sees an outcome it takes no screenshot for. It handles it
         // anyway rather than giving the picker a second driver: one
@@ -233,21 +206,6 @@ Scope {
                 ? grab
                 : grab + ' && wl-copy --type image/png < "$FS_SHOT_PATH"';
         captureProc.command = ["sh", "-c", 'mkdir -p "$FS_SHOT_DIR" && ' + pipeline];
-        captureProc.running = true;
-    }
-
-    // `path` must be absolute or niri returns Err (niri-ipc v26.04
-    // src/lib.rs:281). It always is here: _dir() is either an absolute
-    // configured directory or $HOME/Pictures/Screenshots.
-    function _grabNiriWindow(windowId) {
-        captureProc.environment = ({
-            FS_SHOT_DIR: root._dir(),
-            FS_SHOT_PATH: root._pendingPath,
-            FS_SHOT_WINDOW: windowId
-        });
-        captureProc.command = ["sh", "-c",
-            'mkdir -p "$FS_SHOT_DIR" && exec niri msg action screenshot-window'
-            + ' --id "$FS_SHOT_WINDOW" --write-to-disk true --path "$FS_SHOT_PATH"'];
         captureProc.running = true;
     }
 

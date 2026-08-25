@@ -1,8 +1,9 @@
 import QtQuick
 
-// The CompositorBackend contract. Every per-compositor backend (niri, hyprland, ...)
-// composes on top of this as its root object. CompositorService holds one active
-// backend and delegates the same surface to it.
+// The CompositorBackend contract. HyprlandBackend is the only implementation;
+// this file stays as the contract every surface is written against, so a second
+// backend is a new file rather than a sweep through the shell. CompositorService
+// holds one backend and delegates the same surface to it.
 QtObject {
     id: root
 
@@ -18,15 +19,15 @@ QtObject {
     property var windows: [] // [{ id:string, title:string, appId:string, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool, rect:{x,y,width,height}|null }]
     // Display/outputs.js's row contract, see its header for the full shape
     // and for why a disabled output reports a zero mode rather than its last
-    // known one. Populated only by refreshOutputs() below; neither compositor
-    // pushes output changes over its event stream.
+    // known one. Populated only by refreshOutputs() below; the compositor
+    // pushes no output changes over its event stream.
     property var outputs: [] // [{ name, make, model, x, y, width, height, refresh, scale, enabled, mirrorOf }]
 
     // "unknown" (no enumeration has answered yet) | "ok" | "failed". An empty
     // `outputs` is ambiguous on its own, "the compositor reports none" and
     // "the query failed" are different facts, and only the first one licenses
-    // the panel's NO OUTPUTS cell. Without this a transiently failing
-    // hyprctl/niri query tells a session with two lit monitors it has none.
+    // the panel's NO OUTPUTS cell. Without this a transiently failing hyprctl
+    // query tells a session with two lit monitors it has none.
     property string outputsState: "unknown"
 
     property string focusedWindowId: ""
@@ -41,7 +42,6 @@ QtObject {
     function spawn(argv) {} // argv: list<string>, no shell interpolation
     function powerOffMonitors() {}
     function powerOnMonitors() {}
-    function applyThemeFragment() {} // niri-only; no-op on backends without one
 
     // Webcam overlay placement (M27 Task 5): whether this backend can move an
     // arbitrary window into the floating layout at an absolute pixel size and
@@ -66,9 +66,8 @@ QtObject {
     // checks it before spawning anything, so a compositor that cannot park
     // never gets a console it would be unable to hide again.
     readonly property bool windowParkingAvailable: false
-    // Out of view. Hyprland hides the special workspace the window lives on;
-    // niri, with no hide primitive at all, moves the window to another
-    // workspace (park.js picks which). Focus stays where it is on both.
+    // Out of view. Hyprland hides the special workspace the window lives on.
+    // Focus stays where it is.
     function parkWindow(id) {}
     // Back into view where the user is looking, still without focusing it,
     // the caller places the window first and focuses it once it has landed,
@@ -92,7 +91,7 @@ QtObject {
     // render an honest unavailable cell instead of a control that would
     // silently do nothing: `outputConfigAvailable` is false wherever no
     // compositor was detected at all, `mirrorSupported` false wherever the
-    // compositor has no mirroring primitive to drive (niri).
+    // compositor has no mirroring primitive to drive.
     readonly property bool outputConfigAvailable: false
     readonly property bool mirrorSupported: false
 

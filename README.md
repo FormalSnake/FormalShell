@@ -11,13 +11,13 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/FormalSnake/FormalShell/ci.yml?branch=main&style=for-the-badge&labelColor=161616&color=4a9eda&logo=githubactions&logoColor=white&label=CI)](https://github.com/FormalSnake/FormalShell/actions/workflows/ci.yml)
 [![Nix flake](https://img.shields.io/badge/nix-flake-4a9eda?style=for-the-badge&labelColor=161616&logo=nixos&logoColor=white)](flake.nix)
 [![QuickShell](https://img.shields.io/badge/quickshell-QML-4a9eda?style=for-the-badge&labelColor=161616&logo=qt&logoColor=white)](https://quickshell.org/)
-[![Wayland](https://img.shields.io/badge/wayland-niri%20%2B%20hyprland-4a9eda?style=for-the-badge&labelColor=161616&logo=wayland&logoColor=white)](#install)
+[![Wayland](https://img.shields.io/badge/wayland-hyprland-4a9eda?style=for-the-badge&labelColor=161616&logo=wayland&logoColor=white)](#install)
 [![Status](https://img.shields.io/badge/status-pre--alpha-d35f5f?style=for-the-badge&labelColor=161616)](docs/SWITCHOVER.md)
 [![License](https://img.shields.io/badge/license-MIT-cccccc?style=for-the-badge&labelColor=161616)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/FormalSnake/FormalShell?style=for-the-badge&labelColor=161616&color=161616&logo=github&logoColor=white)](https://github.com/FormalSnake/FormalShell/stargazers)
 
-A Wayland desktop shell for [niri](https://github.com/YaLTeR/niri) and
-Hyprland, written in QML on top of [QuickShell](https://quickshell.org/).
+A Wayland desktop shell for [Hyprland](https://hypr.land), written in QML on
+top of [QuickShell](https://quickshell.org/).
 One process draws the bar, the launcher, the notifications, the lock screen
 and the rest of it, and every color on screen is pulled out of your wallpaper
 by matugen.
@@ -128,7 +128,7 @@ point it at your session:
 services.formalshell-greeter = {
   enable = true;
   package = formalshell.packages.x86_64-linux.formalshell-greeter;
-  sessionCommand = [ "niri" ];
+  sessionCommand = [ "Hyprland" ];
 };
 ```
 
@@ -152,8 +152,8 @@ just lint     # nix flake check (qml-tests + qmllint)
 just smoke    # the good one
 ```
 
-`just smoke` builds the shell, boots it inside a throwaway **nested** niri
-session, screenshots that session, and tears it down. Your real session is
+`just smoke` builds the shell, boots it inside a throwaway **nested**
+Hyprland session, screenshots that session, and tears it down. Your real session is
 never a test target, which means you can run the lock screen and the
 notification server over and over without locking yourself out or stealing
 the D-Bus name from your actual desktop. Flags drive individual surfaces

@@ -145,7 +145,7 @@ Panel {
         BrightnessService.refreshDevices();
     }
 
-    // Neither compositor pushes output changes, and Hyprland's monitor
+    // The compositor pushes no output changes, and Hyprland's monitor
     // events never mention the disabled outputs this panel exists to switch
     // back on. So an open panel re-reads on a timer, the same 5s cadence
     // omarchy's monitor panel uses. Read-only, and only while open.

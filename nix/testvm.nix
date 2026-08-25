@@ -31,7 +31,7 @@ nixpkgs.lib.nixosSystem {
         greeterPkg = self.packages.aarch64-linux.formalshell-greeter;
 
         # Only job: get WAYLAND_DISPLAY into the systemd --user environment,
-        # the exact lookup dev/smoke-niri.sh falls back to
+        # the exact lookup dev/smoke.sh falls back to
         # (`systemctl --user show-environment`). Mirrors the
         # nixos/modules/programs/wayland/sway.nix upstream module's own
         # generated /etc/sway/config.d/nixos.conf (import-environment then a
@@ -166,8 +166,9 @@ nixpkgs.lib.nixosSystem {
           # Append, not truncate: greetd falls back to this same
           # default_session almost immediately after a successful login's
           # own session command exits (observed ~1s later in this VM, since
-          # the authenticated session has no seat/backend to run "niri"
-          # against and exits right back out) — a truncating `exec >` would
+          # the authenticated session has no seat/backend to run the
+          # compositor against and exits right back out): a truncating
+          # `exec >` would
           # very likely race dev/smoke-greeter.sh's own read of this file
           # and wipe the very "Authentication complete."/"Quitting." lines
           # it's checking for. dev/smoke-greeter.sh rm -f's this path itself
@@ -179,8 +180,8 @@ nixpkgs.lib.nixosSystem {
         };
 
         # Headless wlroots parent compositor — the Wayland "host session"
-        # dev/smoke-*.sh nests its own niri/Hyprland inside, same role
-        # niri-session plays on the real Linux hosts. graphics = false
+        # dev/smoke-*.sh nests its own Hyprland inside, same role a real
+        # Hyprland session plays on the Linux hosts. graphics = false
         # above means no DRM device in the guest, so this runs on
         # wlroots' headless backend with the pixman software renderer.
         systemd.user.services.testhost-compositor = {
@@ -251,11 +252,6 @@ nixpkgs.lib.nixosSystem {
           quickshellPkg
           pkgs.qt6.qtdeclarative
           pkgs.matugen
-          # niri's system-deps constraint on this pinned rev is
-          # libdisplay-info >= 0.1.0, < 0.4.0; nixpkgs bumped the default
-          # libdisplay-info to 0.4.0 out from under it, so pin niri to the
-          # 0.2.0 branch nixpkgs kept around for exactly this skew.
-          (pkgs.niri.override { libdisplay-info = pkgs.libdisplay-info_0_2; })
           # M41: dev/smoke.sh's compositor, and hyprctl with it. The rig can
           # fall back to `nix run nixpkgs#hyprland` on a host without it, but
           # that resolves a flake ref on every run.
@@ -280,7 +276,7 @@ nixpkgs.lib.nixosSystem {
           # nixpkgs' pkgs/by-name/mp/mpv/package.nix), so plain `mpv` on
           # PATH already announces itself over MPRIS. ffmpeg-headless
           # generates the smoke script's silent fixture track at run time
-          # (dev/smoke-niri.sh --media) rather than shipping a committed
+          # (dev/smoke.sh --media) rather than shipping a committed
           # binary asset.
           (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
           pkgs.ffmpeg-headless
@@ -303,14 +299,11 @@ nixpkgs.lib.nixosSystem {
           # virtual-keyboard-unstable-v1 client rather than a headless IPC
           # shortcut (see LockIpc.qml's header comment for why one doesn't
           # exist) — wtype is the standard tool for that on wlroots-family
-          # compositors, which niri implements support for.
+          # compositors.
           pkgs.wtype
-          # M7 Task 3: niri's own `screenshot-screen` msg action is
-          # deliberately refused while the session lock is engaged
-          # (niri-wm/niri discussion #2384) — grim talks wlr-screencopy
-          # directly as an ordinary client, which niri does not gate, so
-          # it's what --lock actually screenshots the locked/unlocked
-          # surfaces with.
+          # M7 Task 3: grim talks wlr-screencopy directly as an ordinary
+          # client, which a session lock does not gate, so it's what --lock
+          # actually screenshots the locked/unlocked surfaces with.
           pkgs.grim
           # M7 Task 2: AppleMusicArtService's own curl calls reach the VM's
           # real DNS/network unwrapped, via nix/package.nix's PATH prefix on
@@ -327,12 +320,12 @@ nixpkgs.lib.nixosSystem {
           # device for anyway.
           (pkgs.python3.withPackages (ps: [ ps.pygobject3 ]))
           # M16 Task 6: NightLightService drives this directly as a Process
-          # (wlr-gamma-control-unstable-v1) — a nested niri session's winit
-          # backend may or may not implement that protocol; either way the
+          # (wlr-gamma-control-unstable-v1). A nested session's backend may
+          # or may not implement that protocol; either way the
           # binary itself needs to be on PATH for the honest active/lastError
           # split to be real evidence rather than a "command not found" no-op.
           pkgs.wlsunset
-          # M14 Task 5: dev/smoke-niri.sh's default leg spawns a real
+          # M14 Task 5: dev/smoke.sh's default leg spawns a real
           # toplevel with a controlled Wayland app-id (foot's --app-id) so
           # ActiveWindow.qml's DesktopEntries.heuristicLookup has a genuine
           # focused window to resolve against the smoke-iconic fixture's

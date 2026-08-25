@@ -2,40 +2,23 @@ pragma Singleton
 import Quickshell
 import QtQuick
 
-import qs.Compositor.niri
 import qs.Compositor.hyprland
 import "focus.js" as Focus
 
 Singleton {
     id: root
 
-    // TODO(hardening): env-based detection is sufficient inside nested test sessions;
-    // DMS walks /proc/net/unix by socket owner for the general case (CompositorService.qml:927).
-    readonly property string compositor: {
-        if (Quickshell.env("NIRI_SOCKET"))
-            return "niri"
-        if (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE"))
-            return "hyprland"
-        return "unknown"
-    }
-
-    BackendBase {
-        id: nullBackend
-    }
-
-    NiriBackend {
-        id: niriBackend
-    }
+    // Hyprland is the only backend, so there is nothing to detect. A session
+    // that is not Hyprland gets the backend's own `available: false` and the
+    // honest unavailable state every surface already renders off it, which is
+    // also what `debug dump` reports next to this name.
+    readonly property string compositor: "hyprland"
 
     HyprlandBackend {
         id: hyprlandBackend
     }
 
-    readonly property QtObject backend: {
-        if (root.compositor === "niri") return niriBackend;
-        if (root.compositor === "hyprland") return hyprlandBackend;
-        return nullBackend;
-    }
+    readonly property QtObject backend: hyprlandBackend
 
     readonly property bool available: backend.available
     property var workspaces: backend.workspaces
@@ -73,7 +56,6 @@ Singleton {
     function spawn(argv) { backend.spawn(argv) }
     function powerOffMonitors() { backend.powerOffMonitors() }
     function powerOnMonitors() { backend.powerOnMonitors() }
-    function applyThemeFragment() { backend.applyThemeFragment() }
     function refreshWindows() { backend.refreshWindows() }
 
     readonly property bool windowParkingAvailable: backend.windowParkingAvailable

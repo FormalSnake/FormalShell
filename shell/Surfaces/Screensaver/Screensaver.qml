@@ -347,7 +347,7 @@ Item {
                 // it is scaled well past body size, but never past the point
                 // where it stops fitting the screen. Before this clamp a
                 // 1276px-wide session rendered the bundled 64-column banner as
-                // "ORMALSHEL" (docs/screenshots/screensaver-niri.png, pre-M22),
+                // "ORMALSHEL" (pre-M22),
                 // and ttfx would truncate its canvas identically. +4 columns
                 // keeps a little air at both edges.
                 readonly property real _fitFontSize: (root._banner.width > 0 && surface._advanceRatio > 0)

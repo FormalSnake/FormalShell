@@ -20,7 +20,7 @@
 #               probe included, which must keep answering "neither" since the
 #               env-var offload path is what this leg proves.
 #
-# The @drm section is replaced rather than appended to, which the niri rig
+# The @drm section is replaced rather than appended to, which the old rig
 # never had to decide: its VM held no cards at all, while this session
 # renders on a real vkms card that enumerates as card0, the same id the
 # fixture's dGPU carries. Two cards under one id is a machine that cannot

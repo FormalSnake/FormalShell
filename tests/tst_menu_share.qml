@@ -104,7 +104,8 @@ TestCase {
     }
 
     // The presence-gate itself (default-menu.jsonc's "share" node): the
-    // same `when` mechanism system.logout's NIRI_SOCKET guard already
+    // same `when` mechanism system.logout's HYPRLAND_INSTANCE_SIGNATURE
+    // guard already
     // proves in tst_menu_model.qml's self-pruning-cascade test, exercised
     // here with the localsend command string. visibleChildren() only ever
     // sees a resolved condResults entry (Menu.qml's own _runCondition

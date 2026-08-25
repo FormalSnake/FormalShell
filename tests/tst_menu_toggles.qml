@@ -58,7 +58,7 @@ TestCase {
     // resolving from the caller's own Process cache.
     function test_non_state_condition_is_undefined() {
         verify(Toggles.resolveState("true", {}) === undefined);
-        verify(Toggles.resolveState("test -n \"$NIRI_SOCKET\"", {}) === undefined);
+        verify(Toggles.resolveState("test -n \"$HYPRLAND_INSTANCE_SIGNATURE\"", {}) === undefined);
     }
 
     function test_checked_for_prefers_live_state_over_the_cache() {

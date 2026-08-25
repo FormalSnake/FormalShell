@@ -502,18 +502,17 @@ behavior on hosts where a real owner exists.
 
 ## Hard rules
 
-- **Host-session safety**: the owner's live niri session is NOT a test target.
-  Never run the shell, the ThemeEngine, or any compositor action (especially
-  `load-config-file` / `applyThemeFragment`) in an environment carrying the
-  host's `NIRI_SOCKET`/`HYPRLAND_INSTANCE_SIGNATURE` — all runtime testing
-  happens inside nested sessions via `dev/smoke-*.sh` (which scrub and restore
-  the env). If you must run `qs` ad hoc, `unset NIRI_SOCKET` first or export
-  the nested session's socket explicitly. Observed failure mode: host niri
-  config reloads firing during isolated testing (2026-07-27).
+- **Host-session safety**: the owner's live session is NOT a test target.
+  Never run the shell, the ThemeEngine, or any compositor action in an
+  environment carrying the host's `HYPRLAND_INSTANCE_SIGNATURE`. All runtime
+  testing happens inside nested sessions via `dev/smoke-*.sh` (which scrub and
+  restore the env). If you must run `qs` ad hoc, unset that variable first or
+  export the nested session's own explicitly. Observed failure mode: host
+  compositor config reloads firing during isolated testing (2026-07-27).
 - **Lock-screen safety**: never run a lock surface (`Lock.qml`'s
   `WlSessionLock`) against anything but a nested test session. All lock
-  testing happens inside the nested niri/Hyprland session `dev/smoke-*.sh`
-  boots and tears down; a lock bug there is harmless (the whole nested
+  testing happens inside the nested Hyprland session `dev/smoke.sh` boots and
+  tears down; a lock bug there is harmless (the whole nested
   compositor gets killed regardless), but the same bug against a real host
   session would leave it genuinely locked. This is the same nested-only
   contract the general host-session-safety rule above already establishes,
@@ -524,10 +523,9 @@ behavior on hosts where a real owner exists.
   `Quickshell.Services.Notifications.NotificationServer`. The owner's live
   session bus is owned by DMS on the Linux hosts — NEVER run the shell's
   notification stack against the host bus, acquiring that name would steal it
-  out from under the real desktop. `dev/smoke-niri.sh` and
-  `dev/smoke-hyprland.sh` wrap the whole nested compositor invocation in
-  `dbus-run-session --`, giving every nested run (and `notify-send` fired
-  inside it) a private bus; both scripts assert `busctl --user status
+  out from under the real desktop. `dev/smoke.sh` wraps the whole nested
+  compositor invocation in `dbus-run-session --`, giving every nested run (and
+  `notify-send` fired inside it) a private bus; it asserts `busctl --user status
   org.freedesktop.Notifications`'s owner PID on the **host** bus is unchanged
   before and after every run (`|| true`-tolerant of a legitimate "no owner"
   answer, e.g. on the mac VM rig, which has no desktop bus owner at all).
@@ -573,10 +571,9 @@ behavior on hosts where a real owner exists.
   still holds with nothing installed alongside the shell. `screensaver
   frameInfo` reports which engine is live.
 - Compositor window/workspace ids are **opaque strings** end to end. Never
-  parse, compare numerically, or assume stability. The one exception is the
-  IPC wire boundary in each backend, where niri/Hyprland actions convert the
-  string back with `Number(id)` (niri) or use the id verbatim (Hyprland hex
-  addresses) — that conversion happens nowhere else.
+  parse, compare numerically, or assume stability. Hyprland's window ids are
+  hex addresses and reach its dispatchers verbatim, as an `address:0x…`
+  selector built at the backend's own wire boundary and nowhere else.
 - The shell only ever **reads** `~/.config/formalshell/settings.json`; it
   never writes it. Runtime-mutable state goes to
   `$XDG_STATE_HOME/formalshell/state.json`.
@@ -602,10 +599,11 @@ behavior on hosts where a real owner exists.
   glyphs (multi-byte codepoints that whole-file rewrites corrupt). Use
   targeted `Edit` operations on those files; new icon uses go through
   `Icon { name: ... }` and `shell/Theme/icons.js`, never a raw codepoint.
-- Hyprland is the only supported compositor (owner, 2026-08-25). The niri
-  backend and `dev/smoke-niri.sh` stay only until M46 deletes them, after
-  the nested Hyprland rig (`dev/smoke.sh`) is green on the M41 gate legs.
-  New compositor work goes in `shell/Compositor/hyprland/` only.
+- Hyprland is the only supported compositor (owner, 2026-08-25). New
+  compositor work goes in `shell/Compositor/hyprland/` only;
+  `shell/Compositor/BackendBase.qml` stays as the contract every surface is
+  written against, so a second backend would be a new file rather than a
+  sweep.
 - ⚠️ Quickshell percentage/fraction-shaped properties are 0..1, not 0..100
   (`UPowerDevice.percentage`, `WifiNetwork.signalStrength` — both confirmed
   from C++ source: `src/network/wifi.hpp:22`, `src/network/nm/network.cpp:260`).

@@ -63,15 +63,7 @@ alias fs='qs ipc --any-display -p <store-path>/share/formalshell call'
 Every example from here on is written against that alias: `fs menu summon`,
 `fs theme status`, and so on.
 
-**Binds** need the whole thing spelled out. niri:
-
-```kdl
-binds {
-    Mod+Space { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "menu" "summon"; }
-}
-```
-
-Hyprland:
+**Binds** need the whole thing spelled out:
 
 ```conf
 bind = SUPER, Space, exec, qs ipc --any-display -p <store-path>/share/formalshell call menu summon
@@ -235,8 +227,8 @@ sandbox.
 
 **Workspaces** shows one cell per visible workspace, sorted by the
 compositor's own per-output ordinal. A workspace renders only if it holds a
-window or is focused, so nine persistent named niri workspaces with two
-windows open show two cells, not nine.
+window or is focused, so nine persistent named workspaces with two windows
+open show two cells, not nine.
 
 **Active window** leads with the focused window's themed icon and app name,
 title following in dim. No matching desktop entry falls back to the raw app
@@ -334,12 +326,12 @@ handler because a mic reads as on or off. No capture device at all reads
 would be the lie.
 
 **Keyboard layout** shows the short form of the active layout, read-only.
-niri has a cycle action and Hyprland's equivalent needs a device name that
-has never been verified against real hardware, so neither is wired up. Fewer
-than two configured layouts hides the cell. A compositor that can't be asked
-reads `NO LAYOUT`. The value is polled every 2 seconds per output rather
-than riding the compositor event stream, so an N-monitor session spawns N
-processes per tick.
+Hyprland's `switchxkblayout` needs a device name that has never been verified
+against real hardware, so click-to-cycle is not wired up. Fewer than two
+configured layouts hides the cell. A compositor that can't be asked reads
+`NO LAYOUT`. The value is polled every 2 seconds per output, since Hyprland
+publishes no layout event, so an N-monitor session spawns N processes per
+tick.
 
 **System update** counts how many of a flake's direct inputs are behind
 upstream and fills the cell with the warning color while any are. It answers
@@ -648,7 +640,7 @@ submenu.
 `when` and `checked` are shell conditions, batched into one process per
 condition when the menu opens and never per keystroke. `when: "false"` hides
 a node outright; anything else has its exit code decide, which is how
-`system.logout` guards on `test -n "$NIRI_SOCKET"`.
+`system.logout` guards on `test -n "$HYPRLAND_INSTANCE_SIGNATURE"`.
 
 Typing at any level searches the whole tree, with one exception. A node
 marked `"routeOnly": true` is searched only while you are standing inside
@@ -922,32 +914,19 @@ ranking (exact chord, chord or action prefix, word start, substring) rather
 than the whole-tree scorer, because a hundred keybind rows in the root
 search would drown everything else.
 
-On niri the config is scanned directly with a KDL scanner that survives
-quoted braces, comments, slashdash node comments, raw and multi-line
-strings, and a `binds` block that isn't first in the file. Four paths are
-tried in order, first readable one wins: `keybinds.niriConfigPath`,
-`$NIRI_CONFIG`, `$XDG_CONFIG_HOME/niri/config.kdl`, `/etc/niri/config.kdl`.
-On Hyprland it is `hyprctl binds -j`, and `keybinds.niriConfigPath` does
-nothing.
-
-```jsonc
-// ~/.config/formalshell/settings.json
-{ "keybinds": { "niriConfigPath": "/home/youruser/.config/niri/config.kdl" } }
-```
-
-```nix
-# home-manager
-programs.formalshell.settings.keybinds.niriConfigPath = "/home/youruser/.config/niri/config.kdl";
-```
+The source is `hyprctl binds`, whose table already has your `source` lines
+and submaps expanded, so there is no config path to configure and no include
+chain to walk. Deliberately not `hyprctl binds -j`: Hyprland 0.56.0's JSON
+encoder writes every value from `modmask` on under the previous key's name
+and emits `allow_input_capture` with no value at all, so the reply is not
+JSON. The text table carries the same binds correctly.
 
 Rows are inert notes and that is the point, not a missing feature. A bind
 acts on the focused window, and when you press Enter the focused window is
 the menu, so running one from here would fire it at whatever the compositor
 hands focus back to. This surface is for remembering a chord, not pressing
-it. Unavailable states get one dim row each: `NO CONFIG`, `NO BINDS`,
-`BINDS UNAVAILABLE`, and `NO BINDS / niri or hyprland only` on any other
-compositor. A half-written config yields the binds above the mistake, which
-is the honest answer for a file you are editing right now.
+it. Unavailable states get one dim row each: `NO BINDS` when the table is
+empty, `BINDS UNAVAILABLE` when the call itself failed.
 
 **Share** appears only when `localsend_app` is on PATH, checked live rather
 than by config, so no LocalSend means no `Share` node at all.
@@ -1341,13 +1320,13 @@ open rather than in a poll loop, since `ddcutil`'s I2C round trips take
 seconds. Nothing controllable collapses it to `NO BACKLIGHT`. `MIRROR`
 points every other enabled output at the focused one.
 
-Everything goes through the compositor backend contract, never `niri msg` or
-`hyprctl` from the panel, and an open panel re-reads every 5 seconds because
-neither compositor pushes output changes. States: `NO OUTPUTS`,
-`MIRROR UNSUPPORTED` (niri's IPC has no mirroring primitive),
-`SINGLE DISPLAY`, and a dimmed `ON` cell on the last enabled output, since
-both compositors would happily leave you with nothing on screen and no
-surface left to undo it from.
+Everything goes through the compositor backend contract, never `hyprctl`
+from the panel, and an open panel re-reads every 5 seconds because Hyprland's
+monitor events never mention the disabled outputs this panel exists to switch
+back on. States: `NO OUTPUTS`, `MIRROR UNSUPPORTED` (a backend with no
+mirroring primitive), `SINGLE DISPLAY`, and a dimmed `ON` cell on the last
+enabled output, since the compositor would happily leave you with nothing on
+screen and no surface left to undo it from.
 
 **AirPods** talks to the `librepods` daemon, an unrelated GPL-3.0 project
 you run yourself (see [`SWITCHOVER.md`](SWITCHOVER.md)). The service watches
@@ -1722,13 +1701,11 @@ it. Window on this workspace: park it. Window anywhere else, parked or on a
 workspace you walked away from: bring it here and focus it. That last arm is
 what makes one keybind work from anywhere.
 
-Hiding is the one place the compositors differ. Hyprland has a special
-workspace. niri has no hide primitive of any kind, no minimize and no
-scratchpad, so the console is parked on another workspace, preferring the
-empty trailing one every niri output carries. On niri you will see that
-extra workspace in the bar while the console is hidden, and it goes away
-when the console comes back. On Hyprland you won't, because the bar drops
-special workspaces from the list entirely.
+Hiding uses Hyprland's special workspace: the console lives there
+permanently and showing it is the compositor toggling that overlay in and
+out, which is where the drop-down animation comes from. You never see it in
+the bar's workspace strip, because the bar drops special workspaces from that
+list entirely.
 
 Placement is recomputed on every show: full width less one margin either
 side, top edge under the bar, covering `console.share` of what is left.
@@ -2474,26 +2451,15 @@ stops. **Both arguments are required**: IPC arity is an exact-equality
 check, so `screenshot pick smart` is rejected before the handler runs and a
 keybind written that way silently does nothing.
 
-**One difference between compositors, and it is the compositor's.** On
-Hyprland every window has a rectangle, so hovering or cycling highlights it
-in place. niri reports a pixel position only for floating windows, so a
-tiled window has no box to draw. Rather than drop the capability, the picker
-names those windows instead, in a card of title over dim app id, and
-captures the chosen one through niri's own `ScreenshotWindow`, which crops
-server-side. Selection works identically on both; only the affordance
-differs. The split is on whether a rectangle exists, never on a compositor
-name, so a future niri that reports tiled geometry gets highlighting with no
-configuration.
-
-That costs REC WINDOW something a shot does not pay. wf-recorder crops with
-a rectangle and nothing else, and there is no video counterpart to
-`ScreenshotWindow`, so a window with no rectangle cannot be recorded. Those
-windows stay listed under REC WINDOW, dimmed, under a
-`CANNOT RECORD: NO COMPOSITOR GEOMETRY` header, and `Return` refuses them by
-name. Processing does not reach that path either: `ScreenshotWindow` always
-writes the file and always copies it, so a named niri window taken with
-`copy` still lands in `screenshot.directory`. Only the notification follows
-what you asked for.
+**A window the compositor reports no box for cannot be taken.** Hyprland
+reports a rectangle for every window it does not hide, so hovering or cycling
+highlights it in place; an unfocused member of a tabbed group is the case
+that has no box. grim crops with a rectangle and wf-recorder with nothing
+else, so those windows can be neither shot nor recorded. Rather than drop
+them from a list that names their neighbours, they stay in a card of title
+over dim app id under a `CANNOT CAPTURE: NO COMPOSITOR GEOMETRY` header,
+dimmed and unselectable. The split is on whether a rectangle exists, never on
+a compositor name.
 
 ### Annotating
 
@@ -2520,8 +2486,8 @@ fs screenshot key tab               # drive the picker headlessly
 ```
 
 `pickerStatus`'s `drawableWindows` and `namedWindows` are the capability
-report: zero drawable next to a non-empty named list is the normal niri
-answer, not a failure.
+report: how many windows the picker can draw against how many it can only
+name.
 
 **Which one to bind.** `pick smart default` is the route with the toolbar,
 keyboard window selection and recording, so it belongs on your main capture
@@ -2557,10 +2523,9 @@ rather than a failure: `NO TEXT FOUND`, no clipboard write, no `lastError`.
 
 **`capture color`** picks one pixel with slurp's point mode, reads it back
 through `grim -t ppm`, and copies `#RRGGBB`. grim plus coreutils rather than
-a compositor call on purpose: niri does have a native `PickColor` with a
-real magnifier, but it is niri-only, so adopting it would build a path
-Hyprland never runs. `grim -t ppm` behaves identically everywhere and its
-output needs no image library to read.
+a compositor call on purpose: Hyprland has no pick-colour request of its own
+to use instead. `grim -t ppm` behaves identically everywhere and its output
+needs no image library to read.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -2604,8 +2569,8 @@ One `wf-recorder` child behind the `record` target. wf-recorder rather than
 gpu-screen-recorder because gpu-screen-recorder captures through KMS, which
 means nothing inside a nested compositor or on llvmpipe and so could never
 be verified in the smoke rig. wf-recorder speaks
-`wlr-screencopy-unstable-v1`, which niri implements under its nested backend,
-so the path that ships is the path that gets exercised.
+`wlr-screencopy-unstable-v1`, which Hyprland implements nested as well as on
+real hardware, so the path that ships is the path that gets exercised.
 
 Two scopes, `screen` (the focused output) and `region` (a slurp rectangle),
 and three audio modes:
@@ -2672,8 +2637,8 @@ programs.formalshell.settings.recording = {
 
 A webcam overlay anchors bottom-right of the captured region, sized as a
 proportion of it so the camera takes up the same share of the frame at any
-resolution. It needs floating placement from the compositor, which niri and
-Hyprland both have. An unplaceable camera window landing mid-recording is
+resolution. It needs floating placement from the compositor, which Hyprland
+has. An unplaceable camera window landing mid-recording is
 worse than no camera, so an unsupported compositor, a missing device, or a
 placement that never settles all fall back to recording without one, with a
 `WEBCAM UNAVAILABLE` or `WEBCAM UNPLACED` notification saying why.
@@ -2708,8 +2673,8 @@ binds {
 ```
 
 **`record start window` does not exist**, and that is wf-recorder's
-interface rather than a gap in niri: it takes an output or a geometry, never
-a window id, so there is nothing to bind to a window that would follow it.
+interface: it takes an output or a geometry, never a window id, so there is
+nothing to bind to a window that would follow it.
 Recording a window is still reachable through the picker's REC WINDOW tool,
 which resolves the box and hands that rectangle to `startAt`. Know what that
 is: a geometry snapshot taken once. Move the window mid-recording and the

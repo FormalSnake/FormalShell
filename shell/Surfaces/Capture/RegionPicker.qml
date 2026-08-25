@@ -11,30 +11,20 @@ import qs.Compositor
 // keyboard layer upstream added in August 2026 moves the selection by WARPING
 // THE CURSOR so slurp's own hover highlight follows it, and binds its keys
 // from Hyprland Lua reacting to `layer.opened` on slurp's `selection`
-// namespace. niri has neither a cursor-warp action nor dynamic layer-scoped
-// binds, and the shell cannot inject binds into a compositor at runtime. So
-// the picker is the shell's own Overlay surface, which owns its highlight
-// state directly: no warping, no compositor binds, one code path on both
-// backends. Every probe-for-a-reachable-warp-point mechanism upstream had to
-// invent exists only to steer a picker that does not know what is selected,
-// and has no counterpart here.
+// namespace. The shell cannot inject binds into a compositor at runtime, so
+// the picker is its own Overlay surface, which owns its highlight state
+// directly: no warping, no compositor binds. Every
+// probe-for-a-reachable-warp-point mechanism upstream had to invent exists
+// only to steer a picker that does not know what is selected, and has no
+// counterpart here.
 //
-// ⚠️ THE ONE ASYMMETRY BETWEEN BACKENDS. niri reports a pixel box only for
-// FLOATING windows: `Tile::ipc_layout_template` hardcodes
-// `tile_pos_in_workspace_view: None` (niri v26.04 src/layout/tile.rs:869),
-// floating.rs:336 fills it in, and the scrolling (tiled) layout overrides
-// only `pos_in_scrolling_layout` (src/layout/scrolling.rs:2426) and inherits
-// that None. `pos_in_scrolling_layout` is a 1-based (column, row) index pair,
-// not pixels. So a tiled niri window has NO rectangle to draw, and on
-// Hyprland every window has one.
-//
-// Window SELECTION exists on both regardless; only the affordance differs.
-// A window with a rect is highlighted on screen; a window without one is
-// named in a labelled list (title over dim app id) and captured by id through
-// niri's `ScreenshotWindow` action, which crops server-side. The split is on
-// `rect === null`, never on a backend name, so a future niri that starts
-// reporting tiled geometry turns this into the Hyprland behaviour with no
-// redesign here.
+// A window whose rect is null cannot be drawn and cannot be captured: there
+// is no crop box and no server-side per-window capture to fall back on. Those
+// windows are still NAMED, in a labelled list (title over dim app id) that
+// says so, rather than vanishing from a mode that lists their neighbours.
+// Hyprland reports a box for every window it does not hide, so the list is
+// normally empty; an unfocused member of a tabbed group is the case that
+// fills it (HyprlandBackend's `hasRect`).
 //
 // The freeze is upstream's trick, kept: grim captures each output BEFORE the
 // surface maps, the surface renders those frames 1:1, and the capture then
@@ -70,7 +60,6 @@ Scope {
 
     // Resolved by the caller (ScreenshotIpc) into a real capture.
     signal picked(var rect)
-    signal pickedWindow(string windowId)
     // The surface is already unmapped when this fires (see _finishRecord).
     // `outputName` rides along because wf-recorder is always pinned to one
     // output and the picker is the only thing that knows which output the
@@ -165,9 +154,8 @@ Scope {
         return { withRect: withRect, withoutRect: withoutRect };
     }
 
-    // Windows the picker can only name, never draw. Empty on Hyprland, and
-    // empty on any future niri that reports tiled geometry, the list card
-    // below simply stops rendering, with no branch on compositor name.
+    // Windows the picker can only name, never draw or take. Normally empty,
+    // and the list card below simply stops rendering.
     readonly property var _unboxedWindows: root._windowEntries.withoutRect
 
     readonly property var _hintRects: {
@@ -180,29 +168,21 @@ Scope {
         return root._outputRects.concat(root._windowEntries.withRect);
     }
 
-    // Windows the picker can name but the recorder cannot take: wf-recorder
-    // crops with `-g` and nothing else, so a window the compositor reports no
-    // box for has nothing to record. niri's server-side ScreenshotWindow has
-    // no video counterpart, and there is no third mechanism to fall back on.
-    // They stay on screen, dimmed and refused, rather than quietly vanishing
-    // from a mode that still lists their neighbours.
-    readonly property var _selectableNamed: root._recording ? [] : root._unboxedWindows
-
     // What Tab and the arrows walk: drawable windows first in reading order,
-    // then the named-only ones, then whole outputs last (capturing a display
-    // is the coarser intent, so it should not sit between two windows). The
-    // toolbar narrows this to the mode's own candidates, so SCREEN never
-    // cycles through windows and REGION cycles nothing at all.
+    // then whole outputs last (capturing a display is the coarser intent, so
+    // it should not sit between two windows). The named-only windows are not
+    // in here: grim crops with `-g` and wf-recorder with nothing else, so a
+    // window the compositor reports no box for can be neither shot nor
+    // recorded. The toolbar narrows this to the mode's own candidates, so
+    // SCREEN never cycles through windows and REGION cycles nothing at all.
     readonly property var _selectable: {
         if (root.mode === "region")
             return [];
         if (root.mode === "fullscreen")
             return root._outputRects;
         if (root.mode === "windows")
-            return root._windowEntries.withRect.concat(root._selectableNamed);
-        return root._windowEntries.withRect
-            .concat(root._selectableNamed)
-            .concat(root._outputRects);
+            return root._windowEntries.withRect;
+        return root._windowEntries.withRect.concat(root._outputRects);
     }
 
     // The named-window card is window selection's affordance, so it follows
@@ -233,12 +213,10 @@ Scope {
         root._capturing = false;
         root._frames = ({});
         // The window boxes this surface is about to draw and crop to are only
-        // as fresh as the backend's model. On Hyprland that model goes stale
-        // between refreshes and omits the box entirely for anything opened
-        // since startup, which reads here as "window with no rect" and used
-        // to send the capture down the niri-only server-side path. Ask for a
-        // current set before the candidate list is built; a backend that is
-        // already event-driven no-ops.
+        // as fresh as the backend's model, which goes stale between refreshes
+        // and omits the box entirely for anything opened since startup. That
+        // reads here as "window with no rect", which is uncapturable. Ask for
+        // a current set before the candidate list is built.
         CompositorService.refreshWindows();
 
         // No interaction at all: the focused output is the answer, and no
@@ -310,8 +288,7 @@ Scope {
             action: root.action,
             tool: root._toolIndex,
             // The honest capability report: how many windows the picker can
-            // draw versus only name. Zero drawable with a non-empty named
-            // list is the normal niri answer, not a failure.
+            // draw versus only name.
             drawableWindows: root._windowEntries.withRect.length,
             namedWindows: root._unboxedWindows.length,
             cursor: root._cursor,
@@ -548,23 +525,15 @@ Scope {
             return "ok";
         }
 
-        // The one thing recording cannot do (see _selectableNamed): no box,
-        // no `-g`, no recording. Refused by name so the answer says which
-        // window and why, rather than reporting a recorder that failed to
-        // start.
-        if (root._recording) {
-            if (!sel.rect)
-                return "error: no geometry to record for \"" + sel.label + "\"";
-            root._finishRecord(sel.rect);
-            return "ok";
-        }
+        // No box, no `-g`, nothing to crop or record. Refused by name so the
+        // answer says which window and why, rather than reporting a capture
+        // that failed to start. Nothing selectable reaches here today, the
+        // named-only windows are outside `_selectable`.
+        if (!sel.rect)
+            return "error: no geometry for \"" + sel.label + "\"";
 
-        // A window with no rect can only be captured by id, server-side. The
-        // overlay is irrelevant to that path: niri crops the window's own
-        // buffer, not the screen, so what is on top of it does not matter.
-        if (sel.kind === "window" && !sel.rect) {
-            root.isOpen = false;
-            root.pickedWindow(sel.windowId);
+        if (root._recording) {
+            root._finishRecord(sel.rect);
             return "ok";
         }
 
@@ -835,8 +804,7 @@ Scope {
             }
 
             // Windows the compositor gave no box for. Renders only when such
-            // windows exist, so it is absent on Hyprland and absent on any
-            // niri that starts reporting tiled geometry.
+            // windows exist, so it is normally absent.
             Rectangle {
                 id: nameList
                 visible: !root._capturing && root._namedShown
@@ -856,11 +824,9 @@ Scope {
                     width: parent.width - Core.Theme.space.panelPadding * 2
 
                     SectionLabel {
-                        // These windows are selectable for a shot and refused
-                        // for a recording, so the header says which it is
-                        // rather than making the dimmed rows carry the whole
-                        // explanation on their own.
-                        text: root._recording ? "CANNOT RECORD: NO COMPOSITOR GEOMETRY" : "SELECT WINDOW"
+                        // The header carries the whole explanation rather than
+                        // leaving the dimmed rows to imply it.
+                        text: "CANNOT CAPTURE: NO COMPOSITOR GEOMETRY"
                         color: Core.Theme.color.mutedForeground
                     }
 
@@ -872,12 +838,9 @@ Scope {
                             required property int index
                             required property var modelData
                             width: listColumn.width
-                            // The cursor walks _selectable, whose named-only
-                            // entries start after the drawable ones, and are
-                            // absent entirely while recording, where that same
-                            // index is an output instead.
-                            selected: !root._recording
-                                && root._cursor === root._windowEntries.withRect.length + windowRow.index
+                            // Named-only windows are outside _selectable, so
+                            // the cursor never lands on one of these rows.
+                            selected: false
 
                             Column {
                                 width: parent.width
@@ -886,14 +849,14 @@ Scope {
                                     width: parent.width
                                     elide: Text.ElideRight
                                     text: windowRow.modelData.label
-                                    color: root._recording ? Core.Theme.color.mutedForeground : windowRow.foreground
+                                    color: Core.Theme.color.mutedForeground
                                     font.family: Core.Theme.fontFamilySans
                                     font.pixelSize: Core.Theme.fontSize.body
                                 }
                                 SectionLabel {
                                     visible: windowRow.modelData.sublabel.length > 0
                                     text: windowRow.modelData.sublabel
-                                    color: root._recording ? Core.Theme.color.mutedForeground : windowRow.dimForeground
+                                    color: Core.Theme.color.mutedForeground
                                 }
                             }
                         }
@@ -901,9 +864,9 @@ Scope {
                 }
             }
 
-            // Key legend, sitting just above the toolbar. Named windows and
-            // the record action both change what Return means, so the hint
-            // follows the current tool rather than stating one fixed contract.
+            // Key legend, sitting just above the toolbar. The record action
+            // changes what Return means, so the hint follows the current tool
+            // rather than stating one fixed contract.
             Cell {
                 id: legend
                 visible: !root._capturing

@@ -22,11 +22,9 @@ import "../Capture/model.js" as Capture
 // text` at the same time puts two slurp overlays on screen at once, and the
 // second one gets the click.
 //
-// Color picking is a grim/coreutils pipeline, not a compositor call. niri
-// does have a native Request::PickColor with a real magnifier grab, but it
-// is niri-only: adopting it would build a code path Hyprland never runs and
-// leave the smoke rig verifying the wrong one. `grim -t ppm` is the same
-// everywhere, and its P6 output needs no image library to read (see
+// Color picking is a grim/coreutils pipeline, not a compositor call.
+// Hyprland has no pick-colour request of its own to use instead, and
+// `grim -t ppm`'s P6 output needs no image library to read (see
 // Capture.hexFromPpmBytes for the byte layout).
 //
 // Scope root, not a bare IpcHandler: IpcHandler has no default property, so

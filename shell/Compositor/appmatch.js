@@ -4,8 +4,7 @@
 // in the menu focuses the app you already have open instead of spawning a
 // second copy. Pure, so it's testable head-on (tests/tst_app_match.qml),
 // and it needs no backend work at all: CompositorService.focusWindow(id)
-// and CompositorService.windows (rows carrying `appId`) already exist on
-// both compositors.
+// and CompositorService.windows (rows carrying `appId`) already exist.
 //
 // Only two DesktopEntry fields are read, and both are the ones quickshell
 // itself matches on. From the pinned quickshell input
