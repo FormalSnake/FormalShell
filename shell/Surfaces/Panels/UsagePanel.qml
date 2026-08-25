@@ -594,9 +594,17 @@ Panel {
         id: hero
         width: parent.width
         title: "Usage"
-        meta: root._peakRow
-            ? Usage.sentenceLabel(root._peakRow.label)
-            : (root.claudeEnabled || root.codexEnabled ? "Loading" : "Disabled")
+        // With nothing to promote the line says which of the three reasons
+        // that is; the sections below carry the provider-specific one.
+        meta: {
+            if (root._peakRow)
+                return Usage.sentenceLabel(root._peakRow.label);
+            if (!root.claudeEnabled && !root.codexEnabled)
+                return "Disabled";
+            var pending = (root.claudeEnabled && root.claudeState === "unknown")
+                || (root.codexEnabled && root.codexState === "unknown");
+            return pending ? "Loading" : "No data";
+        }
         readout: root._peakRow ? Math.round(root._peakRow.percent * 100) + "%" : ""
         rail: root._peakRow ? root._peakRow.percent : -1
 

@@ -1,3 +1,4 @@
+import QtQuick
 import qs.Core
 import qs.Components
 

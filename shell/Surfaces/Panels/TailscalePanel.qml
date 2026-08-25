@@ -346,7 +346,7 @@ Panel {
                     id: onlineDot
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Theme.space.sm
+                    width: Theme.space.md
                     height: width
                     radius: width / 2
                     color: peerCell.modelData.online ? Theme.color.primary : Theme.color.mutedForeground
