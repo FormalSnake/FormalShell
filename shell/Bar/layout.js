@@ -65,6 +65,22 @@ var DEFAULT_LAYOUT = {
 
 var REGIONS = ["left", "center", "right"];
 
+// The strip's own box (M47 D1), pure so it is checkable without a
+// compositor, the same reason shell/Console/geometry.js keeps the console's
+// placement out of QML. `space` is Theme.space, already scaled. The bar is
+// one continuous band across the output: the cell row with a `barMargin`
+// band above and below it, and that whole height is also its exclusive zone.
+// The horizontal inset is `md` rather than `barMargin`, so a cell sits
+// further from the screen edge than from the strip's own edges.
+function stripGeometry(space) {
+    return {
+        height: space.barCellHeight + space.barMargin * 2,
+        cellHeight: space.barCellHeight,
+        cellTop: space.barMargin,
+        edgeInset: space.md
+    };
+}
+
 var CUSTOM_PREFIX = "custom:";
 
 // Must stay byte-identical to shell/Plugins/manifest.js's own PLUGIN_PREFIX:

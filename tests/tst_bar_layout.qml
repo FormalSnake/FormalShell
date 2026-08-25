@@ -407,4 +407,31 @@ TestCase {
         verify(!Layout.hasChevron(r.regions.left));
         verify(!Layout.hasChevron(r.regions.center));
     }
+
+    // The strip's box (M47 D1). Bar.qml needs a compositor to instantiate at
+    // all, so the geometry it draws lives in layout.js and is checked here
+    // against the shipped spacing scale.
+    function test_strip_is_the_cell_row_plus_a_margin_band() {
+        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 });
+        compare(g.height, 40);
+        compare(g.cellHeight, 28);
+        compare(g.cellTop, 6);
+    }
+
+    // The screen edges are further away than the strip's own top and bottom:
+    // a cell sits `md` in from the edge, not `barMargin`.
+    function test_strip_insets_the_regions_by_md_not_by_the_margin_band() {
+        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 });
+        compare(g.edgeInset, 12);
+        verify(g.edgeInset > g.cellTop);
+    }
+
+    // Every term is a token, so a scaled Theme.space scales the whole strip.
+    function test_strip_follows_the_spacing_scale() {
+        var g = Layout.stripGeometry({ barCellHeight: 42, barMargin: 9, md: 18 });
+        compare(g.height, 60);
+        compare(g.cellHeight, 42);
+        compare(g.cellTop, 9);
+        compare(g.edgeInset, 18);
+    }
 }

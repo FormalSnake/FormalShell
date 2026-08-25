@@ -103,15 +103,16 @@ launcher and the lock keep a plain black scrim at 0.5 over the desktop
 because they are modal.
 
 Blur (owner, 2026-08-25, after Nothing OS 5.0): a flat gaussian blur sits
-behind the bar cells, the panels and the launcher card. The shell never
+behind the bar strip, the panels and the launcher card. The shell never
 blurs a pixel itself; Hyprland does it behind the layer surface through
 `layerrule = blur` plus `ignorealpha` on the `formalshell:bar`,
 `formalshell:panel` and `formalshell:menu` namespaces, which the shipped
 example config sets. What the shell contributes is translucency:
 `theme.surfaceOpacity` (default 0.85) is the alpha of every `card` and
 `popover` fill on those three surfaces (`Theme.surface(color)` applies it),
-so the blurred desktop shows through the card and the bar strip's empty
-band stays fully transparent (which `ignorealpha` leaves unblurred). Under
+so the blurred desktop shows through the card. The bar strip is now that
+fill edge to edge (M47 D1), so `ignorealpha` finds nothing to skip inside
+it and the whole band blurs. Under
 a compositor with blur off the same alpha reads as a tint, still legible
 at 0.85. The scrim, the toasts, the OSD and the lock stay opaque.
 
@@ -210,13 +211,18 @@ stay images. Size rule: an icon beside text is the text's font size.
 Positions, grouping and behaviour follow Omarchy quattro; chrome follows the
 tokens above.
 
-**Bar.** A transparent strip, `barMargin` from the top and sides. Cells are
-`card` fill, 1px `border`, `radiusMd`, `barCellHeight` tall, `sm` gap
-between cells. Groups (workspaces, indicators) are one cell holding several
+**Bar** (amended 2026-08-25, M47 D1; the floating pills this paragraph
+described are gone, not optional). One continuous strip across the top of
+the output: `card` fill at `surfaceOpacity`, a 1px `border` along its bottom
+edge and no other edge, `barCellHeight + 2 * barMargin` tall, no side or top
+margin. Regions inset `md` from both screen edges; cells sit `barMargin`
+down from the top, `barCellHeight` tall, `radiusMd`, `sm` gap between cells.
+Cells are ghost items: no fill and no border at rest, since the strip
+carries both. Groups (workspaces, indicators) are one cell holding several
 items. Left: launcher glyph cell, workspaces. Centre: clock, bell (media
 cell when playing, Omarchy's placement). Right: the `bar.layout` right region
-as today. Hover: `accent` fill. Open panel: `primary` 2px underline inside
-the cell's bottom edge (the old open dot). Workspaces: a row of 6px dots,
+as today. Hover: `accent` fill. Open panel: `primary` 2px underline on the
+cell's bottom edge (the old open dot). Workspaces: a row of 6px dots,
 `mutedForeground`; the active one is a `primary` pill 16px wide; an urgent
 one is `destructive`. The chevron keeps its collapse behaviour.
 

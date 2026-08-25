@@ -70,6 +70,18 @@ Item {
     property bool selected: false
     property bool hovered: root.containsPointer
 
+    // A bar cell (DESIGN.md §3 Bar): the strip behind it already carries the
+    // card fill and the border, so a resting ghost paints neither and the bar
+    // reads as one surface. Every state that is not "resting" still draws
+    // exactly as it does anywhere else: the hover fill, the active and
+    // selected fills, the cursor ring, the destructive and warning borders,
+    // and the open-panel mark. Bar.qml sets this on every cell it hosts.
+    property bool ghost: false
+
+    // The only border a ghost draws is one a state asked for.
+    readonly property bool _borderless: root.ghost && !root.cursor
+        && !root.destructive && !root.warning
+
     // A bar cell whose panel (or the launcher, or the notification center)
     // is open (DESIGN.md §3 Bar).
     property bool panelOpen: false
@@ -197,8 +209,10 @@ Item {
             ? Theme.color.primary
             : root.selected
                 ? Theme.color.accent
-                : Theme.surface(Theme.color.card)
-        border.width: Theme.borderWidth
+                : root.ghost
+                    ? "transparent"
+                    : Theme.surface(Theme.color.card)
+        border.width: root._borderless ? 0 : Theme.borderWidth
         border.color: root.cursor
             ? Theme.color.ring
             : root.destructive
@@ -229,7 +243,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.leftMargin: Theme.space.xs
         anchors.rightMargin: Theme.space.xs
-        anchors.bottomMargin: Theme.borderWidth
+        anchors.bottomMargin: root._borderless ? 0 : Theme.borderWidth
         height: Theme.borderWidth * 2
         radius: Theme.radiusSm
         color: Theme.color.primary

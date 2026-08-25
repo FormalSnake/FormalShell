@@ -30,7 +30,7 @@ follow. Nested corners are outer minus padding, floored at `Sm`.
 **Ring**: focus is `border` swapped to `ring` plus a 3px outer halo of `ring`
 at 0.5 alpha. Same drawing on every surface.
 
-**Translucency and blur**: bar cells, panels and the launcher card paint
+**Translucency and blur**: the bar strip, panels and the launcher card paint
 `Theme.surface(Theme.color.card)`, the card colour at
 `theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
 (`layerrule = blur` + `ignorealpha` on `formalshell:bar`, `formalshell:panel`,
@@ -69,7 +69,7 @@ thing.
 
 | primitive | is | states |
 | --- | --- | --- |
-| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip | rest (`card`, `border`), hover (`accent`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
+| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`accent`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
 | `Button` | shadcn button, `variant`: `default` (`primary` fill), `outline` (`border`, transparent), `ghost` (no border, hover `accent`), `destructive` | hover, cursor, pressed (`accent` at 0.8), disabled (opacity 0.5) |
 | `IconButton` | a `ghost` Button that is `controlHeight` square, one `Icon` | as Button |
 | `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding` | none |
@@ -84,10 +84,16 @@ thing.
 
 ## 3. Surface rules
 
-**Bar.** Transparent strip. Cells are `Cell`s, `barCellHeight` tall, `sm`
-apart, grouped where Omarchy groups (workspaces, indicators). A cell whose
-panel is open draws a 2px `primary` line along its inside bottom edge.
-Workspace dots are `mutedForeground`, the active one a `primary` pill.
+**Bar.** One continuous strip across the top of the output: `card` fill at
+`surfaceOpacity`, a 1px `border` along its bottom edge and no other edge,
+`barCellHeight + 2 * barMargin` tall, no side or top margin. Regions inset
+`md` from both screen edges; cells sit `barMargin` down from the top and are
+`barCellHeight` tall, `sm` apart, grouped where Omarchy groups (workspaces,
+indicators). Cells are ghost `Cell`s: no fill and no border at rest, since
+the strip already carries both. Hover, cursor, active, selected,
+destructive and warning draw as they do anywhere else. A cell whose panel is
+open draws a 2px `primary` line along its bottom edge. Workspace dots are
+`mutedForeground`, the active one a `primary` pill.
 
 **Panel.** Header, then sections. A section is a `SectionLabel` and a column
 of `Cell` rows `rowGap` apart. A hero (the connected AP, the active sink) is

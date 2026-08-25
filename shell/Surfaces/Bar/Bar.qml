@@ -41,12 +41,14 @@ import "../../Bar/layout.js" as Layout
 // side away from the region's own anchored edge (M25, layout.js's
 // governsBefore), so the reveal grows into empty bar and the chevron itself
 // keeps its x.
-// The strip itself draws nothing (DESIGN.md §3 Bar): the window is
-// transparent and the desktop shows through between the cells, each of
-// which is a `Cell` carrying its own card fill and border. The strip is
-// still `barMargin` taller than a cell on each side, and that whole height
-// is the exclusive zone, so a tiled window stops below the margin band
-// rather than under the floating pills.
+// The strip is one continuous surface (DESIGN.md §3 Bar, M47 D1): a
+// full-width `card` fill at `theme.surfaceOpacity` with a 1px `border`
+// along its bottom edge, and nothing else. The cells inside are ghosts,
+// so this is the only fill and the only border the bar draws; the owner
+// ran the floating-pill version on both boxes and asked for the shadcn
+// navbar instead (2026-08-25). Its height is the cell row plus a
+// `barMargin` band above and below, and that whole height is the exclusive
+// zone, so a tiled window stops under the border rather than behind it.
 PanelWindow {
     id: bar
     required property var modelData
@@ -92,14 +94,16 @@ PanelWindow {
     // other Config.get() consumer in the shell.
     readonly property var _layout: bar._resolveLayout()
 
+    readonly property var _strip: Layout.stripGeometry(Theme.space)
+
     // One height for every cell in every region, so a widget with a taller
     // line of content can no longer drag the whole strip with it.
-    readonly property real _cellHeight: Theme.space.barCellHeight
-    implicitHeight: bar._cellHeight + Theme.space.barMargin * 2
+    readonly property real _cellHeight: bar._strip.cellHeight
+    implicitHeight: bar._strip.height
+    // The window is the strip exactly, so the fill below covers it edge to
+    // edge; this only decides what is behind that fill's own alpha.
     color: "transparent"
 
-    // The margin band is the bar's own space even though nothing is drawn
-    // in it, so the zone is the whole strip rather than the cell row.
     exclusiveZone: bar.implicitHeight
 
     // Every surface that has to clear the bar (panels, toasts, the center,
@@ -109,6 +113,23 @@ PanelWindow {
         target: Theme
         property: "barHeight"
         value: bar.implicitHeight
+    }
+
+    // Declared before the regions, so it stacks behind every cell.
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.surface(Theme.color.card)
+
+        // The hairline that separates the strip from the desktop, and the
+        // only edge the bar draws. A `border` on the fill above would ring
+        // all four sides, three of which are the screen's own edges.
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Theme.borderWidth
+            color: Theme.color.border
+        }
     }
 
     // Built-in widget registry: each Component wraps the widget with the
@@ -429,6 +450,13 @@ PanelWindow {
             visible: entryLoader._shown
                 && (!entryLoader.modelData.collapsible || entryLoader.width > 0)
             onLoaded: {
+                // The one seam that makes every cell in the bar a ghost
+                // (DESIGN.md §3 Bar): each widget's root is either a `Cell`,
+                // which carries the property itself, or one of the two group
+                // rows (Tray, Indicators), which forward it to the cells they
+                // hold. Set here rather than in the 25 registry Components
+                // above, so a new widget joins the strip by being listed.
+                entryLoader.item.ghost = true;
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
                 else if (entryLoader.modelData.kind === "plugin")
@@ -444,9 +472,9 @@ PanelWindow {
     Row {
         id: leftRegion
         anchors.left: parent.left
-        anchors.leftMargin: Theme.space.barMargin
+        anchors.leftMargin: bar._strip.edgeInset
         anchors.top: parent.top
-        anchors.topMargin: Theme.space.barMargin
+        anchors.topMargin: bar._strip.cellTop
         spacing: Theme.space.sm
         clip: true
         // A settings-driven left region can outgrow the gap before the
@@ -454,7 +482,7 @@ PanelWindow {
         // so it is capped to whatever space actually remains left of
         // centerRegion.x and overflow clips here instead of drawing over
         // the clock.
-        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - Theme.space.barMargin - Theme.space.sm))
+        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
 
         Repeater {
             id: leftRepeater
@@ -467,7 +495,7 @@ PanelWindow {
         id: centerRegion
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        anchors.topMargin: Theme.space.barMargin
+        anchors.topMargin: bar._strip.cellTop
         spacing: Theme.space.sm
 
         Repeater {
@@ -480,15 +508,15 @@ PanelWindow {
     Row {
         id: rightRegion
         anchors.right: parent.right
-        anchors.rightMargin: Theme.space.barMargin
+        anchors.rightMargin: bar._strip.edgeInset
         anchors.top: parent.top
-        anchors.topMargin: Theme.space.barMargin
+        anchors.topMargin: bar._strip.cellTop
         spacing: Theme.space.sm
         clip: true
         // Mirror of leftRegion's cap: never draws left past centerRegion's
         // right edge, regardless of how many built-ins plus custom modules
         // settings.json's bar.layout.right names.
-        width: Math.min(implicitWidth, Math.max(0, bar.width - Theme.space.barMargin - Theme.space.sm - centerRegion.x - centerRegion.width))
+        width: Math.min(implicitWidth, Math.max(0, bar.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
 
         Repeater {
             id: rightRepeater

@@ -56,11 +56,16 @@ Row {
     // future reactivity.
     readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._stayAwakeActive || root._nightLightActive
 
+    // Bar.qml sets this on the widget it loads; this row is not a Cell
+    // itself, so it hands it to each cell it holds (DESIGN.md §3 Bar).
+    property bool ghost: false
+
     spacing: Theme.space.sm
     visible: root.shown
 
     Cell {
         id: recordingCell
+        ghost: root.ghost
         height: root.height
         visible: root._recordingActive
         destructive: true
@@ -84,6 +89,7 @@ Row {
     // file on the far end.
     Cell {
         id: clipsshCell
+        ghost: root.ghost
         height: root.height
         visible: root._clipsshSending
         // The alias is the user's own word for a host, so it goes through
@@ -100,6 +106,7 @@ Row {
 
     Cell {
         id: reminderCell
+        ghost: root.ghost
         height: root.height
         visible: root._reminderPending
         // The message is the user's own typed words, so it goes through
@@ -138,6 +145,7 @@ Row {
 
     Cell {
         id: stayAwakeCell
+        ghost: root.ghost
         // Same Row-only-manages-x gap Workspaces.qml/Tray.qml fix
         // identically: `root` here IS the Row Bar.qml's regionDelegate
         // stretches to the bar's shared content height, so binding to it
@@ -164,6 +172,7 @@ Row {
 
     Cell {
         id: nightLightCell
+        ghost: root.ghost
         height: root.height
         visible: root._nightLightActive
         tooltipText: "NIGHT LIGHT ON"

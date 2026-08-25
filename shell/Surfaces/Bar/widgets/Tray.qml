@@ -61,6 +61,10 @@ Row {
     // own ObjectModel docs; see the Repeater below for why that matters).
     readonly property bool shown: SystemTray.items.values.length > 0
 
+    // Bar.qml sets this on the widget it loads; this row is not a Cell
+    // itself, so it hands it to each cell it holds (DESIGN.md §3 Bar).
+    property bool ghost: false
+
     spacing: Theme.space.sm
     visible: root.shown
 
@@ -86,6 +90,8 @@ Row {
         delegate: Cell {
             id: itemCell
             required property var modelData
+
+            ghost: root.ghost
 
             // Bar.qml's region delegate stretches this Row to the bar's
             // shared cell height; the Row top-aligns children, so without

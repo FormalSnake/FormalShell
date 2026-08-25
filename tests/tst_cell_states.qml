@@ -201,4 +201,51 @@ TestCase {
         compare(mark.anchors.leftMargin, Theme.space.xs);
         compare(mark.anchors.rightMargin, Theme.space.xs);
     }
+
+    // `ghost` (M47 D1): the bar strip behind the cell carries the fill and
+    // the border, so a resting bar cell paints neither. Alpha rather than
+    // Qt.colorEqual against a named colour: what has to be true is that
+    // nothing is painted, whatever colour the layer nominally holds.
+    function test_ghost_paints_nothing_at_rest() {
+        var rects = layers(makeCell({ ghost: true }));
+        compare(rects[1].color.a, 0);
+        compare(rects[1].border.width, 0);
+        compare(rects[2].opacity, 0);
+        verify(!rects[0].visible);
+        verify(!rects[3].visible);
+    }
+
+    function test_ghost_still_fades_in_the_hover_layer() {
+        var rects = layers(makeCell({ ghost: true, hovered: true }));
+        verify(Qt.colorEqual(rects[2].color, Theme.color.accent));
+        tryCompare(rects[2], "opacity", 1);
+        compare(rects[1].color.a, 0);
+    }
+
+    // A state that has something to say still says it, and the mark sits on
+    // the cell's own bottom edge rather than inside a border that is no
+    // longer drawn.
+    function test_ghost_still_draws_the_panel_open_mark() {
+        var mark = layers(makeCell({ ghost: true, panelOpen: true }))[3];
+        verify(mark.visible);
+        verify(Qt.colorEqual(mark.color, Theme.color.primary));
+        compare(mark.anchors.bottomMargin, 0);
+    }
+
+    function test_ghost_still_draws_the_cursor_ring() {
+        var rects = layers(makeCell({ ghost: true, cursor: true }));
+        verify(rects[0].visible);
+        compare(rects[1].border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(rects[1].border.color, Theme.color.ring));
+    }
+
+    function test_ghost_still_fills_when_active_and_bordered_when_destructive() {
+        var activeCell = makeCell({ ghost: true, active: true });
+        verify(Qt.colorEqual(layers(activeCell)[1].color, Theme.color.primary));
+        var destructiveCell = makeCell({ ghost: true, destructive: true });
+        var rects = layers(destructiveCell);
+        compare(rects[1].border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(rects[1].border.color, Theme.color.destructive));
+        compare(rects[1].color.a, 0);
+    }
 }
