@@ -25,13 +25,12 @@ import "../../../Power/model.js" as Power
 // cursor needs before the menu's own handler sees them, and `viewActions`
 // replaces the row list's verbs with the ones that are true here.
 //
-// Two ledger columns behind one shared vertical rule, in DESIGN.md's cell
-// grammar: uppercase MetaLabel section headers with a trailing colon, one
-// Cell per row, DitherFill tracks with a flat accent fill for every
-// fraction, and radius 0 throughout. The rule between the columns is drawn
-// explicitly because the left column's own trailing cell rules stop at its
-// last row, and a ledger column that ends short would otherwise leave the
-// divider hanging.
+// Two columns of sections, in the compact monitor panel's own vocabulary
+// (M43 D4): a `SectionLabel` over a column of `radiusMd` `Cell` rows, each
+// figure in the `display` mono face over a `Track`. The process table below
+// is the one thing that does not take a Cell, because it is a list inside
+// the launcher card and takes the palette's own row instead: square,
+// borderless, the cursor row filled `accent`.
 //
 // Which sections land in which column is packed per machine rather than
 // nailed down (see _splitIndex): a headless VM with one GPU-less card and
@@ -49,19 +48,19 @@ import "../../../Power/model.js" as Power
 // and nvidia-smi emits a literal [N/A] for fan speed on laptop GPUs. A 0%
 // there would read as a measurement rather than the absence of one.
 //
-// Casing rule for the whole file: every string this view WRITES is an
-// uppercase meta label (CPU, OUTPUTS:, NO GPU), and every string it is
-// HANDED renders verbatim. `eDP-2` uppercased is `EDP-2`, which names
-// nothing the kernel or the compositor would answer to, and `/nix/store`
-// uppercased is a path that does not exist. Same division Tooltip.qml's
-// `verbatim` already draws for foreign strings.
+// Face rule for the whole file (spec "Type"): words take the sans section
+// label, values and identifiers take mono. A label this view WRITES (CPU,
+// OUTPUTS, NO GPU) is a `SectionLabel` and so uppercases; a label it is
+// HANDED (`eDP-2`, `/nix/store`, a hwmon chip name) is an identifier, so it
+// renders mono and verbatim. `eDP-2` uppercased names nothing the kernel or
+// the compositor would answer to.
 Item {
     id: root
 
     // What the card wants before Menu.qml caps it (_rowsAreaHeight takes
     // the smaller of this and its cap): the whole ledger plus a row per
     // process, which on any real machine is far past the cap and therefore
-    // asks for the tallest card the launcher will draw. That is the point —
+    // asks for the tallest card the launcher will draw. That is the point:
     // the table is the reason this route is a view rather than a row list.
     // Measured arithmetically off the row count rather than read back off
     // `list.contentHeight`, which would close a loop through the height the
@@ -115,7 +114,7 @@ Item {
     // whenever the pid under the cursor is not the pid that was armed.
     onQueryChanged: root._disarm()
 
-    readonly property real _colWidth: Math.round(root.width / 2)
+    readonly property real _colWidth: Math.round((root.width - Core.Theme.space.sectionGap) / 2)
 
     // How the two halves split the card, in the order the answers matter.
     // Neither half is allowed to hold room the other needs: the table takes
@@ -137,7 +136,7 @@ Item {
 
     function _pct(fraction) {
         if (fraction === null || fraction === undefined || !isFinite(fraction))
-            return "—";
+            return "--";
         return Math.round(fraction * 100) + "%";
     }
 
@@ -149,7 +148,7 @@ Item {
 
     function _bytes(value) {
         if (value === null || value === undefined || !isFinite(value))
-            return "—";
+            return "--";
         var units = ["B", "K", "M", "G", "T"];
         var scaled = value;
         var i = 0;
@@ -162,19 +161,19 @@ Item {
 
     function _rate(bytesPerSec) {
         if (bytesPerSec === null || bytesPerSec === undefined || !isFinite(bytesPerSec))
-            return "—";
+            return "--";
         return root._bytes(bytesPerSec) + "/S";
     }
 
     function _degrees(celsius) {
         if (celsius === null || celsius === undefined || !isFinite(celsius))
-            return "—";
+            return "--";
         return Math.round(celsius) + "°";
     }
 
     function _watts(value) {
         if (value === null || value === undefined || !isFinite(value))
-            return "—";
+            return "--";
         return value.toFixed(1) + "W";
     }
 
@@ -237,12 +236,12 @@ Item {
 
     // --- Shared row shapes ------------------------------------------------
 
-    // A label/value line: uppercase meta on the left, the value hard right.
-    // The value takes whatever width it needs and the label absorbs the
-    // rest, so a long mount point elides rather than pushing its own number
-    // off the cell. An Item rather than a Row because the two run at
-    // different font sizes (caption meta, body value) and a Row would top
-    // align them; these are centered against each other.
+    // A label/value line: the label on the left, the value hard right. The
+    // value takes whatever width it needs and the label absorbs the rest,
+    // so a long mount point elides rather than pushing its own number off
+    // the cell. An Item rather than a Row because the two run at different
+    // font sizes and a Row would top align them; these are centered against
+    // each other.
     component StatLine: Item {
         id: statLine
 
@@ -250,22 +249,35 @@ Item {
         property string value: ""
         property color valueColor: Core.Theme.color.foreground
         // The label is a kernel identifier rather than wording this file
-        // chose (see the casing rule in the header): keeps the meta band's
-        // ink, size and tracking, drops the forced uppercase.
+        // chose (see the face rule in the header), so it takes the mono
+        // face verbatim instead of the section label's uppercase sans.
         property bool identifier: false
 
-        implicitHeight: Math.max(statLabel.implicitHeight, statValue.implicitHeight)
+        implicitHeight: Math.max(statLabel.implicitHeight, statIdent.implicitHeight, statValue.implicitHeight)
 
-        MetaLabel {
+        SectionLabel {
             id: statLabel
             anchors.left: parent.left
             anchors.right: statValue.left
             anchors.rightMargin: Core.Theme.space.sm
             anchors.verticalCenter: parent.verticalCenter
+            visible: !statLine.identifier
             text: statLine.label
-            colon: true
             elide: Text.ElideRight
-            font.capitalization: statLine.identifier ? Font.MixedCase : Font.AllUppercase
+        }
+
+        Text {
+            id: statIdent
+            anchors.left: parent.left
+            anchors.right: statValue.left
+            anchors.rightMargin: Core.Theme.space.sm
+            anchors.verticalCenter: parent.verticalCenter
+            visible: statLine.identifier
+            text: statLine.label
+            elide: Text.ElideRight
+            color: Core.Theme.color.mutedForeground
+            font.family: Core.Theme.fontFamilyMono
+            font.pixelSize: Core.Theme.fontSize.bodySmall
         }
 
         Text {
@@ -274,36 +286,17 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: statLine.value
             color: statLine.valueColor
-            font.family: Core.Theme.fontFamily
+            font.family: Core.Theme.fontFamilyMono
             font.pixelSize: Core.Theme.fontSize.body
         }
     }
 
-    // The one track idiom in the shell (DESIGN.md §2 item 8): a dithered
-    // remainder under a flat accent fill, no thumb, no gauge.
-    component StatBar: DitherFill {
-        id: statBar
-
+    // The shell's one groove (DESIGN.md §2): `Track`, `muted` under a
+    // `primary` fill, nothing dithered anywhere near it.
+    component StatBar: Track {
         property real fraction: 0
 
-        height: Core.Theme.space.trackThickness
-
-        Rectangle {
-            width: statBar.width * statBar.fraction
-            height: statBar.height
-            color: Core.Theme.color.primary
-        }
-    }
-
-    component SectionHeader: Cell {
-        id: sectionHeader
-
-        property string label: ""
-
-        MetaLabel {
-            text: sectionHeader.label
-            colon: true
-        }
+        value: fraction
     }
 
     // --- Column packing --------------------------------------------------
@@ -427,10 +420,10 @@ Item {
 
         Column {
             id: cpuColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "CPU"
+            SectionLabel {
+                text: "CPU"
             }
 
             Cell {
@@ -478,13 +471,18 @@ Item {
                             width: (coreGrid.width - coreGrid.columnSpacing) / 2
                             height: coreLabel.implicitHeight
 
-                            MetaLabel {
+                            // A core index is a number, so it takes the
+                            // mono face and stays tabular down the gutter.
+                            Text {
                                 id: coreLabel
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: root._coreLabelWidth
                                 text: root._coreLabel(coreEntry.modelData.label)
                                 horizontalAlignment: Text.AlignRight
+                                color: Core.Theme.color.mutedForeground
+                                font.family: Core.Theme.fontFamilyMono
+                                font.pixelSize: Core.Theme.fontSize.caption
                             }
 
                             StatBar {
@@ -506,10 +504,10 @@ Item {
 
         Column {
             id: memoryColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "MEMORY"
+            SectionLabel {
+                text: "MEMORY"
             }
 
             Cell {
@@ -524,7 +522,7 @@ Item {
                         label: "RAM"
                         value: root._mem.available
                             ? root._bytes(root._mem.totalBytes - root._mem.availableBytes) + " / " + root._bytes(root._mem.totalBytes)
-                            : "—"
+                            : "--"
                     }
 
                     StatBar {
@@ -543,7 +541,7 @@ Item {
 
                     // A swapless machine has nothing to measure, so the
                     // row says so rather than drawing an empty 0% track.
-                    MetaLabel {
+                    SectionLabel {
                         visible: !root._hasSwap
                         text: "NO SWAP"
                     }
@@ -554,7 +552,7 @@ Item {
                         label: "SWAP"
                         value: root._hasSwap
                             ? root._bytes(root._mem.swapTotalBytes - root._mem.swapFreeBytes) + " / " + root._bytes(root._mem.swapTotalBytes)
-                            : "—"
+                            : "--"
                     }
 
                     StatBar {
@@ -572,10 +570,10 @@ Item {
 
         Column {
             id: systemColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "SYSTEM"
+            SectionLabel {
+                text: "SYSTEM"
             }
 
             Cell {
@@ -590,7 +588,7 @@ Item {
                         label: "LOAD"
                         value: SystemMonitorService.load.available
                             ? SystemMonitorService.load.load1.toFixed(2) + " " + SystemMonitorService.load.load5.toFixed(2) + " " + SystemMonitorService.load.load15.toFixed(2)
-                            : "—"
+                            : "--"
                     }
 
                     StatLine {
@@ -598,7 +596,7 @@ Item {
                         label: "PROCS"
                         value: SystemMonitorService.load.available
                             ? SystemMonitorService.load.runningProcs + " / " + SystemMonitorService.load.totalProcs
-                            : "—"
+                            : "--"
                     }
 
                     StatLine {
@@ -610,7 +608,7 @@ Item {
                         // battery's own remaining-time readout.
                         value: SystemMonitorService.uptime.available
                             ? Power.formatDuration(SystemMonitorService.uptime.uptimeSeconds)
-                            : "—"
+                            : "--"
                     }
                 }
             }
@@ -622,10 +620,10 @@ Item {
 
         Column {
             id: gpuColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "GPU"
+            SectionLabel {
+                text: "GPU"
             }
 
             // No card in /sys/class/drm at all (the mac VM, a headless
@@ -635,7 +633,7 @@ Item {
                 width: parent.width
                 visible: GpuService.cards.length === 0
 
-                MetaLabel { text: "NO GPU" }
+                SectionLabel { text: "NO GPU" }
             }
 
             Repeater {
@@ -646,6 +644,7 @@ Item {
                     required property var modelData
 
                     width: gpuColumn.width
+                    spacing: Core.Theme.space.rowGap
 
                     Cell {
                         width: parent.width
@@ -664,14 +663,14 @@ Item {
                                     text: cardBlock.modelData.name
                                     color: Core.Theme.color.foreground
                                     elide: Text.ElideRight
-                                    font.family: Core.Theme.fontFamily
+                                    font.family: Core.Theme.fontFamilyMono
                                     font.pixelSize: Core.Theme.fontSize.body
                                 }
 
                                 // boot_vga decides this, never the card
                                 // number: the owner's g815 enumerates
                                 // its dGPU as card0.
-                                MetaLabel {
+                                SectionLabel {
                                     id: cardKind
                                     text: cardBlock.modelData.discrete ? "DISCRETE" : "INTEGRATED"
                                 }
@@ -698,12 +697,11 @@ Item {
                             width: parent.width
                             spacing: Core.Theme.space.xxs
 
-                            MetaLabel {
+                            SectionLabel {
                                 text: "OUTPUTS"
-                                colon: true
                             }
 
-                            MetaLabel {
+                            SectionLabel {
                                 visible: cardBlock.modelData.outputs.length === 0
                                 text: "NONE"
                             }
@@ -750,7 +748,7 @@ Item {
                             // counter, and nvidia-smi may not be
                             // installed at all. Both say so here rather
                             // than rendering an invented 0%.
-                            MetaLabel {
+                            SectionLabel {
                                 visible: !cardBlock.modelData.metrics.available
                                 text: "NO METRICS"
                             }
@@ -817,17 +815,17 @@ Item {
 
         Column {
             id: tempsColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "TEMPS"
+            SectionLabel {
+                text: "TEMPS"
             }
 
             Cell {
                 width: parent.width
                 visible: root._tempGroups.length === 0
 
-                MetaLabel { text: "NO SENSORS" }
+                SectionLabel { text: "NO SENSORS" }
             }
 
             Repeater {
@@ -843,10 +841,16 @@ Item {
                         width: parent.width
                         spacing: Core.Theme.space.xxs
 
-                        MetaLabel {
+                        // A hwmon chip name is kernel data, so it renders
+                        // mono and verbatim rather than as a section label
+                        // this file chose the wording of.
+                        Text {
+                            width: parent.width
+                            elide: Text.ElideRight
                             text: tempGroup.modelData.chip
-                            colon: true
-                            font.capitalization: Font.MixedCase
+                            color: Core.Theme.color.foreground
+                            font.family: Core.Theme.fontFamilyMono
+                            font.pixelSize: Core.Theme.fontSize.bodySmall
                         }
 
                         Repeater {
@@ -873,10 +877,10 @@ Item {
 
         Column {
             id: networkColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "NETWORK"
+            SectionLabel {
+                text: "NETWORK"
             }
 
             // Two different empty states. No interface at all beyond
@@ -888,7 +892,7 @@ Item {
                 width: parent.width
                 visible: root._netRows.length === 0
 
-                MetaLabel {
+                SectionLabel {
                     text: SystemMonitorService.net.available ? "NO TRAFFIC YET" : "NO INTERFACES"
                 }
             }
@@ -911,7 +915,7 @@ Item {
                             text: netRow.modelData.iface
                             color: Core.Theme.color.foreground
                             elide: Text.ElideRight
-                            font.family: Core.Theme.fontFamily
+                            font.family: Core.Theme.fontFamilyMono
                             font.pixelSize: Core.Theme.fontSize.body
                         }
 
@@ -937,17 +941,17 @@ Item {
 
         Column {
             id: diskColumn
+            spacing: Core.Theme.space.rowGap
 
-            SectionHeader {
-                width: parent.width
-                label: "DISK"
+            SectionLabel {
+                text: "DISK"
             }
 
             Cell {
                 width: parent.width
                 visible: SystemMonitorService.disk.rows.length === 0
 
-                MetaLabel { text: "NO MOUNTS" }
+                SectionLabel { text: "NO MOUNTS" }
             }
 
             Repeater {
@@ -1001,21 +1005,12 @@ Item {
             width: root.width
             height: Math.max(leftColumn.height, rightColumn.height)
 
-            // Continues the left column's own trailing cell rules (Cell's
-            // shared-rule contract) past whichever column ends first, so the
-            // two ledgers read as one table rather than two stacks.
-            Rectangle {
-                x: leftColumn.width - Core.Theme.borderWidth
-                width: Core.Theme.borderWidth
-                height: statsColumns.height
-                color: Core.Theme.color.border
-            }
-
             Column {
                 id: leftColumn
                 anchors.top: parent.top
                 anchors.left: parent.left
                 width: root._colWidth
+                spacing: Core.Theme.space.sectionGap
 
                 Repeater {
                     model: root._leftSections
@@ -1037,7 +1032,9 @@ Item {
                 id: rightColumn
                 anchors.top: parent.top
                 anchors.left: leftColumn.right
+                anchors.leftMargin: Core.Theme.space.sectionGap
                 anchors.right: parent.right
+                spacing: Core.Theme.space.sectionGap
 
                 Repeater {
                     model: root._rightSections
@@ -1055,19 +1052,19 @@ Item {
 
     // --- Process table ----------------------------------------------------
     //
-    // One line per process, in mek.gallery's ruled-row grammar: fixed
-    // gutters for the numbers (tabular by construction, since the whole
-    // shell is monospace), the argv absorbing whatever is left, and the
-    // cursor row as a full fg/bg inversion. The columns are the four facts
-    // a decision needs (which process, whose command line, what it costs),
-    // and nothing else fits on a line that has to stay scannable.
+    // One line per process, drawn like the palette's own rows (M43 D4):
+    // square, borderless, the cursor row filled `accent`. Fixed gutters for
+    // the numbers, which are mono and so tabular by construction, the name
+    // in sans, the argv absorbing whatever is left. The columns are the four
+    // facts a decision needs (which process, whose command line, what it
+    // costs), and nothing else fits on a line that has to stay scannable.
     //
     // Destructive by design, so every action is two presses: the first arms
-    // it and the row goes full-bleed urgent under a CONFIRM verb, the second
-    // sends the signal. Moving the cursor, retyping the filter or leaving
-    // the route disarms it. The confirm is not a modal and never steals a
-    // key: it is the same arm-then-Enter idiom the launcher's own confirm
-    // rows already use (Menu.qml's _confirmPendingId).
+    // it and the row takes a `destructive` border and ink under a CONFIRM
+    // verb, the second sends the signal. Moving the cursor, retyping the
+    // filter or leaving the route disarms it. The confirm is not a modal and
+    // never steals a key: it is the same arm-then-Enter idiom the launcher's
+    // own confirm rows already use (Menu.qml's _confirmPendingId).
 
     function _disarm() {
         root.confirmAction = "";
@@ -1090,7 +1087,7 @@ Item {
     // ordering by. Same null-in-dash-out rule as _pct above.
     function _procPct(fraction) {
         if (fraction === null || fraction === undefined || !isFinite(fraction))
-            return "—";
+            return "--";
         return (fraction * 100).toFixed(1) + "%";
     }
 
@@ -1098,7 +1095,7 @@ Item {
     // so a retheme that changes fontBaseSize keeps the columns aligned.
     TextMetrics {
         id: metrics
-        font.family: Core.Theme.fontFamily
+        font.family: Core.Theme.fontFamilyMono
         font.pixelSize: Core.Theme.fontSize.body
         text: "0"
     }
@@ -1108,15 +1105,15 @@ Item {
     readonly property real _nameWidth: root._digit * 20
     readonly property real _cpuWidth: root._digit * 6
     readonly property real _memWidth: root._digit * 7
-    readonly property real _rowHeight: metrics.height + Core.Theme.space.controlPaddingY * 2 + Core.Theme.borderWidth
+    readonly property real _rowHeight: metrics.height + Core.Theme.space.controlPaddingY * 2
 
     // The verb a press would take right now, in the action bar's own shape.
     // Everything the footer says about this route is derived here, so the
     // bar can never promise a key the handler below does not answer.
     readonly property var viewActions: {
         var hints = [
-            { key: "↑↓", label: "Move" },
-            { key: "^⏎", label: "Kill" },
+            { key: Actions.KEY_UPDOWN, label: "Move" },
+            { key: "^" + Actions.KEY_ENTER, label: "Kill" },
             { key: "^R", label: "Restart" },
             { key: Actions.KEY_ESC, label: root.confirmAction !== "" ? "Cancel" : "Back" }
         ];
@@ -1215,140 +1212,146 @@ Item {
         anchors.top: statsPane.bottom
         anchors.left: parent.left
         anchors.right: parent.right
+        spacing: Core.Theme.space.rowGap
 
-        // The seam, drawn only when the ledger above is genuinely taller
-        // than the room it got. Its last visible cell is then cut partway
-        // through, and a cut with no line under it reads as a broken frame
-        // rather than as "wheel up for the rest"; a ledger that fits ends
-        // on its own cell's bottom rule (Cell's shared-rule contract) and a
-        // second line here would double it.
+        // The one seam in the card: the machine's stats above, the table
+        // below (btop's split). It doubles as the cut line when the ledger
+        // is taller than the room it got, where the last visible section is
+        // cropped partway through and a crop with no line under it reads as
+        // a broken frame rather than as "wheel up for the rest".
         Rectangle {
             width: parent.width
-            height: statsColumns.height > statsPane.height ? Core.Theme.borderWidth : 0
+            height: Core.Theme.borderWidth
             color: Core.Theme.color.border
         }
 
-        Cell {
+        Item {
             id: header
             width: parent.width
+            height: Core.Theme.space.controlHeight
 
-            Item {
-                width: parent.width
-                implicitHeight: headerLabel.implicitHeight
+            SectionLabel {
+                id: headerLabel
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Processes"
+                count: root._rows.length
+            }
 
-                MetaLabel {
-                    id: headerLabel
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root._rows.length === ProcessService.rows.length
-                        ? "PROCESSES / " + root._rows.length
-                        : "PROCESSES / " + root._rows.length + " OF " + ProcessService.rows.length
-                    colon: true
-                }
+            // The last action's own answer, verbatim: a kill that failed on
+            // permissions says so in the kernel's words rather than this
+            // file's guess at what went wrong.
+            Text {
+                anchors.left: headerLabel.right
+                anchors.leftMargin: Core.Theme.space.lg
+                anchors.right: sortLabel.left
+                anchors.rightMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                visible: ProcessService.lastResult !== null
+                text: ProcessService.lastResult
+                    ? ProcessService.lastResult.pid + " " + ProcessService.lastResult.action + ": " + ProcessService.lastResult.message
+                    : ""
+                color: (ProcessService.lastResult && ProcessService.lastResult.ok)
+                    ? Core.Theme.color.mutedForeground
+                    : Core.Theme.color.destructive
+                elide: Text.ElideRight
+                font.family: Core.Theme.fontFamilyMono
+                font.pixelSize: Core.Theme.fontSize.caption
+            }
 
-                // The last action's own answer, verbatim: a kill that failed
-                // on permissions says so in the kernel's words rather than
-                // this file's guess at what went wrong.
-                Text {
-                    anchors.left: headerLabel.right
-                    anchors.leftMargin: Core.Theme.space.lg
-                    anchors.right: sortLabel.left
-                    anchors.rightMargin: Core.Theme.space.lg
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: ProcessService.lastResult !== null
-                    text: ProcessService.lastResult
-                        ? ProcessService.lastResult.pid + " " + ProcessService.lastResult.action + ": " + ProcessService.lastResult.message
-                        : ""
-                    color: (ProcessService.lastResult && ProcessService.lastResult.ok)
-                        ? Core.Theme.color.mutedForeground
-                        : Core.Theme.color.destructive
-                    elide: Text.ElideRight
-                    font.family: Core.Theme.fontFamily
-                    font.pixelSize: Core.Theme.fontSize.caption
-                }
+            SectionLabel {
+                id: sortLabel
+                anchors.right: sortChord.left
+                anchors.rightMargin: Core.Theme.space.sm
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Sort " + root.sortMode
+            }
 
-                MetaLabel {
-                    id: sortLabel
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "SORT ↓" + root.sortMode + " ^S"
-                }
+            // A chord is a value, so it takes the mono face.
+            Text {
+                id: sortChord
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: "^S"
+                color: Core.Theme.color.mutedForeground
+                font.family: Core.Theme.fontFamilyMono
+                font.pixelSize: Core.Theme.fontSize.caption
             }
         }
 
         // Column labels, and the other way to sort: a click on one takes
         // that column, which is the only thing on this route the pointer can
         // do that the keyboard cannot say faster.
-        Cell {
+        Item {
             id: columnHeader
             width: parent.width
-            interactive: true
-            onClicked: mouse => {
-                var x = mouse.x;
-                if (x < root._pidWidth)
-                    root.sortMode = "pid";
-                else if (x < root._pidWidth + Core.Theme.space.lg + root._nameWidth)
-                    root.sortMode = "name";
-                else if (x > columnHeader.width - root._memWidth - Core.Theme.space.lg * 2)
-                    root.sortMode = "mem";
-                else if (x > columnHeader.width - root._memWidth - root._cpuWidth - Core.Theme.space.lg * 3)
-                    root.sortMode = "cpu";
+            height: pidHeader.implicitHeight
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: mouse => {
+                    var x = mouse.x;
+                    if (x < root._pidWidth)
+                        root.sortMode = "pid";
+                    else if (x < root._pidWidth + Core.Theme.space.lg + root._nameWidth)
+                        root.sortMode = "name";
+                    else if (x > columnHeader.width - root._memWidth - Core.Theme.space.lg * 2)
+                        root.sortMode = "mem";
+                    else if (x > columnHeader.width - root._memWidth - root._cpuWidth - Core.Theme.space.lg * 3)
+                        root.sortMode = "cpu";
+                }
             }
 
-            Item {
-                width: parent.width
-                implicitHeight: pidHeader.implicitHeight
+            SectionLabel {
+                id: pidHeader
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._pidWidth
+                horizontalAlignment: Text.AlignRight
+                text: "PID"
+                color: root.sortMode === "pid" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
+            }
 
-                MetaLabel {
-                    id: pidHeader
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: root._pidWidth
-                    horizontalAlignment: Text.AlignRight
-                    text: "PID"
-                    color: root.sortMode === "pid" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
-                }
+            SectionLabel {
+                id: nameHeader
+                anchors.left: pidHeader.right
+                anchors.leftMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._nameWidth
+                text: "Process"
+                color: root.sortMode === "name" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
+            }
 
-                MetaLabel {
-                    id: nameHeader
-                    anchors.left: pidHeader.right
-                    anchors.leftMargin: Core.Theme.space.lg
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: root._nameWidth
-                    text: "PROCESS"
-                    color: root.sortMode === "name" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
-                }
+            SectionLabel {
+                anchors.left: nameHeader.right
+                anchors.leftMargin: Core.Theme.space.lg
+                anchors.right: cpuHeader.left
+                anchors.rightMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Command"
+                elide: Text.ElideRight
+            }
 
-                MetaLabel {
-                    anchors.left: nameHeader.right
-                    anchors.leftMargin: Core.Theme.space.lg
-                    anchors.right: cpuHeader.left
-                    anchors.rightMargin: Core.Theme.space.lg
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "COMMAND"
-                    elide: Text.ElideRight
-                }
+            SectionLabel {
+                id: cpuHeader
+                anchors.right: memHeader.left
+                anchors.rightMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._cpuWidth
+                horizontalAlignment: Text.AlignRight
+                text: "CPU"
+                color: root.sortMode === "cpu" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
+            }
 
-                MetaLabel {
-                    id: cpuHeader
-                    anchors.right: memHeader.left
-                    anchors.rightMargin: Core.Theme.space.lg
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: root._cpuWidth
-                    horizontalAlignment: Text.AlignRight
-                    text: "CPU"
-                    color: root.sortMode === "cpu" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
-                }
-
-                MetaLabel {
-                    id: memHeader
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: root._memWidth
-                    horizontalAlignment: Text.AlignRight
-                    text: "MEM"
-                    color: root.sortMode === "mem" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
-                }
+            SectionLabel {
+                id: memHeader
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: root._memWidth
+                horizontalAlignment: Text.AlignRight
+                text: "Mem"
+                color: root.sortMode === "mem" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
             }
         }
     }
@@ -1361,6 +1364,7 @@ Item {
     ListView {
         id: list
         anchors.top: procChrome.bottom
+        anchors.topMargin: Core.Theme.space.rowGap
         anchors.left: parent.left
         anchors.right: parent.right
         // A whole number of rows, never the leftover space: the card's own
@@ -1373,20 +1377,65 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         model: root._rows
 
-        delegate: Cell {
+        // The palette's row, not a `Cell`: this list sits inside the
+        // launcher card, and the launcher's lists carry no borders and no
+        // rules between rows (MenuRow.qml's own note).
+        delegate: Item {
             id: procRow
             required property int index
             required property var modelData
 
+            readonly property bool armed: root.confirmAction !== "" && root.confirmPid === procRow.modelData.pid
+            readonly property bool current: procRow.index === root._cursorIndex
+            readonly property bool hovered: pointer.containsMouse
+            readonly property bool filled: procRow.current || procRow.hovered
+            readonly property color foreground: procRow.armed
+                ? Core.Theme.color.destructive
+                : (procRow.filled ? Core.Theme.color.accentForeground : Core.Theme.color.foreground)
+            readonly property color dimForeground: procRow.armed
+                ? Core.Theme.color.destructive
+                : (procRow.filled ? Core.Theme.color.accentForeground : Core.Theme.color.mutedForeground)
+
             width: list.width
             height: root._rowHeight
-            interactive: true
-            selected: procRow.index === root._cursorIndex
-            urgent: root.confirmAction !== "" && root.confirmPid === procRow.modelData.pid
 
-            onClicked: {
-                root.cursorPid = procRow.modelData.pid;
-                root._disarm();
+            // The cursor snaps (DESIGN.md §1 Motion); only the hover fill
+            // below fades.
+            Rectangle {
+                anchors.fill: parent
+                visible: procRow.current
+                color: Core.Theme.color.accent
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: Core.Theme.color.accent
+                opacity: (procRow.hovered && !procRow.current) ? 1 : 0
+
+                Behavior on opacity {
+                    NumberAnimation { duration: Core.Theme.motion.fast; easing.type: Core.Theme.motion.easing }
+                }
+            }
+
+            // An armed row states itself in `destructive` ink behind a
+            // `destructive` border, never a full-bleed fill (DESIGN.md §5).
+            Rectangle {
+                anchors.fill: parent
+                visible: procRow.armed
+                color: "transparent"
+                border.width: Core.Theme.borderWidth
+                border.color: Core.Theme.color.destructive
+            }
+
+            MouseArea {
+                id: pointer
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.cursorPid = procRow.modelData.pid;
+                    root._disarm();
+                }
             }
 
             Text {
@@ -1397,10 +1446,13 @@ Item {
                 horizontalAlignment: Text.AlignRight
                 text: procRow.modelData.pid
                 color: procRow.dimForeground
-                font.family: Core.Theme.fontFamily
+                font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
             }
 
+            // The process's name is what it is called, not what it measures,
+            // so it takes the sans face while every column beside it stays
+            // mono (spec "Type").
             Text {
                 id: nameText
                 anchors.left: pidText.right
@@ -1410,25 +1462,41 @@ Item {
                 elide: Text.ElideRight
                 text: procRow.modelData.name
                 color: procRow.foreground
-                font.family: Core.Theme.fontFamily
+                font.family: Core.Theme.fontFamilySans
                 font.pixelSize: Core.Theme.fontSize.body
+                font.weight: Core.Theme.weight.medium
             }
 
             // A kernel thread has no argv at all, which is a fact about the
             // process rather than a gap in the reading, so the column says
-            // which of the two it is.
+            // which of the two it is: a badge where a command line would be.
+            Cell {
+                id: kernelChip
+                anchors.left: nameText.right
+                anchors.leftMargin: Core.Theme.space.lg
+                anchors.verticalCenter: parent.verticalCenter
+                visible: procRow.modelData.kernel === true
+                radius: Core.Theme.radiusSm
+                selected: true
+
+                SectionLabel {
+                    text: "Kernel"
+                    color: kernelChip.foreground
+                }
+            }
+
             Text {
                 anchors.left: nameText.right
                 anchors.leftMargin: Core.Theme.space.lg
                 anchors.right: cpuText.left
                 anchors.rightMargin: Core.Theme.space.lg
                 anchors.verticalCenter: parent.verticalCenter
+                visible: procRow.modelData.kernel !== true
                 elide: Text.ElideRight
-                text: procRow.modelData.kernel ? "KERNEL" : procRow.modelData.cmd
+                text: procRow.modelData.cmd
                 color: procRow.dimForeground
-                font.family: Core.Theme.fontFamily
+                font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
-                font.capitalization: procRow.modelData.kernel ? Font.AllUppercase : Font.MixedCase
             }
 
             Text {
@@ -1440,7 +1508,7 @@ Item {
                 horizontalAlignment: Text.AlignRight
                 text: root._procPct(procRow.modelData.cpuFraction)
                 color: procRow.foreground
-                font.family: Core.Theme.fontFamily
+                font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
             }
 
@@ -1452,7 +1520,7 @@ Item {
                 horizontalAlignment: Text.AlignRight
                 text: root._bytes(procRow.modelData.memBytes)
                 color: procRow.foreground
-                font.family: Core.Theme.fontFamily
+                font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
             }
         }
@@ -1462,14 +1530,18 @@ Item {
     // answers: the collector has not landed a sample yet, or it has and the
     // filter matched none of it. A sibling of the list rather than a child,
     // which would scroll with its content.
-    Cell {
+    Item {
         id: emptyCell
         anchors.top: list.top
+        anchors.left: parent.left
         width: list.width
+        height: root._rowHeight
         visible: root._rows.length === 0
 
-        MetaLabel {
-            text: ProcessService.available ? "NO MATCH" : "NO SAMPLE YET"
+        SectionLabel {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            text: ProcessService.available ? "No match" : "No sample yet"
         }
     }
 }

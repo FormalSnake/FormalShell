@@ -738,9 +738,15 @@ PanelWindow {
     readonly property bool _previewIsNote: !!root._cursorNode && root._cursorNode.kind === "note"
     readonly property bool _previewIsImage: !!root._cursorNode && !root._previewIsNote && (root._cursorNode.thumbSource || "") !== ""
     readonly property bool _previewIsText: !!root._cursorNode && !root._previewIsNote && !root._previewIsImage
-    readonly property string _previewMetaText: root._previewIsNote || !root._cursorNode
+    // Two bands, since the type is a word and the capture time is a value
+    // (spec "Type"): the label takes the sans section face, the time the
+    // mono one.
+    readonly property string _previewKind: root._previewIsNote || !root._cursorNode
         ? ""
-        : (root._previewIsImage ? "IMAGE" : "TEXT") + " / " + (root._cursorNode.time || "")
+        : (root._previewIsImage ? "Image" : "Text")
+    readonly property string _previewTime: root._previewIsNote || !root._cursorNode
+        ? ""
+        : (root._cursorNode.time || "")
 
     // What the bottom action bar says right now (Menu/actions.js). Bound
     // rather than pushed, so it tracks the cursor, the mode and the pending
@@ -1925,45 +1931,63 @@ PanelWindow {
             }
         }
 
-        // The wallpaper route's DARK | LIGHT switcher, two cells sharing the
-        // grid's own width, the live one carrying `selected`, so which set
-        // is on screen is stated rather than remembered. Absent entirely
-        // (zero height, no reserved gutter) for a directory with no
+        // The wallpaper route's Dark | Light switcher (M43 D3): a segmented
+        // control, two `Cell`s in a `muted` trough, the live one carrying
+        // the `primary` fill every active toggle in the shell takes, so
+        // which set is on screen is stated rather than remembered. Absent
+        // entirely (zero height, no reserved gutter) for a directory with no
         // Dark/Light pair, and on every other route.
         //
         // Both views below anchor to this rather than to the header, so the
         // switcher pushes the grid down without either of them knowing
         // whether it is there.
-        Row {
+        Rectangle {
             id: variantRow
             anchors.top: breadcrumbRow.bottom
             anchors.topMargin: visible ? Core.Theme.space.sm : 0
             anchors.left: parent.left
-            width: root._contentWidth
-            height: visible ? implicitHeight : 0
+            width: Math.round(root._contentWidth / 2)
+            height: visible ? Core.Theme.space.controlHeight : 0
             visible: root._isPickerRoute && root._pickerHasVariants
+            radius: Core.Theme.radiusMd
+            color: Core.Theme.color.muted
 
-            Repeater {
-                model: [
-                    { variant: "dark", label: "DARK" },
-                    { variant: "light", label: "LIGHT" }
-                ]
+            Row {
+                id: variantSegments
+                anchors.fill: parent
+                anchors.margins: Core.Theme.space.xxs
+                spacing: Core.Theme.space.xxs
 
-                delegate: Cell {
-                    id: variantCell
-                    required property var modelData
+                Repeater {
+                    model: [
+                        { variant: "dark", label: "Dark" },
+                        { variant: "light", label: "Light" }
+                    ]
 
-                    width: variantRow.width / 2
-                    selected: root._pickerVariant === variantCell.modelData.variant
+                    delegate: Cell {
+                        id: variantCell
+                        required property var modelData
 
-                    SectionLabel {
-                        anchors.centerIn: parent
-                        text: variantCell.modelData.label
-                        color: variantCell.foreground
+                        width: (variantSegments.width - variantSegments.spacing) / 2
+                        height: variantSegments.height
+                        // Concentric with the group above it (spec
+                        // "Radius"): the trough's own radius minus the
+                        // padding between them.
+                        radius: Core.Theme.radiusSm
+                        active: root._pickerVariant === variantCell.modelData.variant
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: variantCell.modelData.label
+                            color: variantCell.foreground
+                            font.family: Core.Theme.fontFamilySans
+                            font.pixelSize: Core.Theme.fontSize.bodySmall
+                            font.weight: Core.Theme.weight.medium
+                        }
+
+                        interactive: true
+                        onClicked: root.setPickerVariant(variantCell.modelData.variant)
                     }
-
-                    interactive: true
-                    onClicked: root.setPickerVariant(variantCell.modelData.variant)
                 }
             }
         }
@@ -2033,48 +2057,80 @@ PanelWindow {
             // cursor cell ends up off-viewport.
             highlightMoveDuration: 0
 
-            delegate: Cell {
-                id: imageCell
+            // The wrapper carries the GridView's own cell, so the `Cell`
+            // inside it can hold the gutter between thumbnails in its
+            // margins and every gap comes out the same width, the edges of
+            // the grid included.
+            delegate: Item {
+                id: imageSlot
                 required property int index
                 required property var modelData
 
                 width: gridView.cellWidth
                 height: gridView.cellHeight
-                selected: imageCell.index === root._cursorIndex
 
-                // Decode capped at the cell's own on-screen size (M16 Task
-                // 12): without this, a 6000×4000 source decodes at full
-                // resolution into a ~130px cell — ~96MB of resident RGBA
-                // per thumbnail, times every file in the directory.
-                //
-                // The 2x factor matters: sourceSize with both dimensions set
-                // decodes to FIT INSIDE that box (Qt's KeepAspectRatio), not
-                // to cover it, so a non-square source into this square cell
-                // would decode short on one axis and PreserveAspectCrop
-                // would upscale it back out — visibly blurrier than an
-                // uncapped decode. A box 2x the cell's side keeps the
-                // fit-inside decode covering the cell for any source up to
-                // 2:1 either way, comfortably past 16:9, while still capping
-                // memory to a small multiple of the cell.
-                Image {
+                Cell {
+                    id: imageCell
                     anchors.fill: parent
-                    source: "file://" + imageCell.modelData.path
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    cache: false
-                    sourceSize.width: imageCell.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                    sourceSize.height: imageCell.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                }
+                    anchors.margins: Core.Theme.space.xs
+                    radius: Core.Theme.radiusMd
+                    // A grid cursor is the ring (spec "Launcher"): the
+                    // thumbnail covers the cell, so a fill would sit under
+                    // the picture and never be seen.
+                    cursor: imageSlot.index === root._cursorIndex
 
-                interactive: true
-                // Same gate as the row list: filtering re-renders cells
-                // under a parked pointer, and Qt delivers that as a
-                // hover move indistinguishable from a real one.
-                onPointerMoved: (x, y) => {
-                    if (pointerGate.moved(imageCell, x, y))
-                        root._setCursor(imageCell.index);
+                    // The thumbnail is inset far enough that its square corners
+                    // sit inside the cell's rounded ones, which is what lets an
+                    // image live in a `radiusMd` frame with no mask: at `sm` the
+                    // corner of the inset square is 5.7px from the arc's centre
+                    // against a radius of 8.
+                    //
+                    // Decode capped at the cell's own on-screen size (M16 Task
+                    // 12): without this, a 6000×4000 source decodes at full
+                    // resolution into a ~130px cell, ~96MB of resident RGBA
+                    // per thumbnail, times every file in the directory.
+                    //
+                    // The 2x factor matters: sourceSize with both dimensions set
+                    // decodes to FIT INSIDE that box (Qt's KeepAspectRatio), not
+                    // to cover it, so a non-square source into this square cell
+                    // would decode short on one axis and PreserveAspectCrop
+                    // would upscale it back out, visibly blurrier than an
+                    // uncapped decode. A box 2x the cell's side keeps the
+                    // fit-inside decode covering the cell for any source up to
+                    // 2:1 either way, comfortably past 16:9, while still capping
+                    // memory to a small multiple of the cell.
+                    // Sized off the GridView's own cell rather than off
+                    // `imageCell`: a `Cell` measures its content to publish
+                    // an implicit size, so a child measured back off the
+                    // cell closes a loop Qt then reports and breaks (its
+                    // own anchors already decide its size, but the detector
+                    // sees the cycle first).
+                    Image {
+                        id: thumb
+                        anchors.centerIn: parent
+                        width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                        height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                        source: "file://" + imageSlot.modelData.path
+                        fillMode: Image.PreserveAspectCrop
+                        // PreserveAspectCrop paints past its own bounds
+                        // without this, over the cells beside it.
+                        clip: true
+                        asynchronous: true
+                        cache: false
+                        sourceSize.width: thumb.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                        sourceSize.height: thumb.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                    }
+
+                    interactive: true
+                    // Same gate as the row list: filtering re-renders cells
+                    // under a parked pointer, and Qt delivers that as a
+                    // hover move indistinguishable from a real one.
+                    onPointerMoved: (x, y) => {
+                        if (pointerGate.moved(imageCell, x, y))
+                            root._setCursor(imageSlot.index);
+                    }
+                    onClicked: root._activateFromPointer(imageSlot.index)
                 }
-                onClicked: root._activateFromPointer(imageCell.index)
             }
         }
 
@@ -2116,96 +2172,88 @@ PanelWindow {
             when: appView.item !== null && appView.item.query !== undefined
         }
 
-        // The split route's right half (M30): the cursor row's full
-        // content, behind one shared vertical rule. Positioned by anchoring
-        // off rowsView itself (whichever width it currently has) rather
-        // than an independent x/width pair, so the two views can never
-        // drift apart. `anchors.leftMargin: -borderWidth` pulls this pane's
-        // own left edge back by one rule width, landing it exactly where a
-        // history row's own trailing right-edge rule (Cell's shared-rule
-        // contract) already sits — the divider drawn below coincides with
-        // that rule as one line rather than doubling it, and continues for
-        // the pane's full height even past a short list's last row.
-        Item {
+        // The split route's right half (M30, M43 D4): the cursor row's
+        // full content in an inner `Card` at `radiusMd`, a `sm` gutter off
+        // the list. Positioned by anchoring off rowsView itself (whichever
+        // width it currently has) rather than an independent x/width pair,
+        // so the two views can never drift apart.
+        Card {
             id: previewPane
             visible: root._isSplitRoute
             anchors.top: rowsView.top
             anchors.left: rowsView.right
-            anchors.leftMargin: -Core.Theme.borderWidth
+            anchors.leftMargin: Core.Theme.space.sm
             anchors.right: parent.right
             height: rowsView.height
+            radius: Core.Theme.radiusMd
 
-            Rectangle {
-                anchors.left: parent.left
+            Row {
+                id: previewHeader
                 anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: Core.Theme.borderWidth
-                color: Core.Theme.color.border
-            }
-
-            Item {
-                id: previewContent
-                anchors.fill: parent
-                anchors.topMargin: Core.Theme.space.panelPadding
-                anchors.leftMargin: Core.Theme.borderWidth + Core.Theme.space.panelPadding
-                anchors.rightMargin: Core.Theme.space.panelPadding
-                anchors.bottomMargin: Core.Theme.space.panelPadding
-                clip: true
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: Core.Theme.space.sm
 
                 SectionLabel {
                     id: previewMeta
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    visible: root._previewMetaText !== ""
-                    text: root._previewMetaText
+                    visible: root._previewKind !== ""
+                    text: root._previewKind
                 }
 
                 Text {
-                    anchors.top: previewMeta.bottom
-                    anchors.topMargin: Core.Theme.space.xxs
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    visible: root._previewIsText
-                    text: root._cursorNode ? (root._cursorNode.fullText || "") : ""
-                    wrapMode: Text.WrapAnywhere
-                    color: Core.Theme.color.foreground
+                    visible: root._previewTime !== ""
+                    text: root._previewTime
+                    color: Core.Theme.color.mutedForeground
                     font.family: Core.Theme.fontFamilyMono
-                    font.pixelSize: Core.Theme.fontSize.body
+                    font.pixelSize: Core.Theme.fontSize.caption
                 }
+            }
 
-                // True-color (DESIGN.md §2 item 12: menu thumbnails stay out
-                // of the dither list) full preview of the cursor row's
-                // capture, PreserveAspectFit against a box capped at the
-                // pane's own remaining size — the picker grid's decode-cap
-                // rationale. `anchors.topMargin` on the Image itself
-                // subtracts PreserveAspectFit's own vertical centering, so
-                // the image sits flush against this box's top like the text
-                // above it does, rather than centered in the leftover space
-                // of a portrait capture inside a landscape pane.
-                Item {
-                    id: previewImageBox
-                    anchors.top: previewMeta.bottom
-                    anchors.topMargin: Core.Theme.space.xxs
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    visible: root._previewIsImage
-                    clip: true
+            Text {
+                anchors.top: previewHeader.bottom
+                anchors.topMargin: Core.Theme.space.sm
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                visible: root._previewIsText
+                clip: true
+                text: root._cursorNode ? (root._cursorNode.fullText || "") : ""
+                wrapMode: Text.WrapAnywhere
+                color: Core.Theme.color.foreground
+                font.family: Core.Theme.fontFamilyMono
+                font.pixelSize: Core.Theme.fontSize.body
+            }
 
-                    Image {
-                        id: previewImage
-                        width: parent.width
-                        height: parent.height
-                        anchors.top: parent.top
-                        anchors.topMargin: -(height - previewImage.paintedHeight) / 2
-                        source: root._previewIsImage ? ("file://" + root._cursorNode.thumbSource) : ""
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                        cache: false
-                        sourceSize.width: width * (root.screen ? root.screen.devicePixelRatio : 1)
-                        sourceSize.height: height * (root.screen ? root.screen.devicePixelRatio : 1)
-                    }
+            // True-color (menu thumbnails are never dithered) full preview
+            // of the cursor row's capture, in its own `radiusMd` frame with
+            // a 1px border, decode capped at the frame's own size for the
+            // picker grid's reason. The frame is `muted` so a letterboxed
+            // capture reads as a picture in a well rather than as a gap in
+            // the card.
+            Rectangle {
+                id: previewImageBox
+                anchors.top: previewHeader.bottom
+                anchors.topMargin: Core.Theme.space.sm
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                visible: root._previewIsImage
+                radius: Core.Theme.radiusMd
+                color: Core.Theme.color.muted
+                border.width: Core.Theme.borderWidth
+                border.color: Core.Theme.color.border
+                clip: true
+
+                Image {
+                    id: previewImage
+                    anchors.fill: parent
+                    anchors.margins: Core.Theme.space.sm
+                    source: root._previewIsImage ? ("file://" + root._cursorNode.thumbSource) : ""
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                    sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
                 }
             }
         }

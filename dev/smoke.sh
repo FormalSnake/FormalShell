@@ -8,7 +8,7 @@
 # richer script until M46 deletes the niri backend. Legs here: the base bar
 # shot, --dump, --menu, --notify, --center, --osd, --panel <name>
 # (with --tooltip), --panel-at <n>, --console, --wallpaper, --lock,
-# --picker, --hotcorner.
+# --picker, --hotcorner, --clipboard, --monitor, --processes.
 #
 # --osd drives the bottom-centre pill three ways off one timeline: a manual
 # `osd volume` (osd-manual.png), a real `wpctl set-volume` (the
@@ -78,6 +78,9 @@ console_mode=false
 wallpaper_mode=false
 lock_mode=false
 picker_mode=false
+clipboard_mode=false
+monitor_mode=false
+processes_mode=false
 hotcorner_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -93,8 +96,11 @@ while [ $# -gt 0 ]; do
     --osd) osd_mode=true; shift ;;
     --tooltip) tooltip_mode=true; shift ;;
     --picker) picker_mode=true; shift ;;
+    --clipboard) clipboard_mode=true; shift ;;
+    --monitor) monitor_mode=true; shift ;;
+    --processes) processes_mode=true; shift ;;
     --hotcorner) hotcorner_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock] [--picker] [--hotcorner]" >&2; exit 1 ;;
+    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock] [--picker] [--hotcorner] [--clipboard] [--monitor] [--processes]" >&2; exit 1 ;;
   esac
 done
 
@@ -130,7 +136,8 @@ fi
 # dev/smoke-niri.sh draws.
 fixture_window_mode=true
 if $dump_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode \
-  || $panel_at_mode || $console_mode || $wallpaper_mode || $lock_mode || $picker_mode; then
+  || $panel_at_mode || $console_mode || $wallpaper_mode || $lock_mode || $picker_mode \
+  || $clipboard_mode || $monitor_mode || $processes_mode; then
   fixture_window_mode=false
 fi
 
@@ -193,7 +200,7 @@ if $osd_mode; then
   fi
 fi
 
-if $fixture_window_mode || $wallpaper_mode || $picker_mode; then
+if $fixture_window_mode || $wallpaper_mode || $picker_mode || $clipboard_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -219,6 +226,21 @@ if $hotcorner_mode; then
     jq_bin=$(command -v jq)
   else
     jq_bin=$(nix build --no-link --print-out-paths 'nixpkgs#jq^out')/bin/jq
+  fi
+fi
+
+# --clipboard drives both directions: wl-copy seeds the ledger, wl-paste
+# reads the system clipboard back to prove what the shell put there.
+if $clipboard_mode; then
+  if command -v wl-copy >/dev/null 2>&1; then
+    wl_copy_bin=$(command -v wl-copy)
+  else
+    wl_copy_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-copy
+  fi
+  if command -v wl-paste >/dev/null 2>&1; then
+    wl_paste_bin=$(command -v wl-paste)
+  else
+    wl_paste_bin=$(nix build 'nixpkgs#wl-clipboard^out' --no-link --print-out-paths)/bin/wl-paste
   fi
 fi
 
@@ -345,14 +367,47 @@ lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
 lock_status_path="$shot_dir/lock-status.json"
 lock_call_rc_path="$shot_dir/lock-call-rc.txt"
 lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
-picker_grid_path="$shot_dir/picker-grid.png"
-picker_variant_path="$shot_dir/picker-variant.png"
+picker_done_path="$shot_dir/picker-drive.done"
+monitor_done_path="$shot_dir/monitor-drive.done"
+picker_grid_png="$shot_dir/picker-grid.png"
+picker_variant_png="$shot_dir/picker-variant.png"
 picker_flat_status_path="$shot_dir/picker-status-flat.json"
 picker_dark_status_path="$shot_dir/picker-status-dark.json"
 picker_light_status_path="$shot_dir/picker-status-light.json"
 picker_variant_reply_path="$shot_dir/picker-variant-reply.txt"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
-picker_selection_path="$shot_dir/picker-selection.txt"
+clip_list1_path="$shot_dir/clipboard-list1.json"
+clip_list2_path="$shot_dir/clipboard-list2.json"
+clip_list3_path="$shot_dir/clipboard-list3.json"
+clip_copy_path="$shot_dir/clipboard-copy.txt"
+clip_paste_path="$shot_dir/clipboard-paste.txt"
+clip_activate_path="$shot_dir/clipboard-activate.txt"
+clip_activate_paste_path="$shot_dir/clipboard-activate-paste.txt"
+clip_image_fixture_path="$shot_dir/clip-image.png"
+clip_route_png="$shot_dir/clipboard-route.png"
+monitor_status_path="$shot_dir/monitor-status.json"
+monitor_gpu_path="$shot_dir/monitor-gpu.json"
+monitor_panel_reply_path="$shot_dir/monitor-panel-reply.txt"
+monitor_panel_state_path="$shot_dir/monitor-panel-state.txt"
+monitor_menu_reply_path="$shot_dir/monitor-menu-reply.txt"
+monitor_menu_status_path="$shot_dir/monitor-menu-status.json"
+monitor_bar_png="$shot_dir/monitor-bar.png"
+monitor_panel_png="$shot_dir/monitor-panel.png"
+monitor_view_png="$shot_dir/monitor-view.png"
+processes_victim_pid_path="$shot_dir/processes-victim.pid"
+processes_restart_pid_path="$shot_dir/processes-restart.pid"
+processes_menu_reply_path="$shot_dir/processes-menu-reply.txt"
+processes_filter_reply_path="$shot_dir/processes-filter-reply.txt"
+processes_filtered_path="$shot_dir/processes-filtered.json"
+processes_after_path="$shot_dir/processes-after.json"
+processes_alive_arm_path="$shot_dir/processes-alive-arm.txt"
+processes_alive_fire_path="$shot_dir/processes-alive-fire.txt"
+processes_restart_reply_path="$shot_dir/processes-restart-reply.txt"
+processes_restart_pids_path="$shot_dir/processes-restart-pids.txt"
+processes_full_png="$shot_dir/processes-full.png"
+processes_view_png="$shot_dir/processes-view.png"
+processes_confirm_png="$shot_dir/processes-confirm.png"
+processes_killed_png="$shot_dir/processes-killed.png"
 hotcorner_layers_path="$shot_dir/hotcorner-layers.json"
 cfg="$shot_dir/hyprland.conf"
 
@@ -404,37 +459,56 @@ if $wallpaper_mode && [ "${SMOKE_WALLPAPER_DITHER:-0}" = "1" ]; then
   wallpaper_settings=', "wallpaper": {"dither": true}'
 fi
 
-# --picker points picker.directory at a fixture directory of generated
-# solid-color PNGs, so the grid renders real image cells rather than the
-# honest empty one. Twenty of them, which is several rows at the route's own
-# column count. The Dark/Light pair is STAGED under a dot directory the
-# shell's own scan cannot see (it globs one level down from the directory
-# and its Dark/Light children, never a hidden one), because the drive script
-# moves it into place under the running shell to prove the scan re-runs per
-# entry rather than caching at startup.
+# --picker points the route at a directory of generated solid-colour
+# fixtures, so the grid renders real images and `choose` picks a real file
+# rather than a path that merely happens to parse. 960x540 rather than the
+# niri leg's 1920x1080: that size is there to feed a resident-memory
+# bracket this port leaves behind, and anything past the grid cell's own
+# ~210px decode cap already exercises the cap.
 picker_settings=""
 picker_dir="$iso_home/.local/share/formalshell/pictures"
 if $picker_mode; then
-  mkdir -p "$picker_dir" "$picker_dir/.stage/Dark" "$picker_dir/.stage/Light"
-  picker_settings=', "picker": {"directory": "'"$picker_dir"'"}'
-  picker_colors=(c0392b 27ae60 2980b9 f1c40f 8e44ad e67e22 16a085 2c3e50 d35400 c2185b 00838f 5d4037 7cb342 512da8 0097a7 ff7043 78909c 43a047 6d4c41 3949ab)
+  mkdir -p "$picker_dir"
+  picker_colors=(c0392b 27ae60 2980b9 f1c40f 8e44ad e67e22 16a085 2c3e50 d35400 c2185b 00838f 5d4037)
   for i in "${!picker_colors[@]}"; do
-    $convert_bin -size 1920x1080 "xc:#${picker_colors[$i]}" "$picker_dir/img-$i.png"
+    $convert_bin -size 960x540 "xc:#${picker_colors[$i]}" "$picker_dir/img-$i.png"
   done
+  # The Dark/Light variant sets, STAGED rather than in place: every leg
+  # before the switcher runs against the flat listing, which is what a
+  # directory with no variant pair does, and the drive moves these in
+  # mid-run to cover the other half. `.stage` is not one of the scan's
+  # starting points, so nothing here is visible until it is moved.
   # Deliberately different counts per variant, so a status dump reporting
-  # the wrong set is a wrong number rather than a plausible one.
+  # the wrong set is unambiguous rather than a coincidence.
   picker_dark_colors=(1b2a4a 24344f 2f3f5c 3a4a68 111c33)
   picker_light_colors=(f5efe0 e8dcc3 fbf7ee)
+  mkdir -p "$picker_dir/.stage/Dark" "$picker_dir/.stage/Light"
   for i in "${!picker_dark_colors[@]}"; do
     $convert_bin -size 960x540 "xc:#${picker_dark_colors[$i]}" "$picker_dir/.stage/Dark/dark-$i.png"
   done
   for i in "${!picker_light_colors[@]}"; do
     $convert_bin -size 960x540 "xc:#${picker_light_colors[$i]}" "$picker_dir/.stage/Light/light-$i.png"
   done
+  picker_settings=', "picker": {"directory": "'"$picker_dir"'"}'
+fi
+
+# The clipboard leg's image entry: a small solid PNG copied last, so the
+# route's newest row is the image one and the split pane's screenshot shows
+# the framed preview rather than the text one.
+if $clipboard_mode; then
+  $convert_bin -size 320x180 xc:'#3fae2a' "$clip_image_fixture_path"
+fi
+
+# `monitor` is an opt-in builtin (absent from DEFAULT_LAYOUT), so naming it
+# here is the whole install of the bar cell. Leading the right region rather
+# than appended, so a wide CPU/MEM/GPU cell cannot be clipped off the end.
+bar_settings=""
+if $monitor_mode; then
+  bar_settings=', "bar": {"layout": {"right": ["monitor", "battery", "audio", "network", "bluetooth", "weather", "tray", "bell", "indicators"]}}'
 fi
 
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings$wallpaper_settings$picker_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings$wallpaper_settings$picker_settings$bar_settings}
 EOF
 
 # The calendar leg's own events, dated at run time so the fixture never goes
@@ -839,34 +913,29 @@ sleep 1
 EOF
 fi
 
-# --picker drives the whole route over IPC: `summon` opens the wallpaper-mode
-# grid (the cursor sits on the first cell with no keypress at all, which is
-# what makes the ring photographable here), `choose` picks a non-first
-# fixture by path (the same function Enter or a click on that cell calls, and
-# the only one reachable from a rig with no proven pointer or keyboard
-# delivery into a layer surface), and `theme status` proves the pick really
-# became the wallpaper. `select` then reopens the same directory in the
-# generic image-selector mode with a caller token, and picker-selection.txt
-# is read back to confirm the {token, value} write. Only then are the staged
-# Dark/Light sets moved in and the route re-summoned, so the variant legs
-# also prove the scan re-runs per entry.
 if $picker_mode; then
+  # The wallpaper picker, which is the launcher's grid route rather than a
+  # surface of its own: `summon` opens it, `choose` is the same action Enter
+  # or a click on a cell takes (exposed over IPC because no synthetic
+  # pointer or key delivery into an OnDemand layer surface exists here), and
+  # `theme status` is what proves the pick actually became the wallpaper.
+  #
+  # Then the Dark/Light half: the staged subdirectories are moved in
+  # underneath the running shell, which also proves the scan re-runs per
+  # entry (a listing cached at startup would still report the flat set), and
+  # `picker variant light` is the segmented switcher's own action over IPC.
+  # The route is left open so the run's own screenshot is the grid.
   picker_script="$shot_dir/picker-drive.sh"
   write_script "$picker_script" <<EOF
 #!/usr/bin/env bash
-sleep 3
+sleep 4
 "$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
 sleep 2
-"$grim_bin" "$picker_grid_path" > /dev/null 2>&1
+"$grim_bin" "$picker_grid_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call picker status > "$picker_flat_status_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
-sleep 2
+sleep 3
 "$qs_bin" ipc -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
-sleep 2
-"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
-sleep 1
-cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
 mv "$picker_dir/.stage/Dark" "$picker_dir/Dark"
 mv "$picker_dir/.stage/Light" "$picker_dir/Light"
 "$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
@@ -874,9 +943,173 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call picker status > "$picker_dark_status_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call picker variant light > "$picker_variant_reply_path" 2>&1
 sleep 2
-"$grim_bin" "$picker_variant_path" > /dev/null 2>&1
+"$grim_bin" "$picker_variant_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call picker status > "$picker_light_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker close > /dev/null 2>&1
+touch "$picker_done_path"
+EOF
+fi
+
+# The picker and the clipboard routes are the same launcher surface, so a
+# run carrying both has the second leg wait out the first rather than
+# summoning over it (dev/smoke-niri.sh draws the same line between its own
+# --menu and --share drives). Empty when the other leg is not in the run.
+picker_wait=""
+if $picker_mode; then
+  picker_wait="for _ in \$(seq 1 60); do [ -f \"$picker_done_path\" ] && break; sleep 1; done"
+fi
+monitor_wait=""
+if $monitor_mode; then
+  monitor_wait="for _ in \$(seq 1 60); do [ -f \"$monitor_done_path\" ] && break; sleep 1; done"
+fi
+
+if $clipboard_mode; then
+  # ClipboardService's wl-paste watcher can take several seconds to come
+  # online in a fresh session, so a warmup copy is polled into the ledger
+  # until capture provably works and then cleared, leaving the real fixture
+  # sequence starting from the same empty state the count assertions expect.
+  #
+  # Two list dumps prove capture, newest-first order, and that re-copying an
+  # existing entry moves it to the front rather than duplicating it. Then
+  # the leg that matters: a sentinel is copied, the route is summoned,
+  # `menu filter` narrows it to one known row, `menu activate 0` (the rig's
+  # Enter stand-in) fires, and the clipboard is read back. It has to hold
+  # the ROW's entry, not the sentinel: row activation is in-process
+  # (`@ipc:clipboard.copy:<id>`), and a spawned `qs ipc` would be a silent
+  # exit 127 on any install that does not put `qs` on PATH.
+  #
+  # The image fixture is copied last so the cursor lands on it when the
+  # route is resummoned, which is what puts the split pane's framed image
+  # preview in this run's own screenshot.
+  clipboard_script="$shot_dir/clipboard-drive.sh"
+  write_script "$clipboard_script" <<EOF
+#!/usr/bin/env bash
+for _ in \$(seq 1 8); do
+  "$wl_copy_bin" "clipboard smoke warmup"
+  sleep 1
+  if "$qs_bin" ipc -p "$shell_path" call clipboard list 2>/dev/null | grep -qF warmup; then
+    break
+  fi
+done
+"$qs_bin" ipc -p "$shell_path" call clipboard clear > /dev/null 2>&1
+sleep 1
+"$wl_copy_bin" "clipboard smoke one"
+sleep 1
+"$wl_copy_bin" "clipboard smoke two"
+sleep 1
+"$wl_copy_bin" "clipboard smoke three"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list1_path" 2>&1
+sleep 1
+"$wl_copy_bin" "clipboard smoke three"
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list2_path" 2>&1
+copy_id=\$(grep -o '"id":"[^"]*"' "$clip_list2_path" | sed -n '2p' | cut -d'"' -f4)
+"$qs_bin" ipc -p "$shell_path" call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
+sleep 1
+"$wl_paste_bin" --no-newline > "$clip_paste_path" 2>&1
+sleep 1
+"$wl_copy_bin" "clipboard smoke sentinel"
+sleep 1
+$picker_wait
+"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu filter "clipboard smoke one" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$clip_activate_path" 2>&1
+sleep 2
+"$wl_paste_bin" --no-newline > "$clip_activate_paste_path" 2>&1
+sleep 1
+"$wl_copy_bin" --type image/png < "$clip_image_fixture_path"
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list3_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+sleep 3
+"$grim_bin" "$clip_route_png" > /dev/null 2>&1
+EOF
+fi
+
+if $monitor_mode; then
+  # The opt-in bar cell, its compact panel, and the launcher's full monitor
+  # route (Menu/appviews.js's one registered app view), off one timeline.
+  # Never-faked data is the actual claim: `monitor gpu` has to name exactly
+  # the cards this machine's own /sys/class/drm holds (here that is the
+  # vkms card the session renders on, which reports no utilisation counter
+  # at all and so renders as the view's NO METRICS cell) while `monitor
+  # status`, taken in the same breath, carries real CPU and memory numbers
+  # off the VM's own /proc.
+  monitor_script="$shot_dir/monitor-drive.sh"
+  write_script "$monitor_script" <<EOF
+#!/usr/bin/env bash
+sleep 6
+"$qs_bin" ipc -p "$shell_path" call monitor status > "$monitor_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call monitor gpu > "$monitor_gpu_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
+"$grim_bin" "$monitor_bar_png" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call panel open monitor > "$monitor_panel_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call panel state > "$monitor_panel_state_path" 2>&1
+"$grim_bin" "$monitor_panel_png" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon monitor > "$monitor_menu_reply_path" 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call menu status > "$monitor_menu_status_path" 2>&1
+"$grim_bin" "$monitor_view_png" > /dev/null 2>&1
+touch "$monitor_done_path"
+EOF
+fi
+
+if $processes_mode; then
+  # The process table is the bottom half of the launcher's monitor view, so
+  # this leg summons that route and types into its own search field. The
+  # fixtures are copies of bash (not coreutils `sleep`, which nixpkgs builds
+  # as one multi-call binary that exits at once under any other name)
+  # spinning on a builtin loop: findable by a whole 15-byte comm, the
+  # busiest thing on the machine so the CPU column has something real to
+  # show, and dead on TERM with no foreground child to wait out.
+  #
+  # The kill runs through `menu activate` rather than `monitor kill`, since
+  # that is the rig's Enter stand-in and so exercises the whole path a
+  # keypress takes. It is called TWICE on purpose: this route arms on the
+  # first press and fires on the second, and the `kill -0` written between
+  # the two is what proves the arming press did not already kill.
+  processes_victim_bin="$shot_dir/smokevictim"
+  processes_restart_bin="$shot_dir/smokerestart"
+  cp "$(readlink -f "$(command -v bash)")" "$processes_victim_bin"
+  cp "$(readlink -f "$(command -v bash)")" "$processes_restart_bin"
+  chmod +x "$processes_victim_bin" "$processes_restart_bin"
+
+  processes_script="$shot_dir/processes-drive.sh"
+  write_script "$processes_script" <<EOF
+#!/usr/bin/env bash
+sleep 5
+"$processes_victim_bin" -c 'while :; do :; done' & echo \$! > "$processes_victim_pid_path"
+"$processes_restart_bin" -c 'while :; do :; done' & echo \$! > "$processes_restart_pid_path"
+$monitor_wait
+"$qs_bin" ipc -p "$shell_path" call menu summon monitor > "$processes_menu_reply_path" 2>&1
+# Two poll ticks with the route open: the service polls only while something
+# is subscribed, and the first tick after a subscribe has nothing to
+# difference, so a measured CPU column needs the second.
+sleep 6
+"$grim_bin" "$processes_full_png" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu filter smokevictim > "$processes_filter_reply_path" 2>&1
+sleep 3
+"$grim_bin" "$processes_view_png" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call monitor processes smokevictim > "$processes_filtered_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$processes_confirm_png" > /dev/null 2>&1
+kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes_alive_arm_path"
+"$qs_bin" ipc -p "$shell_path" call menu activate 0 > /dev/null 2>&1
+sleep 3
+kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes_alive_fire_path"
+"$qs_bin" ipc -p "$shell_path" call monitor processes smokevictim > "$processes_after_path" 2>&1
+"$grim_bin" "$processes_killed_png" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call monitor restart \$(cat "$processes_restart_pid_path") > "$processes_restart_reply_path" 2>&1
+sleep 6
+pgrep -f smokerestart > "$processes_restart_pids_path"
 EOF
 fi
 
@@ -922,11 +1155,33 @@ if $center_mode; then
   session_timeout=70
 fi
 if $picker_mode; then
-  # Past picker-drive.sh's own last step, so the run's own frame is the
-  # ordinary session with the picker already closed. The two frames that
-  # matter here are the ones the drive takes while it is open.
-  screenshot_delay=22
-  session_timeout=60
+  # Past picker-drive.sh's own last step, which leaves the light-variant
+  # grid up, so the run's own frame is that grid.
+  screenshot_delay=20
+  session_timeout=50
+fi
+if $monitor_mode; then
+  screenshot_delay=18
+  session_timeout=50
+fi
+if $processes_mode; then
+  screenshot_delay=32
+  session_timeout=70
+fi
+if $clipboard_mode; then
+  # The warmup poll makes this leg's head elastic (up to 8s), and every
+  # frame after it stacks on top. The end state (the route summoned over the
+  # image entry) is stable, so a generous delay only ever lands on it.
+  screenshot_delay=42
+  session_timeout=70
+fi
+if $picker_mode && $clipboard_mode; then
+  screenshot_delay=50
+  session_timeout=85
+fi
+if $monitor_mode && $processes_mode; then
+  screenshot_delay=52
+  session_timeout=95
 fi
 tail_gap=1
 if $menu_mode; then
@@ -941,12 +1196,20 @@ elif $tooltip_mode; then
   tail_gap=8
 fi
 
+# --processes' fixtures are bash copies this script started itself, so they
+# are killed by name before the session goes away rather than left behind.
+fixture_cleanup=""
+if $processes_mode; then
+  fixture_cleanup="pkill -f \"$shot_dir/smoke\" 2>/dev/null || true"
+fi
+
 shot_script="$shot_dir/shot.sh"
 write_script "$shot_script" <<EOF
 #!/usr/bin/env bash
 sleep $screenshot_delay
 "$grim_bin" "$shot_path" > "$shot_dir/grim.log" 2>&1
 sleep $tail_gap
+$fixture_cleanup
 "$hyprctl_bin" dispatch exit
 EOF
 
@@ -1030,6 +1293,15 @@ EOF
   fi
   if $picker_mode; then
     echo "exec-once = bash $picker_script"
+  fi
+  if $clipboard_mode; then
+    echo "exec-once = bash $clipboard_script"
+  fi
+  if $monitor_mode; then
+    echo "exec-once = bash $monitor_script"
+  fi
+  if $processes_mode; then
+    echo "exec-once = bash $processes_script"
   fi
   if $hotcorner_mode; then
     echo "exec-once = bash $hotcorner_script"
@@ -1399,57 +1671,44 @@ if $lock_mode; then
 fi
 
 if $picker_mode; then
-  if [ ! -f "$picker_grid_path" ]; then
+  if [ ! -f "$picker_grid_png" ]; then
     fail "no picker-grid screenshot produced"
   fi
-  echo "SMOKE_PICKER_GRID $picker_grid_path"
-  if [ ! -f "$picker_variant_path" ]; then
-    fail "no picker-variant screenshot produced"
-  fi
-  echo "SMOKE_PICKER_VARIANT $picker_variant_path"
-
+  echo "SMOKE_PICKER_GRID $picker_grid_png"
+  # The flat listing first: with no subdirectory pair the route lists the
+  # directory itself and raises no switcher, which is what every setup that
+  # does not use variants must keep doing.
   if [ ! -s "$picker_flat_status_path" ]; then
     fail "no flat picker status produced"
   fi
   cat "$picker_flat_status_path"; echo
   if ! grep -q '"hasVariants":false' "$picker_flat_status_path" \
     || ! grep -q '"variant":"none"' "$picker_flat_status_path" \
-    || ! grep -q '"count":20' "$picker_flat_status_path"; then
-    fail "the flat listing did not report all 20 images with no variants. Got: $(cat "$picker_flat_status_path")"
+    || ! grep -q '"count":12' "$picker_flat_status_path"; then
+    fail "the flat listing did not report all 12 fixtures with no variants, got: $(cat "$picker_flat_status_path")"
   fi
-
+  # Choosing over IPC has to have run State.setWallpaper() through to the
+  # ThemeEngine, which is what `theme status` reports back.
   if [ ! -s "$picker_theme_status_path" ]; then
-    fail "no picker theme-status produced"
+    fail "no picker theme status produced"
   fi
   cat "$picker_theme_status_path"; echo
   if ! grep -q "\"wallpaper\":\"$picker_dir/img-3.png\"" "$picker_theme_status_path"; then
-    fail "theme status did not report the picker-chosen wallpaper. Got: $(cat "$picker_theme_status_path")"
+    fail "theme status did not report the picker-chosen wallpaper, got: $(cat "$picker_theme_status_path")"
   fi
-
-  if [ ! -s "$picker_selection_path" ]; then
-    fail "no picker-selection.txt produced"
-  fi
-  cat "$picker_selection_path"; echo
-  if ! grep -q '"token":"tok-picker"' "$picker_selection_path" \
-    || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
-    fail "picker-selection.txt did not resolve tok-picker with the chosen path. Got: $(cat "$picker_selection_path")"
-  fi
-
-  # The variant legs: the sets were moved in under the running shell, so a
-  # scan cached at startup would still answer with the flat listing here.
+  # Then the same directory with the pair moved in underneath the running
+  # shell: hasVariants, entered on the theme's own mode, listing that set.
   if [ ! -s "$picker_dark_status_path" ]; then
     fail "no dark-variant picker status produced"
   fi
   cat "$picker_dark_status_path"; echo
   if ! grep -q '"hasVariants":true' "$picker_dark_status_path" \
-    || ! grep -q '"variant":"dark"' "$picker_dark_status_path" \
     || ! grep -q '"darkCount":5' "$picker_dark_status_path" \
-    || ! grep -q '"lightCount":3' "$picker_dark_status_path" \
-    || ! grep -q '"count":5' "$picker_dark_status_path"; then
-    fail "the variant listing did not report the dark set on entry. Got: $(cat "$picker_dark_status_path")"
+    || ! grep -q '"lightCount":3' "$picker_dark_status_path"; then
+    fail "the variant listing did not report the staged sets, got: $(cat "$picker_dark_status_path")"
   fi
   if ! grep -qx 'ok' "$picker_variant_reply_path" 2>/dev/null; then
-    fail "picker variant light was refused. Got: $(cat "$picker_variant_reply_path" 2>/dev/null)"
+    fail "picker variant light was refused, got: $(cat "$picker_variant_reply_path" 2>/dev/null)"
   fi
   if [ ! -s "$picker_light_status_path" ]; then
     fail "no light-variant picker status produced"
@@ -1457,8 +1716,191 @@ if $picker_mode; then
   cat "$picker_light_status_path"; echo
   if ! grep -q '"variant":"light"' "$picker_light_status_path" \
     || ! grep -q '"count":3' "$picker_light_status_path"; then
-    fail "the switcher did not swap the listing to the light set. Got: $(cat "$picker_light_status_path")"
+    fail "the switcher did not swap the listing to the light set, got: $(cat "$picker_light_status_path")"
   fi
+  if [ ! -f "$picker_variant_png" ]; then
+    fail "no picker-variant screenshot produced"
+  fi
+  echo "SMOKE_PICKER_VARIANT $picker_variant_png"
+fi
+
+if $clipboard_mode; then
+  for f in "$clip_list1_path" "$clip_list2_path" "$clip_list3_path"; do
+    if [ ! -s "$f" ]; then
+      fail "no clipboard list produced at $f"
+    fi
+  done
+  cat "$clip_list1_path"; echo
+  cat "$clip_list2_path"; echo
+  if ! grep -qF 'clipboard smoke three' "$clip_list1_path"; then
+    fail "the clipboard ledger never captured the fixture strings: $(cat "$clip_list1_path")"
+  fi
+  # The count has to stay 3 across the re-copy: a fourth entry would mean
+  # the dedup-to-front path inserted a duplicate instead of moving the
+  # existing "clipboard smoke three" entry.
+  count1=$(grep -o '"id":' "$clip_list1_path" | wc -l | tr -d ' ')
+  count2=$(grep -o '"id":' "$clip_list2_path" | wc -l | tr -d ' ')
+  if [ "$count1" != "3" ] || [ "$count2" != "3" ]; then
+    fail "clipboard list item count drifted (before=$count1 after-recopy=$count2, want 3/3)"
+  fi
+  if ! grep -q '^ok$' "$clip_copy_path" 2>/dev/null; then
+    fail "clipboard copy did not answer ok, got: $(cat "$clip_copy_path" 2>/dev/null)"
+  fi
+  # wl-paste --no-newline leaves this file without one of its own, so the
+  # explicit echo keeps the next line from landing appended to it.
+  cat "$clip_paste_path"; echo
+  if ! grep -q 'clipboard smoke two' "$clip_paste_path"; then
+    fail "the system clipboard did not flip to the copied entry, got: $(cat "$clip_paste_path")"
+  fi
+  # Row activation, the Enter stand-in. The sentinel copied right before it
+  # is what makes this a real assertion rather than a tautology: the system
+  # clipboard held "clipboard smoke sentinel" when the row was activated, so
+  # reading "clipboard smoke one" back can only have come from the row's own
+  # in-process action running.
+  if ! grep -q '^ok$' "$clip_activate_path" 2>/dev/null; then
+    fail "menu activate on the clipboard row did not answer ok, got: $(cat "$clip_activate_path" 2>/dev/null)"
+  fi
+  cat "$clip_activate_paste_path"; echo
+  if ! grep -q 'clipboard smoke one' "$clip_activate_paste_path"; then
+    fail "activating the clipboard row left the clipboard at $(cat "$clip_activate_paste_path"), not the row's own entry"
+  fi
+  # The image entry is what the split pane's preview frame is read against.
+  if ! grep -qF '"kind":"image"' "$clip_list3_path"; then
+    fail "the image fixture never reached the ledger: $(cat "$clip_list3_path")"
+  fi
+  if [ ! -f "$clip_route_png" ]; then
+    fail "no clipboard-route screenshot produced"
+  fi
+  echo "SMOKE_CLIPBOARD_ROUTE $clip_route_png"
+fi
+
+if $monitor_mode; then
+  if [ ! -s "$monitor_status_path" ]; then
+    fail "no monitor status produced"
+  fi
+  cat "$monitor_status_path"; echo
+  # cpuDelta returns null until it has two /proc/stat samples (the surfaces
+  # render that as a dash, never a fabricated 0%), so a real fraction here
+  # proves the collector is ticking, not merely that the service loaded.
+  if ! grep -q '"cpu":{"available":true,"aggregate":[0-9]' "$monitor_status_path"; then
+    fail "monitor status carries no real CPU sample: $(cat "$monitor_status_path")"
+  fi
+  if ! grep -q '"mem":{"available":true,"totalBytes":[1-9]' "$monitor_status_path"; then
+    fail "monitor status carries no real memory sample: $(cat "$monitor_status_path")"
+  fi
+  if [ ! -s "$monitor_gpu_path" ]; then
+    fail "no monitor gpu produced"
+  fi
+  cat "$monitor_gpu_path"; echo
+  # The card list has to be the machine's own, counted straight off /sys
+  # rather than pinned to a rig: the vkms session here holds one card, a
+  # nested run on a real host holds that host's, and a headless box holds
+  # none. Connector entries (card0-Virtual-1) are not cards, hence the
+  # anchored match.
+  sys_card_count=$(ls /sys/class/drm 2>/dev/null | grep -cE '^card[0-9]+$' || true)
+  gpu_card_count=$(grep -oF '"card":"card' "$monitor_gpu_path" | wc -l | tr -d ' ')
+  if [ "$sys_card_count" != "$gpu_card_count" ]; then
+    fail "monitor gpu reported $gpu_card_count cards, /sys/class/drm holds $sys_card_count: $(cat "$monitor_gpu_path")"
+  fi
+  if [ "$sys_card_count" = "0" ] && ! grep -qF '"available":false,"cards":[]' "$monitor_gpu_path"; then
+    fail "a machine with no card did not report the honest no-GPU state: $(cat "$monitor_gpu_path")"
+  fi
+  # The cell is opt-in, so the screenshot below only means something if the
+  # layout the shell resolved is the one bar_settings asked for.
+  if [ ! -s "$dump_path" ]; then
+    fail "no debug dump produced"
+  fi
+  if ! grep -qF '"right":["monitor"' "$dump_path"; then
+    fail "the resolved settings do not lead bar.layout's right region with monitor, the opt-in cell was never placed"
+  fi
+  if [ ! -f "$monitor_bar_png" ]; then
+    fail "no monitor-bar screenshot produced"
+  fi
+  echo "SMOKE_MONITOR_BAR $monitor_bar_png"
+  if ! grep -q '^ok$' "$monitor_panel_reply_path" 2>/dev/null; then
+    fail "panel open monitor did not answer ok, got: $(cat "$monitor_panel_reply_path" 2>/dev/null)"
+  fi
+  if ! grep -q '^monitor$' "$monitor_panel_state_path" 2>/dev/null; then
+    fail "panel state did not report monitor open, got: $(cat "$monitor_panel_state_path" 2>/dev/null)"
+  fi
+  if [ ! -f "$monitor_panel_png" ]; then
+    fail "no monitor-panel screenshot produced"
+  fi
+  echo "SMOKE_MONITOR_PANEL $monitor_panel_png"
+  if ! grep -q '^ok$' "$monitor_menu_reply_path" 2>/dev/null; then
+    fail "menu summon monitor did not answer ok, got: $(cat "$monitor_menu_reply_path" 2>/dev/null)"
+  fi
+  # The claim the frame cannot make on its own: the launcher is sitting on
+  # the monitor route itself (an app view), not on a row list that happens
+  # to mention it.
+  if ! grep -qF '"isOpen":true,"level":"monitor"' "$monitor_menu_status_path" 2>/dev/null; then
+    fail "the launcher is not on the monitor app view: $(cat "$monitor_menu_status_path" 2>/dev/null)"
+  fi
+  cat "$monitor_menu_status_path"; echo
+  if [ ! -f "$monitor_view_png" ]; then
+    fail "no monitor-view screenshot produced"
+  fi
+  echo "SMOKE_MONITOR_VIEW $monitor_view_png"
+fi
+
+if $processes_mode; then
+  victim_pid=$(cat "$processes_victim_pid_path" 2>/dev/null)
+  if ! grep -q '^ok$' "$processes_menu_reply_path" 2>/dev/null; then
+    fail "menu summon monitor did not answer ok, got: $(cat "$processes_menu_reply_path" 2>/dev/null)"
+  fi
+  if ! grep -q '^ok$' "$processes_filter_reply_path" 2>/dev/null; then
+    fail "menu filter did not answer ok, got: $(cat "$processes_filter_reply_path" 2>/dev/null)"
+  fi
+  if [ ! -s "$processes_filtered_path" ]; then
+    fail "no filtered process dump produced"
+  fi
+  cat "$processes_filtered_path"; echo
+  # The filter's own claim: one row out of the whole table, and it is the
+  # fixture, matched on a name the kernel's comm holds whole.
+  if [ "$(grep -oF '"name":"smokevictim"' "$processes_filtered_path" | wc -l | tr -d ' ')" != "1" ] \
+    || ! grep -qF "\"pid\":$victim_pid," "$processes_filtered_path"; then
+    fail "the filter did not narrow to the fixture process (pid $victim_pid): $(cat "$processes_filtered_path")"
+  fi
+  for f in "$processes_full_png" "$processes_view_png" "$processes_confirm_png" "$processes_killed_png"; do
+    if [ ! -f "$f" ]; then
+      fail "no processes screenshot produced at $f"
+    fi
+  done
+  # Arming is not killing: this route takes two presses, and the first has
+  # to leave the process alive or the confirm is decoration.
+  if [ "$(cat "$processes_alive_arm_path" 2>/dev/null)" != "0" ]; then
+    fail "the arming press killed pid $victim_pid outright, the confirm did nothing"
+  fi
+  if [ "$(cat "$processes_alive_fire_path" 2>/dev/null)" = "0" ]; then
+    fail "pid $victim_pid survived the confirming press"
+  fi
+  if grep -qF '"name":"smokevictim"' "$processes_after_path" 2>/dev/null; then
+    fail "the killed fixture is still in the table: $(cat "$processes_after_path" 2>/dev/null)"
+  fi
+  # The kill's own exit status, which the synchronous IPC reply could not
+  # carry: ProcessService.lastResult is where it lands, and the next dump
+  # reports it.
+  if ! grep -qF "\"lastAction\":{\"pid\":$victim_pid,\"action\":\"TERM\",\"ok\":true" "$processes_after_path"; then
+    fail "no successful TERM recorded for pid $victim_pid: $(cat "$processes_after_path")"
+  fi
+  # The restart leg proves what no screenshot can: one smokerestart alive
+  # afterwards, under a pid that is not the one it was started with.
+  # `monitor restart` answers `ok:<pid>`, not a bare ok.
+  if ! grep -q '^ok' "$processes_restart_reply_path" 2>/dev/null; then
+    fail "monitor restart did not answer ok, got: $(cat "$processes_restart_reply_path" 2>/dev/null)"
+  fi
+  restart_pid=$(cat "$processes_restart_pid_path" 2>/dev/null)
+  restart_now=$(cat "$processes_restart_pids_path" 2>/dev/null | tr '\n' ' ')
+  if [ "$(cat "$processes_restart_pids_path" 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
+    fail "expected exactly one smokerestart alive after the restart, got: $restart_now"
+  fi
+  if [ "$(cat "$processes_restart_pids_path" 2>/dev/null | tr -d ' \n')" = "$restart_pid" ]; then
+    fail "the restarted process kept its old pid ($restart_pid), nothing was re-run"
+  fi
+  echo "SMOKE_PROCESSES_FULL $processes_full_png"
+  echo "SMOKE_PROCESSES_VIEW $processes_view_png"
+  echo "SMOKE_PROCESSES_CONFIRM $processes_confirm_png"
+  echo "SMOKE_PROCESSES_KILLED $processes_killed_png"
 fi
 
 if $hotcorner_mode; then

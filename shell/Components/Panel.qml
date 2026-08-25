@@ -46,6 +46,11 @@ PanelWindow {
     // panel gets for free. Meant for `IconButton`s.
     property alias titleActions: actionsRow.data
     property int panelWidth: Theme.space.popupWidthDefault
+    // The frame's own fill and corner. A panel is a `card` at `radiusXl`
+    // (DESIGN.md §3); the tray menu is the one popout that is a menu rather
+    // than a panel and takes the `popover` fill at `radiusMd` instead.
+    property color frameColor: Theme.surface(Theme.color.card)
+    property int frameRadius: Theme.radiusXl
     // Screen-relative x of the bar cell that opened this panel, mapped within
     // that cell's OWN window (openFrom below). Wayland gives clients no
     // cross-window global coordinates, so mapping the cell into this window's
@@ -309,6 +314,8 @@ PanelWindow {
             y: Theme.barHeight + Theme.space.barMargin
             width: root.panelWidth
             height: root._frameHeight
+            color: root.frameColor
+            radius: root.frameRadius
 
             opacity: root.isOpen ? 1 : 0
 

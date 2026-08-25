@@ -7,9 +7,10 @@ import qs.Components
 // QsMenuAnchor/native-QMenu path — see that file's own header for the
 // Hyprland grab bug that made this necessary). Composes Panel.qml rather
 // than duplicating its frame: one instance, opened per tray item via
-// openItem(cell, item), so it gets the card gutters (§1.3), dog-ear
-// (§2.7) and title band (§2.9, naming the tray item) for free, exactly
-// like every other popout.
+// openItem(cell, item), so the anchoring, the click-outside dismiss, the
+// keyboard priming and the header naming the tray item all come for free,
+// exactly like every other popout. Only the frame's own fill and corner
+// differ, since this one is a menu (M43 D6).
 //
 // Driven by Quickshell.QsMenuOpener over the item's own DBusMenuHandle
 // (item.menu) — ground-truthed against the pinned quickshell source
@@ -33,6 +34,11 @@ Panel {
 
     panelTitle: root._title
     panelWidth: Theme.space.popupWidthDefault
+    // A menu, not a panel (M43 D6): the `popover` fill at `radiusMd`, the
+    // same frame the tooltip takes, rather than the `card` at `radiusXl`
+    // every widget popout wears.
+    frameColor: Theme.surface(Theme.color.popover)
+    frameRadius: Theme.radiusMd
 
     // The tray item's own DBusMenuHandle (SNI item.menu) — null while
     // closed, so QsMenuOpener drops every ref'd DBusMenuItem the instant
@@ -221,89 +227,144 @@ Panel {
         }
     }
 
-    Cell {
-        visible: root.isOpen && root._rows.length === 0
+    // One column at the Column type's own zero spacing, not the panel
+    // content slot's `sectionGap`: this is a menu list, so its rows abut
+    // exactly like the launcher's do.
+    Column {
         width: parent.width
 
-        MetaLabel { text: "EMPTY MENU" }
-    }
-
-    Repeater {
-        model: root._rows
-
-        delegate: Item {
-            id: rowWrap
-            required property var modelData
-            required property int index
-            readonly property var entry: rowWrap.modelData.entry
-            readonly property int depth: rowWrap.modelData.depth
-            readonly property real _availWidth: rowCell.width - Theme.space.controlPaddingX * 2 - Theme.borderWidth
-                - rowWrap.depth * Theme.space.xxl
-                - (trailingGlyph.visible ? trailingGlyph.implicitWidth + Theme.space.labelGap : 0)
-                - (iconImg.visible ? iconImg.width + Theme.space.labelGap : 0)
-
+        Item {
+            visible: root.isOpen && root._rows.length === 0
             width: parent.width
-            height: rowWrap.entry.isSeparator ? Theme.borderWidth : rowCell.height
+            height: Theme.space.controlHeight
 
-            Rectangle {
-                visible: rowWrap.entry.isSeparator
-                anchors.fill: parent
-                color: Theme.color.border
+            SectionLabel {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Empty menu"
             }
+        }
 
-            Cell {
-                id: rowCell
-                visible: !rowWrap.entry.isSeparator
+        Repeater {
+            model: root._rows
+
+            delegate: Item {
+                id: rowWrap
+                required property var modelData
+                required property int index
+                readonly property var entry: rowWrap.modelData.entry
+                readonly property int depth: rowWrap.modelData.depth
+
+                readonly property bool cursorHere: root.cursorActive && root._cursor === rowWrap.index
+                readonly property bool hovered: pointer.containsMouse
+                readonly property bool filled: rowWrap.cursorHere || rowWrap.hovered
+                readonly property color foreground: !rowWrap.entry.enabled
+                    ? Theme.color.mutedForeground
+                    : (rowWrap.filled ? Theme.color.accentForeground : Theme.color.foreground)
+
+                readonly property real _availWidth: rowWrap.width - Theme.space.controlPaddingX * 2
+                    - rowWrap.depth * Theme.space.xxl
+                    - (trailingIcon.visible ? trailingIcon.width + Theme.space.iconGap : 0)
+                    - (iconImg.visible ? iconImg.width + Theme.space.iconGap : 0)
+
                 width: parent.width
-                // Checkable state as the selected fill (accent inversion,
-                // DESIGN.md §2.2) — same fill the cursor row uses, per the
-                // M32 plan's own constraint; a checked+cursor row is still
-                // just the one inversion, never a double treatment.
-                selected: (root.cursorActive && root._cursor === rowWrap.index) || rowWrap.entry.checkState === Qt.Checked
-                interactive: rowWrap.entry.enabled
-                hovered: root.cursorActive && root._cursor === rowWrap.index
-                onContainsPointerChanged: if (rowCell.containsPointer) {
-                    root.cursorActive = true;
-                    root._cursor = rowWrap.index;
-                }
+                height: rowWrap.entry.isSeparator
+                    ? Theme.borderWidth + Theme.space.sm * 2
+                    : Theme.space.controlHeight
 
-                Image {
-                    id: iconImg
+                // A separator is one `border` rule with a `sm` gap either side
+                // of it, which is the whole of its chrome.
+                Rectangle {
+                    visible: rowWrap.entry.isSeparator
                     anchors.left: parent.left
-                    anchors.leftMargin: rowWrap.depth * Theme.space.xxl
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: rowWrap.entry.icon !== ""
-                    source: rowWrap.entry.icon || ""
-                    width: Theme.fontSize.body
-                    height: Theme.fontSize.body
-                    sourceSize.width: Theme.fontSize.body
-                    sourceSize.height: Theme.fontSize.body
-                }
-
-                Text {
-                    anchors.left: iconImg.visible ? iconImg.right : parent.left
-                    anchors.leftMargin: iconImg.visible ? Theme.space.labelGap : rowWrap.depth * Theme.space.xxl
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(implicitWidth, rowWrap._availWidth)
-                    elide: Text.ElideRight
-                    text: rowWrap.entry.text
-                    color: rowWrap.entry.enabled ? rowCell.foreground : Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-
-                Text {
-                    id: trailingGlyph
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: rowWrap.entry.hasChildren
-                    text: root._expanded.indexOf(rowWrap.entry) !== -1 ? "▾" : "▸"
-                    color: rowCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
+                    height: Theme.borderWidth
+                    color: Theme.color.border
                 }
 
-                onClicked: root._activate(rowWrap.entry)
+                // The launcher's own row (M43 D6): square, borderless, the
+                // cursor and a hovered row both filled `accent`.
+                Item {
+                    id: row
+                    anchors.fill: parent
+                    visible: !rowWrap.entry.isSeparator
+
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: rowWrap.cursorHere
+                        color: Theme.color.accent
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: Theme.color.accent
+                        opacity: (rowWrap.hovered && !rowWrap.cursorHere) ? 1 : 0
+
+                        Behavior on opacity {
+                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        }
+                    }
+
+                    MouseArea {
+                        id: pointer
+                        anchors.fill: parent
+                        enabled: rowWrap.entry.enabled
+                        hoverEnabled: rowWrap.entry.enabled
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: {
+                            root.cursorActive = true;
+                            root._cursor = rowWrap.index;
+                        }
+                        onClicked: root._activate(rowWrap.entry)
+                    }
+
+                    // The item's own icon, which the tray hands over as a
+                    // pixmap rather than a name.
+                    Image {
+                        id: iconImg
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.space.controlPaddingX + rowWrap.depth * Theme.space.xxl
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: rowWrap.entry.icon !== ""
+                        source: rowWrap.entry.icon || ""
+                        width: Theme.fontSize.body
+                        height: Theme.fontSize.body
+                        sourceSize.width: Theme.fontSize.body
+                        sourceSize.height: Theme.fontSize.body
+                    }
+
+                    Text {
+                        anchors.left: iconImg.visible ? iconImg.right : parent.left
+                        anchors.leftMargin: iconImg.visible
+                            ? Theme.space.iconGap
+                            : Theme.space.controlPaddingX + rowWrap.depth * Theme.space.xxl
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, rowWrap._availWidth)
+                        elide: Text.ElideRight
+                        text: rowWrap.entry.text
+                        color: rowWrap.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                    }
+
+                    // Checked and "has a submenu" never co-occur on one entry,
+                    // so one slot carries both: a `check` for the first, the
+                    // chevron the expansion state names for the second.
+                    Icon {
+                        id: trailingIcon
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.space.controlPaddingX
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: rowWrap.entry.hasChildren || rowWrap.entry.checkState === Qt.Checked
+                        name: rowWrap.entry.hasChildren
+                            ? (root._expanded.indexOf(rowWrap.entry) !== -1 ? "chevron-down" : "chevron-right")
+                            : "check"
+                        size: Theme.fontSize.body
+                        color: rowWrap.foreground
+                    }
+                }
             }
         }
     }
