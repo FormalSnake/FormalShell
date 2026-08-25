@@ -81,12 +81,19 @@ function buckets(devices, discovering) {
     };
 }
 
-// PAIRING…/CONNECTING… take priority over a stale battery reading; battery
-// only renders for an already-connected device that reports one.
-function statusText(device) {
+// The row's own state line, words only (DESIGN.md §1 "Type"): what BlueZ
+// is doing to this device right now, or "" when it is doing nothing.
+function activityText(device) {
     if (!device) return "";
     if (device.pairing === true) return "PAIRING…";
     if (device.state === DeviceState.Connecting) return "CONNECTING…";
-    if (device.connected && device.batteryAvailable) return Math.round(device.battery * 100) + "%";
     return "";
+}
+
+// The row's trailing value. Only an already-connected device that reports
+// a battery has one, and `battery` is a 0..1 fraction (CLAUDE.md's
+// quickshell percentage rule), so the conversion happens here once.
+function batteryText(device) {
+    if (!device || !device.connected || !device.batteryAvailable) return "";
+    return Math.round(device.battery * 100) + "%";
 }

@@ -13,6 +13,7 @@ var ICONS = {
     "wifi": "\u{F05A9}",
     "wifi-off": "\u{F05AA}",
     "bluetooth": "\u{F00AF}",
+    "bluetooth-connected": "\u{F00B1}",
     "bluetooth-off": "\u{F00B2}",
     "volume": "\u{F0580}",
     "volume-1": "\u{F057F}",
@@ -20,9 +21,13 @@ var ICONS = {
     "volume-x": "\u{F075F}",
     "mic": "\u{F036C}",
     "mic-off": "\u{F036D}",
+    // MDI's own md-battery is the full one, so "battery" and "battery-full"
+    // share it; lucide draws them apart (empty outline vs full).
     "battery": "\u{F0079}",
     "battery-charging": "\u{F0085}",
+    "battery-full": "\u{F0079}",
     "battery-low": "\u{F007B}",
+    "battery-medium": "\u{F007E}",
     "battery-warning": "\u{F0083}",
     "sun": "\u{F0599}",
     "moon": "\u{F0594}",

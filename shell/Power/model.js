@@ -113,13 +113,21 @@ function parseRaplUj(text) {
     return { energyUj: energyUj, maxRangeUj: maxRangeUj };
 }
 
-// The battery section's one slash-fused wattage row (DESIGN §2 item 10:
-// meta pairs fuse with " / ", never a colon). `cpuPackageW` is null
-// whenever RAPL is unreadable or hasn't produced a second sample yet —
-// the " / CPU" half is simply absent then, never "/ CPU 0.0W" or a
-// stale figure from before the panel reopened.
-function formatWattageRow(charging, changeRateW, cpuPackageW) {
-    var head = (charging ? "CHARGING " : "DRAW ") + formatRate(changeRateW);
+// The wattage stat, split so the words land in the label and the figures
+// in the mono value (DESIGN.md §1 "Type"). "HOLDING" is the charge
+// threshold's own word: the rate is real but near zero there, and calling
+// it a draw would misread it.
+function rateRowLabel(charging, thresholdActive) {
+    if (thresholdActive)
+        return "HOLDING";
+    return charging ? "CHARGING" : "DRAW";
+}
+
+// `cpuPackageW` is null whenever RAPL is unreadable or hasn't produced a
+// second sample yet, and the " / CPU" half is simply absent then, never
+// "/ CPU 0.0W" or a stale figure from before the panel reopened.
+function rateRowValue(changeRateW, cpuPackageW) {
+    var head = formatRate(changeRateW);
     if (cpuPackageW === null || cpuPackageW === undefined)
         return head;
     return head + " / CPU " + formatRate(cpuPackageW);
@@ -161,22 +169,22 @@ function chargeStateLabel(pct, state, onBattery, thresholdActive, states) {
     return "CHARGING";
 }
 
-var BATTERY_EMPTY_GLYPH = "󰂎";
-// Discharging ramp (also used for the threshold state, which is plugged in
-// but not visibly charging) and the charging ramp — both converge on the
-// same glyph at 100% by construction, so no separate fully-charged special
-// case is needed.
-var BATTERY_DISCHARGE_RAMP = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"];
-var BATTERY_CHARGE_RAMP = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"];
-
-// Percent-bucketed battery glyph, decile rounded — the bar cell and the
-// power panel's hero share this so their icon never drifts apart.
-function batteryGlyph(pct, onBattery, thresholdActive) {
-    var bucket = Math.max(0, Math.min(100, Math.round(pct / 10) * 10));
-    if (bucket === 0)
-        return BATTERY_EMPTY_GLYPH;
-    var index = bucket === 100 ? 9 : (bucket / 10) - 1;
-    return (!onBattery && !thresholdActive) ? BATTERY_CHARGE_RAMP[index] : BATTERY_DISCHARGE_RAMP[index];
+// Icon name for the battery's state (spec "Icons"): a named set draws
+// state, not a decile ramp, so the level detail the old Nerd Font ramp
+// carried lives in the percentage beside it. `warnPct` defaults to the
+// same 10% warnEvent() uses, so the alert icon and the low-battery
+// notification agree on where low starts.
+function batteryIcon(pct, onBattery, thresholdActive, warnPct) {
+    warnPct = warnPct === undefined ? DEFAULT_WARN_PCT : warnPct;
+    if (!onBattery && !thresholdActive)
+        return "battery-charging";
+    if (pct <= warnPct)
+        return "battery-warning";
+    if (pct >= 66)
+        return "battery-full";
+    if (pct >= 33)
+        return "battery-medium";
+    return "battery-low";
 }
 
 // "56.0 WH", or an honest em dash when the device hasn't reported a
@@ -198,7 +206,7 @@ function timeRowLabel(charging) {
 }
 
 // timeToFull/timeToEmpty are 0 whenever the other one applies (the pinned
-// quickshell source's own contract, see formatWattageRow above) and can
+// quickshell source's own contract, see rateRowValue above) and can
 // both briefly read 0 right after a state flip before UPower's next
 // estimate lands — an honest em dash rather than "0M" either way.
 function timeRowValue(charging, timeToFull, timeToEmpty) {

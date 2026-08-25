@@ -3,30 +3,33 @@ import Quickshell.Bluetooth
 import Quickshell.Io
 import qs.Core
 import qs.Components
-import qs.Services
 import "../../Bluetooth/model.js" as BluetoothModel
 
-// Bluetooth panel (DESIGN.md §Panels, spec §2, M6 Task 6; behavior parity M14
-// Task 4): adapter state cell (name + state + POWER toggle, unchanged) above
-// a ledger split into CONNECTED / PAIRED / AVAILABLE per Bluetooth/model.js's
-// buckets(). Discovery is self-healed: while the panel is open and the
-// adapter enabled, a 1s timer keeps nudging `discovering = true` whenever it
-// reads false (BlueZ rejects StartDiscovery while the adapter is powering up
-// and times discovery out on its own — omarchy's exact workaround,
+// Bluetooth panel (DESIGN.md §3 "Panel", spec "Panels"): the header carries
+// the adapter's power toggle and a rescan button, the hero names the one
+// connected device (or the adapter itself), and the rows split into
+// `PAIRED (n)` (connected first, each carrying a check) and `AVAILABLE (n)`.
+// Tab moves between those two lists, Enter connects or disconnects the row
+// under the cursor, and `x` forgets a paired one.
+//
+// Discovery is self-healed: while the panel is open and the adapter enabled,
+// a 1s timer keeps nudging `discovering = true` whenever it reads false
+// (BlueZ rejects StartDiscovery while the adapter is powering up and times
+// discovery out on its own, omarchy's exact workaround,
 // ~/Developer/omarchy/shell/plugins/panels/bluetooth/Panel.qml:457-464) and
-// stops outright when the panel closes. Row activation: connected → pauses
-// nothing, click disconnects; paired → connects; available → runs the
-// pair-trust-connect sequence natively (`pair()`; once `pairedChanged`
-// reports true, `trusted = true` then `connect()` — the same sequence
-// omarchy shells out to bluetoothctl for, expressed with the toolkit's own
-// device methods instead). One action in flight at a time, tracked at the
-// panel level by address (mirrors NetworkPanel's _actionSsid/_actionKind),
-// with a 20s fallback timer that clears a stuck action to an honest "TIMED
-// OUT" — BluetoothDevice has no failure signal to key off, unlike
-// WifiNetwork's connectionFailed, so a timeout is the only honest option for
-// a pair/connect/disconnect/forget that never resolves. The in-flight
-// device's own signals are watched via a single root-level Connections whose
-// target tracks `_actionAddress` rather than a per-row Connections block:
+// stops outright when the panel closes. Row activation: connected
+// disconnects; paired connects; available runs the pair-trust-connect
+// sequence natively (`pair()`; once `pairedChanged` reports true,
+// `trusted = true` then `connect()`, the same sequence omarchy shells out to
+// bluetoothctl for, expressed with the toolkit's own device methods
+// instead). One action in flight at a time, tracked at the panel level by
+// address (mirrors NetworkPanel's _actionSsid/_actionKind), with a 20s
+// fallback timer that clears a stuck action to an honest "TIMED OUT":
+// BluetoothDevice has no failure signal to key off, unlike WifiNetwork's
+// connectionFailed, so a timeout is the only honest option for a
+// pair/connect/disconnect/forget that never resolves. The in-flight device's
+// own signals are watched via a single root-level Connections whose target
+// tracks `_actionAddress` rather than a per-row Connections block:
 // pairing/forgetting move a device between buckets exactly on the property
 // change being watched, which would tear down and recreate the Repeater
 // delegate holding a per-row Connections at the worst possible moment.
@@ -35,16 +38,16 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // rather than flipping a property on it (pinned quickshell source,
 // bluez.cpp's onInterfacesRemoved: adapter->devices()->removeObject(device);
 // delete device), so a successful forget leaves `_actionDevice` null with no
-// paired/bonded/trustedChanged signal ever having fired — a second
+// paired/bonded/trustedChanged signal ever having fired: a second
 // Connections block below watches the adapter's device list itself instead.
-// FORGET is hover-revealed on PAIRED rows only, the same "known and not
-// currently connected" restriction NetworkPanel's FORGET already applies.
+// Forget is offered on paired rows only, the same "known and not currently
+// connected" restriction NetworkPanel's own forget applies.
 //
-// AirPods noise control moved out to its own AirpodsPanel (M29 Task 2) —
-// see that file for the daemon this panel used to talk to.
+// AirPods noise control lives in AirpodsPanel (M29 Task 2), which owns the
+// daemon this panel used to talk to.
 //
-// TRUSTED is a peer of those actions — same _runAction machinery, same
-// failure surface — with one behavior difference the toolkit forces.
+// TRUST is a peer of those actions (same _runAction machinery, same failure
+// surface) with one behavior difference the toolkit forces.
 // BluetoothDevice::setTrusted stores its local bindable and fires
 // trustedChanged BEFORE it pushes org.freedesktop.DBus.Properties.Set
 // (pinned quickshell source, src/bluetooth/device.cpp:64-68), and
@@ -52,27 +55,28 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // back an error: it never rolls the local value back and raises no signal
 // (src/dbus/properties.cpp:268-297). So `trusted` reading back as asked is
 // quickshell's optimism, not BlueZ's answer, and clearing the action on it
-// would paint a success nobody verified. What IS observable is a rejection —
+// would paint a success nobody verified. What IS observable is a rejection,
 // BlueZ pushing the old value back through the same property binding, which
-// fires trustedChanged in disagreement with what was asked — so the row
-// stays in flight over a short settle window that fails it on that
-// disagreement, and a window elapsing without one is this action's success
-// signal, the exact opposite of what actionTimeout means for
-// pair/connect/disconnect/forget. The toggle is hover-revealed next to
-// FORGET and only on a device BlueZ reports `paired`; the row's status line
-// carries the persistent TRUSTED marker, hidden for as long as a write on
-// that row is still settling.
+// fires trustedChanged in disagreement with what was asked, so the row stays
+// in flight over a short settle window that fails it on that disagreement,
+// and a window elapsing without one is this action's success signal, the
+// exact opposite of what actionTimeout means for
+// pair/connect/disconnect/forget. The toggle sits beside forget and only on
+// a device BlueZ reports `paired`; the row's status line carries the
+// persistent TRUSTED marker, hidden for as long as a write on that row is
+// still settling.
 //
 // Bound directly to Quickshell.Bluetooth, same as every other panel binds
 // its backend directly rather than through a Services wrapper. The test VM
 // has no adapter at all, so `Bluetooth.defaultAdapter` is null and the panel
-// renders the honest "NO ADAPTER" cell — the adapter-off ("TURN ON TO SCAN")
+// renders the honest "NO ADAPTER" row; the adapter-off ("TURN ON TO SCAN")
 // and discovering-empty ("SCANNING…") states below it are exercised by the
 // model.js bucket tests, not the smoke rig.
 Panel {
     id: root
 
-    panelTitle: "BLUETOOTH"
+    panelIcon: "bluetooth"
+    panelTitle: "Bluetooth"
     panelWidth: Theme.space.popupWidthDefault
 
     readonly property var _adapter: Bluetooth.defaultAdapter
@@ -81,10 +85,10 @@ Panel {
     readonly property var _connectedRows: root._buckets.connected
     readonly property var _pairedRows: root._buckets.known
     readonly property var _availableRows: root._buckets.available
-    readonly property bool _hasAnyRows: root._connectedRows.length > 0 || root._pairedRows.length > 0 || root._availableRows.length > 0
+    readonly property bool _hasAnyRows: root._pairedSection.length > 0 || root._availableSection.length > 0
 
     // The hero's own subject (M28 Task 5): the one connected device when
-    // there is exactly one, else the adapter's own name — a specific
+    // there is exactly one, else the adapter's own name. A specific
     // connected device is only named when it is unambiguous which one, so
     // two simultaneous connections (a mouse and a headset, say) fall back to
     // naming the radio itself rather than picking one arbitrarily.
@@ -93,20 +97,31 @@ Panel {
         ? (root._heroDevice.name || root._heroDevice.deviceName)
         : (root._adapter ? root._adapter.name : "")
     readonly property string _heroMeta: root._heroDevice
-        ? (BluetoothModel.statusText(root._heroDevice) || "CONNECTED")
+        ? (BluetoothModel.activityText(root._heroDevice) || "CONNECTED")
         : (root._adapter ? BluetoothAdapterState.toString(root._adapter.state).toUpperCase() : "")
-    readonly property string _heroGlyph: (!root._adapter || !root._adapter.enabled)
-        ? "󰂲"
-        : (root._connectedRows.length > 0 ? "󰂱" : "󰂯")
+    readonly property string _heroBattery: root._heroDevice ? BluetoothModel.batteryText(root._heroDevice) : ""
+    readonly property string _heroIcon: (!root._adapter || !root._adapter.enabled)
+        ? "bluetooth-off"
+        : (root._connectedRows.length > 0 ? "bluetooth-connected" : "bluetooth")
 
-    readonly property var _allRows: {
+    // Connected devices lead the paired list rather than forming a third
+    // section: they are the same "this machine knows this device" set, and
+    // the check on the row already says which one is live.
+    readonly property var _pairedSection: {
         var out = [];
         var i;
-        for (i = 0; i < root._connectedRows.length; i++) out.push({ device: root._connectedRows[i], bucket: "connected" });
-        for (i = 0; i < root._pairedRows.length; i++) out.push({ device: root._pairedRows[i], bucket: "paired" });
-        for (i = 0; i < root._availableRows.length; i++) out.push({ device: root._availableRows[i], bucket: "available" });
+        for (i = 0; i < root._connectedRows.length; i++)
+            out.push({ device: root._connectedRows[i], bucket: "connected", section: 0 });
+        for (i = 0; i < root._pairedRows.length; i++)
+            out.push({ device: root._pairedRows[i], bucket: "paired", section: 0 });
         return out;
     }
+    readonly property var _availableSection: root._availableRows.map(function (d) {
+        return { device: d, bucket: "available", section: 1 };
+    })
+
+    // The rows Tab has reached: Panel's cursor addresses one list at a time.
+    readonly property var _sectionRows: root.cursorSection === 1 ? root._availableSection : root._pairedSection
 
     // One action in flight at a time, keyed by device address (BlueZ's own
     // stable device identity, unlike a QML object reference that dies with
@@ -116,11 +131,9 @@ Panel {
     property string _failureAddress: ""
     property string _failureText: ""
 
-    // Keyboard cursor over the combined CONNECTED+PAIRED+AVAILABLE row
-    // order, tracked by address (PowerPanel's numeric _cursor doesn't fit a
-    // table that splits across three headers and reshuffles rows between
-    // them as actions complete — NetworkPanel's ssid-keyed cursor is the
-    // same idiom, applied here by address instead).
+    // The cursor's row identity, kept alongside Panel's own numeric
+    // cursorIndex: rows relocate between buckets as actions complete, and an
+    // index on its own would walk the cursor onto whatever slid underneath.
     property string _cursorAddress: ""
 
     readonly property var _actionDevice: {
@@ -131,14 +144,68 @@ Panel {
         return null;
     }
 
+    function _rowAt(index) {
+        return (index >= 0 && index < root._sectionRows.length) ? root._sectionRows[index] : null;
+    }
+
+    function _addressAt(index) {
+        var row = root._rowAt(index);
+        return row ? (row.device.address || "") : "";
+    }
+
+    function _indexForAddress(address) {
+        for (var i = 0; i < root._sectionRows.length; i++) {
+            if ((root._sectionRows[i].device.address || "") === address)
+                return i;
+        }
+        return -1;
+    }
+
+    function _pointAt(section, address) {
+        root.cursorActive = true;
+        root.cursorSection = section;
+        var index = root._indexForAddress(address);
+        if (index >= 0)
+            root.cursorIndex = index;
+    }
+
+    cursorCount: root._sectionRows.length
+    // 0 is PAIRED, 1 is AVAILABLE.
+    sectionCount: 2
+
+    onCursorIndexChanged: root._cursorAddress = root._addressAt(root.cursorIndex)
+
+    onCursorSectionChanged: {
+        root.cursorIndex = 0;
+        root._cursorAddress = root._addressAt(0);
+    }
+
+    on_SectionRowsChanged: {
+        var index = root._indexForAddress(root._cursorAddress);
+        if (index >= 0 && index !== root.cursorIndex)
+            root.cursorIndex = index;
+    }
+
+    onCursorActivated: index => {
+        var row = root._rowAt(index);
+        if (row)
+            root._activateRow(row.bucket, row.device);
+    }
+
+    onCursorDeleted: index => {
+        var row = root._rowAt(index);
+        if (row && row.bucket === "paired")
+            root._forgetDevice(row.device);
+    }
+
     onIsOpenChanged: {
         if (root.isOpen) {
-            // Cursor identity starts on the first row every open (M26 Task
-            // 8's reveal-only guard below needs a real position to show,
-            // never an empty address that would gate `hovered` false on the
-            // first press) — empty when discovery hasn't produced a row
-            // yet, which the guard's own fallback handles honestly.
-            root._cursorAddress = root._allRows.length > 0 ? root._allRows[0].device.address : "";
+            // The cursor starts on the first row every open, so the
+            // reveal-only first keypress has a real position to show. Empty
+            // while discovery has produced nothing yet.
+            root.cursorIndex = 0;
+            root.cursorSection = 0;
+            root._cursorAddress = root._addressAt(0);
         } else {
             root._cursorAddress = "";
             if (root._adapter)
@@ -146,63 +213,26 @@ Panel {
         }
     }
 
-    function _rowIndexForAddress(address) {
-        for (var i = 0; i < root._allRows.length; i++) {
-            if (root._allRows[i].device.address === address)
-                return i;
+    titleActions: [
+        IconButton {
+            name: (root._adapter && root._adapter.enabled) ? "bluetooth" : "bluetooth-off"
+            enabled: root._adapter !== null
+            onClicked: if (root._adapter) root._adapter.enabled = !root._adapter.enabled
+        },
+        IconButton {
+            name: "refresh-cw"
+            enabled: root._adapter !== null && root._adapter.enabled
+            onClicked: root._rescan()
         }
-        return -1;
-    }
+    ]
 
-    function _moveCursor(delta) {
-        if (root._allRows.length === 0) {
-            root._cursorAddress = "";
+    // Dropping discovery and letting discoveryRetry below re-arm it is the
+    // rescan handle BlueZ gives: StartDiscovery on an already-discovering
+    // adapter is a no-op, so restarting the scan means stopping it first.
+    function _rescan() {
+        if (!root._adapter)
             return;
-        }
-        var idx = root._rowIndexForAddress(root._cursorAddress);
-        if (idx < 0)
-            idx = delta > 0 ? 0 : root._allRows.length - 1;
-        else
-            idx = Math.max(0, Math.min(root._allRows.length - 1, idx + delta));
-        root._cursorAddress = root._allRows[idx].device.address;
-    }
-
-    // Panel.qml's shared keyboard-nav hook (M6 Task 7, PowerPanel's consumer
-    // pattern; NetworkPanel's the direct precedent for this table-of-rows
-    // shape): Up/Down move the cursor, Enter activates it.
-    Connections {
-        target: root
-
-        function onKeyPressed(event) {
-            if (!root.isOpen)
-                return;
-            // First Up/Down only reveals the cursor where it already sits
-            // (M26 Task 8, upstream's CursorSurface contract) — it does not
-            // also move it, so the highlight appears where the user can see
-            // it before anything happens.
-            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                root.cursorActive = true;
-                event.accepted = true;
-                return;
-            }
-            switch (event.key) {
-            case Qt.Key_Up:
-                root._moveCursor(-1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Down:
-                root._moveCursor(1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                var idx = root._rowIndexForAddress(root._cursorAddress);
-                if (idx >= 0)
-                    root._activateRow(root._allRows[idx].bucket, root._allRows[idx].device);
-                event.accepted = true;
-                break;
-            }
-        }
+        root._adapter.discovering = false;
     }
 
     function _runAction(kind, device) {
@@ -225,7 +255,7 @@ Panel {
     }
 
     // Ends an in-flight action on the row it was armed for, leaving the
-    // failure text behind for _statusText to render. actionTimeout's own
+    // failure text behind for the row's status line. actionTimeout's own
     // expiry lands here too, so every honest failure on this panel is
     // written in exactly one place.
     function _failAction(text) {
@@ -244,8 +274,8 @@ Panel {
         else if (root._actionKind === "forget" && !device.paired && !device.bonded && !device.trusted) root._clearAction();
     }
 
-    // Row activation (click or Enter-on-cursor): connected → disconnect;
-    // paired (known) → connect; available (unpaired, discovered) → start the
+    // Row activation (click or Enter-on-cursor): connected disconnects;
+    // paired (known) connects; available (unpaired, discovered) starts the
     // pair-trust-connect sequence.
     function _activateRow(bucket, device) {
         if (!device || root._actionKind !== "")
@@ -284,9 +314,9 @@ Panel {
     }
 
     // Safety net (omarchy's pendingTimeout, Panel.qml:465-470 there): if the
-    // completion signals below never fire — a pair() that BlueZ silently
-    // rejects, a connect that never settles — this clears a stuck busy row
-    // to an honest "TIMED OUT" instead of "PAIRING…"/"CONNECTING…" forever.
+    // completion signals below never fire (a pair() that BlueZ silently
+    // rejects, a connect that never settles) this clears a stuck busy row to
+    // an honest "TIMED OUT" instead of "PAIRING…"/"CONNECTING…" forever.
     //
     // The trust kinds run on their own clock and with the opposite meaning
     // (header comment): their window only has to outlast a BlueZ rejection
@@ -311,9 +341,9 @@ Panel {
     // settle window ends in a real read-back rather than an assumption.
     // Quickshell's setTrusted stores the requested value locally and emits
     // trustedChanged BEFORE it pushes the D-Bus Set, and a Set that BlueZ
-    // rejects is only qCWarning'd — no rollback, no signal (device.cpp:64-68,
+    // rejects is only qCWarning'd: no rollback, no signal (device.cpp:64-68,
     // properties.cpp:268-297). BlueZ emits no PropertiesChanged for a property
-    // that never changed either, so the disagreement branch above can never
+    // that never changed either, so the disagreement branch below can never
     // fire for an ordinary rejection: without this, a refused trust would
     // settle into a persistent TRUSTED marker painted purely from the
     // optimistic local value. `bluetoothctl info` reports BlueZ's own answer.
@@ -414,7 +444,7 @@ Panel {
 
     // forget()'s completion signal: RemoveDevice deletes the device object
     // (see the header comment), so the Connections block above never fires
-    // for it. adapter.devices is an ObjectModel — removeObject() emits
+    // for it. adapter.devices is an ObjectModel, removeObject() emits
     // valuesChanged before the C++ delete runs, and root._devices (bound to
     // devices.values) is already reactive to that, so by the time this
     // handler runs the forgotten address is simply absent from it.
@@ -432,6 +462,18 @@ Panel {
         }
     }
 
+    // BlueZ rejects StartDiscovery while the adapter is still powering up,
+    // and discovery can also lapse on its own: keep nudging it back on for
+    // as long as the panel is open and the adapter enabled.
+    Timer {
+        id: discoveryRetry
+        interval: 1000
+        repeat: true
+        triggeredOnStart: true
+        running: root.isOpen && root._adapter !== null && root._adapter.enabled && !root._adapter.discovering
+        onTriggered: root._adapter.discovering = true
+    }
+
     Component {
         id: deviceRow
 
@@ -439,9 +481,13 @@ Panel {
             id: btCell
             required property var modelData
             width: parent.width
+            interactive: root._actionKind === ""
+
             readonly property var _device: btCell.modelData.device
             readonly property string _bucket: btCell.modelData.bucket
+            readonly property int _section: btCell.modelData.section
             readonly property string _address: btCell._device.address || ""
+            readonly property bool _connected: btCell._bucket === "connected"
             readonly property bool _canForget: btCell._bucket === "paired"
             // Eligibility is BlueZ's own `paired`, not the bucket: `known`
             // also holds bonded/trusted-but-unpaired devices (model.js:73),
@@ -449,8 +495,10 @@ Panel {
             readonly property bool _canTrust: btCell._device.paired === true
             readonly property bool _isTrusted: btCell._device.trusted === true
             readonly property bool _trustPending: (root._actionKind === "trust" || root._actionKind === "untrust") && root._actionAddress === btCell._address
-            selected: btCell._bucket === "connected"
-            hovered: root.cursorActive && root._cursorAddress === btCell._address
+            readonly property string _battery: BluetoothModel.batteryText(btCell._device)
+            readonly property bool _revealed: btCell.hovered || btCell.cursor
+
+            cursor: root.cursorActive && root.cursorSection === btCell._section && root._cursorAddress === btCell._address
 
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionAddress === btCell._address) {
@@ -463,135 +511,130 @@ Panel {
                 }
                 if (root._failureAddress !== "" && root._failureAddress === btCell._address)
                     return root._failureText;
-                return BluetoothModel.statusText(btCell._device);
+                var activity = BluetoothModel.activityText(btCell._device);
+                if (activity !== "")
+                    return activity;
+                // The persistent marker reports what BlueZ holds, and stays
+                // hidden for as long as a write on this row is inside its
+                // settle window, so it never asserts a state the panel
+                // hasn't finished verifying.
+                return (btCell._isTrusted && !btCell._trustPending) ? "TRUSTED" : "";
             }
             readonly property bool _isFailed: root._failureAddress !== "" && root._failureAddress === btCell._address && (root._actionKind === "" || root._actionAddress !== btCell._address)
 
+            onContainsPointerChanged: if (btCell.containsPointer) root._pointAt(btCell._section, btCell._address)
+
+            onClicked: root._activateRow(btCell._bucket, btCell._device)
+
             Column {
                 width: parent.width
-                spacing: Theme.space.xxs
+                spacing: Theme.space.xs
 
                 Item {
                     width: parent.width
-                    // Read off the cells rather than actionsRow: a Cell keeps
-                    // its implicit height while hidden, but a Row drops a
-                    // hidden child from its own, which would leave AVAILABLE
-                    // rows (neither cell eligible) shorter than the rest and
-                    // break the ledger's uniform row height.
-                    height: Math.max(nameText.implicitHeight, trustCell.height, forgetCell.height)
+                    height: nameText.implicitHeight
+
+                    Icon {
+                        id: rowIcon
+                        name: btCell._connected ? "bluetooth-connected" : "bluetooth"
+                        size: Theme.fontSize.body
+                        color: btCell.foreground
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
 
                     Text {
                         id: nameText
-                        anchors.left: parent.left
-                        anchors.right: actionsRow.left
-                        anchors.rightMargin: actionsRow.width > 0 ? Theme.space.sm : 0
+                        anchors.left: rowIcon.right
+                        anchors.leftMargin: Theme.space.iconGap
+                        anchors.right: trailingBits.left
+                        anchors.rightMargin: Theme.space.iconGap
                         anchors.verticalCenter: parent.verticalCenter
                         text: btCell._device.name || btCell._device.deviceName
                         color: btCell.foreground
-                        elide: Text.ElideRight
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontFamilySans
                         font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
                     }
 
-                    // A Row rather than the chain of conditional anchors a
-                    // second hover cell would otherwise need: TRUST and FORGET
-                    // are independently eligible (see _canTrust), so every
-                    // combination has to lay out without leaving a gap where
-                    // the ineligible one would have been. Collapses to zero
-                    // width when neither applies, which is why nameText and
-                    // rowMouse can anchor to it unconditionally.
                     Row {
-                        id: actionsRow
+                        id: trailingBits
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.space.sm
+                        spacing: Theme.space.iconGap
 
-                        Cell {
-                            id: trustCell
+                        Text {
+                            visible: btCell._battery !== ""
+                            text: btCell._battery
+                            color: btCell.dimForeground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.bodySmall
+                        }
+
+                        SectionLabel {
+                            id: trustLabel
                             visible: btCell._canTrust
-                            opacity: btCell._canTrust && btCell.hovered ? 1 : 0
-                            enabled: opacity > 0 && root._actionKind === ""
-                            width: implicitWidth
-                            height: implicitHeight
+                            opacity: btCell._revealed ? 1 : 0
+                            text: btCell._isTrusted ? "UNTRUST" : "TRUST"
+                            color: trustHit.containsMouse ? Theme.color.foreground : btCell.dimForeground
 
                             Behavior on opacity {
                                 NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
                             }
 
-                            MetaLabel {
-                                text: btCell._isTrusted ? "UNTRUST" : "TRUST"
-                                color: btCell.foreground
+                            // Sits above the cell's own pointer layer, so the
+                            // trust hit never doubles as a row activation.
+                            MouseArea {
+                                id: trustHit
+                                anchors.fill: parent
+                                anchors.margins: -Theme.space.xs
+                                enabled: trustLabel.opacity > 0 && root._actionKind === ""
+                                hoverEnabled: enabled
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root._setTrust(btCell._device, !btCell._isTrusted)
                             }
-
-                            interactive: trustCell.enabled
-                            onClicked: root._setTrust(btCell._device, !btCell._isTrusted)
                         }
 
-                        Cell {
-                            id: forgetCell
+                        Icon {
+                            id: forgetIcon
+                            name: "trash"
+                            size: Theme.fontSize.body
                             visible: btCell._canForget
-                            opacity: btCell._canForget && btCell.hovered ? 1 : 0
-                            enabled: opacity > 0 && root._actionKind === ""
-                            width: implicitWidth
-                            height: implicitHeight
+                            opacity: btCell._revealed ? 1 : 0
+                            color: forgetHit.containsMouse ? Theme.color.destructive : btCell.dimForeground
 
                             Behavior on opacity {
                                 NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
                             }
 
-                            MetaLabel {
-                                text: "FORGET"
-                                color: Theme.color.destructive
+                            // The negative margins buy back a hit area a
+                            // 13px glyph cannot offer on its own.
+                            MouseArea {
+                                id: forgetHit
+                                anchors.fill: parent
+                                anchors.margins: -Theme.space.sm
+                                enabled: forgetIcon.opacity > 0 && root._actionKind === ""
+                                hoverEnabled: enabled
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root._forgetDevice(btCell._device)
                             }
-
-                            interactive: forgetCell.enabled
-                            onClicked: root._forgetDevice(btCell._device)
                         }
-                    }
 
-                    MouseArea {
-                        id: rowMouse
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: actionsRow.left
-                        enabled: root._actionKind === ""
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: {
-                            root.cursorActive = true;
-                            root._cursorAddress = btCell._address;
+                        Icon {
+                            name: "check"
+                            size: Theme.fontSize.body
+                            visible: btCell._connected
+                            color: Theme.color.primary
                         }
-                        onClicked: root._activateRow(btCell._bucket, btCell._device)
                     }
                 }
 
-                // The status line doubles as the row's trust marker
-                // (DESIGN.md §2.3's uppercase meta row): TRUSTED reports what
-                // BlueZ holds, and stays hidden for as long as a write on this
-                // row is inside its settle window, so the marker never asserts
-                // a state the panel hasn't finished verifying.
-                Row {
-                    visible: btCell._statusText !== "" || (btCell._isTrusted && !btCell._trustPending)
-                    width: parent.width
-                    spacing: Theme.space.sm
-
-                    Text {
-                        visible: btCell._statusText !== ""
-                        text: btCell._statusText
-                        color: btCell._isFailed ? Theme.color.destructive : btCell.dimForeground
-                        font.italic: btCell._isFailed
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.caption
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: Theme.letterSpacing.meta
-                    }
-
-                    MetaLabel {
-                        visible: btCell._isTrusted && !btCell._trustPending
-                        text: "TRUSTED"
-                        color: btCell.dimForeground
-                    }
+                SectionLabel {
+                    visible: btCell._statusText !== ""
+                    text: btCell._statusText
+                    color: btCell._isFailed ? Theme.color.destructive : btCell.dimForeground
+                    font.italic: btCell._isFailed
                 }
             }
         }
@@ -601,98 +644,67 @@ Panel {
         visible: !root._adapter
         width: parent.width
 
-        MetaLabel { text: "NO ADAPTER" }
+        SectionLabel { text: "NO ADAPTER" }
     }
 
-    // The panel's own subject (M28 Task 5): the one connected device, or the
-    // adapter itself, with POWER promoted into the trailing slot — this
-    // replaces the old adapter-name-plus-state row outright.
+    // The panel's own subject (M28 Task 5): the one connected device, or
+    // the adapter itself. Power moved to the header's own toggle.
     PanelHero {
+        id: hero
         visible: root._adapter !== null
         width: parent.width
-        glyph: root._heroGlyph
         title: root._heroTitle
         meta: root._heroMeta
-        trailing: adapterPowerToggle
-    }
 
-    Component {
-        id: adapterPowerToggle
-
-        // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09 amendment):
-        // no cell chrome, armed state promotes straight to accent instead
-        // of a fill/inversion.
-        MetaLabel {
-            text: "POWER"
-            color: (root._adapter && root._adapter.enabled)
-                ? Theme.color.primary
-                : (powerHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-            MouseArea {
-                id: powerHover
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (root._adapter)
-                        root._adapter.enabled = !root._adapter.enabled;
-                }
+        leading: Component {
+            Icon {
+                name: root._heroIcon
+                size: Theme.fontSize.heading
+                color: hero.foreground
             }
         }
-    }
 
-    // BlueZ rejects StartDiscovery while the adapter is still powering up,
-    // and discovery can also lapse on its own — keep nudging it back on for
-    // as long as the panel is open and the adapter enabled.
-    Timer {
-        id: discoveryRetry
-        interval: 1000
-        repeat: true
-        triggeredOnStart: true
-        running: root.isOpen && root._adapter !== null && root._adapter.enabled && !root._adapter.discovering
-        onTriggered: root._adapter.discovering = true
+        trailing: Component {
+            Text {
+                visible: root._heroBattery !== ""
+                text: root._heroBattery
+                color: hero.dimForeground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.bodySmall
+            }
+        }
     }
 
     Cell {
         visible: root._adapter !== null && !root._hasAnyRows
         width: parent.width
 
-        MetaLabel { text: (!root._adapter || !root._adapter.enabled) ? "TURN ON TO SCAN" : "SCANNING…" }
+        SectionLabel { text: (!root._adapter || !root._adapter.enabled) ? "TURN ON TO SCAN" : "SCANNING…" }
     }
 
-    Cell {
-        visible: root._connectedRows.length > 0
+    Column {
         width: parent.width
+        visible: root._pairedSection.length > 0
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "CONNECTED"; colon: true }
+        SectionLabel { text: "PAIRED"; count: root._pairedSection.length }
+
+        Repeater {
+            model: root._pairedSection
+            delegate: deviceRow
+        }
     }
 
-    Repeater {
-        model: root._connectedRows.map(function (d) { return { device: d, bucket: "connected" }; })
-        delegate: deviceRow
-    }
-
-    Cell {
-        visible: root._pairedRows.length > 0
+    Column {
         width: parent.width
+        visible: root._availableSection.length > 0
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "PAIRED"; colon: true }
-    }
+        SectionLabel { text: "AVAILABLE"; count: root._availableSection.length }
 
-    Repeater {
-        model: root._pairedRows.map(function (d) { return { device: d, bucket: "paired" }; })
-        delegate: deviceRow
-    }
-
-    Cell {
-        visible: root._availableRows.length > 0
-        width: parent.width
-
-        MetaLabel { text: "AVAILABLE"; colon: true }
-    }
-
-    Repeater {
-        model: root._availableRows.map(function (d) { return { device: d, bucket: "available" }; })
-        delegate: deviceRow
+        Repeater {
+            model: root._availableSection
+            delegate: deviceRow
+        }
     }
 }

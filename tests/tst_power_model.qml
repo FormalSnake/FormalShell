@@ -259,31 +259,31 @@ TestCase {
         compare(Power.chargeStateLabel(50, 1, false, false, _states), "CHARGING");
     }
 
-    // batteryGlyph
+    // batteryIcon
 
-    function test_glyph_empty_at_zero() {
-        compare(Power.batteryGlyph(0, true, false), "󰂎");
+    function test_icon_charging_beats_every_level() {
+        compare(Power.batteryIcon(5, false, false), "battery-charging");
+        compare(Power.batteryIcon(90, false, false), "battery-charging");
     }
 
-    function test_glyph_discharge_ramp() {
-        compare(Power.batteryGlyph(10, true, false), "󰁺");
-        compare(Power.batteryGlyph(90, true, false), "󰂂");
+    function test_icon_low_reading_warns() {
+        compare(Power.batteryIcon(10, true, false), "battery-warning");
+        compare(Power.batteryIcon(3, true, false), "battery-warning");
     }
 
-    function test_glyph_discharge_ramp_full() {
-        compare(Power.batteryGlyph(100, true, false), "󰁹");
+    function test_icon_level_ramp() {
+        compare(Power.batteryIcon(80, true, false), "battery-full");
+        compare(Power.batteryIcon(40, true, false), "battery-medium");
+        compare(Power.batteryIcon(20, true, false), "battery-low");
     }
 
-    function test_glyph_charge_ramp() {
-        compare(Power.batteryGlyph(10, false, false), "󰢜");
+    function test_icon_threshold_reads_as_a_level_not_a_charge() {
+        compare(Power.batteryIcon(50, false, true), Power.batteryIcon(50, true, false));
     }
 
-    function test_glyph_charge_ramp_full() {
-        compare(Power.batteryGlyph(100, false, false), "󰂅");
-    }
-
-    function test_glyph_threshold_uses_discharge_ramp() {
-        compare(Power.batteryGlyph(50, false, true), Power.batteryGlyph(50, true, false));
+    function test_icon_warn_percent_is_the_callers_to_set() {
+        compare(Power.batteryIcon(18, true, false, 20), "battery-warning");
+        compare(Power.batteryIcon(18, true, false), "battery-low");
     }
 
     // formatWh
@@ -328,25 +328,28 @@ TestCase {
         compare(Power.timeRowValue(true, 0, 0), "—");
     }
 
-    // formatWattageRow
+    // rateRowLabel / rateRowValue
 
-    function test_wattage_row_charging_no_cpu() {
-        compare(Power.formatWattageRow(true, 15.5, null), "CHARGING 15.5W");
+    function test_rate_row_label_names_the_direction() {
+        compare(Power.rateRowLabel(true, false), "CHARGING");
+        compare(Power.rateRowLabel(false, false), "DRAW");
     }
 
-    function test_wattage_row_discharging_no_cpu() {
-        compare(Power.formatWattageRow(false, -12.3, null), "DRAW 12.3W");
+    function test_rate_row_label_threshold_is_holding() {
+        compare(Power.rateRowLabel(true, true), "HOLDING");
+        compare(Power.rateRowLabel(false, true), "HOLDING");
     }
 
-    function test_wattage_row_charging_with_cpu() {
-        compare(Power.formatWattageRow(true, 15.5, 8.5), "CHARGING 15.5W / CPU 8.5W");
+    function test_rate_row_value_is_the_magnitude() {
+        compare(Power.rateRowValue(15.5, null), "15.5W");
+        compare(Power.rateRowValue(-12.3, null), "12.3W");
     }
 
-    function test_wattage_row_discharging_with_cpu() {
-        compare(Power.formatWattageRow(false, -12.3, 8.5), "DRAW 12.3W / CPU 8.5W");
+    function test_rate_row_value_with_cpu() {
+        compare(Power.rateRowValue(15.5, 8.5), "15.5W / CPU 8.5W");
     }
 
-    function test_wattage_row_cpu_undefined_omits_half() {
-        compare(Power.formatWattageRow(true, 15.5, undefined), "CHARGING 15.5W");
+    function test_rate_row_value_cpu_undefined_omits_half() {
+        compare(Power.rateRowValue(15.5, undefined), "15.5W");
     }
 }

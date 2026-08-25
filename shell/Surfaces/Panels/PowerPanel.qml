@@ -6,30 +6,34 @@ import qs.Components
 import qs.Notifications
 import "../../Power/model.js" as Power
 
-// Power panel (DESIGN.md §Panels, spec §2, M6 Task 7): the shared
-// PanelHero (M26 Task 1) opens the panel — battery glyph, "Battery",
-// four-way state meta line, percent as the displayLarge readout, charge
-// level as the rail — then a ruled stats ledger (M26 Task 3), then a
-// keyboard-navigable power-profile picker under a PROFILE header, the
-// active profile inverted. Bound directly to Quickshell.Services.UPower,
-// same as AudioPanel binds Pipewire directly. The test VM's QEMU aarch64
-// "virt" machine has no battery at all — UPower.displayDevice.isLaptopBattery
-// is then false and the panel renders the honest "AC POWER" cell instead
-// of a lying 0%, mirroring Bluetooth's "NO ADAPTER" state.
+// Power panel (DESIGN.md §3 "Panel", spec "Panels"): a hero for the battery
+// (state icon, "Battery", the state word, the percent as the display-sized
+// readout and the charge level as the rail), a stats ledger of four
+// label-and-mono-value cells, then the power-profile rows with the active
+// one `selected`. Enter applies the profile under the cursor. Bound directly
+// to Quickshell.Services.UPower, same as AudioPanel binds Pipewire directly.
+// The test VM's QEMU aarch64 "virt" machine has no battery at all:
+// UPower.displayDevice.isLaptopBattery is then false and the panel renders
+// the honest "AC POWER" row instead of a lying 0%, mirroring Bluetooth's
+// "NO ADAPTER" state.
+//
+// The charging pulse is DESIGN.md §1 "Motion"'s one continuous-motion
+// carve-out, and it keeps its own pacing regardless of `motion.enabled`.
 //
 // M16 Task 5: this is the shell's one instance of PowerPanel (shell.qml
-// wires the same `powerPanelInstance` into every screen's Bar) — the
+// wires the same `powerPanelInstance` into every screen's Bar), the
 // natural, already-live home for the low-battery watcher below, since a
 // per-screen widget (Battery.qml) would otherwise fire the same warning
-// once per monitor. `_percent`/`_charging` are real property bindings
-// that update regardless of whether the panel is open, so the watcher
-// runs continuously in the background exactly like the rest of this
-// panel's state already does.
+// once per monitor. `_percent`/`_charging` are real property bindings that
+// update regardless of whether the panel is open, so the watcher runs
+// continuously in the background exactly like the rest of this panel's
+// state already does.
 Panel {
     id: root
 
-    panelTitle: "POWER"
-    // A hero plus a short PROFILE list, no ledger with competing columns —
+    panelIcon: root._hasBattery ? "battery" : "zap"
+    panelTitle: "Power"
+    // A hero plus a short profile list, no ledger with competing columns:
     // the same shape as Weather's own Narrow, and the closest sanctioned
     // step to upstream's own 299px power panel.
     panelWidth: Theme.space.popupWidthNarrow
@@ -44,8 +48,8 @@ Panel {
 
     // Charge-threshold detection (M26 Task 3): UPower's own AC-vs-battery
     // aggregate, not a per-device state parse, and the states object the
-    // Power/model.js checks need — shared by the glyph, the hero meta line,
-    // and the stats ledger below so none of the three can disagree.
+    // Power/model.js checks need, shared by the icon, the hero meta line and
+    // the stats ledger below so none of the three can disagree.
     readonly property bool _onBattery: UPower.onBattery
     readonly property var _upowerStates: ({
         PendingCharge: UPowerDeviceState.PendingCharge,
@@ -55,14 +59,14 @@ Panel {
     readonly property bool _thresholdActive: root._hasBattery
         ? Power.chargeThresholdActive(root._percent, root._device.state, root._changeRate, root._timeToFull, root._onBattery, root._upowerStates)
         : false
-    readonly property string _batteryGlyph: root._hasBattery
-        ? Power.batteryGlyph(root._percent, root._onBattery, root._thresholdActive)
-        : ""
+    readonly property string _batteryIcon: root._hasBattery
+        ? Power.batteryIcon(root._percent, root._onBattery, root._thresholdActive, root._warnPercentPref)
+        : "zap"
     readonly property string _stateLabel: root._hasBattery
         ? Power.chargeStateLabel(root._percent, root._device.state, root._onBattery, root._thresholdActive, root._upowerStates)
         : ""
 
-    // Hysteresis state for Power/model.js's warnEvent() — persisted here
+    // Hysteresis state for Power/model.js's warnEvent(), persisted here
     // across calls, never reset except by the model's own re-arm-on-charge
     // rule. See model.js's own header comment for the full behavior.
     readonly property real _warnPercentPref: Config.get("battery.warnPercent", 10)
@@ -72,7 +76,7 @@ Panel {
 
     // The watcher's charging input is "anything that isn't actively
     // draining" (Charging/FullyCharged/PendingCharge re-arm), not the
-    // pulse's narrow state === Charging — a battery sitting at 100% on AC
+    // pulse's narrow state === Charging: a battery sitting at 100% on AC
     // reports FullyCharged, and treating that as "discharging" would let
     // thresholds fire on it.
     readonly property bool _draining: root._hasBattery
@@ -101,17 +105,17 @@ Panel {
     }
 
     // Component.onCompleted covers a boot that starts already below a
-    // threshold, which never generates a "changed" signal of its own —
-    // the on_*Changed handlers below cover every real transition after
-    // that (UPower keeps updating percentage/state independently of
-    // whether this panel is open).
+    // threshold, which never generates a "changed" signal of its own; the
+    // on_*Changed handlers below cover every real transition after that
+    // (UPower keeps updating percentage/state independently of whether this
+    // panel is open).
     Component.onCompleted: root._checkBatteryThresholds()
     on_PercentChanged: root._checkBatteryThresholds()
     on_ChargingChanged: root._checkBatteryThresholds()
     on_HasBatteryChanged: root._checkBatteryThresholds()
     on_DrainingChanged: root._checkBatteryThresholds()
 
-    // Fixed order matching the PowerProfile enum, so `_profiles[i] === i` —
+    // Fixed order matching the PowerProfile enum, so `_profiles[i] === i`.
     // PowerProfilesQml exposes no enumerable "available profiles" list, only
     // `hasPerformanceProfile`; a rejected Performance write just leaves the
     // live ActiveProfile DBus property (and this binding) unchanged, which
@@ -119,19 +123,21 @@ Panel {
     // panel needs to gate by hand.
     readonly property var _profiles: [PowerProfile.PowerSaver, PowerProfile.Balanced, PowerProfile.Performance]
 
-    // Keyboard cursor (Up/Down), independent of the active profile —
-    // rendered via Cell's `hovered` state so it reads as "pointed at" rather
-    // than "selected" (that inversion stays reserved for the real active
-    // profile). Reset to the active profile every time the panel opens.
-    property int _cursor: 0
+    cursorCount: root._profiles.length
+
+    onCursorActivated: index => root._applyProfile(index)
+
     onIsOpenChanged: {
         if (root.isOpen) {
-            root._cursor = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
+            // The cursor starts on the active profile, so the reveal-only
+            // first keypress shows it where the eye already is.
+            root.cursorIndex = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
+            root.cursorSection = 0;
         } else {
-            // Drop the RAPL baseline on close (M20 Task 5c) — no
-            // background polling for a closed panel, and reopening starts
-            // a fresh pair of samples rather than computing a wattage
-            // across whatever gap the panel was closed for.
+            // Drop the RAPL baseline on close (M20 Task 5c): no background
+            // polling for a closed panel, and reopening starts a fresh pair
+            // of samples rather than computing a wattage across whatever gap
+            // the panel was closed for.
             root._raplPrev = null;
             root.cpuPackageW = null;
         }
@@ -139,7 +145,7 @@ Panel {
 
     // CPU package power (M20 Task 5c, owner ask: "the W usage right next
     // to the W it's charging with"). Two `energy_uj` reads a fixed
-    // interval apart, watts = delta / interval — same idiom as
+    // interval apart, watts = delta / interval, the same idiom as
     // NetworkPanel's speed-test sampler (`cat` straight to argv, no
     // shell, a pure-JS reducer in Power/model.js does the math). RAPL's
     // `energy_uj` is root-only by default (PLATYPUS mitigation); a udev
@@ -192,62 +198,44 @@ Panel {
     function _applyProfile(index) {
         if (index < 0 || index >= root._profiles.length)
             return;
-        root._cursor = index;
+        root.cursorIndex = index;
         PowerProfiles.profile = root._profiles[index];
     }
 
-    // Panel.qml's shared keyboard-nav hook (M6 Task 7): Up/Down move the
-    // cursor, Enter/Return applies it. Escape keeps closing the panel as
-    // normal — Panel.qml dispatches that separately regardless of whether
-    // this handler accepts the event.
-    Connections {
-        target: root
+    PanelHero {
+        id: batteryHero
+        visible: root._hasBattery
+        width: parent.width
+        title: "Battery"
+        meta: root._stateLabel
+        readout: root._hasBattery ? root._percent + "%" : ""
+        rail: root._hasBattery ? root._percent / 100 : -1
 
-        function onKeyPressed(event) {
-            if (!root.isOpen)
-                return;
-            // First Up/Down only reveals the cursor on the active profile
-            // (M26 Task 8, upstream's CursorSurface contract) — it does not
-            // also move it, so the highlight appears where the user can see
-            // it before anything happens.
-            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                root.cursorActive = true;
-                event.accepted = true;
-                return;
-            }
-            switch (event.key) {
-            case Qt.Key_Up:
-                root._cursor = Math.max(0, root._cursor - 1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Down:
-                root._cursor = Math.min(root._profiles.length - 1, root._cursor + 1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                root._applyProfile(root._cursor);
-                event.accepted = true;
-                break;
+        leading: Component {
+            Icon {
+                name: root._batteryIcon
+                size: Theme.fontSize.heading
+                color: batteryHero.foreground
+
+                // Gated on root.isOpen (M16 Task 12): this panel's content
+                // is instantiated once for the shell's whole lifetime
+                // (Panel.qml hides the window rather than destroying it), so
+                // an unqualified `running: root._charging` kept animating a
+                // fully hidden window for as long as the laptop stayed on AC.
+                SequentialAnimation on opacity {
+                    running: root._charging && root.isOpen
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                    NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                }
             }
         }
     }
 
-    PanelHero {
-        visible: root._hasBattery
-        width: parent.width
-        glyph: root._batteryGlyph
-        title: "Battery"
-        meta: root._stateLabel
-        readout: root._hasBattery ? root._percent + "%" : ""
-        readoutSize: "displayLarge"
-        rail: root._hasBattery ? root._percent / 100 : -1
-    }
-
-    // Stats ledger (M26 Task 3): two ruled half-width cells for the short
-    // readings, two ruled full-width cells for the two whose value can run
-    // long (the wattage row's optional CPU suffix). "Charge cycles" is not
-    // in this ledger — verified against the pinned quickshell source
+    // Stats ledger (M26 Task 3): two half-width cells for the short
+    // readings, two full-width ones for the values that can run long (the
+    // rate row's optional CPU suffix). "Charge cycles" is not in this
+    // ledger, verified against the pinned quickshell source
     // (services/upower/device.hpp / org.freedesktop.UPower.Device.xml):
     // UPowerDevice exposes no cycle-count property at all. Battery size
     // (energyCapacity, a real UPower Wh reading) fills that slot instead;
@@ -255,29 +243,30 @@ Panel {
     // capacity as a percentage") covers design capacity. Every row here
     // reads a live UPowerDevice binding directly, never an async-populated
     // cache, so the four rows stay mounted for the panel's whole lifetime
-    // (`visible: root._hasBattery`, same gate as the hero) — an AC
-    // plug/unplug only ever changes a row's value text, never its
-    // presence.
+    // (`visible: root._hasBattery`, same gate as the hero): an AC
+    // plug/unplug only ever changes a row's value text, never its presence.
     Grid {
         id: batteryStatsGrid
         visible: root._hasBattery
         width: parent.width
         columns: 2
+        columnSpacing: Theme.space.rowGap
 
         Cell {
             id: capacityCell
-            width: batteryStatsGrid.width / 2
+            width: (batteryStatsGrid.width - batteryStatsGrid.columnSpacing) / 2
 
             Column {
                 width: parent.width
                 spacing: Theme.space.xxs
 
-                MetaLabel { text: "CAPACITY" }
+                SectionLabel { text: "CAPACITY" }
+
                 Text {
                     width: parent.width
                     text: root._hasBattery ? Power.formatHealthPercent(root._device.healthPercentage, root._device.healthSupported) : ""
                     color: capacityCell.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
@@ -286,18 +275,19 @@ Panel {
 
         Cell {
             id: sizeCell
-            width: batteryStatsGrid.width / 2
+            width: (batteryStatsGrid.width - batteryStatsGrid.columnSpacing) / 2
 
             Column {
                 width: parent.width
                 spacing: Theme.space.xxs
 
-                MetaLabel { text: "SIZE" }
+                SectionLabel { text: "SIZE" }
+
                 Text {
                     width: parent.width
                     text: root._hasBattery ? Power.formatWh(root._device.energyCapacity) : ""
                     color: sizeCell.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
                 }
@@ -310,41 +300,55 @@ Panel {
         visible: root._hasBattery
         width: parent.width
 
-        Row {
+        Item {
             width: parent.width
-            spacing: Theme.space.sm
+            height: Math.max(timeStatLabel.implicitHeight, timeStatValue.implicitHeight)
 
-            MetaLabel { id: timeStatLabel; text: Power.timeRowLabel(root._charging); colon: true }
+            SectionLabel {
+                id: timeStatLabel
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: Power.timeRowLabel(root._charging)
+            }
+
             Text {
-                width: parent.width - timeStatLabel.implicitWidth - parent.spacing
+                id: timeStatValue
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 text: root._hasBattery ? Power.timeRowValue(root._charging, root._timeToFull, root._timeToEmpty) : ""
                 color: timeStatCell.foreground
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.body
-                elide: Text.ElideRight
             }
         }
     }
 
-    // No colon on the rate row (DESIGN §2 item 10): the value is already
-    // fused with its own CHARGING/DRAW word via formatWattageRow.
     Cell {
         id: rateStatCell
         visible: root._hasBattery
         width: parent.width
 
-        Row {
+        Item {
             width: parent.width
-            spacing: Theme.space.sm
+            height: Math.max(rateStatLabel.implicitHeight, rateStatValue.implicitHeight)
 
-            MetaLabel { id: rateStatLabel; text: "RATE" }
+            SectionLabel {
+                id: rateStatLabel
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: Power.rateRowLabel(root._charging, root._thresholdActive)
+            }
+
             Text {
-                width: parent.width - rateStatLabel.implicitWidth - parent.spacing
-                text: root._hasBattery
-                    ? (root._thresholdActive ? "HOLDING" : Power.formatWattageRow(root._charging, root._changeRate, root.cpuPackageW))
-                    : ""
+                id: rateStatValue
+                anchors.left: rateStatLabel.right
+                anchors.leftMargin: Theme.space.iconGap
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                horizontalAlignment: Text.AlignRight
+                text: root._hasBattery ? Power.rateRowValue(root._changeRate, root.cpuPackageW) : ""
                 color: rateStatCell.foreground
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.body
                 elide: Text.ElideRight
             }
@@ -355,13 +359,7 @@ Panel {
         visible: !root._hasBattery
         width: parent.width
 
-        MetaLabel { text: "AC POWER"; colon: true }
-    }
-
-    Cell {
-        width: parent.width
-
-        MetaLabel { text: "PROFILE"; colon: true }
+        SectionLabel { text: "AC POWER" }
     }
 
     Component {
@@ -372,25 +370,57 @@ Panel {
             required property int index
             required property var modelData
             width: parent.width
+            interactive: true
             selected: profileCell.modelData === PowerProfiles.profile
-            hovered: root.cursorActive && profileCell.index === root._cursor
+            cursor: root.cursorActive && profileCell.index === root.cursorIndex
+
             onContainsPointerChanged: if (profileCell.containsPointer) {
                 root.cursorActive = true;
-                root._cursor = profileCell.index;
+                root.cursorIndex = profileCell.index;
             }
 
-            ActionLabel {
-                text: PowerProfile.toString(profileCell.modelData)
-                color: profileCell.foreground
-            }
-
-            interactive: true
             onClicked: root._applyProfile(profileCell.index)
+
+            Item {
+                width: parent.width
+                height: profileLabel.implicitHeight
+
+                Text {
+                    id: profileLabel
+                    anchors.left: parent.left
+                    anchors.right: profileCheck.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: PowerProfile.toString(profileCell.modelData)
+                    color: profileCell.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
+                }
+
+                Icon {
+                    id: profileCheck
+                    name: "check"
+                    size: Theme.fontSize.body
+                    visible: profileCell.selected
+                    color: profileCell.foreground
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
         }
     }
 
-    Repeater {
-        model: root._profiles
-        delegate: profileRow
+    Column {
+        width: parent.width
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "PROFILE" }
+
+        Repeater {
+            model: root._profiles
+            delegate: profileRow
+        }
     }
 }

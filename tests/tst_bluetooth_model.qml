@@ -89,24 +89,29 @@ TestCase {
         compare(names(b.known), "Alpha,Mid,Zeta");
     }
 
-    function test_statusText_pairing_beats_everything() {
-        compare(BluetoothModel.statusText(dev("A", { pairing: true, connected: true, batteryAvailable: true, battery: 0.9 })), "PAIRING…");
+    function test_activityText_pairing_beats_a_connecting_state() {
+        compare(BluetoothModel.activityText(dev("A", { pairing: true, state: BluetoothModel.DeviceState.Connecting })), "PAIRING…");
     }
 
-    function test_statusText_connecting_state() {
-        compare(BluetoothModel.statusText(dev("A", { state: BluetoothModel.DeviceState.Connecting })), "CONNECTING…");
+    function test_activityText_connecting_state() {
+        compare(BluetoothModel.activityText(dev("A", { state: BluetoothModel.DeviceState.Connecting })), "CONNECTING…");
     }
 
-    function test_statusText_battery_percent_when_connected() {
-        compare(BluetoothModel.statusText(dev("A", { connected: true, batteryAvailable: true, battery: 0.42 })), "42%");
+    function test_activityText_blank_for_a_settled_device() {
+        compare(BluetoothModel.activityText(dev("A", { connected: true })), "");
+        compare(BluetoothModel.activityText(null), "");
     }
 
-    function test_statusText_blank_when_connected_without_battery() {
-        compare(BluetoothModel.statusText(dev("A", { connected: true, batteryAvailable: false })), "");
+    function test_batteryText_percent_when_connected() {
+        compare(BluetoothModel.batteryText(dev("A", { connected: true, batteryAvailable: true, battery: 0.42 })), "42%");
     }
 
-    function test_statusText_blank_for_null_device() {
-        compare(BluetoothModel.statusText(null), "");
+    function test_batteryText_blank_when_connected_without_battery() {
+        compare(BluetoothModel.batteryText(dev("A", { connected: true, batteryAvailable: false })), "");
     }
 
+    function test_batteryText_blank_for_a_disconnected_device() {
+        compare(BluetoothModel.batteryText(dev("A", { connected: false, batteryAvailable: true, battery: 0.9 })), "");
+        compare(BluetoothModel.batteryText(null), "");
+    }
 }

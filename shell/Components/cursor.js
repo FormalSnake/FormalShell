@@ -33,6 +33,14 @@ function activation(index, count, active, section) {
     return count > 0 ? clamp(index, count) : -1;
 }
 
+// Left/Right on a panel whose cursor row carries an adjustable value
+// (Audio's volume tracks) steps that value instead of walking the list.
+// Gated on `active` for the same reason move() is: the first key reveals
+// the cursor, so nothing under it changes before the eye can find it.
+function isStep(dx, dy, steps, active) {
+    return !!steps && !!active && dy === 0 && dx !== 0;
+}
+
 // Tab wraps through the panel's sections in either direction.
 function section(current, count, direction) {
     if (count <= 1)

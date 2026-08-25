@@ -9,9 +9,11 @@ TestCase {
     name: "Icons"
 
     readonly property var names: [
-        "wifi", "wifi-off", "bluetooth", "bluetooth-off", "volume",
+        "wifi", "wifi-off", "bluetooth", "bluetooth-connected",
+        "bluetooth-off", "volume",
         "volume-1", "volume-2", "volume-x", "mic", "mic-off", "battery",
-        "battery-charging", "battery-low", "battery-warning", "sun", "moon",
+        "battery-charging", "battery-full", "battery-low", "battery-medium",
+        "battery-warning", "sun", "moon",
         "bell", "bell-off", "clock", "calendar", "search", "command", "x",
         "check", "lock", "lock-open", "refresh-cw", "settings", "power",
         "monitor", "cpu", "memory-stick", "hard-drive", "thermometer",

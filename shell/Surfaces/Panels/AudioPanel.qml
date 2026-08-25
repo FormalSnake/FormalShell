@@ -4,38 +4,37 @@ import qs.Core
 import qs.Components
 import "../../Audio/model.js" as AudioModel
 
-// The shared PanelHero (M26 Task 1) opens the panel with the default
-// sink's own name, mute state, volume percent and rail, mute as its
-// trailing toggle, the rail itself press/drag/wheel-adjustable via
-// `railInteractive` (M28 Task 1, review fix: the hero is the master
-// slider now, not a readout of one). Omarchy mixer behavior below it
-// (DESIGN.md §Panels, spec §2, M6 Task 1; M15 Task 4): one selectable row
-// per OTHER candidate output sink (click/Enter sets
-// Pipewire.preferredDefaultAudioSink) — the active sink is deliberately
-// left out of this list, since the hero above already names it and an
-// inverted row repeating that same name would just say it twice; INPUT
-// pairs its own noun with its percent and mute on one header line, track
-// underneath, then the same selectable rows for sources, the whole
-// section omitted when no input hardware exists; APPS lists real playback
-// streams
-// (Audio/model.js.isPlaybackStream, never reading `properties` at filter
-// time — the omarchy destabilization note), omitted entirely with no
-// streams. Master sliders clamp 0..1 (AudioModel.clampDevice); stream
-// tracks allow 0..1.5 overdrive (AudioModel.clampStream) with a hairline
-// notch at the 1.0 mark so overdrive reads as deliberate, not a broken
-// track. Keyboard: Up/Down walk one combined cursor across every row
-// (master sliders count as their own row), h/l adjust 5% on whatever
-// slider-shaped row the cursor sits on, m mutes it, Enter activates
-// (default-switch on a device row, mute-toggle everywhere else) — the same
-// `Panel.keyPressed` hook NetworkPanel/PowerPanel already consume. Wheel
-// over any track steps 5% too. PwNode.audio's volume/muted (and
-// .properties, read only once .ready — the stream label's fallback chain)
-// are invalid until bound, so every node this panel touches, streams
-// included, goes through the shared PwObjectTracker below.
+// Audio panel (DESIGN.md §3 "Panel", spec "Panels"): a hero card for the
+// default sink (its name, mute state, volume percent and an interactive
+// rail), `OUTPUT (n)` listing the other candidate sinks, an INPUT master
+// row over the default source's own track with `INPUT (n)` under it, and
+// `APPS (n)` for the live playback streams.
+//
+// The active sink is deliberately absent from the OUTPUT list: the hero
+// already names it, and a row repeating that name would say it twice. The
+// input list does carry its own default, marked `selected`.
+//
+// Keyboard (spec "Keyboard model"): one flat cursor walks every row, the
+// two master sliders included; Left/Right steps whatever slider it sits on
+// by 5%, `m` mutes it, Enter switches the default on a device row and
+// mutes on a slider row. Wheel over any track steps 5% too. The cursor is
+// keyed by row identity rather than by index, since a device appearing or
+// a stream ending renumbers the list under it.
+//
+// Master sliders clamp 0..1 (AudioModel.clampDevice); stream tracks allow
+// 0..1.5 overdrive (AudioModel.clampStream) with a notch at the 1.0 mark
+// so overdrive reads as deliberate rather than as a track that ran out of
+// room.
+//
+// PwNode.audio's volume/muted (and .properties, read only once .ready, the
+// stream label's own fallback chain) are invalid until bound, so every
+// node this panel touches, streams included, goes through the shared
+// PwObjectTracker below.
 Panel {
     id: root
 
-    panelTitle: "AUDIO"
+    panelIcon: "volume-2"
+    panelTitle: "Audio"
     panelWidth: Theme.space.popupWidthDefault
 
     readonly property var _sink: Pipewire.defaultAudioSink
@@ -44,6 +43,9 @@ Panel {
     readonly property bool _outputMuted: root._sink !== null && root._sink.audio !== null && root._sink.audio.muted
     readonly property real _outputVolume: root._sink !== null && root._sink.audio !== null
         ? AudioModel.clampDevice(root._sink.audio.volume) : 0
+    readonly property bool _inputMuted: root._source !== null && root._source.audio !== null && root._source.audio.muted
+    readonly property real _inputVolume: root._source !== null && root._source.audio !== null
+        ? AudioModel.clampDevice(root._source.audio.volume) : 0
 
     readonly property var _deviceNodes: Pipewire.nodes.values.filter(function (n) {
         return n.audio !== null && !n.isStream;
@@ -55,9 +57,6 @@ Panel {
         return n.audio !== null && AudioModel.isPlaybackStream(n);
     })
 
-    // The active sink is excluded here (M28 review fix, the duplication
-    // trap): the hero above already names it, so this list is only the
-    // OTHER candidates there is any point clicking.
     readonly property var _outputRows: root._outputs.filter(function (n) {
         return root._sink === null || n.id !== root._sink.id;
     }).map(function (n) {
@@ -75,12 +74,8 @@ Panel {
     }
 
     // One flat cursor across master sliders (role "slider", section
-    // "output"/"input"), device rows (role "device"), and stream rows
-    // (role "slider", section "stream") — mirrors NetworkPanel's
-    // string-identity cursor (`_cursorSsid`) rather than PowerPanel's
-    // single-list numeric one, since this panel spans several Repeaters.
-    property string _cursorKey: ""
-
+    // "output"/"input"), device rows (role "device") and stream rows (role
+    // "slider", section "stream"), in the order the panel renders them.
     readonly property var _cursorEntries: {
         var out = [];
         if (root._sink && root._sink.audio)
@@ -98,34 +93,37 @@ Panel {
         return out;
     }
 
-    function _cursorIndex() {
+    // The cursor's row identity, kept alongside Panel's own numeric
+    // cursorIndex: the row list rebuilds whenever a device or a stream
+    // comes and goes, and an index on its own would walk the cursor onto
+    // whatever row slid underneath it.
+    property string _cursorKey: ""
+
+    function _entryAt(index) {
+        return (index >= 0 && index < root._cursorEntries.length) ? root._cursorEntries[index] : null;
+    }
+
+    function _keyAt(index) {
+        var entry = root._entryAt(index);
+        return entry ? entry.key : "";
+    }
+
+    function _indexForKey(key) {
         for (var i = 0; i < root._cursorEntries.length; i++)
-            if (root._cursorEntries[i].key === root._cursorKey)
+            if (root._cursorEntries[i].key === key)
                 return i;
         return -1;
     }
 
-    function _cursorEntry() {
-        var idx = root._cursorIndex();
-        return idx >= 0 ? root._cursorEntries[idx] : null;
-    }
-
-    function _moveCursor(delta) {
-        var entries = root._cursorEntries;
-        if (entries.length === 0) {
-            root._cursorKey = "";
+    function _pointAt(key) {
+        var index = root._indexForKey(key);
+        if (index < 0)
             return;
-        }
-        var idx = root._cursorIndex();
-        if (idx < 0)
-            idx = delta > 0 ? 0 : entries.length - 1;
-        else
-            idx = Math.max(0, Math.min(entries.length - 1, idx + delta));
-        root._cursorKey = entries[idx].key;
+        root.cursorActive = true;
+        root.cursorIndex = index;
     }
 
-    function _adjustCursorVolume(delta) {
-        var entry = root._cursorEntry();
+    function _adjustVolume(entry, delta) {
         if (!entry || entry.role !== "slider")
             return;
         if (entry.section === "output" && root._sink && root._sink.audio)
@@ -136,8 +134,7 @@ Panel {
             entry.node.audio.volume = AudioModel.clampStream(entry.node.audio.volume + delta);
     }
 
-    function _muteCursor() {
-        var entry = root._cursorEntry();
+    function _mute(entry) {
         if (!entry)
             return;
         if (entry.section === "output" && root._sink && root._sink.audio)
@@ -148,68 +145,54 @@ Panel {
             entry.node.audio.muted = !entry.node.audio.muted;
     }
 
-    function _activateCursor() {
-        var entry = root._cursorEntry();
+    function _makeDefault(row) {
+        if (!row)
+            return;
+        if (row.isOutput)
+            Pipewire.preferredDefaultAudioSink = row.node;
+        else
+            Pipewire.preferredDefaultAudioSource = row.node;
+    }
+
+    cursorCount: root._cursorEntries.length
+    // Left/Right belongs to the slider under the cursor, not to the list.
+    cursorStepsHorizontally: true
+
+    onCursorIndexChanged: root._cursorKey = root._keyAt(root.cursorIndex)
+
+    on_CursorEntriesChanged: {
+        var index = root._indexForKey(root._cursorKey);
+        if (index >= 0 && index !== root.cursorIndex)
+            root.cursorIndex = index;
+    }
+
+    onCursorActivated: index => {
+        var entry = root._entryAt(index);
         if (!entry)
             return;
-        if (entry.role === "device") {
-            if (entry.section === "output")
-                Pipewire.preferredDefaultAudioSink = entry.node;
-            else
-                Pipewire.preferredDefaultAudioSource = entry.node;
-            return;
-        }
-        root._muteCursor();
-    }
-
-    // Cursor identity starts on the first row every open (audio devices can
-    // change while the panel was closed) so the M26 Task 8 reveal-only
-    // guard above has a real position to show, never an empty key that
-    // would gate `hovered` false on the first press.
-    onIsOpenChanged: {
-        if (root.isOpen)
-            root._cursorKey = root._cursorEntries.length > 0 ? root._cursorEntries[0].key : "";
+        if (entry.role === "device")
+            root._makeDefault({ node: entry.node, isOutput: entry.section === "output" });
         else
-            root._cursorKey = "";
+            root._mute(entry);
     }
 
-    // Panel.qml's shared keyboard-nav hook (M6 Task 7, PowerPanel/
-    // NetworkPanel's consumer pattern): Up/Down move the cursor, h/l step
-    // whatever slider it's on by 5%, m mutes, Enter activates.
-    Connections {
-        target: root
+    onCursorStepped: (index, direction) => root._adjustVolume(root._entryAt(index), direction * 0.05)
 
-        function onKeyPressed(event) {
-            if (!root.isOpen)
-                return;
-            // First Up/Down only reveals the cursor where it already sits
-            // (M26 Task 8, upstream's CursorSurface contract) — it does not
-            // also move it, so the highlight appears where the user can see
-            // it before anything happens.
-            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                root.cursorActive = true;
-                event.accepted = true;
-                return;
-            }
-            if (event.key === Qt.Key_Up) {
-                root._moveCursor(-1);
-                event.accepted = true;
-            } else if (event.key === Qt.Key_Down) {
-                root._moveCursor(1);
-                event.accepted = true;
-            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                root._activateCursor();
-                event.accepted = true;
-            } else if (event.text === "h" || event.text === "H") {
-                root._adjustCursorVolume(-0.05);
-                event.accepted = true;
-            } else if (event.text === "l" || event.text === "L") {
-                root._adjustCursorVolume(0.05);
-                event.accepted = true;
-            } else if (event.text === "m" || event.text === "M") {
-                root._muteCursor();
-                event.accepted = true;
-            }
+    onCursorTextKey: text => {
+        if (text === "m" || text === "M")
+            root._mute(root._entryAt(root.cursorIndex));
+    }
+
+    // The cursor starts on the first row every open (devices can come and
+    // go while the panel is closed), so the reveal-only first keypress has
+    // a real position to show.
+    onIsOpenChanged: {
+        if (root.isOpen) {
+            root.cursorIndex = 0;
+            root.cursorSection = 0;
+            root._cursorKey = root._keyAt(0);
+        } else {
+            root._cursorKey = "";
         }
     }
 
@@ -220,30 +203,55 @@ Panel {
             id: deviceCell
             required property var modelData
             width: parent.width
+            interactive: true
             selected: deviceCell.modelData.isOutput
                 ? (root._sink !== null && deviceCell.modelData.node.id === root._sink.id)
                 : (root._source !== null && deviceCell.modelData.node.id === root._source.id)
-            hovered: root.cursorActive && root._cursorKey === deviceCell.modelData.cursorKey
-            onContainsPointerChanged: if (deviceCell.containsPointer) {
-                root.cursorActive = true;
-                root._cursorKey = deviceCell.modelData.cursorKey;
-            }
+            cursor: root.cursorActive && root._cursorKey === deviceCell.modelData.cursorKey
 
-            Text {
+            // A pointer reaching a row reveals the cursor on it, the same
+            // gate the first navigation key flips.
+            onContainsPointerChanged: if (deviceCell.containsPointer) root._pointAt(deviceCell.modelData.cursorKey)
+
+            onClicked: root._makeDefault(deviceCell.modelData)
+
+            Item {
                 width: parent.width
-                text: deviceCell.modelData.node.description || deviceCell.modelData.node.name
-                color: deviceCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-                elide: Text.ElideRight
-            }
+                height: deviceName.implicitHeight
 
-            interactive: true
-            onClicked: {
-                if (deviceCell.modelData.isOutput)
-                    Pipewire.preferredDefaultAudioSink = deviceCell.modelData.node;
-                else
-                    Pipewire.preferredDefaultAudioSource = deviceCell.modelData.node;
+                Icon {
+                    id: deviceIcon
+                    name: deviceCell.modelData.isOutput ? "volume-2" : "mic"
+                    size: Theme.fontSize.body
+                    color: deviceCell.foreground
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    id: deviceName
+                    anchors.left: deviceIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: deviceCheck.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: deviceCell.modelData.node.description || deviceCell.modelData.node.name
+                    color: deviceCell.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
+                }
+
+                Icon {
+                    id: deviceCheck
+                    name: "check"
+                    size: Theme.fontSize.body
+                    visible: deviceCell.selected
+                    color: Theme.color.primary
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
     }
@@ -256,11 +264,7 @@ Panel {
             required property var modelData
             width: parent.width
             interactive: true
-            hovered: root.cursorActive && root._cursorKey === streamCell.modelData.cursorKey
-            onContainsPointerChanged: if (streamCell.containsPointer) {
-                root.cursorActive = true;
-                root._cursorKey = streamCell.modelData.cursorKey;
-            }
+            cursor: root.cursorActive && root._cursorKey === streamCell.modelData.cursorKey
 
             readonly property var _node: streamCell.modelData.node
             readonly property var _audio: streamCell._node ? streamCell._node.audio : null
@@ -271,96 +275,70 @@ Panel {
                 streamCell._node ? streamCell._node.description : "",
                 streamCell._node ? streamCell._node.name : "") || "Stream"
 
+            onContainsPointerChanged: if (streamCell.containsPointer) root._pointAt(streamCell.modelData.cursorKey)
+
             Column {
                 width: parent.width
-                spacing: Theme.space.xxs
+                spacing: Theme.space.xs
 
-                // Same header-line rhythm as the hero and the INPUT row
-                // above: the app's own name left, its percent and mute
-                // right, one line, track underneath.
                 Item {
                     width: parent.width
                     height: Math.max(streamLabelText.implicitHeight, streamValueRow.implicitHeight)
 
                     Text {
                         id: streamLabelText
-                        text: streamCell._label
-                        color: streamCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
-                        elide: Text.ElideRight
                         anchors.left: parent.left
                         anchors.right: streamValueRow.left
-                        anchors.rightMargin: Theme.space.sm
+                        anchors.rightMargin: Theme.space.iconGap
                         anchors.verticalCenter: parent.verticalCenter
+                        text: streamCell._label
+                        color: streamCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
                     }
 
                     Row {
                         id: streamValueRow
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.space.sm
+                        spacing: Theme.space.iconGap
 
                         Text {
-                            id: streamPercent
-                            text: Math.round(streamCell._volume * 100) + "%"
-                            color: streamCell._muted ? Theme.color.mutedForeground : streamCell.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.caption
                             anchors.verticalCenter: parent.verticalCenter
+                            text: Math.round(streamCell._volume * 100) + "%"
+                            color: streamCell._muted ? Theme.color.mutedForeground : streamCell.dimForeground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.bodySmall
                         }
 
-                        // Bare-label ink promotion (DESIGN.md §1.1's
-                        // 2026-08-09 amendment): no cell chrome, armed
-                        // state promotes straight to accent instead of a
-                        // fill/inversion.
-                        MetaLabel {
-                            id: streamMuteLabel
-                            text: "MUTE"
-                            color: streamCell._muted
-                                ? Theme.color.primary
-                                : (streamMuteHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
+                        IconButton {
                             anchors.verticalCenter: parent.verticalCenter
-
-                            MouseArea {
-                                id: streamMuteHover
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
-                            }
+                            name: streamCell._muted ? "volume-x" : "volume-2"
+                            onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
                         }
                     }
                 }
 
-                DitherFill {
+                Track {
                     id: streamTrack
                     width: parent.width
-                    height: Theme.space.trackThickness
+                    value: streamCell._volume / 1.5
 
-                    Rectangle {
-                        width: parent.width * Math.min(1, streamCell._volume / 1.5)
-                        height: parent.height
-                        color: Theme.color.primary
-                    }
-
-                    // The 1.0 boundary, at 2/3 of the 0..1.5 track — cuts a
-                    // notch through fill and empty track alike so crossing
-                    // into overdrive reads as a deliberate line, not the
-                    // track simply running out of room. Deliberately 1px, not
-                    // `Theme.borderWidth`: this isn't a border or a rule
-                    // (§1.4's ink hierarchy doesn't apply), it's a
-                    // background-colored cut through a fill — the 2/0 border
-                    // convention (audit "border widths") doesn't govern it.
+                    // The 1.0 boundary, at 2/3 of the 0..1.5 track: a cut
+                    // through fill and groove alike, so crossing into
+                    // overdrive reads as a deliberate line.
                     Rectangle {
                         x: parent.width * (1 / 1.5) - width / 2
-                        width: 1
+                        width: Theme.borderWidth
                         height: parent.height
                         color: Theme.color.background
                     }
 
                     MouseArea {
                         anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
                         function _setFromX(x) {
                             if (!streamCell._audio) return;
                             streamCell._audio.volume = AudioModel.clampStream((x / streamTrack.width) * 1.5);
@@ -378,43 +356,32 @@ Panel {
         }
     }
 
-    // The panel's own subject: the default sink's name, mute state, volume
-    // and rail, with mute promoted into the trailing slot (M28 Task 1).
-    // Replaces the old OUTPUT header row and its master slider outright, so
-    // the output device list below opens directly on this.
+    // The panel's own subject: the default sink, with its rail as the
+    // master slider (press, drag and wheel) and mute in the trailing slot.
     PanelHero {
+        id: outputHero
         visible: root._sink !== null && root._sink.audio !== null
         width: parent.width
-        glyph: root._outputMuted ? "󰝟" : "󰕾"
         title: root._sink ? (root._sink.description || root._sink.name) : ""
         meta: root._outputMuted ? "MUTED" : "ACTIVE"
         readout: Math.round(root._outputVolume * 100) + "%"
         rail: root._outputVolume
-        // Press/drag/wheel on the rail itself (M28 review fix): the old
-        // master-slider row's only pointer target, restored here now that
-        // the hero is what stands in for it. The keyboard cursor still
-        // lands on "output-slider" for h/l.
         railInteractive: true
+        cursor: root.cursorActive && root._cursorKey === "output-slider"
         onRailPressed: fraction => { if (root._sink && root._sink.audio) root._sink.audio.volume = AudioModel.clampDevice(fraction); }
         onRailStepped: direction => { if (root._sink && root._sink.audio) root._sink.audio.volume = AudioModel.clampDevice(root._sink.audio.volume + direction * 0.05); }
-        hovered: root.cursorActive && root._cursorKey === "output-slider"
-        trailing: outputMuteToggle
-    }
 
-    Component {
-        id: outputMuteToggle
+        leading: Component {
+            Icon {
+                name: root._outputMuted ? "volume-x" : "volume-2"
+                size: Theme.fontSize.heading
+                color: outputHero.foreground
+            }
+        }
 
-        MetaLabel {
-            text: "MUTE"
-            color: root._outputMuted
-                ? Theme.color.primary
-                : (outputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-            MouseArea {
-                id: outputMuteHover
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
+        trailing: Component {
+            IconButton {
+                name: root._outputMuted ? "volume-x" : "volume-2"
                 onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
             }
         }
@@ -424,117 +391,132 @@ Panel {
         visible: root._outputs.length === 0 && root._inputs.length === 0
         width: parent.width
 
-        MetaLabel { text: "NO DEVICES" }
+        SectionLabel { text: "NO DEVICES" }
     }
 
-    Repeater {
-        model: root._outputRows
-        delegate: deviceRow
-    }
-
-    // Header-line pairing (upstream's own idiom, adopted M28 Task 1): the
-    // section noun sits left, its readout and mute right, on one line,
-    // track underneath — one row saved over a separate "INPUT:" header.
-    Cell {
-        id: inputMasterCell
-        visible: root._inputs.length > 0
-        interactive: true
-        hovered: root.cursorActive && root._cursorKey === "input-slider"
-        onContainsPointerChanged: if (inputMasterCell.containsPointer) {
-            root.cursorActive = true;
-            root._cursorKey = "input-slider";
-        }
+    Column {
         width: parent.width
+        visible: root._outputRows.length > 0
+        spacing: Theme.space.rowGap
 
-        Column {
+        SectionLabel { text: "OUTPUT"; count: root._outputRows.length }
+
+        Repeater {
+            model: root._outputRows
+            delegate: deviceRow
+        }
+    }
+
+    Column {
+        width: parent.width
+        visible: root._inputs.length > 0
+        spacing: Theme.space.rowGap
+
+        // The default source's own master row: one line of label, percent
+        // and mute, its track underneath, the same rhythm as a stream row.
+        Cell {
+            id: inputMasterCell
             width: parent.width
-            spacing: Theme.space.xxs
+            interactive: true
+            cursor: root.cursorActive && root._cursorKey === "input-slider"
+            onContainsPointerChanged: if (inputMasterCell.containsPointer) root._pointAt("input-slider")
 
-            Item {
+            Column {
                 width: parent.width
-                height: Math.max(inputHeaderLabel.implicitHeight, inputValueRow.implicitHeight)
+                spacing: Theme.space.xs
 
-                MetaLabel {
-                    id: inputHeaderLabel
-                    text: "INPUT"
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                }
+                Item {
+                    width: parent.width
+                    height: Math.max(inputLabel.implicitHeight, inputValueRow.implicitHeight)
 
-                Row {
-                    id: inputValueRow
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.space.sm
-
-                    Text {
-                        text: Math.round((root._source && root._source.audio ? root._source.audio.volume : 0) * 100) + "%"
+                    Icon {
+                        id: inputIcon
+                        name: root._inputMuted ? "mic-off" : "mic"
+                        size: Theme.fontSize.body
                         color: inputMasterCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    MetaLabel {
-                        id: inputMuteLabel
-                        text: "MUTE"
-                        color: (root._source && root._source.audio && root._source.audio.muted)
-                            ? Theme.color.primary
-                            : (inputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
+                    Text {
+                        id: inputLabel
+                        anchors.left: inputIcon.right
+                        anchors.leftMargin: Theme.space.iconGap
+                        anchors.right: inputValueRow.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Input"
+                        color: inputMasterCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
 
-                        MouseArea {
-                            id: inputMuteHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
+                    Row {
+                        id: inputValueRow
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.iconGap
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Math.round(root._inputVolume * 100) + "%"
+                            color: root._inputMuted ? Theme.color.mutedForeground : inputMasterCell.dimForeground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.bodySmall
+                        }
+
+                        IconButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: root._inputMuted ? "mic-off" : "mic"
                             onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
                         }
                     }
                 }
-            }
 
-            DitherFill {
-                id: inputTrack
-                width: parent.width
-                height: Theme.space.trackThickness
+                Track {
+                    id: inputTrack
+                    width: parent.width
+                    value: root._inputVolume
 
-                Rectangle {
-                    width: parent.width * (root._source && root._source.audio ? AudioModel.clampDevice(root._source.audio.volume) : 0)
-                    height: parent.height
-                    color: Theme.color.primary
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    function _setFromX(x) {
-                        if (!root._source || !root._source.audio) return;
-                        root._source.audio.volume = AudioModel.clampDevice(x / inputTrack.width);
-                    }
-                    onPressed: mouse => _setFromX(mouse.x)
-                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                    onWheel: wheel => {
-                        if (!root._source || !root._source.audio) return;
-                        root._source.audio.volume = AudioModel.clampDevice(root._source.audio.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
-                        wheel.accepted = true;
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        function _setFromX(x) {
+                            if (!root._source || !root._source.audio) return;
+                            root._source.audio.volume = AudioModel.clampDevice(x / inputTrack.width);
+                        }
+                        onPressed: mouse => _setFromX(mouse.x)
+                        onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+                        onWheel: wheel => {
+                            if (!root._source || !root._source.audio) return;
+                            root._source.audio.volume = AudioModel.clampDevice(root._source.audio.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
+                            wheel.accepted = true;
+                        }
                     }
                 }
             }
         }
+
+        SectionLabel { text: "INPUT"; count: root._inputRows.length }
+
+        Repeater {
+            model: root._inputRows
+            delegate: deviceRow
+        }
     }
 
-    Repeater {
-        model: root._inputRows
-        delegate: deviceRow
-    }
-
-    Cell {
-        visible: root._streams.length > 0
+    Column {
         width: parent.width
+        visible: root._streamRows.length > 0
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "APPS"; colon: true }
-    }
+        SectionLabel { text: "APPS"; count: root._streamRows.length }
 
-    Repeater {
-        model: root._streamRows
-        delegate: streamRow
+        Repeater {
+            model: root._streamRows
+            delegate: streamRow
+        }
     }
 }

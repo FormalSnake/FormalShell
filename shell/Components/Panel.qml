@@ -83,7 +83,18 @@ PanelWindow {
     // that field's then, not the cursor's.
     property bool inlineEditorFocused: false
 
+    // Left/Right steps the value on the cursor row rather than walking the
+    // list, for a panel whose rows carry an adjustable track (Audio).
+    property bool cursorStepsHorizontally: false
+
     signal cursorActivated(int index)
+    // `x` on a row that has a destructive action (Bluetooth's forget).
+    signal cursorDeleted(int index)
+    // A step on the cursor row, `direction` -1 or 1.
+    signal cursorStepped(int index, int direction)
+    // Any printable key the catcher does not bind itself, for a panel with
+    // a single-letter action of its own (Audio's `m`).
+    signal cursorTextKey(string text)
 
     // Forwarded from backdrop's own Keys.onPressed: the raw-event hook for a
     // panel whose keyboard model predates the cursor above (PowerPanel's
@@ -95,6 +106,10 @@ PanelWindow {
     signal keyPressed(var event)
 
     function moveCursor(dx, dy) {
+        if (Cursor.isStep(dx, dy, root.cursorStepsHorizontally, root.cursorActive)) {
+            root.cursorStepped(root.cursorIndex, dx > 0 ? 1 : -1);
+            return;
+        }
         var next = Cursor.move(root.cursorIndex, root.cursorCount, root.cursorActive, dx, dy);
         root.cursorIndex = next.index;
         root.cursorActive = next.active;
@@ -104,6 +119,12 @@ PanelWindow {
         var index = Cursor.activation(root.cursorIndex, root.cursorCount, root.cursorActive, root.cursorSection);
         if (index >= 0)
             root.cursorActivated(index);
+    }
+
+    function deleteCursor() {
+        var index = Cursor.activation(root.cursorIndex, root.cursorCount, root.cursorActive, root.cursorSection);
+        if (index >= 0)
+            root.cursorDeleted(index);
     }
 
     function moveSection(direction) {
@@ -394,8 +415,10 @@ PanelWindow {
 
                     onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
                     onActivateRequested: root.activateCursor()
+                    onDeleteRequested: root.deleteCursor()
                     onCloseRequested: root.close()
                     onTabRequested: direction => root.moveSection(direction)
+                    onTextKey: text => root.cursorTextKey(text)
 
                     Column {
                         id: contentColumn

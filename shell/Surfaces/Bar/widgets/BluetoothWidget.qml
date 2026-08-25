@@ -3,14 +3,11 @@ import Quickshell.Bluetooth
 import qs.Core
 import qs.Components
 
-// Bar cell for bluetooth status (DESIGN.md §Bar's "network/BT glyphs"
-// indicator slot, spec §1, M6 Task 6): a single glyph for adapter/device
-// state (no adapter or disabled, enabled with nothing connected, enabled
-// with a device connected), click toggles the bluetooth panel anchored
-// under this cell — same open-panel underline as NetworkWidget.qml.
-// Glyph codepoints taken from the pinned nerd-fonts-jetbrains-mono cmap
-// (nix/testvm.nix): md-bluetooth U+F00AF, md-bluetooth_connect U+F00B1,
-// md-bluetooth_off U+F00B2.
+// Bar cell for bluetooth status (DESIGN.md §3 Bar, spec "Surfaces"): one
+// icon for adapter/device state (no adapter or disabled, enabled with
+// nothing connected, enabled with a device connected), click toggles the
+// bluetooth panel anchored under this cell, same open-panel line as
+// NetworkWidget.qml.
 Cell {
     id: root
 
@@ -27,17 +24,15 @@ Cell {
             .map(function (d) { return d.name || d.deviceName; })
         : []
     readonly property bool _connected: root._connectedNames.length > 0
-    readonly property string _glyph: (!root._adapter || !root._adapter.enabled)
-        ? "󰂲"
-        : (root._connected ? "󰂱" : "󰂯")
+    readonly property string _icon: (!root._adapter || !root._adapter.enabled)
+        ? "bluetooth-off"
+        : (root._connected ? "bluetooth-connected" : "bluetooth")
 
-    standalone: true
-
-    // Three glyphs cover four states between them (no adapter and adapter
+    // Three icons cover four states between them (no adapter and adapter
     // off share one), and none of them names the device that's connected.
     // "NO ADAPTER"/"NO DEVICES" are BluetoothPanel.qml's own honest-empty
     // strings, not second wordings for the same states. The trailing
-    // segment states the M26 Task 9 right-click action — no adapter means
+    // segment states the M26 Task 9 right-click action: no adapter means
     // there's nothing to toggle, so it's omitted rather than dangled.
     tooltipText: {
         if (!root._adapter)
@@ -52,12 +47,10 @@ Cell {
         return head + " / RIGHT " + (root._adapter.enabled ? "RADIO OFF" : "RADIO ON");
     }
 
-    Text {
+    Icon {
         anchors.verticalCenter: parent.verticalCenter
-        text: root._glyph
+        name: root._icon
         color: root.foreground
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize.body
     }
 
     panelOpen: root._panelOpen

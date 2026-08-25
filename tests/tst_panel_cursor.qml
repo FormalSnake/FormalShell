@@ -70,6 +70,21 @@ TestCase {
         compare(Cursor.section(0, 0, -1), 0);
     }
 
+    function test_horizontal_is_a_step_only_on_a_panel_that_asked_for_one() {
+        compare(Cursor.isStep(1, 0, true, true), true);
+        compare(Cursor.isStep(-1, 0, true, true), true);
+        compare(Cursor.isStep(1, 0, false, true), false);
+    }
+
+    function test_a_step_never_fires_before_the_cursor_is_revealed() {
+        compare(Cursor.isStep(1, 0, true, false), false);
+    }
+
+    function test_vertical_is_never_a_step() {
+        compare(Cursor.isStep(0, 1, true, true), false);
+        compare(Cursor.isStep(1, 1, true, true), false);
+    }
+
     function test_the_catcher_is_blocked_while_an_inline_editor_has_focus() {
         compare(Cursor.catcherBlocked(true, true), true);
         compare(Cursor.catcherBlocked(true, false), false);
