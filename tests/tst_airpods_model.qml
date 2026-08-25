@@ -54,7 +54,7 @@ TestCase {
         var adaptive = modes.filter(function (m) { return m.key === "adaptive"; })[0];
         compare(adaptive.active, true);
 
-        compare(AirpodsModel.stateLine(s), "ADAPTIVE / LID CLOSED");
+        compare(AirpodsModel.stateLine(s), "Adaptive / Lid closed");
     }
 
     function test_nonpro_status_filters_adaptive_and_keeps_off() {
@@ -69,7 +69,7 @@ TestCase {
 
         var rows = AirpodsModel.batteryRows(s);
         compare(rows[1].hint, "IN EAR");
-        compare(AirpodsModel.stateLine(s), "NOISE CANCELLATION / LID OPEN");
+        compare(AirpodsModel.stateLine(s), "Noise cancellation / Lid open");
     }
 
     function test_absent_pods_return_default_shape_and_no_battery_rows() {
@@ -93,7 +93,7 @@ TestCase {
         compare(rows[0].hint, "CHARGING");
         compare(rows[2].hint, "CHARGING");
 
-        compare(AirpodsModel.stateLine(s), "NOT CONNECTED / LID CLOSED");
+        compare(AirpodsModel.stateLine(s), "Not connected / Lid closed");
     }
 
     function test_wrong_schema_version_returns_default_shape() {
@@ -124,16 +124,16 @@ TestCase {
         compare(AirpodsModel.earDetectionLabel(2), "NEVER");
         compare(AirpodsModel.earDetectionLabel(99), "UNKNOWN");
 
-        compare(AirpodsModel.lidLabel(0), "LID OPEN");
-        compare(AirpodsModel.lidLabel(1), "LID CLOSED");
+        compare(AirpodsModel.lidLabel(0), "Lid open");
+        compare(AirpodsModel.lidLabel(1), "Lid closed");
         compare(AirpodsModel.lidLabel(2), "");
     }
 
     function test_noise_mode_label_covers_unknown() {
-        compare(AirpodsModel.noiseModeLabel(0), "OFF");
-        compare(AirpodsModel.noiseModeLabel(1), "NOISE CANCELLATION");
-        compare(AirpodsModel.noiseModeLabel(2), "TRANSPARENCY");
-        compare(AirpodsModel.noiseModeLabel(3), "ADAPTIVE");
-        compare(AirpodsModel.noiseModeLabel(-1), "UNKNOWN");
+        compare(AirpodsModel.noiseModeLabel(0), "Off");
+        compare(AirpodsModel.noiseModeLabel(1), "Noise cancellation");
+        compare(AirpodsModel.noiseModeLabel(2), "Transparency");
+        compare(AirpodsModel.noiseModeLabel(3), "Adaptive");
+        compare(AirpodsModel.noiseModeLabel(-1), "Unknown");
     }
 }

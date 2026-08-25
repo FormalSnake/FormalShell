@@ -10,12 +10,12 @@ import Quickshell.Services.SystemTray
 // method" idiom `panel`/`picker` already established.
 //
 // `menu` (M32) opens TrayMenu.qml for the named item the same way a real
-// right-click would — the compositor-keybind path and the smoke drive path
+// right-click would, the compositor-keybind path and the smoke drive path
 // the old native QMenu never had (a platform QMenu with no pointer to
 // dismiss it would have wedged a headless run; the shell-owned menu is a
 // layer-shell surface like any other popout, so it doesn't). `menucursor`/
 // `menuactivate` stand in for the menu's own real Down/Up/Enter keys, same
-// division as `picker`'s `choose`/`variant` — an IPC-opened popout gets no
+// division as `picker`'s `choose`/`variant`, an IPC-opened popout gets no
 // bar cell and so never reliably picks up real Wayland keyboard focus in
 // this rig, confirmed by a wtype Escape landing on a menu that stayed open
 // (2026-08-18).
@@ -68,7 +68,7 @@ IpcHandler {
     }
 
     // Cursor-nav standins for the real Down/Up/Enter keys `menu` sets up to
-    // receive (TrayMenu.qml's moveCursor()/activateCursor()) — the same
+    // receive (TrayMenu.qml's moveCursor()/activateCursor()), the same
     // "verify the action, not the input method" division `picker`'s own
     // choose()/variant() already draw for exactly this reason: an
     // IPC-opened popout gets no bar cell and so never picks up real focus

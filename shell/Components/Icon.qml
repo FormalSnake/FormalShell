@@ -18,7 +18,7 @@ Text {
 
     text: Icons.glyph(root._set, root.name)
     color: Theme.color.foreground
-    font.family: root._family === "" ? Theme.fontFamily : root._family
+    font.family: root._family === "" ? Theme.fontFamilyMono : root._family
     font.pixelSize: root.size
     // A square the size of the neighbouring text, so a row lays the glyph
     // out like a character whatever advance width the icon font gives it.

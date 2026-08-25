@@ -10,21 +10,21 @@ import qs.Components
 // referencing the singleton "will make quickshell start tracking system
 // tray contents"), so every real StatusNotifierItem registered on the
 // session bus shows up in .items with no extra wiring on our end. Each item
-// renders as its own standalone Cell — left click Activate()s it, middle
+// renders as its own standalone Cell, left click Activate()s it, middle
 // click SecondaryActivate()s it, right click opens its DBusMenu when
 // item.hasMenu is true. Items whose onlyMenu flag is set (SNI ItemIsMenu:
 // "activation will do nothing") get the menu on left click too.
 //
 // M32: the menu itself is TrayMenu.qml (`menu` below, one shared instance
-// wired in from shell.qml/Bar.qml), a shell-owned QsMenuOpener surface —
+// wired in from shell.qml/Bar.qml), a shell-owned QsMenuOpener surface,
 // not the old QsMenuAnchor/native-QMenu path this file used to open
 // directly. That native QMenu was also an xdg_popup with its own
 // keyboard+pointer grab (platformmenu.cpp); Hyprland's grab code never adds
 // the layer-shell parent to the grab's accept set on the path Qt takes to
 // map it (`m_parent` stays null, XDGShell.cpp), and its popup grab is
 // pointer+keyboard rather than keyboard-only, so a click anywhere outside
-// the accept set — including the tray icon's own pixmap, inside the same
-// Cell's hit area the surrounding padding shares — tore the grab down and
+// the accept set, including the tray icon's own pixmap, inside the same
+// Cell's hit area the surrounding padding shares, tore the grab down and
 // closed the menu instantly (niri tracked this correctly; the same shell
 // worked before the owner's hosts moved niri→Hyprland, 2026-08-17). A
 // layer-shell popout takes no such grab, so this class of bug is gone by
@@ -49,11 +49,11 @@ Row {
     id: root
 
     // The shared TrayMenu instance (shell.qml, wired through Bar.qml same
-    // as every other panel property) — null is a valid state (menu never
+    // as every other panel property), null is a valid state (menu never
     // opened this session), openMenu() below just no-ops rather than crash.
     property var menu: null
 
-    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity. `.values` is read here for the count alone, never
@@ -90,21 +90,20 @@ Row {
             // Bar.qml's region delegate stretches this Row to the bar's
             // shared cell height; the Row top-aligns children, so without
             // this the shorter icon cells sit visibly high (Row permits
-            // vertical anchors on children — it only manages x).
+            // vertical anchors on children, it only manages x).
             anchors.verticalCenter: parent.verticalCenter
             // Same Row (`root` here IS the Row Bar.qml stretches) only
             // manages x, never size, so the cell's own icon-only content
             // would otherwise measure shorter than the bar's shared height
-            // — see Workspaces.qml's identical fix for why this binds to
+            //, see Workspaces.qml's identical fix for why this binds to
             // `root.height` (the externally forced value) and not
             // `Theme.barHeight` (which routes back through the same
             // implicitHeight chain Bar.qml measures this Row by).
             height: root.height
-            standalone: true
             // The item's own words, in the SNI's own order of preference:
             // ToolTip.title is what the spec means for hover text, Title is
             // the display name, and Id is the last thing that is always set.
-            // Nothing here is ours to rewrite — hence `tooltipVerbatim`, which
+            // Nothing here is ours to rewrite, hence `tooltipVerbatim`, which
             // keeps the card from uppercasing another process's string.
             tooltipText: itemCell.modelData.tooltipTitle || itemCell.modelData.title || itemCell.modelData.id
             tooltipVerbatim: true

@@ -6,7 +6,7 @@ import Quickshell.Services.Pipewire
 // Default-sink volume/mute, backed by Quickshell's native Pipewire client
 // (no wpctl/pactl spawning). Verified against quickshell source
 // (src/services/pipewire/qml.hpp): PwNode.audio's volume/muted are marked
-// "invalid unless the node is bound using PwObjectTracker" — the tracker
+// "invalid unless the node is bound using PwObjectTracker", the tracker
 // below is load-bearing, not decoration. Binding the node is also what
 // makes external changes (wpctl, pavucontrol, another client) observable:
 // PwNodeAudio's volume/muted are live Q_PROPERTYs once bound, so they pick
@@ -42,7 +42,7 @@ Singleton {
     property bool sourceMuted: _sourceAudio ? _sourceAudio.muted : false
 
     // Fired whenever the bound sink's volume or mute state changes, ours or
-    // someone else's — the OSD (M5 Task 6) shows on this, not on setVolume()
+    // someone else's, the OSD (M5 Task 6) shows on this, not on setVolume()
     // being called directly.
     signal changed
 
@@ -73,8 +73,8 @@ Singleton {
     }
 
     // PwNodeAudioIface's Q_PROPERTY for the averaged `volume` is declared
-    // `NOTIFY volumesChanged` (plural — the signal backing the `volumes`
-    // vector, reused for the average) — there is no `volumeChanged` signal
+    // `NOTIFY volumesChanged` (plural, the signal backing the `volumes`
+    // vector, reused for the average), there is no `volumeChanged` signal
     // to connect to. A singular `onVolumeChanged` handler here silently
     // never fires, so a pure volume change (no mute toggle) never emitted
     // `changed()`, and neither the OSD nor anything else keyed off it ever

@@ -69,7 +69,7 @@ function titleCase(segment) {
 }
 
 function inferKind(entry) {
-    // An explicit `kind` wins outright — the one escape hatch for a kind
+    // An explicit `kind` wins outright, the one escape hatch for a kind
     // the other four fields can't express, e.g. "note" (nix's own
     // non-activatable NO NIX/SEARCHING rows): those are hand-built Node
     // fragments from a provider fn today, bypassing buildTree entirely, but
@@ -177,7 +177,7 @@ function isWhenVisible(node, condResults) {
 // review finding, M-polish batch item F): summoning a route directly
 // (Menu.qml's `open(route)` -> `_resolveRoute`/`_enterLevel`) bypasses the
 // parent-level `isWhenVisible()` filter that would otherwise have kept a
-// gated node off screen entirely — `menu summon share` without
+// gated node off screen entirely, `menu summon share` without
 // localsend_app used to render SHARE's actionable children anyway, each
 // one silently exiting 127 on activation. Never activatable ("note" kind,
 // `dim: true`), the same honest-unavailable shape every other absent state
@@ -213,7 +213,7 @@ function directChildren(nodes, id) {
 }
 
 // `_ancestry` tracks ids on the current recursion path (not a global
-// memo — two branches may legitimately share a target) so a link cycle
+// memo, two branches may legitimately share a target) so a link cycle
 // (a -> b -> a) bottoms out as "no visible children" instead of recursing
 // forever. Each call gets its own copy: siblings must not see each
 // other's marks, only actual ancestors matter.

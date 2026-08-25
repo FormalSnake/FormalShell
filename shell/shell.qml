@@ -29,7 +29,7 @@ import qs.Reminders
 import qs.Services
 
 ShellRoot {
-    // Single-instance takeover lock (post-M16 addendum) — wired first so a
+    // Single-instance takeover lock (post-M16 addendum), wired first so a
     // stale/duplicate instance is caught before any surface renders. See
     // InstanceLock.qml's own header comment for the takeover protocol.
     InstanceLock {}
@@ -75,7 +75,7 @@ ShellRoot {
 
         delegate: Component {
             // center: notificationsCenter suppresses this screen's toast
-            // stack while the history center is open — see Toasts.qml's own
+            // stack while the history center is open, see Toasts.qml's own
             // header comment for why the two surfaces can't coexist.
             Toasts { center: notificationsCenter }
         }
@@ -85,7 +85,7 @@ ShellRoot {
     // summon time rather than living on every output.
     // `menuInstance`, not a bare `menu`: Bar.qml carries a property of that
     // name and is instantiated inside a Variants delegate `Component`, where
-    // an object's OWN property shadows an outer id of the same name — so
+    // an object's OWN property shadows an outer id of the same name, so
     // `Bar { menu: menu }` bound the property to itself and every launcher
     // cell got null (probe-verified in-VM, 2026-08-19: the same binding at
     // this file's top level resolves to the id and works, which is exactly
@@ -103,7 +103,7 @@ ShellRoot {
     Osd { id: osd }
 
     // WlSessionLock manages its own per-screen surfaces internally (see
-    // Lock.qml's header comment) — one instance here covers every output.
+    // Lock.qml's header comment), one instance here covers every output.
     Lock { id: lock }
 
     // LockService is the one lock trigger every caller goes through (IPC,
@@ -113,7 +113,7 @@ ShellRoot {
 
     // Same "one controller, many surfaces" reasoning as Lock, minus the
     // WlSessionLock auto-management (see Screensaver.qml's own header
-    // comment) — one instance here, its internal Variants loop covers every
+    // comment), one instance here, its internal Variants loop covers every
     // output.
     Screensaver { id: screensaver }
 
@@ -127,7 +127,7 @@ ShellRoot {
     HotCorners { screensaver: screensaver; menu: menuInstance }
 
     // Same "one controller, shown on the focused screen at trigger time"
-    // reasoning as Osd — but this one's trigger is a real polkit
+    // reasoning as Osd, but this one's trigger is a real polkit
     // authentication request, not an IPC call.
     PolkitDialog { id: polkitDialog }
 
@@ -192,7 +192,7 @@ ShellRoot {
         }
     }
 
-    // Dev surface, reachable only through `gallery open|toggle` — no bar
+    // Dev surface, reachable only through `gallery open|toggle`, no bar
     // cell, no bar.layout entry, and deliberately absent from PanelIpc's
     // registry below. Its own Loader stays inactive until summoned, so an
     // ordinary session pays nothing for it.
@@ -231,7 +231,7 @@ ShellRoot {
     LockIpc {}
     ScreensaverIpc { screensaver: screensaver }
     // The image/wallpaper picker is the menu's "wallpaper" route (M23), not
-    // a surface of its own — see PickerIpc.qml's header for why the target
+    // a surface of its own, see PickerIpc.qml's header for why the target
     // keeps its own name and selection file regardless.
     PickerIpc { picker: menuInstance }
     ScreenshotIpc { picker: regionPickerInstance }

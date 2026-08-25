@@ -6,18 +6,18 @@
 // docs/superpowers/plans/2026-08-18-m29-device-panels.md). Every function
 // takes the raw text a `cat` on the matching sysfs file would produce, or
 // an absent/unparsable one, and returns a complete default shape rather
-// than leaving a caller to guard against null — same discipline as
+// than leaving a caller to guard against null, same discipline as
 // Airpods/model.js.
 //
 // There is no daemon here: DualsenseService reads sysfs directly (a
 // power_supply node keyed by Bluetooth MAC, a `leds` node keyed by input
-// index — both first-match-wins globs, see that file), and the shell never
+// index, both first-match-wins globs, see that file), and the shell never
 // writes any of it. The owner's host units own the lightbar/player-LED
 // writes; this model only ever describes what was read.
 
 // warn/critical thresholds mirror the retired `dualsense-bar` command
 // module this panel replaces (M29 plan): a straight read of the capacity
-// percentage, no charge-direction gating — the sysfs `status` string is
+// percentage, no charge-direction gating, the sysfs `status` string is
 // surfaced separately as `statusLabel` for the hero meta line instead.
 var WARN_PERCENT = 20;
 var CRITICAL_PERCENT = 10;
@@ -29,7 +29,7 @@ function _defaultSupply() {
 // capacityText: the `capacity` sysfs file's own text (0-100, in 10% buckets
 // on real hardware, but this parses whatever integer it holds rather than
 // assuming the bucket size). statusText: the `status` sysfs file's own text
-// (POWER_SUPPLY_STATUS values — "Charging", "Discharging", "Full", "Not
+// (POWER_SUPPLY_STATUS values, "Charging", "Discharging", "Full", "Not
 // charging", "Unknown"). Either missing/unparsable leaves `percent` at -1,
 // which is the panel's "no controller" cue.
 function parseSupply(capacityText, statusText) {
@@ -49,7 +49,7 @@ function parseSupply(capacityText, statusText) {
 }
 
 // text: the `multi_intensity` sysfs file's own text, "R G B" (each 0-255).
-// Returns a "#rrggbb" string, or null when the file is absent/malformed —
+// Returns a "#rrggbb" string, or null when the file is absent/malformed,
 // the LIGHTBAR row's own presence gate.
 function parseLightbar(text) {
     if (typeof text !== "string")
@@ -75,7 +75,7 @@ function parseLightbar(text) {
 
 // brightnesses: exactly 5 entries, each the matching `player-N/brightness`
 // sysfs file's own text ("0"/"1") or null where that file didn't exist.
-// Returns the lit count (0-5) — the caller decides "unreadable" (as
+// Returns the lit count (0-5), the caller decides "unreadable" (as
 // opposed to "readable, none lit") by whether it attempted this call at
 // all, since a real DualSense always exposes all five once its lightbar
 // node is found.
@@ -91,10 +91,10 @@ function parsePlayerLeds(brightnesses) {
 }
 
 // The hero meta line: the sysfs status word alone, e.g. "CHARGING" /
-// "DISCHARGING" / "FULL" / "NOT CHARGING" — sysfs carries no time-to-empty
+// "DISCHARGING" / "FULL" / "NOT CHARGING", sysfs carries no time-to-empty
 // for this device, so nothing is estimated or invented here.
 function stateLine(supply) {
     if (!supply || supply.percent < 0 || supply.statusLabel === "")
         return "";
-    return supply.statusLabel.toUpperCase();
+    return supply.statusLabel;
 }

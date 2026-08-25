@@ -54,7 +54,7 @@ Scope {
     }
     // Reloads niri's current config file with no path argument (niri-ipc's
     // Action::LoadConfigFile { path: Option<String> }, verified against
-    // niri-ipc/src/lib.rs and src/ipc/server.rs) — re-parses the `include`d
+    // niri-ipc/src/lib.rs and src/ipc/server.rs), re-parses the `include`d
     // niri-border.kdl fragment ThemeEngine just wrote.
     function applyThemeFragment() {
         requestSocket.request({ Action: { LoadConfigFile: {} } });
@@ -92,8 +92,8 @@ Scope {
     }
 
     // Parking (M37). niri has no minimize, no scratchpad and no special
-    // workspace — the full `niri msg action` list on 26.04 carries no hide
-    // of any kind — so out of view means another workspace, with `focus`
+    // workspace, the full `niri msg action` list on 26.04 carries no hide
+    // of any kind, so out of view means another workspace, with `focus`
     // false so the user stays where they are.
     readonly property bool windowParkingAvailable: true
 
@@ -123,7 +123,7 @@ Scope {
 
     // Anywhere but the workspace being looked at. niri has no overlay
     // workspace, so "parked" and "on some other workspace" are the same fact
-    // here — including a console the user scrolled away from, which the
+    // here, including a console the user scrolled away from, which the
     // toggle then brings back rather than hiding something already gone.
     function isWindowParked(id) {
         const win = root.windows.find(w => w.id === id);
@@ -134,15 +134,15 @@ Scope {
 
     readonly property bool outputConfigAvailable: true
     // niri-ipc's OutputAction (lib.rs:1018) is Off/On/Mode/CustomMode/
-    // Modeline/Scale/Transform/Position/Vrr — no mirror variant, because niri
+    // Modeline/Scale/Transform/Position/Vrr, no mirror variant, because niri
     // has no mirroring primitive at all. setOutputMirror below is therefore a
     // declared no-op rather than a missing symbol, matching how
     // HyprlandBackend states applyThemeFragment's absence; the panel gates on
     // this flag and renders an honest unavailable cell.
     readonly property bool mirrorSupported: false
 
-    // Output names are plain strings on the wire on both compositors — niri
-    // keys its Outputs map by name — so none of the requests below carry the
+    // Output names are plain strings on the wire on both compositors, niri
+    // keys its Outputs map by name, so none of the requests below carry the
     // Number(id) conversion the window/workspace actions above need.
     // Set across the request so the shared reply parser can attribute an Err
     // to this request rather than to one of the action acks that use the same
@@ -192,7 +192,7 @@ Scope {
 
     // niri applies an Output request from an idle callback (src/ipc/server.rs:415
     // schedules apply_transient_output_config), so its reply lands before the
-    // change does — re-reading immediately would report the old geometry back.
+    // change does, re-reading immediately would report the old geometry back.
     Timer {
         id: outputRefreshTimer
         interval: 300
@@ -270,7 +270,7 @@ Scope {
                     return;
                 }
                 // An Err reply to an Outputs request is a failed enumeration,
-                // not an empty one — see BackendBase's outputsState comment for
+                // not an empty one, see BackendBase's outputsState comment for
                 // why the panel must be able to tell those apart. Errs to other
                 // requests are indistinguishable on this shared connection, so
                 // only an outstanding Outputs request claims one.

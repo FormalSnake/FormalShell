@@ -19,7 +19,7 @@ function clampShare(share) {
     return Math.min(SHARE_MAX, Math.max(SHARE_MIN, value));
 }
 
-// `screen` is the output's LOGICAL box ({x, y, width, height} — Quickshell.
+// `screen` is the output's LOGICAL box ({x, y, width, height}, Quickshell.
 // screens, the same space windows[].rect and the placement dispatchers use,
 // never the output mode's physical pixels). `barHeight` is the exclusive
 // zone the bar already took off the top; the console covers `share` of what

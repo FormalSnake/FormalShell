@@ -5,10 +5,10 @@ import "../shell/Menu/model.js" as Model
 import "../shell/Theme/icons.js" as Icons
 
 // M43 D2: shell/Menu/icons.js maps the shipped route ids onto icon names so
-// MenuRow can draw them through `Icon` instead of the raw glyph the tree
-// carries as data. Two drift guards read shipped files rather than fixtures:
-// a name that does not resolve in a set renders as circle-help, and a route
-// added to default-menu.jsonc without a mapping silently keeps the glyph.
+// MenuRow can draw them through `Icon`. Two drift guards read shipped files
+// rather than fixtures: a name that does not resolve in a set renders as
+// circle-help, and a route added to default-menu.jsonc without a mapping
+// renders with no icon at all.
 // Reading a file outside the test's own directory needs
 // QML_XHR_ALLOW_FILE_READ=1, set by the qmltestrunner invocations in
 // justfile and flake.nix's qml-tests derivation.
@@ -41,19 +41,19 @@ TestCase {
         }
     }
 
-    // The point of the map: a route that ships an icon gets a NAME, not the
-    // glyph. A route added without one still renders (the glyph fallback),
-    // so only this test catches the omission.
-    function test_every_shipped_route_with_an_icon_is_mapped() {
+    // The point of the map: every route the shell ships names its icon here.
+    // A route added without one still renders, just bare, so only this test
+    // catches the omission.
+    function test_every_shipped_route_is_mapped() {
         var tree = Model.buildTree(Model.parseJsonc(_read("../shell/Menu/default-menu.jsonc")), {});
         var ids = Object.keys(tree.nodes);
         verify(ids.length > 0);
         var mapped = 0;
         for (var i = 0; i < ids.length; i++) {
             var node = tree.nodes[ids[i]];
-            if (!node.icon || node.icon === "")
+            if (!node.id || node.id === "")
                 continue;
-            verify(MenuIcons.iconFor(node) !== "", node.id + " carries a glyph with no mapped name");
+            verify(MenuIcons.iconFor(node) !== "", node.id + " has no mapped icon name");
             mapped++;
         }
         verify(mapped > 0);

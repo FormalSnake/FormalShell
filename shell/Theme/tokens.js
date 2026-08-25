@@ -8,7 +8,7 @@
 
 // --- 1.3 scale roots -------------------------------------------------
 
-// fontScale is fontBaseSize/13 — 13 is the shell's long-standing body size,
+// fontScale is fontBaseSize/13, 13 is the shell's long-standing body size,
 // so the default base size produces fontScale 1.0 and every multiplier
 // below reduces to the exact px values already shipping.
 var FONT_MULTIPLIERS = {
@@ -20,7 +20,7 @@ function fontScale(baseSize) {
     return baseSize / 13;
 }
 
-// Every font token as `fontBaseSize * multiplier`, rounded — retheming the
+// Every font token as `fontBaseSize * multiplier`, rounded, retheming the
 // one `baseSize` number rescales every token proportionally.
 function fontTokens(baseSize) {
     var out = { baseSize: baseSize };
@@ -31,7 +31,7 @@ function fontTokens(baseSize) {
 
 // Base px per token at spacingScale 1.0.
 var SPACING_BASE = {
-    xxs: 2, xs: 3, sm: 4, md: 6, lg: 8, xl: 10, xxl: 12, xxxl: 14, huge: 18
+    xxs: 2, xs: 3, sm: 4, md: 6, lg: 8, xl: 10, xxl: 12, huge: 18
 };
 
 // Semantic spacing tokens (a control's own padding/height, not a bare
@@ -40,11 +40,9 @@ var SPACING_BASE = {
 // `controlPaddingX`/`Y`, `rowGap`, `iconGap`, `panelPadding` and
 // `sectionGap` take the spec's own values, decoupling `controlPaddingX`/`Y`
 // from the bare `lg`/`sm` scale steps they used to mirror exactly. Older
-// keys not named in the spec (`controlGap`, `inputPaddingY`,
-// `popupRowHeight`, `rowPaddingX`, `labelGap`, `panelGap`) keep their
-// existing values: surfaces still reading them move to the new semantic
-// keys on their own retrofit milestone (M45 prunes what nothing reads any
-// more). `trackThickness` is the one flat-fill-track idiom (OSD,
+// keys not named in the spec (`controlGap`, `popupRowHeight`, `panelGap`)
+// keep their existing values while surfaces still read them.
+// `trackThickness` is the one flat-fill-track idiom (OSD,
 // volume/brightness/life-progress sliders), a single token so every track
 // site renders the same thickness instead of each surface picking its own
 // literal. `popupWidth{Narrow,Default,Wide,Menu,MenuSplit,MenuApp}` are the
@@ -57,10 +55,10 @@ var SPACING_BASE = {
 // where the split route's right half is a single preview that can take
 // whatever room is left over.
 var SEMANTIC_SPACING_BASE = {
-    controlGap: 8, controlPaddingX: 12, controlPaddingY: 6, inputPaddingY: 7,
+    controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
     controlHeight: 32, barCellHeight: 28, barMargin: 6,
-    popupRowHeight: 28, rowGap: 4, iconGap: 8, rowPaddingX: 12,
-    labelGap: 4, panelGap: 14, panelPadding: 12, sectionGap: 16,
+    popupRowHeight: 28, rowGap: 4, iconGap: 8,
+    panelGap: 14, panelPadding: 12, sectionGap: 16,
     trackThickness: 6,
     popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900
@@ -77,7 +75,7 @@ function spacingTokens(scale) {
 
 // DESIGN.md §2.3's uppercase meta-row tracking, the wider variant the
 // lock/greeter date label uses, and `display`'s own wide tracking for the
-// lock clock's oversized digits — a font metric, so it scales with
+// lock clock's oversized digits, a font metric, so it scales with
 // fontScale (not spacingScale) to stay proportional to the text it tracks.
 var LETTER_SPACING_BASE = { meta: 1, wide: 2, display: 6 };
 
@@ -123,12 +121,12 @@ function radiusTokens(base) {
 // --- §4 motion tokens ---------------------------------------------------
 
 // The owner's brief verbatim: "fast and subtle, it should just look
-// better". `fast` paces hover fills, `standard` paces surface enter/exit —
+// better". `fast` paces hover fills, `standard` paces surface enter/exit,
 // both inside DESIGN.md §4's 90-140ms band. `slide` is the enter/exit
 // translate distance (§4's 4-8px). `reveal` paces the two full-screen
 // fades: the wallpaper crossfade (§4's third named carve-out, beside the
 // pulse and the screensaver) and the screensaver's own enter/exit
-// (§4 rule 6, owner's call 2026-08-12) — deliberately outside the
+// (§4 rule 6, owner's call 2026-08-12), deliberately outside the
 // 90-140ms band since a full-screen swap reads better slower than a
 // control hover. `enabled: false`
 // (the motion.enabled settings key) short-circuits `fast`/`standard`/
@@ -137,7 +135,7 @@ function radiusTokens(base) {
 // single pixel of chrome.
 //
 // `marqueePxPerSec`/`marqueeHoldMs` pace the now-playing bar cell's
-// overflow scroll (owner-requested, M16 Task 11) — a constant scroll rate,
+// overflow scroll (owner-requested, M16 Task 11), a constant scroll rate,
 // not a duration, so `enabled` doesn't zero them the way it zeroes
 // fast/standard/reveal; the caller (NowPlaying.qml) gates the whole
 // animation on `Theme.motionEnabled` directly and falls back to today's

@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import "../shell/Menu/model.js" as Model
+import "../shell/Menu/icons.js" as MenuIcons
 import "../shell/Menu/providers.js" as Providers
 import "../shell/Menu/actions.js" as Actions
 
@@ -40,8 +41,8 @@ TestCase {
         verify(entry);
         compare(entry.label, "Wallpaper");
         compare(entry.provider, "wallpaper");
-        verify(entry.icon.length > 0);
         verify(entry.aliases.indexOf("picker") >= 0);
+        compare(MenuIcons.iconFor({ id: "wallpaper" }), "image");
     }
 
     // "provider" is what makes the node a descendable level rather than an

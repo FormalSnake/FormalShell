@@ -263,24 +263,24 @@ function shortRev(rev) {
 // configured), "nolock" (the directory has no readable flake.lock),
 // "checking" (probes in flight), "offline" (every probe failed to reach its
 // forge), "ok" (probes finished). Anything else is treated as still
-// resolving, never as UP TO DATE.
+// resolving, never as up to date.
 //
-// UP TO DATE is only ever returned when nothing is behind AND nothing is
+// "Up to date" is only ever returned when nothing is behind AND nothing is
 // unknown, and no zero count is ever printed.
 function summaryLabel(state, counts) {
     switch (String(state || "")) {
     case "noflake":
-        return "NO FLAKE";
+        return "No flake";
     case "nolock":
-        return "NO LOCK";
+        return "No lock";
     case "checking":
-        return "CHECKING";
+        return "Checking";
     case "offline":
-        return "NO NETWORK";
+        return "No network";
     case "ok":
         break;
     default:
-        return "CHECKING";
+        return "Checking";
     }
 
     var c = counts || {};
@@ -288,10 +288,10 @@ function summaryLabel(state, counts) {
     var unknown = Number(c.unknown) || 0;
 
     if (behind > 0 && unknown > 0)
-        return behind + " BEHIND / " + unknown + " ?";
+        return behind + " behind / " + unknown + " ?";
     if (behind > 0)
-        return behind + " BEHIND";
+        return behind + " behind";
     if (unknown > 0)
         return unknown + " ?";
-    return "UP TO DATE";
+    return "Up to date";
 }

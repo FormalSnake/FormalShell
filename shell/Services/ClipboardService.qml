@@ -8,7 +8,7 @@ import "../Clipboard/history.js" as History
 // Process (verified against the wl-clipboard 2.3.0 man page in the store):
 // wl-paste forks <cmd> on every clipboard change, connects its stdin to the
 // new selection, and sets CLIPBOARD_STATE in its environment (`data` | `nil`
-// | `clear` | `sensitive` — `sensitive` is the one wl-paste itself derives
+// | `clear` | `sensitive`, `sensitive` is the one wl-paste itself derives
 // from an `x-kde-passwordManagerHint` mime, the cheap password-manager
 // signal the plan asks for). The spawned shell one-liner below skips
 // forwarding sensitive captures at all; nil/clear captures still reach
@@ -17,19 +17,19 @@ import "../Clipboard/history.js" as History
 // split with a SplitParser whose marker is the NUL character above.
 //
 // History persists to $XDG_STATE_HOME/formalshell/clipboard.json via the
-// same FileView+JsonAdapter pattern Core/State.qml uses for state.json —
+// same FileView+JsonAdapter pattern Core/State.qml uses for state.json,
 // this file is its own, separate from state.json, per the plan's Task 2.
 //
 // Images (M14 Task 6) ride a SECOND, independent `wl-paste --type image/png
-// --watch` process — a separate Process/handler rather than in-band tagging
+// --watch` process, a separate Process/handler rather than in-band tagging
 // alongside the text watcher's own stream. Its spawned script skips
 // sensitive captures the same way, streams stdin to a mktemp file under
 // `_imagesDir`, content-addresses it to `<sha256>.png` (an existing hash
-// drops the temp and reuses the file — the same file IS the same capture),
+// drops the temp and reuses the file, the same file IS the same capture),
 // and NUL-delimits the final path on stdout, exactly like the text watcher's
 // own entries. `copy()` branches on `entry.kind`: image entries `wl-copy
 // --type image/png` the file back rather than re-emitting text. Eviction
-// (overflow/remove/clear) can orphan an image file — history.js reports
+// (overflow/remove/clear) can orphan an image file, history.js reports
 // those paths back as `removedPaths`, and `_deletePaths` is the one place
 // that ever calls `rm`, guarded to paths under `_imagesDir` only.
 Singleton {
@@ -88,7 +88,7 @@ Singleton {
         root._deletePaths(result.removedPaths);
     }
 
-    // The one place that ever calls `rm` — every path is checked against
+    // The one place that ever calls `rm`, every path is checked against
     // `_imagesDir` first so an eviction can never delete anything outside
     // the content-addressed image store, no matter what history.js reports.
     function _deletePaths(paths) {
@@ -124,7 +124,7 @@ Singleton {
     }
 
     // sh -c one-liner: `cat` forwards the selection, then a NUL byte marks
-    // the entry boundary — skipped entirely (no NUL emitted either) when
+    // the entry boundary, skipped entirely (no NUL emitted either) when
     // CLIPBOARD_STATE says the selection is a password-manager hint.
     Process {
         id: watcher
@@ -136,7 +136,7 @@ Singleton {
             onRead: data => root._capture(data)
         }
         // wl-paste itself only exits if it crashes or the compositor lacks
-        // the wlroots data-control protocol — back off instead of hot-
+        // the wlroots data-control protocol, back off instead of hot-
         // looping a binary that may simply be missing.
         onExited: exitCode => restartTimer.restart()
     }
@@ -150,7 +150,7 @@ Singleton {
     // Second, independent watcher for image/png captures (see header
     // comment). wl-paste execs "sh" "-c" "<script>" "<_imagesDir>" per
     // change, so the trailing command-array argument lands in the script's
-    // own $0 — the same idiom `copy()`'s wl-copy-back one-liner uses above.
+    // own $0, the same idiom `copy()`'s wl-copy-back one-liner uses above.
     // A zero-byte read (an empty selection, e.g. a clear) leaves no file
     // behind; a hash collision with an already-captured image drops the
     // fresh temp file and reuses the existing one.

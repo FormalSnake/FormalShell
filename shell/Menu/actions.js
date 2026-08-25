@@ -1,6 +1,6 @@
 .pragma library
 
-// The launcher's bottom action bar (M23) — Raycast's footer translated into
+// The launcher's bottom action bar (M23), Raycast's footer translated into
 // this shell's own ledger language: what Enter does to the row under the
 // cursor on the left, the keys that always apply on the right. Pure data,
 // so the verb a row answers to is decided in exactly one place and a test
@@ -18,7 +18,7 @@
 //
 // Key caps are literal characters, not names, and every one of them is
 // checked against the pinned nerd-fonts-jetbrains-mono cmap: U+23CE ⏎ is
-// present, U+21B5 ↵ — the more obvious return glyph — is NOT, and would
+// present, U+21B5 ↵, the more obvious return glyph, is NOT, and would
 // render as tofu. Escape stays the word "ESC" for the same reason its
 // U+238B symbol is unhelpful even where it exists.
 var KEY_ENTER = "⏎";
@@ -68,7 +68,7 @@ function primaryAction(ctx) {
 // hint bar exists.
 //
 // `variantSwitch` is the wallpaper route's other variant ("dark"/"light")
-// when its Dark/Light switcher is up, and null everywhere else — the hint
+// when its Dark/Light switcher is up, and null everywhere else, the hint
 // names the set Tab would show rather than the key's mechanism, so it reads
 // as the outcome the way every other label here does.
 //

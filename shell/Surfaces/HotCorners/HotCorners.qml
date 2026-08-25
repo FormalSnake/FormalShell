@@ -8,13 +8,13 @@ import "../../HotCorners/corners.js" as Corners
 // Pointer-driven corner triggers: throw the cursor into a screen corner and
 // the shell locks or shows the screensaver. One controller (this Item)
 // resolves the config, a Variants loop below spawns one tiny layer surface
-// per active corner per output — the same "one controller, many surfaces"
+// per active corner per output, the same "one controller, many surfaces"
 // split Screensaver.qml uses, and for the same reason (Quickshell has no
 // auto-multi-output primitive for a plain layer surface).
 //
 // Each surface is a `hotCorners.size` square of nothing: transparent, no
 // content, no exclusive zone. Its input region is the whole (tiny) window,
-// which is the one real cost here — Wayland has no hover-only input region,
+// which is the one real cost here, Wayland has no hover-only input region,
 // so those pixels stop reaching the window underneath. That is why the
 // square is 4px by default and why a click on it fires the corner's action
 // rather than being swallowed for nothing.
@@ -101,7 +101,7 @@ Item {
 
                 // Armed/disarmed rather than firing on every entry. Firing
                 // maps the action's own surface above this one, which takes
-                // the pointer with it — so dismissing that surface hands the
+                // the pointer with it, so dismissing that surface hands the
                 // pointer straight back to a corner it never really left.
                 // Re-arming only on a leave taken while the action is NOT
                 // active is what stops that handoff from re-firing under a
@@ -128,7 +128,7 @@ Item {
                     }
                     // This surface's input region eats the click whatever it
                     // does with it, so it fires outright rather than being
-                    // lost — no dwell, a click on a 4px corner is deliberate.
+                    // lost, no dwell, a click on a 4px corner is deliberate.
                     onClicked: win.fire()
                 }
 

@@ -12,8 +12,8 @@ import "../Dualsense/model.js" as DualsenseModel
 // (`multi_intensity`, "R G B"), and player LEDs as five sibling nodes,
 // input<N>:white:player-1..5/brightness. <MAC> and <N> both drift across
 // reconnects (a fresh input index, a different paired controller), so
-// `_probeScript` globs both — first match wins, same caveat the plan's
-// research block calls out — in a single `sh -c` exec rather than five
+// `_probeScript` globs both, first match wins, same caveat the plan's
+// research block calls out, in a single `sh -c` exec rather than five
 // separate Process round trips. The lightbar and player-LED nodes share one
 // index, so `<N>` is read once (off the lightbar match) and reused for all
 // five player files, never globbed a second time.
@@ -23,8 +23,8 @@ import "../Dualsense/model.js" as DualsenseModel
 // and this service's only job is describing what's currently there.
 //
 // No standing poll: `_refCount` tracks how many consumers currently care
-// (the bar widget, for as long as it's instantiated at all — it only
-// exists when "dualsense" is actually in bar.layout — and the panel, for as
+// (the bar widget, for as long as it's instantiated at all, it only
+// exists when "dualsense" is actually in bar.layout, and the panel, for as
 // long as it's open), and the 30s timer this milestone's `dualsense-bar`
 // command module used to run on its own only runs while that count is
 // above zero.
@@ -66,7 +66,7 @@ Singleton {
         onTriggered: root.probe()
     }
 
-    // One line per field, "KEY=value" — a format this file fully controls
+    // One line per field, "KEY=value", a format this file fully controls
     // (never anything sourced from omarchy-pods; DualSense has no plugin
     // equivalent to port from anyway), so `_field` below can pull each
     // piece back out unambiguously. Every step degrades honestly: no

@@ -41,13 +41,9 @@ TestCase {
         compare(s.lg, 8);
         compare(s.xl, 10);
         compare(s.xxl, 12);
-        compare(s.xxxl, 14);
         compare(s.huge, 18);
         compare(s.controlGap, 8);
-        compare(s.inputPaddingY, 7);
         compare(s.popupRowHeight, 28);
-        compare(s.rowPaddingX, 12);
-        compare(s.labelGap, 4);
         compare(s.panelGap, 14);
         compare(s.trackThickness, 6);
     }

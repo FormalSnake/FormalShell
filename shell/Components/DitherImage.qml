@@ -5,29 +5,29 @@ import "dither.js" as Dither
 // 1-bit dithered imagery (DESIGN.md §2, dither imagery item; DitherFill.qml's
 // sibling): a Canvas draws a hidden `Image` once it reports Ready, samples
 // its pixels, and repaints a 4x4 ordered-Bayer duotone over the whole
-// component — light pixels `lightColor` (`Theme.color.background`), dark
+// component, light pixels `lightColor` (`Theme.color.background`), dark
 // pixels `darkColor` (`Theme.color.foreground`), roles only so a retheme
 // recolors it. Nearest-neighbor decode, radius 0, one repaint per
-// source/status/size/color change, never a per-frame timer here — a caller
+// source/status/size/color change, never a per-frame timer here, a caller
 // driving live frames (the animated album art path) reassigns `source`
 // itself and this component just reacts, same as any other change.
 //
 // The Canvas writes with per-pixel `fillRect`, not `putImageData`: verified
 // in-VM (real Wayland/Quickshell rendering, not the offscreen qmltestrunner
 // path) that `putImageData` right after a `drawImage(Image item, …)` in the
-// same paint silently fails to composite — the canvas keeps showing the
-// raw drawImage content. `fillRect` is DitherFill.qml/DogEar.qml's own
+// same paint silently fails to composite, the canvas keeps showing the
+// raw drawImage content. `fillRect` is DitherFill.qml's own
 // established write path and reads back correctly in both environments.
 //
 // `mode` picks the Canvas pass: "duotone" thresholds luminance across the
 // whole image, painting every pixel light or dark (full duotone
 // coverage).
 //
-// "retro" (Task 5b, content imagery — album art, animated cover, the
+// "retro" (Task 5b, content imagery, album art, animated cover, the
 // wallpaper) keeps the source's own colors instead of reducing to
 // `lightColor`/`darkColor`: dither.js derives a palette of at most
 // `paletteSize` colors from the image itself by median cut and each cell
-// takes its nearest entry, ordered-dithered against the second nearest —
+// takes its nearest entry, ordered-dithered against the second nearest,
 // a period-correct Amiga/VGA conversion rather than a fixed grid of
 // posterize steps. Read dither.js's header for what that fixed grid did
 // wrong (2026-08-12: dots over monotone sources, maximum-contrast dots
@@ -38,12 +38,12 @@ import "dither.js" as Dither
 // `chunk` (default 2) downsamples retro mode to a `width/chunk ×
 // height/chunk` grid before the palette pass runs, sampling the source at
 // each grid cell's center pixel (cheaper than averaging the cell, and
-// correct here — a chunk is small enough, and Image already decoded at 2x
+// correct here, a chunk is small enough, and Image already decoded at 2x
 // sourceSize, that a center sample and a block average land on the same
 // visible color) and painting the whole cell as one `chunk`-sized
 // fillRect square instead of a single source pixel (M21 Task 3, owner:
 // "the album cover is dithered like i asked ... it doesnt become 90s
-// image style" — at a 96px slot, 1px dither cells read as texture, not as
+// image style", at a 96px slot, 1px dither cells read as texture, not as
 // an era). The Bayer threshold is indexed by grid-cell position, not raw
 // pixel position, so the dither pattern is visible at the enlarged scale
 // instead of drowning as 1px noise. Runs of same-index cells paint as one
@@ -51,12 +51,12 @@ import "dither.js" as Dither
 // full-screen pass affordable now that flat regions genuinely stay flat.
 //
 // The hidden Image can report `Ready` before its decoded pixmap is
-// actually synced for `Canvas.drawImage()` to read — a first paint can
+// actually synced for `Canvas.drawImage()` to read, a first paint can
 // land on a fully blank (all-zero) sample. Duotone reads that as "all
 // dark" (still a plausible-looking foreground fill), which is why this
 // went unnoticed until retro mode painted it literally, solid black
 // (probe-verified in-VM, M20 Task 5b). A full-buffer all-zero read
-// (never a legitimate image, even one with real transparent regions —
+// (never a legitimate image, even one with real transparent regions,
 // those still carry nonzero bytes somewhere) restarts a short one-shot
 // timer instead of publishing that blank paint, bounded so a genuinely
 // broken source still settles rather than retrying forever.
@@ -90,7 +90,7 @@ Item {
     property color lightColor: Theme.color.background
     property color darkColor: Theme.color.foreground
     // "retro" mode only: the upper bound on colors derived from the image.
-    // 6 is the era being referenced and it is also the intensity knob —
+    // 6 is the era being referenced and it is also the intensity knob,
     // more colors means less quantization error, so less dithering.
     property int paletteSize: 6
     // "retro" mode only: the source is downsampled to a width/chunk x

@@ -1,7 +1,7 @@
 import Quickshell.Io
 import qs.Services
 
-// `qs ipc call console toggle|show|hide|status` — the quake console (M37).
+// `qs ipc call console toggle|show|hide|status`, the quake console (M37).
 // `toggle` is what a compositor keybind binds to; the other three exist
 // because a headless smoke run has no keyboard, and because a status dump
 // is the only way to prove the window that comes back after a hide is the

@@ -7,7 +7,7 @@
 // --json` run (BackendState, Self.HostName, Self.TailscaleIPs,
 // Peer.<nodekey>.{HostName, TailscaleIPs, Online, OS}), not the omarchy
 // panel's own richer parse (~/Developer/omarchy/shell/plugins/panels/
-// tailscale/Model.js) — reimplemented narrower for what this shell's panel
+// tailscale/Model.js), reimplemented narrower for what this shell's panel
 // actually shows: no exit nodes, no Mullvad, no multi-account switching.
 
 function _firstIp(ips) {
@@ -15,7 +15,7 @@ function _firstIp(ips) {
 }
 
 // Falls back to the peer's own map key (its stable nodekey) when the daemon
-// hasn't reported a HostName yet — never a blank row.
+// hasn't reported a HostName yet, never a blank row.
 function _peer(id, raw) {
     var p = raw || {};
     return {
@@ -26,7 +26,7 @@ function _peer(id, raw) {
     };
 }
 
-// Online-first, then alphabetical within each group — matches the ledger
+// Online-first, then alphabetical within each group, matches the ledger
 // sort every other panel table uses (NetworkPanel's connected-first,
 // BluetoothPanel's connected/paired/available buckets).
 function _sortPeers(peers) {
@@ -37,7 +37,7 @@ function _sortPeers(peers) {
 }
 
 // `raw` is `tailscale status --json`'s stdout, verbatim. Honest null/[]
-// for anything missing or unparsable, never a thrown exception — a
+// for anything missing or unparsable, never a thrown exception, a
 // daemon-unreachable run prints a plain-text error instead of JSON, and an
 // unparsable response is exactly as unusable to the caller as a process
 // failure (TailscalePanel.qml folds both into its "NO TAILSCALE" state).
@@ -77,7 +77,7 @@ function parseStatus(raw) {
     };
 }
 
-// First address from a parsed status's own Self entry, or null — kept as
+// First address from a parsed status's own Self entry, or null, kept as
 // its own function (rather than inlined at every call site) per the two
 // functions this file is scoped to.
 function selfIp(status) {

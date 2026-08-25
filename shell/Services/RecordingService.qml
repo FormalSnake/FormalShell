@@ -95,7 +95,7 @@ Singleton {
 
     // "screen" | "region" | "window", and "none" | "desktop" | "desktopmic":
     // what the current (or most recent) run was asked for. "window" only ever
-    // arrives through startAt() — a window is a rectangle to wf-recorder, so
+    // arrives through startAt(), a window is a rectangle to wf-recorder, so
     // it is a scope label for `record status`, never a different pipeline.
     property string scope: "screen"
     property string audioMode: "none"
@@ -232,7 +232,7 @@ Singleton {
     // This is how the capture picker's RECORD tools start a run (its toolbar
     // has already resolved the window or display box, and slurp has no part in
     // it), and how the smoke rig drives a region recording without a pointer
-    // to answer slurp with — the same split `capture textAt` and `picker
+    // to answer slurp with, the same split `capture textAt` and `picker
     // choose` already use. An object rather than four positional arguments
     // because only the IPC boundary needs scalars.
     function startAt(opts) {

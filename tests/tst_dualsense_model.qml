@@ -91,12 +91,12 @@ TestCase {
 
     function test_state_line_discharging() {
         var s = DualsenseModel.parseSupply("80\n", "Discharging\n");
-        compare(DualsenseModel.stateLine(s), "DISCHARGING");
+        compare(DualsenseModel.stateLine(s), "Discharging");
     }
 
     function test_state_line_full() {
         var s = DualsenseModel.parseSupply("100\n", "Full\n");
-        compare(DualsenseModel.stateLine(s), "FULL");
+        compare(DualsenseModel.stateLine(s), "Full");
     }
 
     function test_state_line_no_controller() {

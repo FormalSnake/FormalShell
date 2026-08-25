@@ -10,13 +10,13 @@
 //
 // Preference order, all restricted to the focused output so the parked
 // window never lands on a screen the user is not looking at:
-//   1. the highest-index workspace holding nothing else — on niri that is
+//   1. the highest-index workspace holding nothing else, on niri that is
 //      the trailing empty workspace every output always carries, so parking
 //      normally costs no workspace anyone was using;
 //   2. failing that, the highest-index workspace that is not the focused
 //      one, which parks on top of other windows but still gets it out of
 //      the way;
-//   3. "" — nowhere to park. One output with exactly one workspace, which
+//   3. "", nowhere to park. One output with exactly one workspace, which
 //      niri's always-trailing-empty rule means is effectively never, and
 //      the null backend, which parks nothing anyway.
 function parkTarget(workspaces, windows, focusedWorkspaceId, focusedOutputName, windowId) {

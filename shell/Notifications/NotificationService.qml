@@ -4,20 +4,20 @@ import Quickshell
 import Quickshell.Services.Notifications
 import qs.Compositor
 // `qs.Core as Core`, not a bare import: QtQuick already exports a type named
-// State (for property-binding states) — see ThemeEngine.qml's own note on
+// State (for property-binding states), see ThemeEngine.qml's own note on
 // this same collision. Core.State disambiguates it.
 import qs.Core as Core
 import "model.js" as Model
 
 // Owns the freedesktop NotificationServer and drives model.js's pure
 // three-tier reducer (M5 Task 3). Live Notification objects are kept OUT of
-// the reducer state — model.js entries are plain JS data, retained after the
-// server destroys the notification — in a side map keyed by id instead, so
+// the reducer state, model.js entries are plain JS data, retained after the
+// server destroys the notification, in a side map keyed by id instead, so
 // dismiss()/expire()/action-invoke can still reach the real object while it
 // lives.
 //
 // DND persistence: Core.State.dnd (state.json) is the source of truth, same
-// pattern as wallpaper/mode — setDnd() below only ever writes there, and the
+// pattern as wallpaper/mode, setDnd() below only ever writes there, and the
 // Connections block mirrors it into the reducer's own state.dnd (needed by
 // model.js's add() bypass check) whenever it changes, including the async
 // FileView load completing after this singleton's _state has already
@@ -30,8 +30,8 @@ Singleton {
     // Ids currently mid-flight through a dismiss()/expire() call WE made
     // (dismissPopup, the expiry timer): the model was already updated
     // before that call, so the closed() it triggers must be a no-op there.
-    // Anything closed WITHOUT this flag set — CloseNotification from the
-    // sender, an action's implicit close, a generation switch — never
+    // Anything closed WITHOUT this flag set, CloseNotification from the
+    // sender, an action's implicit close, a generation switch, never
     // touched the model at all and must be dropped from it here.
     property var _selfClosing: ({})
     // Popup ids currently under the pointer (Toasts.qml's NotificationCard
@@ -45,7 +45,7 @@ Singleton {
     // Omarchy's duration bands (low 5s / normal 8s / cap 30s), honoring a
     // sender's own expireTimeout hint (freedesktop spec: milliseconds,
     // <=0 meaning "use the server default") when it falls inside the band.
-    // Critical is sticky regardless — Model.add()/update() already force
+    // Critical is sticky regardless, Model.add()/update() already force
     // expiresAt to 0 for urgency 2, so the value returned here for
     // critical is never actually consulted.
     readonly property int _lowPopupDurationMs: 5000
@@ -87,7 +87,7 @@ Singleton {
     property bool centerOpen: false
 
     // Sonner-style stack force-expand (M34 Task 2), set only by the
-    // `notifications expand` IPC verb — the rig has no synthetic pointer,
+    // `notifications expand` IPC verb, the rig has no synthetic pointer,
     // so this is the IPC stand-in for "hover the stack" (the bar
     // chevron's own `expand` verb is the named precedent for this shape).
     // Each Toasts.qml instance ORs this with its own local hover, and it
@@ -137,7 +137,7 @@ Singleton {
 
             // server.cpp's Notify() honours replaces_id by mutating this same
             // Notification object in place (updateProperties) rather than
-            // emitting a new `notification` — this handler runs exactly
+            // emitting a new `notification`, this handler runs exactly
             // once per id, and every subsequent replace only fires the
             // per-property NOTIFY signals below. Resync the model entry
             // from the live object on each one so replaces_id senders
@@ -178,7 +178,7 @@ Singleton {
                 // Sender-initiated close (CloseNotification) or an action's
                 // implicit close on a non-resident notification: the model
                 // was never told, so it would otherwise sit in popups/pending
-                // forever — sticky critical ones with no other way out.
+                // forever, sticky critical ones with no other way out.
                 root._state = Model.dismissOne(root._state, id);
             });
 
@@ -364,7 +364,7 @@ Singleton {
     property var _localActions: ({})
 
     // urgency defaults to normal (1); pass 2 for a critical local warning
-    // (M16 Task 5's low-battery path) — Model.add() already makes those
+    // (M16 Task 5's low-battery path), Model.add() already makes those
     // sticky and model.js's bypassesDnd() already lets a `local` entry
     // through DND on its own honest marker, same as a real notify-send
     // critical.
@@ -421,7 +421,7 @@ Singleton {
     // Fires the most recent popup-or-pending entry's default action if it
     // has one, then dismisses it either way: a popup is archived to past
     // (dismissPopup's seen-and-keep contract), a pending entry is dropped
-    // outright (dismissOne — it was never shown, there's nothing to archive
+    // outright (dismissOne, it was never shown, there's nothing to archive
     // as "seen").
     function invokeLast() {
         var target = Model.invokeTarget(root._state);

@@ -7,7 +7,7 @@ import qs.Components
 import qs.Services
 
 // The shell's polkit consent surface (M16 Task 4, laptop feature parity
-// with omarchy — reimplemented against `~/Developer/omarchy/shell/plugins/
+// with omarchy, reimplemented against `~/Developer/omarchy/shell/plugins/
 // polkit/PolkitAgent.qml`'s flow-tracking, read-reference only, never
 // copied). One centred card over the modal scrim, shown for as long as
 // PolkitService.isActive holds a live authentication request (M45 D4): a
@@ -19,7 +19,7 @@ import qs.Services
 // error state, nothing more physical), no fingerprint branch
 // (password-only here).
 //
-// The typed password only ever reaches `flow.submit()` below — never
+// The typed password only ever reaches `flow.submit()` below, never
 // logged, never mirrored into settings/state, never touched by the
 // `debug` IPC dump (CLAUDE.md's secrets discipline for this task).
 PanelWindow {
@@ -28,7 +28,7 @@ PanelWindow {
     readonly property var _flow: PolkitService.flow
     readonly property bool _active: PolkitService.isActive
 
-    // Local, transient UI state — never read from `flow.failed` directly:
+    // Local, transient UI state, never read from `flow.failed` directly:
     // that property stays true for the rest of the *flow* (module.md: a
     // failed attempt auto-starts a fresh session for a retry), so binding
     // to it would leave "WRONG PASSWORD" stuck on screen through a
@@ -57,7 +57,7 @@ PanelWindow {
         return identity.displayName || identity.string || "";
     }
 
-    // PAM's own conversation prompt, verbatim (trimmed) — never the
+    // PAM's own conversation prompt, verbatim (trimmed), never the
     // static "Enter Password" once a real one has arrived. A single-
     // prompt password-only stack never notices ("Password: " trimmed
     // reads the same as the fallback); a 2FA/U2F stack's later prompts
@@ -94,7 +94,7 @@ PanelWindow {
     }
 
     // A fresh request (this flip going true, not just any change while
-    // already active — a mid-conversation supplementary message must not
+    // already active, a mid-conversation supplementary message must not
     // reset the field the user is mid-typing into) starts clean.
     on_ActiveChanged: {
         if (root._active) {
@@ -117,11 +117,11 @@ PanelWindow {
 
         // `isResponseRequired` (and so `_inputEnabled`) starts false and
         // only flips true once the PAM stack actually asks for a
-        // password — reproduced directly: that flip lands AFTER
+        // password, reproduced directly: that flip lands AFTER
         // `isActive`'s own, so the `on_ActiveChanged` refocus below fires
         // too early (`_inputEnabled` still false, `_refocus()` no-ops) and
         // nothing else ever retried, leaving real Wayland keyboard focus
-        // parked on `backdrop` — which has no key handler beyond Escape —
+        // parked on `backdrop`, which has no key handler beyond Escape,
         // forever. Every real keystroke silently went nowhere; the field
         // itself was correctly enabled (a live binding), just never
         // actually focused.
@@ -129,7 +129,7 @@ PanelWindow {
         // Also the only place a second (or later) PAM prompt in the same
         // session can clear `submitted`: quickshell's AuthFlow::request()
         // (flow.cpp) flips `isResponseRequired` true again for every
-        // conversation prompt, not just the first — a 2FA/U2F stack that
+        // conversation prompt, not just the first, a 2FA/U2F stack that
         // asks twice would otherwise leave `submitted` latched from the
         // first `_submit()` forever (it's only ever cleared by a fresh
         // request or a failed one), stranding the card on "CHECKING…"
@@ -143,18 +143,18 @@ PanelWindow {
 
     screen: root._screen
     // Held visible through the exit fade (DESIGN.md §4), same idiom as
-    // every other floating surface here — `_active` dropping (auth
+    // every other floating surface here, `_active` dropping (auth
     // succeeded, or the daemon/user cancelled) is this surface's only
     // "close" path; there is no summon/dismiss API of its own to call.
     visible: root._active || card.opacity > 0
     color: "transparent"
 
-    // Top, matching Menu.qml's own layer — not Overlay: reproduced
+    // Top, matching Menu.qml's own layer, not Overlay: reproduced
     // directly, an Overlay-layer surface with `keyboardFocus: Exclusive`
     // never actually received wtype's synthetic keystrokes in the smoke
     // rig (Screensaver.qml is this shell's only other Overlay surface, and
     // its own keyboard-dismiss path has never been wtype-exercised
-    // either — Menu.qml's Top+Exclusive combination is the one proven
+    // either, Menu.qml's Top+Exclusive combination is the one proven
     // working here).
     WlrLayershell.namespace: "formalshell:polkit"
     WlrLayershell.layer: WlrLayer.Top
@@ -162,12 +162,12 @@ PanelWindow {
     // Exclusive, not OnDemand: unlike Panel.qml/Center.qml (pointer-driven,
     // keyboard nav is a secondary aid claimed only after a real click
     // already triggered open()), this surface needs to already be
-    // receiving keystrokes the instant it maps — no prior click ever
+    // receiving keystrokes the instant it maps, no prior click ever
     // happens, the request is entirely OS-triggered. Menu.qml's own search
     // field is the sibling case (typed input from the first frame) and
     // makes the identical choice. Reproduced directly: OnDemand here never
     // actually received wtype's synthetic keystrokes in the smoke rig even
-    // though the card rendered — niri never shifted real keyboard focus to
+    // though the card rendered, niri never shifted real keyboard focus to
     // an on-demand layer surface with no preceding pointer interaction.
     WlrLayershell.keyboardFocus: root._active ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 

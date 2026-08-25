@@ -10,8 +10,8 @@ import "../Console/geometry.js" as Geometry
 
 // The quake console: one terminal that drops down over whatever workspace
 // you are on and goes away again with the session inside it still running
-// (M37). The window is the terminal's own — the shell is pure QML/JS and has
-// no emulator to embed — so this service owns exactly three things: spawning
+// (M37). The window is the terminal's own, the shell is pure QML/JS and has
+// no emulator to embed, so this service owns exactly three things: spawning
 // it once, placing it, and moving it in and out of view.
 //
 // Visibility is DERIVED, never stored: the console is showing when the
@@ -24,7 +24,7 @@ import "../Console/geometry.js" as Geometry
 // CompositorService.parkWindow/isWindowParked. Hyprland takes omarchy's own
 // route (default/hypr/qconsole.lua): the console never leaves its special
 // workspace, and showing it is the compositor toggling that overlay in and
-// out — which is where the drop-down animation comes from, since the
+// out, which is where the drop-down animation comes from, since the
 // compositor is animating a whole workspace rather than the shell shuffling
 // a window between two. niri has no special workspace and no hide primitive
 // at all, so there the window really does move.
@@ -145,7 +145,7 @@ Singleton {
         root._placedAt = 0;
         // Size it where nobody can see it, then bring it in. The other order
         // shows the terminal at whatever size it opened itself at for as long
-        // as the placement takes to land — which on a first spawn is a
+        // as the placement takes to land, which on a first spawn is a
         // default-sized box appearing on screen and then jumping to shape.
         root._wasParked = CompositorService.isWindowParked(id);
         CompositorService.floatWindow(id);
@@ -163,7 +163,7 @@ Singleton {
         onTriggered: {
             // No-op on niri, whose window model is event-driven. On Hyprland
             // it re-reads `j/clients`, which is the only thing that gives a
-            // freshly mapped window a `rect` at all — the poll below reads
+            // freshly mapped window a `rect` at all, the poll below reads
             // the answer on the next tick, hence 100ms rather than 50.
             CompositorService.refreshWindows();
             root._attempts++;
@@ -183,7 +183,7 @@ Singleton {
         }
     }
 
-    // Place, then reveal, then focus — in that order and on one clock. The
+    // Place, then reveal, then focus, in that order and on one clock. The
     // window is still out of view while it is being resized, so the console
     // only ever appears at the size it is meant to be. Focus comes after the
     // reveal for the same reason it always did: focusing a window still
@@ -207,7 +207,7 @@ Singleton {
             const rect = win.rect;
             // A rect is what niri's placement needs (it converts the absolute
             // target into its own relative move by reading the current box),
-            // so wait for one — but only for half a second. A backend that
+            // so wait for one, but only for half a second. A backend that
             // reports no geometry at all must not silently cost the console
             // its placement: Hyprland's dispatchers are absolute, so placing
             // blind there is correct, and that is exactly the case that

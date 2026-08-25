@@ -1,12 +1,12 @@
 .pragma library
 
 // Pure Apple Music animated-cover glue (M7 Task 2, spec §5's opt-in
-// animated-art feature, ported — with attribution — from
+// animated-art feature, ported, with attribution, from
 // AvengeMedia/DankMaterialShell PR #2918, MIT). Owns URL construction,
 // every response-parsing step of the undocumented chain (iTunes Search →
 // scraped web-player token → amp-api `editorialVideo` → HLS master/rendition
 // playlists → the one progressive-mp4 byterange), and the cache-key/prune-
-// decision logic. No Process/XMLHttpRequest/Date.now() in here —
+// decision logic. No Process/XMLHttpRequest/Date.now() in here,
 // AppleMusicArtService.qml owns every network and disk side effect, this
 // file stays deterministic under test. Every parse function takes the raw
 // process exit code alongside the output text, mirroring openmeteo.js's
@@ -31,7 +31,7 @@ function searchUrl(artist, album) {
 
 // iTunes Search: a hit resolves a collectionId to look editorialVideo up
 // against; a well-formed response with no matching album is a miss
-// (collectionId: null), never an error — there is simply no animated art to
+// (collectionId: null), never an error, there is simply no animated art to
 // find for a track iTunes doesn't carry.
 function parseSearchResult(exitCode, output) {
     if (exitCode !== 0)
@@ -52,7 +52,7 @@ function albumPageUrl(collectionId) {
 }
 
 // The anonymous web-player JWT sits in the main JS bundle referenced by any
-// album page — the asset path first, then the token out of that bundle.
+// album page, the asset path first, then the token out of that bundle.
 function extractAssetPath(html) {
     var m = /\/assets\/index~[A-Za-z0-9]+\.js/.exec(html || "");
     return m ? m[0] : null;
@@ -100,7 +100,7 @@ function resolveUrl(maybeRelative, baseUrl) {
     return baseUrl.slice(0, baseUrl.lastIndexOf("/") + 1) + maybeRelative;
 }
 
-// Highest-bandwidth avc1 rendition at or below 768px — hvc1 is skipped for
+// Highest-bandwidth avc1 rendition at or below 768px, hvc1 is skipped for
 // decoder compatibility. Returns the (possibly relative) variant playlist
 // path, or null when the master has no eligible stream at all.
 function pickVariant(masterPlaylistText) {
@@ -130,7 +130,7 @@ function pickVariant(masterPlaylistText) {
 }
 
 // The rendition playlist is BYTERANGE segments over one progressive mp4
-// named by EXT-X-MAP — that mp4 is the actual download target.
+// named by EXT-X-MAP, that mp4 is the actual download target.
 function extractMp4Url(renditionPlaylistText, variantUrl) {
     var m = /#EXT-X-MAP:URI="([^"]+)"/.exec(renditionPlaylistText || "");
     return m ? resolveUrl(m[1], variantUrl) : null;
@@ -149,7 +149,7 @@ function isStale(mtimeMs, nowMs, maxAgeDays) {
 
 // `find -printf '%T@ %p\n'` output (epoch-seconds mtime, space, path) → the
 // paths stale enough to prune. Malformed lines are skipped, never thrown on
-// — a partially-corrupt listing should still prune the lines it can read.
+//, a partially-corrupt listing should still prune the lines it can read.
 function parsePruneListing(listingText, nowMs, maxAgeDays) {
     var stale = [];
     var lines = (listingText || "").split("\n");

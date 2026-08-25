@@ -11,18 +11,18 @@ import "../Calendar/ics.js" as Ics
 // - Local .ics files: `calendar.icsDir` in settings.json points at a
 //   khal/vdir-style directory (M6 Task 5's spike outcome). Reading is a
 //   flat `cat "$dir"/*.ics` (mirrors ThemeEngine's own drop-in-directory
-//   read) rather than any folder-watch model — Quickshell has no
+//   read) rather than any folder-watch model, Quickshell has no
 //   directory-listing QML type, and a periodic re-read is plenty for data
 //   that changes on the timescale of "someone edited a calendar file".
 // - EDS/GOA over D-Bus via the `formalshell-eds` companion CLI (M12
 //   Task 3): the spike's blocker was that EDS's whole
 //   OpenCalendar -> Open -> GetObjectList handshake must run over one held
-//   bus connection, which no chain of gdbus/busctl calls can provide — the
+//   bus connection, which no chain of gdbus/busctl calls can provide, the
 //   CLI does it in one process and prints raw ICS, fed through the exact
 //   same parser. `calendar.eds` (bool, default true) gates it; the first
 //   run doubles as the reachability probe, and a failure (nonzero exit, or
 //   the binary never starting at all) degrades silently to ics-only for
-//   the rest of the process's life — one console.warn, no error cell, no
+//   the rest of the process's life, one console.warn, no error cell, no
 //   retry storm.
 //
 // Both refresh on the same cadence: icsDir change, every 5 minutes, and
@@ -37,7 +37,7 @@ Singleton {
 
     property var _icsEvents: []
     property var _edsEvents: []
-    // Flips true at most once, on the first failed CLI run — never back.
+    // Flips true at most once, on the first failed CLI run, never back.
     property bool _edsUnavailable: false
     // Same normal-completion-vs-never-started discrimination
     // CommandModule.qml documents: quickshell's Process never emits
@@ -48,7 +48,7 @@ Singleton {
     // Checks icsDir directly rather than through the `available` alias:
     // this runs from onIcsDirChanged, and reading a *different* property's
     // binding (available) that also depends on icsDir isn't guaranteed to
-    // have re-evaluated yet at that exact point in the change cascade —
+    // have re-evaluated yet at that exact point in the change cascade,
     // icsDir itself is already the fresh value by definition.
     function refresh() {
         if (root.icsDir === "") {
@@ -74,7 +74,7 @@ Singleton {
     function _edsDown(reason) {
         if (!root._edsUnavailable) {
             root._edsUnavailable = true;
-            console.warn("CalendarEventsService: " + reason + " — EDS events disabled, ics-only from here on");
+            console.warn("CalendarEventsService: " + reason + ": EDS events disabled, ics-only from here on");
         }
         if (root._edsEvents.length > 0) {
             root._edsEvents = [];
@@ -82,14 +82,14 @@ Singleton {
         }
     }
 
-    // Events on a given local calendar date — the day-cell query
+    // Events on a given local calendar date, the day-cell query
     // CalendarPanel makes once per visible day.
     function onDate(date) {
         return Ics.eventsOnDate(root.events, date);
     }
 
     // Config's settings.json load is async (FileView), so icsDir can still
-    // be "" the instant this singleton completes — refresh off the
+    // be "" the instant this singleton completes, refresh off the
     // property actually changing rather than a single onCompleted shot, or
     // a settings.json that finishes loading a moment later never gets read
     // until the 5-minute timer below catches up.

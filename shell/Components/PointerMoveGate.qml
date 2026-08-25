@@ -2,14 +2,14 @@ import QtQuick
 
 // Keeps a moving list's own churn from reading as pointer input
 // (reimplemented from omarchy's `shell/Ui/PointerMoveGate.qml`, a
-// read-reference per CLAUDE.md — no line of it is copied).
+// read-reference per CLAUDE.md, no line of it is copied).
 //
 // The problem: a row MouseArea's onPositionChanged cannot tell a real mouse
 // move from a different row sliding under a parked pointer. Qt re-delivers a
 // hover move to whatever item lands under the cursor whenever geometry
 // changes, and the row's own local coordinates change with it, so a surface
 // that wires hover straight to its keyboard cursor (Menu.qml's row delegate)
-// loses that cursor on every filter keystroke and every scroll — the pointer
+// loses that cursor on every filter keystroke and every scroll, the pointer
 // never moved, but the row underneath it did.
 //
 // Contract:
@@ -48,7 +48,7 @@ QtObject {
         root._stationaryAllowed = true;
     }
 
-    // The decision itself, in scene coordinates — moved() below is the mapping
+    // The decision itself, in scene coordinates, moved() below is the mapping
     // wrapper consumers actually call, this is what the unit tests drive.
     function movedTo(x, y) {
         var first = !root._primed;
@@ -67,7 +67,7 @@ QtObject {
         return didMove;
     }
 
-    // `item` is whatever the sample's coordinates are local to — the row's own
+    // `item` is whatever the sample's coordinates are local to, the row's own
     // MouseArea. mapToItem(null, …) is the scene frame (Qt 6: a null target
     // maps into the scene).
     function moved(item, x, y) {

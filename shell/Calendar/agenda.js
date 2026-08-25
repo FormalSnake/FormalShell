@@ -9,8 +9,8 @@
 
 var MS_PER_DAY = 86400000;
 
-// All-day events lead — they have no clock time to sort against and cover
-// the whole day the ledger is listing — then the timed ones in
+// All-day events lead, they have no clock time to sort against and cover
+// the whole day the ledger is listing, then the timed ones in
 // chronological order. Summary breaks a same-minute tie so two events keep
 // a stable order across re-renders instead of following whatever order
 // mergeEvents happened to concatenate its two backends in.
@@ -30,7 +30,7 @@ function _startOfDay(d) {
 }
 
 // Whole local days between two instants, so a DST-shifted day still counts
-// as one — ms division alone would round a 23-hour day down to zero.
+// as one, ms division alone would round a 23-hour day down to zero.
 function _dayDelta(from, to) {
     return Math.round((_startOfDay(to) - _startOfDay(from)) / MS_PER_DAY);
 }

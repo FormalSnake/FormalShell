@@ -54,7 +54,6 @@ Cell {
     readonly property bool _showLabel: Config.get("bar.widgets.keyboardLayout.showLabel", true)
 
     visible: root.shown
-    standalone: true
     tooltipText: Keyboard.tooltipText(root.layout)
 
     function _poll() {
@@ -103,18 +102,26 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        Icon {
             anchors.verticalCenter: parent.verticalCenter
-            text: "󰌌"
+            name: "keyboard"
             color: root.layout.available ? root.foreground : root.dimForeground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
         }
 
-        MetaLabel {
-            visible: root._showLabel
+        Text {
+            visible: root._showLabel && root.layout.available
             anchors.verticalCenter: parent.verticalCenter
-            text: root.layout.available ? Keyboard.shortLabel(root.layout.current) : "NO LAYOUT"
+            text: Keyboard.shortLabel(root.layout.current)
+            color: root.dimForeground
+            font.family: Theme.fontFamilyMono
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
+        }
+
+        SectionLabel {
+            visible: root._showLabel && !root.layout.available
+            anchors.verticalCenter: parent.verticalCenter
+            text: "NO LAYOUT"
             color: root.dimForeground
         }
     }

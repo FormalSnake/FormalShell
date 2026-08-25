@@ -1,4 +1,3 @@
-ActionLabel ActionLabel.qml
 AuthPrompt AuthPrompt.qml
 Button Button.qml
 Card Card.qml
@@ -6,13 +5,11 @@ Cell Cell.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
-DogEar DogEar.qml
 Icon Icon.qml
 IconButton IconButton.qml
 Input Input.qml
 KeyCatcher KeyCatcher.qml
 MarqueeText MarqueeText.qml
-MetaLabel MetaLabel.qml
 Panel Panel.qml
 PanelHero PanelHero.qml
 PointerMoveGate PointerMoveGate.qml

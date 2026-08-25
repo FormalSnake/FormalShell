@@ -293,7 +293,7 @@ TestCase {
     }
 
     function test_format_wh_zero_is_dash() {
-        compare(Power.formatWh(0), "—");
+        compare(Power.formatWh(0), "--");
     }
 
     // formatHealthPercent
@@ -303,7 +303,7 @@ TestCase {
     }
 
     function test_format_health_percent_unsupported_is_dash() {
-        compare(Power.formatHealthPercent(0, false), "—");
+        compare(Power.formatHealthPercent(0, false), "--");
     }
 
     // timeRowLabel / timeRowValue
@@ -325,7 +325,7 @@ TestCase {
     }
 
     function test_time_row_value_no_reading_is_dash() {
-        compare(Power.timeRowValue(true, 0, 0), "—");
+        compare(Power.timeRowValue(true, 0, 0), "--");
     }
 
     // rateRowLabel / rateRowValue

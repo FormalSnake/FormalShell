@@ -5,7 +5,7 @@ import QtQuick
 
 // `qs.Core as Core`, not a bare import: QtQuick already exports a type
 // named State (for property-binding states), and an unqualified `import
-// qs.Core` loses that name collision — State.wallpaper reads back
+// qs.Core` loses that name collision, State.wallpaper reads back
 // undefined at runtime instead of hitting the qs.Core singleton (verified
 // with a throwaway probe script). Core.State disambiguates it.
 import qs.Core as Core
@@ -16,14 +16,14 @@ import "palette.js" as Palette
 // run just sets pending, the run in flight is never killed mid-write, and a
 // run that ends with pending set immediately reruns once. Reads the user's
 // own matugen ecosystem (~/.config/matugen/config.toml, and drop-ins from
-// ~/.config/formalshell/matugen.d/*.toml) with a single `cat` Process —
-// Quickshell.Io has no directory-listing API — merges it via matugen.js's
+// ~/.config/formalshell/matugen.d/*.toml) with a single `cat` Process,
+// Quickshell.Io has no directory-listing API, merges it via matugen.js's
 // buildConfig(), writes matugen-merged.toml, then runs matugen against it.
 // matugen's own template output_paths land on <state-dir>/{theme.json,
 // formalshell-colors.conf}.tmp; on success those are renamed into place
 // atomically, theme.json into the state dir and the Hyprland colours into
 // the user's hypr config dir. No wallpaper set → skip matugen
-// entirely and write palette.fallback(State.mode) — the Flexoki variant for
+// entirely and write palette.fallback(State.mode) — the zinc variant for
 // the current mode, so `theme mode toggle` recolors every consumer live
 // through the exact same theme.json write a matugen run uses (M13b Task 3;
 // before that the fallback was static dark and toggling without a wallpaper
@@ -36,7 +36,7 @@ import "palette.js" as Palette
 // so no shell-quoting is needed), never FileView.setText(): FileView skips
 // the write AND the saved() signal entirely when the new text is byte-
 // identical to what's already on disk (fileview.cpp's writeCmpData() check)
-// — a real hazard here, since two retheme() runs back to back for the same
+//, a real hazard here, since two retheme() runs back to back for the same
 // wallpaper/mode produce byte-identical output, and gating the pipeline on
 // saved() would wedge running=true forever on the second run. Verified by
 // reproducing the wedge with a throwaway probe script before switching to
@@ -98,7 +98,7 @@ Singleton {
     // Existence check for ThemeIpc's status(), tracked by hand rather than
     // via FileView.loaded + watchChanges: QFileSystemWatcher silently fails
     // to attach to a path (or its parent dir) that doesn't exist yet at
-    // construction time — the common case for a fresh state dir — so it
+    // construction time, the common case for a fresh state dir, so it
     // never notices this singleton's own later out-of-band Process writes
     // (verified by reproducing the stuck-false read against a real run).
     // ThemeEngine is theme.json's only writer, so it can just say so itself.
@@ -159,14 +159,14 @@ Singleton {
     // Ordinary apps never read theme.json: GTK4/libadwaita, GTK3 (≥3.24.30,
     // via the settings portal), browsers and Electron learn light/dark and
     // the GTK theme name from org.gnome.desktop.interface, which
-    // xdg-desktop-portal-gtk re-broadcasts as org.freedesktop.appearance —
+    // xdg-desktop-portal-gtk re-broadcasts as org.freedesktop.appearance,
     // so every retheme must assert the runtime signal too, or Mod+Shift+T
     // recolors the shell while every app stays frozen in its old mode.
     // dconf, not gsettings: on NixOS glib schemas live under per-package
     // share/gsettings-schemas/ paths, so a bare `gsettings set` from the
     // shell's environment fails with "No schemas installed" (verified on the
     // e1504g); `dconf write` hits the same backend schema-free. Fire and
-    // forget — the matugen pipeline must not gate on it.
+    // forget, the matugen pipeline must not gate on it.
     function _syncSystemScheme() {
         var dark = Core.State.mode !== "light";
         var proc = writeFileProcComponent.createObject(root, {
@@ -295,7 +295,7 @@ Singleton {
         }
     }
 
-    // Startup probe only — reads theme.json once to detect a first run and
+    // Startup probe only, reads theme.json once to detect a first run and
     // seed themeJsonPresent's initial value; writes never go through here
     // (see the FileView.setText() hazard above). Every later transition of
     // themeJsonPresent is set directly by the write sites above, not by

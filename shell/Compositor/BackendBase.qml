@@ -9,21 +9,21 @@ QtObject {
     readonly property bool available: false // backend detected its compositor and is connected
 
     property var workspaces: [] // [{ id:string, idx:int, name:string, output:string, isActive:bool, isFocused:bool, isUrgent:bool }]
-    // `rect` is the window's box in LOGICAL compositor coordinates — the same
+    // `rect` is the window's box in LOGICAL compositor coordinates, the same
     // space `outputs` rows use, and the space grim/slurp geometry is expressed
     // in. It is `null`, never a zeroed box, whenever the compositor did not
     // report a geometry for that window: a window with no box must not become
     // a rectangle at the origin, which the capture picker would happily
     // highlight and crop to.
     property var windows: [] // [{ id:string, title:string, appId:string, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool, rect:{x,y,width,height}|null }]
-    // Display/outputs.js's row contract — see its header for the full shape
+    // Display/outputs.js's row contract, see its header for the full shape
     // and for why a disabled output reports a zero mode rather than its last
     // known one. Populated only by refreshOutputs() below; neither compositor
     // pushes output changes over its event stream.
     property var outputs: [] // [{ name, make, model, x, y, width, height, refresh, scale, enabled, mirrorOf }]
 
     // "unknown" (no enumeration has answered yet) | "ok" | "failed". An empty
-    // `outputs` is ambiguous on its own — "the compositor reports none" and
+    // `outputs` is ambiguous on its own, "the compositor reports none" and
     // "the query failed" are different facts, and only the first one licenses
     // the panel's NO OUTPUTS cell. Without this a transiently failing
     // hyprctl/niri query tells a session with two lit monitors it has none.
@@ -62,7 +62,7 @@ QtObject {
 
     // Parking (M37): moving a window out of view and back without touching
     // focus, which is what a quake console's toggle is made of. False here,
-    // the null backend's answer for "no compositor detected" — ConsoleService
+    // the null backend's answer for "no compositor detected", ConsoleService
     // checks it before spawning anything, so a compositor that cannot park
     // never gets a console it would be unable to hide again.
     readonly property bool windowParkingAvailable: false
@@ -70,7 +70,7 @@ QtObject {
     // niri, with no hide primitive at all, moves the window to another
     // workspace (park.js picks which). Focus stays where it is on both.
     function parkWindow(id) {}
-    // Back into view where the user is looking, still without focusing it —
+    // Back into view where the user is looking, still without focusing it,
     // the caller places the window first and focuses it once it has landed,
     // so it never appears at its old size for a frame.
     function unparkWindow(id) {}

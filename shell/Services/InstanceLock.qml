@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 
 // Single-instance takeover lock (post-M16 addendum, owner ask 2026-08-03:
-// "i see two bars there has to be instance locking" — a rebuild+respawn had
+// "i see two bars there has to be instance locking", a rebuild+respawn had
 // raced an old shell instance against a new one, each drawing its own bar).
 //
 // The lock is a unix socket at
@@ -37,7 +37,7 @@ import Quickshell.Io
 // instance running, or a stale socket file left behind by a crash),
 // Quickshell.Io.SocketServer's own enableServer() unconditionally unlinks
 // any existing file at its path before listen() (verified against the
-// pinned quickshell source, src/io/socket.cpp) — so a crash-orphaned socket
+// pinned quickshell source, src/io/socket.cpp), so a crash-orphaned socket
 // file needs no special handling here, the same server.active = true bind
 // path clears it either way.
 //
@@ -59,12 +59,12 @@ Scope {
     readonly property bool active: server.active
 
     // Whether the initial probe's outcome (a live instance found, or none)
-    // has already been acted on — guards against the probe's error/
+    // has already been acted on, guards against the probe's error/
     // disconnect signals double-firing the same decision.
     property bool _resolved: false
 
     function _log(line) {
-        console.log("formalshell: instance lock —", line);
+        console.log("formalshell: instance lock:", line);
     }
 
     function _bind() {
@@ -74,7 +74,7 @@ Scope {
         if (server.active)
             root._log("acquired at " + root.socketPath + " (pid " + Quickshell.processId + ")");
         else
-            console.warn("formalshell: instance lock — bind failed, continuing without single-instance guarantee");
+            console.warn("formalshell: instance lock: bind failed, continuing without single-instance guarantee");
     }
 
     function _requestTakeover() {
@@ -101,7 +101,7 @@ Scope {
 
     // Bounded wait for the old instance's connection to drop once takeover
     // has been requested. Binds regardless once the bound is hit even if the
-    // old side never confirmed — SocketServer's own unlink-then-listen is
+    // old side never confirmed, SocketServer's own unlink-then-listen is
     // safe to call whether or not the old process has actually exited yet.
     Timer {
         id: pollTimer
@@ -132,7 +132,7 @@ Scope {
         onConnectionStateChanged: {
             if (!probe.connected && !root._resolved) {
                 // Connected then dropped before a greeting arrived, or never
-                // connected at all — either way there's no live instance to
+                // connected at all, either way there's no live instance to
                 // hand off to.
                 root._resolved = true;
                 root._bind();
@@ -158,7 +158,7 @@ Scope {
                     splitMarker: "\n"
                     onRead: message => {
                         if (message.indexOf("takeover") === 0) {
-                            console.log("formalshell: instance lock — being replaced (" + message + "), quitting");
+                            console.log("formalshell: instance lock: being replaced (" + message + "), quitting");
                             Qt.quit();
                         }
                     }

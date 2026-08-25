@@ -6,7 +6,7 @@ import qs.Core as Core
 
 // Session-wide idle detection (spec §10, M7 Task 5): one shared IdleMonitor
 // on top of ext-idle-notify-v1. `respectInhibitors: true` means `isIdle`
-// already folds any app's ext-idle-inhibit-v1 hold into its own value — the
+// already folds any app's ext-idle-inhibit-v1 hold into its own value, the
 // compositor negotiates the "input-idle" vs. plain "idle" notification kind
 // per monitor.hpp's own doc, so a video call or similar keeps the whole
 // session non-idle with no polling or IdleInhibitor-tracking of our own
@@ -23,19 +23,19 @@ import qs.Core as Core
 // not.
 //
 // `monitor` stays disabled until Core.Config.loaded first flips true, and
-// `timeout` is set from Core.Config.get(...) in that same moment — reproduced
+// `timeout` is set from Core.Config.get(...) in that same moment, reproduced
 // directly on the mac VM rig (2026-07-28): settings.json loads
 // asynchronously, so binding `timeout` straight to a live Core.Config.get()
 // read (with `enabled: true` from the start) makes the monitor initialize
 // with the 300s fallback and then reconfigure to the real value a moment
 // later once settings.json actually loads. That reconfiguration recreates
-// IdleMonitor's underlying ext_idle_notification_v1 object a second time —
+// IdleMonitor's underlying ext_idle_notification_v1 object a second time,
 // and left isIdle stuck at false forever afterward, despite the
 // compositor's own "idled" event demonstrably still firing (quickshell's
 // own qCDebug confirmed it: the notification really did go idle; the
 // binding chain exposing that to QML just never fired again post-recreate).
 // Only ever creating the real notification ONCE, already carrying the
-// correct timeout, avoids the recreation entirely — matching Lock.qml's own
+// correct timeout, avoids the recreation entirely, matching Lock.qml's own
 // IdleMonitor, which never hits this because it doesn't enable until well
 // after Config has settled. A live settings.json edit to
 // screensaver.timeoutSeconds needs a shell restart to take effect; that is
@@ -47,8 +47,8 @@ Singleton {
     readonly property bool isIdle: monitor.isIdle
 
     // Explicit session-only "keep the screen on" toggle (M-polish batch item
-    // B, omarchy's StayAwake indicator semantics — binds to the toggle
-    // itself, never a media-inferred state) — deliberately not persisted:
+    // B, omarchy's StayAwake indicator semantics, binds to the toggle
+    // itself, never a media-inferred state), deliberately not persisted:
     // a shell restart always comes back to false, same as the media guard
     // it sits alongside. Screensaver.qml's own _autoWant reads this exactly
     // like its existing guardMediaPlayback term below.

@@ -62,6 +62,6 @@ Panel {
         visible: root.loadFailed
         width: parent.width
 
-        MetaLabel { text: "PLUGIN ERROR" }
+        SectionLabel { text: "PLUGIN ERROR" }
     }
 }

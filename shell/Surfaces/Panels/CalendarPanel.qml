@@ -271,7 +271,7 @@ Panel {
     PanelHero {
         width: parent.width
         title: Qt.locale().dayName(root._today.getDay(), Locale.LongFormat)
-        meta: "WEEK " + ClockModel.pad2(ClockModel.isoWeek(
+        meta: "Week " + ClockModel.pad2(ClockModel.isoWeek(
             root._today.getFullYear(), root._today.getMonth(), root._today.getDate()))
         readout: String(root._today.getDate())
     }

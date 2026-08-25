@@ -11,8 +11,8 @@
 // First entry with a connected output wins, so that list reads "the desk
 // monitor when it's plugged in, the laptop panel when it isn't". An entry
 // matches a connector by exact name ("HDMI-A-1"), by the port it hangs off
-// ("HDMI", "DP-2"), or by one of the two aliases below. Unset — the default
-// — falls through to the focused output, which on a single-head session is
+// ("HDMI", "DP-2"), or by one of the two aliases below. Unset, the default
+//, falls through to the focused output, which on a single-head session is
 // the only output there is.
 //
 // Pure strings in, a string out: no Quickshell, no compositor, so the
@@ -32,7 +32,7 @@ var INTERNAL_PREFIXES = ["edp", "lvds", "dsi"];
 // `current` only holds the line for an unconfigured session, and only for
 // callers that pass one. There the answer comes from focus, which says
 // nothing new once the session is already idle, so a screen arriving must
-// not drag a running screensaver off the output it started on — restarting
+// not drag a running screensaver off the output it started on, restarting
 // ttfx there would replay the effect from frame 0 on a screen already past
 // it. An unplug still moves it: the name is gone from `names`, so the
 // fallbacks below pick up.
@@ -47,7 +47,7 @@ function resolveMainOutput(names, priority, focused, current) {
     return names.length > 0 ? names[0] : "";
 }
 
-// The first entry in the priority list with a connected output, or "" —
+// The first entry in the priority list with a connected output, or "",
 // which is also how a list of nothing but typos and unplugged monitors
 // answers, so MainOutputService can say so once rather than silently
 // falling back somewhere else.

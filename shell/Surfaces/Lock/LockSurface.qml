@@ -6,19 +6,19 @@ import qs.Components
 
 // Per-output lock surface, instantiated automatically by WlSessionLock (see
 // Lock.qml's `surface: Component { LockSurface { ... } }`) once for every
-// screen — no manual Variants loop, unlike every other multi-output surface
+// screen, no manual Variants loop, unlike every other multi-output surface
 // in this shell. The composed clock/date/field block itself lives in
-// `qs.Components`' `AuthPrompt` (M8b Task 6) — greeter.qml instantiates the
+// `qs.Components`' `AuthPrompt` (M8b Task 6), greeter.qml instantiates the
 // exact same component as its own twin.
 //
 // Why this surface never captures the screen: a ScreencopyView + MultiEffect
 // blurred-backdrop capture was tried first and
 // crashes the lock screen outright (the moment ANY ScreencopyView exists,
 // quickshell's WlBufferManager unconditionally negotiates v4+
-// zwp_linux_dmabuf_v1 feedback with no version guard —
-// src/wayland/buffer/dmabuf.cpp — and WlSessionLock::realizeLockTarget()
+// zwp_linux_dmabuf_v1 feedback with no version guard,
+// src/wayland/buffer/dmabuf.cpp, and WlSessionLock::realizeLockTarget()
 // constructs this surface, and fires captureFrame(), BEFORE calling
-// manager->lock() — src/wayland/session_lock.cpp — so the protocol
+// manager->lock(), src/wayland/session_lock.cpp, so the protocol
 // violation kills the whole Wayland connection, and thus the whole shell
 // process, before the lock has actually engaged: a fail-OPEN crash on a
 // security-critical surface). The backdrop below therefore reads a plain
@@ -35,7 +35,7 @@ import qs.Components
 // unqualified `import qs.Core` would suggest: QtQuick's own built-in `State`
 // element (property-state-machine, exported by `import QtQuick`) shadows
 // the unqualified singleton name, so a bare `State.wallpaper` silently reads
-// `undefined` instead of erroring — reproduced via a Component.onCompleted
+// `undefined` instead of erroring, reproduced via a Component.onCompleted
 // console.warn that printed exactly `wallpaper=[undefined]`. Every other
 // file that reads this singleton (`Background.qml`, `ThemeEngine.qml`)
 // already imports `qs.Core as Core` for this exact reason; this file adds
@@ -49,7 +49,7 @@ WlSessionLockSurface {
     property bool fingerprintEnrolled: false
     // Idle-blanked (M7 Task 4, forwarded from Lock.qml's `blanked`): hides
     // the clock/backdrop/input entirely, leaving the plain background
-    // Rectangle below — a real blank, not a dimmed clock, since the whole
+    // Rectangle below, a real blank, not a dimmed clock, since the whole
     // point is nothing worth reading stays on screen while genuinely
     // unattended. Un-blanking flows from two places in Lock.qml: the
     // compositor's own IdleMonitor transition, and this surface's own
@@ -59,7 +59,7 @@ WlSessionLockSurface {
     // IdleMonitor's own isIdle transition clears a resume-guard trip caused
     // by an organically-elapsed idle timeout just fine (isIdle was true,
     // input arrives, isIdle goes false, Lock.qml's onIsIdleChanged clears
-    // it) — but a resume-guard trip on its own can blank the surface while
+    // it), but a resume-guard trip on its own can blank the surface while
     // isIdle is STILL false (the compositor's own idle timer is monotonic
     // and may not have elapsed at all yet), so isIdleChanged never fires to
     // clear it. This signal is the other half: real activity clears the
@@ -133,7 +133,7 @@ WlSessionLockSurface {
     // Mouse-move activity detector for `activity()` (see its declaration
     // above): acceptedButtons Qt.NoButton means presses pass straight
     // through to whatever's beneath (the password cell's own MouseArea,
-    // via TextInput's built-in one) — this only ever tracks hover.
+    // via TextInput's built-in one), this only ever tracks hover.
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true

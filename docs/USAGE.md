@@ -1552,7 +1552,7 @@ line per GPU card, a `MAIN DISPLAY` row naming whatever
 row that hands off to the full view.
 
 **The full view** is `menu summon monitor`, or the `MONITOR` row at the
-launcher's root. Two ledger columns: CPU (aggregate plus one bar per core),
+launcher's root. Two columns: CPU (aggregate plus one bar per core),
 MEM, SWAP (`NO SWAP` where none is configured), LOAD and UPTIME on the left;
 TEMPS, NET (per interface, `lo` excluded), DISK, then GPU on the right. Each
 GPU block carries name, driver, PCI address, its connectors and which are

@@ -4,7 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Core as Core
 
-// Opt-in night light (M16 Task 6, laptop feature parity with omarchy — that
+// Opt-in night light (M16 Task 6, laptop feature parity with omarchy, that
 // shell drives Hyprland's own hyprsunset IPC directly; this compositor has
 // no equivalent, so wlsunset (wlr-gamma-control-unstable-v1) plays the same
 // role as a plain Process). `nightlight.startOn` (settings.json, default
@@ -12,7 +12,7 @@ import qs.Core as Core
 // _armMonitor idiom) rather than kept live, so a later settings.json edit
 // never fights a user's own enable()/disable() calls mid-session.
 //
-// "Fixed-temp mode, not schedule": wlsunset has no such mode on its own —
+// "Fixed-temp mode, not schedule": wlsunset has no such mode on its own,
 // every run needs either geo coordinates or manual sunrise/sunset, and
 // normally cycles day/night temperature by wall clock. Verified against the
 // pinned 0.4.0 source (kennylevinsen/wlsunset, main.c/wlsunset.1.scd) rather
@@ -20,14 +20,14 @@ import qs.Core as Core
 // SIGUSR1 cycles OFF -> forced-high -> forced-low -> OFF (automatic), each
 // transition unconditionally fprintf'd to stderr ("forcing high
 // temperature" / "forcing low temperature"). Sending it twice pins the low
-// temperature permanently, bypassing the sun calculation entirely — exactly
+// temperature permanently, bypassing the sun calculation entirely, exactly
 // "fixed-temp", using the tool's own sanctioned mechanism rather than
 // fighting it with a zero-length manual sunset/sunrise window. Dummy manual
 // -S/-s times are passed only to route around wlsunset's geo-validation
 // branch (config.manual_time gates it; without either manual or geo flags,
 // latitude/longitude default to NaN, which the validation silently accepts
 // and would feed into a live sun-position calculation for the brief instant
-// before the forced state lands — no reason to depend on that when the
+// before the forced state lands, no reason to depend on that when the
 // values are about to be overridden anyway). Each SIGUSR1 is sent only
 // after the previous one's own stderr confirmation line: standard signals
 // aren't queued, so a blind double-send risks the second one coalescing
@@ -101,7 +101,7 @@ Singleton {
         }
     }
 
-    // Sent once, shortly after the process comes up — see the header
+    // Sent once, shortly after the process comes up, see the header
     // comment for why the race this guards against is already negligible;
     // this is defense in depth, not the primary safety net (the stderr
     // confirmation above is).
@@ -129,7 +129,7 @@ Singleton {
                 // quickshell's Process never emits `exited` when the
                 // command fails to start (CommandModule.qml's own learned
                 // idiom: onErrorOccurred only emits runningChanged for
-                // FailedToStart) — `wlsunset` missing from PATH lands here,
+                // FailedToStart), `wlsunset` missing from PATH lands here,
                 // never in onExited below.
                 if (!root._sawExit && !root._intentionalStop)
                     root.lastError = "wlsunset not found (failed to start)";

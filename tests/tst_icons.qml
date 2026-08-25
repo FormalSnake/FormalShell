@@ -33,7 +33,8 @@ TestCase {
         "star", "heart", "globe", "map-pin", "user", "users", "home",
         "folder", "file", "save", "copy", "share-2", "send", "mail",
         "message-square", "phone", "headphones", "gamepad-2", "printer",
-        "usb", "plug", "plug-zap", "fingerprint"
+        "usb", "plug", "plug-zap", "fingerprint", "circle-dot",
+        "app-window"
     ]
 
     // "circle-help" is its own fallback, and "plug-zap" is nerd.js's one

@@ -25,7 +25,7 @@ Cell {
         : (root._wifiConnected ? "wifi" : "wifi-off")
 
     // The connected network behind the wifi glyph, if NetworkManager has one
-    // to name — NetworkDevice.networks carries the device's own scan list,
+    // to name, NetworkDevice.networks carries the device's own scan list,
     // of which at most one is `connected` at a time.
     readonly property var _activeWifi: {
         for (var i = 0; i < root._devices.length; i++) {
@@ -43,10 +43,10 @@ Cell {
 
     // The glyph alone says "wifi", never which network or how well. Same
     // precedence the glyph uses (wired beats wifi beats nothing). The
-    // trailing segment states the M26 Task 9 right-click action —
+    // trailing segment states the M26 Task 9 right-click action,
     // otherwise it's undiscoverable.
     // ⚠️ signalStrength is a 0..1 fraction, not a percent (quickshell
-    // src/network/wifi.hpp:23) — the same conversion NetworkPanel.qml's own
+    // src/network/wifi.hpp:23), the same conversion NetworkPanel.qml's own
     // signal column makes.
     tooltipText: {
         var head;

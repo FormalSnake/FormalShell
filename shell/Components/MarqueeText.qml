@@ -6,8 +6,8 @@ import qs.Core
 // window-title cell). Both consumers scroll words (a track title, a window
 // title), so the face is sans (DESIGN.md §1 "Type"): renders `text` as a
 // plain elided Text when it fits
-// `maxWidth`, or scrolls it — a hold at the loop start, then a steady linear
-// loop with no visible seam — once it genuinely overflows. Gated on
+// `maxWidth`, or scrolls it, a hold at the loop start, then a steady linear
+// loop with no visible seam, once it genuinely overflows. Gated on
 // Theme.motionEnabled AND `windowVisible` so a hidden window or a
 // motion-disabled session never pays for a running animation; a title that
 // fits never moves (DESIGN.md §4 rule 7).
@@ -22,11 +22,11 @@ Item {
     // instead of one overshooting by the padding and being clipped.
     property real maxWidth: 220
     // Extra inset before the text itself, on top of whatever Row spacing
-    // already separates this from its previous sibling — plain QtQuick
+    // already separates this from its previous sibling, plain QtQuick
     // Text has no leftPadding of its own, so this component provides one.
     property real leftPadding: 0
     // Set by the embedding widget so the marquee can gate on the window
-    // actually being on screen — a hidden-window ticker is exactly the CPU
+    // actually being on screen, a hidden-window ticker is exactly the CPU
     // cost DESIGN.md's motion carve-outs exist to avoid. Defaults true so
     // any other embedding still animates.
     property bool windowVisible: true
@@ -92,7 +92,7 @@ Item {
             width: viewport.width
         }
 
-        // Two copies of the title, a gap apart, scrolled together as one Row —
+        // Two copies of the title, a gap apart, scrolled together as one Row,
         // once `x` reaches `-_loopWidth` the second copy sits exactly where
         // the first one started, so the wrap is seamless with no reset
         // needed between loops.
@@ -118,7 +118,7 @@ Item {
     }
 
     // Hold at the loop start so the beginning is always readable, then
-    // scroll the full loop width at a slow constant rate — no easing, since
+    // scroll the full loop width at a slow constant rate, no easing, since
     // a steady speed is the point (DESIGN.md §4).
     SequentialAnimation {
         id: marqueeAnim

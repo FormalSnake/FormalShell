@@ -1,7 +1,7 @@
 .pragma library
 
 // The palette engine behind DitherImage.qml's "retro" pass (DESIGN.md §2
-// item 12) — pure JS so the color math is reachable from a test without a
+// item 12), pure JS so the color math is reachable from a test without a
 // Canvas, the same split every other algorithmic surface here uses
 // (Screensaver/effect.js, Menu/search.js).
 //
@@ -18,8 +18,8 @@
 //   forever, at up to a 50/50 checker, because the boundary is a property of
 //   the grid and not of the image. A monotone wallpaper is one such region
 //   the size of the screen, so it speckled end to end.
-// - The two colors being mixed are a full step apart — 128 per channel at
-//   3 levels — so every one of those dots is maximum contrast. That is the
+// - The two colors being mixed are a full step apart, 128 per channel at
+//   3 levels, so every one of those dots is maximum contrast. That is the
 //   "too intense".
 //
 // A period-correct image instead carries a SMALL palette chosen FOR that
@@ -35,19 +35,19 @@
 //   to the SECOND nearest by the 4x4 Bayer threshold, weighted by how far
 //   between the two the cell actually sits. Cells that land on a palette
 //   entry never dither at all; cells exactly halfway land on a 50/50
-//   checker, the same as before — but between two colors the image itself
+//   checker, the same as before, but between two colors the image itself
 //   put next to each other, so a dense region reads as shading rather than
 //   as noise.
 //
 // Hue survives for the same reason it did before, more strongly: entries are
 // real averages of the image's own colors, so nothing is forced onto a gray
 // axis and nothing can drift to a hue the source never contained. This is
-// display-side only — nothing here is ever written to disk, and matugen still
+// display-side only, nothing here is ever written to disk, and matugen still
 // reads the untouched wallpaper FILE (ThemeEngine.qml), so a dithered
 // rendering cannot seed the color scheme.
 
 // 4x4 ordered Bayer matrix, values 0..15 mapped to a per-cell threshold.
-// Shared with DitherImage's duotone pass — one matrix, one convention.
+// Shared with DitherImage's duotone pass, one matrix, one convention.
 var BAYER = [
     0, 8, 2, 10,
     12, 4, 14, 6,
@@ -95,7 +95,7 @@ function _buckets(cells, cellCount) {
 // A median-cut box: the buckets it holds, its population, its own average
 // color (population-weighted, so a box's entry sits where its pixels
 // actually are rather than at its geometric center), and the channel it is
-// longest along — the axis a split would cut.
+// longest along, the axis a split would cut.
 function _box(buckets, h) {
     var pop = 0, tr = 0, tg = 0, tb = 0;
     var minR = 256, maxR = -1, minG = 256, maxG = -1, minB = 256, maxB = -1;
@@ -151,7 +151,7 @@ function _split(box, h) {
 }
 
 // `cells`: flat r,g,b triples (0..255), `cellCount` triples long. Returns a
-// flat r,g,b palette, AT MOST `maxColors` entries and often fewer — an image
+// flat r,g,b palette, AT MOST `maxColors` entries and often fewer, an image
 // with less color than that in it gets a shorter palette rather than
 // duplicate entries a dither would then mix between for no reason. Capped at
 // 256 entries because quantize() answers in a Uint8Array of indices; nothing
@@ -203,7 +203,7 @@ function palette(cells, cellCount, maxColors) {
 //
 // `t` is the cell projected onto the line from its nearest entry to its
 // second nearest, so it is 0 when the cell IS the nearest color and 0.5 when
-// it sits exactly between the two (it can never exceed 0.5 — past that the
+// it sits exactly between the two (it can never exceed 0.5, past that the
 // other entry would have been the nearer one). Choosing the second entry
 // when `t` exceeds the Bayer threshold makes the proportion of stepped-up
 // cells equal `t`, so a flat area of a color the palette holds shows no
@@ -213,7 +213,7 @@ function quantize(cells, cellCount, gridWidth, pal) {
     var count = pal.length / 3;
     // Uint8Array, not a plain Array: a full-screen pass indexes hundreds of
     // thousands of cells, and this is the one allocation per paint that
-    // scales with the screen — a boxed-double array of the same length is
+    // scales with the screen, a boxed-double array of the same length is
     // eight times the garbage on a path the animated album art re-runs
     // several times a second.
     var out = new Uint8Array(cellCount);

@@ -3,13 +3,13 @@
 // Pure model for the AirPods panel (M29 Task 1). No Quickshell dependency,
 // so it's testable head-on against fixture status lines (mirrors
 // Bluetooth/model.js). Talks only to the wire shape the omarchy-pods
-// librepods daemon publishes — nothing here is ported from that project's
+// librepods daemon publishes, nothing here is ported from that project's
 // own (GPL) source, this is an independent reimplementation of the
 // documented contract (plan's research block,
 // docs/superpowers/plans/2026-08-18-m29-device-panels.md).
 //
 // `left`/`right`/`case` are absent from the daemon's JSON entirely until a
-// battery packet has arrived — never present with `available:false` — so
+// battery packet has arrived, never present with `available:false`, so
 // every parse path below returns a complete default shape rather than
 // leaving a caller to guard against `undefined`. `connected:false` does
 // not mean nothing is known: battery keeps arriving over BLE adverts while
@@ -33,11 +33,11 @@ var _NOISE_MODE_TITLE = {
 };
 
 var _NOISE_MODE_META = {
-    "-1": "UNKNOWN",
-    "0": "OFF",
-    "1": "NOISE CANCELLATION",
-    "2": "TRANSPARENCY",
-    "3": "ADAPTIVE"
+    "-1": "Unknown",
+    "0": "Off",
+    "1": "Noise cancellation",
+    "2": "Transparency",
+    "3": "Adaptive"
 };
 
 function _defaultPod() {
@@ -92,7 +92,7 @@ function _parseCase(raw) {
 // text: one line of the daemon's own JSON, or "" / malformed / a foreign
 // schema_version. Every one of those returns the same complete default
 // shape (ok:false) rather than throwing or handing back a partial object
-// — a caller never null-checks a field, it checks `ok` once.
+//, a caller never null-checks a field, it checks `ok` once.
 function parseStatus(text) {
     var result = _defaultStatus();
     if (!text)
@@ -112,7 +112,7 @@ function parseStatus(text) {
     result.deviceName = typeof raw.device_name === "string" ? raw.device_name : "";
     result.modelName = typeof raw.model_name === "string" ? raw.model_name : "";
     result.isPro = raw.is_pro_series === true;
-    // Missing key defaults to supporting Off — only Pro 3 sets this false.
+    // Missing key defaults to supporting Off, only Pro 3 sets this false.
     result.supportsOff = raw.supports_noise_off !== false;
     result.noiseMode = typeof raw.noise_mode === "number" ? raw.noise_mode : -1;
     result.left = _parsePod(raw.left);
@@ -138,7 +138,7 @@ function _hint(inEar, charging, hasInEar) {
     return parts.join(" / ");
 }
 
-// The BATTERY section's rows — one per component with a known level.
+// The BATTERY section's rows, one per component with a known level.
 // Empty array when nothing has reported a level yet (fresh daemon), which
 // is the panel's cue to skip the whole section rather than draw an empty
 // one.
@@ -155,7 +155,7 @@ function batteryRows(status) {
 
 // The LISTENING MODE section's rows. Off only exists while the device
 // supports it (Pro 3 dropped it); Adaptive only exists on Pro models.
-// Independent of `connected` — the panel itself decides whether to gate
+// Independent of `connected`, the panel itself decides whether to gate
 // the whole section on the link being up.
 function modesFor(status) {
     var modes = [];
@@ -179,21 +179,21 @@ function earDetectionLabel(n) {
 
 function lidLabel(n) {
     switch (n) {
-    case 0: return "LID OPEN";
-    case 1: return "LID CLOSED";
+    case 0: return "Lid open";
+    case 1: return "Lid closed";
     default: return "";
     }
 }
 
 function noiseModeLabel(n) {
     var label = _NOISE_MODE_META[String(n)];
-    return label !== undefined ? label : "UNKNOWN";
+    return label !== undefined ? label : "Unknown";
 }
 
 // The hero meta line: the link state (noise mode when connected, else
-// NOT CONNECTED) fused with lid state when known, " / " per §2 item 10.
+// "Not connected") fused with lid state when known, " / " per §2 item 10.
 function stateLine(status) {
-    var parts = [status.connected ? noiseModeLabel(status.noiseMode) : "NOT CONNECTED"];
+    var parts = [status.connected ? noiseModeLabel(status.noiseMode) : "Not connected"];
     var lid = lidLabel(status.lidState);
     if (lid !== "")
         parts.push(lid);

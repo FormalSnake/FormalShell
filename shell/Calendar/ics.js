@@ -1,7 +1,7 @@
 .pragma library
 
 // Pure RFC 5545 VEVENT reader for the calendar panel's events feature (M6
-// Task 5's outcome — see docs/spikes/2026-07-28-eds-calendar-events.md).
+// Task 5's outcome, see docs/spikes/2026-07-28-eds-calendar-events.md).
 // Feeds from both of CalendarEventsService's backends: local .ics files in
 // a khal/vdir-style directory, and the raw ICS the formalshell-eds
 // companion CLI prints from EDS/GOA (M12 Task 3).
@@ -11,8 +11,8 @@
 // yesterday through 45 days out, matching formalshell-eds's fetch window).
 // Supported subset: FREQ=DAILY/WEEKLY/MONTHLY/YEARLY, INTERVAL, COUNT,
 // UNTIL, BYDAY on weekly rules, and EXDATE as simple local-date matches.
-// Anything else in the rule — BYSETPOS, BYMONTHDAY, ordinal BYDAY (1MO),
-// an unparseable EXDATE, any part not named above — leaves the anchoring
+// Anything else in the rule, BYSETPOS, BYMONTHDAY, ordinal BYDAY (1MO),
+// an unparseable EXDATE, any part not named above, leaves the anchoring
 // VEVENT as a single occurrence at its DTSTART: honest under-expansion,
 // never a guessed instance. Also out of scope: RECURRENCE-ID overrides
 // (the override renders alongside the generated instance), WKST (accepted
@@ -37,7 +37,7 @@ function _unescape(value) {
 // "DTSTART;VALUE=DATE:20260315" (all-day) / "DTSTART:20260315T090000Z"
 // (UTC) / "DTSTART;TZID=Europe/Madrid:20260315T090000" (zoned or floating)
 // -> { date, allDay }. TZID offsets are not resolved: a zoned or floating
-// time is read as local wall-clock time — reasonable for a single-timezone
+// time is read as local wall-clock time, reasonable for a single-timezone
 // khal setup, a documented limitation otherwise.
 function _parseDateValue(params, value) {
     var allDay = /VALUE=DATE\b/.test(params) && !/VALUE=DATE-TIME/.test(params);
@@ -54,7 +54,7 @@ function _parseDateValue(params, value) {
 
 // One VEVENT block's unfolded body -> { uid, summary, start, end, allDay,
 // rrule, exdates, exdateBad }, or null when DTSTART is missing or
-// unparseable — an event this reducer can't place on the grid is dropped
+// unparseable, an event this reducer can't place on the grid is dropped
 // rather than rendered wrong. rrule/exdates/exdateBad are parseEvents-
 // internal; its output objects never carry them.
 function _parseEvent(block) {
@@ -158,7 +158,7 @@ function _parseRrule(value) {
     return rule;
 }
 
-// Calendar arithmetic on local wall-clock fields — day steps across a DST
+// Calendar arithmetic on local wall-clock fields, day steps across a DST
 // boundary keep the event's local time, which ms arithmetic would not.
 function _shiftDate(base, days, months, years) {
     return new Date(base.getFullYear() + years, base.getMonth() + months, base.getDate() + days, base.getHours(), base.getMinutes(), base.getSeconds());
@@ -166,7 +166,7 @@ function _shiftDate(base, days, months, years) {
 
 // k-th candidate occurrence for the non-BYDAY frequencies, or null when the
 // target month/year has no such calendar date (Jan 31 monthly in February,
-// Feb 29 yearly off-leap) — RFC 5545 skips those rather than shifting them,
+// Feb 29 yearly off-leap), RFC 5545 skips those rather than shifting them,
 // and they don't consume COUNT.
 function _nthOccurrence(start, freq, n) {
     if (freq === "DAILY")
@@ -317,7 +317,7 @@ function _sameDate(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-// Events whose local start date falls on `date` — the day-cell dot/list
+// Events whose local start date falls on `date`, the day-cell dot/list
 // query the panel makes once per visible day.
 function eventsOnDate(events, date) {
     return events.filter(function (e) {

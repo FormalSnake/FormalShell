@@ -67,7 +67,7 @@ import "../../Network/wifiqr.js" as WifiQr
 // rectangles. Honest states, one dim cell each: `NO QRENCODE` (the binary
 // is optional and absent), `NOT CONNECTED` (no active wifi connection),
 // `ENTERPRISE CANNOT SHARE` (802.1x has no shared secret to encode), and
-// `ERROR` for any other nmcli/qrencode failure — never a partial matrix.
+// `ERROR` for any other nmcli/qrencode failure, never a partial matrix.
 //
 // WI-FI PASSWORD REVEAL (owner ask; omarchy's own show/hide affordance,
 // `~/Developer/omarchy/shell/plugins/panels/network/WifiQrPanel.qml:168-187`,
@@ -75,12 +75,12 @@ import "../../Network/wifiqr.js" as WifiQr
 // row with a SHOW / HIDE toggle reveals the saved secret for the network
 // this machine is already on, so the owner can read it out to someone. It
 // rides the QR share's own nmcli read (`wifiFieldsProc` below) rather than
-// running a second one — both consumers want the same fields for the same
+// running a second one, both consumers want the same fields for the same
 // connection. The row only exists while a wifi network is actually
 // connected; past that, honest states one dim cell each: `OPEN NETWORK`,
 // `ENTERPRISE` (802.1x authenticates against a server, so there is no
 // shared secret to show), `NO NMCLI`, and `NO PASSWORD SAVED` when nmcli
-// answers with nothing usable — never an empty reveal. Constraints are in
+// answers with nothing usable, never an empty reveal. Constraints are in
 // the reveal section's own header comment below.
 Panel {
     id: root
@@ -144,8 +144,8 @@ Panel {
     // link state when there is no address to show.
     readonly property string _wifiHeroMeta: {
         if (root._connectedWifiSsid === "")
-            return Networking.wifiEnabled ? "DISCONNECTED" : "RADIO OFF";
-        return root._wifiDeviceAddress !== "" ? root._wifiDeviceAddress : "CONNECTED";
+            return Networking.wifiEnabled ? "Disconnected" : "Radio off";
+        return root._wifiDeviceAddress !== "" ? root._wifiDeviceAddress : "Connected";
     }
     readonly property string _wifiHeroIcon: root._connectedWifiSsid !== "" ? "wifi" : "wifi-off"
 
@@ -383,7 +383,7 @@ Panel {
     // ---- Wi-Fi QR share --------------------------------------------------
     //
     // Constraints: the passphrase is the entire point of the payload, so it
-    // is handled exactly like enterpriseProc's own secret below — it reaches
+    // is handled exactly like enterpriseProc's own secret below, it reaches
     // qrencode over that Process's stdin, never argv (which /proc publishes
     // world-readable to every local user), and `qrEncodeProc.payload` is
     // cleared the instant it has been written. It is never logged and never
@@ -391,7 +391,7 @@ Panel {
     // serializes a fixed key set (compositor/config/audio/brightness) and
     // PanelIpc only calls open/close/toggle/state on a panel, so neither can
     // reflect a property of this file. The rendered matrix ENCODES the
-    // passphrase — scanning it hands the network over — so it lives exactly
+    // passphrase, scanning it hands the network over, so it lives exactly
     // as long as the expanded row does: collapsing the row or closing the
     // panel drops it.
 
@@ -413,13 +413,13 @@ Panel {
         qrencodeCheckProc.running = true;
     }
 
-    // wifiFieldsProc is deliberately not stopped here — see
+    // wifiFieldsProc is deliberately not stopped here, see
     // _requestWifiFields() for why an early stop is worse than letting the
     // read finish and land on a phase nobody is waiting on.
     // Every secret-bearing property is wiped here, not just the rendered
     // matrix. `payload` in particular is otherwise only cleared in
     // qrEncodeProc's onStarted, which never fires if a close lands inside the
-    // few milliseconds before QProcess emits started() — that path would strand
+    // few milliseconds before QProcess emits started(), that path would strand
     // the plaintext WIFI:…;P:<psk>;; string in a live QML property for the
     // lifetime of the shell.
     function _closeWifiQr() {
@@ -457,7 +457,7 @@ Panel {
         var built = WifiQr.buildPayload(WifiQr.parseFields(fieldsText));
         if (!built.ok) {
             // no_ssid means nmcli answered for a connection with no
-            // 802-11-wireless.ssid at all — not a wifi connection, so
+            // 802-11-wireless.ssid at all, not a wifi connection, so
             // the same honest state as having found no device.
             root._failWifiQr(built.error === "enterprise" ? "ENTERPRISE CANNOT SHARE"
                 : built.error === "no_ssid" ? "NOT CONNECTED"
@@ -495,15 +495,15 @@ Panel {
 
     // Routed through `sh` rather than exec'd directly: Quickshell's Process
     // turns a FailedToStart (binary not on PATH) into a bare warning and a
-    // runningChanged, never an `exited` — verified in the pinned source,
-    // src/io/process.cpp:289-297 — which would leave _qrPhase stuck at
+    // runningChanged, never an `exited`, verified in the pinned source,
+    // src/io/process.cpp:289-297, which would leave _qrPhase stuck at
     // "encoding" forever. `sh` always starts, so a vanished qrencode comes
     // back as an ordinary 127 and lands in the ERROR state.
     // Split line by line rather than collected, for the same reason
     // wifiFieldsProc is (see its comment): StdioCollector's `text` is read-only
     // from QML and holds its last value until the next run ends. The ASCII
-    // matrix IS the passphrase in another encoding — decoding it hands the
-    // network over — so leaving it in a live collector would outlast the row
+    // matrix IS the passphrase in another encoding, decoding it hands the
+    // network over, so leaving it in a live collector would outlast the row
     // that asked for it by the lifetime of the process. `_qrAsciiText` is ours
     // to wipe, and the same drain-before-exited ordering applies.
     property string _qrAsciiText: ""
@@ -523,7 +523,7 @@ Panel {
             // qrencode reads stdin to EOF; setStdinEnabled(false) is what
             // closes the write channel (src/io/process.cpp:169-177). It
             // stays false until _onWifiFieldsForQr re-enables it ahead of
-            // the next run — the flag is only read when a process starts.
+            // the next run, the flag is only read when a process starts.
             qrEncodeProc.stdinEnabled = false;
         }
 
@@ -559,12 +559,12 @@ Panel {
     // halves of that have to stay true: DebugIpc.dump() serializes a fixed
     // key set (compositor/config/audio/brightness) with no route into this
     // file at all, while NetworkIpc DOES hold this panel as `panel` and can
-    // read any root property on it — its verbs deliberately touch only the
+    // read any root property on it, its verbs deliberately touch only the
     // action/speed-test state, and `_pwText`/`_pwError` are excluded from
     // status() and speedstatus() on purpose. Do not add a reveal verb: an
     // IPC reply is exactly the kind of surface a secret must never reach.
-    // The read itself runs only when SHOW is pressed — nothing reads
-    // secrets speculatively — and the honest states below are error codes
+    // The read itself runs only when SHOW is pressed, nothing reads
+    // secrets speculatively, and the honest states below are error codes
     // the owner can act on, never a stand-in value.
 
     // "idle" | "reading" | "shown" | "failed"
@@ -582,7 +582,7 @@ Panel {
     // model: this gates whether the PASSWORD row exists at all, so nmcli is
     // never asked for a secret on a surface that has nothing to reveal.
     // Tracked as the ssid rather than the network object because the change
-    // handler below drops a revealed password — it must fire when the
+    // handler below drops a revealed password, it must fire when the
     // connection genuinely changed and not on every scan tick's rebuild of
     // _wifiSorted, and a string property notifies on value, not identity.
     readonly property string _connectedWifiSsid: {
@@ -626,7 +626,7 @@ Panel {
         // none, and reporting the second would be a lie (CLAUDE.md's
         // honest-unavailable-state rule). 3 is "no active wifi connection"
         // (a disconnect racing the read, or nmcli answering `--` for the
-        // CON-UUID), and every other nonzero is some other nmcli failure —
+        // CON-UUID), and every other nonzero is some other nmcli failure,
         // none of those read the network's stored secret at all, so none of
         // them may claim it has none. They land on the same ERROR the QR half
         // uses for its equivalent failures. NO PASSWORD SAVED is reserved for
@@ -670,7 +670,7 @@ Panel {
     // /sys/class/net/<dev>/wireless directory), since that's the connection
     // the rest of this panel describes; otherwise take the first connected
     // wifi device nmcli reports. nmcli localizes device states, hence
-    // LC_ALL=C and the prefix match — "connected (externally)" is still
+    // LC_ALL=C and the prefix match, "connected (externally)" is still
     // connected. Exit 3 is "no active wifi connection"; the leading
     // `command -v` guard (the same one _enterpriseScript needs, for the same
     // reason: this script's own `|| exit 3` would otherwise report a missing

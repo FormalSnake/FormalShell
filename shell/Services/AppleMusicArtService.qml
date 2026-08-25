@@ -8,12 +8,12 @@ import "../Media/applemusic.js" as AppleMusic
 
 // Apple Music animated album covers (M7 Task 2, spec §5): resolves the
 // *currently playing* track's cover through iTunes Search + a scraped
-// web-player token + amp-api's undocumented `editorialVideo` field, ported —
-// with attribution — from AvengeMedia/DankMaterialShell PR #2918 (MIT).
+// web-player token + amp-api's undocumented `editorialVideo` field, ported,
+// with attribution, from AvengeMedia/DankMaterialShell PR #2918 (MIT).
 // Isolated and off by default behind `media.appleMusicArt` in settings.json:
 // `_schedule()` bails before touching the network the instant `enabled` is
 // false, so flipping the setting off is a hard stop, not a slow one. Every
-// step runs over `curl` — the chain ends in a binary mp4 download with an
+// step runs over `curl`, the chain ends in a binary mp4 download with an
 // atomic rename, so curl's own file-output/exit-code idiom covers the whole
 // pipeline uniformly rather than mixing in QML's text-only XMLHttpRequest.
 // Every URL-building, response-parsing and staleness decision lives in
@@ -23,7 +23,7 @@ Singleton {
 
     readonly property bool enabled: Core.Config.get("media.appleMusicArt", false)
 
-    // file:// URL of the current track's downloaded animated cover, or "" —
+    // file:// URL of the current track's downloaded animated cover, or "",
     // MediaPanel/AnimatedAlbumArt.qml's own rule (never render anything but
     // this) does the rest, including every fallback-to-static-art path.
     property string animatedArtUrl: ""
@@ -34,7 +34,7 @@ Singleton {
     }
 
     property string _token: ""
-    // cacheKey -> file:// url, or "" for a known miss — a track without
+    // cacheKey -> file:// url, or "" for a known miss, a track without
     // animated art is cached too, so it is never re-fetched every play.
     property var _cache: ({})
     // Bumped on every (re)schedule so a slow in-flight lookup for a track
@@ -182,7 +182,7 @@ Singleton {
     }
 
     // The anonymous web-player JWT sits in the main JS bundle referenced by
-    // any album page — fetch the page, find the bundle, fetch the bundle.
+    // any album page, fetch the page, find the bundle, fetch the bundle.
     function _fetchToken(collectionId, callback) {
         root._curl([AppleMusic.albumPageUrl(collectionId)], (pageExit, html) => {
             if (pageExit !== 0) {
@@ -268,7 +268,7 @@ Singleton {
 
     // Per-lookup temp file then atomic rename, so a concurrent download for
     // the same album (rapid track flip-flop) can never interleave writes
-    // into one file — the temp is removed on failure or on being
+    // into one file, the temp is removed on failure or on being
     // superseded, rather than stranded as a .part.
     function _download(key, serial, url) {
         const path = root._artPath(key);
@@ -307,12 +307,12 @@ Singleton {
     // 30-day prune: list the cache dir's own mtimes and let pure
     // applemusic.js decide which files are stale, rather than trusting
     // `find -mtime`'s boundary semantics unverified. Runs once at startup,
-    // gated on `enabled` so a disabled install spawns no process at all —
+    // gated on `enabled` so a disabled install spawns no process at all,
     // the disk cache simply stops growing along with everything else.
     function _prune() {
         root._run(["find", root._cacheDir, "-maxdepth", "1", "-type", "f", "-printf", "%T@ %p\n"], (exitCode, output) => {
             if (exitCode !== 0)
-                return; // cache dir doesn't exist yet — nothing to prune
+                return; // cache dir doesn't exist yet, nothing to prune
             const stale = AppleMusic.parsePruneListing(output, Date.now(), 30);
             if (stale.length > 0)
                 root._run(["rm", "-f"].concat(stale), () => {});

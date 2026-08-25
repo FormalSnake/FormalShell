@@ -1,11 +1,11 @@
 // FormalShell's shipped default menu tree (dotted-id hierarchy, per-key
-// user-overridable at ~/.config/formalshell/menu.jsonc — see model.js's
+// user-overridable at ~/.config/formalshell/menu.jsonc, see model.js's
 // buildTree()). Kind is inferred per entry: `action` -> action, `target` ->
 // link, `provider` -> submenu populated at tree-build time by providers.js
 // (see "apps" below), else a plain submenu.
 //
 // Internal actions: an `action` value prefixed `@ipc:` is dispatched
-// in-process instead of spawned via `sh -c` — Menu.qml's activation switches
+// in-process instead of spawned via `sh -c`, Menu.qml's activation switches
 // on the name after the prefix (e.g. "@ipc:theme.toggleMode" ->
 // Core.State.toggleMode()). Use this for anything that must run in the
 // shell's own process rather than as a detached command.
@@ -17,36 +17,34 @@
 // carrying it is refused with a warning and the node hides. `"keepOpen":
 // true` on an action row leaves the menu open after activation.
 {
-    "apps": { "provider": "apps", "icon": "󰀻" },
-    "clipboard": { "provider": "clipboard", "icon": "󰅍" },
-    // "calc" registers no provider fn — the node exists as a summonable
+    "apps": { "provider": "apps" },
+    "clipboard": { "provider": "clipboard" },
+    // "calc" registers no provider fn, the node exists as a summonable
     // route (`menu summon calc`) whose level Menu.qml special-cases to show
     // only the live CALC result row for the typed expression (calc.js).
-    "calc": { "label": "Calculator", "provider": "calc", "icon": "󰃬" },
+    "calc": { "label": "Calculator", "provider": "calc" },
     // "emoji" registers no provider fn either: a summonable route
     // (`menu summon emoji`) whose level Menu.qml points at the vendored
     // emoji dataset (emoji.json) instead of the tree; ":e <query>" reaches
-    // the same rows from anywhere. md-emoticon U+F0C68, pinned
-    // nerd-fonts-jetbrains-mono cmap.
-    "emoji": { "label": "Emoji", "provider": "emoji", "icon": "󰱨" },
+    // the same rows from anywhere.
+    "emoji": { "label": "Emoji", "provider": "emoji" },
     // "nix" registers no provider fn either: a summonable route
     // (`menu summon nix`) whose level Menu.qml fills from the debounced
     // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
     // from anywhere. No nix on PATH renders a single dim NO NIX row.
-    "nix": { "label": "Nix Run", "provider": "nix", "icon": "" },
+    "nix": { "label": "Nix Run", "provider": "nix" },
     // "keybinds" registers no provider fn either: a summonable route
     // (`menu summon keybinds`) whose level Menu.qml fills from the parsed
     // compositor binds (Compositor/keybinds.js); ":k <query>" reaches the
     // same rows from anywhere. Rows are inert notes, never activatable.
-    // md-keyboard U+F030C, pinned nerd-fonts-jetbrains-mono cmap.
-    "keybinds": { "label": "Keybinds", "provider": "keybinds", "icon": "󰌌", "aliases": ["keys", "hotkeys", "shortcuts"] },
+    "keybinds": { "label": "Keybinds", "provider": "keybinds", "aliases": ["keys", "hotkeys", "shortcuts"] },
     // "wallpaper" registers no provider fn either: a summonable route
     // (`menu summon wallpaper`, and the whole `picker` IPC target) whose
     // level Menu.qml renders as an image GRID over `picker.directory`
-    // rather than as rows — the wallpaper picker lives inside the menu now
+    // rather than as rows, the wallpaper picker lives inside the menu now
     // instead of being a popout of its own. The search field filters it by
-    // filename like any other level. md-wallpaper U+F0E09.
-    "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "icon": "󰸉", "aliases": ["picker", "background"] },
+    // filename like any other level.
+    "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "aliases": ["picker", "background"] },
     // "monitor" registers no provider fn either, on the same footing as
     // "wallpaper" above: a summonable route (`menu summon monitor`) whose
     // level Menu.qml renders as a whole APP VIEW rather than as rows:
@@ -55,12 +53,11 @@
     // does not want its bar cell, which is opt-in. The declared "provider"
     // is what keeps the row itself listed: a childless "submenu" is
     // filtered out of its parent level (model.js's visibleChildren), a
-    // childless "provider" is not. md-cpu_64_bit U+F0EE0, pinned
-    // nerd-fonts-jetbrains-mono cmap.
+    // childless "provider" is not.
     // The process table lives inside that view (btop's layout), so the
     // aliases for it are this route's too: `ps`, `top` and `htop` are what
     // someone reaching for a process list actually types.
-    "monitor": { "label": "System Monitor", "provider": "monitor", "icon": "󰻠", "aliases": ["sysmon", "system", "cpu", "gpu", "ps", "top", "htop", "processes", "kill", "task", "tasks", "activity"] },
+    "monitor": { "label": "System Monitor", "provider": "monitor", "aliases": ["sysmon", "system", "cpu", "gpu", "ps", "top", "htop", "processes", "kill", "task", "tasks", "activity"] },
 
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"
@@ -72,13 +69,13 @@
     // already lists somewhere else, so a root search that walked them
     // returned "Audio" or "Equibop" two and three times over. The route row
     // itself still matches from anywhere, so "tray" still reaches the tray.
-    "panels": { "label": "Panels", "provider": "panels", "icon": "󰕰", "routeOnly": true },
+    "panels": { "label": "Panels", "provider": "panels", "routeOnly": true },
     // "tray" mirrors it for the live SNI tray (providers.js's
     // trayProvider): one row per registered item, activating it the same
     // way a left click on its bar cell does. Its labels come from an item's
     // tooltip title, which for most items is exactly the application name,
     // hence the same "routeOnly" as panels above.
-    "tray": { "label": "Tray", "provider": "tray", "icon": "󱊔", "routeOnly": true },
+    "tray": { "label": "Tray", "provider": "tray", "routeOnly": true },
     // "gpu" registers a provider fn too (providers.js's gpuProvider): one
     // inert note row per GpuService card -- name, integrated/discrete,
     // driver, connected outputs -- informational only, same non-activatable
@@ -88,24 +85,22 @@
     // absent -- not present and empty -- on a machine with no supergfxctl.
     // Launching an app on the discrete card is Shift+Enter on the app row,
     // not a route under here listing every app a second time.
-    "gpu": { "label": "GPU", "provider": "gpu", "icon": "󰢮" },
+    "gpu": { "label": "GPU", "provider": "gpu" },
 
-    "system": { "label": "System", "icon": "󰒓" },
+    "system": { "label": "System" },
     // Deliberately disabled -- flipping it on is the owner's call, not
     // something to change incidentally.
     "system.lock": { "action": "@ipc:lock.lock", "when": "false" },
-    "system.suspend": { "action": "systemctl suspend", "icon": "󰤄" },
-    "system.reboot": { "action": "systemctl reboot", "icon": "󰜉", "confirm": true },
-    "system.shutdown": { "action": "systemctl poweroff", "icon": "󰤂", "confirm": true },
+    "system.suspend": { "action": "systemctl suspend" },
+    "system.reboot": { "action": "systemctl reboot", "confirm": true },
+    "system.shutdown": { "action": "systemctl poweroff", "confirm": true },
     "system.logout": {
         "action": "niri msg action quit --skip-confirmation",
-        "icon": "󰍃",
         "when": "test -n \"$NIRI_SOCKET\""
     },
     "system.notifications": {
         "label": "Notifications",
-        "action": "@ipc:notifications.showHistory",
-        "icon": "󰂚"
+        "action": "@ipc:notifications.showHistory"
     },
 
     // REMINDERS: a countdown plus a message, fired through
@@ -114,73 +109,63 @@
     // Menu.openInput with ReminderService's token) rather than taking an
     // argument here. No `when` on any node: `when` runs a shell command and
     // cannot gate on in-process state, so Clear Reminders stays visible and
-    // is a harmless no-op on an empty list. md-reminder U+F088C,
-    // md-timer_outline U+F051B, md-clock_outline U+F0150, md-close U+F0156,
-    // all four from the pinned nerd-fonts-jetbrains-mono cmap.
-    "reminder": { "label": "Reminder", "icon": "󰢌" },
-    "reminder.set": { "label": "Set Reminder", "action": "@ipc:reminder.set", "icon": "󰔛" },
-    "reminder.show": { "label": "Show Reminders", "action": "@ipc:reminder.show", "icon": "󰅐" },
-    "reminder.clear": { "label": "Clear Reminders", "action": "@ipc:reminder.clear", "icon": "󰅖" },
+    // is a harmless no-op on an empty list.
+    "reminder": { "label": "Reminder" },
+    "reminder.set": { "label": "Set Reminder", "action": "@ipc:reminder.set" },
+    "reminder.show": { "label": "Show Reminders", "action": "@ipc:reminder.show" },
+    "reminder.clear": { "label": "Clear Reminders", "action": "@ipc:reminder.clear" },
 
     // SHARE (M17 Task 1): present only when `localsend_app` resolves on
     // PATH (nixpkgs' pkgs.localsend package, verified against its actual
-    // installed bin/ — not the bare `localsend` name omarchy assumes) — the
+    // installed bin/, not the bare `localsend` name omarchy assumes), the
     // standard `command -v` presence guard (see TailscalePanel.qml's own
     // "NO TAILSCALE" check for the same idiom). "share.clipboard" is a
     // placeholder: providers.js's shareClipboardEntry() overwrites it at
     // tree-build time with the live newest-clipboard-entry action (or the
     // honest NOTHING TO SHARE row), keeping its declared position ahead of
     // "share.history"/"share.receive" below.
-    "share": { "label": "Share", "icon": "󰒗", "when": "command -v localsend_app >/dev/null 2>&1" },
+    "share": { "label": "Share", "when": "command -v localsend_app >/dev/null 2>&1" },
     "share.clipboard": { "label": "Clipboard" },
-    "share.history": { "label": "Pick From History", "provider": "shareHistory", "icon": "󰋚" },
-    "share.receive": { "label": "Receive", "action": "localsend_app", "icon": "󰥦" },
+    "share.history": { "label": "Pick From History", "provider": "shareHistory" },
+    "share.receive": { "label": "Receive", "action": "localsend_app" },
 
     // CLIPSSH: present only when `clipssh` resolves on PATH (the same
-    // presence-gate idiom as "share" above) — each row is a saved alias
+    // presence-gate idiom as "share" above), each row is a saved alias
     // from ~/.clipssh/aliases (providers.js's clipsshRows), Enter sends
     // the current clipboard image to that host and copies the remote path
-    // back. md-console_network U+F08A9, pinned nerd-fonts-jetbrains-mono
-    // cmap via fonttools ttx.
-    "clipssh": { "label": "Clipssh", "provider": "clipssh", "icon": "󰢩", "when": "command -v clipssh >/dev/null 2>&1" },
+    // back.
+    "clipssh": { "label": "Clipssh", "provider": "clipssh", "when": "command -v clipssh >/dev/null 2>&1" },
 
     // TOGGLE HUB: every row is a live in-process toggle. `checked` takes an
     // "@state:" condition (toggles.js's allow-list, resolved from Menu.qml's
     // _stateSnapshot, never a Process, so the checkmark flips in the same
     // turn the toggle does), and `keepOpen` holds the surface open so that
-    // flip is actually visible. Glyphs from the pinned
-    // nerd-fonts-jetbrains-mono cmap: md-toggle_switch U+F0521,
-    // md-lightbulb_night U+F1A4C, md-coffee U+F0176, md-bell_off U+F009B,
-    // md-theme_light_dark U+F050E.
-    "toggles": { "label": "Toggles", "icon": "󰔡" },
+    // flip is actually visible.
+    "toggles": { "label": "Toggles" },
     "toggles.nightlight": {
         "label": "Night Light",
         "action": "@ipc:nightlight.toggle",
         "checked": "@state:nightlight.active",
         "keepOpen": true,
-        "icon": "󱩌",
         "when": "command -v wlsunset >/dev/null 2>&1"
     },
     "toggles.stay-awake": {
         "label": "Stay Awake",
         "action": "@ipc:screensaver.stayAwakeToggle",
         "checked": "@state:screensaver.stayAwake",
-        "keepOpen": true,
-        "icon": "󰅶"
+        "keepOpen": true
     },
     "toggles.dnd": {
         "label": "Do Not Disturb",
         "action": "@ipc:notifications.toggleDnd",
         "checked": "@state:notifications.dnd",
-        "keepOpen": true,
-        "icon": "󰂛"
+        "keepOpen": true
     },
     "toggles.dark-mode": {
         "label": "Dark Mode",
         "action": "@ipc:theme.toggleMode",
         "checked": "@state:theme.dark",
-        "keepOpen": true,
-        "icon": "󰔎"
+        "keepOpen": true
     }
 
     // The root "capture" node (OCR, colour pick, record, stop, video-to-GIF,

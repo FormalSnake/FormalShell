@@ -4,7 +4,7 @@ import qs.Core
 import qs.Components
 
 // The shell-owned tray context menu (M32, replacing Tray.qml's old
-// QsMenuAnchor/native-QMenu path — see that file's own header for the
+// QsMenuAnchor/native-QMenu path, see that file's own header for the
 // Hyprland grab bug that made this necessary). Composes Panel.qml rather
 // than duplicating its frame: one instance, opened per tray item via
 // openItem(cell, item), so the anchoring, the click-outside dismiss, the
@@ -13,21 +13,21 @@ import qs.Components
 // differ, since this one is a menu (M43 D6).
 //
 // Driven by Quickshell.QsMenuOpener over the item's own DBusMenuHandle
-// (item.menu) — ground-truthed against the pinned quickshell source
+// (item.menu), ground-truthed against the pinned quickshell source
 // (src/core/qsmenu.hpp, src/dbus/dbusmenu/dbusmenu.cpp): assigning a
 // QsMenuHandle to QsMenuOpener.menu refs it, which for a DBusMenuHandle
 // triggers AboutToShow(0) + GetLayout(0, -1, []) once and loads the
 // *entire* subtree eagerly (GetLayout's recursive depth argument is
-// effectively ignored by our own root ref — every descendant inherits
+// effectively ignored by our own root ref, every descendant inherits
 // mShowChildren=true from its parent at creation), not per-submenu-open.
 // A `QsMenuEntry` is itself a `QsMenuHandle` (its own `menu()` override
 // returns itself), so a second QsMenuOpener bound to a hasChildren entry
-// reads its already-populated children synchronously — no second D-Bus
+// reads its already-populated children synchronously, no second D-Bus
 // round trip. Submenus expand in place (indented rows) rather than
 // spawning cascade popups: `_expanded` tracks which entries are open,
 // `_openerFor()` lazily creates one QsMenuOpener per expanded entry
 // (destroyed on collapse/close), and `_flatten()` walks the tree into one
-// ledger list every render. One surface, no nested popup grabs — the
+// ledger list every render. One surface, no nested popup grabs, the
 // entire point of this milestone.
 Panel {
     id: root
@@ -40,14 +40,14 @@ Panel {
     frameColor: Theme.surface(Theme.color.popover)
     frameRadius: Theme.radiusMd
 
-    // The tray item's own DBusMenuHandle (SNI item.menu) — null while
+    // The tray item's own DBusMenuHandle (SNI item.menu), null while
     // closed, so QsMenuOpener drops every ref'd DBusMenuItem the instant
     // the surface closes rather than polling a menu nobody can see.
     property var menuHandle: null
     property string _title: ""
     // JS array of QsMenuEntry refs currently expanded (submenu rows shown
     // indented beneath their parent) and the {entry, opener} pairs backing
-    // them — a plain array, not a model: nothing here renders directly off
+    // them, a plain array, not a model: nothing here renders directly off
     // it, `_rows` (rebuilt into a fresh array on every change) is what the
     // Repeater below binds to.
     property var _expanded: []
@@ -143,7 +143,7 @@ Panel {
     }
 
     // IPC-safe standins for the real Down/Up/Enter keys above (TrayIpc.qml's
-    // `menucursor <delta>`/`menuactivate`) — the same division the
+    // `menucursor <delta>`/`menuactivate`), the same division the
     // picker's `choose`/`variant` verbs already draw (their own header:
     // "independent of real keyboard/pointer delivery... the same division
     // every other surface's actions already use in the smoke rig"), needed
@@ -162,7 +162,7 @@ Panel {
     }
 
     // Skips separator rows (an inverted/hovered hairline reads as broken
-    // chrome); disabled rows stay reachable, same as most native menus —
+    // chrome); disabled rows stay reachable, same as most native menus,
     // `_activate` is what refuses them.
     function _moveCursor(delta) {
         if (root._rows.length === 0) {

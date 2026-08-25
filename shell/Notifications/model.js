@@ -2,7 +2,7 @@
 
 // Pure three-tier notification state machine: popups (visible toasts) ->
 // pending (unseen, waiting in the history center) -> past (seen, pruned
-// after 15 minutes). Every function takes state in, returns state out —
+// after 15 minutes). Every function takes state in, returns state out,
 // no Date.now(), no mutation of the input.
 
 // Caps GROUPS on screen, not raw entries: five repeats of one notification
@@ -17,11 +17,11 @@ function initialState() {
 
 // Omarchy's narrow bypass: only urgency=critical notifications from
 // notify-send itself get through DND. A chat app marking its messages
-// critical does not qualify — senderIsNotifySend is set by the server
+// critical does not qualify, senderIsNotifySend is set by the server
 // layer from the sender's app info, never inferred from urgency alone.
 // A shell-authored local entry (NotificationService.notify(), M16 Task 5's
 // critical battery warning) earns the same bypass on its own honest
-// `local` marker — it never claims to be notify-send.
+// `local` marker, it never claims to be notify-send.
 function bypassesDnd(notif) {
     return notif.urgency === 2 && (notif.senderIsNotifySend === true || notif.local === true);
 }
@@ -146,7 +146,7 @@ function add(state, notif, now, opts) {
 }
 
 // Applies a replaces_id update (the server mutates the existing
-// Notification object in place instead of emitting a new one — see
+// Notification object in place instead of emitting a new one, see
 // NotificationService.qml's onNotification comment) to whichever tier
 // currently holds the entry, without moving it between tiers or touching
 // arrivedAt/seenAt. A still-popped-up entry gets expiresAt recomputed from
@@ -196,7 +196,7 @@ function expire(state, now) {
 }
 
 // Only removes from the popups tier, marking the entry seen on its way
-// to past — this is the toast surface's dismiss ("X" cell, or the click
+// to past, this is the toast surface's dismiss ("X" cell, or the click
 // that acknowledges a popup still on screen).
 function dismissPopup(state, id, now) {
     var idx = state.popups.findIndex(function (p) { return p.id === id; });
@@ -251,7 +251,7 @@ function prunePast(state, now) {
 }
 
 // General-purpose delete by id from whichever tier holds it (the history
-// center's per-row dismiss, on pending or past rows) — unlike
+// center's per-row dismiss, on pending or past rows), unlike
 // dismissPopup, this drops the entry outright rather than promoting it.
 function dismissOne(state, id) {
     var popups = state.popups.filter(function (p) { return p.id !== id; });
@@ -341,10 +341,10 @@ function _escapeHtml(text) {
 // server advertises no body-markup capability (NotificationService.qml's
 // NotificationServer leaves bodyMarkupSupported at its false default), so
 // senders are never told markup is safe to send and any `&`/`<`/`>` in
-// their text is incidental, not intentional tags — escape it first or
+// their text is incidental, not intentional tags, escape it first or
 // Text.StyledText's parser silently swallows everything after a bare `<`
 // (an unterminated tag) or misreads it as real markup. Only then does raw
-// \n become <br/>, since StyledText otherwise ignores it — the <br/> we
+// \n become <br/>, since StyledText otherwise ignores it, the <br/> we
 // insert is deliberately unescaped, it's the one piece of markup this
 // pipeline actually means to emit.
 function styledBody(body, appName, appIcon) {
@@ -370,7 +370,7 @@ function setDnd(state, on) {
     return Object.assign({}, state, { dnd: on });
 }
 
-// Not a reducer step — returns the entry itself (or null) for invokeLast:
+// Not a reducer step, returns the entry itself (or null) for invokeLast:
 // the most recently arrived notification still live in popups or pending.
 function invokeTarget(state) {
     return state.popups.concat(state.pending).reduce(function (latest, entry) {
@@ -390,9 +390,9 @@ var DEFAULT_POSITION = "bottom-right";
 // Collapsed-stack front-to-back order (DESIGN.md §Notifications, M34 Task
 // 2, sonner's depth stack translated to stepped-integer sizing): newest
 // group first, EXCEPT a critical group always wins the front slot over a
-// newer normal one — "urgency outranks recency at a glance". Ties (two
+// newer normal one, "urgency outranks recency at a glance". Ties (two
 // criticals) resolve by recency same as everything else. Pure and
-// independent of anchor direction/newestFirst — Toasts.qml's collapsed
+// independent of anchor direction/newestFirst, Toasts.qml's collapsed
 // layout reads index 0 as the front card, 1/2 as the two peek levels, the
 // rest as present only in the count the expanded stack reveals.
 function stackOrder(entries) {

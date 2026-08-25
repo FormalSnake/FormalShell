@@ -8,15 +8,15 @@ import "../../../Bar/commandOutput.js" as CommandOutput
 // §Bar, spec §Surfaces-1, M10 Task 3): runs `module.command` on an
 // interval and parses its stdout as Waybar-JSON-compatible
 // `{text, tooltip, class}`. `text` renders in the cell and `tooltip` goes
-// straight to Cell's hover tooltip verbatim — the module author's own
-// wording, never reformatted or uppercased here (MetaLabel's own
+// straight to Cell's hover tooltip verbatim, the module author's own
+// wording, never reformatted or uppercased here (SectionLabel's own
 // `font.capitalization` does the casing on the way out). `class` maps onto
 // the two states Cell already has (DESIGN's accent/urgent are flat blocks,
 // not arbitrary CSS classes, so only "warning" and "critical"/"urgent" are
 // recognised; anything else renders plain). A non-zero exit, a timeout, or
 // output that fails to parse as JSON with a string `text` all render the
-// same honest "MODULE ERROR" cell — with no tooltip, since
-// commandOutput.js's error state carries an empty one — instead of a stale
+// same honest "MODULE ERROR" cell, with no tooltip, since
+// commandOutput.js's error state carries an empty one, instead of a stale
 // value.
 Cell {
     id: root
@@ -34,9 +34,8 @@ Cell {
     // always fires first) apart from a process that never started at all.
     property bool _sawExit: false
 
-    standalone: true
-    accent: root._class === "warning"
-    urgent: root._class === "critical" || root._class === "urgent"
+    warning: root._class === "warning"
+    destructive: root._class === "critical" || root._class === "urgent"
     tooltipText: root._tooltip
 
     // A module that succeeds with nothing to say renders no cell at all,
@@ -56,7 +55,7 @@ Cell {
         // `.length` truthiness, not Array.isArray: `module` crossed a
         // property assignment onto a Loader-created object (Bar.qml's
         // onLoaded), and the nested `command` array on the far side of that
-        // boundary is a QVariantList — real, indexable, and perfectly
+        // boundary is a QVariantList, real, indexable, and perfectly
         // usable as Process.command, but Array.isArray() on it is false
         // (confirmed by reproducing it; silently starved _run() of ever
         // reaching proc.running = true).
@@ -92,7 +91,7 @@ Cell {
     }
 
     // Single-shot per invocation, restarted by _run(). A command that
-    // outlives this kills it (SIGTERM — Process.running's own documented
+    // outlives this kills it (SIGTERM, Process.running's own documented
     // behavior) and reports the same error state rather than leaving a
     // stale value on screen indefinitely.
     Timer {
@@ -118,7 +117,7 @@ Cell {
             root._applyState(CommandOutput.resolve(exitCode, stdoutCollector.text));
         }
         // quickshell's Process never emits `exited` when the command fails
-        // to start (a missing/typo'd binary — process.cpp's
+        // to start (a missing/typo'd binary, process.cpp's
         // onErrorOccurred only emits runningChanged for FailedToStart), so
         // without this a bad command path left this cell blank forever
         // instead of erroring. `_sawExit` distinguishes that case from a
@@ -135,7 +134,7 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         text: root._text
         color: root.foreground
-        font.family: Theme.fontFamily
+        font.family: Theme.fontFamilyMono
         font.pixelSize: Theme.fontSize.body
     }
 

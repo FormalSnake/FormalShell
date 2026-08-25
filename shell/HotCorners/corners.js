@@ -1,7 +1,7 @@
 .pragma library
 
 // Pure resolver for `hotCorners` (settings.json). Takes the raw object in,
-// returns { enabled, size, delayMs, corners, warnings } out — no Quickshell
+// returns { enabled, size, delayMs, corners, warnings } out, no Quickshell
 // or Config access, so it's testable head-on, same shape as Bar/layout.js.
 // Bad input is never fatal: an unrecognised action name or a non-numeric
 // size is dropped with one warning string rather than thrown, since a typo
@@ -30,7 +30,7 @@ function isLauncherAction(action) {
 
 // Both top corners default to "none": Bar.qml anchors top/left/right, so a
 // hot corner up there would take its trigger square out of the bar's own
-// input region — the leftmost pixels of the workspace cell, the rightmost
+// input region, the leftmost pixels of the workspace cell, the rightmost
 // of the indicators one.
 var DEFAULT_CORNERS = { topLeft: "none", topRight: "none", bottomLeft: "screensaver", bottomRight: "lock" };
 
@@ -97,7 +97,7 @@ function edges(corner) {
     };
 }
 
-// Flat {screen, corner, action} list — one entry per window HotCorners.qml
+// Flat {screen, corner, action} list, one entry per window HotCorners.qml
 // actually has to create, so a corner left at "none" (or the whole feature
 // switched off) costs no layer surface at all rather than a mapped but
 // inert one holding an input region over live pixels.

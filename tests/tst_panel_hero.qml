@@ -5,7 +5,7 @@ import "../shell/Components"
 
 // PanelHero's caption line (DESIGN.md §1 "Type", §5): `bodySmall`,
 // `mutedForeground`, sentence case, in the face `metaMono` picks. It used to
-// render through MetaLabel, which uppercases, so DisplayPanel's mode line
+// render through the uppercasing section label, so DisplayPanel's mode line
 // read back as `1920X1080@60`.
 TestCase {
     id: testCase

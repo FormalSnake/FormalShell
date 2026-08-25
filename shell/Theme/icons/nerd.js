@@ -161,7 +161,9 @@ var ICONS = {
     "laptop": "\u{F0322}",           // md-laptop
     "git-fork": "\u{F00FB}",         // md-call_split
     "bot": "\u{F16A3}",              // md-robot_excited
-    "fingerprint": "\u{F0237}"
+    "fingerprint": "\u{F0237}",
+    "circle-dot": "\u{F0EC2}",       // md-record_circle
+    "app-window": "\u{F05AF}"        // md-window_maximize
 };
 
 var FAMILY = "";

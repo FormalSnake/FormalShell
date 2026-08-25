@@ -2,7 +2,7 @@
 
 // Pure resolver for a `command` module's completed run (DESIGN.md §Bar,
 // spec §Surfaces-1, M10 Task 3). Takes the process exit code and raw
-// stdout in, returns the state CommandModule.qml renders out — no
+// stdout in, returns the state CommandModule.qml renders out, no
 // Quickshell/Process access, so the three failure paths (non-zero exit,
 // malformed JSON, a `text` field that isn't a string) are testable head-on
 // without spawning a real process. A timeout is a Process-level concern

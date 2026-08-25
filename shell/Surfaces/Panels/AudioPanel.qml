@@ -363,7 +363,7 @@ Panel {
         visible: root._sink !== null && root._sink.audio !== null
         width: parent.width
         title: root._sink ? (root._sink.description || root._sink.name) : ""
-        meta: root._outputMuted ? "MUTED" : "ACTIVE"
+        meta: root._outputMuted ? "Muted" : "Active"
         readout: Math.round(root._outputVolume * 100) + "%"
         rail: root._outputVolume
         railInteractive: true

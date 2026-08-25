@@ -3,7 +3,7 @@ import Quickshell.Io
 import qs.Services
 
 // `qs ipc call airpods status|noise <mode>|ca <on|off>|onebud <on|off>|ear
-// <one|both|off>|adaptive <0-100>` — spec addendum (M29 Task 2, the
+// <one|both|off>|adaptive <0-100>`, spec addendum (M29 Task 2, the
 // `panel`/`bluetooth` tradition, CLAUDE.md hard rules): compositor keybinds
 // and the smoke rig both need a headless drive path onto the librepods
 // daemon's control socket. AirpodsService.send() already carries the wire
@@ -41,7 +41,7 @@ IpcHandler {
         return _send("adaptive:" + level);
     }
 
-    // The parsed daemon state as-is, or an honest {available:false} — no
+    // The parsed daemon state as-is, or an honest {available:false}, no
     // component here reshapes AirpodsService's own status object, so this
     // stays byte-for-byte what the panel itself renders from.
     function status(): string {

@@ -22,7 +22,7 @@ import "../Media/model.js" as MediaModel
 // at all, so a like button would be a per-app D-Bus dialect, not a feature.
 //
 // MprisPlayer.position doesn't emit positionChanged on ordinary playback
-// ticks (only on nonlinear jumps) per quickshell's own player.hpp docs — the
+// ticks (only on nonlinear jumps) per quickshell's own player.hpp docs, the
 // Timer below is the documented workaround: manually re-emit the signal
 // while playing so bindings that read `position` (the panel's progress fill)
 // actually advance.

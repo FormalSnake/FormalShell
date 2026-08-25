@@ -14,8 +14,8 @@ import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
 
 // The bar (DESIGN.md §3 Bar, spec §1, M6 Tasks 1+3, M8b Task 3 retrofit,
-// M10 Task 3 settings-driven retrofit): three regions — left, center,
-// right — each populated from `bar.layout` in settings.json (left/center/
+// M10 Task 3 settings-driven retrofit): three regions, left, center,
+// right, each populated from `bar.layout` in settings.json (left/center/
 // right arrays of widget names, resolved by ../../Bar/layout.js) rather
 // than a fixed declaration order; an absent or partial `bar.layout` falls
 // back region-by-region to exactly today's arrangement (launcher+workspaces
@@ -25,7 +25,7 @@ import "../../Bar/layout.js" as Layout
 // Layout entries name either a built-in widget (resolved against
 // `_builtinComponents` below, each pre-wired with the panel/screen context
 // only Bar.qml has), a `bar.modules[]` custom module via a "custom:<id>"
-// name — `command` (CommandModule.qml, Waybar-JSON-compatible polled
+// name, `command` (CommandModule.qml, Waybar-JSON-compatible polled
 // output) or `qml` (QmlModule.qml, a user-supplied file in a Loader), or a
 // drop-in plugin from ~/.config/formalshell/plugins via a "plugin:<id>"
 // name (PluginBarModule.qml). A kind:"bar" plugin the layout never names is
@@ -50,7 +50,7 @@ import "../../Bar/layout.js" as Layout
 PanelWindow {
     id: bar
     required property var modelData
-    // shell.qml's single Menu instance — the launcher cell's summon target.
+    // shell.qml's single Menu instance, the launcher cell's summon target.
     property var menu: null
     property var appMenuPanel: null
     property var audioPanel: null
@@ -69,7 +69,7 @@ PanelWindow {
     property var displayPanel: null
     property var monitorPanel: null
     property var trayMenu: null
-    // The single Center instance (shell.qml's notificationsCenter) — the
+    // The single Center instance (shell.qml's notificationsCenter), the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
     screen: modelData
@@ -87,7 +87,7 @@ PanelWindow {
         return result;
     }
 
-    // Recomputes (and re-warns) whenever Config.settings changes — Config.get()
+    // Recomputes (and re-warns) whenever Config.settings changes, Config.get()
     // reads that property internally, so this binding tracks it same as any
     // other Config.get() consumer in the shell.
     readonly property var _layout: bar._resolveLayout()
@@ -137,7 +137,7 @@ PanelWindow {
             // "the title is too long" was the cap, not the marquee.
             maxWidth: Math.min(bar.width * 0.25, Theme.space.popupWidthWide)
             // Gates the title marquee off while the bar's own PanelWindow
-            // isn't on screen — same rationale as NowPlaying's own
+            // isn't on screen, same rationale as NowPlaying's own
             // windowVisible below.
             windowVisible: bar.visible
         }
@@ -337,13 +337,13 @@ PanelWindow {
             // A hidden widget (Battery with no laptop battery, NowPlaying
             // with no player, Tray with no items, Indicators with nothing
             // active) sets `visible: false` on itself expecting Row to drop
-            // its slot entirely — but Row only inspects its *direct*
+            // its slot entirely, but Row only inspects its *direct*
             // children's `visible`, and every entry here loads behind this
             // Loader, whose own `visible` defaults true regardless of its
             // item's. Binding straight to `entryLoader.item.visible` looks
             // right and even renders right once, but permanently kills that
             // *same* item's own `visible` binding from ever updating again
-            // (confirmed by reproducing it in isolation — reading a
+            // (confirmed by reproducing it in isolation, reading a
             // Loader-hosted item's built-in `visible` from an external
             // binding, declarative or imperative, silently detaches the
             // item's own visible binding the moment it's read this way; a
@@ -415,9 +415,9 @@ PanelWindow {
             // item's implicitWidth, and once that measurement has been 0 with
             // this binding holding the entry hidden, nothing ever produces
             // the width that would reopen it. It bites exactly the widgets
-            // that are empty at creation and gain content later — Indicators
+            // that are empty at creation and gain content later, Indicators
             // when its first glyph turns on, Tray registering its first item
-            // — and never the ones with content from the start, which is why
+            //, and never the ones with content from the start, which is why
             // the chevron's own collapse/expand has always worked. It
             // escaped notice for the same reason: the indicators row's ONE
             // cell with a live label, the reminder countdown, re-measures

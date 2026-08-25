@@ -6,7 +6,7 @@
 // Visualizer/model.js.
 //
 // Store shape: [{ id, count, lastMs }], keyed on the DESKTOP ENTRY id
-// (`entry.id` — the same value providers.js:32 builds its node ids from).
+// (`entry.id`, the same value providers.js:32 builds its node ids from).
 // An array of records rather than an id-keyed object because that's the
 // shape a JsonAdapter `var` property is already proven to round-trip in
 // this shell (ClipboardService.qml's own `property var items: []`
@@ -19,13 +19,13 @@
 // HALF_LIFE_MS. A never-launched entry scores exactly 0 (no "slightly
 // better than nothing" bias over an app the user has genuinely never
 // touched), and four launches a month ago lose to one this morning. No
-// per-launch history, no session weighting, no time-of-day buckets — none
+// per-launch history, no session weighting, no time-of-day buckets, none
 // of that is explainable from a state.json a user can read.
 //
 // What this deliberately does NOT do is outrank the fuzzy search.
 // providers.js's appsProvider only uses order() to decide the order it
 // hands its rows to the tree in, and search.js:85-89 breaks equal-score
-// ties by declaration order — so frecency picks which of two
+// ties by declaration order, so frecency picks which of two
 // equally-good matches leads, and nothing else. A stronger match tier
 // still wins outright, exactly as it did before.
 
@@ -61,7 +61,7 @@ function _index(store) {
     return out;
 }
 
-// 0 for anything this store has never seen — the honest answer for an app
+// 0 for anything this store has never seen, the honest answer for an app
 // with no launch history, never a floor above it.
 function score(store, id, nowMs) {
     return _scoreOf(_index(store)[String(id || "")], nowMs);
@@ -99,7 +99,7 @@ function _cap(list, nowMs, maxEntries) {
 }
 
 // Stable reorder of `items` (anything carrying an `id`) by descending
-// score, ties keeping the caller's own order — the QML JS engine's sort
+// score, ties keeping the caller's own order, the QML JS engine's sort
 // isn't specified stable, hence the explicit original-position tiebreak.
 // An empty/absent store leaves the input order completely untouched, so a
 // fresh profile browses apps in exactly the order it did before.

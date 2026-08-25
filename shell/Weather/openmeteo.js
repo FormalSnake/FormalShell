@@ -4,7 +4,7 @@
 // request URL construction and response→model parsing, including every
 // failure shape WeatherPanel.qml needs to render an honest error cell
 // instead of a hang or a silent blank. No Date.now()/XMLHttpRequest in
-// here — the network side-effect and current-time formatting stay in
+// here, the network side-effect and current-time formatting stay in
 // WeatherPanel.qml, this file stays deterministic under test.
 
 function buildUrl(latitude, longitude) {
@@ -28,7 +28,7 @@ function _isNumber(v) {
 }
 
 // status 0 is XMLHttpRequest's own signal for "never reached the server"
-// (DNS failure, no route, timeout) — distinct from a real HTTP error status
+// (DNS failure, no route, timeout), distinct from a real HTTP error status
 // the server sent back, so the two get separate honest error labels.
 function parseResponse(status, bodyText) {
     if (status === 0)

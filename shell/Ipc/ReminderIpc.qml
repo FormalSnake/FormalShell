@@ -1,7 +1,7 @@
 import Quickshell.Io
 import qs.Reminders
 
-// `qs ipc call reminder set|show|clear|status` — countdown reminders for
+// `qs ipc call reminder set|show|clear|status`, countdown reminders for
 // compositor keybinds and headless smoke verification. ReminderService owns
 // every rule; this only forwards, so it never touches model.js itself.
 //

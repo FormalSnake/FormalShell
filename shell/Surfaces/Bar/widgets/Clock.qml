@@ -31,7 +31,7 @@ Cell {
     readonly property string _text: Qt.formatDateTime(root._now, ClockModel.substituteIsoWeek(root._format, root._now))
 
     // The ring's presets differ wildly in width ("hh:mm" versus
-    // "yyyy-MM-dd hh:mm") — glide the swap instead of shoving every other
+    // "yyyy-MM-dd hh:mm"), glide the swap instead of shoving every other
     // right-region cell instantly (DESIGN.md §4, M16 Task 2's contract).
     Behavior on implicitWidth {
         NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
@@ -56,7 +56,7 @@ Cell {
     }
 
     interactive: true
-    // M26 Task 9's trailing hint states the right-click action — otherwise
+    // M26 Task 9's trailing hint states the right-click action, otherwise
     // it's undiscoverable. Middle also opens the panel, added below.
     tooltipText: "RIGHT CYCLE FORMAT / MIDDLE CALENDAR"
     acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton

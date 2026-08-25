@@ -4,7 +4,7 @@ import qs.Core
 import qs.Components
 
 // The dev gallery (reference: omarchy's own shell/plugins/dev-gallery/
-// GalleryPanel.qml, read per CLAUDE.md's read-reference rule — the ledger
+// GalleryPanel.qml, read per CLAUDE.md's read-reference rule, the ledger
 // layout below is this shell's own language, nothing is ported). Summoned
 // only by `qs ipc call gallery show|toggle`: no bar cell opens it, no
 // `bar.layout` entry names it, and it is deliberately absent from
@@ -42,7 +42,7 @@ Panel {
         ? Math.round(root.screen.width - Theme.space.panelGap * 2)
         : 960
 
-    // Nothing below exists until the surface is actually summoned — the
+    // Nothing below exists until the surface is actually summoned, the
     // same `active:`-gated Loader MediaPanel.qml uses for its animated-art
     // overlay. A session that never calls `gallery show` pays for one
     // inactive Loader and not a single specimen, which matters here more
@@ -78,16 +78,16 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "AUTHPROMPT / IDLE" }
+                        SectionLabel { text: "AUTHPROMPT / IDLE" }
                     }
 
                     // inputEnabled: false is the component's own way of
                     // standing down, not a gallery-only hack: the panel's
                     // backdrop owns keyboard focus (Panel.qml's focus
                     // prime), and a live TextInput here would take it and
-                    // leave Escape dead. Everything else — the display
+                    // leave Escape dead. Everything else, the display
                     // clock, the date meta row, the dividing rule, the 3px
-                    // field outline, the centred placeholder — is the
+                    // field outline, the centred placeholder, is the
                     // surface the lock screen and the greeter both render.
                     Cell {
                         id: authCell
@@ -103,26 +103,21 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "CELL" }
+                        SectionLabel { text: "CELL" }
                     }
 
                     Repeater {
-                        // One row per flag combination Cell.qml actually
-                        // renders differently, driven as data rather than
-                        // seven hand-written delegates. `standalone` plus
-                        // `hovered` earns its own row because it is not the
-                        // sum of the two above it: that pair is the bar's
-                        // full fg/bg inversion (DESIGN.md §1.1 amendment),
-                        // not the low-alpha tint every other cell hovers
-                        // with.
+                        // One row per state Cell.qml renders differently
+                        // (DESIGN.md §2), driven as data rather than as one
+                        // hand-written delegate each.
                         model: [
-                            { label: "NORMAL",           selected: false, accent: false, urgent: false, hovered: false, standalone: false },
-                            { label: "HOVERED",          selected: false, accent: false, urgent: false, hovered: true,  standalone: false },
-                            { label: "SELECTED",         selected: true,  accent: false, urgent: false, hovered: false, standalone: false },
-                            { label: "ACCENT",           selected: false, accent: true,  urgent: false, hovered: false, standalone: false },
-                            { label: "URGENT",           selected: false, accent: false, urgent: true,  hovered: false, standalone: false },
-                            { label: "STANDALONE",       selected: false, accent: false, urgent: false, hovered: false, standalone: true  },
-                            { label: "STANDALONE HOVER", selected: false, accent: false, urgent: false, hovered: true,  standalone: true  }
+                            { label: "Rest",        selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: false },
+                            { label: "Hovered",     selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: true  },
+                            { label: "Cursor",      selected: false, active: false, destructive: false, warning: false, cursor: true,  hovered: false },
+                            { label: "Selected",    selected: true,  active: false, destructive: false, warning: false, cursor: false, hovered: false },
+                            { label: "Active",      selected: false, active: true,  destructive: false, warning: false, cursor: false, hovered: false },
+                            { label: "Destructive", selected: false, active: false, destructive: true,  warning: false, cursor: false, hovered: false },
+                            { label: "Warning",     selected: false, active: false, destructive: false, warning: true,  cursor: false, hovered: false }
                         ]
 
                         delegate: Cell {
@@ -131,26 +126,31 @@ Panel {
 
                             width: cellColumn.width
                             selected: stateCell.modelData.selected
-                            accent: stateCell.modelData.accent
-                            urgent: stateCell.modelData.urgent
+                            active: stateCell.modelData.active
+                            destructive: stateCell.modelData.destructive
+                            warning: stateCell.modelData.warning
+                            cursor: stateCell.modelData.cursor
                             hovered: stateCell.modelData.hovered
-                            standalone: stateCell.modelData.standalone
 
-                            MetaLabel {
+                            Text {
                                 text: stateCell.modelData.label
                                 color: stateCell.foreground
+                                font.family: Theme.fontFamilySans
+                                font.pixelSize: Theme.fontSize.body
+                                font.weight: Theme.weight.medium
                             }
                         }
                     }
 
                     // The honest-unavailable state every surface in the
                     // shell falls back to (NO ADAPTER, NO DEVICES, NO
-                    // LOCATION): a plain cell whose label keeps MetaLabel's
-                    // own mutedForeground, not a Cell flag of its own.
+                    // LOCATION): a plain cell whose label keeps
+                    // SectionLabel's own mutedForeground, not a Cell flag of
+                    // its own.
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "DIM / UNAVAILABLE" }
+                        SectionLabel { text: "DIM / UNAVAILABLE" }
                     }
                 }
 
@@ -161,7 +161,7 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "TYPE SCALE" }
+                        SectionLabel { text: "TYPE SCALE" }
                     }
 
                     Repeater {
@@ -182,7 +182,7 @@ Panel {
                             Row {
                                 spacing: Theme.space.md
 
-                                MetaLabel {
+                                SectionLabel {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: typeCell.modelData + " " + Theme.fontSize[typeCell.modelData]
                                 }
@@ -190,7 +190,7 @@ Panel {
                                 Text {
                                     text: "Aa"
                                     color: typeCell.foreground
-                                    font.family: Theme.fontFamily
+                                    font.family: Theme.fontFamilySans
                                     font.pixelSize: Theme.fontSize[typeCell.modelData]
                                 }
                             }
@@ -205,7 +205,7 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "COLOR TOKENS" }
+                        SectionLabel { text: "COLOR TOKENS" }
                     }
 
                     Repeater {
@@ -240,7 +240,7 @@ Panel {
                                     border.color: Theme.color.border
                                 }
 
-                                MetaLabel {
+                                SectionLabel {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: swatchCell.modelData + " " + Theme.color[swatchCell.modelData]
                                 }
@@ -251,20 +251,20 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "METALABEL" }
+                        SectionLabel { text: "METALABEL" }
                     }
 
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "METALABEL / CAPTION" }
+                        SectionLabel { text: "METALABEL / CAPTION" }
                     }
 
                     Cell {
                         width: parent.width
 
                         // The wider variant the lock/greeter date row uses.
-                        MetaLabel {
+                        SectionLabel {
                             text: "METALABEL / SUBTITLE"
                             font.pixelSize: Theme.fontSize.subtitle
                             font.letterSpacing: Theme.letterSpacing.wide
@@ -286,7 +286,7 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "SPACING SCALE" }
+                        SectionLabel { text: "SPACING SCALE" }
                     }
 
                     Grid {
@@ -298,10 +298,10 @@ Panel {
                             // rather than taken from Object.keys(Theme.space):
                             // that object also carries the semantic tokens
                             // (controlHeight, panelPadding, popupRowHeight,
-                            // …), which are DESIGN.md §1.3's second table —
+                            // …), which are DESIGN.md §1.3's second table,
                             // derived from the same spacingScale root, but
                             // not steps of this scale.
-                            model: ["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "xxxl", "huge"]
+                            model: ["xxs", "xs", "sm", "md", "lg", "xl", "xxl", "huge"]
 
                             delegate: Cell {
                                 id: stepCell
@@ -312,7 +312,7 @@ Panel {
                                 Row {
                                     spacing: Theme.space.md
 
-                                    MetaLabel {
+                                    SectionLabel {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: stepCell.modelData + " " + Theme.space[stepCell.modelData]
                                     }
@@ -340,7 +340,7 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "MARQUEETEXT" }
+                        SectionLabel { text: "MARQUEETEXT" }
                     }
 
                     Cell {
@@ -350,7 +350,7 @@ Panel {
                         Column {
                             spacing: Theme.space.xxs
 
-                            MetaLabel { text: "FITS / NEVER MOVES" }
+                            SectionLabel { text: "FITS / NEVER MOVES" }
 
                             MarqueeText {
                                 text: "A TITLE THAT FITS"
@@ -367,7 +367,7 @@ Panel {
                         Column {
                             spacing: Theme.space.xxs
 
-                            MetaLabel { text: "OVERFLOWS / SCROLLS" }
+                            SectionLabel { text: "OVERFLOWS / SCROLLS" }
 
                             // Half the column on purpose: the component only
                             // scrolls once the text genuinely overruns the
@@ -389,13 +389,13 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "SURFACES" }
+                        SectionLabel { text: "SURFACES" }
                     }
 
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "PANEL / THIS SURFACE" }
+                        SectionLabel { text: "PANEL / THIS SURFACE" }
                     }
 
                     Cell {
@@ -403,9 +403,9 @@ Panel {
 
                         // Panel.qml holds one DismissTwins for this surface,
                         // which maps one click catcher per output other than
-                        // the one it opened on — so a single-output session
+                        // the one it opened on, so a single-output session
                         // honestly reports none rather than an invented one.
-                        MetaLabel { text: "DISMISSTWINS / " + Math.max(0, Quickshell.screens.length - 1) + " TWINS" }
+                        SectionLabel { text: "DISMISSTWINS / " + Math.max(0, Quickshell.screens.length - 1) + " TWINS" }
                     }
 
                     // A real hover source, not just a `tooltipText` string:
@@ -422,7 +422,7 @@ Panel {
 
                         interactive: true
 
-                        MetaLabel {
+                        SectionLabel {
                             text: "TOOLTIP / REAL TOOLTIPTEXT"
                             color: tooltipCell.foreground
                         }
@@ -431,7 +431,7 @@ Panel {
                     Cell {
                         width: parent.width
 
-                        MetaLabel { text: "TOOLTIP OPENS UNDER THE ROW ABOVE, OVER THIS PANEL" }
+                        SectionLabel { text: "TOOLTIP OPENS UNDER THE ROW ABOVE, OVER THIS PANEL" }
                     }
                 }
             }

@@ -4,7 +4,7 @@ import qs.Components
 
 // The launcher cell (DESIGN.md §3 Bar, M39 Task 1): the shell's mark at the
 // head of the bar's left region, and the menu's only pointer-reachable
-// summon path — every other route into it is a compositor keybind or the
+// summon path, every other route into it is a compositor keybind or the
 // `menu` IPC target. It leads DEFAULT_LAYOUT.left rather than joining the
 // opt-in builtins for exactly that reason: a bar with no launcher cell
 // leaves a mouse user with no way to open the menu at all.
@@ -20,7 +20,6 @@ Cell {
 
     readonly property bool _menuOpen: root.menu ? root.menu.isOpen : false
 
-    standalone: true
 
     tooltipText: "LAUNCHER"
 

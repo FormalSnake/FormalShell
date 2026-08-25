@@ -7,12 +7,12 @@ import qs.Core as Core
 // Location for WeatherPanel (M6 Task 8, spec §Surfaces 2's Location→Weather
 // chain): geoclue2 by default via QtPositioning's PositionSource, left
 // continuously `active` with a repeating updateInterval rather than a
-// one-shot update() — the spec cites PR #2914's lesson by name, so
+// one-shot update(), the spec cites PR #2914's lesson by name, so
 // latitude/longitude stay live bindings off positionSource.position for as
 // long as the source runs, and an early inaccurate seed is just replaced by
 // the next fix instead of freezing in. `location.latitude`/
 // `location.longitude` in settings.json override geoclue entirely when
-// both are present — the documented fallback for geoclue's own known
+// both are present, the documented fallback for geoclue's own known
 // failure mode (stale/empty wpa_supplicant BSS cache), and the only fix
 // path exercisable in the test VM, which has no Wi-Fi radio to associate
 // with in the first place.
@@ -29,7 +29,7 @@ Singleton {
 
     PositionSource {
         id: positionSource
-        // No point running geoclue at all once a manual override is set —
+        // No point running geoclue at all once a manual override is set,
         // it would only ever be overridden right back.
         active: !root._hasOverride
         updateInterval: 60000

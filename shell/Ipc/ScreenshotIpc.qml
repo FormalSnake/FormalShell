@@ -24,9 +24,9 @@ import qs.Services
 // accent border at Theme.borderWidth, a transparent selection, and -d
 // dimension readout, so pressing the bind visibly changes the screen
 // immediately. Colors ride the Process environment, resolved at call time
-// (matugen-current). slurp runs as its own Process — sh exec's straight into
+// (matugen-current). slurp runs as its own Process, sh exec's straight into
 // it, so `running = false`'s SIGTERM (quickshell src/io/process.cpp
-// setRunning) lands on slurp itself, not a wrapper — and hands its geometry
+// setRunning) lands on slurp itself, not a wrapper, and hands its geometry
 // to the grim pipeline on exit 0. Exit 1 is slurp's own cancel exit (Escape/
 // right-click): a cancel, not an error, so no toast. A watchdog auto-cancels
 // an unanswered region selection after screenshot.timeoutSeconds (default
@@ -36,7 +36,7 @@ import qs.Services
 //
 // Three routes, and only one of them is the rich one. `full()` and
 // `region()` are non-interactive legacy paths (whole output, bare slurp)
-// with no toolbar and no recording — they exist for anyone who wants a
+// with no toolbar and no recording, they exist for anyone who wants a
 // plain instant capture. `pick()` opens RegionPicker below, which is the
 // only route carrying the toolbar, keyboard window selection, and
 // recording; bind it to whatever chord is meant to be "the" screenshot
@@ -95,7 +95,7 @@ Scope {
             // 0</dev/null is load-bearing: slurp reads stdin to EOF before
             // connecting to the compositor whenever stdin is not a tty (its
             // predefined-boxes feature), and quickshell's Process hands it a
-            // pipe that never closes — slurp then blocks forever with zero
+            // pipe that never closes, slurp then blocks forever with zero
             // wayland fds and no surface (diagnosed live on the e1504g,
             // 2026-08-03; this was M13's "slurp sat invisible" mystery too).
             slurpProc.command = ["sh", "-c",
@@ -175,7 +175,7 @@ Scope {
         // anyway rather than giving the picker a second driver: one
         // full-screen surface with two owners is how it ends up opened twice,
         // or torn down by one while the other still thinks it is up. Nothing
-        // of the recording itself lives here — RecordingService owns the path,
+        // of the recording itself lives here, RecordingService owns the path,
         // the audio, the notification and the child.
         //
         // The surface is already unmapped by the time this fires (wf-recorder
@@ -252,7 +252,7 @@ Scope {
     }
 
     // Hands a captured PNG to the annotation editor. Default `tensaku-edit`
-    // is the wrapper nix/tensaku-package.nix installs — Tensaku takes its
+    // is the wrapper nix/tensaku-package.nix installs, Tensaku takes its
     // input as a flag rather than a positional argument, so the wrapper is
     // what accepts the "editor <path>" convention this calls with.
     //
@@ -283,7 +283,7 @@ Scope {
         // Tear the overlay down directly rather than through picker.close():
         // that would fire onCancelled straight back into this function's own
         // state, and the picker must never outlive the capture it was opened
-        // for — a full-screen surface left mapped is the worst failure here.
+        // for, a full-screen surface left mapped is the worst failure here.
         if (root.picker && root.picker.isOpen)
             root.picker.done();
         root._busy = false;
@@ -310,7 +310,7 @@ Scope {
         }
 
         // The picker (M22 Task 5). `mode` is smart|region|windows|fullscreen,
-        // `processing` is default|copy|save — upstream's two positional
+        // `processing` is default|copy|save, upstream's two positional
         // arguments, same names and same defaults.
         function pick(mode: string, processing: string): string {
             return root._pick(mode || "smart", processing || "default");
@@ -335,7 +335,7 @@ Scope {
         }
 
         // Opens the last capture (or an explicit path) in the annotation
-        // editor — the same thing the SAVED notification's EDIT action does,
+        // editor, the same thing the SAVED notification's EDIT action does,
         // reachable from a compositor keybind.
         function edit(path: string): string {
             return root.edit(path || root._lastPath);

@@ -210,17 +210,17 @@ TestCase {
     }
 
     function test_summary_label_honest_states() {
-        compare(SystemUpdate.summaryLabel("noflake", {}), "NO FLAKE");
-        compare(SystemUpdate.summaryLabel("nolock", {}), "NO LOCK");
-        compare(SystemUpdate.summaryLabel("checking", {}), "CHECKING");
-        compare(SystemUpdate.summaryLabel("offline", {}), "NO NETWORK");
-        compare(SystemUpdate.summaryLabel("ok", { behind: 0, current: 2, unknown: 0 }), "UP TO DATE");
-        compare(SystemUpdate.summaryLabel("ok", { behind: 2, current: 1, unknown: 0 }), "2 BEHIND");
-        compare(SystemUpdate.summaryLabel("ok", { behind: 2, current: 0, unknown: 1 }), "2 BEHIND / 1 ?");
+        compare(SystemUpdate.summaryLabel("noflake", {}), "No flake");
+        compare(SystemUpdate.summaryLabel("nolock", {}), "No lock");
+        compare(SystemUpdate.summaryLabel("checking", {}), "Checking");
+        compare(SystemUpdate.summaryLabel("offline", {}), "No network");
+        compare(SystemUpdate.summaryLabel("ok", { behind: 0, current: 2, unknown: 0 }), "Up to date");
+        compare(SystemUpdate.summaryLabel("ok", { behind: 2, current: 1, unknown: 0 }), "2 behind");
+        compare(SystemUpdate.summaryLabel("ok", { behind: 2, current: 0, unknown: 1 }), "2 behind / 1 ?");
     }
 
     function test_summary_label_of_an_unrecognized_state_holds_at_checking() {
-        compare(SystemUpdate.summaryLabel("", { behind: 0, current: 0, unknown: 0 }), "CHECKING");
-        compare(SystemUpdate.summaryLabel("wat", { behind: 0, current: 9, unknown: 0 }), "CHECKING");
+        compare(SystemUpdate.summaryLabel("", { behind: 0, current: 0, unknown: 0 }), "Checking");
+        compare(SystemUpdate.summaryLabel("wat", { behind: 0, current: 9, unknown: 0 }), "Checking");
     }
 }

@@ -4,12 +4,6 @@ import qs.Core
 // The shadcn item (DESIGN.md §2): a `card` fill with a 1px `border` at
 // `radiusMd`. Every bar cell, list row and chip on every surface is one of
 // these, so the chrome lives in exactly one place.
-//
-// The old ledger props survive this milestone mapped onto the new states
-// (M41 plan D3): 59 files instantiate a Cell, and rewriting all of them here
-// would make one unreviewable commit. `accent` and `ink` mean `active`,
-// `urgent` means `destructive`, `standalone` and `pending` mean nothing at
-// all. M45 deletes them with their last consumers.
 Item {
     id: root
 
@@ -76,26 +70,12 @@ Item {
     property bool selected: false
     property bool hovered: root.containsPointer
 
-    // Mapped legacy props (D3). `standalone` and `pending` are inert.
-    property bool accent: false
-    property bool ink: false
-    property bool urgent: false
-    property bool standalone: false
-    property bool pending: false
-
-    readonly property bool _active: root.active || root.accent || root.ink
-    readonly property bool _destructive: root.destructive || root.urgent
-
     // A bar cell whose panel (or the launcher, or the notification center)
     // is open (DESIGN.md §3 Bar).
     property bool panelOpen: false
 
-    // Visualizer.qml paints its own bars against the cell's fill and reads
-    // this to know which pair it is drawing on.
-    readonly property bool invertedNow: root._active
-
     // Hover paints below both fills (active > selected > hover).
-    readonly property bool _hoverFillActive: root.hovered && !root._active && !root.selected
+    readonly property bool _hoverFillActive: root.hovered && !root.active && !root.selected
 
     // Hover tooltip: a short line naming what this cell is and what it
     // currently reads, shown after Tooltip.qml's own delay once the pointer
@@ -114,9 +94,9 @@ Item {
     // set it.
     property bool tooltipVerbatim: false
 
-    readonly property color foreground: root._active
+    readonly property color foreground: root.active
         ? Theme.color.primaryForeground
-        : root._destructive
+        : root.destructive
             ? Theme.color.destructive
             : root.warning
                 ? Theme.color.warning
@@ -129,7 +109,7 @@ Item {
     // `foreground` resolves for content. A destructive or warning cell is not
     // filled (its colour is on the border and the label), so its captions
     // stay dim.
-    readonly property color dimForeground: (root._active || root.selected)
+    readonly property color dimForeground: (root.active || root.selected)
         ? foreground
         : Theme.color.mutedForeground
 
@@ -213,7 +193,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: root.radius
-        color: root._active
+        color: root.active
             ? Theme.color.primary
             : root.selected
                 ? Theme.color.accent
@@ -221,7 +201,7 @@ Item {
         border.width: Theme.borderWidth
         border.color: root.cursor
             ? Theme.color.ring
-            : root._destructive
+            : root.destructive
                 ? Theme.color.destructive
                 : root.warning
                     ? Theme.color.warning

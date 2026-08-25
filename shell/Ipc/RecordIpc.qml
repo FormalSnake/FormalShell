@@ -36,7 +36,7 @@ IpcHandler {
     // Start against a geometry the caller already has ("X,Y WxH"), skipping
     // the selection. Its own verb rather than an optional argument on start():
     // IpcHandler dispatches on exact arity, so a defaulted parameter would
-    // break the bare `record start` a keybind actually calls — the same split
+    // break the bare `record start` a keybind actually calls, the same split
     // `capture textAt` already makes.
     function startAt(geometry: string, audio: string): string {
         return RecordingService.startAt({ geometry: geometry, audio: audio, scope: "region" });

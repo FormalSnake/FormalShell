@@ -2,17 +2,17 @@ import Quickshell.Io
 import qs.Services
 
 // `qs ipc call screensaver start|stop|status|stayAwakeOn|stayAwakeOff|
-// stayAwakeToggle` — spec's IPC list. Same division of labour as
+// stayAwakeToggle`, spec's IPC list. Same division of labour as
 // MediaIpc/LockIpc: the surface owns the real start()/stop()/guard logic;
 // this just exposes it for compositor keybinds and headless smoke
 // verification. The stayAwake verbs (M-polish batch item B) drive
-// IdleService.stayAwake directly — there is no separate "stayAwake" IPC
+// IdleService.stayAwake directly, there is no separate "stayAwake" IPC
 // target, it rides the existing "screensaver" one since that's the surface
 // the toggle actually gates.
 IpcHandler {
     target: "screensaver"
 
-    // Set from shell.qml — the single Screensaver instance.
+    // Set from shell.qml, the single Screensaver instance.
     property var screensaver: null
 
     function start(): string {
@@ -53,7 +53,7 @@ IpcHandler {
             guardMediaPlayback: screensaver.guardMediaPlayback,
             mediaPlaying: MediaService.isPlaying,
             stayAwake: IdleService.stayAwake,
-            // The output animating this activation (outputs.js) — or, while
+            // The output animating this activation (outputs.js), or, while
             // inactive, the one that would be: resolved fresh on the call
             // rather than answered from the last activation, which on a
             // machine that has been undocked since would be a stale name.
@@ -66,7 +66,7 @@ IpcHandler {
     // Timer free-run, so a headless recorder can capture one screenshot per
     // frame with even spacing regardless of the render backend's own
     // wall-clock jitter. Never a way to start the screensaver itself, and
-    // never touches which effect is selected — Screensaver.qml releases the
+    // never touches which effect is selected, Screensaver.qml releases the
     // pin the moment `active` goes false, so normal animation always
     // resumes on the next real activation.
     function frame(n: int): string {
@@ -82,16 +82,16 @@ IpcHandler {
 
     // The engine actually animating (`ttfx`, or `builtin` on a host with no
     // ttfx on PATH), the effect the current (or next) activation resolved
-    // to, the frame at which it's fully converged — so a recorder knows how
+    // to, the frame at which it's fully converged, so a recorder knows how
     // many frames to capture rather than guessing per-effect constants of
-    // its own — and the activation's completed cycle count (M13b Task 5): 0
+    // its own, and the activation's completed cycle count (M13b Task 5): 0
     // until the first effect has converged, held, and rerolled, so the rig
     // can observe continuous cycling from two read-only calls instead of
     // screenshots. cycles is deliberately the last key: the smoke rig greps
     // '"cycles":0}' as an exact zero-baseline match.
     //
     // Under ttfx, convergenceFrame is how many frames the effect really
-    // produced, which is only known once one pinned run has completed — so
+    // produced, which is only known once one pinned run has completed, so
     // a recorder calls `frame 0` first and reads this after, rather than the
     // other way round. It reads 0 until then, never a guess. The builtin
     // engine still answers straight from Effect.convergenceFrame with no

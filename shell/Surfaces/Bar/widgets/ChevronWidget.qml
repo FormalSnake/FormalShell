@@ -61,20 +61,17 @@ Cell {
         return !stored || stored[root.region] !== false;
     }
 
-    // Which of the two glyphs below is the outward one, read off layout.js's
+    // Which of the two chevrons below is the outward one, read off layout.js's
     // own rule rather than restated here: the same annotation the governed
     // cells are gated on decides which way this points.
     readonly property bool _pointsRight: Layout.governsBefore(root.region) ? !root.collapsed : root.collapsed
 
-    standalone: true
     tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
 
-    Text {
+    Icon {
         anchors.verticalCenter: parent.verticalCenter
-        text: root._pointsRight ? "󰅂" : "󰅁"
+        name: root._pointsRight ? "chevron-right" : "chevron-left"
         color: root.foreground
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize.body
     }
 
     interactive: true

@@ -101,9 +101,9 @@ shell/
                                  negative-id special:* overlays the quake console parks on
       HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
   Components/
-    Cell.qml                    the shared ledger cell: selected/accent/hovered, bottom+right hairline
-                                 rules only (shared-rule contract, see below), default-property content
-    MetaLabel.qml                uppercase/letterspaced/dim caption Text for meta rows
+    Cell.qml                    the shared cell: card fill, 1px border, radiusMd, with the
+                                 active/selected/destructive/warning/cursor states and
+                                 default-property content
     Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,
                                   opaque fill, Theme.space.panelGap below the bar) anchored under its
                                   opening bar cell, on that cell's own output (anchorX/anchorScreen, both
@@ -287,8 +287,8 @@ shell/
       NetworkPanel.qml           WIRED/WI-FI grouped connections, 5-segment mono signal bar, connect/disconnect
       BluetoothPanel.qml         adapter state + paired devices, or a dim "NO ADAPTER" cell
       PowerPanel.qml              AC/battery row + keyboard-navigable power-profile picker (Up/Down/Enter)
-      WeatherPanel.qml            current-conditions header + FORECAST ledger off LocationService + open-meteo
-      MediaPanel.qml               album art + NOW PLAYING meta row + flat progress cell + hover-invert transport cells
+      WeatherPanel.qml            current-conditions header + FORECAST rows off LocationService + open-meteo
+      MediaPanel.qml               album art + NOW PLAYING meta row + flat progress cell + transport cells
       AnimatedAlbumArt.qml         opt-in muted looping video, active only while open and MediaService.isPlaying
       SystemUpdatePanel.qml        flake.lock via FileView (free, no nix invocation) + one queued upstream
                                     probe per direct input; the poll lives here, the widget only enables it
@@ -313,7 +313,7 @@ shell/
       Screensaver.qml              one controller Item (IdleService x MediaService guard) + per-monitor Variants overlay; a Canvas drawing the banner off ttfx, or off effect.js with no ttfx on PATH
     Capture/
       RegionPicker.qml              full-screen Overlay region picker over grim-frozen output frames;
-                                     window rectangles on Hyprland, a named-window ledger card on niri
+                                     window rectangles on Hyprland, a named-window list card on niri
     Plugins/
       PluginPanel.qml               kind:"panel" plugin host (a real Panel), registers itself in
                                      PluginService.surfaces as "plugin:<id>"
@@ -672,6 +672,15 @@ spawning a second copy, and repeat activation cycles that app's windows; a
 miss falls through to the same `execute()` spawn path as before, which is
 the only path that honors the entry's own `Exec` field codes. Focusing
 records a frecency hit, since it is a use of the app.
+
+**Cell contract.** `Components/Cell.qml` draws a `card` fill with a 1px
+`border` at `radiusMd` (DESIGN.md §2), plus one layer each for the hover
+fill, the cursor ring and the open-panel mark. Its states are `active`
+(`primary` fill), `selected` (`accent` fill), `destructive` and `warning`
+(colour on the border and the ink, never a fill) and `cursor` (the ring).
+Every bar cell, panel row and chip goes through it, so a
+`Rectangle`-with-border appearing outside `Components/` is drift, not a new
+pattern; the launcher's list row is the one exception, below.
 
 **Cell, and where the launcher doesn't use it.** `Components/Cell.qml` is
 the shadcn item shared by every bar cell, panel row and chip (DESIGN.md
@@ -1054,10 +1063,10 @@ Surfaces/Panels/WeatherPanel.qml
   { ok:false, error: "network_error"|"http_error"|"malformed_json"|"missing_fields" }
     |
     v
-  header meta row (condition label + temperature + glyph) + a FORECAST
-  ledger (one row per daily period, glyph + weekday + high/low mono temps
+  header meta row (condition label + temperature + icon) + a FORECAST
+  section (one row per daily period, icon + weekday + high/low mono temps
   pinned right); an "UNAVAILABLE" cell carrying the `error` code replaces
-  the ledger on any fetch failure: never a stale or fabricated forecast
+  those rows on any fetch failure: never a stale or fabricated forecast
 ```
 
 `WeatherPanel.qml` owns its own `XMLHttpRequest` directly (no separate
@@ -1092,8 +1101,8 @@ Services/MediaService.qml            (pick + clamps: Media/model.js)
     |     album art cell (static Image off artUrl) + NOW PLAYING / <app>
     |     meta row + title/artist + one row per player when more than one is
     |     registered + flat accent-fill progress cell (draggable to seek when
-    |     canSeek) + hover-inverted transport cells, flanked by shuffle and
-    |     loop cells (inverted = on) when the player supports them + the
+    |     canSeek) + transport cells, flanked by shuffle and
+    |     loop cells (active = on) when the player supports them + the
     |     player's own volume track + a RAISE label in the title band
     |     |
     |     v
@@ -1434,7 +1443,7 @@ pixel box only for floating windows: `Tile::ipc_layout_template` hardcodes
 `pos_in_scrolling_layout` and inherits that `None`. So a tiled niri window
 has no rectangle to draw, while every Hyprland window has one. Window
 *selection* works on both; only the affordance differs. A window with a rect
-is highlighted on screen, a window without one is named in a labelled ledger
+is highlighted on screen, a window without one is named in a labelled list
 card (title over dim app id) and captured by id through niri's
 `ScreenshotWindow` action, which crops server-side. **The branch is on
 `rect === null`, never on a compositor name**, so a future niri that starts

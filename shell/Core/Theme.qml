@@ -2,7 +2,7 @@ pragma Singleton
 import Quickshell
 import Quickshell.Io
 import QtQuick
-// Self-module import, for the Config sibling singleton (motion.enabled) —
+// Self-module import, for the Config sibling singleton (motion.enabled),
 // same pattern as AppleMusicArtService's `import qs.Services`.
 import qs.Core
 import "../Theme/palette.js" as Palette
@@ -44,7 +44,7 @@ Singleton {
     readonly property var space: Tokens.spacingTokens(spacingScale)
 
     // Letter-spacing tokens (DESIGN.md §2.3's meta-row tracking, plus the
-    // wider variant the lock/greeter date label uses) — scale with
+    // wider variant the lock/greeter date label uses), scale with
     // fontScale, since tracking is a font metric, not a layout gap.
     readonly property var letterSpacing: Tokens.letterSpacingTokens(fontScale)
 
@@ -60,9 +60,6 @@ Singleton {
     // Geist Mono, chosen through the user's own fontconfig defaults.
     readonly property string fontFamilySans: "sans-serif"
     readonly property string fontFamilyMono: "monospace"
-    // The pre-M41 name, still read by every surface not yet ported. M45
-    // deletes it with the last of them.
-    readonly property string fontFamily: root.fontFamilyMono
 
     // The alpha of every `card`/`popover` fill on the three surfaces
     // Hyprland blurs behind (DESIGN.md §1 "Translucency and blur"): the bar
@@ -81,16 +78,16 @@ Singleton {
     // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the
     // enter/exit translate distance) / `easing` (the one ease-out curve every
     // transition uses) / `reveal` (the wallpaper crossfade duration,
-    // §4's third carve-out) / `revealEasing` (its own curve — a full-screen
+    // §4's third carve-out) / `revealEasing` (its own curve, a full-screen
     // image swap reads better on InOutQuad than the control-chrome OutCubic).
     // motion.enabled=false in settings.json zeroes `fast`/`standard`/`reveal`
-    // (Tokens.motionTokens) — the shell's reduced-motion switch, since no
+    // (Tokens.motionTokens), the shell's reduced-motion switch, since no
     // Wayland analog of prefers-reduced-motion exists. The "breathing"
     // opacity pulse (PowerPanel's charging state) and the screensaver's
     // frame effect remain §4's other two continuous-motion carve-outs and
     // keep their own pacing, unaffected by motion.enabled. `marqueePxPerSec`/
     // `marqueeHoldMs` (the now-playing bar cell's overflow scroll) are the
-    // fourth carve-out (M16 Task 11) — unlike the pulse and the screensaver,
+    // fourth carve-out (M16 Task 11), unlike the pulse and the screensaver,
     // it DOES respect motion.enabled, but the consumer gates on
     // `motionEnabled` directly rather than this object zeroing the rate
     // to 0.
@@ -118,14 +115,14 @@ Singleton {
 
     // Re-attempt the watch until it actually attaches: FileView's underlying
     // QFileSystemWatcher silently fails to watch a path (or its parent dir)
-    // when neither exists yet, which is the normal state at shell startup —
-    // ThemeEngine hasn't written its first theme.json yet — so a bare
+    // when neither exists yet, which is the normal state at shell startup,
+    // ThemeEngine hasn't written its first theme.json yet, so a bare
     // watchChanges: true here would watch nothing, forever, and never notice
     // ThemeEngine's later out-of-band Process writes (verified: theme.json
     // changed on disk with matugen colors, this FileView never reloaded).
     // reload() re-runs FileView's internal updateWatchedFiles(), so once the
-    // state dir exists — which happens within ThemeEngine's very first
-    // startup run — the watch attaches for real and takes over from here.
+    // state dir exists, which happens within ThemeEngine's very first
+    // startup run, the watch attaches for real and takes over from here.
     Timer {
         id: rewatchTimer
         interval: 300
@@ -134,7 +131,7 @@ Singleton {
 
     // Live theme.json watch: ThemeEngine writes this file atomically, we just
     // read it. Absent or failing palette.validate() (e.g. mid-write, or no
-    // engine run yet) falls back to the static Flexoki defaults.
+    // engine run yet) falls back to palette.js's static zinc defaults.
     FileView {
         id: themeJsonFile
         path: root._stateDir + "/theme.json"
@@ -157,7 +154,7 @@ Singleton {
         }
         // Per-key fallback, not whole-file: a theme.json written before a
         // token existed (or mid-write with one bad value) keeps every other
-        // live matugen color and only substitutes Flexoki for that key.
+        // live matugen color and only substitutes zinc for that key.
         root.color = Palette.mergeWithFallback(parsed);
     }
 }

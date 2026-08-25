@@ -3,7 +3,7 @@ import Quickshell.Io
 import qs.Theme
 import qs.Core as Core
 
-// `qs ipc call theme retheme|mode|status` — the theming half of the IPC
+// `qs ipc call theme retheme|mode|status`, the theming half of the IPC
 // surface; WallpaperIpc.qml covers wallpaper get/set.
 IpcHandler {
     target: "theme"
@@ -13,7 +13,7 @@ IpcHandler {
     // the shipped shell ever reads a ThemeEngine property, so without this
     // touch here, at ThemeIpc's own construction, its startup probe (retheme
     // if theme.json is absent) and its Connections on State.wallpaper/mode
-    // never activate — `wallpaper set` would update state.json and nothing
+    // never activate, `wallpaper set` would update state.json and nothing
     // downstream would ever notice. Verified by reproducing the miss (state.json
     // written, theme.json never created) before adding this line.
     readonly property bool _warmThemeEngine: ThemeEngine.themeJsonPresent

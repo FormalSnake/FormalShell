@@ -4,7 +4,7 @@ import qs.Plugins
 import "../Bar/layout.js" as Layout
 import "../Bar/panels.js" as Panels
 
-// `qs ipc call panel open|close|toggle|toggleAt|state <name>` — spec addendum (this
+// `qs ipc call panel open|close|toggle|toggleAt|state <name>`, spec addendum (this
 // plan's own header note, M6 Task 1): per-widget popouts otherwise have no
 // summon path for compositor keybinds and no way to be verified headlessly
 // in the smoke rig. IPC-triggered opens have no bar cell to anchor under

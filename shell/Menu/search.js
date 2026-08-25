@@ -2,7 +2,7 @@
 
 // Omarchy-style tiered fuzzy scorer for the menu search field. Tiers sit
 // 200 points apart (1000/800/600/400/200) so the root bonus (+100) and the
-// app demotion (-50) can only reorder rows within a tier — neither can ever
+// app demotion (-50) can only reorder rows within a tier, neither can ever
 // promote a weaker tier over a stronger one.
 
 var TIER_EXACT = 1000;
@@ -23,7 +23,7 @@ function slug(text) {
 }
 
 // True if any whitespace/punctuation-delimited word in `text` starts with
-// `needle` — e.g. "here" matches "Open your files here" but "iles" does not.
+// `needle`, e.g. "here" matches "Open your files here" but "iles" does not.
 function wordBoundaryMatch(text, needle) {
     var words = normalize(text).split(/[^a-z0-9]+/).filter(Boolean);
     for (var i = 0; i < words.length; i++) {

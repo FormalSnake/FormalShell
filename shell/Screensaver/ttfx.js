@@ -1,13 +1,13 @@
 .pragma library
 
 // ttfx (github.com/omacom-io/ttfx, MIT) drives the screensaver's banner
-// animation — the same engine omarchy's own screensaver runs, invoked with
+// animation, the same engine omarchy's own screensaver runs, invoked with
 // the same shape of arguments (bin/omarchy-screensaver: centered canvas,
 // centered text, a random effect, no gradient overrides, so every effect
 // paints in its own upstream colors).
 //
 // Spec addendum, same standing as the `panel` IPC target: §10 says the
-// effect is "drawn in QML with the shell's mono font and palette — no
+// effect is "drawn in QML with the shell's mono font and palette, no
 // spawned terminal windows". No terminal window is spawned here and the
 // glyphs are still drawn by the shell's own Canvas in the shell's own mono
 // font; what moved out of QML is the *frame math*, from effect.js's five
@@ -15,8 +15,8 @@
 // install with no ttfx on PATH, so the pure-QML/JS guarantee still holds
 // with nothing installed alongside the shell.
 //
-// Everything here is a pure function of its arguments — the argv the
-// surface spawns and the parse of what comes back — so the wire protocol
+// Everything here is a pure function of its arguments, the argv the
+// surface spawns and the parse of what comes back, so the wire protocol
 // is unit tested rather than only observed in a smoke run.
 
 // `ttfx --help`, ttfx 0.3.0, in its own listed order.
@@ -34,14 +34,14 @@ var EFFECT_NAMES = [
 // rather than frame count. Under normal pacing they behave like any other
 // effect; at --frame-rate 0 (the deterministic pin path below) they emit as
 // many frames as the machine can produce inside that fixed duration, which
-// is not reproducible across hosts — so they are never recorded frame by
+// is not reproducible across hosts, so they are never recorded frame by
 // frame.
 var TIMED_EFFECTS = ["matrix", "thunderstorm"];
 
 // A pinned (frame-stepped) run re-generates the effect from scratch and
 // counts frames until it reaches the requested one, so a single pathological
 // run can't stream unbounded output into the shell. 600 frames is ~10s of
-// animation at 60fps — past the end of every effect that isn't wall-clock
+// animation at 60fps, past the end of every effect that isn't wall-clock
 // gated, at this surface's canvas size.
 var PIN_FRAME_CAP = 600;
 
@@ -54,8 +54,8 @@ function isTimedEffect(name) {
 }
 
 // Same contract effect.js's own rerollEffectName has, over ttfx's pool: a
-// known (pinned) name replays itself, anything else — "random", the default,
-// or an unrecognised name — picks from every effect except the immediately
+// known (pinned) name replays itself, anything else, "random", the default,
+// or an unrecognised name, picks from every effect except the immediately
 // previous one, so consecutive cycles never repeat.
 function rerollEffectName(requested, previousEffect, seed) {
     if (isKnownEffect(requested))
@@ -71,7 +71,7 @@ function rerollEffectName(requested, previousEffect, seed) {
 // ---- wire protocol -------------------------------------------------------
 // ttfx writes one full canvas repaint per frame to stdout: `rows` lines of
 // `columns` cells, separated by \n, with truecolor SGR runs inside them.
-// Between two frames it emits restore-cursor, save-cursor, cursor-up-rows —
+// Between two frames it emits restore-cursor, save-cursor, cursor-up-rows,
 // which is the only byte sequence that can't occur inside a frame, so it is
 // what Quickshell's SplitParser splits on. (Verified against ttfx 0.3.0's
 // real output, not assumed: the complete escape vocabulary it emits is
@@ -87,7 +87,7 @@ function frameDelimiter(rows) {
 //   --ignore-terminal-dimensions   there is no tty on the other end of this
 //     pipe, so without it ttfx measures nothing and silently falls back to
 //     80x24 no matter what --canvas-width/height say (confirmed against the
-//     binary — omarchy doesn't need it because it really is inside a
+//     binary, omarchy doesn't need it because it really is inside a
 //     terminal, and passes --canvas-width 0 to mean "measure it").
 //   --terminal-background-color    ttfx blends against it; the surface is
 //     painted in the theme's background, not a hardcoded black.
@@ -187,7 +187,7 @@ function parseFrame(text) {
 }
 
 // Returns { next, color }: the index just past the escape sequence, and the
-// color it selects — null when the sequence doesn't change the color (a
+// color it selects, null when the sequence doesn't change the color (a
 // cursor move, the show/hide-cursor pair, an SGR this doesn't model).
 function _readEscape(text, start) {
     if (text.charAt(start + 1) !== "[")
@@ -217,7 +217,7 @@ function _byte(value) {
     return (n < 16 ? "0" : "") + n.toString(16);
 }
 
-// Flattens a parsed frame back to plain per-row strings — the shape tests
+// Flattens a parsed frame back to plain per-row strings, the shape tests
 // assert content against, and the only thing that needs a run's `col` to be
 // honoured rather than assumed contiguous.
 function rowsToText(rows) {

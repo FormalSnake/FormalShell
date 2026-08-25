@@ -2,7 +2,7 @@
 
 // Pure banner-effect state stepping (DESIGN.md's screensaver exception,
 // M8b Task 7): every function below is a deterministic function of
-// (column, row, frame, banner) — no Date.now(), no Math.random() — so
+// (column, row, frame, banner), no Date.now(), no Math.random(), so
 // Screensaver.qml stays a thin per-frame render layer over this and the
 // whole animation is genuinely testable frame by frame. The banner itself
 // (branding/screensaver.txt by default) is the entire subject: nothing is
@@ -40,7 +40,7 @@ function targetChar(banner, col, row) {
     return banner.rows[row].charAt(col);
 }
 
-// Deterministic per-cell pseudo-random integer in [0, mod) — every effect's
+// Deterministic per-cell pseudo-random integer in [0, mod), every effect's
 // apparent "randomness" (stagger timing, arrival order) is really just this
 // hash, so a whole activation is a pure function of frame: reproducible by
 // tests, and identical in shape on every real activation too (only the
@@ -53,7 +53,7 @@ function hash(col, row, salt, mod) {
 // ---- decrypt: static noise resolving to the banner, no direction --------
 // Every non-space cell flickers through the noise charset until its own
 // (hashed, scattered) reveal frame, then holds its target character
-// forever. No motion, no directionality — a "hacker terminal" resolve.
+// forever. No motion, no directionality, a "hacker terminal" resolve.
 
 var DECRYPT_SPAN = 40; // every cell's revealAt is < this, so it bounds convergence
 
@@ -68,7 +68,7 @@ function decryptCell(col, row, frame, banner) {
 
 // ---- rain: falling trail that locks each cell once it passes over -------
 // The restructured matrix rain (M7's original effect): a per-column head
-// falls monotonically (no wrap — unlike a decorative loop, this one must
+// falls monotonically (no wrap, unlike a decorative loop, this one must
 // actually finish) leaving a short fading trail; once the head passes a
 // row for the first time that cell locks to its target character for good.
 
@@ -76,7 +76,7 @@ var RAIN_TRAIL = 3;
 
 // Frames-per-row (not rows-per-frame): the banner is only a handful of
 // rows tall, so a head moving a whole row every frame would settle almost
-// instantly — these keep a column's fall visible for a couple of seconds
+// instantly, these keep a column's fall visible for a couple of seconds
 // instead of one.
 function rainColumnPeriod(col) { return 6 + (col % 5); }
 function rainColumnStartDelay(col) { return (col * 13) % 24; }
@@ -107,7 +107,7 @@ function rainConvergenceFrame(banner) {
 
 // ---- expand: reveal opens outward from the centre -----------------------
 // No noise stage at all: a cell is either not-yet-open (blank) or open
-// (its target character) — the open region is a diamond growing outward
+// (its target character), the open region is a diamond growing outward
 // from the banner's centre, doubling row-distance to compensate for
 // glyphs being visually taller than they are wide.
 
@@ -162,7 +162,7 @@ function slideConvergenceFrame(banner) {
 // Unlike decrypt's dense, constantly-changing noise, scatter's canvas is
 // mostly blank: each cell independently and abruptly "lands" at its own
 // hashed arrival frame, fading in over a short final approach rather than
-// flickering through unrelated glyphs first — a sparse, unordered
+// flickering through unrelated glyphs first, a sparse, unordered
 // materialize instead of a scramble-and-resolve.
 
 var SCATTER_SPAN = 50;
@@ -194,8 +194,8 @@ function isKnownEffect(name) {
 }
 
 // "random" or any unrecognised name deterministically falls back to a
-// pick keyed on `seed` (the caller supplies a fresh seed per activation —
-// see Screensaver.qml — so a long idle session still cycles variants).
+// pick keyed on `seed` (the caller supplies a fresh seed per activation,
+// see Screensaver.qml, so a long idle session still cycles variants).
 function resolveEffectName(requested, seed) {
     if (isKnownEffect(requested)) return requested;
     return EFFECT_NAMES[Math.abs(seed) % EFFECT_NAMES.length];
@@ -203,7 +203,7 @@ function resolveEffectName(requested, seed) {
 
 // The number of frames after which `name` is guaranteed fully converged
 // (every non-space cell showing its target character) for the given
-// banner — used by tests, and available to callers that want to know when
+// banner, used by tests, and available to callers that want to know when
 // an activation has "settled".
 function convergenceFrame(name, banner) {
     switch (name) {
@@ -217,7 +217,7 @@ function convergenceFrame(name, banner) {
 }
 
 // The full per-frame grid for `name`: banner.height arrays of banner.width
-// { char, opacity } cells — Screensaver.qml's Canvas renders this directly
+// { char, opacity } cells, Screensaver.qml's Canvas renders this directly
 // at a fixed on-screen offset, no further per-effect logic on its side.
 function frameState(name, frame, banner) {
     var fn = _CELL_FNS[name] || _CELL_FNS[resolveEffectName(name, 0)];
@@ -234,8 +234,8 @@ function frameState(name, frame, banner) {
 // ---- continuous cycling (M13b Task 5) ------------------------------------
 // After an effect converges the controller holds the finished banner for
 // screensaver.holdSeconds, then rerolls and animates again, indefinitely.
-// Both helpers are pure so the reroll contract — a pinned effect replays
-// itself, "random" never repeats the immediately previous effect — is unit
+// Both helpers are pure so the reroll contract, a pinned effect replays
+// itself, "random" never repeats the immediately previous effect, is unit
 // tested rather than only observed in a smoke run.
 
 // How many auto-timer ticks the converged banner holds before the reroll.
@@ -245,7 +245,7 @@ function holdFrames(holdSeconds, tickMs) {
     return Math.max(1, Math.ceil((holdSeconds * 1000) / tickMs));
 }
 
-// The next cycle's effect. A known (pinned) name replays itself — the fresh
+// The next cycle's effect. A known (pinned) name replays itself, the fresh
 // activation seed only resets the frame counter. "random" (or any unknown
 // name, same fallback as resolveEffectName) picks from every effect except
 // the immediately previous one, so consecutive cycles never repeat while
@@ -264,11 +264,11 @@ function rerollEffectName(requested, previousEffect, seed) {
 // Pure decision logic behind Screensaver.qml's deterministic frame pin: which
 // counter actually renders, whether the free-running per-surface Timer
 // should tick, and what the pin resolves to across an active/inactive
-// transition. Kept here rather than inline in QML so the contract — a stale
-// pin never survives deactivation — is directly testable instead of only
+// transition. Kept here rather than inline in QML so the contract, a stale
+// pin never survives deactivation, is directly testable instead of only
 // exercised by a manual smoke run.
 
-// -1 means "not pinned" — the free-running counter renders.
+// -1 means "not pinned", the free-running counter renders.
 function resolveRenderFrame(pinnedFrame, autoFrame) {
     return pinnedFrame >= 0 ? pinnedFrame : autoFrame;
 }

@@ -10,26 +10,26 @@ import "../Visualizer/model.js" as Model
 // "next to the now playing it would be nice to have an ASCII style audio
 // visualizer"). One process for the whole shell regardless of how many
 // outputs/bars exist (shell.qml's Variants instantiates one Bar per
-// screen) — each bar's own Visualizer.qml cell registers its on-screen
+// screen), each bar's own Visualizer.qml cell registers its on-screen
 // state here via setBarVisible() rather than owning its own process,
 // since running one cava per monitor against the same system audio would
 // just be duplicated work.
 //
 // Hard gate (DESIGN.md §4, CLAUDE.md's M16 hidden-work rule): the process
 // runs ONLY while a track is actually playing AND at least one bar
-// window showing the widget is on screen AND motion is enabled — paused
+// window showing the widget is on screen AND motion is enabled, paused
 // music is a dead process, zero CPU, the same discipline the now-playing
 // marquee's own windowVisible gate already follows. This singleton isn't
 // even constructed unless "visualizer" is opted into some bar's
 // bar.layout (Visualizer.qml is the only thing that references it, and it
-// only loads when named — layout.js's BUILTIN_WIDGETS/DEFAULT_LAYOUT
+// only loads when named, layout.js's BUILTIN_WIDGETS/DEFAULT_LAYOUT
 // split), so an unconfigured shell touches none of this.
 //
 // cava's own raw output format (verified against its 0.10.7 example
 // config, not memory): [output] method=raw writes bar heights to
 // raw_target either as binary or as ascii text, one frame (line) of
 // `;`-delimited 0..ascii_max_range values per line, `\n`-terminated.
-// ascii, not binary, is what SplitParser can parse robustly here — a
+// ascii, not binary, is what SplitParser can parse robustly here, a
 // binary stream can contain the newline byte value inside a bar's own
 // value, which would corrupt a line-based split; ascii text has no such
 // collision. raw_target is pointed at /dev/stdout so this Process's own
@@ -41,12 +41,12 @@ Singleton {
     readonly property string _configPath: root._runtimeDir + "/cava.conf"
 
     // "unknown" until the one-shot PATH probe below answers, mirroring
-    // GithubWidget/UsageWidget's own pre-first-answer hidden state — never
+    // GithubWidget/UsageWidget's own pre-first-answer hidden state, never
     // guessed. "available" or "missing" after.
     property string state: "unknown"
 
     // Ref-counted by Visualizer.qml instances (one per bar that opts the
-    // widget in) via setBarVisible(). Symmetric add/remove calls only —
+    // widget in) via setBarVisible(). Symmetric add/remove calls only,
     // each caller tracks its own last-reported bool and only calls on a
     // real transition, so this can never drift from the true count.
     property int _visibleBars: 0
@@ -59,7 +59,7 @@ Singleton {
 
     readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying && root._visibleBars > 0 && Theme.motionEnabled
 
-    // Rendered levels for the current frame — one 0..1 fill fraction per
+    // Rendered levels for the current frame, one 0..1 fill fraction per
     // bar, reset to the all-zero baseline array the instant the process
     // isn't running, so a paused/hidden widget never shows a frozen "still
     // playing" frame.
@@ -68,7 +68,7 @@ Singleton {
     // Every key below is in cava 0.10.7's own example config (checked there,
     // not from memory), and every one that departs from cava's default does
     // so for a stated reason. The tuning is DMS's (`Services/CavaService.qml`)
-    // — the owner's reference for how this should feel — reworked onto this
+    //, the owner's reference for how this should feel, reworked onto this
     // shell's own 0..MAX_LEVEL output range and without DMS's three
     // deprecated smoothing keys.
     //
@@ -81,7 +81,7 @@ Singleton {
     //     one (0.3), which spends the glyph range without pegging. DMS's own
     //     number works out to ~300% here (its 30% reads against a 0..1000
     //     range it then clamps at 100 in QML), and 300% measures out at
-    //     ▃▃▃▄▄▅ / ▂▂▃▃▃▃ — fine for DMS's continuous shader bars, but this
+    //     ▃▃▃▄▄▅ / ▂▂▃▃▃▃, fine for DMS's continuous shader bars, but this
     //     row only has eight discrete steps and the bottom three are all
     //     near-flat strokes, so it needs more of the range to read at all.
     //   higher_cutoff_freq             12kHz over cava's 10kHz default: pulls
@@ -155,7 +155,7 @@ Singleton {
         onExited: exitCode => root.state = exitCode === 0 ? "available" : "missing"
     }
 
-    // Declaratively bound to the hard gate above — Process.running's own
+    // Declaratively bound to the hard gate above, Process.running's own
     // documented behavior (CommandModule.qml/NetworkPanel.qml) sends
     // SIGTERM the instant _shouldRun drops, no manual stop() needed. The
     // `command -v` guard is defense in depth against cava vanishing from

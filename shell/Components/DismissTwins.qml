@@ -4,7 +4,7 @@ import Quickshell.Wayland
 
 // Cross-monitor click-to-dismiss (DESIGN.md, M16 Task 7): a summonable
 // surface (Panel.qml, Menu.qml, Center.qml) only ever maps on the screen it
-// opened on, and the compositor hit-tests pointer input per output — a
+// opened on, and the compositor hit-tests pointer input per output, a
 // click on any OTHER monitor never reaches that surface's own backdrop, so
 // on a multi-monitor rig the surface just sits open forever until the user
 // wanders back. Omarchy's fix (`shell/Ui/KeyboardPanel.qml`'s twin
@@ -26,7 +26,7 @@ Variants {
             required property var modelData
 
             screen: modelData
-            // The twin for the surface's own output stays unmapped — that
+            // The twin for the surface's own output stays unmapped, that
             // output already has the surface's real backdrop (or, for the
             // keyboard-exclusive Menu, Escape) to handle local dismissal.
             visible: root.active && !!root.ownScreen && modelData.name !== root.ownScreen.name

@@ -9,15 +9,15 @@ import "../../Screensaver/effect.js" as Effect
 import "../../Screensaver/ttfx.js" as Ttfx
 
 // Idle-driven screensaver (DESIGN.md's terminal-text-effect exception, spec
-// §10, M7 Task 5): one controller (this Item) decides WHEN to show — the
+// §10, M7 Task 5): one controller (this Item) decides WHEN to show, the
 // session-wide IdleService.isIdle crossed with a live media-playback guard
-// — and a Variants loop below spawns the actual per-output overlay
+//, and a Variants loop below spawns the actual per-output overlay
 // surfaces. Mirrors Lock.qml's own "one controller, many surfaces" split:
 // WlSessionLock manages its outputs internally so Lock.qml needs no
 // explicit per-screen loop, but Quickshell has no equivalent auto-multi-
 // output primitive for a plain overlay layer, so this does it explicitly
 // over Quickshell.screens instead, with every delegate reading its shared
-// `active` state straight off this outer Item (legal QML scoping — Lock.qml
+// `active` state straight off this outer Item (legal QML scoping, Lock.qml
 // / LockSurface.qml's own `surface: Component { LockSurface { ... } }`
 // already relies on exactly this to forward `root.authError` etc. into a
 // Component declared inline).
@@ -25,14 +25,14 @@ Item {
     id: root
 
     // Forced true by an explicit `screensaver start` IPC call, independent
-    // of IdleService entirely — the deterministic manual path a headless
+    // of IdleService entirely, the deterministic manual path a headless
     // smoke run (or a compositor keybind) can rely on without waiting on a
     // real idle timeout.
     property bool _forced: false
 
     // Set by stop() (IPC `screensaver stop`, or any real input on a
     // surface below) and held until IdleService.isIdle next drops to false
-    // — i.e. until genuine activity actually happens — so a single
+    //, i.e. until genuine activity actually happens, so a single
     // dismissal doesn't get instantly overridden by `_autoWant` still
     // reading true from the very same idle stretch, but also doesn't
     // suppress the NEXT idle cycle once real activity resets things.
@@ -45,7 +45,7 @@ Item {
     // is the subject", M8b Task 7) ------------------------------------------
 
     // "" (the default) means the bundled banner; any other value is a path
-    // to a user-supplied text file — our equivalent of omarchy's
+    // to a user-supplied text file, our equivalent of omarchy's
     // omarchy-branding-screensaver replacement command.
     readonly property string _configuredAsciiPath: Core.Config.get("screensaver.asciiPath", "")
     readonly property string _bundledAsciiPath: Quickshell.shellPath("branding/screensaver.txt")
@@ -71,8 +71,8 @@ Item {
 
     // ---- engine (ttfx, with effect.js as the no-binary fallback) -----------
     // ttfx is on PATH in every real install (nix/package.nix prefixes it onto
-    // the wrapper), so `builtin` is what a bare `qs -p shell/` dev run — or an
-    // install that skipped the wrapper — falls back to, rather than a blank
+    // the wrapper), so `builtin` is what a bare `qs -p shell/` dev run, or an
+    // install that skipped the wrapper, falls back to, rather than a blank
     // overlay. Probed once at shell startup, long before any activation, the
     // same way VisualizerService probes cava.
 
@@ -87,7 +87,7 @@ Item {
     }
 
     // ---- effect selection (spec: "screensaver.effect accepts a name or
-    // 'random' — the default; each activation picks fresh") -----------------
+    // 'random', the default; each activation picks fresh") -----------------
     // Which pool "random" draws from follows the engine: ttfx's 37 effects,
     // or effect.js's five. A `screensaver.effect` naming an effect the active
     // engine doesn't have falls back to that engine's random pick, so a
@@ -110,7 +110,7 @@ Item {
     // stops. Under ttfx an effect converging IS its process exiting, so the
     // hold runs off holdTimer below; under the builtin engine it's the same
     // per-surface auto timer that animates frames reaching _rerollAtFrame.
-    // Either way a `frame(n)` pin suspends cycling — the M11 recorder keeps
+    // Either way a `frame(n)` pin suspends cycling, the M11 recorder keeps
     // capturing one single, deterministic effect. No idle inhibitor is taken
     // anywhere here, so system suspend fires exactly as it would over a
     // static banner. --------------------------------------------------------
@@ -144,7 +144,7 @@ Item {
     }
 
     // ---- deterministic frame stepping (ScreensaverIpc's `frame(n)`, M11
-    // Task 1) — a verification affordance only, never how the screensaver
+    // Task 1), a verification affordance only, never how the screensaver
     // normally animates: -1 (the default) means "not pinned", so every
     // surface below free-runs its own Timer-driven counter exactly as
     // before. Released the instant `active` goes false (see onActiveChanged
@@ -153,7 +153,7 @@ Item {
 
     property int _pinnedFrame: -1
 
-    // Frames counted in the last completed pinned ttfx run — 0 until one has
+    // Frames counted in the last completed pinned ttfx run, 0 until one has
     // finished, which is why a recorder pins frame 0 first and reads
     // frameInfo after. Under ttfx there is no closed-form convergence frame
     // to compute the way effect.js has one: the only honest answer is how
@@ -179,11 +179,11 @@ Item {
 
     // Live, not edge-triggered: recomputes continuously off IdleService and
     // MediaService, so a track starting or ending mid-idle-stretch flips
-    // this immediately either way — spec §10's "never activates while ...
+    // this immediately either way, spec §10's "never activates while ...
     // media is actually playing" is a standing condition, not a one-time
     // check made only at the moment idle first fires. IdleService.stayAwake
     // (M-polish batch item B) holds the whole idle chain exactly like the
-    // media guard — lockAfterSeconds' own auto-lock timer only ever runs
+    // media guard, lockAfterSeconds' own auto-lock timer only ever runs
     // while `active` is true, so gating activation here is enough to hold
     // that chain too, with no separate check needed there.
     readonly property bool _autoWant: IdleService.isIdle && !root._suppressed
@@ -202,7 +202,7 @@ Item {
     }
 
     // Real activity clears a stale suppression the instant the compositor
-    // reports genuine non-idle input — otherwise one dismissal would
+    // reports genuine non-idle input, otherwise one dismissal would
     // permanently disable the auto-trigger for the rest of the session.
     Connections {
         target: IdleService
@@ -217,7 +217,7 @@ Item {
         // between one converged effect and the next, and it belongs to the
         // activation that started it: left running across a stop, it fires
         // inside the NEXT activation and rerolls an effect that has barely
-        // begun — with the fresh activation's own `cycles: 0` already
+        // begun, with the fresh activation's own `cycles: 0` already
         // counted past. Observed as a smoke failure (frameInfo reporting
         // cycles:1 one second after a manual start, 2026-08-12).
         holdTimer.stop();
@@ -257,7 +257,7 @@ Item {
     // `display.outputPriority`'s first entry with a screen actually
     // connected, e.g. ["HDMI", "internal"] for "the desk monitor while it's
     // plugged in". With the key unset it's the focused output, resolved at
-    // activation rather than bound live — a focus event landing mid-run
+    // activation rather than bound live, a focus event landing mid-run
     // would restart ttfx on two screens at once, and nothing can move focus
     // while the session is idle anyway.
 
@@ -285,7 +285,7 @@ Item {
     }
 
     // Optional chain into Lock after continued inactivity once already
-    // showing (spec §10) — 0 (the default) disables the chain outright,
+    // showing (spec §10), 0 (the default) disables the chain outright,
     // since most deployments (and every reader-less VM) have no reason to
     // want it on unasked.
     Timer {
@@ -311,7 +311,7 @@ Item {
                 // same as Panel.qml's frame: `active` drops, content's
                 // opacity Behavior runs to 0, and only then does the window
                 // unmap. Everything below therefore keys off `root.active`
-                // rather than `surface.visible` — for the length of the fade
+                // rather than `surface.visible`, for the length of the fade
                 // the two disagree, and activation is the one that means
                 // "this screensaver is running".
                 visible: root.active || content.opacity > 0
@@ -326,7 +326,7 @@ Item {
 
                 // Off-screen glyphs measured at the live mono font so the
                 // banner's cell size reflects real metrics rather than a
-                // guessed constant — same technique Osd.qml's own calibration
+                // guessed constant, same technique Osd.qml's own calibration
                 // Text items use. Ten cells, not one, so per-glyph side
                 // bearing amortizes into a true advance: every run this
                 // surface paints is positioned at col * _cellWidth, and a
@@ -336,7 +336,7 @@ Item {
                     id: metric
                     visible: false
                     text: "MMMMMMMMMM"
-                    font.family: Core.Theme.fontFamily
+                    font.family: Core.Theme.fontFamilyMono
                     font.pixelSize: 100
                 }
 
@@ -344,7 +344,7 @@ Item {
                 readonly property real _lineRatio: metric.implicitHeight / 100
 
                 // The banner is the entire subject of this surface (spec), so
-                // it is scaled well past body size — but never past the point
+                // it is scaled well past body size, but never past the point
                 // where it stops fitting the screen. Before this clamp a
                 // 1276px-wide session rendered the bundled 64-column banner as
                 // "ORMALSHEL" (docs/screenshots/screensaver-niri.png, pre-M22),
@@ -362,7 +362,7 @@ Item {
                 // Only the main output animates (outputs.js); every other
                 // screen stays a bare background field. "" means the resolver
                 // found no outputs to choose between, which can only happen
-                // with none connected — animating then costs nothing and is
+                // with none connected, animating then costs nothing and is
                 // the safer way to be wrong.
                 readonly property bool animated: root.mainOutput === "" || surface.modelData.name === root.mainOutput
                 onAnimatedChanged: {
@@ -374,7 +374,7 @@ Item {
                 // ---- ttfx engine ---------------------------------------
                 // One process for the animating output. Its canvas is
                 // measured in that screen's own cells, so this stays inside
-                // the delegate rather than being hoisted to root — the
+                // the delegate rather than being hoisted to root, the
                 // surface that animates is decided per activation, and a
                 // hotplug can hand the run to a differently-sized screen.
                 // The effect name, seed and cycle counter all come from root.
@@ -387,14 +387,14 @@ Item {
                 // old QProcess is still alive when `running` goes back to
                 // true, so quickshell defers the new run until it reaps the
                 // old one (Process::onFinished -> startProcessIfReady). One
-                // stale `exited` — and one stale stdout flush before it —
+                // stale `exited`, and one stale stdout flush before it,
                 // therefore arrives per restart, and neither belongs to the
                 // run now on screen. Counted rather than flagged: two
                 // restarts in the same tick owe two stale exits.
                 property int _staleExits: 0
 
                 // Becoming visible changes visibility, columns and rows in
-                // the same turn, and each of those wants the run restarted —
+                // the same turn, and each of those wants the run restarted,
                 // Qt.callLater collapses them into the single start that
                 // actually happens, instead of spawning ttfx three times and
                 // killing two of them.
@@ -411,7 +411,7 @@ Item {
                     if (root.engine !== "ttfx" || !root.active || !surface.animated || surface._columns <= 0 || surface._rows <= 0)
                         return;
                     // A pinned run regenerates the effect from frame 0 and
-                    // races to the requested frame with pacing disabled —
+                    // races to the requested frame with pacing disabled,
                     // ttfx is deterministic under a fixed seed, so stepping
                     // by re-running costs a few tens of milliseconds and
                     // needs no frame buffer at all.
@@ -434,7 +434,7 @@ Item {
                         return;
                     // The first segment is ttfx's canvas prep (hide cursor,
                     // then the blank canvas it will animate over), not a
-                    // frame — painting it would just clear the surface, which
+                    // frame, painting it would just clear the surface, which
                     // it already is.
                     var index = surface._chunks;
                     surface._chunks += 1;
@@ -477,7 +477,7 @@ Item {
                             // probe; anything else is a run this shell asked
                             // for and ttfx refused. Either way, fall back to
                             // the builtin engine rather than leave the
-                            // surface blank — and rather than respawn, which
+                            // surface blank, and rather than respawn, which
                             // for a rejected argv would spin.
                             console.warn("Screensaver: ttfx exited " + exitCode + ", falling back to the builtin effects");
                             root._ttfxState = "missing";
@@ -497,7 +497,7 @@ Item {
                 on_ColumnsChanged: surface._startRun()
                 on_RowsChanged: surface._startRun()
 
-                // Free-running counter for the ordinary, non-pinned path —
+                // Free-running counter for the ordinary, non-pinned path,
                 // untouched by frame stepping. _renderFrame is what
                 // everything below actually paints: root's pin (when set)
                 // wins outright, otherwise it's this counter.
@@ -532,7 +532,7 @@ Item {
                     function onActiveChanged() {
                         if (root.active) {
                             // Every activation replays its effect from
-                            // scratch — without this a long-idle session that
+                            // scratch, without this a long-idle session that
                             // already ran the animation past its convergence
                             // frame would just show the static finished
                             // banner on the very next activation instead of
@@ -548,7 +548,7 @@ Item {
                             // positionChanged with no real movement behind it
                             // (reproduced on the mac VM rig, 2026-07-28: the
                             // very first auto-activation dismissed itself
-                            // instantly this way) — dropping any baseline
+                            // instantly this way), dropping any baseline
                             // here makes dismissArea treat that first report
                             // as a reference point instead of real activity.
                             dismissArea._hasBaseline = false;
@@ -573,7 +573,7 @@ Item {
                     function onEngineChanged() {
                         surface._startRun();
                     }
-                    // Watched on the banner file, so it can land mid-run —
+                    // Watched on the banner file, so it can land mid-run,
                     // and a paint-once surface has no next frame to pick the
                     // new text up on.
                     function on_BannerChanged() {
@@ -582,13 +582,13 @@ Item {
                 }
 
                 // Fades both ways (DESIGN.md §4 rule 6, owner's call
-                // 2026-08-12), opacity only — a full-screen surface has no
+                // 2026-08-12), opacity only, a full-screen surface has no
                 // edge to slide in from. At `reveal` rather than `standard`,
                 // the same 400ms the wallpaper crossfade already uses: a
                 // full-screen swap paced at 130ms reads as a flash, not a
                 // fade. `motion.enabled: false` zeroes `reveal` too, so a
                 // reduced-motion session still gets the old hard cut in both
-                // directions. Lives on an inner Item, not `surface` itself —
+                // directions. Lives on an inner Item, not `surface` itself,
                 // PanelWindow has no Item-style `opacity` of its own
                 // (Panel.qml/Menu.qml's frame/card carry their own fades the
                 // same way), and `surface.visible` above holds the window
@@ -633,7 +633,7 @@ Item {
                             var banner = root._banner;
                             if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
                                 return;
-                            ctx.font = surface._fontSize + "px " + Core.Theme.fontFamily;
+                            ctx.font = surface._fontSize + "px " + Core.Theme.fontFamilyMono;
                             ctx.textBaseline = "top";
                             var offsetCol = Math.floor((surface._columns - banner.width) / 2);
                             var offsetRow = Math.floor((surface._rows - banner.height) / 2);
@@ -676,7 +676,7 @@ Item {
                     // movement and key presses, both calling the same stop()
                     // path ScreensaverIpc's own explicit verb uses. The first
                     // position report after becoming visible is recorded as a
-                    // baseline rather than treated as activity — see
+                    // baseline rather than treated as activity, see
                     // onVisibleChanged above for why that first report can't be
                     // trusted as real movement.
                     MouseArea {

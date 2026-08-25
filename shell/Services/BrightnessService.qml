@@ -4,14 +4,14 @@ import Quickshell.Io
 import QtQuick
 
 // Backlight control via `brightnessctl -m` (machine-readable CSV: name,
-// class,current,percent%,max — verified against the installed 0.5 binary's
+// class,current,percent%,max, verified against the installed 0.5 binary's
 // actual output, not the man page). `-c backlight` scopes the device list to
 // the screen backlight only; brightnessctl also reports keyboard/lan/caps-
 // lock LED classes under the same `-l`, which we never want here. No polling
 // loop: the device list is queried once when the singleton is first touched
 // (Component.onCompleted, same lazy-instantiation trigger AudioService relies
 // on) and percent is re-read straight from set()/step()'s own machine-
-// readable reply — brightnessctl rounds to the device's step granularity, so
+// readable reply, brightnessctl rounds to the device's step granularity, so
 // the requested percentage and the applied one can differ.
 Singleton {
     id: root
@@ -22,7 +22,7 @@ Singleton {
     property string _device: ""
 
     // Per-monitor brightness (M16 Task 5): `devices` unions the backlight
-    // above with any DDC-capable external monitor — one entry per
+    // above with any DDC-capable external monitor, one entry per
     // controllable display, `deviceId` "backlight" for the internal panel
     // or a DRM connector name (e.g. "DP-1") for an external one (role
     // named `deviceId` rather than `id`, since `id` is a reserved QML
@@ -34,17 +34,17 @@ Singleton {
     // invocation per keystroke, so the connector->bus cache omarchy keeps
     // in a runtime-dir file is just an in-memory map here, rebuilt on the
     // same cadence (refreshDevices()) instead of a TTL. Detection NEVER
-    // runs on a timer — ddcutil's I2C round-trips are seconds-slow, and
+    // runs on a timer, ddcutil's I2C round-trips are seconds-slow, and
     // DisplayPanel.qml is the only caller, from its own onIsOpenChanged. A
     // missing `ddcutil` binary or a detect that finds nothing just leaves
-    // the DDC rows empty — identical, honest fallback to today's
+    // the DDC rows empty, identical, honest fallback to today's
     // backlight-only behavior either way.
     //
     // `devices` is a ListModel, not a `property var` JS array: PowerPanel's
     // `Repeater { model: BrightnessService.devices }` used to bind against
     // a freshly-built array every time `percent` changed (every set()/
     // step()/refresh() reply), and Repeater does a full delegate
-    // destroy/recreate whenever the model *identity* changes — which
+    // destroy/recreate whenever the model *identity* changes, which
     // dropped the mouse grab mid-drag on the brightness slider. A
     // ListModel has one stable identity; rows are mutated in place
     // (`setProperty`/`insert`/`remove`), so an in-progress drag's
@@ -112,7 +112,7 @@ Singleton {
         if (bus === undefined || idx === -1)
             return;
         const device = root.devices.get(idx);
-        // Never write a literal 0% over DDC — omarchy's own floor
+        // Never write a literal 0% over DDC, omarchy's own floor
         // (../../bin/omarchy-brightness-display-ddc there): some panels
         // treat VCP 10 = 0 as "off", not "dim".
         const target = Math.max(1, pct);
@@ -161,7 +161,7 @@ Singleton {
     // brightness keybind runs `brightnessctl set 5%+` itself (bypassing
     // set()/step() below) before calling the `osd brightness` IPC route, so
     // this service's cached percent is stale by exactly one step until
-    // something re-reads it — no polling loop means that has to be explicit.
+    // something re-reads it, no polling loop means that has to be explicit.
     function refresh() {
         listProc.running = true;
     }
@@ -231,7 +231,7 @@ Singleton {
         }
     }
 
-    // Reused sequentially across `_ddcQueue` (one bus at a time — ddcutil
+    // Reused sequentially across `_ddcQueue` (one bus at a time, ddcutil
     // is slow enough that running several in parallel would just contend
     // on the same I2C bus anyway).
     Process {

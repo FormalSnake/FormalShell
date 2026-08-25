@@ -14,7 +14,7 @@ import "../Display/priority.js" as Priority
 //
 // `mainOutput` is bound live: it re-resolves off Quickshell.screens and the
 // focused output, so a plug or unplug moves it immediately. Callers that
-// must NOT move mid-run pass their current pick to resolve() instead —
+// must NOT move mid-run pass their current pick to resolve() instead,
 // Screensaver.qml's own stickiness, which exists because restarting ttfx on
 // a new screen replays the effect from frame 0.
 //

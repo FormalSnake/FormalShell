@@ -5,7 +5,7 @@ import qs.Components
 import qs.Core as Core
 
 // Per-screen wallpaper surface, pinned to the wlr-layer-shell Background
-// layer (below Bottom, i.e. below every other surface including windows) —
+// layer (below Bottom, i.e. below every other surface including windows),
 // verified against quickshell's own WlrLayer::Enum source, not guessed.
 // Shows State.wallpaper when set; otherwise just the live Theme.color.background
 // fill, so the layer is always present even before a wallpaper is picked.
@@ -16,7 +16,7 @@ import qs.Core as Core
 // Theme.motion.reveal once it finishes loading (never mid-decode, so the
 // fade never starts on blank pixels), then gets "promoted" onto
 // bottomImage so the next change has a clean top layer to fade into. First
-// paint and motion.enabled: false both skip the fade — a hard cut straight
+// paint and motion.enabled: false both skip the fade, a hard cut straight
 // onto bottomImage, today's behavior.
 //
 // A request that arrives while topImage is already fully faded in
@@ -24,7 +24,7 @@ import qs.Core as Core
 // clobbering topImage.source: overwriting it there wouldn't re-fire
 // onOpacityChanged (opacity isn't changing), so bottomImage's catch-up
 // check would compare against a source it'll never match and the promote
-// would never run — topImage stuck at opacity 1 for the rest of the
+// would never run, topImage stuck at opacity 1 for the rest of the
 // session. The queued request replaces any earlier one and is applied the
 // moment the in-flight promote actually lands.
 //
@@ -56,7 +56,7 @@ PanelWindow {
 
     property bool _firstPaint: true
     // Guards the promote-time opacity reset from re-triggering the fade
-    // Behavior — that reset is bookkeeping, not a user-visible transition.
+    // Behavior, that reset is bookkeeping, not a user-visible transition.
     property bool _suppressTopFade: false
     property bool _hasQueued: false
     property string _queuedUrl: ""
@@ -152,7 +152,7 @@ PanelWindow {
         asynchronous: true
         cache: false
         // Catches up to a just-promoted topImage in the background. Only
-        // once this decode actually lands do we drop topImage — never in
+        // once this decode actually lands do we drop topImage, never in
         // the same tick as the source swap, or the screen shows nothing
         // but Theme.color.background for the length of this decode (the
         // bug this split guards against). Clearing topImage.source here
@@ -167,8 +167,8 @@ PanelWindow {
         // non-screen-aspect wallpaper doesn't bind on and PreserveAspectCrop
         // would upscale it back out. Requesting a square box sized to the
         // screen's larger side instead covers any wallpaper at least as
-        // wide (relatively) as the screen itself — true for virtually all
-        // real wallpapers, landscape photos included — with zero decode
+        // wide (relatively) as the screen itself, true for virtually all
+        // real wallpapers, landscape photos included, with zero decode
         // overhead over the straight box whenever it holds; only a source
         // more extreme than the screen's own aspect (ultra-panoramic on a
         // standard screen, or portrait) falls back to a mild upscale.
@@ -206,7 +206,7 @@ PanelWindow {
         sourceSize.width: Math.max(background.width, background.height)
         sourceSize.height: Math.max(background.width, background.height)
         // Reaching full opacity only starts bottomImage's own decode of
-        // the same source — it must stay the frontmost, fully-decoded
+        // the same source, it must stay the frontmost, fully-decoded
         // layer until bottomImage's onStatusChanged above confirms the
         // catch-up landed and hides it.
         onOpacityChanged: {

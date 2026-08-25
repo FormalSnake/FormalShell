@@ -4,7 +4,7 @@
 // parsing for both providers, no Quickshell/XHR/Process access, so it's
 // testable head-on (mirrors openmeteo.js). Shapes verified against
 // Anthropic's OAuth usage endpoint and Codex's app-server JSON-RPC replies
-// per the plan's research header — this file is an original
+// per the plan's research header, this file is an original
 // reimplementation of that behavior, not ported from omarchy (read-
 // reference only per CLAUDE.md's Reference repos section).
 
@@ -33,7 +33,7 @@ function parseCredentials(body) {
     if (accessToken === "")
         return { ok: false, error: "missing_fields" };
 
-    // The refresh token itself is never returned — only whether one is
+    // The refresh token itself is never returned, only whether one is
     // present, which is all the caller needs to tell "logged out" apart from
     // "logged in, access token needs refreshing" (see credentialsExpired).
     return {
@@ -51,12 +51,12 @@ function _normalizeExpiresAtMs(value) {
     return (isFinite(n) && n > 0) ? n : 0;
 }
 
-// 0/absent expiresAtMs means the credentials carry no expiry info at all —
+// 0/absent expiresAtMs means the credentials carry no expiry info at all,
 // not the same as "expired now".
 //
 // Claude Code's accessToken lives ~12h while its refreshToken lives ~10d, and
 // only a Claude Code run refreshes the pair on disk. An expired accessToken
-// therefore means "logged in, token needs refreshing", NOT "logged out" — the
+// therefore means "logged in, token needs refreshing", NOT "logged out", the
 // caller renders those as different states. This is advisory only: the local
 // clock decides which label shows while a probe is in flight, the server's own
 // 401 decides the settled state.
@@ -65,7 +65,7 @@ function credentialsExpired(expiresAtMs, nowMs) {
 }
 
 // GET https://api.anthropic.com/api/oauth/usage's body: a flat object whose
-// keys are rate-limit windows, each shaped `{utilization, resets_at}` —
+// keys are rate-limit windows, each shaped `{utilization, resets_at}`,
 // `five_hour`, `seven_day`, and (2026-08-03) per-model keys like
 // `seven_day_opus`/`seven_day_sonnet` that the endpoint adds without notice.
 // Every such key is rendered, so a future bucket (e.g. a `fable` window)
@@ -101,7 +101,7 @@ function parseUsage(body) {
 
 // Every own key whose value looks like a rate window (an object carrying a
 // `utilization` field), ordered `five_hour`, `seven_day`, then alphabetical
-// — stable regardless of the source object's own key order.
+//, stable regardless of the source object's own key order.
 function _rateWindowKeys(payload) {
     var candidates = [];
     for (var key in payload) {
@@ -237,7 +237,7 @@ function refreshHint(refreshState) {
 // ---- Codex (`codex app-server` JSON-RPC) ----
 
 // One line of the app-server's stdout, already framed as newline-delimited
-// JSON (no Content-Length headers — verified against
+// JSON (no Content-Length headers, verified against
 // codex_usage_scanner.py's rpc_request(), which writes/reads exactly one
 // JSON object per line). Reply to `account/read`: {id, result: {account}}.
 function parseCodexAccount(body) {

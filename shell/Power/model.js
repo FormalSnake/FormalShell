@@ -12,7 +12,7 @@ function initialFired() {
     return { warn: false, critical: false };
 }
 
-// prevPct/pct: whole-number percentages (0..100) — UPower's own 0..1
+// prevPct/pct: whole-number percentages (0..100), UPower's own 0..1
 // fraction is converted exactly once, at the call site, never in here.
 // charging: the live discharging/charging state, already resolved to a
 // boolean. fired: whatever this function returned last call
@@ -20,11 +20,11 @@ function initialFired() {
 // settings.json's own defaults (10/5) when omitted.
 //
 // Charging re-arms both thresholds immediately, regardless of percentage
-// — a plugged-in battery is never "discharging" mid-crossing, so a later
+//, a plugged-in battery is never "discharging" mid-crossing, so a later
 // unplug while still low fires again (the "charge interruptions" case).
 // While discharging, a threshold fires once when the reading is at/below
 // it and hasn't already fired since the last re-arm; a boot (or resume)
-// that starts already below a threshold fires immediately — prevPct is
+// that starts already below a threshold fires immediately, prevPct is
 // null on the very first call, so there is nothing to compare against,
 // and staying silent about a real critical/low state would be dishonest.
 // `notRising` guards the fire against a single noisy uptick (UPower's
@@ -51,7 +51,7 @@ function warnEvent(prevPct, pct, charging, fired, warnPct, criticalPct) {
     return { fired: prevFired, event: null };
 }
 
-// "2H 14M" / "14M" / "1D 3H" — mirrors Usage/usage.js's formatReset shape.
+// "2H 14M" / "14M" / "1D 3H", mirrors Usage/usage.js's formatReset shape.
 function formatDuration(totalSeconds) {
     var totalMins = Math.floor(totalSeconds / 60);
     var hours = Math.floor(totalMins / 60);
@@ -64,7 +64,7 @@ function formatDuration(totalSeconds) {
 }
 
 // UPowerDevice.changeRate is signed (positive charging, negative
-// discharging, per the pinned quickshell source) — callers already know
+// discharging, per the pinned quickshell source), callers already know
 // the sign from `state`, so the display text only ever wants the
 // magnitude.
 function formatRate(watts) {
@@ -75,7 +75,7 @@ function formatRate(watts) {
 // the W it's charging with"). `energy_uj` accumulates until it reaches
 // `max_energy_range_uj`, then the powercap driver resets it to 0 rather
 // than overflowing, so a sample pair spanning exactly one wrap needs the
-// full range added back onto the naive difference — the same one-wrap
+// full range added back onto the naive difference, the same one-wrap
 // assumption the kernel's own powercap consumers make (RAPL packages wrap
 // on the order of minutes on real hardware, far longer than a poll
 // interval measured in seconds).
@@ -87,7 +87,7 @@ function raplDeltaUj(prevUj, currUj, maxRangeUj) {
 
 // null on a non-positive interval or a still-negative delta (a reset
 // outside the wraparound case, e.g. suspend/resume clearing the
-// counter) — never a negative or invented wattage.
+// counter), never a negative or invented wattage.
 function raplWatts(prevUj, currUj, maxRangeUj, deltaMs) {
     if (!(deltaMs > 0))
         return null;
@@ -144,7 +144,7 @@ function rateRowValue(changeRateW, cpuPackageW) {
 // a per-device state parse, matching the gate upstream uses. `pct` is a
 // whole-number percentage (0..100), same convention as warnEvent above.
 // `states` carries the three UPowerDeviceState values the check needs
-// (PendingCharge, FullyCharged, Charging) — passed in rather than imported,
+// (PendingCharge, FullyCharged, Charging), passed in rather than imported,
 // since this file has no Qt/Quickshell dependency.
 function chargeThresholdActive(pct, state, changeRate, timeToFull, onBattery, states) {
     if (onBattery)
@@ -190,15 +190,15 @@ function batteryIcon(pct, onBattery, thresholdActive, warnPct) {
 // "56.0 WH", or an honest em dash when the device hasn't reported a
 // capacity (energyCapacity reads 0 rather than being absent).
 function formatWh(wh) {
-    return (wh > 0) ? wh.toFixed(1) + " WH" : "—";
+    return (wh > 0) ? wh.toFixed(1) + " WH" : "--";
 }
 
 // UPower's Capacity property is already "design capacity as a percentage"
 // (device.hpp: healthPercentage, "health of the device as a percentage of
-// its original health") — healthSupported is false when the driver never
+// its original health"), healthSupported is false when the driver never
 // reported one, the honest case to show an em dash rather than a bogus 0%.
 function formatHealthPercent(pct, supported) {
-    return supported ? Math.round(pct) + "%" : "—";
+    return supported ? Math.round(pct) + "%" : "--";
 }
 
 function timeRowLabel(charging) {
@@ -208,8 +208,8 @@ function timeRowLabel(charging) {
 // timeToFull/timeToEmpty are 0 whenever the other one applies (the pinned
 // quickshell source's own contract, see rateRowValue above) and can
 // both briefly read 0 right after a state flip before UPower's next
-// estimate lands — an honest em dash rather than "0M" either way.
+// estimate lands, an honest em dash rather than "0M" either way.
 function timeRowValue(charging, timeToFull, timeToEmpty) {
     var seconds = charging ? timeToFull : timeToEmpty;
-    return (seconds > 0) ? formatDuration(seconds) : "—";
+    return (seconds > 0) ? formatDuration(seconds) : "--";
 }

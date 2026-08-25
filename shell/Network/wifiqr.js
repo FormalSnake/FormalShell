@@ -2,13 +2,13 @@
 
 // Pure payload + matrix logic for the network panel's Wi-Fi QR share
 // (omarchy's `bin/omarchy-network-qr` reimplemented as testable JS: its
-// escaping rules, its security-branch choice, and its ASCII-pair collapse —
+// escaping rules, its security-branch choice, and its ASCII-pair collapse,
 // nothing else). NetworkPanel.qml drives the real `nmcli`/`qrencode`
 // Processes and feeds their stdout through these helpers; nothing here
 // touches Qt.
 //
 // Constraints: the passphrase passes through `buildPayload`. It stays an
-// argument and a return value — this file never logs it, never keeps it in
+// argument and a return value, this file never logs it, never keeps it in
 // a module-level variable, and never writes it anywhere. The caller holds
 // the returned payload only long enough to write it to qrencode's stdin
 // (never argv, which /proc publishes to every local user).
@@ -34,7 +34,7 @@ function isEnterpriseKeyMgmt(keyMgmt) {
 
 // The five `nmcli --get-values` lines, in the order NetworkPanel.qml
 // requests them: ssid, key-mgmt, psk, hidden, wep-key0. nmcli prints one
-// line per requested field — an empty line when the property is unset — so
+// line per requested field, an empty line when the property is unset, so
 // a short read means the command answered for fewer fields than were asked
 // for, and the missing ones stay empty rather than shifting position.
 function parseFields(text) {
@@ -98,8 +98,8 @@ function buildPayload(fields) {
 //
 // A QR symbol is square and --margin applies the quiet zone on all four
 // sides, so the collapsed matrix must have as many columns as rows.
-// Anything else — empty stdout, a truncated read, an all-space quiet-zone
-// row trimmed away by something in the pipe — returns an empty matrix, so
+// Anything else, empty stdout, a truncated read, an all-space quiet-zone
+// row trimmed away by something in the pipe, returns an empty matrix, so
 // the caller shows an honest error instead of a partial or padded code.
 function parseMatrix(ascii) {
     var lines = String(ascii === undefined || ascii === null ? "" : ascii).split("\n");

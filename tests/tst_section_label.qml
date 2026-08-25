@@ -5,8 +5,6 @@ import "../shell/Components"
 
 // SectionLabel's contract (DESIGN.md §2): caption, medium, mutedForeground,
 // uppercase, tracked by letterSpacing.meta, with an optional trailing count.
-// No label anywhere carries a trailing colon any more (§5), which is what
-// the MetaLabel cases below pin: 25 call sites still set `colon: true`.
 TestCase {
     id: testCase
     name: "SectionLabel"
@@ -18,11 +16,6 @@ TestCase {
     Component {
         id: labelComponent
         SectionLabel {}
-    }
-
-    Component {
-        id: metaComponent
-        MetaLabel {}
     }
 
     // The paint target is the wrapper's only child.
@@ -80,18 +73,5 @@ TestCase {
         compare(label.implicitWidth, text.implicitWidth);
         compare(label.implicitHeight, text.implicitHeight);
         verify(label.implicitWidth > 0);
-    }
-
-    function test_meta_label_never_appends_a_colon() {
-        var label = make(metaComponent, { text: "NETWORK", colon: true });
-        compare(labelOf(label).text, "NETWORK");
-    }
-
-    function test_meta_label_is_a_section_label() {
-        var label = make(metaComponent, { text: "BAT" });
-        var text = labelOf(label);
-        compare(text.font.pixelSize, Theme.fontSize.caption);
-        compare(text.font.capitalization, Font.AllUppercase);
-        verify(Qt.colorEqual(text.color, Theme.color.mutedForeground));
     }
 }

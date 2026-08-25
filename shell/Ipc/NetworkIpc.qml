@@ -3,7 +3,7 @@ import Quickshell.Networking
 
 import "../Network/model.js" as NetworkModel
 
-// `qs ipc call network status|connect|connectEap|forget|wifi` — spec
+// `qs ipc call network status|connect|connectEap|forget|wifi`, spec
 // addendum (the `panel` tradition, CLAUDE.md hard rules): drives the wifi
 // flow headlessly for the hwsim rig (nix/testvm.nix's FORMALTEST/
 // FORMALTEST-EAP radios) and gives compositor keybinds a target `panel
@@ -14,7 +14,7 @@ import "../Network/model.js" as NetworkModel
 // methods (same pattern CalendarIpc drives CalendarPanel's selectIsoDate)
 // rather than calling Quickshell.Networking directly: the panel's failure
 // handling (wifiRow's Connections.onConnectionFailed -> _failAction) is
-// gated on root._actionKind having been armed by _runAction first — an IPC
+// gated on root._actionKind having been armed by _runAction first, an IPC
 // call that skipped straight to network.connectWithPsk() left that gate
 // permanently closed, so a genuine wrong-password rejection produced a
 // correctly-settled disconnected state but never lit up the row's WRONG
@@ -25,7 +25,7 @@ import "../Network/model.js" as NetworkModel
 IpcHandler {
     target: "network"
 
-    // Set from shell.qml — the single NetworkPanel instance.
+    // Set from shell.qml, the single NetworkPanel instance.
     property var panel: null
 
     function _wifiNetworks() {

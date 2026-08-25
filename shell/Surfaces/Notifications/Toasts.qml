@@ -10,14 +10,14 @@ import "../../Notifications/stack.js" as Stack
 // The popup toast stack (DESIGN.md §Notifications, M8b Task 5; sonner-style
 // collapsed depth stack, M34 Task 2): a fixed pool of card slots
 // (`poolRepeater` below, `_poolSize` deep) whose SAME Item instances get
-// reassigned to different live notifications over time — never a
+// reassigned to different live notifications over time, never a
 // Repeater bound straight to a reactively-recomputed array, which QML
 // treats as a full model reset on every change and would restart every
 // card's enter animation whenever any ONE notification arrived or left.
 // Reusing fixed slots is what makes `Behavior on x`/`y` actually retarget
 // smoothly (§4.4) instead of snapping, and what lets a departed entry keep
 // its own Item alive (frozen at its last position) through its exit fade
-// before the slot frees up — Panel.qml's "visible-until-opacity-0 hold"
+// before the slot frees up, Panel.qml's "visible-until-opacity-0 hold"
 // generalized to a pool instead of a single surface.
 //
 // Two geometries share the same pool, picked by `_expanded`. Where each
@@ -29,19 +29,19 @@ import "../../Notifications/stack.js" as Stack
 // the front card full-size, up to two older ones peeking a fixed sliver
 // out from behind it, each SIZED narrower by an integer `Theme.space`
 // step per level (owner amendment, 2026-08-18: never a fractional
-// `transform: scale` — a 2px border under `scale(0.95)` rasterizes
-// blurry) — critical always wins the front slot over a newer normal one
+// `transform: scale`, a 2px border under `scale(0.95)` rasterizes
+// blurry), critical always wins the front slot over a newer normal one
 // (`Model.stackOrder`). EXPANDED is today's plain full-width list, one
 // card per live popup, `panelGap` apart, ordered by `_entries` exactly as
 // before this task. Hovering the stack (or `notifications expand
 // on/off` over IPC, the rig's stand-in for a pointer this rig doesn't
-// have — the bar chevron's own `expand` verb is the precedent) toggles
+// have, the bar chevron's own `expand` verb is the precedent) toggles
 // between them, and pauses every visible popup's expiry for as long as
 // it's expanded (the existing per-card `setPopupHovered`, applied
-// stack-wide) — "hover shows all of the ones that appeared at once".
+// stack-wide), "hover shows all of the ones that appeared at once".
 //
 // Anchor corner is configurable (settings.json's `notifications.position`,
-// M34 Task 1, default bottom-right) via Model.positionSpec — see
+// M34 Task 1, default bottom-right) via Model.positionSpec, see
 // `_positionSpec` below for how a single resolved object drives the
 // PanelWindow's own anchors/margins, the stack's growth order and the
 // enter/exit slide direction together.
@@ -51,7 +51,7 @@ import "../../Notifications/stack.js" as Stack
 // Center's own card is a fixed right-edge, full-height panel that overlaps
 // every right-anchored toast position anyway and costs nothing to also
 // suppress for the two left ones): a sticky critical popup (expiresAt = 0,
-// never times out — see model.js's expire()) would otherwise sit
+// never times out, see model.js's expire()) would otherwise sit
 // permanently on top of the center's own card, both visually and for
 // pointer input, since Toasts is on the Overlay layer above Center's Top
 // layer. Hiding this surface for the duration costs nothing: the popup is
@@ -65,19 +65,19 @@ PanelWindow {
     screen: modelData
 
     // Bar.qml publishes its content-derived height as Theme.barHeight (the
-    // same lookup Panel.qml uses) — the old hardcoded-32 mirror left toasts
+    // same lookup Panel.qml uses), the old hardcoded-32 mirror left toasts
     // overlapping the bar's bottom rows once the bar grew taller (same
     // stale literal Center.qml carried, fixed together in M13b Task 2).
     readonly property int _barHeight: Theme.barHeight
 
     // Resolves settings.json's notifications.position (default
     // bottom-right, M34 Task 1) to the anchors/margins/growth/slide-axis
-    // this whole surface reads off below — see model.js's positionSpec()
+    // this whole surface reads off below, see model.js's positionSpec()
     // for the corner math.
     readonly property var _positionSpec: Model.positionSpec(Config.get("notifications.position", Model.DEFAULT_POSITION))
 
     // Every live popup, grouped (Model.groupEntries), in whatever order
-    // groupEntries itself returns (oldest-recent-activity-first) — the raw
+    // groupEntries itself returns (oldest-recent-activity-first), the raw
     // truth `_syncDisplay` reconciles `_slots` against.
     readonly property var _groups: Model.groupEntries(NotificationService.popups)
 
@@ -86,7 +86,7 @@ PanelWindow {
     // `_groups` updates the instant a notification disappears, so a
     // `_stackOrder`/`_entries` bound to it would already have forgotten a
     // departing entry by the time `_syncDisplay`'s own `on_GroupsChanged`
-    // handler runs and tries to freeze its last position — it would read
+    // handler runs and tries to freeze its last position, it would read
     // back the post-removal fallback, not where the card actually was.
     // Reading `_slots` instead means the freeze snapshot, taken BEFORE
     // `_syncDisplay` writes the new `_slots` array, still sees the old
@@ -102,7 +102,7 @@ PanelWindow {
     readonly property var _stackOrder: Model.stackOrder(root._liveSlotEntries)
 
     // Expanded-view display order: newest nearest the anchor corner, same
-    // as Task 1 — the Column-free layout below still needs this to decide
+    // as Task 1, the Column-free layout below still needs this to decide
     // which end of the list is "closest to the anchor".
     readonly property var _entries: root._positionSpec.newestFirst
         ? root._liveSlotEntries.slice().reverse()
@@ -112,7 +112,7 @@ PanelWindow {
     color: "transparent"
 
     // Relative timestamps ("2m ago") only ever recompute off this timer per
-    // the plan-wide constraint — never off the reducer's own 1s tick.
+    // the plan-wide constraint, never off the reducer's own 1s tick.
     property double _now: Date.now()
     Timer {
         interval: 30000
@@ -170,7 +170,7 @@ PanelWindow {
     // Repeater's array-reset behavior (see header) never needs to be
     // config-driven.
     readonly property int _poolSize: 8
-    // Pre-filled with `_poolSize` nulls up front — `_syncDisplay`'s "first
+    // Pre-filled with `_poolSize` nulls up front, `_syncDisplay`'s "first
     // empty slot" search below walks existing INDICES, so a `_slots`
     // starting at length 0 never has an index to claim and every arrival
     // is silently dropped.
@@ -250,7 +250,7 @@ PanelWindow {
     on_GroupsChanged: root._syncDisplay()
     Component.onCompleted: root._syncDisplay()
 
-    // Per-slot target geometry for both modes, keyed by pool index —
+    // Per-slot target geometry for both modes, keyed by pool index,
     // `x`/`y`/`width`/`z` only; height is deliberately NOT included here:
     // it stays each card's own natural implicit height in both modes, so
     // reading it back (`poolRepeater.itemAt(i).height` below) never closes
@@ -304,7 +304,7 @@ PanelWindow {
     }
 
     // A departing card keeps whatever bounds it had when it left, and the
-    // window itself must stay at least that tall until the fade finishes —
+    // window itself must stay at least that tall until the fade finishes,
     // otherwise dismissing the last live popup would shrink the window to
     // its new (empty) target height instantly and clip the exit mid-fade.
     function _departingExtent() {
@@ -358,7 +358,7 @@ PanelWindow {
         height: root._targetHeight
 
         // The layer surface itself is sized off this height (implicitHeight
-        // above), and the compositor's resize is a real round trip — with
+        // above), and the compositor's resize is a real round trip, with
         // no Behavior here the window used to jump to its target size in
         // one frame while the delegates' own x/y Behaviors were still
         // gliding, so a card mid-glide would render clipped to whichever
@@ -403,7 +403,7 @@ PanelWindow {
                     NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
                 }
 
-                // presence: 0 = off-stack, 1 = fully shown — one scalar
+                // presence: 0 = off-stack, 1 = fully shown, one scalar
                 // drives both the enter (freshly assigned slot) and exit
                 // (departing) fade, so the exact same Behavior retargets
                 // whichever direction is live at any moment (DESIGN.md
@@ -446,7 +446,7 @@ PanelWindow {
                     // Gated on !root._expanded: `stackHover`'s HoverHandler
                     // covers this same card's whole bounding box, so a card
                     // hover inside an already-expanded stack always
-                    // coincides with `root._expanded` staying true — letting
+                    // coincides with `root._expanded` staying true, letting
                     // this fire there too raced `_syncExpandPause`'s
                     // stack-wide pause (moving the pointer from card A to
                     // card B cleared A's id from `_hoveredPopups` with

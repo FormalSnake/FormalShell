@@ -21,7 +21,7 @@ import qs.Components
 // app-name menu in the same place the app name already sits. The window it
 // names is CompositorService.heldFocusedWindowId, not the raw focused id, so
 // opening that menu (or any other panel) doesn't empty the cell it was
-// opened from — see Compositor/focus.js.
+// opened from, see Compositor/focus.js.
 Cell {
     id: root
 
@@ -30,7 +30,7 @@ Cell {
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     // Set from Bar.qml (`windowVisible: bar.visible`) so the title marquee
-    // below can gate on the bar's own PanelWindow actually being on screen —
+    // below can gate on the bar's own PanelWindow actually being on screen,
     // same rationale as NowPlaying.qml's own windowVisible. Defaults true so
     // any other embedding still animates.
     property bool windowVisible: true
@@ -43,7 +43,7 @@ Cell {
     readonly property var desktopEntry: root.appId !== "" ? DesktopEntries.heuristicLookup(root.appId) : null
 
     // check=true so a theme that can't resolve the entry's icon name
-    // yields "" — the Image slot below then simply doesn't render, the
+    // yields "", the Image slot below then simply doesn't render, the
     // same missing-texture-free contract as MenuRow's app rows.
     readonly property string iconSource: (root.desktopEntry && root.desktopEntry.icon)
         ? Quickshell.iconPath(root.desktopEntry.icon, true)
@@ -56,7 +56,7 @@ Cell {
     // minus the cell's own control padding.
     readonly property real _contentMaxWidth: Math.max(0, root.maxWidth - Theme.space.controlPaddingX * 2)
 
-    // Focus/title changes resize this cell (window switch, title rename) —
+    // Focus/title changes resize this cell (window switch, title rename),
     // animate the width instead of shoving the bar's other widgets
     // instantly (DESIGN.md §4, M16 Task 2).
     Behavior on implicitWidth {
@@ -87,7 +87,7 @@ Cell {
             id: primaryText
             visible: text !== ""
             // Entry found: its name leads in foreground. No entry: the raw
-            // appId, dimmed — today's exact fallback rendering.
+            // appId, dimmed, today's exact fallback rendering.
             text: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
             color: root.desktopEntry ? root.foreground : root.dimForeground
             font.family: Theme.fontFamilySans
@@ -106,7 +106,7 @@ Cell {
         // the shared MarqueeText mechanism (Components/MarqueeText.qml,
         // extracted from NowPlaying.qml's M16 Task 11 now-playing ticker).
         // `leftPadding` widens the gap to the app name without touching
-        // `row.spacing` — that stays tight (xxs) for the icon+name lockup.
+        // `row.spacing`, that stays tight (xxs) for the icon+name lockup.
         MarqueeText {
             id: titleText
             anchors.verticalCenter: parent.verticalCenter

@@ -48,7 +48,7 @@ PanelWindow {
     property var _condResults: ({})
     property var _checkedResults: ({})
 
-    // "menu" (tree navigation) | "select" | "input" — the dmenu-replacement
+    // "menu" (tree navigation) | "select" | "input", the dmenu-replacement
     // modes summoned via MenuIpc's select()/input(). Both repurpose the same
     // window/search field; _displayRows, breadcrumb and key handling branch
     // on this. _abandonPendingSelect() is what resets it back to "menu".
@@ -58,7 +58,7 @@ PanelWindow {
     property string _selectToken: ""
 
     // Fires whenever a select()/input() request resolves (submitted value or
-    // cancelled) — the same event external callers poll menu-selection.txt
+    // cancelled), the same event external callers poll menu-selection.txt
     // for (see MenuIpc.qml's header comment), exposed as a signal so
     // in-process callers (the Calendar panel's life-progress easter egg,
     // M6 Task 4) don't need a FileView of their own.
@@ -67,7 +67,7 @@ PanelWindow {
     property string _defaultMenuText: ""
     property string _userMenuText: ""
 
-    // Set from shell.qml — the single Center instance, needed for
+    // Set from shell.qml, the single Center instance, needed for
     // "@ipc:notifications.showHistory" (see _dispatchInternal below).
     property var center: null
 
@@ -78,7 +78,7 @@ PanelWindow {
         id: defaultMenuFile
         path: Quickshell.shellPath("Menu/default-menu.jsonc")
         // default-menu.jsonc ships inside the package, so this load only
-        // ever races startup once — but Component.onCompleted's auto-open
+        // ever races startup once, but Component.onCompleted's auto-open
         // (and a very early `menu summon`, Task 7) can call open() before
         // it lands, evaluating conditions against an empty tree with
         // nothing left to ever re-check them. Re-running the batch here,
@@ -91,7 +91,7 @@ PanelWindow {
         onLoadFailed: error => console.warn("Menu: failed to load default-menu.jsonc:", error)
     }
 
-    // Vendored emoji dataset (M12 Task 6) — ships inside the package like
+    // Vendored emoji dataset (M12 Task 6), ships inside the package like
     // default-menu.jsonc, parsed with Model.parseJsonc because
     // dev/gen-emoji.sh writes a provenance header comment JSON.parse would
     // reject. Load failure degrades to an empty list (the emoji route and
@@ -121,7 +121,7 @@ PanelWindow {
     // binding: keystrokes arm a 500ms debounce (_requestNixSearch, called
     // from onTextChanged/query(), never from a binding), one Process runs
     // at a time, and a result is only cached when it still answers the
-    // latest requested query — anything else is dropped and the search
+    // latest requested query, anything else is dropped and the search
     // re-runs (_startNixSearch from onExited). Each cached answer carries
     // its outcome (Providers.nixSearchOutcome) so _nixRowsFor renders NO
     // RESULTS and SEARCH FAILED distinctly instead of one ambiguous
@@ -152,7 +152,7 @@ PanelWindow {
     // right now: the honest NO NIX row, a dim SEARCHING note while the
     // cached answer doesn't cover this exact query yet (the debounce +
     // Process round trip runs tens of seconds on a cold real-host eval
-    // cache), or the cached end state — result rows, NO RESULTS, SEARCH
+    // cache), or the cached end state, result rows, NO RESULTS, SEARCH
     // FAILED. Stale rows for a previous query never linger.
     function _nixRowsFor(q) {
         if (!root._nixAvailable) return [Providers.nixUnavailableRow()];
@@ -195,7 +195,7 @@ PanelWindow {
         }
     }
 
-    // ~/.config/formalshell/menu.jsonc — the per-key user overlay (plan-wide
+    // ~/.config/formalshell/menu.jsonc, the per-key user overlay (plan-wide
     // constraint: user wins, `"hidden": true` drops a default node). Same
     // bounded-retry-until-watch-attaches pattern as Config.qml's
     // settings.json: the file (and its parent dir) may not exist yet at
@@ -242,12 +242,12 @@ PanelWindow {
         }
     }
 
-    // ~/.clipssh/aliases — clipssh's own `name=user@host` store, optional
+    // ~/.clipssh/aliases, clipssh's own `name=user@host` store, optional
     // like menu.jsonc but with none of its retry machinery: open() reloads
     // it every summon, so an alias added mid-session (even before the file
     // first existed) shows on the next open without a watch ever having
-    // attached. Absence just means zero aliases — clipsshRows' own NO
-    // ALIASES note row — never a warning.
+    // attached. Absence just means zero aliases, clipsshRows' own NO
+    // ALIASES note row, never a warning.
     property string _clipsshAliasesText: ""
 
     FileView {
@@ -351,17 +351,17 @@ PanelWindow {
     // (Surfaces/Picker/ImagePicker.qml, now deleted). It is a menu ROUTE:
     // "wallpaper" is an ordinary provider node in default-menu.jsonc, its
     // level renders as a grid instead of rows, and its cells are ordinary
-    // _displayRows entries (Providers.imageRows) — so the cursor, the
+    // _displayRows entries (Providers.imageRows), so the cursor, the
     // pointer gate, `activate(index)` over IPC, and every close path are
     // the menu's own rather than a second implementation of each.
     //
     // Two modes, both driving the same grid, unchanged from the panel:
     // - "wallpaper" (PickerIpc's summon(), the WALLPAPER menu row, `menu
     //   summon wallpaper`): scans picker.directory from settings.json;
-    //   choosing calls Core.State.setWallpaper() — the exact call
+    //   choosing calls Core.State.setWallpaper(), the exact call
     //   WallpaperIpc's set() makes, so ThemeEngine's retheme fires through
     //   one trigger path and is never duplicated here.
-    // - "select" (openImageSelect(), PickerIpc's select() — spec §11's
+    // - "select" (openImageSelect(), PickerIpc's select(), spec §11's
     //   "doubles as a generic image-selector"): scans an arbitrary
     //   directory and writes {token, value: path} to picker-selection.txt
     //   instead of touching the wallpaper. Leaving the route without
@@ -372,8 +372,8 @@ PanelWindow {
     //   them would let one answer the other's poll.
     //
     // A `Dark`/`Light` subdirectory pair inside the scanned directory splits
-    // the listing in two (Providers.wallpaperVariants) and raises the DARK |
-    // LIGHT switcher above the grid; a directory with neither is listed flat
+    // the listing in two (Providers.wallpaperVariants) and raises the Dark |
+    // Light switcher above the grid; a directory with neither is listed flat
     // and shows no switcher, so nothing changes for a setup that doesn't use
     // them. The variant a route entry lands on is the theme's own current
     // mode, which is the one the owner is looking at.
@@ -392,13 +392,13 @@ PanelWindow {
     readonly property bool _pickerHasVariants: root._pickerVariants.hasVariants
     readonly property var _pickerImages: Providers.wallpaperListing(root._pickerVariants, root._pickerVariant)
     // Set by openImageSelect() so the level entry it triggers keeps that
-    // caller's directory and token — every other way of reaching this level
+    // caller's directory and token, every other way of reaching this level
     // (the menu row, `menu summon wallpaper`, `picker summon`) is a plain
     // wallpaper-mode open and resets both.
     property bool _pickerRequestPending: false
 
     // Quickshell has no directory-listing QML type (same rationale as
-    // CalendarEventsService's own `find`-backed read) — re-scanned on every
+    // CalendarEventsService's own `find`-backed read), re-scanned on every
     // entry into the route, so a directory edited between opens is picked up.
     // Both variant subdirectories are named as starting points alongside the
     // directory itself: `find` reports a missing one on stderr (swallowed)
@@ -436,7 +436,7 @@ PanelWindow {
             root._pickerToken = "";
         }
         root._pickerRequestPending = false;
-        // The variant the theme is currently in, every entry — a switch is a
+        // The variant the theme is currently in, every entry, a switch is a
         // deliberate act of browsing the other set, not a preference the
         // route carries over from last time.
         root._pickerVariant = Core.State.mode === "light" ? "light" : "dark";
@@ -444,7 +444,7 @@ PanelWindow {
     }
 
     // Dropping the listing destroys every decoded thumbnail with the grid
-    // delegates that held them — the whole point of the old panel's close()
+    // delegates that held them, the whole point of the old panel's close()
     // override (M16 Task 12), kept. Re-entering re-scans and re-decodes,
     // which is cheap; the decodes were the cost.
     function _leavePickerRoute() {
@@ -452,9 +452,9 @@ PanelWindow {
         root._pickerScanned = [];
     }
 
-    // The DARK | LIGHT switcher's one entry point: the cells, Tab, and
+    // The Dark | Light switcher's one entry point: the segments, Tab, and
     // `picker variant` over IPC all land here. Same-variant calls are a
-    // no-op rather than a failure — a caller asking for the variant already
+    // no-op rather than a failure, a caller asking for the variant already
     // showing got what it asked for.
     function setPickerVariant(variant) {
         if (!root.isOpen || !root._isPickerRoute || !root._pickerHasVariants)
@@ -477,7 +477,7 @@ PanelWindow {
         }
     }
 
-    // PickerIpc's summon() — the wallpaper-mode open. Everything it needs to
+    // PickerIpc's summon(), the wallpaper-mode open. Everything it needs to
     // reset happens in _enterPickerRoute() off the level entry, so a menu row
     // and this call reach an identical state by construction.
     function openWallpaperPicker() {
@@ -494,7 +494,7 @@ PanelWindow {
     }
 
     // Callable over IPC (PickerIpc's choose()) as well as from Enter/click
-    // on a cell — the one function that resolves a pick, so both paths stay
+    // on a cell, the one function that resolves a pick, so both paths stay
     // in sync by construction. Refuses a path outside the current listing
     // rather than trusting an arbitrary caller-supplied one.
     function chooseImage(path) {
@@ -530,7 +530,7 @@ PanelWindow {
     // omarchy's clipboard history layout (owner: "copy omarchy's clipboard
     // history layout. It's way better."): a 50/50 split between the history
     // list and a full preview of the cursor row, reached without a second
-    // surface — same card, search field, cursor and action bar as every
+    // surface, same card, search field, cursor and action bar as every
     // other level, the same "view swap over one level" precedent the
     // wallpaper grid already set. "share.history" qualifies too: it lists
     // the identical rows (Providers.clipboardProvider with mode: "share"),
@@ -556,7 +556,7 @@ PanelWindow {
     readonly property bool _isAppView: root._appViewSource !== ""
 
     // Mirrors ClipboardService.items ONLY while the menu is actually open
-    // (M17 review finding, M-polish batch item G, owner: low-end laptop) —
+    // (M17 review finding, M-polish batch item G, owner: low-end laptop),
     // the ternary's closed branch never reads ClipboardService.items, so
     // QML's binding dependency tracker doesn't subscribe to it while
     // closed: a clipboard capture landing while the menu is closed no
@@ -584,7 +584,7 @@ PanelWindow {
         // Live-while-open, unlike wallpaper/buttons above: its action
         // depends on the current newest clipboard entry, so
         // _liveClipboardItems rides this same binding for _defaultObj (and
-        // _tree below) to recompute whenever it changes — but only while
+        // _tree below) to recompute whenever it changes, but only while
         // that dependency is actually subscribed (see _liveClipboardItems'
         // own comment). Merged as a plain overwrite of the
         // "share.clipboard" key default-menu.jsonc already declares, so the
@@ -640,7 +640,7 @@ PanelWindow {
     readonly property var _nodes: root._tree.nodes
 
     // True while the current level's own node carries an unsatisfied (or
-    // not-yet-resolved) `when` gate — see _displayRows' own comment for why
+    // not-yet-resolved) `when` gate, see _displayRows' own comment for why
     // this only matters for the direct-summon path.
     readonly property bool _currentNodeGated: {
         if (root.currentNodeId === null) return false;
@@ -660,7 +660,7 @@ PanelWindow {
         var q = searchInput.text;
         // The wallpaper route is the picker's grid (M23): route-local rows
         // built from the scanned directory and filtered by filename, never
-        // whole-tree ranking — a wallpapers directory would drown a root
+        // whole-tree ranking, a wallpapers directory would drown a root
         // query exactly the way the emoji dataset would.
         if (root._isPickerRoute)
             return Providers.imageRows(root._pickerImages, q);
@@ -668,7 +668,7 @@ PanelWindow {
         // the same reason the picker route above is: typing here narrows
         // history, it never falls through to whole-tree Search.rank or to
         // the trigger routes below (checked here, ahead of them, on
-        // purpose — a ":e"/":nix"/":k"-prefixed clipboard entry is filter
+        // purpose, a ":e"/":nix"/":k"-prefixed clipboard entry is filter
         // text on this level, not a trigger).
         if (root._isSplitRoute) {
             var historyRows = Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
@@ -705,7 +705,7 @@ PanelWindow {
             // `open(route)` resolves a node by id directly, bypassing the
             // parent-level isWhenVisible() filter that keeps a gated node
             // (e.g. "share" without localsend_app) from ever appearing as
-            // a row in the first place — without this, landing on that
+            // a row in the first place, without this, landing on that
             // level here would still list its children as if the gate
             // never existed. `root._currentNodeGated` covers "not yet
             // resolved" the same as "resolved false": _condResults starts
@@ -718,7 +718,7 @@ PanelWindow {
         }
         // A query that parses as an expression leads with the CALC result row
         // (M12 Task 5). At the dedicated calc level the result row is the
-        // whole surface — whole-tree matches would just be root search noise
+        // whole surface, whole-tree matches would just be root search noise
         // there. Parse failures are silent: calcRow is null, nothing renders.
         var calcRow = Calc.resultNode(q);
         if (root.currentNodeId === "calc")
@@ -815,7 +815,7 @@ PanelWindow {
     // ceiling and still scrolls past it.
     // The output's own size, read off THIS WINDOW rather than off the
     // ShellScreen it sits on (M39 Task 6). The window covers the output
-    // exactly, so its width/height are the same fact — except they are also
+    // exactly, so its width/height are the same fact, except they are also
     // already in the window's own coordinate space, which a ShellScreen's are
     // not once two heads differ in size or scale. Reading the screen instead
     // laid the card out for whichever output was resolved rather than the one
@@ -853,7 +853,7 @@ PanelWindow {
         - Core.Theme.space.sm * 2 - actionBar.height)
     // Fixed height on the split route (M30, omarchy parity): the preview
     // pane needs to be genuinely useful, not sized to whatever row count a
-    // filter happens to leave — so this route always takes the full cap
+    // filter happens to leave, so this route always takes the full cap
     // instead of shrinking to content height like every other level does.
     readonly property real _rowsAreaHeight: root._isSplitRoute ? root._rowsAreaCap : Math.min(root._viewContentHeight, root._rowsAreaCap)
 
@@ -892,13 +892,13 @@ PanelWindow {
 
     // Write-only: select()/input() answers land here as `{token, value}` /
     // `{token, cancelled: true}` JSON. Every write goes through a Process
-    // (`printf '%s' "$content" > "$path"`), never FileView.setText() —
+    // (`printf '%s' "$content" > "$path"`), never FileView.setText(),
     // ThemeEngine.qml documents FileView silently skipping the write *and*
     // the saved() signal when the new text is byte-identical to what it has
     // cached, which a repeated identical answer hits every time, and which a
     // caller-side truncate can't work around either (FileView compares
     // against its own cached text, not what's actually on disk). Callers
-    // poll/read the file themselves — see MenuIpc.qml's header comment for
+    // poll/read the file themselves, see MenuIpc.qml's header comment for
     // the full contract.
     function _writeSelectionFile(path, content) {
         var proc = _selectionFileProcComponent.createObject(root, {});
@@ -934,7 +934,7 @@ PanelWindow {
 
     // Leaving select/input mode without the caller ever getting an answer
     // (a fresh open()/openSelect()/openInput() supersedes it, or the window
-    // is closed) must still resolve that caller's poll loop — write the
+    // is closed) must still resolve that caller's poll loop, write the
     // cancel record before switching back to "menu". A no-op once already
     // back in "menu" mode, so close() and _completeSelect()/_submitInput()
     // (which set _mode = "menu" themselves before calling close()) never
@@ -950,12 +950,12 @@ PanelWindow {
     // before that request's UI ever opens. Exactly one write happens
     // either way: if another request was still pending, _abandonPendingSelect
     // above already overwrote the file with that request's own cancel
-    // record — invalidating it for free — so nothing else is done; otherwise
+    // record, invalidating it for free, so nothing else is done; otherwise
     // the file may still hold an already-resolved answer from an earlier,
     // now-finished request (the README's own tok1/tok2 examples reuse a
     // stable token across invocations, with no requirement that tokens be
     // unique per run), so it's deleted outright. Deliberately not folded
-    // into _abandonPendingSelect itself — that function also runs from
+    // into _abandonPendingSelect itself, that function also runs from
     // open()/close(), including right after _completeSelect() writes a real
     // answer, where deleting the file would race the write just made.
     function _beginSelectionRequest() {
@@ -969,7 +969,7 @@ PanelWindow {
         root._abandonPendingSelect();
         // Fresh session: last session's condition results must not leak
         // into this one (a `when`/`checked` shell command can change
-        // between opens — bluetooth power, mode toggle, device presence).
+        // between opens, bluetooth power, mode toggle, device presence).
         root._condResults = {};
         root._checkedResults = {};
         // "@state:" `checked` conditions are deliberately NOT cleared here:
@@ -980,8 +980,8 @@ PanelWindow {
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
         // (onTextChanged side effects included, so the debounced search
-        // arms), giving compositor keybinds — and the smoke rig's toast
-        // assertion — a direct path into the trigger surfaces without
+        // arms), giving compositor keybinds, and the smoke rig's toast
+        // assertion, a direct path into the trigger surfaces without
         // keyboard delivery. No node id or alias starts with ":".
         var prefill = (route && route.indexOf(":") === 0) ? route : "";
         var target = null;
@@ -1037,7 +1037,7 @@ PanelWindow {
         pointerGate.reset();
     }
 
-    // Force an immediate re-read of default+user jsonc — Config's settings
+    // Force an immediate re-read of default+user jsonc, Config's settings
     // watch is already live/reactive (_defaultObj recomputes on its own), so
     // this is mainly a manual fallback for an editor save that an fs watcher
     // missed (atomic-save tools can swap the inode).
@@ -1113,8 +1113,8 @@ PanelWindow {
     }
 
     // Launch feedback for app rows. DesktopEntry.execute() is
-    // fire-and-forget — it hands the entry's Exec line off and reports
-    // nothing back — so the only truthful confirmation a launch can ever
+    // fire-and-forget, it hands the entry's Exec line off and reports
+    // nothing back, so the only truthful confirmation a launch can ever
     // get is the app's own window turning up. CompositorService.windows is
     // the live toplevel list on both backends, so this watches instead of
     // claiming: baseline the window count (and the focused window id) the
@@ -1135,7 +1135,7 @@ PanelWindow {
     // there is nothing to observe at any point, so waiting out the grace
     // period would only delay the same sentence.
     //
-    // One watch at a time — a second launch inside the grace period
+    // One watch at a time, a second launch inside the grace period
     // supersedes the first, so a burst of Enters can't stack up toasts.
     readonly property int _launchGraceMs: 2000
     property string _launchWatchLabel: ""
@@ -1164,7 +1164,7 @@ PanelWindow {
             // A focus move is evidence alongside the count: an app that
             // raised an already-open window of its own never changes the
             // total. Either reading can also be the user's own doing, which
-            // costs at worst one toast NOT shown — never a false claim.
+            // costs at worst one toast NOT shown, never a false claim.
             if ((CompositorService.windows || []).length > root._launchBaselineWindows
                 || CompositorService.focusedWindowId !== root._launchBaselineFocusedId)
                 return;
@@ -1204,7 +1204,7 @@ PanelWindow {
     }
 
     // Debug-only: ranks `q` against the live tree without requiring the
-    // surface to be open — backs the `debug query` IPC hook used to verify
+    // surface to be open, backs the `debug query` IPC hook used to verify
     // the apps provider + fuzzy filtering where keyboard injection isn't
     // available (nested test sessions).
     function query(q) {
@@ -1218,7 +1218,7 @@ PanelWindow {
             });
         }
         // ":nix" narrows the same way, but the search is async: the first
-        // call arms the debounce and returns the SEARCHING note row — the
+        // call arms the debounce and returns the SEARCHING note row, the
         // smoke rig calls twice, reading the cached end state (result rows,
         // NO RESULTS, SEARCH FAILED) on the second pass.
         var nixQuery = Providers.nixTriggerQuery(q);
@@ -1287,7 +1287,7 @@ PanelWindow {
     // Hover owns the cursor only while the pointer is the thing that moved.
     // Filtering re-renders the row list under a parked pointer on every
     // keystroke, and Qt hands the row that slid underneath a hover move
-    // indistinguishable from a real one — which used to yank the keyboard
+    // indistinguishable from a real one, which used to yank the keyboard
     // cursor to wherever the mouse happened to be sitting. Every keyboard
     // path below re-arms the gate; the first genuine pointer movement takes
     // the cursor straight back.
@@ -1297,7 +1297,7 @@ PanelWindow {
 
     // `delta` is ±1 for the row list and ±`pickerColumns` for the grid's
     // vertical moves, so the wrap has to survive a step larger than the row
-    // count itself — the old `(i + delta + n) % n` only ever saw ±1 and
+    // count itself, the old `(i + delta + n) % n` only ever saw ±1 and
     // returns a negative index the moment |delta| > n.
     function _moveCursor(delta) {
         var n = root._displayRows.length;
@@ -1373,7 +1373,7 @@ PanelWindow {
     // A click IS the pointer acting, so the level it opens hands the cursor to
     // whatever row lands under the (still parked) pointer: re-arm one
     // stationary sample after _activateRow's own level change has reset the
-    // gate. Only the row delegate's own MouseArea takes this path — activate()
+    // gate. Only the row delegate's own MouseArea takes this path, activate()
     // over IPC stays keyboard-shaped.
     function _activateFromPointer(index) {
         root._activateRow(index);
@@ -1439,7 +1439,7 @@ PanelWindow {
             }
             // Baseline first: nothing can map a window inside this same JS
             // block, so the count _beginLaunchWatch reads is genuinely the
-            // "before". execute() stays exactly as it was — the entry's own
+            // "before". execute() stays exactly as it was, the entry's own
             // Exec field codes and quoting only survive that path (see
             // providers.js's header), so the feedback wraps it rather than
             // routing around it.
@@ -1478,7 +1478,7 @@ PanelWindow {
     }
 
     // "@ipc:<name>" actions (see default-menu.jsonc's header comment)
-    // dispatch in-process instead of spawning a shell command — needed for
+    // dispatch in-process instead of spawning a shell command, needed for
     // anything that must run in the shell's own process, like toggling
     // Core.State directly.
     function _runAction(action) {
@@ -1498,7 +1498,7 @@ PanelWindow {
             return;
         }
         // The clipboard route's own rows. In-process because this menu runs
-        // inside the process that owns the history — providers.js's header
+        // inside the process that owns the history, providers.js's header
         // has why the spawned `qs ipc` form it replaced only ever worked on
         // the smoke rig.
         if (name.indexOf("clipboard.copy:") === 0) {
@@ -1566,14 +1566,14 @@ PanelWindow {
     })
 
     // Shell-condition batch: `when`/`checked` for EVERY node in the tree,
-    // not just the current level — whole-tree search (see _displayRows) can
+    // not just the current level, whole-tree search (see _displayRows) can
     // surface a node whose level the user hasn't descended into yet, and a
     // submenu with an unevaluated-when child self-prunes to invisible
     // (Model.visibleChildren), which would make that child undescendable and
     // its own condition permanently unevaluated. Runs once per open()
     // (open() clears both result caches first) and again on every
     // _enterLevel(), where the `undefined` guards make repeat calls within
-    // the same session cheap no-ops. Never per-keystroke — search filters
+    // the same session cheap no-ops. Never per-keystroke, search filters
     // purely against whatever's already cached. Results are merged into
     // fresh objects so QML's var-property change detection fires.
     function _evalConditions() {
@@ -1663,8 +1663,8 @@ PanelWindow {
     // dithered freeze of the screen itself, which read beautifully in a still
     // frame and could not be made to hold still in motion: refreshing it on
     // an interval meant the capture contained the backdrop it was replacing,
-    // and every term in that loop — the resample, the per-frame palette, the
-    // darkening wash — drifted a little each generation, so the picture
+    // and every term in that loop, the resample, the per-frame palette, the
+    // darkening wash, drifted a little each generation, so the picture
     // crawled while nothing on screen moved (owner, 2026-08-19). A scrim has
     // no such loop, costs nothing, and stays out of the way of the card,
     // which is the whole job. The lock screen still dithers, because its
@@ -1931,65 +1931,32 @@ PanelWindow {
             }
         }
 
-        // The wallpaper route's Dark | Light switcher (M43 D3): a segmented
-        // control, two `Cell`s in a `muted` trough, the live one carrying
-        // the `primary` fill every active toggle in the shell takes, so
-        // which set is on screen is stated rather than remembered. Absent
-        // entirely (zero height, no reserved gutter) for a directory with no
-        // Dark/Light pair, and on every other route.
+        // The wallpaper route's Dark | Light switcher (spec "Picker"): the
+        // `Segmented` primitive. Absent entirely (zero height, no reserved
+        // gutter) for a directory with no Dark/Light pair, and on every
+        // other route.
         //
         // Both views below anchor to this rather than to the header, so the
         // switcher pushes the grid down without either of them knowing
         // whether it is there.
-        Rectangle {
+        Segmented {
             id: variantRow
             anchors.top: breadcrumbRow.bottom
             anchors.topMargin: visible ? Core.Theme.space.sm : 0
             anchors.left: parent.left
-            width: Math.round(root._contentWidth / 2)
-            height: visible ? Core.Theme.space.controlHeight : 0
             visible: root._isPickerRoute && root._pickerHasVariants
-            radius: Core.Theme.radiusMd
-            color: Core.Theme.color.muted
+            height: visible ? implicitHeight : 0
+            options: ["Dark", "Light"]
+            onChanged: i => root.setPickerVariant(i === 1 ? "light" : "dark")
+        }
 
-            Row {
-                id: variantSegments
-                anchors.fill: parent
-                anchors.margins: Core.Theme.space.xxs
-                spacing: Core.Theme.space.xxs
-
-                Repeater {
-                    model: [
-                        { variant: "dark", label: "Dark" },
-                        { variant: "light", label: "Light" }
-                    ]
-
-                    delegate: Cell {
-                        id: variantCell
-                        required property var modelData
-
-                        width: (variantSegments.width - variantSegments.spacing) / 2
-                        height: variantSegments.height
-                        // Concentric with the group above it (spec
-                        // "Radius"): the trough's own radius minus the
-                        // padding between them.
-                        radius: Core.Theme.radiusSm
-                        active: root._pickerVariant === variantCell.modelData.variant
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: variantCell.modelData.label
-                            color: variantCell.foreground
-                            font.family: Core.Theme.fontFamilySans
-                            font.pixelSize: Core.Theme.fontSize.bodySmall
-                            font.weight: Core.Theme.weight.medium
-                        }
-
-                        interactive: true
-                        onClicked: root.setPickerVariant(variantCell.modelData.variant)
-                    }
-                }
-            }
+        // The variant belongs to the route, not to the control: Tab and
+        // `picker variant` over IPC move it too, and Segmented writes its own
+        // `index` on click, which a plain binding would not survive.
+        Binding {
+            target: variantRow
+            property: "index"
+            value: root._pickerVariant === "light" ? 1 : 0
         }
 
         ListView {
@@ -2012,7 +1979,7 @@ PanelWindow {
             // ListView tracks the cursor through its (always present, even
             // with no `highlight` component) highlight item, and the
             // default `highlightMoveDuration: -1` moves that item at
-            // `highlightMoveVelocity` — 400px/s. Key repeat outruns it, so
+            // `highlightMoveVelocity`, 400px/s. Key repeat outruns it, so
             // the view crawls behind the cursor and the tail of a long list
             // stays off-screen for seconds after the cursor has already
             // reached it and wrapped back to the top. 0 makes the follow a
@@ -2034,7 +2001,7 @@ PanelWindow {
         }
 
         // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
-        // of image cells sharing hairline rules", spec §11) — the picker's
+        // of image cells sharing hairline rules", spec §11), the picker's
         // own surface, now one of the menu's two views over the same
         // _displayRows/_cursorIndex state rather than a panel of its own.
         // Shares rowsView's geometry exactly, so the action bar below can

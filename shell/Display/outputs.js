@@ -3,10 +3,10 @@
 
 // Pure output/display model for DisplayPanel (M17): both compositors' wire
 // shapes normalized onto one row contract, plus every derivation the panel
-// renders — sort order, the mode/scale/status labels, what a mirror would
+// renders, sort order, the mode/scale/status labels, what a mirror would
 // actually do, and whether an output may be switched off at all. No
 // Quickshell, no Process, no socket access here, so all of it is testable
-// head-on (tests/tst_outputs.qml) — same split as Network/speedtest.js and
+// head-on (tests/tst_outputs.qml), same split as Network/speedtest.js and
 // Usage/usage.js.
 //
 // Row contract, produced by both normalizers and consumed by everything else:
@@ -16,7 +16,7 @@
 // `name` is the compositor's own output name and stays an opaque string end
 // to end: nothing here parses or compares it numerically, and neither backend
 // converts it either (niri keys its Outputs map by name, Hyprland's `monitor`
-// keyword takes the name verbatim) — unlike the Number(id) window/workspace
+// keyword takes the name verbatim), unlike the Number(id) window/workspace
 // conversion each backend does at its own wire edge.
 //
 // `width`/`height`/`refresh` describe the CURRENT mode in physical pixels and
@@ -100,7 +100,7 @@ function formatScale(scale) {
 }
 
 // Hyprland only accepts a scale whose mode divides into whole logical pixels,
-// counted in 1/120ths — so the acceptable scales are exactly the divisors of
+// counted in 1/120ths, so the acceptable scales are exactly the divisors of
 // gcd(width*120, height*120), and a requested scale rounds UP to the nearest
 // one. Read off omarchy's own clean_scale()
 // (bin/omarchy-hyprland-monitor-scaling there) and reimplemented. niri has no
@@ -126,7 +126,7 @@ function cleanScale(scale, width, height) {
 // ---- Row derivations ---------------------------------------------------
 
 // Enabled outputs first (the ones an action can act on), then left-to-right /
-// top-to-bottom by logical position, then by name — so the order never
+// top-to-bottom by logical position, then by name, so the order never
 // depends on the map key order or array order the compositor answered in.
 function sortOutputs(rows) {
     return (rows || []).slice().sort(function (a, b) {
@@ -154,7 +154,7 @@ function enabledCount(rows) {
 }
 
 // A display may always be switched on; switching one off is refused when it
-// is the last enabled output — both compositors would happily leave the
+// is the last enabled output, both compositors would happily leave the
 // session with nothing on screen and no surface left to undo it from.
 function canToggle(rows, name) {
     var row = findOutput(rows, name);
@@ -176,7 +176,7 @@ function modeLabel(row) {
 }
 
 // "DELL U2720Q" for the row's second meta line, "" when the compositor
-// reports neither half — never a placeholder standing in for hardware
+// reports neither half, never a placeholder standing in for hardware
 // identity we were not given.
 function describe(row) {
     if (!row)
@@ -189,7 +189,7 @@ function describe(row) {
 // What turning MIRROR on would do: every other enabled output mirrors
 // `primaryName` (the focused output when it is enabled, else the first
 // sorted enabled one). `ok:false` with `reason:"single"` when fewer than two
-// outputs are enabled — there is nothing to mirror onto, and the panel says
+// outputs are enabled, there is nothing to mirror onto, and the panel says
 // so rather than rendering a toggle that cannot act.
 function mirrorPlan(rows, primaryName) {
     var enabled = sortOutputs(rows).filter(function (row) { return row.enabled; });
@@ -207,7 +207,7 @@ function mirrorPlan(rows, primaryName) {
     };
 }
 
-// Every output currently mirroring something — the set MIRROR OFF has to
+// Every output currently mirroring something, the set MIRROR OFF has to
 // clear, and the reason the toggle reads as on.
 function mirroredNames(rows) {
     return (rows || []).filter(function (row) {
@@ -261,14 +261,14 @@ function normalizeNiriOutputs(byName) {
             scale: isEnabled ? _positive(logical.scale, 1) : 1,
             enabled: isEnabled,
             // niri-ipc's OutputAction has no mirror variant at all, so no niri
-            // output is ever mirroring — see NiriBackend's mirrorSupported.
+            // output is ever mirroring, see NiriBackend's mirrorSupported.
             mirrorOf: ""
         });
     }
     return sortOutputs(rows);
 }
 
-// `hyprctl monitors all -j`'s raw stdout — the only Hyprland enumeration that
+// `hyprctl monitors all -j`'s raw stdout, the only Hyprland enumeration that
 // includes disabled monitors (plain `monitors` omits them entirely, which is
 // also why Quickshell's own Hyprland.monitors model, populated from
 // `j/monitors`, cannot back this panel: an output switched off would vanish
@@ -319,7 +319,7 @@ function parseHyprlandOutputs(text) {
 // `overrides` carries only what the caller means to change (`scale`,
 // `mirrorOf`); everything else is re-stated from the row so a scale change
 // never silently drops an active mirror, and vice versa. Position stays
-// "auto" — omarchy's own scale and mirror scripts do the same, and a literal
+// "auto", omarchy's own scale and mirror scripts do the same, and a literal
 // x/y here would fight the compositor's layout on every change when neither
 // control means to move anything.
 function hyprlandMonitorArg(row, overrides) {

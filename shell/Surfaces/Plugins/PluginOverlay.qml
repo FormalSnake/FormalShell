@@ -134,7 +134,7 @@ PanelWindow {
                 visible: root.loadFailed
                 anchors.centerIn: parent
 
-                MetaLabel { text: "PLUGIN ERROR" }
+                SectionLabel { text: "PLUGIN ERROR" }
             }
         }
     }

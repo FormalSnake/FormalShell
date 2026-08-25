@@ -3,15 +3,15 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-// Read-only watched ~/.config/formalshell/settings.json — the shell's user
+// Read-only watched ~/.config/formalshell/settings.json, the shell's user
 // config surface. Per CLAUDE.md's hard rule the shell never writes this file;
 // State.qml (runtime-mutable, $XDG_STATE_HOME) is the writable counterpart.
 // v1 keys: menu.customPowerButtons: [{ label, icon, command, confirm? }],
 // bar.position (reserved), theme.fontDisplay (reserved), media.appleMusicArt
-// (bool, default false — AppleMusicArtService's opt-in, M7 Task 2).
-// lock.blankAfterSeconds (number, default 30 — Lock.qml's idle-blank
+// (bool, default false, AppleMusicArtService's opt-in, M7 Task 2).
+// lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank
 // timeout, seconds, fed straight to IdleMonitor.timeout), lock.
-// fingerprintPamService (string, default "" — the PAM service name for
+// fingerprintPamService (string, default "", the PAM service name for
 // Lock.qml's parallel fingerprint flow; empty means no reader enrolled, so
 // it never starts, M7 Task 4), lock.command (array of strings, default [],
 // an external locker LockService spawns instead of raising the built-in
@@ -19,28 +19,28 @@ import QtQuick
 // built-in one, M45) and lock.dither (bool, default false, the retro
 // dither pass over the lock backdrop; off means the plain wallpaper
 // draws, M45). screensaver.timeoutSeconds (number, default
-// 300 — IdleService's IdleMonitor.timeout), screensaver.guardMediaPlayback
-// (bool, default true — Screensaver.qml's live guard against auto-activating
+// 300, IdleService's IdleMonitor.timeout), screensaver.guardMediaPlayback
+// (bool, default true, Screensaver.qml's live guard against auto-activating
 // while MediaService.isPlaying), screensaver.lockAfterSeconds (number,
-// default 0 — Screensaver.qml's optional chain into Lock once already
+// default 0, Screensaver.qml's optional chain into Lock once already
 // showing; 0 disables the chain, M7 Task 5). screensaver.asciiPath (string,
-// default "" — a path to a user-supplied ASCII banner text file; "" means
+// default "", a path to a user-supplied ASCII banner text file; "" means
 // the bundled branding/screensaver.txt), screensaver.effect (string,
-// default "random" — one of effect.js's EFFECT_NAMES, or "random" to pick a
+// default "random", one of effect.js's EFFECT_NAMES, or "random" to pick a
 // fresh one every activation; an unknown name also falls back to random,
-// M8b Task 7), screensaver.holdSeconds (number, default 6 — how long the
+// M8b Task 7), screensaver.holdSeconds (number, default 6, how long the
 // converged banner holds before the screensaver rerolls its effect and
 // animates again, indefinitely; "random" never repeats the immediately
 // previous effect, a pinned name replays itself, M13b Task 5).
 // hotCorners.topLeft / topRight / bottomLeft / bottomRight (strings, one of
 // "none" | "screensaver" | "lock"; defaults "none" / "none" / "screensaver"
-// / "lock" — both top corners stay inert because the bar owns the top edge
+// / "lock", both top corners stay inert because the bar owns the top edge
 // and a corner there would take pixels out of its input region),
-// hotCorners.enabled (bool, default true — false creates no corner surface
-// at all), hotCorners.size (number, default 4, clamped 1..64 — the trigger
+// hotCorners.enabled (bool, default true, false creates no corner surface
+// at all), hotCorners.size (number, default 4, clamped 1..64, the trigger
 // square's side in pixels; those pixels stop reaching the window under
 // them, Wayland having no hover-only input region) and hotCorners.delayMs
-// (number, default 400, clamped 0..10000 — how long the pointer must dwell
+// (number, default 400, clamped 0..10000, how long the pointer must dwell
 // in the corner before the action fires; a click fires immediately
 // regardless). Resolved by shell/HotCorners/corners.js.
 // wallpaper.dither (bool, default false since M45: true renders the
@@ -52,28 +52,28 @@ import QtQuick
 // bigger palette leaves fewer cells sitting between two entries, so less of
 // the screen patterns at all).
 // picker.directory (string,
-// default "" — the wallpaper directory the menu's "wallpaper" route scans
+// default "", the wallpaper directory the menu's "wallpaper" route scans
 // in wallpaper mode (`picker summon`); a `Dark`/`Light` subdirectory pair
 // there (either name, any case) splits the listing into the two variants the
 // route's DARK | LIGHT switcher picks between, and a directory with neither
 // is listed flat exactly as before. `picker select`'s generic image-selector
 // mode takes an arbitrary directory as an IPC argument instead, M7 Task 6,
 // folded into the menu in M23).
-// greeter.sessionCommand (array of strings, default ["niri"] — greeter.qml's
+// greeter.sessionCommand (array of strings, default ["niri"], greeter.qml's
 // Greetd.launch() argv once a login succeeds; the `greeter` system user has
 // no real settings.json of its own, so this is really just this key's
-// documented fallback today — a real deployment's session choice belongs in
+// documented fallback today, a real deployment's session choice belongs in
 // nixosModules.formalshell-greeter, M8 Task 4).
-// calendar.icsDir (string, default "" — CalendarEventsService's local .ics
+// calendar.icsDir (string, default "", CalendarEventsService's local .ics
 // directory; "" means no local files) and calendar.eds (bool, default true
-// — the same service's EDS/GOA backend via the formalshell-eds companion
+//, the same service's EDS/GOA backend via the formalshell-eds companion
 // CLI; unreachable EDS degrades silently to ics-only after one probe,
 // M12 Task 3).
 // bar.layout ({left, center, right}: arrays of widget names, each region
-// optional — an absent region falls back to today's default arrangement,
+// optional, an absent region falls back to today's default arrangement,
 // resolved by shell/Bar/layout.js, M10 Task 3) and bar.modules (array of
 // {id, type: "command"|"qml", ...}, referenced from bar.layout via a
-// "custom:<id>" entry — "command" runs `command` on an `interval` (ms,
+// "custom:<id>" entry, "command" runs `command` on an `interval` (ms,
 // default 5000) and parses Waybar-JSON-compatible stdout
 // (CommandModule.qml); "qml" loads a `source` file into a Loader
 // (QmlModule.qml)). An unknown widget name or a dangling module reference
@@ -99,37 +99,37 @@ import QtQuick
 // region is currently collapsed is runtime state, not settings: it lives in
 // state.json's `barCollapsed`, defaults collapsed, and is written by the
 // cell's own click or by `bar chevron toggle|expand|collapse [region]`.
-// github.intervalMs (number, default 300000 — GithubWidget's `gh api`
+// github.intervalMs (number, default 300000, GithubWidget's `gh api`
 // poll cadence in ms; the widget itself is opt-in via bar.layout,
 // M12 Task 8).
 // screenshot.directory (string, default "" meaning $HOME/Pictures/
 // Screenshots: where ScreenshotIpc's grim captures land, created on first
 // capture, M12 Task 9).
-// motion.enabled (bool, default true — Theme's motion switch: false zeroes
+// motion.enabled (bool, default true, Theme's motion switch: false zeroes
 // every animation duration (Tokens.motionTokens) so all transitions become
 // instant state swaps, M13 Task 8).
-// usage.claude / usage.codex (bool, each default true — UsagePanel's
+// usage.claude / usage.codex (bool, each default true, UsagePanel's
 // independent per-provider opt-out; a disabled provider polls nothing and
 // renders no section at all) and usage.intervalMs (number, default 900000
-// — the same panel's background poll cadence in ms; the widget itself is
+//, the same panel's background poll cadence in ms; the widget itself is
 // opt-in via bar.layout, M14 Task 7).
-// weather.intervalMs (number, default 900000 — WeatherPanel's open-meteo
+// weather.intervalMs (number, default 900000, WeatherPanel's open-meteo
 // background poll cadence in ms; the widget stays in bar.layout by
 // default, so this generally runs whenever the bar does, M15 Task 3).
-// polkit.enabled (bool, default true — gates whether PolkitService.qml
+// polkit.enabled (bool, default true, gates whether PolkitService.qml
 // even constructs a PolkitAgent element at all, since registration is
 // attempted the instant one exists; false means the shell never tries to
 // register, M16 Task 4).
-// battery.warnPercent / battery.criticalPercent (numbers, default 10 / 5 —
+// battery.warnPercent / battery.criticalPercent (numbers, default 10 / 5,
 // Power/model.js's warnEvent() thresholds, read by PowerPanel's own
 // hysteresis watcher and Battery.qml's urgent/warning-cell checks, M16 Task
 // 5 and M18 Task 7).
-// nightlight.startOn (bool, default false — opt-in: whether
+// nightlight.startOn (bool, default false, opt-in: whether
 // NightLightService starts wlsunset automatically at shell boot) and
-// nightlight.temp (number, default 4000 — the fixed low colour
+// nightlight.temp (number, default 4000, the fixed low colour
 // temperature it pins via wlsunset's own SIGUSR1 runtime control, M16
 // Task 6).
-// tailscale.intervalMs (number, default 60000 — TailscalePanel's
+// tailscale.intervalMs (number, default 60000, TailscalePanel's
 // `tailscale status --json` poll cadence in ms; the widget itself is
 // opt-in via bar.layout, M16 Task 8).
 // capture.ocrLanguage (string, default "eng": the language CaptureIpc's
@@ -206,14 +206,14 @@ import QtQuick
 // that flag differently (`foot --app-id`, `alacritty --class`, `kitty
 // --class`, `ghostty --class`), which is why this is argv and not a command
 // name. console.appId (string, default "dev.formalshell.console"): the app
-// id ConsoleService matches the mapped window against — change it in both
+// id ConsoleService matches the mapped window against, change it in both
 // places or the console never finds its own window and says so.
 // console.share (number, default 0.5, clamped 0.2..1): how much of the
 // height under the bar the console covers, M37 Task 2.
 // clipboard.paste (bool, default true: Enter on a clipboard-history row or
 // an emoji row copies the entry and then synthesizes a paste into whatever
 // window focus returns to, Raycast's behaviour; false copies only) and
-// clipboard.pasteChord (string, default "ctrl+v" — the chord that paste
+// clipboard.pasteChord (string, default "ctrl+v", the chord that paste
 // synthesizes, in wtype's own modifier vocabulary, e.g. "ctrl+shift+v" for
 // a terminal-first session). A chord naming a modifier wtype does not know
 // pastes nothing and warns, rather than sending some other keystroke.
@@ -223,13 +223,13 @@ Singleton {
     property var settings: ({})
 
     // Flips true exactly once, the first time settings.json has actually
-    // been resolved one way or another (parsed, or confirmed absent) —
+    // been resolved one way or another (parsed, or confirmed absent),
     // never back to false, even across a later reload. IdleService reads
     // this to apply screensaver.timeoutSeconds as a one-shot value rather
     // than a live binding (see its own header comment for the very real
     // reason: re-triggering IdleMonitor's underlying notification a second
-    // time shortly after startup — exactly what a live binding here would
-    // do, given settings.json loads asynchronously — has been observed to
+    // time shortly after startup, exactly what a live binding here would
+    // do, given settings.json loads asynchronously, has been observed to
     // silently and permanently break IdleMonitor.isIdle for the rest of the
     // process's life).
     property bool loaded: false
@@ -242,7 +242,7 @@ Singleton {
     // Same bounded-retry rationale as Theme.qml's theme.json watch: at first
     // launch settings.json (and its parent dir) may not exist yet, and a bare
     // watchChanges: true never attaches to a path whose parent dir is also
-    // missing — retry until the dir shows up (e.g. ThemeEngine creates it)
+    // missing, retry until the dir shows up (e.g. ThemeEngine creates it)
     // and the real QFileSystemWatcher takes over from here.
     Timer {
         id: rewatchTimer

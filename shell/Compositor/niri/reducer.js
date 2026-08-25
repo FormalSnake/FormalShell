@@ -43,7 +43,7 @@ function normalizeWorkspace(ws) {
 // None. `pos_in_scrolling_layout` is a 1-based (column, row) index pair, not
 // pixels, so it cannot be converted into one.
 //
-// So a tiled niri window — which is nearly all of them — has NO rectangle,
+// So a tiled niri window, which is nearly all of them, has NO rectangle,
 // and this returns null for it. That is the compositor's limit, not a gap
 // here: anything wanting to capture a niri window works by window id through
 // the `ScreenshotWindow` action (niri crops server-side), never by rect.
@@ -107,7 +107,7 @@ function withAbsoluteRects(windows, workspaces, outputs) {
 // enum), and the Outputs request that does enumerate outputs carries no focus
 // flag. The focused workspace's own `output` is therefore the only report of
 // which output is active, and every surface that opens on the focused screen
-// resolves through it — a focusedOutputName left empty here silently sends all
+// resolves through it, a focusedOutputName left empty here silently sends all
 // of them to Quickshell.screens[0].
 function withWorkspaces(state, workspaces) {
     var focused = workspaces.find(function (ws) { return ws.isFocused; });

@@ -2,16 +2,16 @@
 
 // Pure resolver for `bar.layout`/`bar.modules` (DESIGN.md §Bar, spec
 // §Surfaces-1, M10 Task 3). Takes the raw settings.json `bar` object in,
-// returns a resolved { regions: {left, center, right}, warnings } out — no
+// returns a resolved { regions: {left, center, right}, warnings } out, no
 // Quickshell/Config access, so it's testable head-on. Each resolved entry
 // is either { kind: "builtin", name } (one of BUILTIN_WIDGETS, rendered by
 // Bar.qml's own component registry) or { kind: "module", id, module }
 // (module is the matching entry from `bar.modules`, looked up by id via
-// the layout name's "custom:" prefix — distinct from BUILTIN_WIDGETS so a
+// the layout name's "custom:" prefix, distinct from BUILTIN_WIDGETS so a
 // user's module id can never collide with a built-in widget name). Absent
 // or malformed input is never fatal: an unknown widget name, a "custom:"
 // reference with no matching module, or a module with an unrecognized
-// `type` is dropped with one warning string rather than thrown — a typo in
+// `type` is dropped with one warning string rather than thrown, a typo in
 // settings.json must never crash the bar. A region missing from
 // `bar.layout` falls back to DEFAULT_LAYOUT for that region alone (today's
 // exact arrangement); a region present but empty (`[]`) stays empty.
@@ -224,7 +224,7 @@ function hasChevron(entries) {
     return false;
 }
 
-// `bar` is the raw settings.json `bar` object — may be undefined, null, or
+// `bar` is the raw settings.json `bar` object, may be undefined, null, or
 // missing either `layout` or `modules`. `barPlugins` is manifest.js's
 // kind === "bar" array, already id-sorted; undefined or null means none, so
 // every pre-plugin caller keeps its exact previous result.

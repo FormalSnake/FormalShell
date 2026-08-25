@@ -6,21 +6,21 @@
 // have the dithered ASCII effect like progress bars"). VisualizerService
 // feeds this cava's own raw ASCII output format one frame (one line) at a
 // time: `BAR_COUNT` bar values 0..`MAX_LEVEL`, separated by `;` (cava's
-// bar_delimiter default, decimal 59) — cava's own frame_delimiter default
+// bar_delimiter default, decimal 59), cava's own frame_delimiter default
 // (decimal 10, `\n`) is what the Process's SplitParser already split on to
 // hand us one line, so a frame never needs splitting on anything but `;`
 // here. No Quickshell access, so the mapping/clamping/malformed-line paths
 // are testable head-on.
 // `BAR_COUNT`/`MAX_LEVEL` must match VisualizerService's generated
-// cava.conf (`bars` / `ascii_max_range`) — the two are kept in the same
+// cava.conf (`bars` / `ascii_max_range`), the two are kept in the same
 // place on purpose so they can't drift apart.
 //
 // Malformed input (wrong token count, non-numeric values, a blank or
-// undefined line) parses to an all-zero frame rather than throwing — one
+// undefined line) parses to an all-zero frame rather than throwing, one
 // bad line from cava must never crash the widget or freeze it on a stale
 // render.
 
-// 6 bars at caption size, not 10 at body — the owner wants the cell
+// 6 bars at caption size, not 10 at body, the owner wants the cell
 // DMS-compact ("less wide"), and a fixed-frequency spectrum reads fine
 // at this resolution.
 var BAR_COUNT = 6;
@@ -37,13 +37,13 @@ var NOISE_FLOOR = 2;
 // zero and barely moves; sqrt lifts the mid-levels where music actually
 // lives. This is the same perceptual curve DMS applies to its own cava
 // values (`Math.sqrt(x * 0.01)` in `Modules/DankBar/Widgets/AudioVisualization.qml`)
-// and is the larger half of why theirs reads livelier — the other half is
+// and is the larger half of why theirs reads livelier, the other half is
 // VisualizerService's cava tuning (fixed sensitivity, monstercat spread).
 function _response(fraction) {
     return Math.sqrt(fraction);
 }
 
-// All-zero levels — the bar's own dithered-track baseline (DESIGN.md §4
+// All-zero levels, the bar's own dithered-track baseline (DESIGN.md §4
 // item 8): empty fills, pure dither, no live spectrum.
 function baselineLevels() {
     var levels = new Array(BAR_COUNT);

@@ -3,10 +3,8 @@ import QtTest
 import qs.Core
 import "../shell/Components"
 
-// Cell's state table (DESIGN.md §2, M41 plan D3): which layer paints, and
-// what ink content and meta rows resolve to, for every flag combination.
-// The mapped legacy props are asserted alongside their new names, since 59
-// files still set the old ones.
+// Cell's state table (DESIGN.md §2): which layer paints, and what ink
+// content and meta rows resolve to, for every flag combination.
 //
 // Verified against a synthetic palette (init()/cleanup() below), not
 // Palette.fallback()'s real hex values: a fallback set can coincidentally
@@ -136,16 +134,6 @@ TestCase {
         verify(Qt.colorEqual(rects[1].color, Theme.color.primary));
         verify(Qt.colorEqual(cell.foreground, Theme.color.primaryForeground));
         verify(Qt.colorEqual(cell.dimForeground, Theme.color.primaryForeground));
-        verify(cell.invertedNow);
-    }
-
-    function test_accent_and_ink_map_to_active() {
-        var accentCell = makeCell({ accent: true });
-        var inkCell = makeCell({ ink: true });
-        verify(Qt.colorEqual(layers(accentCell)[1].color, Theme.color.primary));
-        verify(Qt.colorEqual(layers(inkCell)[1].color, Theme.color.primary));
-        verify(accentCell.invertedNow);
-        verify(inkCell.invertedNow);
     }
 
     function test_selected_fills_with_accent() {
@@ -178,12 +166,6 @@ TestCase {
         verify(Qt.colorEqual(cell.dimForeground, Theme.color.mutedForeground));
     }
 
-    function test_urgent_maps_to_destructive() {
-        var cell = makeCell({ urgent: true });
-        verify(Qt.colorEqual(layers(cell)[1].border.color, Theme.color.destructive));
-        verify(Qt.colorEqual(cell.foreground, Theme.color.destructive));
-    }
-
     function test_warning_colours_the_border_and_the_ink() {
         var cell = makeCell({ warning: true });
         var rects = layers(cell);
@@ -206,20 +188,6 @@ TestCase {
         var cell = makeCell({ cursor: true, destructive: true });
         verify(Qt.colorEqual(layers(cell)[1].border.color, Theme.color.ring));
         verify(Qt.colorEqual(cell.foreground, Theme.color.destructive));
-    }
-
-    function test_standalone_and_pending_paint_nothing() {
-        var cell = makeCell({ standalone: true, pending: true });
-        var rects = layers(cell);
-        compare(rects.length, 4);
-        verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));
-        verify(Qt.colorEqual(cell.foreground, Theme.color.foreground));
-    }
-
-    function test_invertedNow_false_when_nothing_is_filled() {
-        verify(!makeCell({}).invertedNow);
-        verify(!makeCell({ selected: true }).invertedNow);
-        verify(!makeCell({ hovered: true }).invertedNow);
     }
 
     // The bar's open-panel mark: 18 cells set `panelOpen` while their panel,

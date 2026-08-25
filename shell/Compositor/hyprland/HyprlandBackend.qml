@@ -36,7 +36,7 @@ Scope {
     // from `j/clients` on connect and on `configreloaded` (verified in the
     // pinned quickshell 43d4fa9: refreshToplevels() is defined at
     // src/wayland/hyprland/ipc/connection.cpp:705 and called only from :92
-    // and :277 — none of the movewindowv2/openwindow/fullscreen event
+    // and :277, none of the movewindowv2/openwindow/fullscreen event
     // branches refresh it). A window moved or resized since then reports
     // where it used to be. Good enough to HINT a rectangle in the picker;
     // never good enough to CROP from. Anything cropping must re-read
@@ -64,8 +64,8 @@ Scope {
             // from `j/clients` on connect and on configreloaded (see the
             // comment above), so a window opened since startup reported an
             // EMPTY app id here until something forced a refresh. Anything
-            // matching a freshly spawned window by app id — the quake
-            // console, the recorder's webcam overlay — silently never found
+            // matching a freshly spawned window by app id, the quake
+            // console, the recorder's webcam overlay, silently never found
             // it (2026-08-19).
             appId: (t.wayland && t.wayland.appId) ? t.wayland.appId : (ipc.class ?? ""),
             workspaceId: t.workspace ? String(t.workspace.id) : "",
@@ -78,7 +78,7 @@ Scope {
 
     // Not derived from Hyprland.monitors, unlike everything else here:
     // Quickshell populates that model from `j/monitors`, which omits disabled
-    // monitors entirely (connection.cpp:805 there) — an output switched off
+    // monitors entirely (connection.cpp:805 there), an output switched off
     // would vanish from the very list DisplayPanel needs to switch it back on
     // from. `hyprctl monitors all -j` is the only enumeration that includes
     // them, and it carries `disabled`/`mirrorOf` too, which the model doesn't
@@ -174,7 +174,7 @@ Scope {
     }
 
     // No niri-border.kdl equivalent on Hyprland (M3 ships the fragment for
-    // niri only) — no-op, matching BackendBase's contract default.
+    // niri only), no-op, matching BackendBase's contract default.
     function applyThemeFragment() {}
 
     // Webcam overlay placement (M27 Task 5), the exact dual dispatch
@@ -200,7 +200,7 @@ Scope {
     // omarchy's own Quake console is built on (default/hypr/qconsole.lua): a
     // special workspace is an overlay that is simply not on screen until
     // something toggles it. So the console LIVES there permanently and
-    // showing it is the compositor's own toggle — which is what makes it drop
+    // showing it is the compositor's own toggle, which is what makes it drop
     // down and retract under the `specialWorkspace` animation instead of
     // being carried between workspaces a window at a time. niri, with no
     // special workspace and no hide of any kind, still moves the window.
@@ -285,11 +285,11 @@ Scope {
     // Output configuration goes through `hyprctl keyword monitor` rather than
     // Hyprland.dispatch(): monitor layout is a config keyword, not a
     // dispatcher, and Quickshell exposes only dispatch() plus the request
-    // socket's path (qml.hpp:52 there) — makeRequest() itself is C++-private.
+    // socket's path (qml.hpp:52 there), makeRequest() itself is C++-private.
     // hyprctl is guaranteed present wherever HYPRLAND_INSTANCE_SIGNATURE is
     // set, and that env guard matters: CompositorService instantiates every
     // backend regardless of which one it goes on to select, so without it a
-    // niri session would spawn a doomed hyprctl on startup — the same reason
+    // niri session would spawn a doomed hyprctl on startup, the same reason
     // NiriBackend's own _connect() bails on an empty socket path.
     function refreshOutputs() {
         if (!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || outputsProc.running)
@@ -297,8 +297,8 @@ Scope {
         outputsProc.running = true;
     }
 
-    // Output names are plain strings on the wire on both compositors — the
-    // `monitor` keyword takes the name verbatim — so none of the requests
+    // Output names are plain strings on the wire on both compositors, the
+    // `monitor` keyword takes the name verbatim, so none of the requests
     // below carry any id conversion, unlike the window selectors above.
     function setOutputEnabled(name, enabled) {
         // Re-enabling deliberately re-derives the mode, position and scale
@@ -349,7 +349,7 @@ Scope {
         }
         onExited: exitCode => {
             // A failed enumeration reports nothing rather than leaving the
-            // last good list on screen — a stale row is not the truth. But it
+            // last good list on screen, a stale row is not the truth. But it
             // is flagged as a FAILURE rather than as an empty result, so the
             // panel says so instead of claiming the session has no displays.
             if (exitCode !== 0) {
@@ -363,7 +363,7 @@ Scope {
     }
 
     // Hyprland applies a monitor keyword before hyprctl exits, so unlike
-    // niri's idle-scheduled Output request this needs no settling delay — but
+    // niri's idle-scheduled Output request this needs no settling delay, but
     // the re-read waits until the whole queue has drained, so a mirror of
     // three outputs reports once, not once per leg.
     Process {

@@ -4,12 +4,12 @@ import qs.Compositor
 import qs.Core as Core
 import qs.Services
 
-// `qs ipc call debug dump` — the scripted-verification hook every later
+// `qs ipc call debug dump`, the scripted-verification hook every later
 // task uses to assert on live compositor state from outside the process.
 IpcHandler {
     target: "debug"
 
-    // Set from shell.qml — the menu instance to query() against. Menu.qml
+    // Set from shell.qml, the menu instance to query() against. Menu.qml
     // has no singleton of its own (only one instance, opened on demand), so
     // DebugIpc can't reach it any other way.
     property var menu: null
@@ -18,7 +18,7 @@ IpcHandler {
     // it (or connects its backend) until something reads one of its
     // properties. Touch it here, at DebugIpc's own construction, so the
     // backend is already connected and streaming by the time anything calls
-    // dump() — otherwise the very first call would race the connection.
+    // dump(), otherwise the very first call would race the connection.
     readonly property bool _warmCompositor: CompositorService.available
 
     // Same lazy-singleton hazard for Config: its FileView load is async, so
@@ -63,7 +63,7 @@ IpcHandler {
         });
     }
 
-    // `qs ipc call debug query "<text>"` — ranks a query against the live
+    // `qs ipc call debug query "<text>"`, ranks a query against the live
     // menu tree without opening the surface (no keyboard injection in a
     // nested test session); verifies the apps provider + fuzzy filtering.
     function query(q: string): string {

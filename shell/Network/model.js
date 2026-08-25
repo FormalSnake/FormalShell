@@ -13,7 +13,7 @@
 // (verified against the pinned quickshell source, never guessed) because a
 // .pragma library file can't import Quickshell.Networking's QML enums.
 // Callers that already have the real enum (Task 2's panel) can pass its
-// values straight through — they compare equal to these.
+// values straight through, they compare equal to these.
 
 // src/network/enums.hpp:107-128
 var WifiSecurityType = {
@@ -48,12 +48,12 @@ function isSecured(security) {
 }
 
 // 802.1x/EAP networks need an identity + nmcli side-script, not a plain
-// PSK — Task 2 renders these as a dim ENTERPRISE tag instead of a prompt.
+// PSK, Task 2 renders these as a dim ENTERPRISE tag instead of a prompt.
 function isEnterprise(security) {
     return security === WifiSecurityType.WpaEap || security === WifiSecurityType.Wpa2Eap;
 }
 
-// Connected first, then known (saved) networks, then everything else —
+// Connected first, then known (saved) networks, then everything else,
 // each tier sorted by signal strength descending. Non-mutating.
 function sortWifiRows(rows) {
     var list = Array.isArray(rows) ? rows.slice() : [];
@@ -66,7 +66,7 @@ function sortWifiRows(rows) {
 }
 
 // Section header a row falls under once sortWifiRows has grouped connected
-// in with known — the connected row is always known (you can't be
+// in with known, the connected row is always known (you can't be
 // connected to a network with no saved settings), so this only ever needs
 // to look at `known` itself.
 function sectionOf(row) {
@@ -81,7 +81,7 @@ function failureText(reason) {
     return "CONNECTION FAILED";
 }
 
-// strength is a 0..1 fraction (src/network/wifi.hpp:22), not 0..100 — see
+// strength is a 0..1 fraction (src/network/wifi.hpp:22), not 0..100, see
 // CLAUDE.md's percentage/fraction rule. Five-cell block/light-shade bar,
 // moved out of NetworkPanel.qml unchanged.
 function signalBar(strength) {

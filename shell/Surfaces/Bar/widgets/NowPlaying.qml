@@ -30,14 +30,14 @@ Cell {
     property var panel: null
     property real maxWidth: 220
     // Set from Bar.qml (`windowVisible: bar.visible`) so the marquee below
-    // can gate on the bar's own PanelWindow actually being on screen — a
+    // can gate on the bar's own PanelWindow actually being on screen, a
     // hidden-window ticker is exactly the CPU cost DESIGN.md's motion
     // carve-outs exist to avoid (M16 Task 11/12). Defaults true so any
     // other embedding still animates.
     property bool windowVisible: true
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
-    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
@@ -46,7 +46,7 @@ Cell {
     visible: root.shown
 
     // M35: this cell wants animated frames exactly while it would actually
-    // paint them — shown AND its bar window on screen — mirroring
+    // paint them, shown AND its bar window on screen, mirroring
     // Visualizer.qml's own windowVisible registration. AnimatedCoverFrameSource
     // ANDs in isPlaying/animatedArtUrl/motionEnabled itself, so those gates
     // don't need repeating here.
@@ -68,9 +68,9 @@ Cell {
     }
 
     // The cell shows the title alone, and marquees or elides it once it
-    // outgrows maxWidth — the tooltip adds the artist and, for a title that
+    // outgrows maxWidth, the tooltip adds the artist and, for a title that
     // was scrolling, lets it be read in one piece. The trailing segment
-    // states the M26 Task 9 right-click/scroll actions — otherwise they're
+    // states the M26 Task 9 right-click/scroll actions, otherwise they're
     // undiscoverable.
     tooltipText: {
         if (!root.shown)
@@ -79,7 +79,7 @@ Cell {
         return "NOW PLAYING / " + (MediaService.artist !== "" ? MediaService.artist + " / " : "") + track + " / RIGHT NEXT / SCROLL PREV NEXT";
     }
 
-    // Track title changes resize this cell — animate the width instead of
+    // Track title changes resize this cell, animate the width instead of
     // shoving the bar's other widgets instantly (DESIGN.md §4, M16 Task 2).
     Behavior on implicitWidth {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }

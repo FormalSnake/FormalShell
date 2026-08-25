@@ -6,7 +6,7 @@
 // Reimplemented from omarchy's Model.js deviceLists()/hasHumanName()
 // (~/Developer/omarchy/shell/plugins/panels/bluetooth/Model.js) against
 // Quickshell.Bluetooth's native BluetoothDevice properties (paired/bonded/
-// trusted/connected/pairing/state/battery/batteryAvailable —
+// trusted/connected/pairing/state/battery/batteryAvailable,
 // src/bluetooth/device.hpp) instead of bluetoothctl output.
 
 // BluetoothDeviceState (src/bluetooth/device.hpp:14-29).
@@ -27,7 +27,7 @@ function isUuidShaped(name) {
 }
 
 // Rejects the empty string and the two label shapes BlueZ falls back to
-// when a device hasn't advertised a real name yet — a raw address or a
+// when a device hasn't advertised a real name yet, a raw address or a
 // service UUID, neither of which is worth showing a person.
 function hasHumanName(name) {
     var label = String(name || "").trim();
@@ -48,14 +48,14 @@ function _sortByLabel(devices) {
 }
 
 // known = paired||bonded||trusted (omarchy's rule); available devices only
-// surface while `discovering` is true — a raw scan result the adapter
+// surface while `discovering` is true, a raw scan result the adapter
 // hasn't paired/trusted has no business staying listed once scanning
 // stops. Devices without a human-readable name are dropped from every
 // bucket, connected or not.
 function buckets(devices, discovering) {
     // `devices` arrives either as a plain JS array (tests) or as QML's
     // sequence wrapper over QList<QObject*> (adapter.devices.values fed
-    // straight in by BluetoothPanel) — and Array.isArray is FALSE for the
+    // straight in by BluetoothPanel), and Array.isArray is FALSE for the
     // wrapper, which made this guard discard every real device on the
     // live host (2026-08-04) while fixture-fed tests stayed green. Copy
     // via indexed loop, the one protocol both shapes share.

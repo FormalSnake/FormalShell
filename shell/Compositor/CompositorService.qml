@@ -50,7 +50,7 @@ Singleton {
     property string _rememberedFocusedId: ""
     onFocusedWindowIdChanged: if (root.focusedWindowId !== "") root._rememberedFocusedId = root.focusedWindowId
 
-    // focus.js's held focus — what a bar cell naming the current app should
+    // focus.js's held focus, what a bar cell naming the current app should
     // read. Anything that needs the compositor's literal answer (Menu.qml's
     // launch baseline) keeps reading focusedWindowId.
     readonly property string heldFocusedWindowId: Focus.held(root.focusedWindowId, root._rememberedFocusedId, root.windows, root.focusedWorkspaceId)

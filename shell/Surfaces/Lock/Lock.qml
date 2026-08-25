@@ -5,7 +5,7 @@ import qs.Core as Core
 
 // The lock screen (DESIGN.md §Lock/greeter, spec §8, M7 Task 3): a plain Item
 // wrapper around the actual WlSessionLock, needed because WlSessionLock's
-// QML_ELEMENT default property is `surface` (Component-typed) — a bare
+// QML_ELEMENT default property is `surface` (Component-typed), a bare
 // (unqualified) PamContext child declared directly inside a WlSessionLock
 // gets swept into that default-property slot as an anonymous Component and
 // silently discarded the moment an explicit `surface: Component {...}` is
@@ -18,14 +18,14 @@ import qs.Core as Core
 // else external still reads/writes lock state exactly as before.
 //
 // WlSessionLock creates one LockSurface per Wayland output on its own once
-// `locked` flips true — unlike every other top-layer surface in this shell
+// `locked` flips true, unlike every other top-layer surface in this shell
 // there is no manual per-screen Variants loop to write. PamContext lives
 // here, not per surface: one authentication attempt applies regardless of
 // which output's input cell the user is looking at.
 //
 // See nix/testvm.nix's security.pam.services.formalshell-lock comment for
 // why this config name exists rather than reusing "login" (console-specific
-// checks this isn't) — a real deployment needs the same system-side
+// checks this isn't), a real deployment needs the same system-side
 // declaration (Task 7 documents it; the home-manager module alone cannot
 // create a PAM service).
 //
@@ -48,20 +48,20 @@ Item {
     property string _pendingPassword: ""
 
     // Idle blanking (spec §8, Task 4): once locked, `idleMonitor` mirrors
-    // the compositor's own ext-idle-notify-v1 idle state — the real,
+    // the compositor's own ext-idle-notify-v1 idle state, the real,
     // session-wide "no input anywhere" signal, not just activity inside
-    // this surface's own input cell — so an organically-elapsed idle
+    // this surface's own input cell, so an organically-elapsed idle
     // timeout un-blanks the instant the compositor sees ANY input again,
     // no matter which output it lands on.
     //
     // `_resumeGuardActive` is the second, independent half: a suspend/
-    // resume gap. `respectInhibitors: false` is deliberate — once the
+    // resume gap. `respectInhibitors: false` is deliberate, once the
     // session is actually locked, an app-held idle-inhibit (e.g. a video
     // call) should not keep a *locked* screen lit; that guarantee is worth
     // more than convenience here.
     //
     // Reads idleMonitor.isIdle/_resumeGuardActive into locals BEFORE the
-    // `&&`/`||`, not inline — reproduced directly: with `sessionLock.locked
+    // `&&`/`||`, not inline, reproduced directly: with `sessionLock.locked
     // && (idleMonitor.isIdle || ...)` written inline, the very first
     // evaluation happens while `locked` is still false, so JS's `&&`
     // short-circuits before ever reading the right-hand side at all; QML's
@@ -86,7 +86,7 @@ Item {
     // Fingerprint as a parallel PAM flow (spec §8): "enrolled" has no
     // hardware-probing API in this shell's ground truth (no Fprintd
     // binding), so it is expressed the same way every other optional
-    // feature here is — a settings.json key. Empty (the default, and the
+    // feature here is, a settings.json key. Empty (the default, and the
     // only state a VM with no reader can honestly test) means
     // `pamFingerprint` never starts: no prompt, password flow unaffected.
     readonly property string _fingerprintService: Core.Config.get("lock.fingerprintPamService", "")
@@ -96,12 +96,12 @@ Item {
 
     // idleMonitor.enabled and tickTimer.running are driven imperatively from
     // here and _unlock() below rather than bound declaratively to
-    // `sessionLock.locked` — verified (against session_lock.cpp) that
+    // `sessionLock.locked`, verified (against session_lock.cpp) that
     // WlSessionLock::setLocked() only emits lockStateChanged() on its
     // *unlock* path (realizeLockTarget()'s locking branch never emits it),
     // so a QML binding of the form `enabled: sessionLock.locked` evaluates
     // once at construction (false) and then never re-fires when lock()
-    // actually flips it true — reproduced directly: a live binding stuck at
+    // actually flips it true, reproduced directly: a live binding stuck at
     // enabled:false forever while `sessionLock.locked` itself correctly read
     // true on every fresh IPC status() call. `blanked` above is safe despite
     // reading the same property because its `&&` means a stale `false` read
@@ -118,7 +118,7 @@ Item {
             fingerprintRetryTimer.restart();
     }
 
-    // The only unlock path (see both PamContexts' onCompleted below) — pairs
+    // The only unlock path (see both PamContexts' onCompleted below), pairs
     // with lock() so idleMonitor/tickTimer's imperative state always mirrors
     // sessionLock.locked exactly, never drifting into "still enabled after
     // unlock."
@@ -141,8 +141,8 @@ Item {
     // accumulated tick count (which would not, since a suspended process
     // simply stops ticking and resumes counting from where it left off).
     // A gap much larger than the timer's own interval means real time
-    // jumped further than one interval's worth since the last tick — the
-    // machine was suspended (or the clock was stepped) — and the safe
+    // jumped further than one interval's worth since the last tick, the
+    // machine was suspended (or the clock was stepped), and the safe
     // default on waking is "blank now", not "keep trusting whatever the
     // idle monitor's own timeout was mid-counting when it happened."
     function _tick() {
@@ -163,7 +163,7 @@ Item {
     }
 
     // Called by LockSurface's TextInput.onAccepted (forwarded through the
-    // submit signal bound at the surface Component below) — the sole unlock
+    // submit signal bound at the surface Component below), the sole unlock
     // path. No IPC verb mirrors this on purpose: a headless "type this
     // password" hook would bypass the exact TextInput/PamContext wiring a
     // real unlock exercises, so the smoke rig authenticates with real
@@ -178,7 +178,7 @@ Item {
         // (PamContext::startConversation() logs qCritical and bails without
         // ever emitting completed/onError when `config` names a PAM service
         // /etc/pam.d/<config> doesn't have, e.g. formalshell-lock never
-        // declared) — without this check that failure is a permanent silent
+        // declared), without this check that failure is a permanent silent
         // no-op: authenticating latches true forever, no error ever shows,
         // and the typed password sits in _pendingPassword indefinitely.
         if (!pam.start()) {
@@ -194,7 +194,7 @@ Item {
 
         // pam_unix's password prompt arrives as a message with
         // responseRequired true; respond immediately with whatever
-        // submitPassword() buffered rather than surfacing a second prompt —
+        // submitPassword() buffered rather than surfacing a second prompt,
         // this lock screen only ever has one field to answer with.
         onPamMessage: {
             if (pam.responseRequired) {
@@ -205,7 +205,7 @@ Item {
 
         // onError always precedes a completed(PamResult.Error) emission
         // (qml.cpp's onError doubles as onCompleted(Error)), so this alone
-        // covers every failure path — wrong password, pam error, max tries.
+        // covers every failure path, wrong password, pam error, max tries.
         onCompleted: result => {
             root.authenticating = false;
             if (result === PamResult.Success) {
@@ -218,7 +218,7 @@ Item {
     }
 
     // Parallel fingerprint flow: independent PamContext, independent
-    // conversation — it shares no state with `pam` above, so a pending
+    // conversation, it shares no state with `pam` above, so a pending
     // fingerprint attempt never disables or blocks the password field (spec
     // §8's "either can succeed" while both stay usable). `config` is only
     // ever non-empty when settings.json enrolls one; see
@@ -244,7 +244,7 @@ Item {
             } else {
                 root.authError = root._resultError(result);
                 // A single failed scan shouldn't lock the reader out for
-                // the rest of the session — retry — but MaxTries means the
+                // the rest of the session, retry, but MaxTries means the
                 // method itself says "should not be used again" (PamResult
                 // doc), so it stops here and leaves password as the sole
                 // remaining path.
@@ -265,7 +265,7 @@ Item {
     }
 
     // `running` starts false and is toggled imperatively by lock()/_unlock()
-    // — not bound to `sessionLock.locked` — see lock()'s comment for why.
+    //, not bound to `sessionLock.locked`, see lock()'s comment for why.
     Timer {
         id: tickTimer
         interval: root._tickIntervalMs
@@ -275,7 +275,7 @@ Item {
     }
 
     // `enabled` starts false and is toggled imperatively by lock()/_unlock()
-    // — not bound to `sessionLock.locked` — see lock()'s comment for why.
+    //, not bound to `sessionLock.locked`, see lock()'s comment for why.
     IdleMonitor {
         id: idleMonitor
         enabled: false
@@ -284,7 +284,7 @@ Item {
         onIsIdleChanged: {
             // Real input resuming (compositor-reported, not just "our own
             // TextInput got a key") is exactly the signal that also clears
-            // a resume-guard trip — see `blanked`'s comment above.
+            // a resume-guard trip, see `blanked`'s comment above.
             if (!idleMonitor.isIdle)
                 root._resumeGuardActive = false;
         }

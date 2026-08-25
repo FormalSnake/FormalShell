@@ -1,10 +1,10 @@
 .pragma library
 
-// Route icons for the launcher (M43 D2). The menu tree carries its icons as
-// raw glyph strings (default-menu.jsonc, providers.js), which `Icon` cannot
-// render: it resolves a NAME through the active set. This maps the shipped
-// route ids onto Lucide names, so a row drawn from data still gets a named
-// icon in whichever set `theme.icons` selects.
+// Route icons for the launcher (M43 D2). A node's own `icon` is a raw glyph
+// string (providers.js, a user's menu.jsonc), which `Icon` cannot render: it
+// resolves a NAME through the active set. This maps the shipped route ids
+// onto Lucide names, so a row drawn from data still gets a named icon in
+// whichever set `theme.icons` selects.
 //
 // An id that is not here resolves to "", and MenuRow falls back to the
 // node's own glyph in the mono font, which is what keeps a user-defined

@@ -10,7 +10,7 @@ import "../Airpods/model.js" as AirpodsModel
 // run out-of-repo per SWITCHOVER.md) writes its whole state as one line of
 // sorted-key JSON to $XDG_STATE_HOME/librepods/status.json via QSaveFile
 // (never half-written), write-on-change only, and removes the file on
-// quit — an absent file is the only "daemon down" signal there is, so this
+// quit, an absent file is the only "daemon down" signal there is, so this
 // needs no separate liveness probe. AirpodsModel.parseStatus() already
 // returns a complete default shape on every unusable path (missing file,
 // malformed JSON, a schema_version this parser doesn't understand), which
@@ -19,7 +19,7 @@ import "../Airpods/model.js" as AirpodsModel
 // Control verbs go out over $XDG_RUNTIME_DIR/librepods.sock as one raw
 // write, no framing, no reply expected (only the "status"/"reopen" verbs
 // get one, and this service never sends either). Every send opens its own
-// self-destroying Socket rather than reusing one — the same shape
+// self-destroying Socket rather than reusing one, the same shape
 // LibrePodsService.qml used against the old stock librepods app, and for
 // the same reason: a shared long-lived Socket's errorOccurred leaves the
 // underlying QLocalSocket non-null with no matching connectionStateChanged
@@ -33,7 +33,7 @@ Singleton {
         return xdgState + "/librepods";
     }
 
-    // Empty XDG_RUNTIME_DIR means no socket and no fallback — the daemon's
+    // Empty XDG_RUNTIME_DIR means no socket and no fallback, the daemon's
     // own ipcpath.hpp refuses to guess one, and this mirrors that.
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
     readonly property string socketPath: root._runtimeDir === "" ? "" : root._runtimeDir + "/librepods.sock"
@@ -41,9 +41,9 @@ Singleton {
     property bool available: false
     property var status: AirpodsModel.parseStatus("")
 
-    // Rewatch runs only while a consumer is registered — the bar widget,
+    // Rewatch runs only while a consumer is registered, the bar widget,
     // for as long as it exists at all (opted into bar.layout), and the
-    // panel, for as long as it's open — the same acquire()/release() shape
+    // panel, for as long as it's open, the same acquire()/release() shape
     // DualsenseService uses. Unlike settings.json/theme.json, whose
     // Config.qml/Theme.qml precedent this used to cite, status.json's
     // parent directory is created by the daemon itself and, on the common
@@ -104,7 +104,7 @@ Singleton {
 
     // Exact wire verbs the daemon's control socket understands
     // (daemon/librepods-ctl.cpp's usage text, read-reference only).
-    // connect/disconnect/forget are deliberately excluded — those shell
+    // connect/disconnect/forget are deliberately excluded, those shell
     // out to bluetoothctl, and that job belongs to the Bluetooth panel.
     readonly property var _allowedVerbs: [
         "noise:off", "noise:anc", "noise:transparency", "noise:adaptive",
@@ -138,7 +138,7 @@ Singleton {
     }
 
     // verb: a raw wire command, checked against _isAllowed before the
-    // socket ever opens — an unknown verb or an unset XDG_RUNTIME_DIR is
+    // socket ever opens, an unknown verb or an unset XDG_RUNTIME_DIR is
     // refused right here, never sent. Returns whether the send was
     // attempted; the daemon gives no reply either way for a control verb.
     function send(verb) {

@@ -2,7 +2,7 @@
 
 // Safe expression calculator behind the menu's CALC row (M12 Task 5): a
 // recursive-descent parser over + - * / % ^, parentheses, unary minus and
-// plain decimal numbers (no underscore separators) — never eval()/Function(),
+// plain decimal numbers (no underscore separators), never eval()/Function(),
 // so a search query can't execute anything. evaluate() returns a finite
 // number or null; it never throws, because every keystroke in the menu's
 // search field runs through it.
@@ -114,7 +114,7 @@ function format(n) {
 }
 
 // The ready-made row Menu.qml prepends to ranked results (and shows alone at
-// the calc route level) when the query parses. A plain "action" node — the
+// the calc route level) when the query parses. A plain "action" node, the
 // existing _activateRow action path already runs the command and closes, so
 // Enter needs zero new handling (clipboardProvider's own trick). The
 // formatted result is digits/./-/e/+ only, so it's shell-safe unquoted; "--"

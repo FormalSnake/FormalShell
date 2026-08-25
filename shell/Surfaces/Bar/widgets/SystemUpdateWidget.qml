@@ -26,7 +26,7 @@ Cell {
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     readonly property int _behind: root.panel ? root.panel.counts.behind : 0
-    readonly property string _summary: root.panel ? root.panel.summary : "CHECKING"
+    readonly property string _summary: root.panel ? root.panel.summary : "Checking"
 
     // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
     // keep their reading unless a user who added the widget opts back out.
@@ -35,7 +35,7 @@ Cell {
     warning: root._behind > 0
 
     // The cell already carries the count; the tooltip names what it counts,
-    // which "2 BEHIND" alone never says.
+    // which "2 behind" alone never says.
     tooltipText: "FLAKE INPUTS / " + root._summary
 
     Component.onCompleted: {

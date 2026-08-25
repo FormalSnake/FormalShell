@@ -66,7 +66,7 @@ Panel {
     property bool pollEnabled: false
 
     // "noflake" | "nolock" | "checking" | "offline" | "ok". Starts at
-    // "checking" (CHECKING, i.e. nobody has asked yet) rather than at
+    // "checking" (nobody has asked yet) rather than at
     // "noflake": the flake directory has not been read at this point, so
     // NO FLAKE would be a claim rather than an answer.
     property string pollState: "checking"
@@ -156,7 +156,7 @@ Panel {
             var input = root._queue.shift();
             var cmd = Update.probeCommand(input);
             // An input type with no cheap probe stays unknown; it is not a
-            // failed probe, so it must not count toward NO NETWORK.
+            // failed probe, so it must not count toward "No network".
             if (cmd.kind === "none")
                 continue;
             root._probeKind = cmd.kind;
@@ -213,7 +213,7 @@ Panel {
         onTriggered: root._poll()
     }
 
-    // A poll right after a reconnect rather than showing NO NETWORK for up
+    // A poll right after a reconnect rather than showing "No network" for up
     // to three hours (TailscalePanel makes the same call).
     Connections {
         target: ConnectivityService
@@ -235,7 +235,7 @@ Panel {
     // The panel's own subject once a directory is named: which flake, what
     // the last check said, and how many of its inputs are behind. The
     // readout only carries a number while a poll has actually resolved, so
-    // CHECKING and NO NETWORK never sit under a stale count.
+    // "Checking" and "No network" never sit under a stale count.
     PanelHero {
         id: hero
         visible: root.flakeDir !== ""

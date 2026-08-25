@@ -3,10 +3,10 @@
 
 // Provider functions populate a "provider" kind node's children at
 // tree-build time (Model.buildTree() infers "provider" from an entry's
-// `provider` key — see default-menu.jsonc's "apps" node). Providers return
+// `provider` key, see default-menu.jsonc's "apps" node). Providers return
 // ready-made Node fragments (Model's Node shape: id/label/icon/title/
 // aliases/kind/childIds) rather than JSONC entries, because they bypass
-// buildTree()'s action/target/provider kind inference entirely — an app has
+// buildTree()'s action/target/provider kind inference entirely, an app has
 // no `action` string, it has a DesktopEntry to call execute() on, which
 // respects .desktop field codes/Exec quoting that re-running it through
 // `sh -c` would mangle.
@@ -16,13 +16,13 @@
 // keeps a reference to its DesktopEntry (`_entry`) so Menu.qml's activation
 // can call `_entry.execute()` directly instead of spawning a shell command.
 //
-// `entry.icon` is an icon-theme NAME ("firefox", "mpv"), not a glyph — it
+// `entry.icon` is an icon-theme NAME ("firefox", "mpv"), not a glyph, it
 // must never land in the node's `icon` slot, which MenuRow renders as
 // literal text (the M13b "apps list shows app IDs" symptom: rows led with
 // the raw icon name, which conventionally equals the app id). Instead
 // `resolveIcon` (Menu.qml passes Quickshell.iconPath with check=true, tests
 // pass a stub) maps the name to an image URL for MenuRow's image slot, or
-// "" when the theme has no such icon — the row then simply has no leading
+// "" when the theme has no such icon, the row then simply has no leading
 // cell, never a missing-texture box. `entry.name` can't be empty for listed
 // applications (quickshell drops invalid entries in onScanCompleted), but
 // the id fallback keeps the row honest if that ever changes.
@@ -82,7 +82,7 @@ function applyProviders(tree, providerFns) {
 }
 
 // Clipboard history rows, newest first (ClipboardService.items' own order).
-// Unlike appsProvider these are plain "action" nodes — Menu.qml's existing
+// Unlike appsProvider these are plain "action" nodes, Menu.qml's existing
 // `_activateRow`/`_runAction` path activates them with no bespoke node kind
 // (and no `_entry`-style back-reference) needed here.
 //
@@ -104,7 +104,7 @@ function applyProviders(tree, providerFns) {
 //
 // Image entries (M14 Task 1, history.js's `kind: "image"`) get a fixed
 // "IMAGE" label instead of a text preview, a dimmed capture time in the
-// `desc` slot (same trailing-text idiom nixRows uses), and `thumbSource` —
+// `desc` slot (same trailing-text idiom nixRows uses), and `thumbSource`,
 // a new node field MenuRow doesn't render yet (Task 6 wires the thumbnail
 // row); the activation action is identical to a text row's.
 function _capturedAtLabel(capturedAt) {
@@ -114,7 +114,7 @@ function _capturedAtLabel(capturedAt) {
 }
 
 // `mode` ("copy", the default, or "share") only changes the row's id
-// prefix, verb and activation — label/desc/thumbSource stay identical
+// prefix, verb and activation, label/desc/thumbSource stay identical
 // either way. "share" rows need their own id namespace ("share.history.<id>"
 // rather than "clipboard.<id>"): both providers read the SAME
 // ClipboardService.items list, and tree.nodes is one flat map keyed by id,
@@ -139,7 +139,7 @@ function clipboardProvider(items, mode, paste) {
             title: "",
             desc: isImage ? _capturedAtLabel(entry.capturedAt) : "",
             thumbSource: isImage ? entry.path : "",
-            // Full untruncated text for the split-pane preview (M30) —
+            // Full untruncated text for the split-pane preview (M30),
             // "" for images, same emptiness `desc` already uses to mean
             // "no text preview here". `time` rides every row (not just
             // images, unlike `desc`) since the preview pane's meta line
@@ -201,9 +201,9 @@ function pasteArgv(chord) {
 }
 
 // Route-local filter for the clipboard/share-history level (M30): unlike
-// Search.rank's whole-tree ranking, this only tests one field per row —
+// Search.rank's whole-tree ranking, this only tests one field per row,
 // `fullText`, falling back to `label` for image rows (whose `fullText` is
-// always "") — so typing here narrows history instead of turning into a
+// always ""), so typing here narrows history instead of turning into a
 // global search the moment a query is non-empty. Case-insensitive
 // substring, not fuzzy: the ask is "does this entry contain what I typed".
 function clipboardSearch(rows, query) {
@@ -238,7 +238,7 @@ function clipboardEmptyRow() { return _clipboardNoteRow("clipboard.empty", "CLIP
 function clipboardNoMatchRow() { return _clipboardNoteRow("clipboard.nomatch", "NO MATCHES"); }
 
 // Single-quotes `value` for a sh -c string, escaping embedded single quotes
-// the same way HyprlandBackend.qml's _quoteArg does ('\'' — close the
+// the same way HyprlandBackend.qml's _quoteArg does ('\'', close the
 // quote, an escaped literal quote, reopen). Clipboard text can contain
 // anything a shell would otherwise interpret, so this is the one place a
 // captured entry's raw content reaches a spawned command.
@@ -250,16 +250,16 @@ function _shq(value) {
 // invokes `localsend --headless send <path>`, but that binary name and
 // those flags don't exist on the package this shell actually ships
 // (nixpkgs' pkgs.localsend installs a binary named `localsend_app`, and
-// upstream's own arg parser — LoadSelectionFromArgsAction in
+// upstream's own arg parser, LoadSelectionFromArgsAction in
 // app/lib/provider/selection/selected_sending_files_provider.dart,
-// localsend/localsend — has no `--headless`/`send` mode at all: unknown
+// localsend/localsend, has no `--headless`/`send` mode at all: unknown
 // dash-flags are silently skipped and a bare non-path token like "send" is
 // silently ignored too, so omarchy's invocation happens to still work by
 // accident, not by design). The real, verified mechanism is narrower still:
 // LoadSelectionFromArgsAction (app/lib/provider/selection/
 // selected_sending_files_provider.dart:290-293) skips every arg starting
 // with "-" outright, then only keeps args where File(arg).existsSync() or
-// Directory(arg).existsSync() — a bare file path pre-populates the GUI's
+// Directory(arg).existsSync(), a bare file path pre-populates the GUI's
 // send selection (`AddFilesAction`), but `-t`/`--text` are dash-prefixed so
 // they're dropped before that check ever runs, and the text that follows
 // isn't a path either, so nothing gets added. `AddMessageAction` (the
@@ -279,7 +279,7 @@ function shareEntryCommand(entry) {
 // captureEntries() is: its action depends on the CURRENT newest clipboard
 // entry (items[0]), which static jsonc can't express. default-menu.jsonc
 // still declares a "share.clipboard" placeholder so this fragment's key
-// overwrites an already-present entry rather than appending a new one —
+// overwrites an already-present entry rather than appending a new one,
 // JS object property order only tracks first insertion, so overwriting
 // keeps the row's position (right after "share", ahead of "share.history"/
 // "share.receive") instead of the row jumping to the end of the level.
@@ -308,7 +308,7 @@ function shareClipboardEntry(items) {
     };
 }
 
-// First non-blank line only, capped at maxLen chars — clipboard captures can
+// First non-blank line only, capped at maxLen chars, clipboard captures can
 // be multi-line/arbitrarily long, and MenuRow's label is a single Text with
 // no wrapping, so anything longer needs pre-truncating here rather than
 // spilling into the ledger row below it.
@@ -412,7 +412,7 @@ function nixTriggerQuery(text) {
 }
 
 // `nix search nixpkgs <q> --json` stdout -> [{attr, version, description}],
-// or null when the text isn't a JSON object at all — nixSearchOutcome below
+// or null when the text isn't a JSON object at all, nixSearchOutcome below
 // needs unparseable stdout (SEARCH FAILED) kept distinct from nix's clean
 // zero-hit `{}` answer (NO RESULTS). Keys arrive as
 // `legacyPackages.<system>.<attrpath>`; the first two dotted components are
@@ -461,7 +461,7 @@ function nixSearchOutcome(exitCode, text) {
 // `read` holds the window open after the program exits so its output is
 // actually readable. The attr is interpolated into a single-quoted sh
 // string, so anything outside the safe attr charset is skipped outright
-// rather than escaped — nixpkgs attrs are [A-Za-z0-9._+-] in practice.
+// rather than escaped, nixpkgs attrs are [A-Za-z0-9._+-] in practice.
 // `notifySummary`/`notifyBody` mark the row for Menu.qml's activation
 // toast: the spawned terminal can be seconds from mapping, so Enter fires
 // a shell-local NIX RUN notification the moment it lands.
@@ -511,7 +511,7 @@ function nixSearchingRow() { return _nixNoteRow("nix.searching", "SEARCHING"); }
 function nixNoResultsRow() { return _nixNoteRow("nix.noresults", "NO RESULTS"); }
 function nixFailedRow() { return _nixNoteRow("nix.failed", "SEARCH FAILED"); }
 
-// ~/.clipssh/aliases (`name=user@host` lines, clipssh's own alias store —
+// ~/.clipssh/aliases (`name=user@host` lines, clipssh's own alias store,
 // its alias_add rejects `=`/whitespace in names) -> [{name, target}].
 // Malformed or blank lines are skipped: the file is clipssh's own state,
 // not input this shell owns validating.
@@ -597,7 +597,7 @@ function clipsshRows(aliases) {
 }
 
 // Expands Config's `menu.customPowerButtons` (the spec's "first-class, not
-// a workaround" case — e.g. an owner's Windows-reboot bootloader shortcut)
+// a workaround" case, e.g. an owner's Windows-reboot bootloader shortcut)
 // into JSONC-shaped entry fragments keyed by dotted id, meant to be merged
 // into the default tree object before Model.buildTree() runs:
 // `system.custom.<i>` auto-nests under the already-declared `system` node
@@ -616,8 +616,8 @@ function customPowerButtonEntries(buttons) {
 }
 
 // Image rows for the menu's "wallpaper" route (M23): the picker's grid
-// moved inside the menu, so its cells are ordinary display rows — kind
-// "image", carrying the absolute path — and every piece of machinery the
+// moved inside the menu, so its cells are ordinary display rows, kind
+// "image", carrying the absolute path, and every piece of machinery the
 // menu already has (cursor wrap, the hover gate, `activate(index)` over
 // IPC, the confirm/close paths) applies to them unchanged. Menu.qml lays
 // them out in a GridView instead of the row ListView; that is the whole
@@ -636,7 +636,7 @@ function imageBasename(path) {
 // it found directly under the picker directory AND directly under its
 // `Dark`/`Light` subdirectories (either case) in one listing; this decides
 // which of the three each path belongs to, from its position relative to
-// `baseDir` rather than from its parent directory's name alone — a picker
+// `baseDir` rather than from its parent directory's name alone, a picker
 // directory itself called `Dark` must not turn its own root listing into a
 // variant.
 //
@@ -644,7 +644,7 @@ function imageBasename(path) {
 // subdirectory means one flat listing and no switcher at all, which is every
 // existing setup and every `picker select` caller passing an arbitrary
 // directory. One of the two present is still variant mode, with the other
-// variant simply empty — an empty grid under a LIGHT header reads honestly,
+// variant simply empty, an empty grid under a LIGHT header reads honestly,
 // where silently falling back to the root listing would look like the
 // switcher did nothing.
 function wallpaperVariants(paths, baseDir) {
@@ -714,8 +714,8 @@ function imageRows(paths, query) {
 // RecordingService.lastPath, so the row needs no menu.input round trip.
 //
 // Kept the name "captureEntries" (M38 Task 3 folded the rest of the
-// launcher's self-targeted leaf rows in here too — console, plain
-// screenshots, screensaver, plugins, notifications, theme — rather than
+// launcher's self-targeted leaf rows in here too, console, plain
+// screenshots, screensaver, plugins, notifications, theme, rather than
 // giving Menu.qml a second merge call site for the identical problem).
 function captureEntries(selfPath) {
     var call = "qs ipc -p " + selfPath + " call ";
@@ -780,7 +780,7 @@ function captureEntries(selfPath) {
         },
 
         // Own root, not nested under "system.notifications" (that id is
-        // already an activatable leaf — @ipc:notifications.showHistory —
+        // already an activatable leaf, @ipc:notifications.showHistory,
         // and a "when"-less action node can't also carry children the
         // model would ever enter).
         "notifications": { label: "Notifications", icon: "\u{F009A}" }, // md-bell, same glyph system.notifications uses
@@ -802,7 +802,7 @@ function captureEntries(selfPath) {
 
         // "theme.retheme" plus explicit dark/light rows alongside the
         // existing in-process toggle ("toggles.dark-mode", @ipc:
-        // theme.toggleMode) — these three go through real IPC instead
+        // theme.toggleMode), these three go through real IPC instead
         // since ThemeIpc.mode() takes an explicit argument the internal
         // dispatch switch has no case for.
         "theme": { label: "Theme", icon: "\u{F0301}" }, // md-invert_colors
@@ -825,7 +825,7 @@ function captureEntries(selfPath) {
 }
 
 // Panel rows (M38 Task 3): one per name in shell.qml's PanelIpc registry.
-// Static list, not a scan — the registry itself is declared in shell.qml,
+// Static list, not a scan, the registry itself is declared in shell.qml,
 // not discoverable at runtime, so a 16th panel needs a new entry here too;
 // tst_menu_reachability.qml is the guard that fails when one is missed.
 // Self-targeted the same way captureEntries above is, and for the same

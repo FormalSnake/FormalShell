@@ -79,7 +79,7 @@ function buildConfig(opts) {
     var parts = [];
 
     // matugen hard-rejects a config file with no top-level [config] table
-    // ("missing field `config`"), so this must always emit one — the user's
+    // ("missing field `config`"), so this must always emit one, the user's
     // verbatim section if they have one, otherwise a bare header. A fresh
     // install with no ~/.config/matugen/config.toml must still produce a
     // config matugen will run.

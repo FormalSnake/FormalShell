@@ -69,7 +69,7 @@ TestCase {
                         width: implicitWidth
                         height: implicitHeight
 
-                        MetaLabel { id: forgetLabel; text: "FORGET" }
+                        SectionLabel { id: forgetLabel; text: "FORGET" }
 
                         MouseArea {
                             anchors.fill: parent
@@ -109,7 +109,6 @@ TestCase {
             readonly property Item probeColumn: column
             property int clicks: 0
 
-            standalone: true
             interactive: true
             onClicked: barCell.clicks++
 
@@ -118,7 +117,7 @@ TestCase {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2
 
-                MetaLabel { text: "TIME" }
+                SectionLabel { text: "TIME" }
 
                 Text {
                     text: "09:41"
@@ -138,7 +137,7 @@ TestCase {
 
         Cell {
             readonly property Item probeLabel: label
-            MetaLabel { id: label; text: "NO ADAPTER" }
+            SectionLabel { id: label; text: "NO ADAPTER" }
         }
     }
 
@@ -156,7 +155,7 @@ TestCase {
 
             width: 200
 
-            MetaLabel { text: "SELECT" }
+            SectionLabel { text: "SELECT" }
 
             hit: MouseArea {
                 id: half

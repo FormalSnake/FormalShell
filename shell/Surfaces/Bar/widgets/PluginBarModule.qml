@@ -26,7 +26,6 @@ Cell {
     // comment documents.
     readonly property bool shown: loader.item && loader.item.shown !== undefined ? loader.item.shown : true
 
-    standalone: true
 
     Loader {
         id: loader
@@ -39,12 +38,10 @@ Cell {
         }
     }
 
-    Text {
+    SectionLabel {
         visible: loader.status === Loader.Error
         anchors.verticalCenter: parent.verticalCenter
         text: "PLUGIN ERROR"
         color: root.foreground
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize.body
     }
 }

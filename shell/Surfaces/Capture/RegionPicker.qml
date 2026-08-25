@@ -49,21 +49,21 @@ import qs.Compositor
 // modes lives on, so the toolbar is chrome on this surface rather than a
 // second one. Six cells: three shot targets and three record targets, screen /
 // window / region each. `action` is what the commit does, `mode` is what it
-// does it to — orthogonal, so RECORD REGION needs no mode of its own.
+// does it to, orthogonal, so RECORD REGION needs no mode of its own.
 //
 // Recording is why `action` exists at all. A recording is not a crop of the
 // freeze: wf-recorder records LIVE content, so the record path unmaps this
 // surface first and hands RecordingService a rectangle, where the shot path
 // keeps the surface up so grim photographs the frozen frames. Same selection
-// model, opposite teardown order — see _finish() versus _finishRecord().
+// model, opposite teardown order, see _finish() versus _finishRecord().
 Scope {
     id: root
 
-    // "smart" | "region" | "windows" | "fullscreen" — which rectangles are
+    // "smart" | "region" | "windows" | "fullscreen", which rectangles are
     // hinted and whether a freeform drag is allowed, matching upstream's mode
     // names so a keybind ported from omarchy reads the same.
     property string mode: "smart"
-    // "shot" | "record" — what Return (and the toolbar's commit cell) does
+    // "shot" | "record", what Return (and the toolbar's commit cell) does
     // with the current selection.
     property string action: "shot"
     property bool isOpen: false
@@ -82,12 +82,12 @@ Scope {
     // cell and its 1-based position, so the legend, the Keys handler and the
     // headless `key` verb all read the same number.
     readonly property var _tools: [
-        { key: 1, action: "shot",   mode: "fullscreen", glyph: "󰍹", label: "SCREEN" },
-        { key: 2, action: "shot",   mode: "windows",    glyph: "󰖯", label: "WINDOW" },
-        { key: 3, action: "shot",   mode: "smart",      glyph: "󰆞", label: "REGION" },
-        { key: 4, action: "record", mode: "fullscreen", glyph: "󰍹", label: "SCREEN" },
-        { key: 5, action: "record", mode: "windows",    glyph: "󰖯", label: "WINDOW" },
-        { key: 6, action: "record", mode: "smart",      glyph: "󰆞", label: "REGION" }
+        { key: 1, action: "shot",   mode: "fullscreen", icon: "monitor",    label: "SCREEN" },
+        { key: 2, action: "shot",   mode: "windows",    icon: "app-window", label: "WINDOW" },
+        { key: 3, action: "shot",   mode: "smart",      icon: "crop",       label: "REGION" },
+        { key: 4, action: "record", mode: "fullscreen", icon: "monitor",    label: "SCREEN" },
+        { key: 5, action: "record", mode: "windows",    icon: "app-window", label: "WINDOW" },
+        { key: 6, action: "record", mode: "smart",      icon: "crop",       label: "REGION" }
     ]
 
     // Which toolbar cell the current action/mode pair lights. `region` (pure
@@ -140,7 +140,7 @@ Scope {
 
     // Duplicate boxes (tabbed groups, windows stacked at identical geometry)
     // collapse to one: they are indistinguishable on screen, and a duplicate
-    // stalls the Tab cycle on the first copy — the same `unique` upstream
+    // stalls the Tab cycle on the first copy, the same `unique` upstream
     // applies to its own rectangle list.
     readonly property var _windowEntries: {
         const seen = {};
@@ -166,7 +166,7 @@ Scope {
     }
 
     // Windows the picker can only name, never draw. Empty on Hyprland, and
-    // empty on any future niri that reports tiled geometry — the list card
+    // empty on any future niri that reports tiled geometry, the list card
     // below simply stops rendering, with no branch on compositor name.
     readonly property var _unboxedWindows: root._windowEntries.withoutRect
 
@@ -242,7 +242,7 @@ Scope {
         CompositorService.refreshWindows();
 
         // No interaction at all: the focused output is the answer, and no
-        // surface ever maps. This is the keybind form of "whole display" —
+        // surface ever maps. This is the keybind form of "whole display",
         // the toolbar's own SCREEN cell is the interactive one, and reaches
         // the same rectangle through setTool() with the surface already up.
         if (root.mode === "fullscreen") {
@@ -272,7 +272,7 @@ Scope {
         return "ok";
     }
 
-    // Selects a toolbar cell — what a click on one does, and what the digit
+    // Selects a toolbar cell, what a click on one does, and what the digit
     // keys and the headless `key` verb both route through.
     function setTool(index) {
         if (!root.isOpen)
@@ -395,7 +395,7 @@ Scope {
         // Plain properties rather than `required`: these are set through
         // createObject's initial-property map, and a required property that
         // the map somehow missed would fail instantiation outright rather
-        // than degrade — on a freeze path whose whole job is to fail open.
+        // than degrade, on a freeze path whose whole job is to fail open.
         Process {
             id: freezeProc
             property string outputName: ""
@@ -610,7 +610,7 @@ Scope {
     }
 
     // The overlay is showing the frozen frames, so grim pointed at this
-    // surface captures the frozen content — upstream grims hyprpicker's freeze
+    // surface captures the frozen content, upstream grims hyprpicker's freeze
     // layer for exactly the same reason. Chrome drops for a frame first so the
     // scrim and readout are not baked in.
     function _finish(rect, windowId) {
@@ -620,7 +620,7 @@ Scope {
     }
 
     // The surface stays MAPPED across this, showing the frozen frames with its
-    // chrome hidden — that is the whole point, since grim photographs the
+    // chrome hidden, that is the whole point, since grim photographs the
     // screen and the screen is this overlay. The caller closes it with done()
     // once grim has exited, exactly as upstream keeps hyprpicker's freeze
     // alive until after its own grim returns.
@@ -795,7 +795,7 @@ Scope {
                     // The record action borrows the recording indicator's own
                     // `urgent` role, the same swap the slurp-driven record
                     // selection already made (RecordingService's FS_SLURP_
-                    // BORDER) — one look for "this is about to record".
+                    // BORDER), one look for "this is about to record".
                     border.color: root._recording ? Core.Theme.color.destructive : Core.Theme.color.primary
                     border.width: Core.Theme.borderWidth * 2
                 }
@@ -843,7 +843,7 @@ Scope {
                 color: Core.Theme.color.background
                 border.color: Core.Theme.color.border
                 border.width: Core.Theme.borderWidth
-                radius: 0
+                radius: Core.Theme.radiusXl
                 width: Core.Theme.space.popupWidthWide
                 height: listColumn.height + Core.Theme.space.panelPadding * 2
                 x: Math.round((parent.width - width) / 2)
@@ -855,7 +855,7 @@ Scope {
                     y: Core.Theme.space.panelPadding
                     width: parent.width - Core.Theme.space.panelPadding * 2
 
-                    MetaLabel {
+                    SectionLabel {
                         // These windows are selectable for a shot and refused
                         // for a recording, so the header says which it is
                         // rather than making the dimmed rows carry the whole
@@ -873,7 +873,7 @@ Scope {
                             required property var modelData
                             width: listColumn.width
                             // The cursor walks _selectable, whose named-only
-                            // entries start after the drawable ones — and are
+                            // entries start after the drawable ones, and are
                             // absent entirely while recording, where that same
                             // index is an output instead.
                             selected: !root._recording
@@ -887,12 +887,12 @@ Scope {
                                     elide: Text.ElideRight
                                     text: windowRow.modelData.label
                                     color: root._recording ? Core.Theme.color.mutedForeground : windowRow.foreground
-                                    font.family: Core.Theme.fontFamily
+                                    font.family: Core.Theme.fontFamilySans
                                     font.pixelSize: Core.Theme.fontSize.body
                                 }
-                                MetaLabel {
+                                SectionLabel {
                                     visible: windowRow.modelData.sublabel.length > 0
-                                    text: windowRow.modelData.sublabel.toUpperCase()
+                                    text: windowRow.modelData.sublabel
                                     color: root._recording ? Core.Theme.color.mutedForeground : windowRow.dimForeground
                                 }
                             }
@@ -906,12 +906,11 @@ Scope {
             // follows the current tool rather than stating one fixed contract.
             Cell {
                 id: legend
-                standalone: true
                 visible: !root._capturing
                 x: Math.round((parent.width - width) / 2)
                 y: toolbar.y - height - Core.Theme.space.md
 
-                MetaLabel {
+                SectionLabel {
                     text: "RETURN " + (root._recording ? "RECORD" : "CAPTURE")
                         + "  ·  CTRL+RETURN DISPLAY  ·  TAB CYCLE  ·  1-6 TOOL  ·  ESC CANCEL"
                     color: legend.dimForeground
@@ -982,7 +981,7 @@ Scope {
             // The toolbar (owner ask, see the file header): the surface's whole
             // mode set as one row of cells over a bordered card, in the bar's
             // standalone-cell idiom (borderless at rest, full inversion on
-            // hover, current tool inverted) rather than the fused ledger — six
+            // hover, current tool inverted) rather than the fused ledger, six
             // discrete buttons is what the bar's own chrome is for. Declared
             // after the drag MouseArea so it sits on top of it and takes its
             // own clicks.
@@ -992,7 +991,7 @@ Scope {
                 color: Core.Theme.color.background
                 border.color: Core.Theme.color.border
                 border.width: Core.Theme.borderWidth
-                radius: 0
+                radius: Core.Theme.radiusXl
                 width: toolbarRow.width + Core.Theme.space.panelPadding * 2
                 height: toolbarRow.height + Core.Theme.space.panelPadding * 2
                 x: Math.round((parent.width - width) / 2)
@@ -1014,20 +1013,17 @@ Scope {
                     Cell {
                         id: toolCell
                         required property var modelData
-                        standalone: true
                         selected: root._toolIndex === toolCell.modelData.key - 1
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Core.Theme.space.sm
 
-                            Text {
-                                text: toolCell.modelData.glyph
+                            Icon {
+                                name: toolCell.modelData.icon
                                 color: toolCell.foreground
-                                font.family: Core.Theme.fontFamily
-                                font.pixelSize: Core.Theme.fontSize.body
                             }
-                            MetaLabel {
+                            SectionLabel {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: toolCell.modelData.label
                                 color: toolCell.dimForeground
@@ -1045,7 +1041,7 @@ Scope {
                     y: Core.Theme.space.panelPadding
                     spacing: Core.Theme.space.md
 
-                    MetaLabel {
+                    SectionLabel {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "SHOT"
                         color: Core.Theme.color.mutedForeground
@@ -1060,7 +1056,7 @@ Scope {
                         }
                     }
 
-                    MetaLabel {
+                    SectionLabel {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "REC"
                         color: Core.Theme.color.mutedForeground
@@ -1080,19 +1076,17 @@ Scope {
                     Cell {
                         id: commitCell
                         anchors.verticalCenter: parent.verticalCenter
-                        ink: true
+                        active: true
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Core.Theme.space.sm
 
-                            Text {
-                                text: root._recording ? "󰑊" : "󰄀"
+                            Icon {
+                                name: root._recording ? "video" : "camera"
                                 color: commitCell.foreground
-                                font.family: Core.Theme.fontFamily
-                                font.pixelSize: Core.Theme.fontSize.body
                             }
-                            MetaLabel {
+                            SectionLabel {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: root._recording ? "RECORD" : "CAPTURE"
                                 color: commitCell.dimForeground
@@ -1145,7 +1139,7 @@ Scope {
                     case Qt.Key_5:
                     case Qt.Key_6:
                         // Contiguous by definition (Qt.Key_1 is 0x31), so the
-                        // digit is the offset — no per-key branch.
+                        // digit is the offset, no per-key branch.
                         root.setTool(event.key - Qt.Key_1);
                         break;
                     default:

@@ -46,7 +46,7 @@
 // one ("processes", M39) lasted a day: the process table belongs inside the
 // monitor rather than beside it (owner, 2026-08-19), so it moved into
 // MonitorView and its route was dropped. The registry is still a registry
-// for the reason it always was — the next app view is one line here plus
+// for the reason it always was, the next app view is one line here plus
 // one file under Surfaces/Menu/views/, with no Menu.qml edit at all.
 var VIEWS = {
     monitor: "views/MonitorView.qml"

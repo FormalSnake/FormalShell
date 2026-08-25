@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-// Runtime-mutable session state (wallpaper, mode, dnd) — the shell owns and
+// Runtime-mutable session state (wallpaper, mode, dnd), the shell owns and
 // rewrites this file; settings.json stays read-only. Quickshell.statePath()
 // resolves under quickshell/by-shell/<shellId>/, not the spec-mandated
 // $XDG_STATE_HOME/formalshell/, so the path is built by hand instead.
@@ -40,7 +40,7 @@ Singleton {
         stateFile.writeAdapter();
     }
 
-    // Both keys land in one write — the life-progress easter egg (Calendar
+    // Both keys land in one write, the life-progress easter egg (Calendar
     // panel, M6 Task 4) always collects birth year then life expectancy as a
     // single flow, and a half-set pair (birth year alone) has no valid
     // lifeFraction() to render anyway.
@@ -51,13 +51,13 @@ Singleton {
     }
 
     // Right-click on the bar clock walks Clock/model.js's format ring and
-    // lands here — never settings.json, which the shell only ever reads.
+    // lands here, never settings.json, which the shell only ever reads.
     function setClockFormat(format) {
         adapter.clockFormat = format;
         stateFile.writeAdapter();
     }
 
-    // The menu's app-launch ledger — [{ id, count, lastMs }], the shape
+    // The menu's app-launch ledger, [{ id, count, lastMs }], the shape
     // shell/Menu/frecency.js owns end to end. This file only stores it:
     // the caller passes the already-recorded array (Frecency.record()
     // returns a fresh one, which is also what makes the alias' change
@@ -87,7 +87,7 @@ Singleton {
     // binding.
     // Right-click on the bar battery cell (M26 Task 9). null means "no
     // override yet, follow bar.widgets.battery.showLabel from settings.json"
-    // — the same layered-default shape settings.json keys get everywhere
+    //, the same layered-default shape settings.json keys get everywhere
     // else, just persisted here since this one toggles at runtime.
     function setBatteryShowPercent(shown) {
         adapter.batteryShowPercent = shown;

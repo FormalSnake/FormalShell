@@ -6,7 +6,7 @@ import qs.Services
 
 // Shared gate + frame republisher for the Apple Music animated cover (M35,
 // owner: "the bar mini cover doesnt appear to be animated ... like the
-// image in the bar, the panel is fine" — DESIGN.md §2 item 12 reversal).
+// image in the bar, the panel is fine", DESIGN.md §2 item 12 reversal).
 // MediaPanel.qml's own AnimatedAlbumArt Loader stays the ONLY QtMultimedia
 // Video decode in the shell; this singleton decides when that Loader may
 // exist and republishes the frames it grabs so NowPlaying.qml's bar-side
@@ -35,8 +35,8 @@ Singleton {
 
     // The full gate (DESIGN.md §4 item 8's visualizer precedent, restated
     // for a decode instead of a child process): any leg going false kills
-    // the decode outright — MediaPanel's Loader unloads its Video entirely
-    // — never just a paused paint.
+    // the decode outright, MediaPanel's Loader unloads its Video entirely
+    //, never just a paused paint.
     readonly property bool active: (root.panelWants || root._barWanters > 0)
         && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== "" && Theme.motionEnabled
 

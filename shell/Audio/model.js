@@ -10,7 +10,7 @@
 // pre-bind-safe fields (isStream, isSink, type). PwNode.properties is
 // invalid until the node is bound, and reading it while streams churn
 // (a capture app starting, say) destabilized quickshell's Pipewire
-// service in omarchy's own history — so this never touches `properties`.
+// service in omarchy's own history, so this never touches `properties`.
 function isPlaybackStream(node) {
     if (!node || !node.isStream) return false;
     if (node.isSink === true) return true;
@@ -24,7 +24,7 @@ function isPlaybackStream(node) {
 // application.name -> node.description -> media.name -> node.name, the
 // same order omarchy's rawStreamLabel reads. `props` must only be passed
 // once the caller has confirmed node.ready (properties is invalid
-// pre-bind, same constraint as isPlaybackStream above) — this function
+// pre-bind, same constraint as isPlaybackStream above), this function
 // itself takes the already-read values so it stays free of that timing
 // concern entirely.
 function streamLabel(props, description, name) {
