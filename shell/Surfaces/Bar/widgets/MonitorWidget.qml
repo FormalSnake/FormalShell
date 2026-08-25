@@ -3,15 +3,11 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// Bar cell for the system monitor (M38 Task 6, plan at
-// docs/superpowers/plans/2026-08-19-m38-launcher-everything-and-gpu.md): a
-// gauge glyph plus CPU/MEM percent, GPU percent appended only when some card
-// on this machine actually reports one: MonitorPanel is the compact glance
+// Bar cell for the system monitor (DESIGN.md §3 "Bar"): an activity icon
+// plus CPU and MEM percent in mono, GPU percent appended only when some card
+// on this machine actually reports one. MonitorPanel is the compact glance
 // this cell opens, the launcher's "monitor" route (Menu/appviews.js) is the
-// full one. Glyph codepoint verified against the pinned
-// nerd-fonts-jetbrains-mono cmap (nix/testvm.nix) via fonttools ttx, not
-// memory: md-gauge U+F029A, the same one panels.monitor uses in
-// Menu/providers.js's PANEL_NAMES.
+// full one.
 //
 // SystemMonitorService only polls while something has subscribed
 // (SystemMonitorService.qml's own header), so this cell only exists to
@@ -21,8 +17,8 @@ import qs.Services
 //
 // Every number here can be null on the very first tick (cpuDelta/memory
 // both need a previous sample, sysinfo.js's own contract): that renders as
-// an em dash, never a fabricated 0% or a gap that would reflow the bar's
-// other cells as the cell's width settles.
+// `--`, never a fabricated 0% or a gap that would reflow the bar's other
+// cells as the cell's width settles.
 Cell {
     id: root
 
@@ -52,18 +48,17 @@ Cell {
 
     function _pct(fraction) {
         if (fraction === null || fraction === undefined || !isFinite(fraction))
-            return "—";
+            return "--";
         return Math.round(fraction * 100) + "%";
     }
 
     // Label-off by default (M23's precedent, reversed for this cell the way
     // DisplayWidget.qml's own showLabel already is): the value text below is
     // always-on content, not something this flag gates: `showLabel` opts in
-    // an extra "MONITOR" caption for a host where the glyph plus numbers
+    // an extra "Monitor" caption for a host where the icon plus numbers
     // alone could read ambiguously next to other percent-bearing cells.
     readonly property bool _showLabel: Config.get("bar.widgets.monitor.showLabel", false)
 
-    standalone: true
     tooltipText: "MONITOR / CPU " + root._pct(root._cpu.aggregate) + " / MEM " + root._pct(root._mem.available ? root._mem.usedFraction : null)
         + (root._gpuCard ? " / GPU " + root._pct(root._gpuCard.metrics.busy) : "")
 
@@ -82,35 +77,40 @@ Cell {
         spacing: Theme.space.xxs
 
         // Fixed-width slot (M26 Task 7), matching this cell's siblings even
-        // though this glyph itself never swaps.
+        // though this icon itself never swaps.
         Item {
             id: glyphSlot
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.space.huge
-            height: glyphText.implicitHeight
+            height: glyphIcon.implicitHeight
 
-            Text {
-                id: glyphText
+            Icon {
+                id: glyphIcon
                 anchors.centerIn: parent
-                text: "󰊚"
+                name: "activity"
+                size: Theme.fontSize.body
                 color: root.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
             }
         }
 
-        MetaLabel {
+        Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "C" + root._pct(root._cpu.aggregate) + " M" + root._pct(root._mem.available ? root._mem.usedFraction : null)
                 + (root._gpuCard ? " G" + root._pct(root._gpuCard.metrics.busy) : "")
             color: root.dimForeground
+            font.family: Theme.fontFamilyMono
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
         }
 
-        MetaLabel {
+        Text {
             visible: root._showLabel
             anchors.verticalCenter: parent.verticalCenter
-            text: "MONITOR"
-            color: root.dimForeground
+            text: "Monitor"
+            color: root.foreground
+            font.family: Theme.fontFamilySans
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
         }
     }
 

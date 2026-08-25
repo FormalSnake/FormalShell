@@ -4,20 +4,18 @@ import qs.Core
 import qs.Compositor
 import qs.Components
 
-// Icon + app name of the focused window (DESIGN.md's launcher-row
-// image-icon exception, extended to the bar in M14): the desktop entry
-// behind the focused window's appId (DesktopEntries.heuristicLookup, the
-// same DMS FocusedApp / launcher lookup) supplies the themed icon and the
-// display name, which leads in foreground; the window title follows
-// dimmed. No entry resolves → falls back to exactly today's rendering
-// (dim raw appId, foreground title, no icon). No focused window → hidden.
-// The app name elides and the title marquee-scrolls once the combined
-// label would exceed maxWidth, which the whole pill (padding included) is
-// capped to — the bar sets it to a quarter of its own width under a hard
-// ceiling. A standalone Cell like the bar's other widgets (M20 Task 1):
-// same padding box, same hover-cursor inversion — text colors resolve
-// through `foreground`/`dimForeground` instead of hardcoded roles so the
-// hover swap covers everything.
+// Icon and app name of the focused window (DESIGN.md §3 "Bar", the bar's
+// one image-icon exception): the desktop entry behind the focused window's
+// appId (DesktopEntries.heuristicLookup, the same lookup the launcher uses)
+// supplies the themed icon and the display name, which leads in foreground;
+// the window title follows dimmed. Both are words, so both are sans. No
+// entry resolves: falls back to the dim raw appId, the foreground title and
+// no icon. No focused window: hidden. The app name elides and the title
+// marquee-scrolls once the combined label would exceed maxWidth, which the
+// whole pill (padding included) is capped to, the bar setting it to a
+// quarter of its own width under a hard ceiling. Text colours resolve
+// through `foreground`/`dimForeground` rather than hardcoded roles, so a
+// filled cell carries every one of them.
 //
 // Clicking the cell toggles the app menu (AppMenuPanel) under it, macOS's
 // app-name menu in the same place the app name already sits. The window it
@@ -53,7 +51,6 @@ Cell {
 
     readonly property bool shown: root.focusedWindow !== null
     visible: root.shown
-    standalone: true
 
     // `maxWidth` is the whole pill's ceiling, so the row content gets it
     // minus the cell's own control padding.
@@ -73,8 +70,8 @@ Cell {
         width: Math.min(implicitWidth, root._contentMaxWidth)
         clip: true
 
-        // Launcher-row image-icon exception (DESIGN.md §3 Bar), glyph-cell
-        // sized, radius 0 — only when the entry resolves one.
+        // The bar's one image-icon exception (DESIGN.md §3 "Bar"), sized to
+        // the label beside it, and only when the entry resolves one.
         Image {
             id: appIcon
             visible: root.iconSource !== ""
@@ -93,8 +90,9 @@ Cell {
             // appId, dimmed — today's exact fallback rendering.
             text: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
             color: root.desktopEntry ? root.foreground : root.dimForeground
-            font.family: Theme.fontFamily
+            font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
             // Never more than half the row's own budget: an entry name (or
             // a raw appId in the no-entry fallback) long enough to eat the
             // whole thing otherwise starves the title of every pixel and

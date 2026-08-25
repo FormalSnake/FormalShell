@@ -3,34 +3,27 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// Bar cell for MediaService's active player (DESIGN.md §Bar, spec §5, M7
-// Task 1): a note glyph, elided title, click toggles the media panel
-// anchored under this cell — same open-panel underline as every other
-// M6 widget. Hidden entirely when no MPRIS player is registered (Battery.qml's
-// own "no dead slot" rule) rather than a "nothing playing" lie. Glyph
-// codepoint taken from the pinned nerd-fonts-jetbrains-mono cmap: md-music_note
-// U+F0387.
+// Bar cell for MediaService's active player (DESIGN.md §3 "Bar"): a music
+// icon, the elided title in sans, and a click that toggles the media panel
+// anchored under this cell, with the same open-panel underline every other
+// widget draws. Hidden entirely when no MPRIS player is registered
+// (Battery.qml's own "no dead slot" rule) rather than a "nothing playing"
+// lie.
 //
-// M20 Task 4b (owner: "the music icon can be replaced with the dithered
-// album cover ... in a layout similar to the app icon in the menu bar"):
-// the glyph above is the no-art fallback only. Once `MediaService.artUrl`
-// resolves, a `DitherImage` takes its place at the same slot size
-// ActiveWindow.qml's own app icon uses (a body-size Text's implicitHeight),
-// radius 0, no border. M20 Task 5b: the cover renders in "retro" color
-// dither and keeps its own colors even on a hovered (inverted) cell — the
-// same content-keeps-its-colors ruling the menu's app icons already have —
-// so unlike the rest of this cell's ink, the mini cover does NOT swap on
-// hover.
+// The icon is the no-art fallback only. Once `MediaService.artUrl` resolves,
+// the cover takes its place at the same slot size ActiveWindow.qml's own app
+// icon uses (a body-size Text's implicitHeight). It is content imagery, so
+// unlike the rest of this cell's ink it keeps its own colours on a filled
+// cell.
 //
 // M35 (owner: "the bar cover doesnt appear to be animated ... the panel is
-// fine" — reverses M20's "static only" call, DESIGN.md §2 item 12): a
-// second DitherImage layers over the static one, sourced from
-// `AnimatedCoverFrameSource.frameUrl` — the exact frames MediaPanel's own
+// fine"): a second Image layers over the static one, sourced from
+// `AnimatedCoverFrameSource.frameUrl`, the exact frames MediaPanel's own
 // AnimatedAlbumArt.qml grabs off its one Video decode, republished rather
-// than decoded twice for a slot this small. This cell registers as a
-// frame consumer via `_syncFrames()` below (windowVisible + shown gate,
-// VisualizerService.setBarVisible's own refcount idiom) so the shared
-// decode runs whenever either this bar or the panel wants it.
+// than decoded twice for a slot this small. This cell registers as a frame
+// consumer via `_syncFrames()` below (windowVisible + shown gate,
+// VisualizerService.setBarVisible's own refcount idiom) so the shared decode
+// runs whenever either this bar or the panel wants it.
 Cell {
     id: root
 
@@ -51,7 +44,6 @@ Cell {
     readonly property bool shown: MediaService.available
 
     visible: root.shown
-    standalone: true
 
     // M35: this cell wants animated frames exactly while it would actually
     // paint them — shown AND its bar window on screen — mirroring
@@ -97,23 +89,22 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        Icon {
             id: glyph
             visible: MediaService.artUrl === ""
             anchors.verticalCenter: parent.verticalCenter
-            text: "󰎇"
+            name: "music"
+            size: Theme.fontSize.body
             color: root.foreground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
         }
 
-        // Dithered mini cover, glyph's own slot size (`glyph.implicitHeight`
-        // still resolves while the glyph itself is hidden). Retro color
-        // dither, content ruling: keeps the cover's own colors at rest and
-        // on hover alike, unlike every other ink on this cell. The static
-        // DitherImage below is the permanent fallback for every path the
-        // animated overlay above it doesn't cover — disabled, no match, no
-        // frame yet, motion off — same layering MediaPanel's artSlot uses.
+        // Mini cover, the glyph's own slot size (`glyph.implicitHeight`
+        // still resolves while the glyph itself is hidden). Content imagery,
+        // so it keeps the cover's own colours at rest and on hover alike,
+        // unlike every other ink on this cell. The static Image below is the
+        // permanent fallback for every path the animated overlay above it
+        // doesn't cover (disabled, no match, no frame yet, motion off), the
+        // same layering MediaPanel's art frame uses.
         Item {
             id: coverSlot
             visible: MediaService.artUrl !== ""
@@ -121,19 +112,25 @@ Cell {
             width: glyph.implicitHeight
             height: glyph.implicitHeight
 
-            DitherImage {
+            Image {
                 anchors.fill: parent
                 source: MediaService.artUrl
-                mode: "retro"
+                sourceSize.width: coverSlot.width
+                sourceSize.height: coverSlot.height
+                fillMode: Image.PreserveAspectCrop
+                cache: false
             }
 
             // M35: shares AnimatedCoverFrameSource's frames with the panel's
             // own AnimatedAlbumArt.qml rather than decoding a second Video.
-            DitherImage {
+            Image {
                 anchors.fill: parent
                 visible: AnimatedCoverFrameSource.active && AnimatedCoverFrameSource.frameUrl !== ""
                 source: AnimatedCoverFrameSource.frameUrl
-                mode: "retro"
+                sourceSize.width: coverSlot.width
+                sourceSize.height: coverSlot.height
+                fillMode: Image.PreserveAspectCrop
+                cache: false
             }
         }
 

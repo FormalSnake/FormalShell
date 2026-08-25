@@ -107,12 +107,16 @@ Cell {
                     elide: Text.ElideRight
                 }
 
-                MetaLabel {
+                // Sentence case as well: only a SectionLabel uppercases
+                // (DESIGN.md §5), and a mode line read back as `1920X1080@60`
+                // is what that rule exists to stop.
+                Text {
                     width: parent.width
                     visible: root.meta !== ""
                     text: root.meta
                     color: root.dimForeground
                     font.family: root.metaMono ? Theme.fontFamilyMono : Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.bodySmall
                     elide: Text.ElideRight
                 }
             }

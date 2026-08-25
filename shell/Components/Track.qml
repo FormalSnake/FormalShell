@@ -1,8 +1,12 @@
 import QtQuick
 import qs.Core
 
-// The one progress/slider groove (DESIGN.md §2): `muted` track, `primary`
-// fill, `radiusSm` on both, `trackThickness` tall.
+// The one progress/slider groove (DESIGN.md §2): `primary` at 0.2 for the
+// groove, `primary` for the fill, `radiusSm` on both, `trackThickness` tall.
+//
+// The groove is shadcn's own `primary/20` rather than `muted`: `muted` and
+// `accent` resolve to the same zinc step in the dark fallback, so a groove
+// painted `muted` vanishes on a row carrying a `selected` or `active` fill.
 Rectangle {
     id: root
 
@@ -13,7 +17,7 @@ Rectangle {
 
     implicitHeight: Theme.space.trackThickness
     radius: Theme.radiusSm
-    color: Theme.color.muted
+    color: Qt.alpha(Theme.color.primary, 0.2)
 
     Rectangle {
         height: parent.height

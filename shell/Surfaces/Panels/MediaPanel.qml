@@ -3,62 +3,50 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// MPRIS now-playing popout (DESIGN.md §Panels, spec §5, M7 Task 1; art+
-// identity row restored M31 Task 1 after M28 Task 2's brief PanelHero
-// recomposition): when art exists the panel opens with its own 96x96
-// dithered cover beside a "NOW PLAYING / <identity>" meta line, the track
-// title, and the artist (DESIGN.md §1.3's 96x96 exception, §2.13's dated
-// exception to "every panel opens with the shared hero"). No art (most
-// browsers publish none) falls back to the plain PanelHero: glyph, title,
-// meta. Elapsed/total on one header line (Task 1's rhythm), the flat
-// accent-fill scrub track underneath, then transport as one small cluster
-// of content-sized cells rather than three glyphs adrift in oversized ones.
+// MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"): a `NOW
+// PLAYING` section label carrying the player's own identity, the cover in a
+// `radiusMd` frame beside the track's title, artist and album, the transport
+// as a row of `IconButton`s, the position and the player's own volume as
+// `Track` rows, and a chip per registered player once more than one is on
+// the bus.
 //
-// The rest of what MPRIS actually defines hangs off that: shuffle and
-// LoopStatus as the outer two cells of the transport cluster, the player's
-// own Volume as a second track under it, Raise as a title-band label, and a
-// row per registered player when more than one is registered at once. Each
-// is gated on the player's own capability flag, so a player that implements
-// none of them renders exactly the panel it rendered before.
+// Everything below the title comes off MPRIS itself and is gated on the
+// player's own capability flags, so a player that implements none of
+// shuffle, loop, volume or seek renders the same three transport buttons and
+// nothing else. Honest states: no registered player at all is `NO PLAYER`,
+// and a player publishing no `mpris:artUrl` (browsers, mostly) leaves the
+// cover slot out rather than showing an empty 96px square.
 //
-// Play/pause stays in that transport cluster rather than moving to the
-// hero's `trailing` slot: unlike Audio's MUTE, it has no sense on its own —
-// prev/next only mean anything next to it, so splitting it out would orphan
-// the other two and cost a row PanelHero's rail-less hero doesn't have room
-// for anyway.
+// Keyboard (spec "Keyboard model"): Tab cycles three sections. Transport
+// first, where Left/Right walk the buttons and Enter presses one; the two
+// tracks next, where Left/Right seek five seconds or step the volume five
+// percent and Enter plays/pauses; the player chips last, where Enter pins
+// the shell to that player.
 Panel {
     id: root
 
-    panelTitle: "NOW PLAYING"
-    panelWidth: Theme.space.popupWidthDefault
+    panelIcon: "music"
+    panelTitle: "Media"
+    panelWidth: Theme.space.popupWidthWide
 
     // MPRIS Raise: bring the player's own window up, the one transport verb
-    // that isn't about the track. A bare label in the title band rather than
-    // a sixth cell in the transport cluster (CardTitleBar's own contract,
-    // DESIGN.md §1.1's ink promotion), and absent entirely on a player that
-    // doesn't implement it.
-    titleActions: MetaLabel {
-        visible: MediaService.canRaise
-        text: "RAISE"
-        color: raiseHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground
-
-        MouseArea {
-            id: raiseHover
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
+    // that isn't about the track. Absent entirely on a player that doesn't
+    // implement it.
+    titleActions: [
+        IconButton {
+            name: "external-link"
+            visible: MediaService.canRaise
             onClicked: MediaService.raise()
         }
-    }
+    ]
 
     // M35: the bar's mini cover (NowPlaying.qml) shares this panel's one
-    // Video decode rather than running its own. AnimatedCoverFrameSource
-    // is the single gate for that decode — panelWants is this panel's own
-    // half of it (MediaPanel is a shell-wide singleton instance,
-    // shell.qml, so one flag is enough), keepMapped keeps this panel's
-    // window mapped for grabToImage while the bar wants frames and the
-    // panel itself is closed (Panel.qml's own click-through mask covers
-    // input during that state).
+    // Video decode rather than running its own. AnimatedCoverFrameSource is
+    // the single gate for that decode. `panelWants` is this panel's own half
+    // of it (MediaPanel is a shell-wide singleton instance, shell.qml, so one
+    // flag is enough), and `keepMapped` keeps this panel's window mapped for
+    // grabToImage while the bar wants frames and the panel itself is closed
+    // (Panel.qml's own click-through mask covers input during that state).
     keepMapped: AnimatedCoverFrameSource.active
     Binding {
         target: AnimatedCoverFrameSource
@@ -66,15 +54,15 @@ Panel {
         value: root.isOpen
     }
 
-    // The one named image-slot size (DESIGN.md §1.3's structural-size
-    // exceptions names "the media panel's 96x96 album-art slot" by name).
+    // The one named image-slot size (DESIGN.md §1's structural-size
+    // exceptions name the media panel's album-art slot by name).
     readonly property real _artSlotSize: 96
 
-    // Plenty of players publish no `mpris:artUrl` at all (browsers, most
-    // notably), so the panel falls back to the ordinary hero with a glyph
-    // rather than a 96px blank slot.
     readonly property bool _hasArt: MediaService.artUrl !== ""
         || AppleMusicArtService.animatedArtUrl !== ""
+
+    readonly property int _seekStepSeconds: 5
+    readonly property real _volumeStep: 0.05
 
     function _formatTime(seconds) {
         var total = Math.max(0, Math.floor(seconds));
@@ -85,159 +73,289 @@ Panel {
         return h > 0 ? h + ":" + pad(m) + ":" + pad(s) : pad(m) + ":" + pad(s);
     }
 
+    // ---- Cursor ---------------------------------------------------------
+
+    // Section 0. Shuffle and loop only exist for a player that implements
+    // them, so the list is built rather than fixed and the cursor addresses
+    // whatever actually rendered.
+    readonly property var _transport: {
+        if (!MediaService.available)
+            return [];
+        var out = ["previous", "playpause", "next"];
+        if (MediaService.shuffleSupported)
+            out.push("shuffle");
+        if (MediaService.loopSupported)
+            out.push("loop");
+        return out;
+    }
+
+    // Section 1.
+    readonly property var _tracks: {
+        if (!MediaService.available)
+            return [];
+        var out = ["progress"];
+        if (MediaService.volumeSupported)
+            out.push("volume");
+        return out;
+    }
+
+    // Section 2. A list of one would just repeat the identity line above, so
+    // the whole section is absent with a single player.
+    readonly property var _playerRows: MediaService.players.length > 1 ? MediaService.players : []
+
+    function _trackIndex(id) {
+        return root._tracks.indexOf(id);
+    }
+
+    function _transportIcon(id) {
+        if (id === "previous")
+            return "skip-back";
+        if (id === "playpause")
+            return MediaService.isPlaying ? "pause" : "play";
+        if (id === "next")
+            return "skip-forward";
+        if (id === "shuffle")
+            return "shuffle";
+        return MediaService.loopState === "track" ? "repeat-1" : "repeat";
+    }
+
+    // The on-state of a toggle is the button's own `primary` fill (DESIGN.md
+    // §5: fills are for buttons and the active toggle).
+    function _transportVariant(id) {
+        if (id === "shuffle" && MediaService.shuffle)
+            return "default";
+        if (id === "loop" && MediaService.loopState !== "none")
+            return "default";
+        return "ghost";
+    }
+
+    function _transportEnabled(id) {
+        if (id === "previous")
+            return MediaService.canGoPrevious;
+        if (id === "next")
+            return MediaService.canGoNext;
+        return true;
+    }
+
+    function _pressTransport(id) {
+        if (id === "previous")
+            MediaService.previous();
+        else if (id === "playpause")
+            MediaService.playPause();
+        else if (id === "next")
+            MediaService.next();
+        else if (id === "shuffle")
+            MediaService.toggleShuffle();
+        else if (id === "loop")
+            MediaService.cycleLoop();
+    }
+
+    function _seekBy(seconds) {
+        if (!MediaService.canSeek || MediaService.length <= 0)
+            return;
+        MediaService.seek((MediaService.position + seconds) / MediaService.length);
+    }
+
+    function _pointAt(section, index) {
+        root.cursorActive = true;
+        root.cursorSection = section;
+        root.cursorIndex = index;
+    }
+
+    sectionCount: root._playerRows.length > 0 ? 3 : 2
+
+    cursorCount: root.cursorSection === 0
+        ? root._transport.length
+        : (root.cursorSection === 1 ? root._tracks.length : root._playerRows.length)
+
+    // Left/Right belongs to the track under the cursor in section 1, and to
+    // the list itself in the other two.
+    cursorStepsHorizontally: root.cursorSection === 1
+
+    // Tab lands on the first row of the section it reached, never on
+    // whatever index the previous section's cursor happened to hold.
+    onCursorSectionChanged: root.cursorIndex = 0
+
+    onCursorActivated: index => {
+        if (root.cursorSection === 0) {
+            var id = root._transport[index];
+            if (id !== undefined && root._transportEnabled(id))
+                root._pressTransport(id);
+        } else if (root.cursorSection === 1) {
+            if (root._tracks[index] === "progress")
+                MediaService.playPause();
+        } else {
+            var player = root._playerRows[index];
+            if (player)
+                MediaService.select(player.id);
+        }
+    }
+
+    onCursorStepped: (index, direction) => {
+        var id = root._tracks[index];
+        if (id === "progress")
+            root._seekBy(direction * root._seekStepSeconds);
+        else if (id === "volume")
+            MediaService.setVolume(MediaService.volume + direction * root._volumeStep);
+    }
+
+    onIsOpenChanged: {
+        if (!root.isOpen)
+            return;
+        root.cursorSection = 0;
+        root.cursorIndex = 0;
+    }
+
     Cell {
         visible: !MediaService.available
         width: parent.width
 
-        MetaLabel { text: "NO PLAYER" }
+        SectionLabel { text: "NO PLAYER" }
     }
 
-    // The panel's own subject: the track itself. When art exists the
-    // panel's point IS the artwork, so it opens with the restored 96x96
-    // art+identity row (DESIGN.md §2 item 13's dated exception) instead of
-    // the shared hero — the analogue of a number panel's oversized readout.
-    // Art + identity share one row cell (owner: a two-cell layout left the
-    // art centered in its own mostly-empty row) rendered in our own ledger
-    // chrome: radius 0, no border on the art, the panel's usual shared Cell
-    // rule below it.
-    Cell {
-        id: infoCell
-        visible: MediaService.available && root._hasArt
+    Column {
         width: parent.width
+        visible: MediaService.available
+        spacing: Theme.space.rowGap
 
         Row {
-            id: infoRow
-            width: parent.width
-            spacing: Theme.space.md
+            spacing: Theme.space.iconGap
 
-            Item {
-                id: artSlot
-                width: root._artSlotSize
-                height: root._artSlotSize
-                anchors.verticalCenter: parent.verticalCenter
+            SectionLabel { text: "NOW PLAYING" }
 
-                // DitherImage owns the hidden source Image itself (decode
-                // capped near the slot size, no pixmap cache) and repaints
-                // the retro color dither (DESIGN.md §2 item 12) whenever
-                // artUrl changes — content imagery, so it keeps the
-                // cover's own colors rather than reducing to theme roles.
-                DitherImage {
-                    visible: MediaService.artUrl !== ""
-                    source: MediaService.artUrl
-                    mode: "retro"
-                    width: root._artSlotSize
-                    height: root._artSlotSize
-                }
-
-                // Apple Music animated cover (M7 Task 2, opt-in): layered
-                // over the static art above, which stays the permanent
-                // fallback for every failure path — disabled, no match, no
-                // animated art, download failure, or a missing
-                // QtMultimedia module. Active whenever AnimatedCoverFrameSource
-                // says either this panel or the bar's mini cover wants
-                // frames (M35) — not just `root.isOpen` any more, since the
-                // Video this Loader owns is the bar's decode too.
-                Loader {
-                    width: root._artSlotSize
-                    height: root._artSlotSize
-                    active: AnimatedCoverFrameSource.active
-                    source: "AnimatedAlbumArt.qml"
-                }
-            }
-
-            Column {
-                width: infoRow.width - artSlot.width - infoRow.spacing
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Theme.space.xxs
-
-                MetaLabel {
-                    text: "NOW PLAYING / " + MediaService.identity
-                }
-
-                Text {
-                    width: parent.width
-                    text: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
-                    color: infoCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.subtitle
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    width: parent.width
-                    visible: MediaService.artist !== ""
-                    text: MediaService.artist
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                    elide: Text.ElideRight
-                }
-            }
-        }
-    }
-
-    // No art (most browsers publish none): the ordinary hero with a note
-    // glyph, never a 96px blank slot.
-    PanelHero {
-        visible: MediaService.available && !root._hasArt
-        width: parent.width
-        glyph: "󰎇"
-        title: MediaService.title !== "" ? MediaService.title : "UNKNOWN TITLE"
-        meta: MediaService.artist !== "" ? MediaService.artist : MediaService.identity
-    }
-
-    // Two players at once is the ordinary case (a browser tab plus a music
-    // app) and MPRIS names them all, so the pick MediaService makes is worth
-    // overriding by hand: one row per registered player, the active one
-    // inverted, click to pin the whole shell to it. Hidden with a single
-    // player, where a list of one would just repeat the identity line above.
-    Cell {
-        visible: MediaService.players.length > 1
-        width: parent.width
-
-        MetaLabel { text: "PLAYERS"; colon: true }
-    }
-
-    Repeater {
-        model: MediaService.players.length > 1 ? MediaService.players : []
-
-        delegate: Cell {
-            id: playerCell
-            required property var modelData
-            width: parent.width
-            selected: playerCell.modelData.id === MediaService.activeId
-
+            // The player's own name is content, not a section label, so it
+            // stays in sentence case beside one.
             Text {
-                width: parent.width - (playingLabel.visible ? playingLabel.width + Theme.space.md : 0)
                 anchors.verticalCenter: parent.verticalCenter
-                text: playerCell.modelData.label
-                color: playerCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
+                visible: MediaService.identity !== ""
+                text: MediaService.identity
+                color: Theme.color.mutedForeground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.bodySmall
                 elide: Text.ElideRight
             }
+        }
 
-            MetaLabel {
-                id: playingLabel
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                visible: playerCell.modelData.isPlaying
-                text: "PLAYING"
-                color: playerCell.dimForeground
+        Cell {
+            id: infoCell
+            width: parent.width
+
+            Row {
+                id: infoRow
+                width: parent.width
+                spacing: root._hasArt ? Theme.space.md : 0
+
+                // A plain frame, never a dither: content imagery keeps its
+                // own colours, and nothing in the shell dithers unless
+                // `wallpaper.dither` or `lock.dither` says so.
+                Rectangle {
+                    id: artFrame
+                    visible: root._hasArt
+                    width: root._hasArt ? root._artSlotSize : 0
+                    height: root._artSlotSize
+                    anchors.verticalCenter: parent.verticalCenter
+                    radius: Theme.radiusMd
+                    color: Theme.color.muted
+                    border.width: Theme.borderWidth
+                    border.color: Theme.color.border
+                    clip: true
+
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: Theme.borderWidth
+                        visible: MediaService.artUrl !== ""
+                        source: MediaService.artUrl
+                        sourceSize.width: root._artSlotSize
+                        sourceSize.height: root._artSlotSize
+                        fillMode: Image.PreserveAspectCrop
+                        cache: false
+                    }
+
+                    // Apple Music animated cover (opt-in): layered over the
+                    // static art above, which stays the fallback for every
+                    // path it doesn't cover (disabled, no match, no animated
+                    // art, download failure, a missing QtMultimedia module).
+                    Loader {
+                        anchors.fill: parent
+                        anchors.margins: Theme.borderWidth
+                        active: AnimatedCoverFrameSource.active
+                        source: "AnimatedAlbumArt.qml"
+                    }
+                }
+
+                Column {
+                    width: infoRow.width - artFrame.width - infoRow.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.space.xxs
+
+                    Text {
+                        width: parent.width
+                        text: MediaService.title !== "" ? MediaService.title : "Unknown title"
+                        color: infoCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.subtitle
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        visible: MediaService.artist !== ""
+                        text: MediaService.artist
+                        color: infoCell.dimForeground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.bodySmall
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        visible: MediaService.album !== ""
+                        text: MediaService.album
+                        color: infoCell.dimForeground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.bodySmall
+                        elide: Text.ElideRight
+                    }
+                }
             }
-
-            interactive: true
-            onClicked: MediaService.select(playerCell.modelData.id)
         }
     }
 
-    // Header-line pairing (Task 1's rhythm): elapsed left, total right, both
-    // content ink since the row's whole point is these two numbers — track
-    // underneath. Flat accent fill, no thumb, draggable when the player
-    // supports seeking (AudioPanel's own volume-slider idiom).
     Cell {
         visible: MediaService.available
         width: parent.width
+
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Theme.space.xs
+
+            Repeater {
+                model: root._transport
+
+                delegate: IconButton {
+                    required property int index
+                    required property string modelData
+
+                    name: root._transportIcon(modelData)
+                    variant: root._transportVariant(modelData)
+                    enabled: root._transportEnabled(modelData)
+                    cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === index
+                    onHoveredChanged: if (hovered) root._pointAt(0, index)
+                    onClicked: root._pressTransport(modelData)
+                }
+            }
+        }
+    }
+
+    Cell {
+        id: progressCell
+        visible: MediaService.available
+        width: parent.width
+        cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
+        interactive: true
+        acceptedButtons: Qt.NoButton
+        onContainsPointerChanged: if (progressCell.containsPointer) root._pointAt(1, root._trackIndex("progress"))
 
         Column {
             width: parent.width
@@ -252,9 +370,9 @@ Panel {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: root._formatTime(MediaService.position)
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
+                    color: progressCell.foreground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
                 }
 
                 Text {
@@ -262,30 +380,21 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: root._formatTime(MediaService.length)
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
+                    color: progressCell.dimForeground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
                 }
             }
 
-            DitherFill {
+            Track {
                 id: progressTrack
                 width: parent.width
-                height: Theme.space.trackThickness
-
-                readonly property real _fraction: MediaService.length > 0
-                    ? Math.max(0, Math.min(1, MediaService.position / MediaService.length))
-                    : 0
-
-                Rectangle {
-                    width: parent.width * progressTrack._fraction
-                    height: parent.height
-                    color: Theme.color.primary
-                }
+                value: MediaService.length > 0 ? MediaService.position / MediaService.length : 0
 
                 MouseArea {
                     anchors.fill: parent
                     enabled: MediaService.canSeek
+                    cursorShape: Qt.PointingHandCursor
                     function _setFromX(x) {
                         MediaService.seek(x / progressTrack.width);
                     }
@@ -296,151 +405,17 @@ Panel {
         }
     }
 
-    // One small cluster of touching, content-sized cells instead of three
-    // glyphs stretched across equal 1/3-width cells — the controls read as
-    // buttons, not as padding. Each inner Cell draws only its own
-    // bottom/right rule (Cell's shared-rule contract), so the two explicit
-    // Rectangles below close the group's top and left edge the way
-    // Panel.qml's own frame closes it for the whole card — without them the
-    // cluster is three verticals and an underline with no top or left edge.
-    Cell {
-        visible: MediaService.available
-        width: parent.width
-
-        Row {
-            id: transportRow
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 0
-
-            // MPRIS Shuffle and LoopStatus flank the transport, each present
-            // only when the player implements it: three cells for a player
-            // that does neither, five for one that does both. Their on-state
-            // is the ledger's own inversion (DESIGN.md §1.1: inversion is
-            // state, the alpha hover is the pointer), which is why these two
-            // don't take the neighbouring cells' hover-inversion: an inverted
-            // shuffle cell has to mean shuffle is on, not that the pointer is
-            // over it.
-            Cell {
-                id: shuffleCell
-                visible: MediaService.shuffleSupported
-                width: implicitWidth
-                height: implicitHeight
-                selected: MediaService.shuffle
-
-                Text {
-                    anchors.centerIn: parent
-                    text: MediaService.shuffle ? "󰒝" : "󰒞"
-                    color: shuffleCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.heading
-                }
-
-                interactive: true
-                onClicked: MediaService.toggleShuffle()
-            }
-
-            Cell {
-                id: prevCell
-                width: implicitWidth
-                height: implicitHeight
-                selected: prevCell.containsPointer
-                enabled: MediaService.canGoPrevious
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "󰒮"
-                    color: MediaService.canGoPrevious ? prevCell.foreground : Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.heading
-                }
-
-                interactive: true
-                onClicked: MediaService.previous()
-            }
-
-            Cell {
-                id: playPauseCell
-                width: implicitWidth
-                height: implicitHeight
-                selected: playPauseCell.containsPointer
-
-                Text {
-                    anchors.centerIn: parent
-                    text: MediaService.isPlaying ? "󰏤" : "󰐊"
-                    color: playPauseCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.heading
-                }
-
-                interactive: true
-                onClicked: MediaService.playPause()
-            }
-
-            Cell {
-                id: nextCell
-                width: implicitWidth
-                height: implicitHeight
-                selected: nextCell.containsPointer
-                enabled: MediaService.canGoNext
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "󰒭"
-                    color: MediaService.canGoNext ? nextCell.foreground : Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.heading
-                }
-
-                interactive: true
-                onClicked: MediaService.next()
-            }
-
-            Cell {
-                id: loopCell
-                visible: MediaService.loopSupported
-                width: implicitWidth
-                height: implicitHeight
-                selected: MediaService.loopState !== "none"
-
-                Text {
-                    anchors.centerIn: parent
-                    text: MediaService.loopState === "track"
-                        ? "󰑘"
-                        : (MediaService.loopState === "playlist" ? "󰑖" : "󰑗")
-                    color: loopCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.heading
-                }
-
-                interactive: true
-                onClicked: MediaService.cycleLoop()
-            }
-        }
-
-        Rectangle {
-            anchors.top: transportRow.top
-            anchors.left: transportRow.left
-            anchors.right: transportRow.right
-            height: Theme.borderWidth
-            color: Theme.color.border
-        }
-
-        Rectangle {
-            anchors.top: transportRow.top
-            anchors.left: transportRow.left
-            anchors.bottom: transportRow.bottom
-            width: Theme.borderWidth
-            color: Theme.color.border
-        }
-    }
-
     // The player's OWN volume (MPRIS Volume), not the sink's. AudioPanel
     // owns that one, and a browser at 30% here is still whatever the sink
-    // says system-wide. Same header-line-plus-track rhythm as the progress
-    // row above; absent on a player that doesn't implement Volume.
+    // says system-wide.
     Cell {
+        id: volumeCell
         visible: MediaService.available && MediaService.volumeSupported
         width: parent.width
+        cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("volume")
+        interactive: true
+        acceptedButtons: Qt.NoButton
+        onContainsPointerChanged: if (volumeCell.containsPointer) root._pointAt(1, root._trackIndex("volume"))
 
         Column {
             width: parent.width
@@ -450,11 +425,15 @@ Panel {
                 width: parent.width
                 height: Math.max(volumeLabel.implicitHeight, volumeReadout.implicitHeight)
 
-                MetaLabel {
+                Text {
                     id: volumeLabel
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "VOLUME"
+                    text: "Volume"
+                    color: volumeCell.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
                 }
 
                 Text {
@@ -462,30 +441,80 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: Math.round(MediaService.volume * 100) + "%"
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
+                    color: volumeCell.dimForeground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
                 }
             }
 
-            DitherFill {
+            Track {
                 id: volumeTrack
                 width: parent.width
-                height: Theme.space.trackThickness
-
-                Rectangle {
-                    width: parent.width * MediaService.volume
-                    height: parent.height
-                    color: Theme.color.primary
-                }
+                value: MediaService.volume
 
                 MouseArea {
                     anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
                     function _setFromX(x) {
                         MediaService.setVolume(x / volumeTrack.width);
                     }
                     onPressed: mouse => _setFromX(mouse.x)
                     onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+                }
+            }
+        }
+    }
+
+    // Two players at once is the ordinary case (a browser tab plus a music
+    // app) and MPRIS names them all, so the pick MediaService makes is worth
+    // overriding by hand.
+    Column {
+        width: parent.width
+        visible: root._playerRows.length > 0
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "PLAYERS"; count: root._playerRows.length }
+
+        Flow {
+            width: parent.width
+            spacing: Theme.space.xs
+
+            Repeater {
+                model: root._playerRows
+
+                delegate: Cell {
+                    id: playerChip
+                    required property int index
+                    required property var modelData
+
+                    radius: Theme.radiusSm
+                    selected: playerChip.modelData.id === MediaService.activeId
+                    cursor: root.cursorActive && root.cursorSection === 2 && root.cursorIndex === playerChip.index
+                    interactive: true
+                    onContainsPointerChanged: if (playerChip.containsPointer) root._pointAt(2, playerChip.index)
+                    onClicked: MediaService.select(playerChip.modelData.id)
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.xs
+
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: playerChip.modelData.isPlaying
+                            name: "play"
+                            size: Theme.fontSize.bodySmall
+                            color: playerChip.foreground
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: playerChip.modelData.label
+                            color: playerChip.foreground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.bodySmall
+                            font.weight: Theme.weight.medium
+                        }
+                    }
                 }
             }
         }

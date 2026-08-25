@@ -71,6 +71,8 @@ var ICONS = {
     "skip-forward": "\u{F04AD}",
     "shuffle": "\u{F049D}",
     "repeat": "\u{F0456}",
+    "repeat-1": "\u{F0458}",
+    "music": "\u{F075A}",
     "image": "\u{F02E9}",
     "camera": "\u{F0100}",
     "video": "\u{F0567}",

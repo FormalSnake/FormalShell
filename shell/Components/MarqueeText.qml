@@ -3,7 +3,9 @@ import qs.Core
 
 // Reusable clipped two-copy seamless marquee (extracted from NowPlaying.qml's
 // M16 Task 11 now-playing title scroll, generalized for ActiveWindow.qml's
-// window-title cell): renders `text` as a plain elided Text when it fits
+// window-title cell). Both consumers scroll words (a track title, a window
+// title), so the face is sans (DESIGN.md §1 "Type"): renders `text` as a
+// plain elided Text when it fits
 // `maxWidth`, or scrolls it — a hold at the loop start, then a steady linear
 // loop with no visible seam — once it genuinely overflows. Gated on
 // Theme.motionEnabled AND `windowVisible` so a hidden window or a
@@ -63,7 +65,7 @@ Item {
         id: measureText
         visible: false
         text: root.text
-        font.family: Theme.fontFamily
+        font.family: Theme.fontFamilySans
         font.pixelSize: root.pixelSize
         onImplicitWidthChanged: root._restartMarquee()
     }
@@ -84,7 +86,7 @@ Item {
             visible: !root._marquee
             text: root.text
             color: root.color
-            font.family: Theme.fontFamily
+            font.family: Theme.fontFamilySans
             font.pixelSize: root.pixelSize
             elide: Text.ElideRight
             width: viewport.width
@@ -102,14 +104,14 @@ Item {
             Text {
                 text: root.text
                 color: root.color
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilySans
                 font.pixelSize: root.pixelSize
             }
             Item { width: root._gap; height: 1 }
             Text {
                 text: root.text
                 color: root.color
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilySans
                 font.pixelSize: root.pixelSize
             }
         }

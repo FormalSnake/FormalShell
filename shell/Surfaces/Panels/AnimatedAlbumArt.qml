@@ -1,36 +1,30 @@
 import QtQuick
 import QtMultimedia
 import qs.Core
-import qs.Components
 import qs.Services
 
-// Apple Music animated cover overlay (M7 Task 2, spec §5; dithered by M20
-// Task 3; frames shared with the bar's mini cover M35). Loaded from
-// MediaPanel.qml via `Loader { source: "AnimatedAlbumArt.qml" }` rather
-// than a direct `import QtMultimedia` there — that keeps a missing
-// QtMultimedia module a failure of this one Loader's component creation,
-// not of the whole now-playing panel, so the static album-art DitherImage
-// beneath is always the honest fallback rather than a broken panel.
+// Apple Music animated cover overlay (M7 Task 2, spec §5; frames shared with
+// the bar's mini cover, M35). Loaded from MediaPanel.qml via `Loader {
+// source: "AnimatedAlbumArt.qml" }` rather than a direct `import
+// QtMultimedia` there, which keeps a missing QtMultimedia module a failure of
+// this one Loader's component creation instead of the whole now-playing
+// panel, so the static album art beneath is always the honest fallback rather
+// than a broken panel.
 //
-// The Video decodes normally underneath but is never the visible content:
-// a Timer at ~8fps grabs its current frame (`Item.grabToImage`, ground-
-// truthed against real Wayland/Quickshell rendering in the mac VM rig —
-// the offscreen qmltestrunner path alone never exercises this) and
-// publishes it to `AnimatedCoverFrameSource.frameUrl` — this component's
-// own DitherImage below reads it back like any other consumer, so the
-// panel and the bar's mini cover (NowPlaying.qml) repaint the exact same
-// retro color-dither pass (DESIGN.md §2 item 12) from one decode rather
-// than two. The choppy ~8fps cadence is the intended aesthetic, not a
-// defect.
+// The Timer at ~8fps grabs the Video's current frame (`Item.grabToImage`,
+// ground-truthed against real Wayland/Quickshell rendering in the VM rig:
+// the offscreen qmltestrunner path alone never exercises this) and publishes
+// it to `AnimatedCoverFrameSource.frameUrl`, which is where the bar's mini
+// cover (NowPlaying.qml) reads its frames from. One decode feeds both
+// surfaces.
 //
 // `visible` folds in the full motion carve-out (DESIGN §4): a decoded,
 // error-free, actually-playing frame AND `Theme.motionEnabled`. Motion
-// disabled, paused, stalled, or errored all fall through to the same
-// state — invisible, letting the static art beneath show instead — so
-// there is never a frame where the raw Video is the only thing painted.
-// This Loader itself only exists while AnimatedCoverFrameSource.active is
-// true (MediaPanel.qml), so `visible` here is a finer-grained gate on top
-// of that: the Video can exist for a moment before it has actually started
+// disabled, paused, stalled, or errored all fall through to the same state,
+// invisible, letting the static art beneath show instead. This Loader itself
+// only exists while AnimatedCoverFrameSource.active is true
+// (MediaPanel.qml), so `visible` here is a finer-grained gate on top of
+// that: the Video can exist for a moment before it has actually started
 // playing real frames.
 Item {
     id: root
@@ -46,13 +40,6 @@ Item {
         muted: true
         onSourceChanged: if (source != "") play();
         Component.onCompleted: if (source != "") play();
-    }
-
-    DitherImage {
-        id: dither
-        anchors.fill: parent
-        mode: "retro"
-        source: AnimatedCoverFrameSource.frameUrl
     }
 
     Timer {
