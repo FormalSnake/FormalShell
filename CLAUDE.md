@@ -10,9 +10,26 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   required before commit — see `docs/superpowers/plans/`).
 - The approved design lives at `docs/superpowers/specs/`. Plans live at
   `docs/superpowers/plans/`. **The spec wins over any plan on conflict.**
+- Since 2026-08-25 the approved design is
+  `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md` (Omarchy
+  behaviour, shadcn chrome, wallpaper palette, keyboard everywhere, Hyprland
+  only). The 2026-07-27 spec still holds for architecture, IPC and config;
+  the 08-25 spec wins where the two disagree.
 
 ## Verification loop
 
+- `dev/smoke.sh` (`just vm-smoke <flags>`) is the rig now: nested Hyprland
+  by default, `--compositor niri` runs the old `dev/smoke-niri.sh` instead.
+  Legs ported so far: base, `--menu`, `--notify`, `--panel <name>`,
+  `--console`; every other leg documented below still lives only in the
+  niri script until M46 deletes it. In the VM, nested Hyprland runs on a
+  `vkms` software KMS card: the pixman-rendered sway parent advertises no
+  `zwp_linux_dmabuf_v1` and hands it no render node, which aquamarine needs
+  to create its backend at all, so `vkms` gives it a real (if virtual) GBM
+  device instead; on a real host, with a real GPU behind the parent, it
+  nests directly. `nix/testvm.nix` changed twice for this (`e517319`,
+  `33fdaca`), so run `just vm-down && just vm-up` once before the first
+  `vm-smoke` against it.
 - `just build` — `nix build .#formalshell`. **`git add` first**: flakes only
   see git-tracked files, so an unstaged file is invisible to the build.
 - `just test` — headless `qmltestrunner` over `tests/` (`QT_QPA_PLATFORM=offscreen`).
@@ -46,12 +63,14 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   Combine with `--wallpaper` to verify the menu over matugen-recolored
   colors (`docs/screenshots/menu-niri.png` is captured this way); that
   combination pushes the menu leg's whole timeline back to sleep 11
-  (`menu_t0`), since the menu's backdrop now covers the entire output and
-  would otherwise be what the wallpaper leg's sleep-8 flatness patch
-  samples. The menu's own backdrop is a `grim -t ppm` freeze taken before
-  the surface maps, dithered at chunk 10 / palette 4 and dissolved in on
-  `DitherImage.reveal`; a summon that cannot get a frame opens anyway
-  behind a 250ms watchdog.
+  (`menu_t0`), since the menu covers the entire output and would otherwise
+  be what the wallpaper leg's sleep-8 flatness patch samples. The menu's own
+  backdrop is a plain black scrim at 0.5 (omarchy parity). A dithered freeze
+  of the screen was built here first and reverted: refreshing it meant the
+  capture contained the backdrop it was replacing, and the resample, the
+  per-frame palette and the darkening wash each drifted a little per
+  generation, so the picture crawled while nothing on screen moved. Only the
+  lock screen dithers, and only because its source is one still wallpaper.
 - `dev/smoke-niri.sh --notify` — same, plus fires `notify-send -u normal`
   then `-u critical` in-session and screenshots the resulting toasts:
   bottom-right by default since M34 (`notifications.position`,
@@ -95,12 +114,20 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 - `dev/smoke-niri.sh --clipboard` — same, plus `wl-copy`s three fixture
   strings, dumps `clipboard list` twice (proving capture, newest-first
   order, and that re-copying an existing entry moves it to the front rather
-  than duplicating it), then activates a second entry via the exact
-  self-targeting `qs ipc --any-display -p <shellDir> call clipboard copy
-  <id>` invocation `Menu/providers.js`'s `clipboardProvider` builds and
-  reads the system clipboard back to confirm it landed, before summoning
-  the menu's `clipboard` route so the screenshot shows the provider's rows
-  rendered as real menu cells.
+  than duplicating it), then calls `clipboard copy <id>` on a second entry
+  and reads the system clipboard back to confirm it landed. Then the leg
+  that matters: a sentinel string is copied, the `clipboard` route is
+  summoned, `menu filter` narrows it to one known row, `menu activate 0`
+  (the rig's Enter stand-in) fires, and the clipboard is read back — it has
+  to hold the ROW's entry, not the sentinel. Enter used to spawn `qs ipc …
+  clipboard copy <id>` through the compositor, which worked only here,
+  because `nix/testvm.nix` installs the whole quickshell package; nothing
+  puts `qs` on a real session's PATH, so it was a silent exit 127 on every
+  actual install. Row activation is in-process now
+  (`@ipc:clipboard.copy:<id>`). The paste keystroke Enter also synthesizes
+  is not observable in a nested session with no focused client. The route
+  is left summoned so the screenshot shows the provider's rows rendered as
+  real menu cells.
 - `dev/smoke-niri.sh --clipssh` — writes a two-alias `~/.clipssh/aliases`
   into the isolated HOME and drives the menu's clipssh route over `menu
   activate` (the rig's Enter stand-in) against a PATH-shimmed `clipssh`
@@ -290,7 +317,8 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `bar.layout` at the opt-in `monitor` builtin leading the right region,
   opens its compact panel over `panel open monitor`, then summons the
   launcher's FULL monitor route (`menu summon monitor`, the one route
-  `Menu/appviews.js`'s registry names so far). Three screenshots off one
+  `Menu/appviews.js`'s registry names so far — the process table is the
+  bottom half of that same view). Three screenshots off one
   timeline (`monitor-bar.png`, `monitor-panel.png`, `monitor-view.png`)
   with `monitor status` and `monitor gpu` dumped beside them. The honest
   no-GPU state is the actual claim: the mac VM's `/sys/class/drm` holds no
@@ -324,9 +352,13 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   are deliberately left unshimmed so `offloadArgv` takes that four-variable
   branch. An environment variable is invisible to a screenshot, which is
   why this leg reads a file back instead of trusting the frame.
-- `dev/smoke-niri.sh --processes` (M39) drives the launcher's process
-  route end to end against two fixture processes it starts itself: copies
-  of **bash** (not coreutils `sleep`, which nixpkgs builds as one
+- `dev/smoke-niri.sh --processes` (M39) drives the process table end to
+  end against two fixture processes it starts itself. The table lives
+  INSIDE the launcher's monitor view (btop's layout, M40: stats above,
+  table below, one route — it had a route of its own for a day and the
+  owner asked for it folded in, 2026-08-19), so this leg summons `monitor`
+  and the search field it types into is that route's own. The fixtures are
+  copies of **bash** (not coreutils `sleep`, which nixpkgs builds as one
   multi-call binary that dispatches on argv[0] and exits at once under any
   other name) spinning on a builtin loop, so each one is findable by a
   whole 15-byte comm, is the busiest thing on the machine, and dies on TERM
@@ -416,9 +448,9 @@ rationale):
   in-VM builds are near no-ops. Inside it, a systemd **user** service runs a
   headless wlroots parent compositor (sway, `WLR_BACKENDS=headless`,
   `WLR_RENDERER=pixman`) publishing `WAYLAND_DISPLAY` into the systemd user
-  environment — the same lookup `dev/smoke-niri.sh` already falls back to on
-  a real host. `dev/smoke-*.sh` then run **completely unchanged** inside,
-  nesting their own niri/Hyprland as a winit/wayland client of that parent
+  environment — the same lookup `dev/smoke.sh` and `dev/smoke-niri.sh` already fall back to on
+  a real host. Both then run **completely unchanged** inside, nesting their
+  own Hyprland/niri as a winit/wayland client of that parent
   (software rendering throughout — Mesa llvmpipe for the nested compositor's
   EGL, pixman for the parent — the same concession any CI-grade wlroots
   testing makes).
@@ -426,8 +458,9 @@ rationale):
 `dev/vm.sh` is the driver: `start` (build+boot headless, wait for ssh),
 `stop`, `status`, `sync` (rsync the **working tree** — not a commit — into
 `~/formalshell` inside the VM), `run <cmd…>` (ssh with cwd at the repo and
-the session env exported), `smoke [flags…]` (sync, run `dev/smoke-niri.sh`
-inside, then `scp` the `SMOKE_OK` screenshot plus any dump/status/query JSON
+the session env exported), `smoke [flags…]` (sync, run `dev/smoke.sh` on nested
+Hyprland by default, or `dev/smoke-niri.sh` with `--compositor niri`,
+then `scp` the `SMOKE_OK` screenshot plus any dump/status/query JSON
 back to `./artifacts/` on the mac; `--screensaver-gif` additionally rsyncs
 the VM's `docs/media/screensaver-*.gif` straight into the real repo's
 `docs/media/` on the mac, since those are committed output, not scratch
@@ -447,7 +480,7 @@ Screenshots and JSON always land on the **mac** filesystem under
 The VM has no real desktop bus owner (nothing on the mac plays the role DMS
 plays on the Linux hosts), so `busctl --user status
 org.freedesktop.Notifications` legitimately answers ENXIO/no-owner every
-run; `dev/smoke-niri.sh`'s D-Bus isolation check tolerates that (`|| true` —
+run; the smoke rig's D-Bus isolation check tolerates that (`|| true` —
 a real "no owner" answer, not a connectivity failure) without changing
 behavior on hosts where a real owner exists.
 
@@ -482,13 +515,12 @@ behavior on hosts where a real owner exists.
   org.freedesktop.Notifications`'s owner PID on the **host** bus is unchanged
   before and after every run (`|| true`-tolerant of a legitimate "no owner"
   answer, e.g. on the mac VM rig, which has no desktop bus owner at all).
-- **Design language**: every UI surface follows `docs/DESIGN.md` — Omarchy
-  quattro close reference (four-state control tokens, border specs, rem/
-  spacing scale roots, bordered floating cards), mek.gallery as an ASCII-OS
-  accent on tabular content (ruled rows, uppercase meta labels, fg/bg
-  inversion for selection, accent as full-bleed cells), radius 0, monospace,
-  DMS for feature ideas only. Read it before building or restyling any
-  surface.
+- **Design language**: every UI surface follows `docs/DESIGN.md`: shadcn/ui
+  chrome (`card` fill, 1px `border`, `radiusMd` controls and `radiusXl`
+  cards, one `ring` for focus, `accent` hover, `primary` for the wallpaper
+  colour) on Omarchy quattro's surface set and habits. Read it before
+  building or restyling any surface. mek.gallery and the ledger grammar are
+  gone (2026-08-25).
 - **`panel` IPC target is a spec addendum, not a conflict.** The design
   spec's §IPC target list (`docs/superpowers/specs/2026-07-27-formalshell-design.md`)
   predates per-widget popouts and doesn't name `panel`. The M6 plan added it
@@ -532,24 +564,32 @@ behavior on hosts where a real owner exists.
 - The shell only ever **reads** `~/.config/formalshell/settings.json`; it
   never writes it. Runtime-mutable state goes to
   `$XDG_STATE_HOME/formalshell/state.json`.
-- Brutalist defaults, non-negotiable: corner radius `0`, no blur, no
-  shadows, border width `2`, font = fontconfig `monospace` alias (never a
-  hardcoded family name), icons = Nerd Font glyphs (no SVG icon sets).
-  **Nothing in the shell blurs anything.** The lock backdrop was DESIGN.md's
-  one named blur exception until M39 replaced it with the same retro dither
-  pass the launcher backdrop and the wallpaper already use (owner,
-  2026-08-19), so there is no exception left to spend: a surface that needs
-  to destroy what is behind it dithers it. Never reintroduce a
-  `ScreencopyView`-based capture for any of them (see `LockSurface.qml`'s
-  header comment: it crashes the whole shell outright, a fail-open on a
-  security-critical surface) — the launcher backdrop's freeze is a `grim`
-  subprocess writing a file, the same way the capture suite does it.
+- Chrome defaults (2026-08-25): radius `Theme.radius` (10, `theme.radius`
+  in settings.json), 1px `border`, no shadow, no gradient, no blur drawn by
+  the shell (Hyprland blurs behind the translucent bar/panel/launcher cards
+  via layerrules; `theme.surfaceOpacity`, default 0.85), dither only behind
+  `wallpaper.dither`/`lock.dither` (both default false), fonts = the
+  fontconfig `sans-serif` alias for words and `monospace` for values (Geist
+  Sans/Mono by intent, never a hardcoded family), icons by name
+  through `Components/Icon.qml` with the set picked by `theme.icons`
+  (`lucide` default, `nerd`; no raw glyphs in surface files, no SVG icon
+  assets). Nothing in the shell blurs or shadows
+  anything: a modal surface sits over a plain 0.5 black scrim, every other
+  surface sits over the desktop with its border doing the work. Never
+  reintroduce a `ScreencopyView`-based capture anywhere (see
+  `LockSurface.qml`'s header comment: it crashes the whole shell outright,
+  a fail-open on a security-critical surface).
 - License MIT. Every file substantially ported from DankMaterialShell keeps
   a `// Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC)`
   header line.
-- ⚠️ Nerd Font glyphs are raw multi-byte codepoints; whole-file rewrites can
-  corrupt them (Omarchy's `AGENTS.md` documents this). Use targeted `Edit`
-  operations on files containing glyphs; never rewrite such files wholesale.
+- ⚠️ Until M45 finishes the sweep, some files still carry raw Nerd Font
+  glyphs (multi-byte codepoints that whole-file rewrites corrupt). Use
+  targeted `Edit` operations on those files; new icon uses go through
+  `Icon { name: ... }` and `shell/Theme/icons.js`, never a raw codepoint.
+- Hyprland is the only supported compositor (owner, 2026-08-25). The niri
+  backend and `dev/smoke-niri.sh` stay only until M46 deletes them, after
+  the nested Hyprland rig (`dev/smoke.sh`) is green on the M41 gate legs.
+  New compositor work goes in `shell/Compositor/hyprland/` only.
 - ⚠️ Quickshell percentage/fraction-shaped properties are 0..1, not 0..100
   (`UPowerDevice.percentage`, `WifiNetwork.signalStrength` — both confirmed
   from C++ source: `src/network/wifi.hpp:22`, `src/network/nm/network.cpp:260`).
