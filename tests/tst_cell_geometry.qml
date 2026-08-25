@@ -8,9 +8,9 @@ import "../shell/Components"
 // The real Theme singleton is a Quickshell Singleton, so these tests run
 // against tests/stubs/qs/Core/Theme.qml (same palette.js/tokens.js values)
 // via qmltestrunner's -import, wired up in the justfile/flake test calls.
-// space.controlPaddingX is 12 and space.controlPaddingY is 6 at the default
-// scale; both are spelled out in the expectations so a token change has to be
-// a deliberate edit here too.
+// space.controlPaddingX is 12, space.controlPaddingY is 6 and
+// space.controlHeight is 32 at the default scale; all three are spelled out
+// in the expectations so a token change has to be a deliberate edit here too.
 TestCase {
     id: testCase
     name: "CellGeometry"
@@ -129,6 +129,31 @@ TestCase {
         }
     }
 
+    // A cell the caller gave a height of its own (a calendar day, a bar
+    // cell): the content centres in whatever height it was handed.
+    Component {
+        id: fixedHeightCellComponent
+
+        Cell {
+            readonly property Item probeLabel: label
+            width: 48
+            height: 48
+            SectionLabel { id: label; text: "12" }
+        }
+    }
+
+    // The process table's KERNEL badge: a cell inside a row, so it hugs its
+    // label instead of taking the row floor.
+    Component {
+        id: chipCellComponent
+
+        Cell {
+            readonly property Item probeLabel: label
+            chip: true
+            SectionLabel { id: label; text: "KERNEL" }
+        }
+    }
+
     // A plain content cell: one intrinsically sized child, no fill-anchored
     // sibling. This is the shape the childrenRect measurement always got
     // right, so it pins the padding arithmetic against regression.
@@ -225,7 +250,7 @@ TestCase {
         // minus padding) straight back into it.
         var forget = row.probeForget;
         compare(forget.implicitWidth, row.probeForgetLabel.implicitWidth + 12 * 2);
-        compare(forget.implicitHeight, row.probeForgetLabel.implicitHeight + 6 * 2);
+        compare(forget.implicitHeight, Math.max(32, row.probeForgetLabel.implicitHeight + 6 * 2));
         compare(forget.width, forget.implicitWidth);
         compare(forget.height, forget.implicitHeight);
         verify(forget.width < row.width / 2);
@@ -243,7 +268,7 @@ TestCase {
         // panel, which is the bug this guards.
         var nameRowHeight = Math.max(row.probeName.implicitHeight, row.probeForget.height);
         compare(row.probeNameRow.height, nameRowHeight);
-        compare(row.implicitHeight, nameRowHeight + 2 + row.probeStatus.height + 6 * 2);
+        compare(row.implicitHeight, Math.max(32, nameRowHeight + 2 + row.probeStatus.height + 6 * 2));
         compare(row.height, row.implicitHeight);
         verify(row.height > 0);
         verify(row.probeName.width > 0);
@@ -261,7 +286,7 @@ TestCase {
         // offset must not contribute.
         var column = cell.probeColumn;
         compare(cell.implicitWidth, column.implicitWidth + 12 * 2);
-        compare(cell.implicitHeight, column.implicitHeight + 6 * 2);
+        compare(cell.implicitHeight, Math.max(32, column.implicitHeight + 6 * 2));
         compare(cell.width, cell.implicitWidth);
         compare(cell.height, cell.implicitHeight);
         compare(column.y, 0);
@@ -344,7 +369,10 @@ TestCase {
         // A Rectangle has no implicit size at all, so measuring implicit
         // sizes alone would collapse the track row to its padding.
         compare(cells.probeTrack.height, 6);
-        compare(cells.probeTrackCell.implicitHeight, 6 + 6 * 2);
+        // A row this short floors at controlHeight and centres the track in
+        // it rather than sitting 18px tall next to 32px rows.
+        compare(cells.probeTrackCell.implicitHeight, 32);
+        compare(cells.probeTrack.mapToItem(cells.probeTrackCell, 0, 0).y, (32 - 6) / 2);
         compare(cells.probeTrackCell.height, cells.probeTrackCell.implicitHeight);
         // The track stretches to the cell it was given, and reports that
         // width back as the cell's own implicit width.
@@ -359,14 +387,42 @@ TestCase {
         settle(cell);
 
         compare(cell.implicitWidth, cell.probeLabel.implicitWidth + 12 * 2);
-        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2);
+        // One caption line is shorter than a row, so the cell takes
+        // controlHeight rather than hugging the label (DESIGN.md §1 Padding).
+        compare(cell.implicitHeight, 32);
+        verify(cell.probeLabel.implicitHeight + 6 * 2 < 32);
 
-        // The label sits inside the cell's own padding, and the cell hugs
-        // it: the same gutter leading and trailing.
+        // The label sits inside the cell's own padding: the same gutter
+        // leading and trailing, and the same above and below.
         var origin = cell.probeLabel.mapToItem(cell, 0, 0);
         compare(origin.x, 12);
-        compare(origin.y, 6);
         compare(cell.width - (origin.x + cell.probeLabel.width), 12);
-        compare(cell.height - (origin.y + cell.probeLabel.height), 6);
+        compare(origin.y, (32 - cell.probeLabel.height) / 2);
+        compare(cell.height - (origin.y + cell.probeLabel.height), origin.y);
+    }
+
+    function test_a_cell_given_a_height_centres_its_content_in_it() {
+        failOnWarning(/Binding loop/);
+        var cell = createTemporaryObject(fixedHeightCellComponent, testCase);
+        verify(cell);
+        settle(cell);
+
+        // The height came from the call site, so the padding cannot be
+        // controlPaddingY top and bottom and still be even: the inset grows
+        // with the room instead (DESIGN.md §1 Padding).
+        var origin = cell.probeLabel.mapToItem(cell, 0, 0);
+        verify(origin.y > 6);
+        compare(origin.y, (48 - cell.probeLabel.height) / 2);
+        compare(cell.height - (origin.y + cell.probeLabel.height), origin.y);
+    }
+
+    function test_a_chip_hugs_its_label_instead_of_taking_the_row_floor() {
+        failOnWarning(/Binding loop/);
+        var cell = createTemporaryObject(chipCellComponent, testCase);
+        verify(cell);
+        settle(cell);
+
+        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2);
+        verify(cell.implicitHeight < 32);
     }
 }

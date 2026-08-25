@@ -1107,7 +1107,10 @@ Item {
     readonly property real _nameWidth: root._digit * 20
     readonly property real _cpuWidth: root._digit * 6
     readonly property real _memWidth: root._digit * 7
-    readonly property real _rowHeight: metrics.height + Core.Theme.space.controlPaddingY * 2
+    // Same floor every other row in the shell takes (DESIGN.md §1 Padding):
+    // `controlHeight`, and taller only where the text itself needs it.
+    readonly property real _rowHeight: Math.max(Core.Theme.space.controlHeight,
+        metrics.height + Core.Theme.space.controlPaddingY * 2)
 
     // The verb a press would take right now, in the action bar's own shape.
     // Everything the footer says about this route is derived here, so the
@@ -1484,6 +1487,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: procRow.modelData.kernel === true
                 radius: Core.Theme.radiusSm
+                chip: true
                 selected: true
 
                 SectionLabel {

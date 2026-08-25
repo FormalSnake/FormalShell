@@ -99,7 +99,7 @@ PanelWindow {
     // surface horizontally under wlr-layer-shell's arrange rules, the same
     // technique swayosd uses for its own bottom-centre card.
     anchors.bottom: true
-    margins.bottom: Theme.space.panelGap
+    margins.bottom: Theme.space.panelPadding
 
     implicitWidth: frame.implicitWidth
     implicitHeight: frame.implicitHeight

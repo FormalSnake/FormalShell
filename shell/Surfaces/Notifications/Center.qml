@@ -285,7 +285,7 @@ PanelWindow {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.rightMargin: root._overhang
-                height: Math.max(title.implicitHeight, clearAllButton.height, dndSwitch.height)
+                height: Theme.space.controlHeight
 
                 Text {
                     id: title

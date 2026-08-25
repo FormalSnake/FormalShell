@@ -44,7 +44,6 @@ TestCase {
         compare(s.huge, 18);
         compare(s.controlGap, 8);
         compare(s.popupRowHeight, 28);
-        compare(s.panelGap, 14);
         compare(s.trackThickness, 6);
     }
 

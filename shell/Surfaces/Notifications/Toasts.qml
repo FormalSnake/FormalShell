@@ -32,7 +32,7 @@ import "../../Notifications/stack.js" as Stack
 // `transform: scale`, a 2px border under `scale(0.95)` rasterizes
 // blurry), critical always wins the front slot over a newer normal one
 // (`Model.stackOrder`). EXPANDED is today's plain full-width list, one
-// card per live popup, `panelGap` apart, ordered by `_entries` exactly as
+// card per live popup, `panelPadding` apart, ordered by `_entries` exactly as
 // before this task. Hovering the stack (or `notifications expand
 // on/off` over IPC, the rig's stand-in for a pointer this rig doesn't
 // have, the bar chevron's own `expand` verb is the precedent) toggles
@@ -133,10 +133,10 @@ PanelWindow {
         right: root._positionSpec.right
     }
     margins {
-        top: root._positionSpec.top ? root._barHeight + Theme.space.panelGap : 0
-        bottom: root._positionSpec.bottom ? Theme.space.panelGap : 0
-        left: root._positionSpec.left ? Theme.space.panelGap : 0
-        right: root._positionSpec.right ? Theme.space.panelGap : 0
+        top: root._positionSpec.top ? root._barHeight + Theme.space.panelPadding : 0
+        bottom: root._positionSpec.bottom ? Theme.space.panelPadding : 0
+        left: root._positionSpec.left ? Theme.space.panelPadding : 0
+        right: root._positionSpec.right ? Theme.space.panelPadding : 0
     }
 
     implicitWidth: stack.width
@@ -286,7 +286,7 @@ PanelWindow {
             peekInset: root._peekInset,
             peekOffset: root._peekOffset,
             maxPeekLevels: root._maxPeekLevels,
-            gap: Theme.space.panelGap,
+            gap: Theme.space.panelPadding,
             top: root._positionSpec.top
         });
     }

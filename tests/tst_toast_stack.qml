@@ -7,7 +7,7 @@ import "../shell/Notifications/stack.js" as Stack
 // spelled out rather than read off Theme so a token change has to be a
 // deliberate edit here too: at the default scale `peekInset` is
 // `Theme.space.lg` (8), `peekOffset` is `Theme.space.sm` (4), `gap` is
-// `Theme.space.panelGap` (14) and the frame is `popupWidthNarrow` (320).
+// `Theme.space.panelPadding` (12) and the frame is `popupWidthNarrow` (320).
 TestCase {
     name: "ToastStack"
 
@@ -16,7 +16,7 @@ TestCase {
         peekInset: 8,
         peekOffset: 4,
         maxPeekLevels: 2,
-        gap: 14
+        gap: 12
     })
 
     function layout(params) {

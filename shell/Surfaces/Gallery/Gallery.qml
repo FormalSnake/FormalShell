@@ -39,7 +39,7 @@ Panel {
     // the screen height, so the sheet below spends that budget across
     // columns rather than on one long scroll.
     panelWidth: root.screen
-        ? Math.round(root.screen.width - Theme.space.panelGap * 2)
+        ? Math.round(root.screen.width - Theme.space.panelPadding * 2)
         : 960
 
     // Nothing below exists until the surface is actually summoned, the

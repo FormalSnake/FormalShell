@@ -99,7 +99,7 @@ shell/
                                  active/selected/destructive/warning/cursor states and
                                  default-property content
     Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,
-                                  opaque fill, Theme.space.panelGap below the bar) anchored under its
+                                  opaque fill, Theme.space.barMargin below the bar) anchored under its
                                   opening bar cell, on that cell's own output (anchorX/anchorScreen, both
                                   unset for an IPC open: bar's right region on the focused output),
                                   WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside

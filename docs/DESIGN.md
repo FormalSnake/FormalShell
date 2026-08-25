@@ -46,11 +46,29 @@ fontconfig aliases, Geist Sans and Geist Mono by intent. Sizes `caption` 11,
 `display` 26, `displayLarge` 30. Weights `normal` 400, `medium` 500,
 `semibold` 600. Values that change are mono, so they stay tabular.
 
-**Space** (`Theme.space.*`): `xs` 4, `sm` 8, `md` 12, `lg` 16, `xl` 24,
-`xxl` 32; `controlHeight` 32, `barCellHeight` 28, `barMargin` 6,
-`controlPaddingX` 12, `controlPaddingY` 6, `rowGap` 4, `panelPadding` 12,
+**Space** (`Theme.space.*`): the raw steps are `xxs` 2, `xs` 3, `sm` 4,
+`md` 6, `lg` 8, `xl` 10, `xxl` 12, `huge` 18; the semantic keys are
+`controlHeight` 32, `barCellHeight` 28, `barMargin` 6, `controlPaddingX` 12,
+`controlPaddingY` 6, `rowGap` 4, `iconGap` 8, `panelPadding` 12,
 `sectionGap` 16, `trackThickness` 6; `popupWidthNarrow` 320, `Default` 380,
 `Wide` 480, `Menu` 560, `MenuSplit` 840, `MenuApp` 900.
+
+**Padding**: one rule, on every surface. A card insets its content by
+`panelPadding`. A row is `controlHeight` tall with `controlPaddingX` either
+side and its content vertically centred; it is taller only when its own
+content needs the room, and a badge that sits inside a row rather than
+being one (`Cell { chip: true }`) hugs its label. A `SectionLabel` sits
+`sectionGap` below the block
+above it and `rowGap` above its rows, and the rows inside a section are
+`rowGap` apart. An icon and the label beside it are `iconGap` apart. A
+header row is `controlHeight` tall and takes the same horizontal padding as
+the rows under it: none of its own where those rows draw their own border
+(a panel), `controlPaddingX` where they do not, which is why the launcher's
+input row and footer line up with its row labels rather than with the card
+edge. A floating surface sits `panelPadding` off the screen edge it hangs
+from and `barMargin` off the bar or the item it is anchored to. Toasts, the
+OSD pill, the notification centre and the tooltip take those same numbers.
+A surface never writes its own margin.
 
 **Motion** (`Theme.motion.*`): `fast` 100 for hover fills, `standard` 130
 for enter/exit, `reveal` 400 for the wallpaper crossfade, `slide` 4px.

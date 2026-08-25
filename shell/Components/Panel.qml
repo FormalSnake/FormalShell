@@ -357,12 +357,15 @@ PanelWindow {
                 onClicked: {}
             }
 
+            // A header row is `controlHeight` tall (DESIGN.md §1 Padding),
+            // stated rather than inferred from whichever control inside it
+            // happens to be tallest.
             Item {
                 id: header
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                height: Math.max(titleText.implicitHeight, closeButton.height)
+                height: Theme.space.controlHeight
 
                 Icon {
                     id: headerIcon

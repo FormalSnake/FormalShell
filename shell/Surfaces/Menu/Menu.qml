@@ -789,11 +789,11 @@ PanelWindow {
     readonly property real _chrome: Core.Theme.space.panelPadding * 2
     // Everything above the view: the input row, the rule under it, and the
     // two optional bands (the breadcrumb chips, the picker's variant
-    // switcher), each with the `sm` gap that precedes it when it is there
+    // switcher), each with the `rowGap` that precedes it when it is there
     // at all.
     readonly property real _headerHeight: searchRow.height + searchRule.height
-        + (breadcrumbRow.height > 0 ? Core.Theme.space.sm + breadcrumbRow.height : 0)
-        + (variantRow.height > 0 ? Core.Theme.space.sm + variantRow.height : 0)
+        + (breadcrumbRow.height > 0 ? Core.Theme.space.rowGap + breadcrumbRow.height : 0)
+        + (variantRow.height > 0 ? Core.Theme.space.rowGap + variantRow.height : 0)
     // Whichever view owns the level: the grid on the wallpaper route, the
     // loaded component on an app-view route, the row list everywhere else.
     // The idle ones are emptied or unloaded rather than merely hidden (see
@@ -805,7 +805,7 @@ PanelWindow {
         ? gridView.contentHeight
         : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight)
     readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - root._headerHeight
-        - Core.Theme.space.sm * 2 - actionBar.height)
+        - Core.Theme.space.rowGap * 2 - actionBar.height)
     // Fixed height on the split route (M30, omarchy parity): the preview
     // pane needs to be genuinely useful, not sized to whatever row count a
     // filter happens to leave, so this route always takes the full cap
@@ -829,10 +829,10 @@ PanelWindow {
     // same job for free, because a row count that changes only ever moves
     // the bottom edge.
     readonly property real _topFraction: 0.3
-    readonly property real _topInset: Core.Theme.space.panelGap
+    readonly property real _topInset: Core.Theme.space.panelPadding
     readonly property real _preferredTop: root._outputHeight * root._topFraction
 
-    // Keeps the card fully on screen with a `panelGap` margin whatever the
+    // Keeps the card fully on screen with a `panelPadding` margin whatever the
     // row count does to its height.
     function _clampTop(top) {
         if (root._outputHeight <= 0)
@@ -1615,7 +1615,7 @@ PanelWindow {
         ? Core.Theme.space.popupWidthMenuApp
         : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
     readonly property real _cardHeight: root._chrome + root._headerHeight
-        + Core.Theme.space.sm * 2 + root._rowsAreaHeight + actionBar.height
+        + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -1689,12 +1689,17 @@ PanelWindow {
 
         // The input row (spec "Launcher"): a search icon, the field, and a
         // 1px rule underneath. No frame of its own, so the card's own
-        // border is the only one on the surface.
+        // border is the only one on the surface. Its content takes the
+        // rows' own `controlPaddingX` (DESIGN.md §1 Padding): the rows here
+        // are borderless, so nothing else would line the icon up with the
+        // column of icons under it. The rule below stays full-bleed.
         Item {
             id: searchRow
             anchors.top: parent.top
             anchors.left: parent.left
+            anchors.leftMargin: Core.Theme.space.controlPaddingX
             anchors.right: parent.right
+            anchors.rightMargin: Core.Theme.space.controlPaddingX
             height: Core.Theme.space.controlHeight
 
             Icon {
@@ -1871,7 +1876,7 @@ PanelWindow {
         Row {
             id: breadcrumbRow
             anchors.top: searchRule.bottom
-            anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.sm : 0
+            anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.rowGap : 0
             anchors.left: parent.left
             spacing: Core.Theme.space.xs
             visible: root._breadcrumbVisible
@@ -1908,7 +1913,7 @@ PanelWindow {
         Segmented {
             id: variantRow
             anchors.top: breadcrumbRow.bottom
-            anchors.topMargin: visible ? Core.Theme.space.sm : 0
+            anchors.topMargin: visible ? Core.Theme.space.rowGap : 0
             anchors.left: parent.left
             visible: root._isPickerRoute && root._pickerHasVariants
             height: visible ? implicitHeight : 0
@@ -1928,7 +1933,7 @@ PanelWindow {
         ListView {
             id: rowsView
             anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.sm
+            anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left
             // Split route (M30): the list keeps the left half of
             // _contentWidth so the preview pane below can own the right
@@ -1977,7 +1982,7 @@ PanelWindow {
         GridView {
             id: gridView
             anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.sm
+            anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left
             width: root._contentWidth
             height: root._rowsAreaHeight
@@ -2094,7 +2099,7 @@ PanelWindow {
         Loader {
             id: appView
             anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.sm
+            anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left
             width: root._contentWidth
             height: root._rowsAreaHeight
@@ -2152,7 +2157,7 @@ PanelWindow {
 
             Text {
                 anchors.top: previewHeader.bottom
-                anchors.topMargin: Core.Theme.space.sm
+                anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
@@ -2174,7 +2179,7 @@ PanelWindow {
             Rectangle {
                 id: previewImageBox
                 anchors.top: previewHeader.bottom
-                anchors.topMargin: Core.Theme.space.sm
+                anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
@@ -2205,9 +2210,14 @@ PanelWindow {
         MenuActionBar {
             id: actionBar
             anchors.top: rowsView.bottom
-            anchors.topMargin: Core.Theme.space.sm
+            anchors.topMargin: Core.Theme.space.rowGap
+            // Same `controlPaddingX` the rows and the input row take, so the
+            // legend starts under the column of labels rather than under the
+            // card's edge (DESIGN.md §1 Padding).
             anchors.left: parent.left
-            width: root._contentWidth
+            anchors.leftMargin: Core.Theme.space.controlPaddingX
+            anchors.right: parent.right
+            anchors.rightMargin: Core.Theme.space.controlPaddingX
             primary: root._actionBar.primary
             hints: root._actionBar.hints
 

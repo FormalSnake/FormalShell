@@ -88,11 +88,11 @@ Cell {
             Column {
                 id: textColumn
                 anchors.left: glyphSlot.right
-                anchors.leftMargin: (root.glyph !== "" || root.leading !== null) ? Theme.space.md : 0
+                anchors.leftMargin: (root.glyph !== "" || root.leading !== null) ? Theme.space.iconGap : 0
                 anchors.right: root.readout !== ""
                     ? readoutText.left
                     : (trailingLoader.active ? trailingLoader.left : parent.right)
-                anchors.rightMargin: (trailingLoader.active || root.readout !== "") ? Theme.space.md : 0
+                anchors.rightMargin: (trailingLoader.active || root.readout !== "") ? Theme.space.iconGap : 0
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space.xxs
 
@@ -126,7 +126,7 @@ Cell {
             Text {
                 id: readoutText
                 anchors.right: trailingLoader.active ? trailingLoader.left : parent.right
-                anchors.rightMargin: trailingLoader.active ? Theme.space.md : 0
+                anchors.rightMargin: trailingLoader.active ? Theme.space.iconGap : 0
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.readout !== ""
                 text: root.readout

@@ -4,14 +4,14 @@ import "../shell/Components/tooltip.js" as Placement
 
 // M44 D6: Tooltip.qml's own geometry, in the anchor's window space (which
 // is the output's, see tooltip.js). `gap` is Theme.space.md and `edge` is
-// Theme.space.panelGap at the default scale.
+// Theme.space.panelPadding at the default scale.
 TestCase {
     name: "TooltipPlacement"
 
     readonly property var screen: ({ width: 1920, height: 1080 })
     readonly property var card: ({ width: 200, height: 24 })
     readonly property int gap: 6
-    readonly property int edge: 14
+    readonly property int edge: 12
 
     function place(anchor, size) {
         return Placement.placement(anchor, size || card, screen, gap, edge);

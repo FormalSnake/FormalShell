@@ -125,8 +125,28 @@ Item {
         ? foreground
         : Theme.color.mutedForeground
 
+    // A badge sitting inside a row (the process table's KERNEL cell) rather
+    // than being one: it hugs its own label, since a badge as tall as the
+    // row around it reads as a second row.
+    property bool chip: false
+
     implicitWidth: root._measure(false) + Theme.space.controlPaddingX * 2
-    implicitHeight: root._measure(true) + Theme.space.controlPaddingY * 2
+    // A row is `controlHeight` tall (DESIGN.md §1 Padding). Content that
+    // needs more (a two-line row, a clipboard thumbnail) still grows past
+    // it; the padding alone never decides the height of a one-line row,
+    // which is what left every list in the shell a few pixels short of the
+    // controls beside it.
+    implicitHeight: Math.max(root.chip ? 0 : Theme.space.controlHeight,
+        root._measure(true) + Theme.space.controlPaddingY * 2)
+
+    // Content is vertically centred (DESIGN.md §1 Padding), so the vertical
+    // inset grows past `controlPaddingY` whenever the cell is taller than
+    // its content: a row floored at `controlHeight`, and a cell given an
+    // explicit height (a calendar day, a bar cell). Equal top and bottom
+    // margins on a fill anchor is what does the centring; the children
+    // themselves need no anchor of their own.
+    readonly property real _insetY: Math.max(Theme.space.controlPaddingY,
+        (root.height - root._measure(true)) / 2)
 
     // How big the content wants to be. This used to be `content`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
@@ -282,9 +302,9 @@ Item {
         id: content
         anchors.fill: parent
         anchors.leftMargin: Theme.space.controlPaddingX
-        anchors.topMargin: Theme.space.controlPaddingY
+        anchors.topMargin: root._insetY
         anchors.rightMargin: Theme.space.controlPaddingX
-        anchors.bottomMargin: Theme.space.controlPaddingY
+        anchors.bottomMargin: root._insetY
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size

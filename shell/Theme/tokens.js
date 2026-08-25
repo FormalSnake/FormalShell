@@ -40,8 +40,11 @@ var SPACING_BASE = {
 // `controlPaddingX`/`Y`, `rowGap`, `iconGap`, `panelPadding` and
 // `sectionGap` take the spec's own values, decoupling `controlPaddingX`/`Y`
 // from the bare `lg`/`sm` scale steps they used to mirror exactly. Older
-// keys not named in the spec (`controlGap`, `popupRowHeight`, `panelGap`)
-// keep their existing values while surfaces still read them.
+// keys not named in the spec (`controlGap`, `popupRowHeight`) keep their
+// existing values while surfaces still read them. `panelGap` (14) is gone:
+// one padding rule (DESIGN.md §1) leaves every floating surface sitting
+// `panelPadding` off the edge it hangs from, so a fourth number had nothing
+// left to describe.
 // `trackThickness` is the one flat-fill-track idiom (OSD,
 // volume/brightness/life-progress sliders), a single token so every track
 // site renders the same thickness instead of each surface picking its own
@@ -58,7 +61,7 @@ var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
     controlHeight: 32, barCellHeight: 28, barMargin: 6,
     popupRowHeight: 28, rowGap: 4, iconGap: 8,
-    panelGap: 14, panelPadding: 12, sectionGap: 16,
+    panelPadding: 12, sectionGap: 16,
     trackThickness: 6,
     popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900

@@ -190,8 +190,8 @@ import QtQuick
 // corner the popup toast stack anchors to, one of "top-right" /
 // "bottom-right" / "bottom-left" / "top-left". An unrecognised value falls
 // back to the default (shell/Notifications/model.js's positionSpec()).
-// Top positions clear the bar (barHeight + panelGap); bottom positions sit
-// panelGap off the bottom edge. The newest toast always sits nearest the
+// Top positions clear the bar (barHeight + panelPadding); bottom positions sit
+// panelPadding off the bottom edge. The newest toast always sits nearest the
 // anchored corner and the enter/exit slide comes from the anchored side
 // edge, M34 Task 1.
 // console.command (array of strings, default ["ghostty",

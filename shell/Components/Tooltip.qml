@@ -71,7 +71,7 @@ PanelWindow {
         ? Placement.placement(root._anchorRect,
             Qt.size(frame.width, frame.height),
             Qt.size(root._screen.width, root._screen.height),
-            Theme.space.md, Theme.space.panelGap)
+            Theme.space.md, Theme.space.panelPadding)
         : ({ x: 0, y: 0, above: false })
 
     function show() {
