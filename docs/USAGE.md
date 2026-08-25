@@ -658,14 +658,53 @@ identical from outside. Success is never claimed, and neither is failure.
 
 ### Getting around
 
+The card centers on the focused output, its top edge starting at 30% of the
+output height, over a plain black scrim at half opacity. The input row is a
+search icon, the text field, and a 1px rule underneath; a breadcrumb chip for
+each level below the root sits under that rule, one chip per step, hidden
+outright at the root where the field is already the whole surface. The
+cursor row, and a hovered row, fill `accent`; the row list itself has no rule
+between rows and no separate focus ring, since the cursor is the only thing
+a modal surface needs to mark.
+
+A row's icon is a name, not a hardcoded glyph: `Menu/icons.js` maps the
+shipped route ids onto Lucide names, rendered through whichever set
+`theme.icons` selects. A route id missing from that map, an emoji row, a
+provider row carrying its own glyph, or an entry from your own `menu.jsonc`,
+falls back to the row's own glyph string in the mono font.
+
 The bottom row of the card names what Enter will do to the row under the
-cursor (`OPEN`, `RUN`, `ENTER`, `SET WALLPAPER`, `COPY AND TYPE`,
-`CONFIRM <label>` while a confirm row waits), followed by the keys that
-always apply: `MOVE` and `ESC`, which reads `BACK` where there is a level to
-pop and `CLOSE` at the root. Clicking the left half does what Enter does;
-the key legends on the right are legends, not buttons. A row that can't be
-activated leaves the left half blank instead of offering a verb that would
-do nothing.
+cursor, then the keys that always apply. The verb comes from the row's own
+kind: Select, Open, Enter, Run, Choose (`Set Wallpaper` on the wallpaper
+route), Copy, Paste or Share on clipboard and emoji rows, or `Confirm
+<label>` once a confirm-gated row is armed. A row that can't be activated
+leaves the verb out rather than naming one that would do nothing. On a plain
+app row at the root the line reads:
+
+```
+↑↓ move  ⏎ open  esc back
+```
+
+`move` covers the row list; on the picker grid it becomes `←→↑↓`, since the
+cursor moves in two dimensions there. `esc` reads `back` wherever there is a
+level to pop, `close` at the root, and `cancel` in select/input mode. Two
+more hints show only when they mean something: `Tab` names the picker's
+other Dark/Light set while its switcher is up, and `Shift+Enter` opens the
+app row under the cursor on the discrete GPU, on a machine that has one.
+Clicking the left half of the footer does what Enter does; the key legends
+on the right are legends, not buttons.
+
+| Key | Does |
+| --- | --- |
+| `↑` / `↓` | Move the cursor a row (a grid row in the picker); scrolls an app view's own content when the view has no row cursor of its own |
+| `←` / `→` | Move the cursor a column, picker route only; the text field's own cursor everywhere else |
+| `Page Up` / `Page Down` | Scroll an app view's content by a page, one row kept for context; text field navigation everywhere else |
+| `Home` / `End` | Jump an app view's content to its start or end; text field navigation everywhere else |
+| `Enter` | Submit (input mode); otherwise activate the row under the cursor |
+| `Shift+Enter` | Launch the app row under the cursor on the discrete GPU |
+| `Escape` | Cancel and close (select/input mode); pop a level, or close at the root (menu mode) |
+| `Backspace` | Pop a level, only when the search field is empty |
+| `Tab` / `Shift+Tab` | Swap the picker's Dark/Light set, only while its switcher is showing |
 
 Hover moves the cursor only when the pointer is genuinely what moved. Qt
 re-delivers hover to whatever row slides under a parked pointer, which
@@ -673,15 +712,14 @@ otherwise yanks the keyboard cursor to wherever your mouse happens to be
 resting on every keystroke. Typing, arrows, a level change and close all
 re-arm the gate, and the first real pointer movement takes the cursor back.
 
-The card is centered on the focused output and clamped to stay fully on
-screen. While a query stands, the top edge freezes where it was when you
-started typing, so the card grows downward instead of jumping on every
-keystroke. Clearing the query, changing level, or a fresh summon releases
-the freeze.
+The card also stays clamped to fit on screen. While a query stands, the top
+edge freezes where it was when you started typing, so the card grows
+downward instead of jumping on every keystroke. Clearing the query,
+changing level, or a fresh summon releases the freeze.
 
 ### Toggles
 
-The root `TOGGLES` node holds four live checkmark rows: night light
+The root `Toggles` node holds four live checkmark rows: night light
 (`toggles.nightlight`, hidden unless `wlsunset` is on PATH), stay awake
 (`toggles.stay-awake`), do not disturb (`toggles.dnd`) and dark mode
 (`toggles.dark-mode`). Activating one flips it and leaves the menu open, so
@@ -715,7 +753,7 @@ makes a toggle worth looking at:
 That `checked` is an ordinary shell condition, resolved by one process on
 menu open like any other. Only the four `@state:` paths are in-process.
 
-**If your `menu.jsonc` predates the `TOGGLES` node**, three ids changed. An
+**If your `menu.jsonc` predates the `Toggles` node**, three ids changed. An
 override keyed on an old one does not error, it goes inert: it lands on a
 node nothing declares, so nothing changes and nothing warns.
 
@@ -741,11 +779,17 @@ panel stays reachable with its bar cell opted out. **Tray** does the same
 for live SNI items, Enter taking the same action a left click on the cell
 would. An empty tray renders one dim `NO TRAY ITEMS` row.
 
+**Clipboard** and **Share > Pick From History** draw as a split route
+instead of a plain row list: the row list keeps the left half of the card,
+and a bordered inner card on the right previews the row under the
+cursor, either its full text or, on a capture, the image itself at true
+color, since menu thumbnails are never dithered.
+
 The launcher is the front door for everything, which is why `System` also
 carries `Console` and `Screensaver` rows, a `Plugins` submenu (`List
-Plugins`, `Reload Plugins`), and why there are root `NOTIFICATIONS` (`Clear
-All`, `Mark All Seen`, `Dismiss Popups`), `THEME` (`Retheme`, `Dark Mode`,
-`Light Mode`) and `CAPTURE` nodes. `tests/tst_menu_reachability.qml` fails
+Plugins`, `Reload Plugins`), and why there are root `Notifications` (`Clear
+All`, `Mark All Seen`, `Dismiss Popups`), `Theme` (`Retheme`, `Dark Mode`,
+`Light Mode`) and `Capture` nodes. `tests/tst_menu_reachability.qml` fails
 the build the moment a panel ships without a route, so this stays true
 rather than being true today.
 
@@ -758,7 +802,10 @@ declaring it: `property string query` for the live search field, `property
 Flickable scrollTarget` for what the arrows scroll, `function viewKey(key,
 modifiers)` to claim keys ahead of the menu's own handler, and `property var
 viewActions` plus `function viewActivate(index)` to put its own verbs in the
-action bar.
+action bar. `monitor` uses all four: its own field filters the process
+table, and `viewKey` claims `Ctrl+Enter` to arm a kill and send it on the
+next matching press, `Ctrl+R` to arm a restart the same way, and `Ctrl+S` to
+cycle the sort column, each named in the footer through `viewActions`.
 
 **Calculator.** A root query that parses as arithmetic (`+ - * / % ^`,
 parentheses, unary minus, decimals, through a real recursive-descent parser,
@@ -820,11 +867,11 @@ compositor. A half-written config yields the binds above the mistake, which
 is the honest answer for a file you are editing right now.
 
 **Share** appears only when `localsend_app` is on PATH, checked live rather
-than by config, so no LocalSend means no `SHARE` node at all.
-`CLIPBOARD` shares the newest entry (text gets written to a temp file
-first), `PICK FROM HISTORY` lists the same clipboard rows but shares the
-chosen one instead of copying it, and `RECEIVE` opens LocalSend empty. An
-empty clipboard renders a dim `NOTHING TO SHARE`. LocalSend has no headless
+than by config, so no LocalSend means no `Share` node at all.
+`Clipboard` shares the newest entry (text gets written to a temp file
+first), `Pick From History` lists the same clipboard rows but shares the
+chosen one instead of copying it, and `Receive` opens LocalSend empty. An
+empty clipboard renders a dim `Nothing To Share`. LocalSend has no headless
 send mode: only a bare path that exists on disk pre-populates its selection,
 dash-prefixed args are silently skipped, and the GUI still owns picking a
 device and starting the transfer. Package and firewall notes are in
@@ -2176,15 +2223,17 @@ can fire is already reachable by its own verb or keybind.
 ## Picker
 
 The picker is a route inside the menu rather than a surface of its own. The
-`WALLPAPER` row, `menu summon wallpaper` and `picker summon` all descend
+`Wallpaper` row, `menu summon wallpaper` and `picker summon` all descend
 into a level whose rows are the images in a directory, which the menu draws
-as a ledger grid of image cells.
+as a grid of thumbnail cells with a 1px border and `radiusMd` corners; the
+cursor is a ring around the cell rather than a fill, since the thumbnail
+already covers it.
 
 ![The picker grid](screenshots/picker-niri.png)
 
-Everything else is the menu's: the search field filters by filename, arrows
-move the cursor in 2D, Enter confirms, Escape pops back out, and the action
-bar names what Enter will do.
+Everything else is the menu's: the search field filters by filename, the
+arrow keys move the cursor in 2D, Enter confirms, Escape pops back out, and
+the footer names what Enter will do.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -2202,11 +2251,12 @@ thumbnails don't outlive it. An empty or unset directory is an empty grid.
 
 **Dark and Light variants.** The scan looks one level down for `Dark` and
 `Light` subdirectories (either name, any case). If either exists, the grid
-shows one variant at a time with a `DARK | LIGHT` switcher between the
-search field and the grid, `Tab` swaps it, and the route opens on whichever
-matches the current mode. Files sitting directly in the directory are not
-listed in that case. A directory with neither subdirectory is listed flat
-and shows no switcher, so nothing changes for a setup that doesn't use them.
+shows one variant at a time with a two-way `Dark` / `Light` switch between
+the search field and the grid, `Tab` swaps it, and the route opens on
+whichever matches the current mode. Files sitting directly in the directory
+are not listed in that case. A directory with neither subdirectory is
+listed flat and shows no switch, so nothing changes for a setup that
+doesn't use them.
 
 The route does two jobs. In **wallpaper mode** choosing an image makes the
 same call `wallpaper set` makes, so the retheme pipeline runs through one
@@ -2220,7 +2270,7 @@ the other's poll.
 fs picker summon                        # wallpaper mode
 fs picker select /path/to/dir tok1      # select mode, correlated by token
 fs picker choose /path/to/dir/img.png   # same as Enter or a click on that cell
-fs picker variant light                 # same as Tab or the DARK | LIGHT cells
+fs picker variant light                 # same as Tab or the Dark / Light cells
 fs picker close
 fs picker status   # {"open":…,"mode":…,"directory":…,"count":…,"variant":…,"hasVariants":…,"cursor":…}
 

@@ -627,8 +627,12 @@ Model.visibleChildren(nodes, id, condResults)   Search.rank(nodes, query, condRe
         \                                           /
          \-----------------------------------------/
                        v
-              Surfaces/Menu/MenuRow.qml  (a Cell: icon+label, ▸/✓ trailing
-                                           indicator, confirm-gate swap)
+              Surfaces/Menu/MenuRow.qml  (icon name via Menu/icons.js's
+                                           iconFor(node), sans label, muted
+                                           detail, chevron-right/check
+                                           trailing icon, confirm-gate swap;
+                                           accent-filled cursor/hover row,
+                                           not a Cell)
 ```
 
 **Toggle rows (`Menu/toggles.js`).** The `toggles` subtree's rows carry a
@@ -669,19 +673,16 @@ miss falls through to the same `execute()` spawn path as before, which is
 the only path that honors the entry's own `Exec` field codes. Focusing
 records a frecency hit, since it is a use of the app.
 
-**Cell shared-rule contract.** `Components/Cell.qml` draws only its own
-bottom and right hairline rule (`Theme.color.rule`, `Theme.borderWidth`
-thick), the container arranging a grid of cells (`Menu.qml`'s `ListView`,
-future bar/panel grids) is responsible for the outer top/left rule, so
-adjacent cells never double up a shared border. Surfaces themselves are
-omarchy-style cards (DESIGN.md §1): their own full border, opaque fill,
-floating with a gap below the bar, rather than edge-to-edge grids. The rows
-inside a card still share the same hairline contract, and every row
-on every surface goes through `Cell`, so a `Rectangle`-with-border
-appearing outside `Components/` is drift, not a new pattern. `Cell`'s
-`standalone` prop is the bar-widget variant: borderless idle,
-gaining a hover-cursor fill+border only on mouseover, for cells that live
-directly on the bar rather than inside a card.
+**Cell, and where the launcher doesn't use it.** `Components/Cell.qml` is
+the shadcn item shared by every bar cell, panel row and chip (DESIGN.md
+§2): a `card` fill with a 1px `border` at `radiusMd`, cursor state drawn as
+a `ring`. The launcher's row list is the one place in the shell that opts
+out of it: `MenuRow.qml` is a plain borderless item, since a Cell's own
+border would double up with every other row's in a list that abuts, and
+its cursor/hover state is an `accent` fill rather than a ring, the one
+focus a modal surface needs. The picker grid's thumbnail cells and the
+breadcrumb chips are `Cell`s, same as everywhere else; only the list row
+carries its own paint.
 
 ## Notification data flow
 
