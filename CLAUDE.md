@@ -20,6 +20,9 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 - `dev/smoke.sh` (`just vm-smoke <flags>`) is the rig now: nested Hyprland
   by default, `--compositor niri` runs the old `dev/smoke-niri.sh` instead.
+  It is a scaffold plus one file per leg under `dev/smoke.d/<leg>.sh`, so
+  what a leg proves lives in that file's own header and adding a leg never
+  edits the scaffold; `dev/smoke.d/README.md` is the file contract.
   Legs ported so far: base, `--menu`, `--notify`, `--panel <name>`,
   `--console`, `--picker`, `--hotcorner`, `--wallpaper`, `--lock`,
   `--clipboard`, `--monitor`, `--processes`; every other leg documented
