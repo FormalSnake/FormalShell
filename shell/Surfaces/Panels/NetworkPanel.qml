@@ -7,23 +7,29 @@ import "../../Network/model.js" as NetworkModel
 import "../../Network/speedtest.js" as SpeedTest
 import "../../Network/wifiqr.js" as WifiQr
 
-// Network panel (DESIGN.md §Panels, spec §2, M6 Task 6; wifi behavior parity
-// M14 Task 2): a ledger table of connections grouped WIRED then WI-FI
-// (mirroring AudioPanel's OUTPUT/INPUT split), each row a full-width cell,
-// the active connection inverted. WIRED stays the simple always-visible
-// connect/disconnect row it always was. WI-FI is the omarchy-parity surface:
-// a WI-FI POWER toggle (BluetoothPanel's adapter-POWER idiom), rows sorted
-// by Network/model.js (connected → known → signal desc) under KNOWN/
-// AVAILABLE headers, a mono signal bar, a lock glyph for secured networks, a
-// status subline (CONNECTING…/failure text), an inline masked passphrase
-// prompt for secured-unknown networks (an IDENTITY field too for 802.1x
-// EAP), and a hover-revealed FORGET action on known rows. The wifi device's
-// `scannerEnabled` tracks the panel's own `isOpen` (live list while looking,
-// idle radio once closed), omarchy's exact idiom. Bound directly to
-// Quickshell.Networking, same as AudioPanel binds Pipewire directly rather
-// than going through a Services wrapper. Honest empty state: "NO DEVICES"
-// when Networking.devices is empty; a section with zero rows simply omits
-// its header rather than inventing a placeholder row.
+// Network panel (DESIGN.md §3 "Panel", spec "Panels"): the first surface
+// built on the shadcn primitives. Panel draws the header (wifi icon, title,
+// the radio power and rescan `IconButton`s, close); the content is a hero
+// card for the connected AP, a stats card carrying the last measured rates,
+// a WIRED section, a `NETWORKS (n)` section of bordered rows, the share and
+// password rows, and a footer pairing an outline Speed test button with the
+// download figure.
+//
+// A row is one `Cell`: wifi icon, SSID, signal percentage, a hover-revealed
+// forget, a lock icon when secured, a check icon when connected. Rows sort
+// through Network/model.js (connected, then known, then signal descending)
+// into one list rather than the old KNOWN/AVAILABLE split, which is what
+// lets Panel's numeric cursor address them. A secured network nobody knows
+// yet expands an inline `Input` for the passphrase (a second one for the
+// 802.1x identity), and that field blocks Panel's KeyCatcher while it holds
+// focus.
+//
+// The wifi device's `scannerEnabled` tracks the panel's own `isOpen` (live
+// list while looking, idle radio once closed), omarchy's exact idiom. Bound
+// directly to Quickshell.Networking, same as AudioPanel binds Pipewire
+// directly rather than going through a Services wrapper. Honest empty
+// states: "NO DEVICES" when Networking.devices is empty, and a section with
+// zero rows omits its rows rather than inventing a placeholder.
 //
 // SPEED TEST (M16 Task 9, "flat ledger rows, no gauges": omarchy's own
 // SpeedTestPanel.qml renders a pair of floating arc gauges; that chrome is
@@ -52,8 +58,8 @@ import "../../Network/wifiqr.js" as WifiQr
 // on screen until the panel closes.
 //
 // WI-FI QR SHARE (owner ask; omarchy's `bin/omarchy-network-qr`
-// reimplemented, its centered scrim overlay deliberately left behind —
-// this is a collapsed row inside the same ledger). A SHARE / QR toggle
+// reimplemented, its centered scrim overlay deliberately left behind, since
+// this is a collapsed row inside the panel itself). A share row toggle
 // expands a scannable code for the network this machine is already on:
 // resolve the active wifi device, read that connection's own settings with
 // nmcli, build a `WIFI:` payload (Network/wifiqr.js), pipe it through
@@ -65,7 +71,7 @@ import "../../Network/wifiqr.js" as WifiQr
 //
 // WI-FI PASSWORD REVEAL (owner ask; omarchy's own show/hide affordance,
 // `~/Developer/omarchy/shell/plugins/panels/network/WifiQrPanel.qml:168-187`,
-// rebuilt as a ledger row instead of a caption under a QR card). A PASSWORD
+// rebuilt as a panel row instead of a caption under a QR card). A password
 // row with a SHOW / HIDE toggle reveals the saved secret for the network
 // this machine is already on, so the owner can read it out to someone. It
 // rides the QR share's own nmcli read (`wifiFieldsProc` below) rather than
@@ -78,12 +84,6 @@ import "../../Network/wifiqr.js" as WifiQr
 // the reveal section's own header comment below.
 Panel {
     id: root
-
-    panelTitle: "NETWORK"
-    // Densest surface in the shell: signal bar, lock glyph, SSID, a hover-
-    // revealed FORGET, a status subline, inline password fields, the QR
-    // matrix and the speed-test ledger all share one row's width.
-    panelWidth: Theme.space.popupWidthWide
 
     // EAP profile creation shells out to nmcli (Constraints: the password
     // never touches argv: it arrives over the Process's own stdin, read by
@@ -129,22 +129,25 @@ Panel {
             security: e.network.security
         };
     }))
-    readonly property var _knownRows: root._wifiSorted.filter(function (r) { return NetworkModel.sectionOf(r) === "KNOWN"; })
-    readonly property var _availableRows: root._wifiSorted.filter(function (r) { return NetworkModel.sectionOf(r) === "AVAILABLE"; })
-
     readonly property var _wifiDevices: Networking.devices.values.filter(function (d) { return d.type === DeviceType.Wifi; })
     readonly property bool _hasWifiDevice: root._wifiDevices.length > 0
 
-    // The hero's own subject (M28 Task 5): the connected SSID when there is
-    // one, else the radio's own control-interface name — never a fabricated
-    // network, and never blank while a real wifi device exists.
+    // The hero's own subject: the connected SSID when there is one, else the
+    // radio's own control-interface name. Never a fabricated network, and
+    // never blank while a real wifi device exists.
     readonly property string _wifiHeroTitle: root._connectedWifiSsid !== ""
         ? root._connectedWifiSsid
         : (root._wifiDevices.length > 0 ? root._wifiDevices[0].name : "")
-    readonly property string _wifiHeroMeta: root._connectedWifiSsid !== ""
-        ? "CONNECTED"
-        : (Networking.wifiEnabled ? "DISCONNECTED" : "RADIO OFF")
-    readonly property string _wifiHeroGlyph: root._connectedWifiSsid !== "" ? "󰖩" : "󰖪"
+    // The caption line carries the radio's own MAC while it is associated
+    // (Quickshell.Networking publishes no per-AP BSSID: WifiNetwork exposes
+    // signalStrength and security and nothing else), and falls back to the
+    // link state when there is no address to show.
+    readonly property string _wifiHeroMeta: {
+        if (root._connectedWifiSsid === "")
+            return Networking.wifiEnabled ? "DISCONNECTED" : "RADIO OFF";
+        return root._wifiDeviceAddress !== "" ? root._wifiDeviceAddress : "CONNECTED";
+    }
+    readonly property string _wifiHeroIcon: root._connectedWifiSsid !== "" ? "wifi" : "wifi-off"
 
     function _applyScanner() {
         for (var i = 0; i < root._wifiDevices.length; i++)
@@ -157,12 +160,12 @@ Panel {
     onIsOpenChanged: {
         root._applyScanner();
         if (root.isOpen) {
-            // Cursor identity starts on the first row every open (M26 Task
-            // 8's reveal-only guard below needs a real position to show,
-            // never an empty ssid that would gate `hovered` false on the
-            // first press) — empty when the scan hasn't produced a row yet,
-            // which the guard's own fallback handles honestly.
-            root._cursorSsid = root._wifiSorted.length > 0 ? (root._wifiSorted[0].network.name || "") : "";
+            // The cursor starts on the first row every open, so the
+            // reveal-only first keypress has a real position to show. Empty
+            // when the scan has not produced a row yet.
+            root.cursorIndex = 0;
+            root.cursorSection = 0;
+            root._cursorSsid = root._ssidAt(0);
         } else {
             root._cancelPasswordPrompt();
             root._cursorSsid = "";
@@ -739,10 +742,9 @@ Panel {
     property string _passwordText: ""
     property string _identityText: ""
 
-    // Keyboard cursor over the combined KNOWN+AVAILABLE row order, tracked
-    // by ssid rather than a numeric index since the two sections render as
-    // separate Repeaters (PowerPanel's numeric _cursor doesn't fit a table
-    // that splits across two headers).
+    // The cursor's row identity, kept alongside Panel's own numeric
+    // cursorIndex: the sort reshuffles as signal strength ticks, and an index
+    // on its own would walk the cursor onto whatever row slid underneath it.
     property string _cursorSsid: ""
 
     function _wifiIndexForSsid(ssid) {
@@ -751,59 +753,6 @@ Panel {
                 return i;
         }
         return -1;
-    }
-
-    function _moveCursor(delta) {
-        if (root._wifiSorted.length === 0) {
-            root._cursorSsid = "";
-            return;
-        }
-        var idx = root._wifiIndexForSsid(root._cursorSsid);
-        if (idx < 0)
-            idx = delta > 0 ? 0 : root._wifiSorted.length - 1;
-        else
-            idx = Math.max(0, Math.min(root._wifiSorted.length - 1, idx + delta));
-        root._cursorSsid = root._wifiSorted[idx].network.name || "";
-    }
-
-    // Panel.qml's shared keyboard-nav hook (M6 Task 7, PowerPanel's consumer
-    // pattern): Up/Down move the cursor, Enter activates it. Bails out
-    // entirely while a passphrase prompt is open: that field owns real Qt
-    // keyboard focus then, so typing (and its own Enter/Escape) goes to the
-    // prompt, never the cursor.
-    Connections {
-        target: root
-
-        function onKeyPressed(event) {
-            if (!root.isOpen || root._passwordSsid !== "")
-                return;
-            // First Up/Down only reveals the cursor where it already sits
-            // (M26 Task 8, upstream's CursorSurface contract) — it does not
-            // also move it, so the highlight appears where the user can see
-            // it before anything happens.
-            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                root.cursorActive = true;
-                event.accepted = true;
-                return;
-            }
-            switch (event.key) {
-            case Qt.Key_Up:
-                root._moveCursor(-1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Down:
-                root._moveCursor(1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                var idx = root._wifiIndexForSsid(root._cursorSsid);
-                if (idx >= 0)
-                    root._activateWifiRow(root._wifiSorted[idx].network);
-                event.accepted = true;
-                break;
-            }
-        }
     }
 
     function _runAction(kind, network) {
@@ -960,63 +909,152 @@ Panel {
         }
     }
 
+    // ---- Layout ----------------------------------------------------------
+
+    readonly property string _wifiDeviceAddress: root._wifiDevices.length > 0
+        ? (root._wifiDevices[0].address || "")
+        : ""
+
+    readonly property real _connectedSignal: {
+        for (var i = 0; i < root._wifiSorted.length; i++) {
+            if (root._wifiSorted[i].network.connected)
+                return root._wifiSorted[i].network.signalStrength;
+        }
+        return -1;
+    }
+    readonly property string _connectedSignalText: root._connectedSignal >= 0
+        ? "signal " + Math.round(root._connectedSignal * 100) + "%"
+        : ""
+
+    // "--" rather than 0.0 before a run: a rate nobody has measured is not a
+    // rate of zero (CLAUDE.md's honest-unavailable-state rule).
+    readonly property string _downText: root._stPhase === "down"
+        ? SpeedTest.formatMbps(root._stDownWindow.liveMbps)
+        : (root._stDownResult > 0 ? SpeedTest.formatMbps(root._stDownResult) : "--")
+    readonly property string _upText: root._stPhase === "up"
+        ? SpeedTest.formatMbps(root._stUpWindow.liveMbps)
+        : (root._stUpResult > 0 ? SpeedTest.formatMbps(root._stUpResult) : "--")
+
+    readonly property string _speedStatusText: {
+        if (root._stError !== "") return root._stError;
+        if (root._stPhase === "resolving") return "RESOLVING INTERFACE";
+        if (root._stPhase === "down") return "MEASURING DOWN";
+        if (root._stPhase === "up") return "MEASURING UP";
+        return "";
+    }
+
+    function _ssidAt(index) {
+        return (index >= 0 && index < root._wifiSorted.length)
+            ? (root._wifiSorted[index].network.name || "")
+            : "";
+    }
+
+    // The cursor's identity is the ssid, not the row number: the sort
+    // reshuffles as signal strength ticks, and an index on its own would walk
+    // the cursor onto whatever row slid underneath it. cursorIndex stays the
+    // thing Panel moves; this re-anchors it after every rebuild.
+    onCursorIndexChanged: root._cursorSsid = root._ssidAt(root.cursorIndex)
+
+    on_WifiSortedChanged: {
+        var idx = root._wifiIndexForSsid(root._cursorSsid);
+        if (idx >= 0 && idx !== root.cursorIndex)
+            root.cursorIndex = idx;
+    }
+
+    cursorCount: root._wifiSorted.length
+    // 0 is the network list, 1 is the footer's speed-test button.
+    sectionCount: 2
+    // The passphrase field owns real Qt focus while it is up, so its own
+    // typing, Enter and Escape have to reach it rather than the cursor.
+    inlineEditorFocused: root._passwordSsid !== ""
+
+    onCursorActivated: index => {
+        if (root.cursorSection === 1) {
+            if (!root._stRunning)
+                root._startSpeedTest();
+            return;
+        }
+        if (index >= 0 && index < root._wifiSorted.length)
+            root._activateWifiRow(root._wifiSorted[index].network);
+    }
+
+    panelIcon: "wifi"
+    panelTitle: "Wi-Fi"
+    panelWidth: Theme.space.popupWidthDefault
+
+    titleActions: [
+        IconButton {
+            name: Networking.wifiEnabled ? "wifi" : "wifi-off"
+            onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
+        },
+        IconButton {
+            name: "refresh-cw"
+            enabled: root._hasWifiDevice
+            onClicked: root._refreshScan()
+        }
+    ]
+
+    // Quickshell.Networking exposes no rescan call at all (checked against
+    // quickshell-network.qmltypes: WifiDevice carries `scannerEnabled` and
+    // nothing else), so dropping the scanner and re-arming it is the only
+    // rescan handle the binding gives.
+    function _refreshScan() {
+        for (var i = 0; i < root._wifiDevices.length; i++)
+            root._wifiDevices[i].scannerEnabled = false;
+        Qt.callLater(root._applyScanner);
+    }
+
     Component {
-        id: networkRow
+        id: wiredRow
 
         Cell {
-            id: netCell
+            id: wiredCell
             required property var modelData
             width: parent.width
-            selected: netCell.modelData.network.connected
+            interactive: true
+            onClicked: {
+                if (wiredCell.modelData.network.connected)
+                    wiredCell.modelData.network.disconnect();
+                else
+                    wiredCell.modelData.network.connect();
+            }
 
-            Column {
+            Item {
                 width: parent.width
-                spacing: Theme.space.xxs
+                height: wiredName.implicitHeight
 
-                Row {
-                    width: parent.width
-                    spacing: Theme.space.sm
-
-                    Text {
-                        width: parent.width - actionLabel.width - parent.spacing
-                        text: netCell.modelData.network.name || "(unnamed)"
-                        color: netCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
-                        elide: Text.ElideRight
-                    }
-
-                    // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-                    // amendment): no cell chrome, armed state promotes
-                    // straight to accent instead of a fill/inversion.
-                    MetaLabel {
-                        id: actionLabel
-                        text: netCell.modelData.network.connected ? "DISCONNECT" : "CONNECT"
-                        color: netCell.modelData.network.connected
-                            ? Theme.color.primary
-                            : (actionHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-                        MouseArea {
-                            id: actionHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (netCell.modelData.network.connected)
-                                    netCell.modelData.network.disconnect();
-                                else
-                                    netCell.modelData.network.connect();
-                            }
-                        }
-                    }
+                Icon {
+                    id: wiredIcon
+                    name: "globe"
+                    size: Theme.fontSize.body
+                    color: wiredCell.foreground
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
                 Text {
-                    visible: typeof netCell.modelData.network.signalStrength === "number"
-                    text: NetworkModel.signalBar(netCell.modelData.network.signalStrength) + "  " + Math.round(netCell.modelData.network.signalStrength * 100) + "%"
-                    color: netCell.foreground
+                    id: wiredName
+                    anchors.left: wiredIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: wiredCheck.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: wiredCell.modelData.network.name || "(unnamed)"
+                    color: wiredCell.foreground
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.caption
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
+                }
+
+                Icon {
+                    id: wiredCheck
+                    name: "check"
+                    size: Theme.fontSize.body
+                    visible: wiredCell.modelData.network.connected
+                    color: Theme.color.primary
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                 }
             }
         }
@@ -1027,10 +1065,11 @@ Panel {
 
         Cell {
             id: wifiCell
+            required property int index
             required property var modelData
             width: parent.width
-            selected: wifiCell.modelData.network.connected
-            hovered: root.cursorActive && root._cursorSsid === wifiCell._ssid
+            interactive: true
+            cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === wifiCell.index
 
             readonly property var _network: wifiCell.modelData.network
             readonly property string _ssid: wifiCell._network.name || ""
@@ -1040,15 +1079,27 @@ Panel {
             readonly property bool _canForget: wifiCell._network.known && !wifiCell._network.connected
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionSsid === wifiCell._ssid) {
-                    if (root._actionKind === "connect") return "CONNECTING…";
-                    if (root._actionKind === "disconnect") return "DISCONNECTING…";
-                    return "FORGETTING…";
+                    if (root._actionKind === "connect") return "CONNECTING";
+                    if (root._actionKind === "disconnect") return "DISCONNECTING";
+                    return "FORGETTING";
                 }
                 if (root._failureSsid !== "" && root._failureSsid === wifiCell._ssid)
                     return root._failureText;
                 return "";
             }
             readonly property bool _isFailed: root._failureSsid !== "" && root._failureSsid === wifiCell._ssid && (root._actionKind === "" || root._actionSsid !== wifiCell._ssid)
+
+            // A pointer reaching a row reveals the cursor on it, the same
+            // gate the first navigation key flips.
+            onContainsPointerChanged: {
+                if (!wifiCell.containsPointer)
+                    return;
+                root.cursorActive = true;
+                root.cursorSection = 0;
+                root.cursorIndex = wifiCell.index;
+            }
+
+            onClicked: root._activateWifiRow(wifiCell._network)
 
             Connections {
                 target: wifiCell._network
@@ -1068,214 +1119,247 @@ Panel {
             }
 
             Column {
-                id: rowColumn
                 width: parent.width
-                spacing: Theme.space.xxs
+                spacing: Theme.space.xs
 
                 Item {
-                    id: topLine
                     width: parent.width
-                    height: Math.max(leftBits.implicitHeight, ssidText.implicitHeight, forgetCell.height)
+                    height: ssidText.implicitHeight
 
-                    Row {
-                        id: leftBits
+                    Icon {
+                        id: rowIcon
+                        name: "wifi"
+                        size: Theme.fontSize.body
+                        color: wifiCell.foreground
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.space.sm
-
-                        Text {
-                            text: NetworkModel.signalBar(wifiCell._network.signalStrength)
-                            color: wifiCell.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.body
-                        }
-
-                        Text {
-                            // md-lock U+F033E, verified against the pinned
-                            // nerd-fonts-jetbrains-mono cmap (nix/testvm.nix)
-                            // via fonttools ttx, not memory: same md- glyph
-                            // family NetworkWidget.qml already uses.
-                            visible: wifiCell._secured
-                            text: "󰌾"
-                            color: wifiCell.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.body
-                        }
-                    }
-
-                    Cell {
-                        id: forgetCell
-                        visible: wifiCell._canForget
-                        opacity: wifiCell._canForget && wifiCell.hovered ? 1 : 0
-                        enabled: opacity > 0 && root._actionKind === ""
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: implicitWidth
-                        height: implicitHeight
-
-                        Behavior on opacity {
-                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
-                        }
-
-                        MetaLabel {
-                            text: "FORGET"
-                            color: Theme.color.destructive
-                        }
-
-                        interactive: forgetCell.enabled
-                        onClicked: root._forgetNetwork(wifiCell._network)
                     }
 
                     Text {
                         id: ssidText
-                        anchors.left: leftBits.right
-                        anchors.leftMargin: Theme.space.sm
-                        anchors.right: wifiCell._canForget ? forgetCell.left : parent.right
-                        anchors.rightMargin: wifiCell._canForget ? Theme.space.sm : 0
+                        anchors.left: rowIcon.right
+                        anchors.leftMargin: Theme.space.iconGap
+                        anchors.right: trailingBits.left
+                        anchors.rightMargin: Theme.space.iconGap
                         anchors.verticalCenter: parent.verticalCenter
-                        text: wifiCell._ssid !== "" ? wifiCell._ssid : "HIDDEN"
+                        text: wifiCell._ssid !== "" ? wifiCell._ssid : "Hidden network"
                         color: wifiCell._ssid !== "" ? wifiCell.foreground : Theme.color.mutedForeground
-                        elide: Text.ElideRight
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
                     }
 
-                    MouseArea {
-                        id: rowMouse
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: wifiCell._canForget ? forgetCell.left : parent.right
-                        enabled: root._actionKind === ""
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: {
-                            root.cursorActive = true;
-                            root._cursorSsid = wifiCell._ssid;
+                    Row {
+                        id: trailingBits
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.iconGap
+
+                        Text {
+                            visible: typeof wifiCell._network.signalStrength === "number"
+                            text: Math.round(wifiCell._network.signalStrength * 100) + "%"
+                            color: wifiCell.dimForeground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize.bodySmall
                         }
-                        onClicked: root._activateWifiRow(wifiCell._network)
+
+                        Icon {
+                            id: forgetIcon
+                            name: "trash"
+                            size: Theme.fontSize.body
+                            visible: wifiCell._canForget
+                            opacity: (wifiCell._canForget && wifiCell.hovered) ? 1 : 0
+                            color: forgetHit.containsMouse ? Theme.color.destructive : wifiCell.dimForeground
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                            }
+
+                            // Sits above the cell's own pointer layer, so the
+                            // forget hit never doubles as a row activation.
+                            // The negative margins buy back a hit area a
+                            // 13px glyph cannot offer on its own.
+                            MouseArea {
+                                id: forgetHit
+                                anchors.fill: parent
+                                anchors.margins: -Theme.space.sm
+                                enabled: forgetIcon.opacity > 0 && root._actionKind === ""
+                                hoverEnabled: enabled
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root._forgetNetwork(wifiCell._network)
+                            }
+                        }
+
+                        Icon {
+                            name: "lock"
+                            size: Theme.fontSize.body
+                            visible: wifiCell._secured
+                            color: wifiCell.dimForeground
+                        }
+
+                        Icon {
+                            name: "check"
+                            size: Theme.fontSize.body
+                            visible: wifiCell._network.connected
+                            color: Theme.color.primary
+                        }
                     }
                 }
 
-                MetaLabel {
+                SectionLabel {
                     visible: wifiCell._statusText !== ""
                     text: wifiCell._statusText
                     color: wifiCell._isFailed ? Theme.color.destructive : wifiCell.dimForeground
-                    font.italic: wifiCell._isFailed
                 }
 
                 Column {
                     width: parent.width
                     visible: wifiCell._promptOpen
-                    spacing: Theme.space.xxs
+                    spacing: Theme.space.xs
 
-                    Item {
+                    Input {
+                        id: identityInput
                         width: parent.width
-                        height: identityInput.implicitHeight
                         visible: wifiCell._enterprise
+                        placeholder: "Identity (user@domain)"
+                        text: wifiCell._promptOpen ? root._identityText : ""
 
-                        MetaLabel {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: identityInput.text.length === 0
-                            text: "IDENTITY (USER@DOMAIN)"
-                            // Faint placeholder ink, DESIGN.md §1.4: one
-                            // band under the field's own label.
-                            color: Theme.color.mutedForeground
+                        onTextChanged: if (wifiCell._promptOpen && text !== root._identityText) root._identityText = text;
+                        onAccepted: passphraseInput.forceFocus()
+                        Keys.onEscapePressed: event => {
+                            root._cancelPasswordPrompt();
+                            root.takeKeyboard();
+                            event.accepted = true;
                         }
-
-                        TextInput {
-                            id: identityInput
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            color: Theme.color.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.body
-                            selectByMouse: true
-                            focus: wifiCell._promptOpen && wifiCell._enterprise
-                            text: wifiCell._promptOpen ? root._identityText : ""
-
-                            onTextChanged: if (wifiCell._promptOpen && text !== root._identityText) root._identityText = text;
-                            onAccepted: passphraseInput.forceActiveFocus()
-                            Keys.onEscapePressed: event => {
-                                root._cancelPasswordPrompt();
-                                event.accepted = true;
-                            }
-                        }
+                        onVisibleChanged: if (visible) Qt.callLater(identityInput.forceFocus)
+                        Component.onCompleted: if (visible) Qt.callLater(identityInput.forceFocus)
                     }
 
-                    Item {
+                    Input {
+                        id: passphraseInput
                         width: parent.width
-                        height: passphraseInput.implicitHeight
+                        placeholder: "Passphrase"
+                        echoMode: TextInput.Password
+                        text: wifiCell._promptOpen ? root._passwordText : ""
+                        error: wifiCell._isFailed
+                        errorText: wifiCell._isFailed ? root._failureText : ""
 
-                        MetaLabel {
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: passphraseInput.text.length === 0
-                            text: "ENTER PASSPHRASE"
-                            // Faint placeholder ink, DESIGN.md §1.4: one
-                            // band under the field's own label.
-                            color: Theme.color.mutedForeground
+                        onTextChanged: if (wifiCell._promptOpen && text !== root._passwordText) root._passwordText = text;
+                        onAccepted: root._submitPassword(wifiCell._network)
+                        // First Escape drops the prompt and hands the keys
+                        // back to the panel; the next one closes the panel,
+                        // since the catcher is no longer blocked.
+                        Keys.onEscapePressed: event => {
+                            root._cancelPasswordPrompt();
+                            root.takeKeyboard();
+                            event.accepted = true;
                         }
-
-                        TextInput {
-                            id: passphraseInput
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            color: Theme.color.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.body
-                            echoMode: TextInput.Password
-                            passwordCharacter: "●"
-                            selectByMouse: true
-                            text: wifiCell._promptOpen ? root._passwordText : ""
-
-                            onTextChanged: if (wifiCell._promptOpen && text !== root._passwordText) root._passwordText = text;
-                            onAccepted: root._submitPassword(wifiCell._network)
-                            Keys.onEscapePressed: event => {
-                                root._cancelPasswordPrompt();
-                                event.accepted = true;
-                            }
-                            onVisibleChanged: if (visible && !wifiCell._enterprise) Qt.callLater(passphraseInput.forceActiveFocus);
-                            Component.onCompleted: if (visible && !wifiCell._enterprise) Qt.callLater(passphraseInput.forceActiveFocus);
-                        }
+                        onVisibleChanged: if (visible && !wifiCell._enterprise) Qt.callLater(passphraseInput.forceFocus)
+                        Component.onCompleted: if (visible && !wifiCell._enterprise) Qt.callLater(passphraseInput.forceFocus)
                     }
                 }
             }
         }
     }
 
-    // The panel's own subject (M28 Task 5): the connected SSID (or the
-    // radio's own interface name while nothing is connected), the wifi
-    // radio's power toggle promoted into the trailing slot — the row this
-    // replaces below (the old WI-FI / WI-FI POWER row) said nothing else.
     PanelHero {
+        id: hero
         visible: root._hasWifiDevice
         width: parent.width
-        glyph: root._wifiHeroGlyph
         title: root._wifiHeroTitle
         meta: root._wifiHeroMeta
-        trailing: wifiPowerToggleHero
+
+        leading: Component {
+            Icon {
+                name: root._wifiHeroIcon
+                size: Theme.fontSize.heading
+                color: hero.foreground
+            }
+        }
+
+        trailing: Component {
+            Text {
+                visible: root._connectedSignalText !== ""
+                text: root._connectedSignalText
+                color: hero.dimForeground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize.bodySmall
+            }
+        }
     }
 
-    Component {
-        id: wifiPowerToggleHero
+    Cell {
+        id: statsCell
+        width: parent.width
 
-        // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09 amendment):
-        // no cell chrome, armed state promotes straight to accent instead
-        // of a fill/inversion.
-        MetaLabel {
-            text: "WI-FI POWER"
-            color: Networking.wifiEnabled
-                ? Theme.color.primary
-                : (wifiPowerHeroHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
+        Column {
+            width: parent.width
+            spacing: Theme.space.xs
 
-            MouseArea {
-                id: wifiPowerHeroHover
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
+            Row {
+                width: parent.width
+                spacing: Theme.space.sectionGap
+
+                Column {
+                    width: (parent.width - parent.spacing) / 2
+                    spacing: Theme.space.xxs
+
+                    SectionLabel { text: "DOWNLOAD" }
+
+                    Row {
+                        spacing: Theme.space.iconGap
+
+                        Icon {
+                            name: "download"
+                            size: Theme.fontSize.body
+                            color: statsCell.dimForeground
+                            height: downValue.implicitHeight
+                        }
+
+                        Text {
+                            id: downValue
+                            text: root._downText + " Mbps"
+                            color: statsCell.foreground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
+                        }
+                    }
+                }
+
+                Column {
+                    width: (parent.width - parent.spacing) / 2
+                    spacing: Theme.space.xxs
+
+                    SectionLabel { text: "UPLOAD" }
+
+                    Row {
+                        spacing: Theme.space.iconGap
+
+                        Icon {
+                            name: "upload"
+                            size: Theme.fontSize.body
+                            color: statsCell.dimForeground
+                            height: upValue.implicitHeight
+                        }
+
+                        Text {
+                            id: upValue
+                            text: root._upText + " Mbps"
+                            color: statsCell.foreground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
+                        }
+                    }
+                }
+            }
+
+            SectionLabel {
+                visible: root._speedStatusText !== ""
+                text: root._speedStatusText
+                color: root._stError !== "" ? Theme.color.destructive : statsCell.dimForeground
             }
         }
     }
@@ -1284,363 +1368,272 @@ Panel {
         visible: root._wiredEntries.length === 0 && root._wifiEntries.length === 0
         width: parent.width
 
-        MetaLabel { text: "NO DEVICES" }
+        SectionLabel { text: "NO DEVICES" }
     }
 
-    Cell {
+    Column {
+        width: parent.width
         visible: root._wiredEntries.length > 0
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "WIRED"; count: root._wiredEntries.length }
+
+        Repeater {
+            model: root._wiredEntries
+            delegate: wiredRow
+        }
+    }
+
+    Column {
         width: parent.width
-
-        MetaLabel { text: "WIRED"; colon: true }
-    }
-
-    Repeater {
-        model: root._wiredEntries
-        delegate: networkRow
-    }
-
-    Cell {
-        visible: root._knownRows.length > 0
-        width: parent.width
-
-        MetaLabel { text: "KNOWN"; colon: true }
-    }
-
-    Repeater {
-        model: root._knownRows
-        delegate: wifiRow
-    }
-
-    Cell {
-        visible: root._availableRows.length > 0
-        width: parent.width
-
-        MetaLabel { text: "AVAILABLE"; colon: true }
-    }
-
-    Repeater {
-        model: root._availableRows
-        delegate: wifiRow
-    }
-
-    Cell {
-        id: qrShareCell
         visible: root._hasWifiDevice
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "NETWORKS"; count: root._wifiSorted.length }
+
+        Cell {
+            visible: root._wifiSorted.length === 0
+            width: parent.width
+
+            SectionLabel { text: Networking.wifiEnabled ? "SCANNING" : "RADIO OFF" }
+        }
+
+        Repeater {
+            model: root._wifiSorted
+            delegate: wifiRow
+        }
+    }
+
+    Column {
         width: parent.width
+        visible: root._hasWifiDevice
+        spacing: Theme.space.rowGap
+
+        Cell {
+            id: shareCell
+            width: parent.width
+            interactive: true
+            onClicked: root._toggleWifiQr()
+
+            Item {
+                width: parent.width
+                height: shareLabel.implicitHeight
+
+                Icon {
+                    id: shareIcon
+                    name: "share-2"
+                    size: Theme.fontSize.body
+                    color: shareCell.foreground
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    id: shareLabel
+                    anchors.left: shareIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Share network"
+                    color: shareCell.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                }
+
+                SectionLabel {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root._qrOpen ? "HIDE QR" : "QR"
+                    color: root._qrOpen ? Theme.color.primary : shareCell.dimForeground
+                }
+            }
+        }
+
+        Cell {
+            visible: root._qrOpen && root._qrPhase !== "idle" && root._qrPhase !== "done"
+            width: parent.width
+
+            SectionLabel { text: "GENERATING" }
+        }
+
+        Cell {
+            visible: root._qrOpen && root._qrError !== ""
+            width: parent.width
+
+            SectionLabel { text: root._qrError }
+        }
+
+        Cell {
+            visible: root._qrOpen && root._qrError === "" && root._qrMatrix.length > 0
+            width: parent.width
+
+            // Square modules are functional, not cosmetic: a scanner reads
+            // the grid's geometry, so the 2:1 character cell a monospace Text
+            // would impose is not an option here. Every module is its own
+            // native rectangle, sized to a whole pixel so no edge lands
+            // mid-pixel. The matrix already carries qrencode's own 4-module
+            // quiet zone, so this surround needs no margin of its own beyond
+            // the cell padding.
+            Rectangle {
+                id: qrCanvas
+
+                readonly property int _size: root._qrMatrix.length
+                readonly property int _module: qrCanvas._size > 0
+                    ? Math.max(1, Math.floor(parent.width / qrCanvas._size))
+                    : 0
+
+                // Polarity is chosen by LUMINANCE, not by token name. A QR
+                // code is only decodable when its dark modules are genuinely
+                // darker than its light ones: ZXing and zbar (so most Android
+                // scanners) do not attempt inverted binarisation, and this
+                // shell's default palette is dark, where `foreground` modules
+                // over a `background` canvas would render the code
+                // photographically inverted and unscannable. Both colours are
+                // still Theme tokens; only which one paints the modules is
+                // derived. Verified end to end: zbarimg decodes the
+                // normal-polarity matrix and returns nothing on the inverted
+                // one.
+                readonly property bool _foregroundIsDarker: Theme.color.foreground.hslLightness < Theme.color.background.hslLightness
+                readonly property color _moduleColor: qrCanvas._foregroundIsDarker ? Theme.color.foreground : Theme.color.background
+                readonly property color _quietColor: qrCanvas._foregroundIsDarker ? Theme.color.background : Theme.color.foreground
+
+                x: Math.floor((parent.width - width) / 2)
+                width: qrCanvas._module * qrCanvas._size
+                height: width
+                color: qrCanvas._quietColor
+
+                Grid {
+                    anchors.fill: parent
+                    columns: qrCanvas._size
+
+                    Repeater {
+                        model: qrCanvas._size * qrCanvas._size
+
+                        Rectangle {
+                            required property int index
+
+                            // Collapsing the row clears _qrMatrix, and this
+                            // binding can re-evaluate against the emptied
+                            // array before the Repeater has torn its own
+                            // delegates down (QML does not order the two), so
+                            // the row lookup has to survive a miss.
+                            readonly property string _row: root._qrMatrix[Math.floor(index / qrCanvas._size)] || ""
+
+                            width: qrCanvas._module
+                            height: qrCanvas._module
+                            color: _row.charAt(index % qrCanvas._size) === "1"
+                                ? qrCanvas._moduleColor
+                                : "transparent"
+                        }
+                    }
+                }
+            }
+        }
+
+        Cell {
+            id: passwordCell
+            visible: root._connectedWifiSsid !== ""
+            width: parent.width
+            interactive: true
+            onClicked: root._togglePasswordReveal()
+
+            Column {
+                width: parent.width
+                spacing: Theme.space.xs
+
+                Item {
+                    width: parent.width
+                    height: passwordLabel.implicitHeight
+
+                    Icon {
+                        id: passwordIcon
+                        name: "lock"
+                        size: Theme.fontSize.body
+                        color: passwordCell.foreground
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        id: passwordLabel
+                        anchors.left: passwordIcon.right
+                        anchors.leftMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Password"
+                        color: passwordCell.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                    }
+
+                    SectionLabel {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
+                        color: root._pwPhase !== "idle" ? Theme.color.primary : passwordCell.dimForeground
+                    }
+                }
+
+                // Wraps anywhere rather than eliding: a passphrase is only
+                // useful read out in full, and it has no word boundaries to
+                // break on. Hidden entirely while reading or once the read
+                // came back with no secret to show, where the label below
+                // says what happened instead of a mask standing in for an
+                // answer.
+                Text {
+                    visible: root._pwPhase === "idle" || root._pwPhase === "shown"
+                    width: parent.width
+                    text: root._pwPhase === "shown" ? root._pwText : root._pwMask
+                    color: root._pwPhase === "shown" ? passwordCell.foreground : Theme.color.mutedForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize.body
+                    wrapMode: Text.WrapAnywhere
+                }
+
+                SectionLabel {
+                    visible: root._pwPhase === "reading" || root._pwError !== ""
+                    text: root._pwPhase === "reading" ? "READING" : root._pwError
+                    color: root._pwError !== "" ? Theme.color.destructive : passwordCell.dimForeground
+                }
+            }
+        }
+    }
+
+    Item {
+        width: parent.width
+        height: Math.max(speedButton.height, resultRow.implicitHeight)
+
+        Button {
+            id: speedButton
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            variant: "outline"
+            icon: "zap"
+            text: root._stRunning ? "Running" : "Speed test"
+            enabled: !root._stRunning
+            cursor: root.cursorActive && root.cursorSection === 1
+            onClicked: root._startSpeedTest()
+        }
 
         Row {
-            width: parent.width
-            spacing: Theme.space.sm
+            id: resultRow
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.space.xs
 
-            MetaLabel {
-                width: parent.width - qrToggle.width - parent.spacing
-                text: "SHARE"
-            }
-
-            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-            // amendment): no cell chrome, armed state promotes straight to
-            // accent instead of a fill/inversion.
-            MetaLabel {
-                id: qrToggle
-                text: "QR"
-                color: root._qrOpen
-                    ? Theme.color.primary
-                    : (qrHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-                MouseArea {
-                    id: qrHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root._toggleWifiQr()
-                }
-            }
-        }
-    }
-
-    Cell {
-        visible: root._qrOpen && root._qrPhase !== "idle" && root._qrPhase !== "done"
-        width: parent.width
-
-        MetaLabel { text: "GENERATING…" }
-    }
-
-    Cell {
-        visible: root._qrOpen && root._qrError !== ""
-        width: parent.width
-
-        MetaLabel { text: root._qrError }
-    }
-
-    Cell {
-        visible: root._qrOpen && root._qrError === "" && root._qrMatrix.length > 0
-        width: parent.width
-
-        // Square modules are functional, not cosmetic: a scanner reads the
-        // grid's geometry, so the 2:1 character cell a monospace Text would
-        // impose is not an option here — every module is its own native
-        // rectangle, sized to a whole pixel so no edge lands mid-pixel.
-        // The matrix already carries qrencode's own 4-module quiet zone, so
-        // this surround needs no margin of its own beyond the cell padding.
-        Rectangle {
-            id: qrCanvas
-
-            readonly property int _size: root._qrMatrix.length
-            readonly property int _module: qrCanvas._size > 0
-                ? Math.max(1, Math.floor(parent.width / qrCanvas._size))
-                : 0
-
-            // Polarity is chosen by LUMINANCE, not by token name. A QR code is
-            // only decodable when its dark modules are genuinely darker than
-            // its light ones: ZXing and zbar (so most Android scanners) do not
-            // attempt inverted binarisation, and this shell's default palette
-            // is dark, where `foreground` modules over a `background` canvas
-            // would render the code photographically inverted and unscannable.
-            // Both colours are still Theme tokens; only which one paints the
-            // modules is derived. Verified end to end: zbarimg decodes the
-            // normal-polarity matrix and returns nothing on the inverted one.
-            readonly property bool _foregroundIsDarker: Theme.color.foreground.hslLightness < Theme.color.background.hslLightness
-            readonly property color _moduleColor: qrCanvas._foregroundIsDarker ? Theme.color.foreground : Theme.color.background
-            readonly property color _quietColor: qrCanvas._foregroundIsDarker ? Theme.color.background : Theme.color.foreground
-
-            x: Math.floor((parent.width - width) / 2)
-            width: qrCanvas._module * qrCanvas._size
-            height: width
-            color: qrCanvas._quietColor
-
-            Grid {
-                anchors.fill: parent
-                columns: qrCanvas._size
-
-                Repeater {
-                    model: qrCanvas._size * qrCanvas._size
-
-                    Rectangle {
-                        required property int index
-
-                        // Collapsing the row clears _qrMatrix, and this
-                        // binding can re-evaluate against the emptied array
-                        // before the Repeater has torn its own delegates
-                        // down — QML does not order the two — so the row
-                        // lookup has to survive a miss.
-                        readonly property string _row: root._qrMatrix[Math.floor(index / qrCanvas._size)] || ""
-
-                        width: qrCanvas._module
-                        height: qrCanvas._module
-                        color: _row.charAt(index % qrCanvas._size) === "1"
-                            ? qrCanvas._moduleColor
-                            : "transparent"
-                    }
-                }
-            }
-        }
-    }
-
-    Cell {
-        id: passwordCell
-        visible: root._connectedWifiSsid !== ""
-        width: parent.width
-
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            Row {
-                width: parent.width
-                spacing: Theme.space.sm
-
-                MetaLabel {
-                    width: parent.width - pwToggle.width - parent.spacing
-                    text: "PASSWORD"
-                }
-
-                // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-                // amendment): no cell chrome, armed state promotes straight
-                // to accent instead of a fill/inversion.
-                MetaLabel {
-                    id: pwToggle
-                    text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
-                    color: root._pwPhase !== "idle"
-                        ? Theme.color.primary
-                        : (pwHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-                    MouseArea {
-                        id: pwHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root._togglePasswordReveal()
-                    }
-                }
-            }
-
-            // Wraps anywhere rather than eliding: a passphrase is only
-            // useful read out in full, and it has no word boundaries to
-            // break on. Hidden entirely while reading or once the read came
-            // back with no secret to show — the honest cell below says what
-            // happened instead of a mask standing in for an answer.
             Text {
-                visible: root._pwPhase === "idle" || root._pwPhase === "shown"
-                width: parent.width
-                text: root._pwPhase === "shown" ? root._pwText : root._pwMask
-                color: root._pwPhase === "shown" ? passwordCell.foreground : Theme.color.mutedForeground
+                id: resultValue
+                text: root._downText
+                color: Theme.color.foreground
                 font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-                wrapMode: Text.WrapAnywhere
-            }
-        }
-    }
-
-    Cell {
-        visible: root._pwPhase === "reading"
-        width: parent.width
-
-        MetaLabel { text: "READING…" }
-    }
-
-    Cell {
-        visible: root._pwError !== ""
-        width: parent.width
-
-        MetaLabel { text: root._pwError }
-    }
-
-    Cell {
-        id: speedTestCell
-        width: parent.width
-
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
-
-            MetaLabel {
-                width: parent.width - runToggle.width - parent.spacing
-                text: "SPEED TEST"
+                font.pixelSize: Theme.fontSize.display
+                font.weight: Theme.weight.semibold
             }
 
-            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-            // amendment): no cell chrome, armed state promotes straight to
-            // accent instead of a fill/inversion. Disabled while running:
-            // no hover tracking or pointer, same gate `interactive` used to
-            // carry.
-            MetaLabel {
-                id: runToggle
-                text: root._stRunning ? "RUNNING…" : "RUN"
-                color: root._stRunning
-                    ? Theme.color.primary
-                    : (runHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-                MouseArea {
-                    id: runHover
-                    anchors.fill: parent
-                    enabled: !root._stRunning
-                    hoverEnabled: !root._stRunning
-                    cursorShape: root._stRunning ? Qt.ArrowCursor : Qt.PointingHandCursor
-                    onClicked: root._startSpeedTest()
-                }
-            }
-        }
-    }
-
-    Cell {
-        visible: root._stError !== ""
-        width: parent.width
-
-        MetaLabel { text: root._stError; color: Theme.color.destructive }
-    }
-
-    Cell {
-        id: downloadCell
-        visible: root._stError === "" && (root._stPhase === "down" || root._stPhase === "up" || root._stPhase === "done")
-        width: parent.width
-
-        readonly property real _mbps: root._stPhase === "down" ? root._stDownWindow.liveMbps : root._stDownResult
-
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            Row {
-                width: parent.width
-                spacing: Theme.space.sm
-
-                MetaLabel {
-                    width: parent.width - downloadValue.width - parent.spacing
-                    text: "DOWNLOAD"
-                }
-
-                Text {
-                    id: downloadValue
-                    text: SpeedTest.formatMbps(downloadCell._mbps) + " MBPS"
-                    color: downloadCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-            }
-
-            // Flat accent fill, no thumb, no gauge: same idiom as every
-            // other slider in the shell.
-            DitherFill {
-                width: parent.width
-                height: Theme.space.trackThickness
-
-                Rectangle {
-                    width: parent.width * SpeedTest.fillFraction(downloadCell._mbps)
-                    height: parent.height
-                    color: Theme.color.primary
-                }
-            }
-
-            MetaLabel {
-                visible: root._stPhase === "down"
-                text: "MEASURING DOWN…"
-            }
-        }
-    }
-
-    Cell {
-        id: uploadCell
-        visible: root._stError === "" && (root._stPhase === "up" || root._stPhase === "done")
-        width: parent.width
-
-        readonly property real _mbps: root._stPhase === "up" ? root._stUpWindow.liveMbps : root._stUpResult
-
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            Row {
-                width: parent.width
-                spacing: Theme.space.sm
-
-                MetaLabel {
-                    width: parent.width - uploadValue.width - parent.spacing
-                    text: "UPLOAD"
-                }
-
-                Text {
-                    id: uploadValue
-                    text: SpeedTest.formatMbps(uploadCell._mbps) + " MBPS"
-                    color: uploadCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
-                }
-            }
-
-            DitherFill {
-                width: parent.width
-                height: Theme.space.trackThickness
-
-                Rectangle {
-                    width: parent.width * SpeedTest.fillFraction(uploadCell._mbps)
-                    height: parent.height
-                    color: Theme.color.primary
-                }
-            }
-
-            MetaLabel {
-                visible: root._stPhase === "up"
-                text: "MEASURING UP…"
+            SectionLabel {
+                text: "MBPS"
+                anchors.bottom: resultValue.bottom
+                anchors.bottomMargin: Theme.space.xs
             }
         }
     }

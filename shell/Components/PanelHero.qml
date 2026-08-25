@@ -1,36 +1,30 @@
 import QtQuick
 import qs.Core
 
-// The shared panel-opening block (DESIGN.md §2 addendum, M26 Task 1): one
-// glyph, one bold noun, one uppercase state line, an optional oversized
-// readout, an optional trailing control, an optional progress rail. Built on
-// Cell, so the block's whole border is Cell's own shared-rule bottom/right
-// contract — no second box drawn here, and no fixed height: everything below
-// sizes off its own content like every other panel row.
+// The shared panel-opening block (DESIGN.md §3 "Panel"): the inner card a
+// panel leads with, holding one icon or image, the subject's name, a caption
+// line under it, an optional oversized readout, an optional trailing control
+// and an optional progress track. Built on Cell, so it is already the
+// `radiusMd` bordered card the design asks for, concentric inside the
+// panel's own `radiusXl` frame, and it sizes off its own content like every
+// other row.
 //
 // All properties are optional except `title`. `glyph` sits in a fixed-width
-// slot (`Theme.space.xxl * 2`) so a wider Nerd Font codepoint never shifts
-// the title next to it, the same jitter guard Task 7 gives the bar's own
-// glyph-only cells. `readout` renders at `readoutSize`, right-aligned ahead
-// of `trailing` when both are set.
+// slot (`Theme.space.xxl * 2`) so a wider codepoint never shifts the title
+// next to it. `readout` renders at `readoutSize`, right-aligned ahead of
+// `trailing` when both are set.
 //
-// `leading` (M28 Task 2) is `trailing`'s mirror: a Component that replaces
-// the glyph text in that same slot, for a panel whose subject has real
-// imagery instead of an icon (MediaPanel's album art). The slot's width
-// stays the shared `Theme.space.xxl * 2` either way — a caller-provided
-// component sizes itself to that same token rather than PanelHero handing
-// out its own internal geometry, so a Media panel with no art (falling
-// back to `glyph`) and every other panel's hero still line up their titles
-// at the identical x.
+// `leading` is `trailing`'s mirror: a Component that replaces the glyph text
+// in that same slot, for a panel whose subject has real imagery or a named
+// Icon instead of a raw codepoint (MediaPanel's album art, NetworkPanel's
+// wifi icon). The slot's width stays the shared `Theme.space.xxl * 2` either
+// way, so every panel's hero lines its title up at the identical x.
 //
-// `railInteractive` (M28 review fix) opts the rail into press/drag/wheel,
-// reporting through `railPressed`/`railStepped` rather than writing state
-// itself — the rail stays a dumb readout of whatever `rail` says either
-// way. Default false, so Weather/Calendar/Power/Usage keep the plain
-// readout DESIGN.md §2 item 13 describes; Audio is the one panel whose
-// subject is itself an adjustable value, not a metric, so its hero opts in
-// to restore the press/drag/wheel volume control the old master-slider row
-// carried before the hero absorbed it.
+// `railInteractive` opts the track into press/drag/wheel, reporting through
+// `railPressed`/`railStepped` rather than writing state itself: the track
+// stays a dumb readout of whatever `rail` says either way. Default false, so
+// every panel but Audio keeps the plain readout. Audio is the one panel whose
+// subject is itself an adjustable value rather than a metric.
 Cell {
     id: root
 
@@ -52,10 +46,8 @@ Cell {
 
     Column {
         width: parent.width
-        // `xxs`, the same text-block-to-track gap every panel row with its
-        // own DitherFill uses (AudioPanel's stream rows, DisplayPanel's
-        // brightness, UsagePanel's meters) — the hero's rail is that same
-        // structural element, so it takes that same token.
+        // The same text-block-to-track gap every panel row with a track of
+        // its own uses.
         spacing: Theme.space.xxs
 
         Item {
@@ -101,9 +93,8 @@ Cell {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space.xxs
 
-                // Sentence case, not uppercase: the panel's noun is content,
-                // not a meta label, so MetaLabel's forced capitalization
-                // does not apply here.
+                // Sentence case: the panel's noun is content, not a
+                // section label.
                 Text {
                     width: parent.width
                     text: root.title
@@ -122,8 +113,8 @@ Cell {
                 }
             }
 
-            // Monospace tabular digits by construction (DESIGN.md §2 item
-            // 5): the readout never jitters as its value ticks.
+            // Monospace tabular digits by construction: the readout never
+            // jitters as its value ticks.
             Text {
                 id: readoutText
                 anchors.right: trailingLoader.active ? trailingLoader.left : parent.right
@@ -145,21 +136,13 @@ Cell {
             }
         }
 
-        // Flat accent fill over the dither remainder, the same idiom
-        // PowerPanel's own battery track and CalendarPanel's year-progress
-        // bar already use. No knob either way; no MouseArea unless a
-        // caller opts into `railInteractive` (AudioPanel's volume rail).
-        DitherFill {
+        // The one progress groove (DESIGN.md §2). No knob either way, and no
+        // MouseArea unless a caller opts into `railInteractive`.
+        Track {
             id: railTrack
             width: parent.width
-            height: Theme.space.trackThickness
             visible: root.rail >= 0
-
-            Rectangle {
-                width: parent.width * Math.max(0, Math.min(1, root.rail))
-                height: parent.height
-                color: Theme.color.primary
-            }
+            value: root.rail
 
             MouseArea {
                 anchors.fill: parent

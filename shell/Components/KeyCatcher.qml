@@ -23,7 +23,13 @@ Item {
     focus: true
     Keys.priority: Keys.BeforeItem
 
-    Keys.onPressed: event => {
+    Keys.onPressed: event => root.handle(event)
+
+    // Public so a surface that owns the keyboard elsewhere can order this
+    // dispatch against its own handling: Panel.qml's backdrop holds focus
+    // and calls this only after its `keyPressed` consumers have passed on
+    // the event.
+    function handle(event) {
         if (root.blocked)
             return;
 
