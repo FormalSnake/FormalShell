@@ -12,7 +12,7 @@ import "../../../Clock/model.js" as ClockModel
 // Bar cell for the wall clock (DESIGN.md §3 Bar, M23: single-line like
 // every other widget here). Left and middle click both toggle the calendar
 // panel anchored under this cell (upstream's redundant left/middle idiom,
-// `manual/05-the-top-bar.md`'s Audio row), same panel-open accent dot idiom
+// `manual/05-the-top-bar.md`'s Audio row), same open-panel underline
 // as Battery.qml. Right click cycles ClockModel's format ring (M26 Task 4)
 // and persists the choice through Core.State, never settings.json (the
 // shell only ever reads that file). Every ring entry renders through
@@ -45,14 +45,10 @@ Cell {
         color: root.foreground
         font.family: Core.Theme.fontFamily
         font.pixelSize: Core.Theme.fontSize.body
+        font.weight: Core.Theme.weight.medium
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     Timer {
         interval: 1000

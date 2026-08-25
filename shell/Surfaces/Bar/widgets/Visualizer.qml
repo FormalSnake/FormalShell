@@ -24,9 +24,9 @@ import "../../../Visualizer/model.js" as Model
 // primary` only past a genuine peak (a meaning, loudness, not a static
 // per-index palette). Hover inversion still wins: dim/content already
 // collapse to the inverted ink through `root.dimForeground`/`root.
-// foreground` (Cell.qml's own logic), and the primary band mirrors
-// PanelOpenDot's own `inverted ? primaryForeground : primary` precedent so
-// a peak bar never fights the cell's own hover fill.
+// foreground` (Cell.qml's own logic), and the primary band follows the
+// same `inverted ? primaryForeground : primary` swap so a peak bar never
+// fights the cell's own hover fill.
 //
 // M20 Task 5b swapped these bands for per-bar colors sampled from the
 // playing track's cover; the owner rejected that on the live shell

@@ -7,7 +7,7 @@ import qs.Components
 // indicator slot, spec §1, M6 Task 6): a single glyph for adapter/device
 // state (no adapter or disabled, enabled with nothing connected, enabled
 // with a device connected), click toggles the bluetooth panel anchored
-// under this cell — same panel-open accent dot idiom as NetworkWidget.qml.
+// under this cell — same open-panel underline as NetworkWidget.qml.
 // Glyph codepoints taken from the pinned nerd-fonts-jetbrains-mono cmap
 // (nix/testvm.nix): md-bluetooth U+F00AF, md-bluetooth_connect U+F00B1,
 // md-bluetooth_off U+F00B2.
@@ -60,12 +60,7 @@ Cell {
         font.pixelSize: Theme.fontSize.body
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     // M26 Task 9: right click toggles the adapter radio, middle also opens

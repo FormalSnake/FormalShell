@@ -13,7 +13,7 @@ import "../../../Power/model.js" as Power
 // Bar cell for the laptop battery (DESIGN.md §Bar's own "battery cell BAT / 87%"
 // meta idiom, spec §1, M6 Task 7): a level glyph plus the BAT / NN% meta
 // label, click toggles the power panel anchored under this cell — same
-// panel-open accent dot idiom as every other M6 widget. Hidden entirely
+// open-panel underline as every other M6 widget. Hidden entirely
 // (never a stub "BAT / 0%") when UPower.displayDevice reports no laptop
 // battery — isLaptopBattery is UPower's own sanctioned "is this a real
 // battery" check (type === Battery && powerSupply === true; the aggregate
@@ -149,12 +149,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     // M26 Task 9: right click flips the BAT / NN% label on and off, both

@@ -5,7 +5,8 @@ import qs.Components
 // Bar cell for DisplayPanel (DESIGN.md §3 Bar, M36, plan at
 // docs/superpowers/plans/2026-08-19-m36-display-bar-cell.md): a single
 // monitor glyph, click toggles the display panel anchored under this cell,
-// same PanelOpenDot idiom as every other M6 widget (BluetoothWidget.qml).
+// marked open by the same `panelOpen` underline as every other
+// panel-bearing cell (BluetoothWidget.qml).
 // Unlike every device-status cell above it, this one has no absent state
 // to hide on — a session always has at least one output — so it carries
 // no `shown` gate and is always visible once placed in `bar.layout`. It
@@ -64,12 +65,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     onClicked: {

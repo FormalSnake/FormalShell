@@ -5,9 +5,8 @@ import qs.Services
 
 // Bar cell for AudioService's default sink (DESIGN.md §Bar, spec §1, M6
 // Task 1): volume glyph + percentage, click toggles the audio panel
-// anchored under this cell. The panel-open accent dot (Omarchy detail,
-// spec §1) sits in the cell's corner while the panel is open — a flat
-// square, not a glyph, per DESIGN's "accent is a block, not a tint" rule.
+// anchored under this cell. The open-panel underline (Omarchy detail,
+// spec §1) runs along the cell's bottom edge while the panel is open.
 Cell {
     id: root
 
@@ -72,12 +71,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     // M26 Task 9: right click mutes the default sink, left opens the panel.

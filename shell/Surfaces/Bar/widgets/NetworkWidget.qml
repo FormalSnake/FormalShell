@@ -3,13 +3,10 @@ import Quickshell.Networking
 import qs.Core
 import qs.Components
 
-// Bar cell for network status (DESIGN.md §Bar's "network/BT glyphs" indicator
-// slot, spec §1, M6 Task 6): a single glyph for the strongest active
-// connection (wired beats wifi beats disconnected), click toggles the
-// network panel anchored under this cell — same panel-open accent dot idiom
-// as AudioWidget.qml/Clock.qml. Glyph codepoints taken from the pinned
-// nerd-fonts-jetbrains-mono cmap (nix/testvm.nix), not memory: md-ethernet
-// U+F0200, md-wifi U+F05A9, md-wifi_off U+F05AA.
+// Bar cell for network status (DESIGN.md §3 Bar, spec §1, M6 Task 6): one
+// icon for the strongest active connection (wired beats wifi beats
+// disconnected), click toggles the network panel anchored under this
+// cell, same open-panel underline as AudioWidget.qml/Clock.qml.
 Cell {
     id: root
 
@@ -23,7 +20,9 @@ Cell {
     readonly property bool _wifiConnected: root._devices.some(function (d) {
         return d.type === DeviceType.Wifi && d.connected;
     })
-    readonly property string _glyph: root._wiredConnected ? "󰈀" : (root._wifiConnected ? "󰖩" : "󰖪")
+    readonly property string _icon: root._wiredConnected
+        ? "globe"
+        : (root._wifiConnected ? "wifi" : "wifi-off")
 
     // The connected network behind the wifi glyph, if NetworkManager has one
     // to name — NetworkDevice.networks carries the device's own scan list,
@@ -64,20 +63,13 @@ Cell {
         return head + " / RIGHT " + (Networking.wifiEnabled ? "WI-FI OFF" : "WI-FI ON");
     }
 
-    Text {
+    Icon {
         anchors.verticalCenter: parent.verticalCenter
-        text: root._glyph
+        name: root._icon
         color: root.foreground
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize.body
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     // M26 Task 9: right click toggles the Wi-Fi radio, middle also opens

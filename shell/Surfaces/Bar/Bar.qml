@@ -41,14 +41,12 @@ import "../../Bar/layout.js" as Layout
 // side away from the region's own anchored edge (M25, layout.js's
 // governsBefore), so the reveal grows into empty bar and the chevron itself
 // keeps its x.
-// Every widget cell is a `standalone` Cell (DESIGN.md §3):
-// borderless at rest, hover-cursor fill+border only on
-// mouseover, separated from its neighbor by a small gap plus its own
-// padding — omarchy's discrete-module bar, not the M1-M3 fused ledger
-// strip this surface used to be. The region-boundary rules (left|center,
-// center|right, the bar's own bottom edge) stay: they mark a structural
-// region boundary the spec already committed to, not the per-widget
-// rule-sharing this task retired.
+// The strip itself draws nothing (DESIGN.md §3 Bar): the window is
+// transparent and the desktop shows through between the cells, each of
+// which is a `Cell` carrying its own card fill and border. The strip is
+// still `barMargin` taller than a cell on each side, and that whole height
+// is the exclusive zone, so a tiled window stops below the margin band
+// rather than under the floating pills.
 PanelWindow {
     id: bar
     required property var modelData
@@ -89,45 +87,23 @@ PanelWindow {
     // other Config.get() consumer in the shell.
     readonly property var _layout: bar._resolveLayout()
 
-    // Max implicit height across every currently-loaded cell in a region,
-    // read off each delegate's *loaded item* (Loader.item), never the Loader
-    // itself: a Loader given no explicit size mirrors its item's actual size
-    // through its own implicitHeight too, so reading Loader.implicitHeight
-    // directly here would close a real cycle back through this very
-    // property (confirmed by reproducing it) — the widget's own
-    // content-derived implicitHeight has no such coupling to the height its
-    // delegate below assigns it.
-    function _regionHeight(repeater) {
-        var max = 0;
-        for (var i = 0; i < repeater.count; i++) {
-            var loader = repeater.itemAt(i);
-            var item = loader ? loader.item : null;
-            if (item && item.implicitHeight > max)
-                max = item.implicitHeight;
-        }
-        return max;
-    }
+    // One height for every cell in every region, so a widget with a taller
+    // line of content can no longer drag the whole strip with it.
+    readonly property real _cellHeight: Theme.space.barCellHeight
+    implicitHeight: bar._cellHeight + Theme.space.barMargin * 2
+    color: "transparent"
 
-    readonly property real _cellHeight: Math.max(bar._regionHeight(leftRepeater), bar._regionHeight(centerRepeater), bar._regionHeight(rightRepeater))
-    implicitHeight: bar._cellHeight
-    color: Theme.color.background
+    // The margin band is the bar's own space even though nothing is drawn
+    // in it, so the zone is the whole strip rather than the cell row.
+    exclusiveZone: bar.implicitHeight
 
-    // Panel.qml anchors every popout's top edge under the bar — it has no
-    // other way to know this bar's actual (content-derived) height, since
-    // Wayland gives clients no cross-window geometry.
+    // Every surface that has to clear the bar (panels, toasts, the center,
+    // the console) reads this: Wayland gives clients no cross-window
+    // geometry, so the strip publishes its own occupied height.
     Binding {
         target: Theme
         property: "barHeight"
-        value: bar._cellHeight
-    }
-
-    // Bottom edge: one rule against the desktop.
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
-        color: Theme.color.border
+        value: bar.implicitHeight
     }
 
     // Built-in widget registry: each Component wraps the widget with the
@@ -463,21 +439,17 @@ PanelWindow {
     Row {
         id: leftRegion
         anchors.left: parent.left
-        anchors.leftMargin: Theme.space.lg
-        anchors.verticalCenter: parent.verticalCenter
-        // Widget gap unified with center/right (M16 Task 1) — was the
-        // legacy fixed scale's 8px "md" step; tightens to match the other
-        // two regions' Theme.space.sm. Bumped to `lg` (M20 Task 1) so
-        // widget-to-widget separation stays 2x the intra-cluster gap
-        // (DESIGN.md §1.3's spacing law) now that pills within a cluster
-        // (workspaces) sit `sm` apart.
-        spacing: Theme.space.lg
+        anchors.leftMargin: Theme.space.barMargin
+        anchors.top: parent.top
+        anchors.topMargin: Theme.space.barMargin
+        spacing: Theme.space.sm
         clip: true
         // A settings-driven left region can outgrow the gap before the
-        // center region (custom command/qml modules have no fixed count) —
-        // capped to whatever space actually remains left of centerRegion.x
-        // so overflow clips here instead of drawing over the clock.
-        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - 2 * Theme.space.lg - Theme.borderWidth))
+        // center region (custom command/qml modules have no fixed count),
+        // so it is capped to whatever space actually remains left of
+        // centerRegion.x and overflow clips here instead of drawing over
+        // the clock.
+        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - Theme.space.barMargin - Theme.space.sm))
 
         Repeater {
             id: leftRepeater
@@ -486,19 +458,12 @@ PanelWindow {
         }
     }
 
-    Rectangle {
-        anchors.left: leftRegion.right
-        anchors.leftMargin: Theme.space.lg
-        anchors.verticalCenter: parent.verticalCenter
-        width: Theme.borderWidth
-        height: parent.height - Theme.space.sm * 2
-        color: Theme.color.border
-    }
-
     Row {
         id: centerRegion
-        anchors.centerIn: parent
-        spacing: Theme.space.lg
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.topMargin: Theme.space.barMargin
+        spacing: Theme.space.sm
 
         Repeater {
             id: centerRepeater
@@ -507,26 +472,18 @@ PanelWindow {
         }
     }
 
-    Rectangle {
-        anchors.right: rightRegion.left
-        anchors.rightMargin: Theme.space.lg
-        anchors.verticalCenter: parent.verticalCenter
-        width: Theme.borderWidth
-        height: parent.height - Theme.space.sm * 2
-        color: Theme.color.border
-    }
-
     Row {
         id: rightRegion
         anchors.right: parent.right
-        anchors.rightMargin: Theme.space.lg
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.lg
+        anchors.rightMargin: Theme.space.barMargin
+        anchors.top: parent.top
+        anchors.topMargin: Theme.space.barMargin
+        spacing: Theme.space.sm
         clip: true
         // Mirror of leftRegion's cap: never draws left past centerRegion's
         // right edge, regardless of how many built-ins plus custom modules
         // settings.json's bar.layout.right names.
-        width: Math.min(implicitWidth, Math.max(0, bar.width - 2 * Theme.space.lg - Theme.borderWidth - centerRegion.x - centerRegion.width))
+        width: Math.min(implicitWidth, Math.max(0, bar.width - Theme.space.barMargin - Theme.space.sm - centerRegion.x - centerRegion.width))
 
         Repeater {
             id: rightRepeater

@@ -15,8 +15,8 @@ import qs.Services
 // codepoint is the same one AirpodsPanel.qml's hero already carries
 // (pinned nerd-fonts-jetbrains-mono cmap, verified via fonttools ttx in
 // M29 Task 2): md-earbuds U+F184F. Click toggles the airpods panel
-// anchored under this cell, same PanelOpenDot idiom as every other M6
-// widget (BluetoothWidget.qml). Registers/unregisters as an
+// anchored under this cell, marked open by the same `panelOpen` underline
+// as every other panel-bearing cell (BluetoothWidget.qml). Registers/unregisters as an
 // AirpodsService consumer for as long as this cell exists at all — it
 // only exists while "airpods" is actually in bar.layout, which is what
 // keeps that service's rewatch loop from spinning on a host that never
@@ -107,12 +107,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     onClicked: {

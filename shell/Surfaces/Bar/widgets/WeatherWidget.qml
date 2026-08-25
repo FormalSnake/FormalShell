@@ -14,7 +14,7 @@ import "../../../Weather/openmeteo.js" as Openmeteo
 // (U+E34E, pinned nerd-fonts-jetbrains-mono cmap) the M6 version hardcoded
 // for any code it doesn't recognize, so there's no second "no data" glyph
 // literal to keep in sync here. Click toggles the panel anchored under
-// this cell, same panel-open accent dot idiom as every other M6 widget.
+// this cell, same open-panel underline as every other M6 widget.
 Cell {
     id: root
 
@@ -85,12 +85,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     // M26 Task 9: right click refetches the forecast, middle also opens

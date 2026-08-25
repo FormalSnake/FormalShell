@@ -9,14 +9,9 @@ import qs.Components
 // opt-in builtins for exactly that reason: a bar with no launcher cell
 // leaves a mouse user with no way to open the menu at all.
 //
-// The mark is `[F]` in the shell's own mono font, not a glyph from a Nerd
-// Font private-use range: it has to survive a fontconfig `monospace` alias
-// that resolves to a font with no icon coverage (the bar's hard rule is the
-// alias, never a family name), and box-drawing/ASCII ornament is the accent
-// this shell already speaks. Both brackets and the letter take
-// `root.foreground` — one color, so Cell's hover inversion carries the whole
-// mark to the accent pair with nothing left painting a resting-state token
-// over an inverted fill.
+// The mark is the command glyph, shadcn's own Command palette sign, drawn
+// through `Icon` so the set follows `theme.icons` like every other icon in
+// the shell.
 Cell {
     id: root
 
@@ -29,20 +24,13 @@ Cell {
 
     tooltipText: "LAUNCHER"
 
-    Text {
+    Icon {
         anchors.verticalCenter: parent.verticalCenter
-        text: "[F]"
+        name: "command"
         color: root.foreground
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize.body
     }
 
-    PanelOpenDot {
-        visible: root._menuOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._menuOpen
 
     interactive: true
     // Toggle rather than open: a second click on the mark closes the menu,

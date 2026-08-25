@@ -48,15 +48,11 @@ Singleton {
     // fontScale, since tracking is a font metric, not a layout gap.
     readonly property var letterSpacing: Tokens.letterSpacingTokens(fontScale)
 
-    // Live bar height, reported by Bar.qml's own content-derived
-    // _cellHeight (a fixed literal here would drift the moment any bar cell
-    // grows taller than the rest, per Bar.qml's own header comment). The 21
-    // default only covers the brief window before the first Bar instance
-    // binds it: fontSize.body (13) + space.controlPaddingY (4) * 2, the
-    // same single-line-cell arithmetic Cell.qml's own implicitHeight uses,
-    // now that Clock.qml collapsed to one line and no cell sets the bar
-    // any taller (M23).
-    property real barHeight: 21
+    // How much vertical space the bar occupies: its cell row plus the
+    // margin band around it, which is also its exclusive zone. Bar.qml
+    // binds this from its own window height; the value here only covers
+    // the window before the first Bar instance maps.
+    property real barHeight: space.barCellHeight + space.barMargin * 2
 
     // Always the fontconfig `monospace` alias (DESIGN.md §1.3, CLAUDE.md
     // hard rule) — never a hardcoded family, never a second display face.

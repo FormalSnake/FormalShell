@@ -31,6 +31,7 @@ var ICONS = {
     "clock": "\u{F0150}",
     "calendar": "\u{F00EE}",
     "search": "\u{F0349}",
+    "command": "\u{F0633}",
     "x": "\u{F0156}",
     "check": "\u{F012C}",
     "lock": "\u{F033E}",

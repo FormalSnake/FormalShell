@@ -79,7 +79,12 @@ Item {
     readonly property bool _active: root.active || root.accent || root.ink
     readonly property bool _destructive: root.destructive || root.urgent
 
-    // PanelOpenDot binds this to keep its dot visible against a filled cell.
+    // A bar cell whose panel (or the launcher, or the notification center)
+    // is open (DESIGN.md §3 Bar).
+    property bool panelOpen: false
+
+    // Visualizer.qml paints its own bars against the cell's fill and reads
+    // this to know which pair it is drawing on.
     readonly property bool invertedNow: root._active
 
     // Hover paints below both fills (active > selected > hover).
@@ -225,6 +230,22 @@ Item {
         Behavior on opacity {
             NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
         }
+    }
+
+    // The open-panel mark (DESIGN.md §3 Bar). The side inset keeps the
+    // line's ends clear of the cell's own rounded corners, which cut in at
+    // this height.
+    Rectangle {
+        visible: root.panelOpen
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: Theme.space.xs
+        anchors.rightMargin: Theme.space.xs
+        anchors.bottomMargin: Theme.borderWidth
+        height: Theme.borderWidth * 2
+        radius: Theme.radiusSm
+        color: Theme.color.primary
     }
 
     // The cell's own target. A sibling of `hitLayer` rather than its child,

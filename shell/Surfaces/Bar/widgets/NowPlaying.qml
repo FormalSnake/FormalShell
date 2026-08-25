@@ -5,7 +5,7 @@ import qs.Services
 
 // Bar cell for MediaService's active player (DESIGN.md §Bar, spec §5, M7
 // Task 1): a note glyph, elided title, click toggles the media panel
-// anchored under this cell — same panel-open accent dot idiom as every other
+// anchored under this cell — same open-panel underline as every other
 // M6 widget. Hidden entirely when no MPRIS player is registered (Battery.qml's
 // own "no dead slot" rule) rather than a "nothing playing" lie. Glyph
 // codepoint taken from the pinned nerd-fonts-jetbrains-mono cmap: md-music_note
@@ -152,12 +152,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._panelOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._panelOpen
 
     interactive: true
     // M26 Task 9: right click skips ahead, scroll steps prev/next (up:

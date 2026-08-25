@@ -50,6 +50,11 @@ PanelWindow {
     anchors { top: true; bottom: true; left: true; right: true }
     color: Core.Theme.color.background
     WlrLayershell.layer: WlrLayer.Background
+    // Reaches under the bar's exclusive zone: the strip is transparent, so
+    // whatever this surface paints is what shows between its cells. At the
+    // default zone of 0 the compositor shrinks this surface out of the bar's
+    // band and its own backdrop shows there instead.
+    WlrLayershell.exclusiveZone: -1
 
     property bool _firstPaint: true
     // Guards the promote-time opacity reset from re-triggering the fade

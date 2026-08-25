@@ -9,12 +9,12 @@ import qs.Notifications
 // (under DND everything non-bypassing lands straight in pending, so the
 // count keeps reading correctly with the bell-off glyph). Left click
 // toggles the notification center — the same single Center instance
-// `notifications showHistory` drives — with the panel-open accent dot
-// idiom (AudioWidget) while it's open. Right click flips DND through
+// `notifications showHistory` drives, with the open-panel underline
+// (AudioWidget) while it's open. Right click flips DND through
 // NotificationService.setDnd, the one existing DND state machine
-// (Core.State.dnd), never a second one. Glyph codepoints from the pinned
-// nerd-fonts-jetbrains-mono cmap (nix/testvm.nix) via fonttools, not
-// memory: md-bell U+F009A, md-bell_off U+F009B.
+// (Core.State.dnd), never a second one. A primary dot on the icon marks
+// pending notifications, so the cell still says "something is waiting"
+// with the count label switched off.
 Cell {
     id: root
 
@@ -44,12 +44,20 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
 
-        Text {
+        Icon {
             anchors.verticalCenter: parent.verticalCenter
-            text: root._dnd ? "󰂛" : "󰂚"
+            name: root._dnd ? "bell-off" : "bell"
             color: root.foreground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize.body
+
+            Rectangle {
+                visible: root._pending > 0
+                anchors.right: parent.right
+                anchors.top: parent.top
+                width: Theme.space.md
+                height: Theme.space.md
+                radius: height / 2
+                color: Theme.color.primary
+            }
         }
 
         MetaLabel {
@@ -60,12 +68,7 @@ Cell {
         }
     }
 
-    PanelOpenDot {
-        visible: root._centerOpen
-        inverted: root.invertedNow
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-    }
+    panelOpen: root._centerOpen
 
     interactive: true
     acceptedButtons: Qt.LeftButton | Qt.RightButton

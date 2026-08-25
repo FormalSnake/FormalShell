@@ -59,10 +59,11 @@ TestCase {
         wait(50);
     }
 
-    // The three painted layers, in declaration order: the ring halo, the
-    // body, the hover fill. They carry no ids reachable from here, so they
-    // are picked out by being the cell's only Rectangle children;
-    // test_cell_paints_three_layers below is what fails if that changes.
+    // The four painted layers, in declaration order: the ring halo, the
+    // body, the hover fill, the open-panel mark. They carry no ids reachable
+    // from here, so they are picked out by being the cell's only Rectangle
+    // children; test_cell_paints_four_layers below is what fails if that
+    // changes.
     function layers(cell) {
         var out = [];
         for (var i = 0; i < cell.children.length; i++) {
@@ -80,14 +81,15 @@ TestCase {
         return cell;
     }
 
-    function test_cell_paints_three_layers() {
+    function test_cell_paints_four_layers() {
         var cell = makeCell({});
         var rects = layers(cell);
-        compare(rects.length, 3);
+        compare(rects.length, 4);
         // The body is the only one that draws a border, and the halo is the
         // only one that reaches outside the cell.
         compare(rects[1].border.width, Theme.borderWidth);
         compare(rects[0].anchors.margins, -Theme.ringWidth);
+        verify(!rects[3].visible);
     }
 
     function test_rest_is_card_over_border() {
@@ -193,7 +195,7 @@ TestCase {
     function test_standalone_and_pending_paint_nothing() {
         var cell = makeCell({ standalone: true, pending: true });
         var rects = layers(cell);
-        compare(rects.length, 3);
+        compare(rects.length, 4);
         verify(Qt.colorEqual(rects[1].color, Theme.color.card));
         verify(Qt.colorEqual(cell.foreground, Theme.color.foreground));
     }
@@ -204,24 +206,15 @@ TestCase {
         verify(!makeCell({ hovered: true }).invertedNow);
     }
 
-    // PanelOpenDot: 22 bar widgets bind its `inverted` to their cell's
-    // `invertedNow` so the dot stays visible against a primary fill.
-    Component {
-        id: dotComponent
-        PanelOpenDot {}
-    }
-
-    function test_panel_open_dot_rests_at_primary() {
-        var dot = createTemporaryObject(dotComponent, testCase, { inverted: false });
-        verify(dot);
-        settle(dot);
-        verify(Qt.colorEqual(dot.color, Theme.color.primary));
-    }
-
-    function test_panel_open_dot_flips_to_primaryForeground_when_inverted() {
-        var dot = createTemporaryObject(dotComponent, testCase, { inverted: true });
-        verify(dot);
-        settle(dot);
-        verify(Qt.colorEqual(dot.color, Theme.color.primaryForeground));
+    // The bar's open-panel mark: 18 cells set `panelOpen` while their panel,
+    // the launcher or the notification center is open.
+    function test_panel_open_draws_a_primary_line_on_the_bottom_edge() {
+        var cell = makeCell({ panelOpen: true });
+        var mark = layers(cell)[3];
+        verify(mark.visible);
+        verify(Qt.colorEqual(mark.color, Theme.color.primary));
+        compare(mark.height, Theme.borderWidth * 2);
+        compare(mark.anchors.leftMargin, Theme.space.xs);
+        compare(mark.anchors.rightMargin, Theme.space.xs);
     }
 }
