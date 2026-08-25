@@ -89,11 +89,9 @@ while [ $# -gt 0 ]; do
     --console) console_mode=true; shift ;;
     --wallpaper) wallpaper_mode=true; shift ;;
     --lock) lock_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
     --osd) osd_mode=true; shift ;;
-    --panel) panel_mode=true; panel_name="${2:-}"; shift 2 ;;
     --tooltip) tooltip_mode=true; shift ;;
-    --console) console_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
   esac
 done
 
