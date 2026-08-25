@@ -79,7 +79,9 @@ D2. Groups: (2) `capture`, `capture-edit`, `screenshot`, `record`, `ocr`,
 `chevron`, `bar-layout`, `visualizer`, `plugins`, `instance`, `prefix`;
 (4) `media`, `mic`, `wifi`, `speedtest`, `nightlight`, `theme-toggle`,
 `toggles`, `keybinds`, `panel-keys`, `reminder`, `systemupdate`, `polkit`;
-(5) `gpu`, `processes`, `clipssh`, `dump` (beyond the basic call). Each
+(5) `gpu`, `clipssh`, `dump` (beyond the basic call), and the `picker
+select` token round trip (`picker-selection.txt`) the niri picker leg
+proved and the Hyprland one dropped when M43's leg replaced M45's. Each
 group verifies every leg it ports with the PNGs read and commits
 `feat(dev): port the <group> smoke legs to hyprland`.
 
