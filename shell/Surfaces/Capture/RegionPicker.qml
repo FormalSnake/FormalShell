@@ -796,7 +796,7 @@ Scope {
                     // `urgent` role, the same swap the slurp-driven record
                     // selection already made (RecordingService's FS_SLURP_
                     // BORDER) — one look for "this is about to record".
-                    border.color: root._recording ? Core.Theme.color.urgent : Core.Theme.color.accent
+                    border.color: root._recording ? Core.Theme.color.destructive : Core.Theme.color.primary
                     border.width: Core.Theme.borderWidth
                     radius: 0
                 }
@@ -840,7 +840,7 @@ Scope {
                 id: nameList
                 visible: !root._capturing && root._namedShown
                 color: Core.Theme.color.background
-                border.color: Core.Theme.color.rule
+                border.color: Core.Theme.color.border
                 border.width: Core.Theme.borderWidth
                 radius: 0
                 width: Core.Theme.space.popupWidthWide
@@ -860,7 +860,7 @@ Scope {
                         // rather than making the dimmed rows carry the whole
                         // explanation on their own.
                         text: root._recording ? "CANNOT RECORD: NO COMPOSITOR GEOMETRY" : "SELECT WINDOW"
-                        color: Core.Theme.color.foregroundDim
+                        color: Core.Theme.color.mutedForeground
                     }
 
                     Repeater {
@@ -885,14 +885,14 @@ Scope {
                                     width: parent.width
                                     elide: Text.ElideRight
                                     text: windowRow.modelData.label
-                                    color: root._recording ? Core.Theme.color.foregroundFaint : windowRow.foreground
+                                    color: root._recording ? Core.Theme.color.mutedForeground : windowRow.foreground
                                     font.family: Core.Theme.fontFamily
                                     font.pixelSize: Core.Theme.fontSize.body
                                 }
                                 MetaLabel {
                                     visible: windowRow.modelData.sublabel.length > 0
                                     text: windowRow.modelData.sublabel.toUpperCase()
-                                    color: root._recording ? Core.Theme.color.foregroundFaint : windowRow.dimForeground
+                                    color: root._recording ? Core.Theme.color.mutedForeground : windowRow.dimForeground
                                 }
                             }
                         }
@@ -989,7 +989,7 @@ Scope {
                 id: toolbar
                 visible: !root._capturing
                 color: Core.Theme.color.background
-                border.color: Core.Theme.color.rule
+                border.color: Core.Theme.color.border
                 border.width: Core.Theme.borderWidth
                 radius: 0
                 width: toolbarRow.width + Core.Theme.space.panelPadding * 2
@@ -1047,7 +1047,7 @@ Scope {
                     MetaLabel {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "SHOT"
-                        color: Core.Theme.color.foregroundDim
+                        color: Core.Theme.color.mutedForeground
                     }
 
                     Row {
@@ -1062,7 +1062,7 @@ Scope {
                     MetaLabel {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "REC"
-                        color: Core.Theme.color.foregroundDim
+                        color: Core.Theme.color.mutedForeground
                     }
 
                     Row {

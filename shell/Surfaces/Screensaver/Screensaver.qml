@@ -620,7 +620,7 @@ Item {
                         // until it expired (a `wallpaper set` over IPC lands
                         // mid-idle with no input to dismiss the screensaver
                         // first).
-                        readonly property color _accent: Core.Theme.color.accent
+                        readonly property color _accent: Core.Theme.color.primary
                         readonly property color _background: Core.Theme.color.background
                         on_AccentChanged: canvas.requestPaint()
                         on_BackgroundChanged: canvas.requestPaint()
@@ -669,7 +669,7 @@ Item {
                                     if (cell.opacity <= 0)
                                         continue;
                                     ctx.globalAlpha = cell.opacity;
-                                    ctx.fillStyle = Core.Theme.color.accent;
+                                    ctx.fillStyle = Core.Theme.color.primary;
                                     ctx.fillText(cell.char, (offsetCol + c) * surface._cellWidth, (offsetRow + r) * surface._cellHeight);
                                 }
                             }

@@ -248,7 +248,7 @@ Panel {
             Rectangle {
                 visible: rowWrap.entry.isSeparator
                 anchors.fill: parent
-                color: Theme.color.rule
+                color: Theme.color.border
             }
 
             Cell {
@@ -287,7 +287,7 @@ Panel {
                     width: Math.min(implicitWidth, rowWrap._availWidth)
                     elide: Text.ElideRight
                     text: rowWrap.entry.text
-                    color: rowWrap.entry.enabled ? rowCell.foreground : Theme.color.foregroundFaint
+                    color: rowWrap.entry.enabled ? rowCell.foreground : Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                 }

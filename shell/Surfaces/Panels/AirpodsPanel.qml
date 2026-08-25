@@ -245,7 +245,7 @@ Panel {
                     Rectangle {
                         width: parent.width * Math.max(0, Math.min(1, battCell.modelData.level / 100))
                         height: parent.height
-                        color: Theme.color.accent
+                        color: Theme.color.primary
                     }
                 }
             }
@@ -331,7 +331,7 @@ Panel {
                 Rectangle {
                     width: parent.width * Math.max(0, Math.min(1, root._status.adaptiveNoiseLevel / 100))
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
 
                 MouseArea {
@@ -396,7 +396,7 @@ Panel {
             MetaLabel {
                 id: caState
                 text: root._status.conversationalAwareness ? "ON" : "OFF"
-                color: root._status.conversationalAwareness ? Theme.color.accent : caCell.dimForeground
+                color: root._status.conversationalAwareness ? Theme.color.primary : caCell.dimForeground
             }
         }
 
@@ -442,7 +442,7 @@ Panel {
             MetaLabel {
                 id: oneBudState
                 text: root._status.oneBudAnc ? "ON" : "OFF"
-                color: root._status.oneBudAnc ? Theme.color.accent : oneBudCell.dimForeground
+                color: root._status.oneBudAnc ? Theme.color.primary : oneBudCell.dimForeground
             }
         }
 

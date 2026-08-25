@@ -4,7 +4,7 @@ import qs.Core
 import "../shell/Components"
 
 // Ordered-dither regression guard (shell/Components/DitherFill.qml,
-// DESIGN.md §2 item 8): a 2px-period checker of `foregroundFaint` on
+// DESIGN.md §2 item 8): a 2px-period checker of `mutedForeground` on
 // transparent, painted once into the Canvas item's default Canvas.Image
 // (software, readback-capable) buffer.
 TestCase {
@@ -52,7 +52,7 @@ TestCase {
     // `color` properties), so `.r`/`.g`/`.b` are only meaningful once
     // funneled through an actual `color`-typed property — exactly what
     // DitherFill's own `inkColor` does before handing it to the Canvas.
-    property color _inkProbe: Theme.color.foregroundFaint
+    property color _inkProbe: Theme.color.mutedForeground
 
     function _pixel(canvas, x, y) {
         var data = canvas.getContext("2d").getImageData(x, y, 1, 1).data;

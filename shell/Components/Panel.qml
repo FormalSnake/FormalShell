@@ -286,7 +286,7 @@ PanelWindow {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 height: Theme.borderWidth
-                color: Theme.color.rule
+                color: Theme.color.border
             }
 
             Rectangle {
@@ -294,7 +294,7 @@ PanelWindow {
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
                 width: Theme.borderWidth
-                color: Theme.color.rule
+                color: Theme.color.border
             }
 
             Rectangle {
@@ -302,7 +302,7 @@ PanelWindow {
                 anchors.bottom: parent.bottom
                 anchors.right: parent.right
                 width: Theme.borderWidth
-                color: Theme.color.rule
+                color: Theme.color.border
             }
 
             Rectangle {
@@ -310,7 +310,7 @@ PanelWindow {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: Theme.borderWidth
-                color: Theme.color.rule
+                color: Theme.color.border
             }
 
             CardTitleBar {

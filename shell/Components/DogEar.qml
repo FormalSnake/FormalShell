@@ -3,7 +3,7 @@ import qs.Core
 
 // The mek.gallery dog-ear fold mark (DESIGN.md §2, item 7): one right
 // triangle at a floating card's top-left corner, legs running along the
-// top and left border edges, filled `foregroundFaint`. Replaces the old
+// top and left border edges, filled `mutedForeground`. Replaces the old
 // four-square CornerMarks — a live-site scan found the corner squares
 // gone; cards there carry a single folded-corner triangle instead. A
 // Canvas repaints once per resize/color change (DitherFill precedent) —
@@ -17,7 +17,7 @@ Item {
     // lg-sized (8px at scale 1.0, DESIGN.md §2.7) — both legs run this far
     // from the corner point along the border edges they sit on.
     readonly property real markSize: Theme.space.lg
-    readonly property color inkColor: Theme.color.foregroundFaint
+    readonly property color inkColor: Theme.color.mutedForeground
 
     anchors.fill: parent
 

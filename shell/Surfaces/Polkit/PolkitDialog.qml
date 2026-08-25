@@ -208,7 +208,7 @@ PanelWindow {
                 radius: Theme.radius
                 color: Theme.color.background
                 border.width: Theme.borderWidth
-                border.color: Theme.color.rule
+                border.color: Theme.color.border
             }
 
             MouseArea {
@@ -255,7 +255,7 @@ PanelWindow {
                     horizontalAlignment: Text.AlignHCenter
                     visible: root.submitted || root.errorState
                     text: root.submitted ? "CHECKING…" : "WRONG PASSWORD"
-                    color: root.errorState ? Theme.color.urgent : Theme.color.foregroundDim
+                    color: root.errorState ? Theme.color.destructive : Theme.color.mutedForeground
                     font.italic: root.errorState
                 }
 
@@ -274,7 +274,7 @@ PanelWindow {
                         // (audit "auth-field border parity") — previously
                         // computed here independently.
                         border.width: Theme.fieldBorderWidth
-                        border.color: root.errorState ? Theme.color.urgent : Theme.color.rule
+                        border.color: root.errorState ? Theme.color.destructive : Theme.color.border
                     }
 
                     MetaLabel {
@@ -283,8 +283,8 @@ PanelWindow {
                         text: root._fieldPlaceholder()
                         // Faint placeholders (DESIGN.md §1.4, M19 Task 4):
                         // one band under the field's own label/status text
-                        // above, which stays foregroundDim/urgent.
-                        color: Theme.color.foregroundFaint
+                        // above, which stays mutedForeground/destructive.
+                        color: Theme.color.mutedForeground
                     }
 
                     TextInput {

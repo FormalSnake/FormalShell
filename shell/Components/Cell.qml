@@ -10,12 +10,12 @@ import qs.Core
 // rule, so adjacent cells never double up their shared border.
 //
 // `urgent` (DESIGN.md §2.4, M8b Task 5) is `accent`'s sibling for the other
-// full-bleed case — a critical notification — filling with `Theme.color.urgent`
+// full-bleed case — a critical notification — filling with `Theme.color.destructive`
 // (a distinct palette role from `accent`, both matugen-driven) instead.
 //
 // `warning` (DESIGN.md §1.5/§2.4, M18 Task 7) is the third full-bleed
 // sibling — a degraded-but-not-critical state, e.g. low (not yet critical)
-// battery — filling with `Theme.color.warning`/`onWarning`. Spent only where
+// battery, filling with `Theme.color.warning`/`warningForeground`. Spent only where
 // a caller's own service layer already distinguishes a middle severity band;
 // see Battery.qml for the one consumer.
 //
@@ -36,8 +36,8 @@ import qs.Core
 //
 // Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, owner
 // directive over a tint/underline): a standalone cell's hover-cursor state
-// swaps its fill and content to the accent pair (`Theme.inverted()`, same
-// `{ bg: accent, fg: onAccent }` the ledger's `selected` fill already uses
+// swaps its fill and content to the primary pair (`Theme.inverted()`, same
+// `{ bg: primary, fg: primaryForeground }` the ledger's `selected` fill already uses
 // below) instead of the fill-alpha tint + border every other cell still
 // uses. `foreground` below is the one place that swap has to happen: every
 // widget's own Text/glyph already reads `root.foreground` (or a Cell id's
@@ -152,11 +152,11 @@ Item {
     readonly property bool invertedNow: root._hoverInverted
 
     readonly property color foreground: urgent
-        ? Theme.color.onUrgent
+        ? Theme.color.destructiveForeground
         : accent
-            ? Theme.color.onAccent
+            ? Theme.color.primaryForeground
             : warning
-                ? Theme.color.onWarning
+                ? Theme.color.warningForeground
                 : root._hoverInverted
                     ? Theme.inverted().fg
                     : ink
@@ -166,7 +166,7 @@ Item {
                             : Theme.color.foreground
 
     // Band-2 (meta) ink that stays legible when this cell is itself
-    // full-bleed or inverted (DESIGN.md §1.4 ink hierarchy): `foregroundDim`
+    // full-bleed or inverted (DESIGN.md §1.4 ink hierarchy): `mutedForeground`
     // is the default resting color, but a dim caption drawn straight onto
     // an accent/urgent/warning/ink fill or the inverted cursor fill measures
     // under 1.1:1 contrast (M18 Task 2/4 regression) — so any of those
@@ -175,10 +175,10 @@ Item {
     // model the inversion itself uses. Every meta caption bound to a
     // Cell's own state (MenuRow's desc/dim text, MetaLabel captions on
     // Battery/UsageWidget/NotificationCard/Osd) reads this instead of
-    // hardcoding `Theme.color.foregroundDim`.
+    // hardcoding `Theme.color.mutedForeground`.
     readonly property color dimForeground: (urgent || accent || warning || ink || root._hoverInverted || selected)
         ? foreground
-        : Theme.color.foregroundDim
+        : Theme.color.mutedForeground
 
     readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
 
@@ -259,9 +259,9 @@ Item {
         anchors.fill: parent
         radius: Theme.radius
         color: root.urgent
-            ? Theme.color.urgent
+            ? Theme.color.destructive
             : root.accent
-                ? Theme.color.accent
+                ? Theme.color.primary
                 : root.warning
                     ? Theme.color.warning
                     : root.ink
@@ -343,7 +343,7 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: Theme.borderWidth
-        color: Theme.color.rule
+        color: Theme.color.border
     }
 
     Rectangle {
@@ -352,7 +352,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.right: parent.right
         width: Theme.borderWidth
-        color: Theme.color.rule
+        color: Theme.color.border
     }
 
     // Loaded by URL rather than declared as a `Tooltip {}`, for two reasons.

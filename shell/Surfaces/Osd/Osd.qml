@@ -185,14 +185,14 @@ PanelWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             height: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
         Rectangle {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             width: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Row {
@@ -276,7 +276,7 @@ PanelWindow {
                         Rectangle {
                             width: parent.width * Math.max(0, Math.min(1, valueCell._fraction))
                             height: parent.height
-                            color: Theme.color.accent
+                            color: Theme.color.primary
                         }
                     }
                 }

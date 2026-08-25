@@ -223,7 +223,7 @@ Panel {
                 Text {
                     width: parent.width - glyphText.width - tempsText.width - parent.spacing * 2
                     text: Openmeteo.weekdayLabel(dayCell.modelData.date)
-                    color: Theme.color.foregroundDim
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight

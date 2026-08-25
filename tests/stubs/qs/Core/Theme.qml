@@ -15,14 +15,22 @@ QtObject {
     id: root
 
     // Not readonly: tst_cell_hover_inversion.qml overrides this per-test with
-    // a palette whose roles are pairwise distinct (Palette.fallback()'s own
-    // dark/light Flexoki variants coincidentally set onAccent == onUrgent ==
-    // background, which makes hex-equality assertions against it unable to
-    // tell a correct role from a swapped one).
+    // a palette whose roles are pairwise distinct, since a fallback set can
+    // coincidentally share a hex across two different roles, which makes a
+    // hex-equality assertion against it unable to tell a correct role from
+    // a swapped one.
     property var color: Palette.fallback()
 
-    readonly property int borderWidth: 2
-    readonly property int radius: 0
+    readonly property int borderWidth: 1
+    readonly property int radius: 10
+    readonly property var _radiusTokens: Tokens.radiusTokens(radius)
+    readonly property int radiusSm: _radiusTokens.sm
+    readonly property int radiusMd: _radiusTokens.md
+    readonly property int radiusLg: _radiusTokens.lg
+    readonly property int radiusXl: _radiusTokens.xl
+    readonly property int ringWidth: 3
+    readonly property real ringAlpha: 0.5
+    readonly property var weight: Tokens.WEIGHTS
     readonly property real fieldBorderWidth: Math.round(3 * fontScale)
 
     readonly property real fontBaseSize: 13

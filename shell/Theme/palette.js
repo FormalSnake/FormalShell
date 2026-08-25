@@ -1,17 +1,21 @@
 .pragma library
 
-// theme.json's twelve required color keys (DESIGN.md §1.5, expanded
-// 2026-08-07 from the original eight), plus the hex format matugen
-// renders them in, and the static Flexoki values Theme.qml falls back to
-// when theme.json is absent or fails validation.
+// theme.json's shadcn color roles (spec "Visual system > Color",
+// 2026-08-25 redesign), plus the hex format matugen renders them in, and
+// the static zinc values Theme.qml falls back to when theme.json is absent
+// or fails validation.
 //
 // These roles are also the color tokens DESIGN.md §1's state/border token
 // system (Theme.qml's `stateStyle`/`borderSpec`, `tokens.js`) resolves
-// against — a state names a role (`foreground`, `accent`, `urgent`,
+// against: a state names a role (`foreground`, `primary`, `destructive`,
 // `background`) or a raw hex, never a new color key of its own.
 
-var COLOR_KEYS = ["background", "backgroundAlt", "foreground", "foregroundDim", "foregroundFaint",
-    "rule", "accent", "onAccent", "urgent", "onUrgent", "warning", "onWarning"];
+var COLOR_KEYS = ["background", "foreground", "card", "cardForeground",
+    "popover", "popoverForeground", "primary", "primaryForeground",
+    "secondary", "secondaryForeground", "muted", "mutedForeground",
+    "accent", "accentForeground", "destructive", "destructiveForeground",
+    "warning", "warningForeground", "border", "input", "ring",
+    "chart1", "chart2", "chart3", "chart4", "chart5"];
 var HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 function validate(themeObj) {
@@ -23,37 +27,51 @@ function validate(themeObj) {
     return { ok: missing.length === 0, missing: missing };
 }
 
-// One static Flexoki variant per mode (hex values from kepano/flexoki:
-// dark = base 950/800/500/200 on black with the 400 accents, light =
-// base 50/200/600 on paper with the 600 accents; faint = base 700 dark /
-// base 400 light, warning = orange 400 dark / orange 600 light). No
-// argument means the dark variant — the seeded first-boot theme.json and
-// Theme.qml's absent-file default both depend on that. Dark `onAccent` and
-// `onUrgent`/`onWarning` are ink (#100F0F), not paper — measured contrast
-// beats paper-on-accent (DESIGN.md's 2026-08-07 revision); light keeps
-// paper on all three fills.
+// One static zinc variant per mode (shadcn's own zinc palette, spec's
+// "Color" table verbatim). No argument means the dark variant: the
+// seeded first-boot theme.json and Theme.qml's absent-file default both
+// depend on that. `accent` is the neutral hover fill (not the wallpaper
+// colour, which lives in `primary`); chart1..5 reuse primary, secondary,
+// warning and two zinc steps since the static fallback has no matugen
+// container roles to draw the chart ramp from.
 function fallback(mode) {
     if (mode === "light") {
         return {
             mode: "light",
-            background: "#FFFCF0", backgroundAlt: "#F2F0E5",
-            foreground: "#100F0F", foregroundDim: "#6F6E69", foregroundFaint: "#9F9D96",
-            rule: "#CECDC3", accent: "#205EA6", onAccent: "#FFFCF0",
-            urgent: "#AF3029", onUrgent: "#FFFCF0", warning: "#BC5215", onWarning: "#FFFCF0"
+            background: "#ffffff", foreground: "#09090b",
+            card: "#ffffff", cardForeground: "#09090b",
+            popover: "#ffffff", popoverForeground: "#09090b",
+            primary: "#18181b", primaryForeground: "#fafafa",
+            secondary: "#f4f4f5", secondaryForeground: "#18181b",
+            muted: "#f4f4f5", mutedForeground: "#71717a",
+            accent: "#f4f4f5", accentForeground: "#18181b",
+            destructive: "#e7000b", destructiveForeground: "#ffffff",
+            warning: "#d97706", warningForeground: "#ffffff",
+            border: "#e4e4e7", input: "#e4e4e7", ring: "#a1a1aa",
+            chart1: "#18181b", chart2: "#f4f4f5", chart3: "#d97706",
+            chart4: "#d4d4d8", chart5: "#52525b"
         };
     }
     return {
         mode: "dark",
-        background: "#100F0F", backgroundAlt: "#1C1B1A",
-        foreground: "#CECDC3", foregroundDim: "#878580", foregroundFaint: "#575653",
-        rule: "#403E3C", accent: "#4385BE", onAccent: "#100F0F",
-        urgent: "#D14D41", onUrgent: "#100F0F", warning: "#DA702C", onWarning: "#100F0F"
+        background: "#09090b", foreground: "#fafafa",
+        card: "#18181b", cardForeground: "#fafafa",
+        popover: "#18181b", popoverForeground: "#fafafa",
+        primary: "#e4e4e7", primaryForeground: "#18181b",
+        secondary: "#27272a", secondaryForeground: "#fafafa",
+        muted: "#27272a", mutedForeground: "#a1a1aa",
+        accent: "#27272a", accentForeground: "#fafafa",
+        destructive: "#ff6467", destructiveForeground: "#fafafa",
+        warning: "#fbbf24", warningForeground: "#18181b",
+        border: "#27272a", input: "#3f3f46", ring: "#71717a",
+        chart1: "#e4e4e7", chart2: "#27272a", chart3: "#fbbf24",
+        chart4: "#3f3f46", chart5: "#71717a"
     };
 }
 
 // Per-key backward-tolerant merge: a theme.json written before a key existed
-// (or mid-write with one bad value) falls back to Flexoki for that key alone
-// — never the whole object, so a live matugen run stays themed everywhere
+// (or mid-write with one bad value) falls back to zinc for that key alone,
+// never the whole object, so a live matugen run stays themed everywhere
 // except the one stale/missing field. The fill matches the theme's own mode
 // so a partial light theme.json never flashes dark tokens into a light UI.
 function mergeWithFallback(themeObj) {

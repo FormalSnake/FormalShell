@@ -291,7 +291,7 @@ Item {
         Rectangle {
             width: statBar.width * statBar.fraction
             height: statBar.height
-            color: Core.Theme.color.accent
+            color: Core.Theme.color.primary
         }
     }
 
@@ -733,7 +733,7 @@ Item {
                                         : "DISCONNECTED"
                                     valueColor: outputLine.modelData.connected
                                         ? Core.Theme.color.foreground
-                                        : Core.Theme.color.foregroundDim
+                                        : Core.Theme.color.mutedForeground
                                 }
                             }
                         }
@@ -1008,7 +1008,7 @@ Item {
                 x: leftColumn.width - Core.Theme.borderWidth
                 width: Core.Theme.borderWidth
                 height: statsColumns.height
-                color: Core.Theme.color.rule
+                color: Core.Theme.color.border
             }
 
             Column {
@@ -1225,7 +1225,7 @@ Item {
         Rectangle {
             width: parent.width
             height: statsColumns.height > statsPane.height ? Core.Theme.borderWidth : 0
-            color: Core.Theme.color.rule
+            color: Core.Theme.color.border
         }
 
         Cell {
@@ -1260,8 +1260,8 @@ Item {
                         ? ProcessService.lastResult.pid + " " + ProcessService.lastResult.action + ": " + ProcessService.lastResult.message
                         : ""
                     color: (ProcessService.lastResult && ProcessService.lastResult.ok)
-                        ? Core.Theme.color.foregroundDim
-                        : Core.Theme.color.urgent
+                        ? Core.Theme.color.mutedForeground
+                        : Core.Theme.color.destructive
                     elide: Text.ElideRight
                     font.family: Core.Theme.fontFamily
                     font.pixelSize: Core.Theme.fontSize.caption
@@ -1306,7 +1306,7 @@ Item {
                     width: root._pidWidth
                     horizontalAlignment: Text.AlignRight
                     text: "PID"
-                    color: root.sortMode === "pid" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                    color: root.sortMode === "pid" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
                 }
 
                 MetaLabel {
@@ -1316,7 +1316,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: root._nameWidth
                     text: "PROCESS"
-                    color: root.sortMode === "name" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                    color: root.sortMode === "name" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
                 }
 
                 MetaLabel {
@@ -1337,7 +1337,7 @@ Item {
                     width: root._cpuWidth
                     horizontalAlignment: Text.AlignRight
                     text: "CPU"
-                    color: root.sortMode === "cpu" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                    color: root.sortMode === "cpu" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
                 }
 
                 MetaLabel {
@@ -1347,7 +1347,7 @@ Item {
                     width: root._memWidth
                     horizontalAlignment: Text.AlignRight
                     text: "MEM"
-                    color: root.sortMode === "mem" ? Core.Theme.color.foreground : Core.Theme.color.foregroundDim
+                    color: root.sortMode === "mem" ? Core.Theme.color.foreground : Core.Theme.color.mutedForeground
                 }
             }
         }

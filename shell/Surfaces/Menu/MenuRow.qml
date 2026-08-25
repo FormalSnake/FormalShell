@@ -144,11 +144,11 @@ Cell {
             elide: Text.ElideRight
             text: root.confirming ? ("CONFIRM " + root.node.label + "?") : root.node.label
             // `dim: true` marks a non-activatable honest-empty row (the nix
-            // provider's NO NIX) — `dimForeground` reads as `foregroundDim`
-            // at rest but promotes to the cursor row's own onAccent ink
-            // when this row is current (Cell.qml's inversion default is
-            // accent since M18 Task 2, so a bare `foregroundDim` here would
-            // sit unreadably on the accent fill).
+            // provider's NO NIX): `dimForeground` reads as `mutedForeground`
+            // at rest but promotes to the cursor row's own primaryForeground
+            // ink when this row is current (Cell.qml's inversion default is
+            // primary since M18 Task 2, so a bare `mutedForeground` here
+            // would sit unreadably on the primary fill).
             color: root.node.dim === true ? root.dimForeground : root.foreground
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize.body
@@ -159,9 +159,9 @@ Cell {
         // `describeAction`'s joined action+argv carries no such cap, so
         // this band gets the same width-cap-and-elide treatment as the
         // label rather than trusting every producer to bound it upstream.
-        // `dimForeground` over a bare `foregroundDim` for the same reason as
-        // the label above: this text sits on the cursor row's accent fill
-        // too.
+        // `dimForeground` over a bare `mutedForeground` for the same reason
+        // as the label above: this text sits on the cursor row's primary
+        // fill too.
         Text {
             id: descText
             y: (contentRow.height - height) / 2
@@ -187,8 +187,9 @@ Cell {
         font.pixelSize: Theme.fontSize.body
     }
 
-    // DESIGN.md §2.4: accent reads as a full-bleed fill with onAccent text,
-    // never a tinted label — independent of the row's own cursor inversion.
+    // DESIGN.md §2.4: primary reads as a full-bleed fill with
+    // primaryForeground text, never a tinted label, independent of the
+    // row's own cursor inversion.
     Rectangle {
         id: metaTagBg
         visible: (root.node.meta || "") !== ""
@@ -197,13 +198,13 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         width: metaTag.implicitWidth + Theme.space.sm * 2
         height: metaTag.implicitHeight + Theme.space.xxs * 2
-        color: Theme.color.accent
+        color: Theme.color.primary
 
         MetaLabel {
             id: metaTag
             anchors.centerIn: parent
             text: root.node.meta || ""
-            color: Theme.color.onAccent
+            color: Theme.color.primaryForeground
         }
     }
 

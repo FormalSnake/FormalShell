@@ -489,7 +489,7 @@ function nixRows(results) {
 }
 
 // The honest single dim rows for everything that isn't a result list (kind
-// "note": not activatable, MenuRow renders the label via foregroundDim):
+// "note": not activatable, MenuRow renders the label via mutedForeground):
 // no `nix` on PATH, a search still in flight, a clean zero-hit answer, and
 // a failed run.
 function _nixNoteRow(id, label) {

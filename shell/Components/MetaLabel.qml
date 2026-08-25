@@ -31,7 +31,7 @@ Item {
     Text {
         id: label
         anchors.fill: parent
-        color: Theme.color.foregroundDim
+        color: Theme.color.mutedForeground
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize.caption
         font.capitalization: Font.AllUppercase

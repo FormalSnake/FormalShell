@@ -219,7 +219,7 @@ Cell {
             visible: actionRow.visible
             width: parent.width
             height: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Row {
@@ -261,7 +261,7 @@ Cell {
             }
 
             // Compact mode: bare labels (DESIGN.md §1.1's ink-promotion
-            // amendment) — no cell chrome, hover promotes foregroundDim to
+            // amendment), no cell chrome, hover promotes mutedForeground to
             // foreground, same idiom Center.qml's own title-bar actions
             // (DND / CLEAR ALL) already use.
             Repeater {

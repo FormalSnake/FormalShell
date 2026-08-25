@@ -84,7 +84,7 @@ Panel {
                 Rectangle {
                     width: parent.width * root._fill(SystemMonitorService.cpu.aggregate)
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
             }
         }
@@ -123,7 +123,7 @@ Panel {
                 Rectangle {
                     width: parent.width * root._fill(root._mem.available ? root._mem.usedFraction : null)
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
             }
         }
@@ -159,7 +159,7 @@ Panel {
                 Text {
                     width: parent.width - gpuStatus.width - parent.spacing
                     text: gpuCell.modelData.name
-                    color: gpuCell.modelData.metrics.available ? Theme.color.foreground : Theme.color.foregroundDim
+                    color: gpuCell.modelData.metrics.available ? Theme.color.foreground : Theme.color.mutedForeground
                     elide: Text.ElideRight
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
@@ -171,7 +171,7 @@ Panel {
                 MetaLabel {
                     id: gpuStatus
                     text: gpuCell.modelData.metrics.available ? root._pct(gpuCell.modelData.metrics.busy) : "NO METRICS"
-                    color: gpuCell.modelData.metrics.available ? Theme.color.foreground : Theme.color.foregroundDim
+                    color: gpuCell.modelData.metrics.available ? Theme.color.foreground : Theme.color.mutedForeground
                 }
             }
         }

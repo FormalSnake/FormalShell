@@ -97,7 +97,7 @@ Item {
         radius: Theme.radius
         color: Theme.color.background
         border.width: Theme.borderWidth
-        border.color: Theme.color.rule
+        border.color: Theme.color.border
     }
 
     Column {
@@ -137,7 +137,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: root._fieldWidth
             height: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Item {
@@ -169,7 +169,7 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: root.showLabel
                     text: root._displayLabel
-                    color: root.errorState ? Theme.color.urgent : Theme.color.foregroundDim
+                    color: root.errorState ? Theme.color.destructive : Theme.color.mutedForeground
                     font.italic: root.errorState
                 }
 
@@ -188,8 +188,8 @@ Item {
                         text: root.masked ? "Enter Password" : "Enter Username"
                         // Faint placeholders (DESIGN.md §1.4, M19 Task 4):
                         // one band under the field's own label above, which
-                        // stays foregroundDim.
-                        color: Theme.color.foregroundFaint
+                        // stays mutedForeground.
+                        color: Theme.color.mutedForeground
                         font.pixelSize: Theme.fontSize.body
                     }
 
@@ -274,7 +274,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: root.fingerprintEnrolled
                         text: "󰈷"
-                        color: Theme.color.foregroundDim
+                        color: Theme.color.mutedForeground
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.title
                     }

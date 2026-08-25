@@ -21,12 +21,12 @@ import "../../../Visualizer/model.js" as Model
 // be colored bar per bar"): each column's fill resolves through
 // `Model.levelColorBand` to its own energy band, `root.dimForeground` for
 // a quiet bar, `root.foreground` for content-level energy, `Theme.color.
-// accent` only past a genuine peak (a meaning, loudness, not a static
+// primary` only past a genuine peak (a meaning, loudness, not a static
 // per-index palette). Hover inversion still wins: dim/content already
 // collapse to the inverted ink through `root.dimForeground`/`root.
-// foreground` (Cell.qml's own logic), and the accent band mirrors
-// PanelOpenDot's own `inverted ? onAccent : accent` precedent so a peak
-// bar never fights the cell's own accent hover fill.
+// foreground` (Cell.qml's own logic), and the primary band mirrors
+// PanelOpenDot's own `inverted ? primaryForeground : primary` precedent so
+// a peak bar never fights the cell's own hover fill.
 //
 // M20 Task 5b swapped these bands for per-bar colors sampled from the
 // playing track's cover; the owner rejected that on the live shell
@@ -130,7 +130,7 @@ Cell {
                         width: parent.width
                         height: parent.height * track._level
                         color: track._band === "accent"
-                            ? (root.invertedNow ? Theme.color.onAccent : Theme.color.accent)
+                            ? (root.invertedNow ? Theme.color.primaryForeground : Theme.color.primary)
                             : track._band === "content"
                                 ? root.foreground
                                 : root.dimForeground

@@ -7,9 +7,9 @@ import "../shell/Components"
 // The real Theme singleton is a Quickshell Singleton, so these tests run
 // against tests/stubs/qs/Core/Theme.qml (same palette.js/tokens.js values)
 // via qmltestrunner's -import, wired up in the justfile/flake test calls.
-// space.lg is 8, space.sm is 4, borderWidth is 2 at the default scale;
-// they are spelled out in the expectations so a token change has to be a
-// deliberate edit here too.
+// space.controlPaddingX is 12, space.controlPaddingY is 6, borderWidth is 1
+// at the default scale; they are spelled out in the expectations so a
+// token change has to be a deliberate edit here too.
 TestCase {
     id: testCase
     name: "CellGeometry"
@@ -224,8 +224,8 @@ TestCase {
         // fill-anchored MouseArea's width (which is the cell's own width,
         // minus padding) straight back into it.
         var forget = row.probeForget;
-        compare(forget.implicitWidth, row.probeForgetLabel.implicitWidth + 8 * 2 + 2);
-        compare(forget.implicitHeight, row.probeForgetLabel.implicitHeight + 4 * 2 + 2);
+        compare(forget.implicitWidth, row.probeForgetLabel.implicitWidth + 12 * 2 + 1);
+        compare(forget.implicitHeight, row.probeForgetLabel.implicitHeight + 6 * 2 + 1);
         compare(forget.width, forget.implicitWidth);
         compare(forget.height, forget.implicitHeight);
         verify(forget.width < row.width / 2);
@@ -243,7 +243,7 @@ TestCase {
         // nothing at all on a panel, which is the bug this guards.
         var nameRowHeight = Math.max(row.probeName.implicitHeight, row.probeForget.height);
         compare(row.probeNameRow.height, nameRowHeight);
-        compare(row.implicitHeight, nameRowHeight + 2 + row.probeStatus.height + 4 * 2 + 2);
+        compare(row.implicitHeight, nameRowHeight + 2 + row.probeStatus.height + 6 * 2 + 1);
         compare(row.height, row.implicitHeight);
         verify(row.height > 0);
         verify(row.probeName.width > 0);
@@ -255,13 +255,13 @@ TestCase {
         verify(cell);
         settle(cell);
 
-        // standalone: no rule reserve, so padding is exactly space.lg * 2
-        // by space.sm * 2 around the column. The `hit` layer (which is the
-        // cell's full size) and the vertically centred column's own offset
-        // must not contribute.
+        // standalone: no rule reserve, so padding is exactly
+        // space.controlPaddingX * 2 by space.controlPaddingY * 2 around the
+        // column. The `hit` layer (which is the cell's full size) and the
+        // vertically centred column's own offset must not contribute.
         var column = cell.probeColumn;
-        compare(cell.implicitWidth, column.implicitWidth + 8 * 2);
-        compare(cell.implicitHeight, column.implicitHeight + 4 * 2);
+        compare(cell.implicitWidth, column.implicitWidth + 12 * 2);
+        compare(cell.implicitHeight, column.implicitHeight + 6 * 2);
         compare(cell.width, cell.implicitWidth);
         compare(cell.height, cell.implicitHeight);
         compare(column.y, 0);
@@ -275,13 +275,13 @@ TestCase {
 
         // The hover fill covers the cell, so the pointer target has to as
         // well. A MouseArea built at the call site lands in the default slot,
-        // which is inset by the control padding: 8px either side and 4px top
-        // and bottom answered nothing while still lighting up, and on the bar
-        // that top band is the row of pixels against the screen edge.
+        // which is inset by the control padding: 12px either side and 6px
+        // top and bottom answered nothing while still lighting up, and on
+        // the bar that top band is the row of pixels against the screen edge.
         //
         // The content really is inset by that padding, so these points are
         // not inside it and the check isn't passing by accident.
-        compare(cell.probeColumn.mapToItem(cell, 0, 0).x, 8);
+        compare(cell.probeColumn.mapToItem(cell, 0, 0).x, 12);
 
         var corners = [[1, 1], [cell.width - 1, 1], [1, cell.height - 1], [cell.width - 1, cell.height - 1]];
         for (var i = 0; i < corners.length; i++) {
@@ -338,17 +338,17 @@ TestCase {
         settle(cells);
 
         // The art slot, not the source image's own 192px implicit size.
-        compare(cells.probeArtCell.implicitHeight, 96 + 4 * 2 + 2);
+        compare(cells.probeArtCell.implicitHeight, 96 + 6 * 2 + 1);
         compare(cells.probeArtCell.height, cells.probeArtCell.implicitHeight);
 
         // A Rectangle has no implicit size at all, so measuring implicit
         // sizes alone would collapse the track row to its padding.
         compare(cells.probeTrack.height, 6);
-        compare(cells.probeTrackCell.implicitHeight, 6 + 4 * 2 + 2);
+        compare(cells.probeTrackCell.implicitHeight, 6 + 6 * 2 + 1);
         compare(cells.probeTrackCell.height, cells.probeTrackCell.implicitHeight);
         // The track stretches to the cell it was given, and reports that
         // width back as the cell's own implicit width.
-        compare(cells.probeTrack.width, 320 - 8 * 2 - 2);
+        compare(cells.probeTrack.width, 320 - 12 * 2 - 1);
         compare(cells.probeTrackCell.implicitWidth, 320);
     }
 
@@ -358,15 +358,15 @@ TestCase {
         verify(cell);
         settle(cell);
 
-        compare(cell.implicitWidth, cell.probeLabel.implicitWidth + 8 * 2 + 2);
-        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 4 * 2 + 2);
+        compare(cell.implicitWidth, cell.probeLabel.implicitWidth + 12 * 2 + 1);
+        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2 + 1);
 
         // The label sits inside the cell's own padding, and the cell hugs
         // it: leading gutter in, trailing gutter plus the rule reserve out.
         var origin = cell.probeLabel.mapToItem(cell, 0, 0);
-        compare(origin.x, 8);
-        compare(origin.y, 4);
-        compare(cell.width - (origin.x + cell.probeLabel.width), 8 + 2);
-        compare(cell.height - (origin.y + cell.probeLabel.height), 4 + 2);
+        compare(origin.x, 12);
+        compare(origin.y, 6);
+        compare(cell.width - (origin.x + cell.probeLabel.width), 12 + 1);
+        compare(cell.height - (origin.y + cell.probeLabel.height), 6 + 1);
     }
 }

@@ -278,8 +278,8 @@ Panel {
                         color: outCell.selected
                             ? outCell.foreground
                             : (outCell.modelData.enabled && outCell._canToggle)
-                                ? Theme.color.accent
-                                : (toggleHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                                ? Theme.color.primary
+                                : (toggleHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                         MouseArea {
                             id: toggleHover
@@ -298,13 +298,13 @@ Panel {
 
                 // Color collapses to the row's own ink when selected, the
                 // same single-band precedent the ON/OFF label above already
-                // follows: `foregroundDim` on the focused row's accent fill
-                // measures unreadable.
+                // follows: `mutedForeground` on the focused row's primary
+                // fill measures unreadable.
                 MetaLabel {
                     width: parent.width
                     visible: outCell._status !== ""
                     text: outCell._status
-                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
                     elide: Text.ElideRight
                 }
 
@@ -312,7 +312,7 @@ Panel {
                     width: parent.width
                     visible: outCell._identity !== ""
                     text: outCell._identity
-                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
                     elide: Text.ElideRight
                 }
 
@@ -320,7 +320,7 @@ Panel {
                     width: parent.width
                     visible: outCell._cardLabel !== ""
                     text: outCell._cardLabel
-                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
                     elide: Text.ElideRight
                 }
 
@@ -328,7 +328,7 @@ Panel {
                     width: parent.width
                     visible: outCell._mainLabel !== ""
                     text: outCell._mainLabel
-                    color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
                     elide: Text.ElideRight
                 }
 
@@ -344,7 +344,7 @@ Panel {
                         MetaLabel {
                             width: parent.width - scaleValue.width - parent.spacing
                             text: "SCALE"
-                            color: outCell.selected ? outCell.foreground : Theme.color.foregroundDim
+                            color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
                         }
 
                         Text {
@@ -370,7 +370,7 @@ Panel {
                         Rectangle {
                             width: parent.width * Outputs.fractionForScale(outCell.modelData.scale)
                             height: parent.height
-                            color: Theme.color.accent
+                            color: Theme.color.primary
                         }
 
                         MouseArea {
@@ -499,7 +499,7 @@ Panel {
                     Rectangle {
                         width: parent.width * Math.max(0, Math.min(1, brightnessCell.percent / 100))
                         height: parent.height
-                        color: Theme.color.accent
+                        color: Theme.color.primary
                     }
 
                     MouseArea {
@@ -572,8 +572,8 @@ Panel {
                 id: mirrorLabel
                 text: root._mirrorOn ? "ON" : "OFF"
                 color: root._mirrorOn
-                    ? Theme.color.accent
-                    : (mirrorHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                    ? Theme.color.primary
+                    : (mirrorHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                 MouseArea {
                     id: mirrorHover

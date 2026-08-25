@@ -249,7 +249,7 @@ Panel {
                     id: revText
                     anchors.verticalCenter: parent.verticalCenter
                     text: Update.shortRev(inputCell.modelData.rev)
-                    color: Theme.color.foregroundDim
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                 }
@@ -258,7 +258,7 @@ Panel {
                     id: statusText
                     anchors.verticalCenter: parent.verticalCenter
                     text: inputCell._status
-                    color: inputCell._status === "BEHIND" ? Theme.color.warning : Theme.color.foregroundDim
+                    color: inputCell._status === "BEHIND" ? Theme.color.warning : Theme.color.mutedForeground
                 }
             }
         }

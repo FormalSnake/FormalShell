@@ -304,7 +304,7 @@ Panel {
                         Text {
                             id: streamPercent
                             text: Math.round(streamCell._volume * 100) + "%"
-                            color: streamCell._muted ? Theme.color.foregroundFaint : streamCell.foreground
+                            color: streamCell._muted ? Theme.color.mutedForeground : streamCell.foreground
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize.caption
                             anchors.verticalCenter: parent.verticalCenter
@@ -318,8 +318,8 @@ Panel {
                             id: streamMuteLabel
                             text: "MUTE"
                             color: streamCell._muted
-                                ? Theme.color.accent
-                                : (streamMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                                ? Theme.color.primary
+                                : (streamMuteHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
                             anchors.verticalCenter: parent.verticalCenter
 
                             MouseArea {
@@ -341,7 +341,7 @@ Panel {
                     Rectangle {
                         width: parent.width * Math.min(1, streamCell._volume / 1.5)
                         height: parent.height
-                        color: Theme.color.accent
+                        color: Theme.color.primary
                     }
 
                     // The 1.0 boundary, at 2/3 of the 0..1.5 track — cuts a
@@ -407,8 +407,8 @@ Panel {
         MetaLabel {
             text: "MUTE"
             color: root._outputMuted
-                ? Theme.color.accent
-                : (outputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                ? Theme.color.primary
+                : (outputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
             MouseArea {
                 id: outputMuteHover
@@ -478,8 +478,8 @@ Panel {
                         id: inputMuteLabel
                         text: "MUTE"
                         color: (root._source && root._source.audio && root._source.audio.muted)
-                            ? Theme.color.accent
-                            : (inputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                            ? Theme.color.primary
+                            : (inputMuteHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                         MouseArea {
                             id: inputMuteHover
@@ -500,7 +500,7 @@ Panel {
                 Rectangle {
                     width: parent.width * (root._source && root._source.audio ? AudioModel.clampDevice(root._source.audio.volume) : 0)
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
 
                 MouseArea {

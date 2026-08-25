@@ -44,28 +44,78 @@ TestCase {
         compare(s.xxxl, 14);
         compare(s.huge, 18);
         compare(s.controlGap, 8);
-        compare(s.controlPaddingX, 8);
-        compare(s.controlPaddingY, 4);
         compare(s.inputPaddingY, 7);
-        compare(s.controlHeight, 28);
         compare(s.popupRowHeight, 28);
-        compare(s.rowGap, 8);
         compare(s.rowPaddingX, 12);
         compare(s.labelGap, 4);
         compare(s.panelGap, 14);
-        compare(s.panelPadding, 8);
         compare(s.trackThickness, 6);
-        compare(s.popupWidthNarrow, 280);
-        compare(s.popupWidthDefault, 320);
-        compare(s.popupWidthWide, 400);
+    }
+
+    // shadcn redesign (2026-08-25): controlHeight/barCellHeight/barMargin/
+    // controlPaddingX/Y/rowGap/iconGap/panelPadding/sectionGap and the
+    // popup widths take the spec's own values, decoupled from the bare
+    // scale steps they used to mirror.
+    function test_semantic_spacing_tokens_match_the_shadcn_table() {
+        var s = Tokens.spacingTokens(1.0);
+        compare(s.controlHeight, 32);
+        compare(s.barCellHeight, 28);
+        compare(s.barMargin, 6);
+        compare(s.controlPaddingX, 12);
+        compare(s.controlPaddingY, 6);
+        compare(s.rowGap, 4);
+        compare(s.iconGap, 8);
+        compare(s.panelPadding, 12);
+        compare(s.sectionGap, 16);
+        compare(s.popupWidthNarrow, 320);
+        compare(s.popupWidthDefault, 380);
+        compare(s.popupWidthWide, 480);
         compare(s.popupWidthMenu, 560);
+        compare(s.popupWidthMenuSplit, 840);
+        compare(s.popupWidthMenuApp, 900);
     }
 
     function test_spacing_tokens_rescale_with_scale_factor() {
         var s = Tokens.spacingTokens(2.0);
         compare(s.sm, 8);
-        compare(s.panelPadding, 16);
+        compare(s.panelPadding, 24);
         compare(s.trackThickness, 12);
+        compare(s.controlHeight, 64);
+        compare(s.barMargin, 12);
+    }
+
+    // 1.3 radius tokens (shadcn redesign, spec "Radius")
+
+    function test_radius_tokens_at_default_base_match_the_spec_table() {
+        var r = Tokens.radiusTokens(10);
+        compare(r.sm, 6);
+        compare(r.md, 8);
+        compare(r.lg, 10);
+        compare(r.xl, 14);
+    }
+
+    function test_radius_tokens_track_a_custom_base() {
+        var r = Tokens.radiusTokens(20);
+        compare(r.sm, 16);
+        compare(r.md, 18);
+        compare(r.lg, 20);
+        compare(r.xl, 24);
+    }
+
+    function test_radius_tokens_floor_at_two() {
+        var r = Tokens.radiusTokens(0);
+        compare(r.sm, 2);
+        compare(r.md, 2);
+        compare(r.lg, 2);
+        compare(r.xl, 4);
+    }
+
+    // Weight tokens (shadcn redesign, spec "Type")
+
+    function test_weights_match_the_shadcn_table() {
+        compare(Tokens.WEIGHTS.normal, 400);
+        compare(Tokens.WEIGHTS.medium, 500);
+        compare(Tokens.WEIGHTS.semibold, 600);
     }
 
     // letter-spacing tokens
@@ -216,27 +266,20 @@ TestCase {
         verify(!Tokens.isUniformBorder(spec));
     }
 
-    // selection inversion (2026-08-07 revision: always accent-carried)
+    // selection inversion (shadcn redesign, 2026-08-25: always primary-carried)
 
-    function test_inverted_pair_defaults_to_accent() {
-        var colors = { accent: "#4385BE", onAccent: "#FFFCF0", urgent: "#D14D41", onUrgent: "#100F0F" };
+    function test_inverted_pair_returns_the_primary_pair() {
+        var colors = { primary: "#e4e4e7", primaryForeground: "#18181b", destructive: "#ff6467", destructiveForeground: "#fafafa" };
         var pair = Tokens.invertedPair(colors);
-        compare(pair.bg, colors.accent);
-        compare(pair.fg, colors.onAccent);
+        compare(pair.bg, colors.primary);
+        compare(pair.fg, colors.primaryForeground);
     }
 
-    function test_inverted_pair_accent_role_explicit() {
-        var colors = { accent: "#4385BE", onAccent: "#FFFCF0", urgent: "#D14D41", onUrgent: "#100F0F" };
-        var pair = Tokens.invertedPair(colors, "accent");
-        compare(pair.bg, colors.accent);
-        compare(pair.fg, colors.onAccent);
-    }
-
-    function test_inverted_pair_urgent_role() {
-        var colors = { accent: "#4385BE", onAccent: "#FFFCF0", urgent: "#D14D41", onUrgent: "#100F0F" };
-        var pair = Tokens.invertedPair(colors, "urgent");
-        compare(pair.bg, colors.urgent);
-        compare(pair.fg, colors.onUrgent);
+    function test_inverted_pair_ignores_role_and_still_returns_primary() {
+        var colors = { primary: "#e4e4e7", primaryForeground: "#18181b", destructive: "#ff6467", destructiveForeground: "#fafafa" };
+        var pair = Tokens.invertedPair(colors, "destructive");
+        compare(pair.bg, colors.primary);
+        compare(pair.fg, colors.primaryForeground);
     }
 
     // Regression guard (M16 Task 1): the legacy fixed Theme.spacing object

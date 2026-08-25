@@ -205,7 +205,7 @@ Singleton {
             // appearing at all.
             slurpProc.environment = ({
                 FS_SLURP_BG: Core.Theme.color.background + "99",
-                FS_SLURP_BORDER: Core.Theme.color.urgent + "FF",
+                FS_SLURP_BORDER: Core.Theme.color.destructive + "FF",
                 FS_SLURP_SEL: "#00000000",
                 FS_SLURP_WEIGHT: "" + Core.Theme.borderWidth
             });

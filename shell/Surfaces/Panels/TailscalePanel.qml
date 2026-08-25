@@ -282,8 +282,8 @@ Panel {
         MetaLabel {
             text: (root.status && root.status.running) ? "DISCONNECT" : "CONNECT"
             color: root._actionKind !== ""
-                ? Theme.color.accent
-                : (statusToggleHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                ? Theme.color.primary
+                : (statusToggleHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
             MouseArea {
                 id: statusToggleHover
@@ -299,7 +299,7 @@ Panel {
         visible: root.pollState === "ok" && root._actionError !== ""
         width: parent.width
 
-        MetaLabel { text: root._actionError; color: Theme.color.urgent }
+        MetaLabel { text: root._actionError; color: Theme.color.destructive }
     }
 
     // The hero above already names this machine; the IP is the one fact it
@@ -368,7 +368,7 @@ Panel {
                     Text {
                         id: onlineText
                         text: peerCell.modelData.online ? "ONLINE" : "OFFLINE"
-                        color: peerCell.modelData.online ? peerCell.dimForeground : Theme.color.foregroundDim
+                        color: peerCell.modelData.online ? peerCell.dimForeground : Theme.color.mutedForeground
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
                         font.capitalization: Font.AllUppercase
@@ -392,7 +392,7 @@ Panel {
                 Text {
                     visible: peerCell.modelData.ip !== null
                     text: peerCell.modelData.ip || ""
-                    color: Theme.color.foregroundDim
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                 }

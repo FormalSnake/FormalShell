@@ -387,7 +387,7 @@ Colors come out of your wallpaper, with no restart anywhere in the loop:
    recolors on the next paint, and the compositor config is reloaded so
    window borders follow.
 
-With no wallpaper set, `theme.json` is written from the bundled Flexoki
+With no wallpaper set, `theme.json` is written from the bundled shadcn zinc
 palette instead, in the variant matching the current mode, so
 `theme mode toggle` flips the whole shell through the same file write a
 matugen run uses.
@@ -398,25 +398,28 @@ fs theme mode toggle          # dark <-> light
 fs theme status               # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
 ```
 
-`theme.json` is the entire contract. Twelve roles, each with a static
-fallback, merged per key, so an older file missing newer roles still works:
+`theme.json` is the entire contract: shadcn's own role names, each with a
+static fallback, merged per key, so an older file missing newer roles still
+works:
 
 | role | meaning |
 | --- | --- |
 | `background` | canvas |
-| `backgroundAlt` | card and panel surface step |
 | `foreground` | content ink |
-| `foregroundDim` | meta ink (uppercase captions, timestamps) |
-| `foregroundFaint` | faint, disabled, ornament, never content |
-| `rule` | rules and control borders |
-| `accent` | the one loud color |
-| `onAccent` | ink on accent fills |
-| `urgent` | critical and error |
-| `onUrgent` | ink on urgent fills |
-| `warning` | degraded and low, the second loud color |
-| `onWarning` | ink on warning fills |
+| `card` | panel and popup surface step, with `cardForeground` |
+| `popover` | tooltip and tray-menu surface step, with `popoverForeground` |
+| `primary` | the wallpaper's own color, with `primaryForeground` |
+| `secondary` | a neutral fill step, with `secondaryForeground` |
+| `muted` | a dimmer neutral fill, with `mutedForeground` for meta ink |
+| `accent` | the neutral hover fill (not the wallpaper color), with `accentForeground` |
+| `destructive` | critical and error, with `destructiveForeground` |
+| `warning` | degraded and low, the second loud color, with `warningForeground` |
+| `border` | rules and control borders |
+| `input` | text-field borders |
+| `ring` | the keyboard-focus halo, carries the wallpaper color |
+| `chart1`..`chart5` | a five-step ramp for graphs |
 
-Anything that writes those twelve keys themes the shell. matugen is the
+Anything that writes those keys themes the shell. matugen is the
 shipped default, and a pywal template ships alongside it
 (`shell/Theme/templates/pywal-theme.json.tmpl`): drop it at
 `~/.config/wal/templates/pywal-theme.json`, run `wal -i <image>`, and point

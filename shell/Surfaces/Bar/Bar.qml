@@ -127,7 +127,7 @@ PanelWindow {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: Theme.borderWidth
-        color: Theme.color.rule
+        color: Theme.color.border
     }
 
     // Built-in widget registry: each Component wraps the widget with the
@@ -492,7 +492,7 @@ PanelWindow {
         anchors.verticalCenter: parent.verticalCenter
         width: Theme.borderWidth
         height: parent.height - Theme.space.sm * 2
-        color: Theme.color.rule
+        color: Theme.color.border
     }
 
     Row {
@@ -513,7 +513,7 @@ PanelWindow {
         anchors.verticalCenter: parent.verticalCenter
         width: Theme.borderWidth
         height: parent.height - Theme.space.sm * 2
-        color: Theme.color.rule
+        color: Theme.color.border
     }
 
     Row {

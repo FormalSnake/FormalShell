@@ -196,7 +196,7 @@ PanelWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             height: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Rectangle {
@@ -204,7 +204,7 @@ PanelWindow {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             width: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Rectangle {
@@ -212,7 +212,7 @@ PanelWindow {
             anchors.bottom: parent.bottom
             anchors.right: parent.right
             width: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Rectangle {
@@ -220,7 +220,7 @@ PanelWindow {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         CardTitleBar {
@@ -234,17 +234,17 @@ PanelWindow {
             anchors.rightMargin: Theme.borderWidth + Theme.space.panelPadding
 
             // Bare-label actions (DESIGN.md §1.1's 2026-08-09 amendment): no
-            // cell chrome, hover promotes ink foregroundDim -> foreground
+            // cell chrome, hover promotes ink mutedForeground -> foreground
             // instead of a fill/inversion. DND still needs to read as armed
-            // at a glance now that it has no fill of its own to go accent —
-            // its resting ink promotes straight to `accent` while armed,
-            // the bare-label equivalent of the full-bleed accent cell this
+            // at a glance now that it has no fill of its own to go primary:
+            // its resting ink promotes straight to `primary` while armed,
+            // the bare-label equivalent of the full-bleed primary cell this
             // replaced.
             MetaLabel {
                 text: "DND"
                 color: NotificationService.dnd
-                    ? Theme.color.accent
-                    : (dndHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                    ? Theme.color.primary
+                    : (dndHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                 MouseArea {
                     id: dndHover
@@ -257,7 +257,7 @@ PanelWindow {
 
             MetaLabel {
                 text: "CLEAR ALL"
-                color: clearAllHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim
+                color: clearAllHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground
 
                 MouseArea {
                     id: clearAllHover

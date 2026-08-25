@@ -448,14 +448,14 @@ PanelWindow {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: Theme.borderWidth
-                    color: Theme.color.rule
+                    color: Theme.color.border
                 }
                 Rectangle {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
                     width: Theme.borderWidth
-                    color: Theme.color.rule
+                    color: Theme.color.border
                 }
 
                 NotificationCard {

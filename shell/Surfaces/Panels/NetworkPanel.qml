@@ -993,8 +993,8 @@ Panel {
                         id: actionLabel
                         text: netCell.modelData.network.connected ? "DISCONNECT" : "CONNECT"
                         color: netCell.modelData.network.connected
-                            ? Theme.color.accent
-                            : (actionHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                            ? Theme.color.primary
+                            : (actionHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                         MouseArea {
                             id: actionHover
@@ -1119,7 +1119,7 @@ Panel {
 
                         MetaLabel {
                             text: "FORGET"
-                            color: Theme.color.urgent
+                            color: Theme.color.destructive
                         }
 
                         interactive: forgetCell.enabled
@@ -1134,7 +1134,7 @@ Panel {
                         anchors.rightMargin: wifiCell._canForget ? Theme.space.sm : 0
                         anchors.verticalCenter: parent.verticalCenter
                         text: wifiCell._ssid !== "" ? wifiCell._ssid : "HIDDEN"
-                        color: wifiCell._ssid !== "" ? wifiCell.foreground : Theme.color.foregroundDim
+                        color: wifiCell._ssid !== "" ? wifiCell.foreground : Theme.color.mutedForeground
                         elide: Text.ElideRight
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
@@ -1160,7 +1160,7 @@ Panel {
                 MetaLabel {
                     visible: wifiCell._statusText !== ""
                     text: wifiCell._statusText
-                    color: wifiCell._isFailed ? Theme.color.urgent : wifiCell.dimForeground
+                    color: wifiCell._isFailed ? Theme.color.destructive : wifiCell.dimForeground
                     font.italic: wifiCell._isFailed
                 }
 
@@ -1181,7 +1181,7 @@ Panel {
                             text: "IDENTITY (USER@DOMAIN)"
                             // Faint placeholder ink, DESIGN.md §1.4: one
                             // band under the field's own label.
-                            color: Theme.color.foregroundFaint
+                            color: Theme.color.mutedForeground
                         }
 
                         TextInput {
@@ -1215,7 +1215,7 @@ Panel {
                             text: "ENTER PASSPHRASE"
                             // Faint placeholder ink, DESIGN.md §1.4: one
                             // band under the field's own label.
-                            color: Theme.color.foregroundFaint
+                            color: Theme.color.mutedForeground
                         }
 
                         TextInput {
@@ -1267,8 +1267,8 @@ Panel {
         MetaLabel {
             text: "WI-FI POWER"
             color: Networking.wifiEnabled
-                ? Theme.color.accent
-                : (wifiPowerHeroHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                ? Theme.color.primary
+                : (wifiPowerHeroHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
             MouseArea {
                 id: wifiPowerHeroHover
@@ -1344,8 +1344,8 @@ Panel {
                 id: qrToggle
                 text: "QR"
                 color: root._qrOpen
-                    ? Theme.color.accent
-                    : (qrHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                    ? Theme.color.primary
+                    : (qrHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                 MouseArea {
                     id: qrHover
@@ -1461,8 +1461,8 @@ Panel {
                     id: pwToggle
                     text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
                     color: root._pwPhase !== "idle"
-                        ? Theme.color.accent
-                        : (pwHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                        ? Theme.color.primary
+                        : (pwHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                     MouseArea {
                         id: pwHover
@@ -1483,7 +1483,7 @@ Panel {
                 visible: root._pwPhase === "idle" || root._pwPhase === "shown"
                 width: parent.width
                 text: root._pwPhase === "shown" ? root._pwText : root._pwMask
-                color: root._pwPhase === "shown" ? passwordCell.foreground : Theme.color.foregroundDim
+                color: root._pwPhase === "shown" ? passwordCell.foreground : Theme.color.mutedForeground
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.body
                 wrapMode: Text.WrapAnywhere
@@ -1527,8 +1527,8 @@ Panel {
                 id: runToggle
                 text: root._stRunning ? "RUNNING…" : "RUN"
                 color: root._stRunning
-                    ? Theme.color.accent
-                    : (runHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                    ? Theme.color.primary
+                    : (runHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
                 MouseArea {
                     id: runHover
@@ -1546,7 +1546,7 @@ Panel {
         visible: root._stError !== ""
         width: parent.width
 
-        MetaLabel { text: root._stError; color: Theme.color.urgent }
+        MetaLabel { text: root._stError; color: Theme.color.destructive }
     }
 
     Cell {
@@ -1587,7 +1587,7 @@ Panel {
                 Rectangle {
                     width: parent.width * SpeedTest.fillFraction(downloadCell._mbps)
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
             }
 
@@ -1634,7 +1634,7 @@ Panel {
                 Rectangle {
                     width: parent.width * SpeedTest.fillFraction(uploadCell._mbps)
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
             }
 

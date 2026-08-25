@@ -8,12 +8,13 @@ import qs.Components
 // keys on the right. Menu/actions.js decides the wording; this file only
 // paints it.
 //
-// The primary key cap is a full-bleed accent block (DESIGN.md §2.4: accent
-// reads as a fill with onAccent ink, never a tinted label) and its verb sits
-// in band 1; every hint cap is a bordered box carrying `rule` at band 2
-// dim, so the one action Enter will actually take is the only loud thing in
-// the row. Clicking the primary does exactly what Enter does — the hints are
-// legends, not buttons, and stay inert.
+// The primary-action key cap is a full-bleed primary block (DESIGN.md
+// §2.4: primary reads as a fill with primaryForeground ink, never a
+// tinted label) and its verb sits in band 1; every hint cap is a bordered
+// box carrying `border` at band 2 dim, so the one action Enter will
+// actually take is the only loud thing in the row. Clicking that cap does
+// exactly what Enter does, the hints are legends, not buttons, and stay
+// inert.
 Cell {
     id: root
 
@@ -44,13 +45,13 @@ Cell {
             anchors.verticalCenter: parent.verticalCenter
             width: primaryKey.implicitWidth + Theme.space.sm * 2
             height: primaryKey.implicitHeight + Theme.space.xxs * 2
-            color: Theme.color.accent
+            color: Theme.color.primary
 
             Text {
                 id: primaryKey
                 anchors.centerIn: parent
                 text: root.primary ? root.primary.key : ""
-                color: Theme.color.onAccent
+                color: Theme.color.primaryForeground
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize.caption
             }
@@ -84,7 +85,7 @@ Cell {
                     height: hintKey.implicitHeight + Theme.space.xxs * 2
                     color: "transparent"
                     border.width: Theme.borderWidth
-                    border.color: Theme.color.rule
+                    border.color: Theme.color.border
                     radius: Theme.radius
 
                     Text {

@@ -26,9 +26,10 @@ import qs.Core
 // own `anchors.bottomMargin` overrides this.
 //
 // `inverted` (DESIGN.md §1.1 bar-cell amendment): a hovered standalone cell's
-// fill swaps to accent, so a plain accent dot vanishes into it — every
+// fill swaps to primary, so a plain primary dot vanishes into it. Every
 // caller binds this to its own cell's hover-inverted state (`Cell.qml`'s
-// `invertedNow`) so the dot swaps to `onAccent` and stays visible instead.
+// `invertedNow`) so the dot swaps to `primaryForeground` and stays visible
+// instead.
 Rectangle {
     property bool inverted: false
 
@@ -37,5 +38,5 @@ Rectangle {
     width: Theme.space.sm
     height: Theme.space.sm
     radius: Theme.radius
-    color: inverted ? Theme.color.onAccent : Theme.color.accent
+    color: inverted ? Theme.color.primaryForeground : Theme.color.primary
 }

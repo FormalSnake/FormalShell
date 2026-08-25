@@ -80,7 +80,7 @@ Panel {
                 radius: 0
                 color: root._lightbar || Theme.color.background
                 border.width: Theme.borderWidth
-                border.color: Theme.color.rule
+                border.color: Theme.color.border
             }
 
             Text {
@@ -114,7 +114,7 @@ Panel {
                         text: "●"
                         color: root._playerLeds !== null && index < root._playerLeds
                             ? Theme.color.foreground
-                            : Theme.color.foregroundFaint
+                            : Theme.color.mutedForeground
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.body
                     }

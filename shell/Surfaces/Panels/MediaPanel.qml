@@ -40,7 +40,7 @@ Panel {
     titleActions: MetaLabel {
         visible: MediaService.canRaise
         text: "RAISE"
-        color: raiseHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim
+        color: raiseHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground
 
         MouseArea {
             id: raiseHover
@@ -167,7 +167,7 @@ Panel {
                     width: parent.width
                     visible: MediaService.artist !== ""
                     text: MediaService.artist
-                    color: Theme.color.foregroundDim
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.body
                     elide: Text.ElideRight
@@ -280,7 +280,7 @@ Panel {
                 Rectangle {
                     width: parent.width * progressTrack._fraction
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
 
                 MouseArea {
@@ -349,7 +349,7 @@ Panel {
                 Text {
                     anchors.centerIn: parent
                     text: "󰒮"
-                    color: MediaService.canGoPrevious ? prevCell.foreground : Theme.color.foregroundFaint
+                    color: MediaService.canGoPrevious ? prevCell.foreground : Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.heading
                 }
@@ -386,7 +386,7 @@ Panel {
                 Text {
                     anchors.centerIn: parent
                     text: "󰒭"
-                    color: MediaService.canGoNext ? nextCell.foreground : Theme.color.foregroundFaint
+                    color: MediaService.canGoNext ? nextCell.foreground : Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.heading
                 }
@@ -422,7 +422,7 @@ Panel {
             anchors.left: transportRow.left
             anchors.right: transportRow.right
             height: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
 
         Rectangle {
@@ -430,7 +430,7 @@ Panel {
             anchors.left: transportRow.left
             anchors.bottom: transportRow.bottom
             width: Theme.borderWidth
-            color: Theme.color.rule
+            color: Theme.color.border
         }
     }
 
@@ -476,7 +476,7 @@ Panel {
                 Rectangle {
                     width: parent.width * MediaService.volume
                     height: parent.height
-                    color: Theme.color.accent
+                    color: Theme.color.primary
                 }
 
                 MouseArea {

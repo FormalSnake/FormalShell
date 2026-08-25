@@ -148,7 +148,7 @@ Panel {
                     // The honest-unavailable state every surface in the
                     // shell falls back to (NO ADAPTER, NO DEVICES, NO
                     // LOCATION): a plain cell whose label keeps MetaLabel's
-                    // own foregroundDim, not a Cell flag of its own.
+                    // own mutedForeground, not a Cell flag of its own.
                     Cell {
                         width: parent.width
 
@@ -239,7 +239,7 @@ Panel {
                                     radius: Theme.radius
                                     color: Theme.color[swatchCell.modelData]
                                     border.width: Theme.borderWidth
-                                    border.color: Theme.color.rule
+                                    border.color: Theme.color.border
                                 }
 
                                 MetaLabel {

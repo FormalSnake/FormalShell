@@ -541,7 +541,7 @@ Panel {
 
                             MetaLabel {
                                 text: "FORGET"
-                                color: Theme.color.urgent
+                                color: Theme.color.destructive
                             }
 
                             interactive: forgetCell.enabled
@@ -579,7 +579,7 @@ Panel {
                     Text {
                         visible: btCell._statusText !== ""
                         text: btCell._statusText
-                        color: btCell._isFailed ? Theme.color.urgent : btCell.dimForeground
+                        color: btCell._isFailed ? Theme.color.destructive : btCell.dimForeground
                         font.italic: btCell._isFailed
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize.caption
@@ -625,8 +625,8 @@ Panel {
         MetaLabel {
             text: "POWER"
             color: (root._adapter && root._adapter.enabled)
-                ? Theme.color.accent
-                : (powerHover.containsMouse ? Theme.color.foreground : Theme.color.foregroundDim)
+                ? Theme.color.primary
+                : (powerHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
 
             MouseArea {
                 id: powerHover

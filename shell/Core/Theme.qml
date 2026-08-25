@@ -13,12 +13,27 @@ Singleton {
 
     property var color: Palette.fallback()
 
-    readonly property int borderWidth: 2
-    readonly property int radius: 0
+    // shadcn's border/ring pair (spec "Depth", 2026-08-25): a 1px border
+    // everywhere, plus a 3px ring halo at 0.5 alpha on focus. `radius`
+    // reads `theme.radius` from settings.json (default 10, shadcn's own
+    // `--radius: 0.625rem`); radiusSm/Md/Lg/Xl derive from it per
+    // `Tokens.radiusTokens`.
+    readonly property int borderWidth: 1
+    readonly property int radius: Config.get("theme.radius", 10)
+    readonly property var _radiusTokens: Tokens.radiusTokens(radius)
+    readonly property int radiusSm: _radiusTokens.sm
+    readonly property int radiusMd: _radiusTokens.md
+    readonly property int radiusLg: _radiusTokens.lg
+    readonly property int radiusXl: _radiusTokens.xl
+    readonly property int ringWidth: 3
+    readonly property real ringAlpha: 0.5
+
+    // shadcn font-weight tokens (spec "Type").
+    readonly property var weight: Tokens.WEIGHTS
 
     // The lock/greeter password field's outline and the polkit dialog's own
     // password field share this one 3px-equivalent width (DESIGN.md's lock
-    // brief, audit "auth-field border parity") — previously each surface
+    // brief, audit "auth-field border parity"): previously each surface
     // computed `Math.round(3 * fontScale)` independently.
     readonly property real fieldBorderWidth: Math.round(3 * fontScale)
 
@@ -148,11 +163,10 @@ Singleton {
         root.color = Palette.mergeWithFallback(parsed);
     }
 
-    // { bg: accent, fg: onAccent } (or the urgent pair when `role` is
-    // `"urgent"`) — the cursor-row/accent-cell inversion pair per
-    // DESIGN.md's "selection = inversion" rule. Always accent-carried
-    // since the 2026-08-07 revision; the old photo-negative
-    // foreground/background pair is retired shell-wide.
+    // { bg: primary, fg: primaryForeground }: the cursor-row/active-cell
+    // inversion pair Cell.qml and AuthPrompt.qml still read. `role` is
+    // accepted but ignored (Tokens.invertedPair, 2026-08-25 rebind);
+    // Task 3 drops the parameter along with Cell's mapped props.
     function inverted(role) {
         return Tokens.invertedPair(color, role);
     }
@@ -180,18 +194,16 @@ Singleton {
 
     // A named state resolved against a color token (a palette role or raw
     // hex) for fill, in the { fill, fillAlpha, border, borderWidth,
-    // borderAlpha } shape. Border color is always `rule` at alpha 1.0
-    // (DESIGN.md §1.4's ink hierarchy — the per-state border-alpha column
-    // is retired) unless `borderToken` names a semantic exception
-    // (`urgent`, `accent`) for a surface whose own brief demands a
-    // meaning-carrying border (§1.1's exception clause); plain structural
-    // chrome never passes one.
+    // borderAlpha } shape. Border color is always `border` at alpha 1.0
+    // unless `borderToken` names a semantic exception (`destructive`,
+    // `primary`) for a surface whose own brief demands a meaning-carrying
+    // border; plain structural chrome never passes one.
     function stateStyle(state, colorToken, borderToken) {
         var col = _resolveColorToken(colorToken);
         var appearance = Tokens.stateAppearance(state);
         return {
             fill: col, fillAlpha: appearance.fillAlpha,
-            border: _resolveColorToken(borderToken || "rule"), borderWidth: appearance.borderWidth, borderAlpha: 1.0
+            border: _resolveColorToken(borderToken || "border"), borderWidth: appearance.borderWidth, borderAlpha: 1.0
         };
     }
 

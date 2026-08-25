@@ -507,7 +507,7 @@ Panel {
                     Rectangle {
                         width: parent.width * Math.max(0, Math.min(1, rowCell.modelData.percent))
                         height: parent.height
-                        color: rowCell._urgent ? Theme.color.urgent : Theme.color.accent
+                        color: rowCell._urgent ? Theme.color.destructive : Theme.color.primary
                     }
                 }
 

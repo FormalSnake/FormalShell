@@ -19,8 +19,8 @@ import "../../Clock/model.js" as ClockModel
 // entry, spec §2, M6 Task 3): a MONTH/YEAR meta row flanked by `<`/`>`
 // month-nav cells, then the grid itself — weekday header meta row followed
 // by one ledger cell per day, days outside the current month dimmed to
-// foregroundFaint — and below it the year-progress bar as a full-width flat
-// accent-fill cell with its percentage as mono text, mirroring AudioPanel's
+// mutedForeground, and below it the year-progress bar as a full-width flat
+// primary-fill cell with its percentage as mono text, mirroring AudioPanel's
 // slider idiom. Day selection (M13 Task 4): every day cell is clickable
 // (hover-cursor state, DESIGN §1.1); the selected day carries Cell's fg/bg
 // inversion and drives the events ledger below the grid, whose meta header
@@ -59,9 +59,9 @@ import "../../Clock/model.js" as ClockModel
 // meta time column on the left sized to the widest label the day prints so
 // the summaries share one column, and the summary elided into whatever is
 // left. The time column is where the day's shape shows: an event already
-// over drops to foregroundFaint (§1.4 sanctions faint for spent meta, never
+// over drops to mutedForeground (§1.4 sanctions faint for spent meta, never
 // for content ink, so the summary itself keeps reading), and the one
-// currently running takes the full-bleed accent fill today's own day cell
+// currently running takes the full-bleed primary fill today's own day cell
 // uses. The section header carries the same reading as a meta pair on its
 // right — NOW while something runs, otherwise NEXT and that start time —
 // and only for today, since "next" on a day the user navigated to means
@@ -72,7 +72,7 @@ import "../../Clock/model.js" as ClockModel
 // doubling as the hero's rail). The grid always renders 6 week rows so
 // stepping months never resizes the card, with an ISO week-number column
 // (ClockModel.isoWeek, shared with the bar clock's own ISO-week format
-// preset) down the left in foregroundFaint.
+// preset) down the left in mutedForeground.
 Panel {
     id: root
 
@@ -368,7 +368,7 @@ Panel {
         width: parent.width
 
         // ISO week-number column (M26 Task 4): a blank header cell over
-        // one number per grid row, quiet enough (foregroundFaint) to never
+        // one number per grid row, quiet enough (mutedForeground) to never
         // compete with the dates it sits beside.
         Column {
             id: weekColumn
@@ -404,7 +404,7 @@ Panel {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: ClockModel.pad2(weekNumberCell.modelData)
-                            color: Core.Theme.color.foregroundFaint
+                            color: Core.Theme.color.mutedForeground
                             font.family: Core.Theme.fontFamily
                             font.pixelSize: Core.Theme.fontSize.body
                         }
@@ -474,7 +474,7 @@ Panel {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: dayCell.modelData.day
-                            color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.foregroundFaint
+                            color: dayCell.modelData.inMonth ? dayCell.foreground : Core.Theme.color.mutedForeground
                             font.family: Core.Theme.fontFamily
                             font.pixelSize: Core.Theme.fontSize.body
                         }
@@ -486,7 +486,7 @@ Panel {
                             width: Core.Theme.space.sm
                             height: Core.Theme.space.sm
                             anchors.horizontalCenter: parent.horizontalCenter
-                            color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.accent
+                            color: (dayCell.selected || dayCell.accent) ? dayCell.foreground : Core.Theme.color.primary
                             opacity: dayCell.hasEvents ? 1 : 0
 
                             Behavior on opacity {
@@ -572,7 +572,7 @@ Panel {
                     width: agendaGauge.implicitWidth
                     visible: eventCell.modelData !== null
                     text: eventCell.modelData ? Agenda.timeLabel(eventCell.modelData, root._twelveHour) : ""
-                    color: eventCell._status === "past" ? Core.Theme.color.foregroundFaint : eventCell.dimForeground
+                    color: eventCell._status === "past" ? Core.Theme.color.mutedForeground : eventCell.dimForeground
                 }
 
                 Text {
@@ -582,7 +582,7 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: eventCell.modelData ? eventCell.modelData.summary : "NO EVENTS"
-                    color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.foregroundDim
+                    color: eventCell.modelData ? eventCell.foreground : Core.Theme.color.mutedForeground
                     elide: Text.ElideRight
                     font.family: Core.Theme.fontFamily
                     font.pixelSize: Core.Theme.fontSize.body
@@ -619,7 +619,7 @@ Panel {
                 Rectangle {
                     width: parent.width * root._yearFraction
                     height: parent.height
-                    color: Core.Theme.color.accent
+                    color: Core.Theme.color.primary
                 }
             }
         }
@@ -671,7 +671,7 @@ Panel {
                 Rectangle {
                     width: parent.width * root._lifeFraction
                     height: parent.height
-                    color: Core.Theme.color.accent
+                    color: Core.Theme.color.primary
                 }
             }
         }

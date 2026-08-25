@@ -7,7 +7,7 @@ import qs.Core
 // tracking convention as MetaLabel (`Font.AllUppercase` +
 // `Theme.letterSpacing.meta`), but body-sized and colored by the caller
 // (usually a Cell's own `foreground`, which already carries hover/selection
-// inversion) instead of MetaLabel's fixed caption size and `foregroundDim`,
+// inversion) instead of MetaLabel's fixed caption size and `mutedForeground`,
 // which would wrongly shrink and dim these.
 Text {
     font.family: Theme.fontFamily

@@ -5,9 +5,9 @@ import "../shell/Components"
 
 // Dog-ear fold-mark regression guard (shell/Components/DogEar.qml,
 // DESIGN.md §2 item 7): one right triangle, legs `Theme.space.lg` long,
-// painted `foregroundFaint` into the Canvas item's default Canvas.Image
+// painted `mutedForeground` into the Canvas item's default Canvas.Image
 // (software, readback-capable) buffer at a card's top-left corner.
-// Replaces tst_corner_marks.qml — CornerMarks' four squares are gone.
+// Replaces tst_corner_marks.qml, CornerMarks' four squares are gone.
 TestCase {
     id: testCase
     name: "DogEar"
@@ -34,7 +34,7 @@ TestCase {
     // `color` properties), so `.r`/`.g`/`.b` are only meaningful once
     // funneled through an actual `color`-typed property — exactly what
     // DogEar's own `inkColor` does before handing it to the Canvas.
-    property color _inkProbe: Theme.color.foregroundFaint
+    property color _inkProbe: Theme.color.mutedForeground
 
     function _pixel(canvas, x, y) {
         var data = canvas.getContext("2d").getImageData(x, y, 1, 1).data;
@@ -82,7 +82,7 @@ TestCase {
 
         var canvas = _findCanvas(mark);
         var original = Theme.color;
-        Theme.color = Object.assign({}, original, { foregroundFaint: "#ff0000" });
+        Theme.color = Object.assign({}, original, { mutedForeground: "#ff0000" });
         settle(mark);
 
         var corner = _pixel(canvas, 0, 0);

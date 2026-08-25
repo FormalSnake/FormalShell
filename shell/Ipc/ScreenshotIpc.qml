@@ -88,7 +88,7 @@ Scope {
             // alpha byte yields slurp's #RRGGBBAA form.
             slurpProc.environment = ({
                 FS_SLURP_BG: Theme.color.background + "99",
-                FS_SLURP_BORDER: Theme.color.accent + "FF",
+                FS_SLURP_BORDER: Theme.color.primary + "FF",
                 FS_SLURP_SEL: "#00000000",
                 FS_SLURP_WEIGHT: "" + Theme.borderWidth
             });

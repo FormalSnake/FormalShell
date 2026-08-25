@@ -2,7 +2,7 @@ import QtQuick
 import qs.Core
 
 // The ordered Bayer dither (DESIGN.md §2, item 8): a 2x2 checker of
-// `foregroundFaint` on transparent, the sanctioned "partial"/"pending"
+// `mutedForeground` on transparent, the sanctioned "partial"/"pending"
 // texture for a track's unfilled remainder, a pending notification row's
 // backdrop, or a disabled toggle's field — replacing the low-alpha tint
 // every one of those used to hand-roll. A Canvas repaints once per
@@ -15,7 +15,7 @@ Item {
     id: root
 
     default property alias content: overlay.data
-    property color inkColor: Theme.color.foregroundFaint
+    property color inkColor: Theme.color.mutedForeground
 
     Canvas {
         id: canvas

@@ -158,7 +158,7 @@ Cell {
             Rectangle {
                 width: parent.width * Math.max(0, Math.min(1, root.rail))
                 height: parent.height
-                color: Theme.color.accent
+                color: Theme.color.primary
             }
 
             MouseArea {

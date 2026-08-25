@@ -193,7 +193,7 @@ Panel {
                     visible: rowCell.modelData.repo !== ""
                     width: parent.width
                     text: rowCell.modelData.repo
-                    color: Theme.color.foregroundDim
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize.caption
                     elide: Text.ElideRight

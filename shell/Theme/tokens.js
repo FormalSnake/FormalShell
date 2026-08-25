@@ -35,16 +35,20 @@ var SPACING_BASE = {
 };
 
 // Semantic spacing tokens (a control's own padding/height, not a bare
-// scale step) — same scaling rule as SPACING_BASE. `trackThickness` is the
-// one flat-fill-track idiom (OSD, volume/brightness/life-progress sliders)
-// — a single token so every track site renders the same thickness instead
-// of each surface picking its own literal. `controlPaddingX`/`Y` match
-// `lg`/`sm` exactly (2026-08-07 spacing-consistency pass) — Cell.qml's
-// implicit sizing routes through these now instead of the bare scale
-// steps, so the two numbers can't drift apart independently again.
-// `popupWidth{Narrow,Default,Wide,Menu,MenuSplit,MenuApp}` are the six snap
-// points every floating card's width now picks from (DESIGN.md §1.3's popup
-// width scale) instead of each surface choosing its own literal. `MenuSplit`
+// scale step), same scaling rule as SPACING_BASE. shadcn redesign
+// (2026-08-25): `controlHeight`, `barCellHeight`, `barMargin`,
+// `controlPaddingX`/`Y`, `rowGap`, `iconGap`, `panelPadding` and
+// `sectionGap` take the spec's own values, decoupling `controlPaddingX`/`Y`
+// from the bare `lg`/`sm` scale steps they used to mirror exactly. Older
+// keys not named in the spec (`controlGap`, `inputPaddingY`,
+// `popupRowHeight`, `rowPaddingX`, `labelGap`, `panelGap`) keep their
+// existing values: surfaces still reading them move to the new semantic
+// keys on their own retrofit milestone (M45 prunes what nothing reads any
+// more). `trackThickness` is the one flat-fill-track idiom (OSD,
+// volume/brightness/life-progress sliders), a single token so every track
+// site renders the same thickness instead of each surface picking its own
+// literal. `popupWidth{Narrow,Default,Wide,Menu,MenuSplit,MenuApp}` are the
+// six snap points every floating card's width picks from. `MenuSplit`
 // (1.5x `Menu`) is the menu's own split-pane step, for the
 // clipboard/share-history route's left-half list plus right-half preview,
 // which needs more than one column of rows can hold. `MenuApp` is one step
@@ -53,11 +57,12 @@ var SPACING_BASE = {
 // where the split route's right half is a single preview that can take
 // whatever room is left over.
 var SEMANTIC_SPACING_BASE = {
-    controlGap: 8, controlPaddingX: 8, controlPaddingY: 4, inputPaddingY: 7,
-    controlHeight: 28, popupRowHeight: 28, rowGap: 8, rowPaddingX: 12,
-    labelGap: 4, panelGap: 14, panelPadding: 8,
+    controlGap: 8, controlPaddingX: 12, controlPaddingY: 6, inputPaddingY: 7,
+    controlHeight: 32, barCellHeight: 28, barMargin: 6,
+    popupRowHeight: 28, rowGap: 4, iconGap: 8, rowPaddingX: 12,
+    labelGap: 4, panelGap: 14, panelPadding: 12, sectionGap: 16,
     trackThickness: 6,
-    popupWidthNarrow: 280, popupWidthDefault: 320, popupWidthWide: 400, popupWidthMenu: 560,
+    popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900
 };
 
@@ -83,6 +88,23 @@ function letterSpacingTokens(scale) {
     return out;
 }
 
+// shadcn font-weight tokens (spec "Type"). Flat, not scaled: a weight is a
+// font axis value, not a size.
+var WEIGHTS = { normal: 400, medium: 500, semibold: 600 };
+
+// Radius tokens (spec "Radius"): sm/md/lg/xl step off the settings-driven
+// base by fixed 2-4px offsets, floored at 2 so a base pinned near 0 never
+// produces a negative or invisible radius.
+function radiusTokens(base) {
+    var b = typeof base === "number" ? base : 0;
+    return {
+        sm: Math.max(2, b - 4),
+        md: Math.max(2, b - 2),
+        lg: Math.max(2, b),
+        xl: Math.max(2, b + 4)
+    };
+}
+
 // --- §4 motion tokens ---------------------------------------------------
 
 // The owner's brief verbatim: "fast and subtle, it should just look
@@ -105,7 +127,7 @@ function letterSpacingTokens(scale) {
 // fast/standard/reveal; the caller (NowPlaying.qml) gates the whole
 // animation on `Theme.motionEnabled` directly and falls back to today's
 // elide instead of scrolling at 0px/s.
-var MOTION_BASE = { fast: 100, standard: 130, slide: 6, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
+var MOTION_BASE = { fast: 100, standard: 130, slide: 4, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
 
 function motionTokens(enabled) {
     return {
@@ -187,12 +209,12 @@ function isUniformBorder(spec) {
 
 // --- selection inversion (§1.1 ASCII-OS override) ----------------------
 
-// { bg, fg } for the selection-inversion pair (DESIGN.md §2.2, 2026-08-07
-// revision): always accent-carried — `role` picks `"accent"` (default) or
-// `"urgent"` for an urgent-carrying row. The old photo-negative
-// foreground/background pair is retired shell-wide, not kept as an option.
+// { bg, fg } for the selection-inversion pair: always the primary pair
+// (shadcn redesign, 2026-08-25), regardless of `role`. No caller passes a
+// role any more, since Cell.qml's own urgent/warning states paint their
+// own fill directly instead of routing through this inversion. Kept as a
+// two-argument function so existing call sites keep compiling; Task 3
+// drops the unused parameter along with Cell's mapped props.
 function invertedPair(colors, role) {
-    return role === "urgent"
-        ? { bg: colors.urgent, fg: colors.onUrgent }
-        : { bg: colors.accent, fg: colors.onAccent };
+    return { bg: colors.primary, fg: colors.primaryForeground };
 }

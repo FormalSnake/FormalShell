@@ -5,18 +5,16 @@ import "../shell/Components"
 
 // Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, M18 Task 4):
 // a standalone (bar) cell's hover-cursor state swaps its fill and content to
-// the accent pair (`Theme.inverted()`, same pair the ledger's `selected`
+// the primary pair (`Theme.inverted()`, same pair the ledger's `selected`
 // fill uses), replacing the fill-alpha tint + border every other cell keeps.
-// Full-bleed accent/urgent/warning cells ink with their own `on*` role
-// (§2.4), never each other's.
+// Full-bleed primary/destructive/warning cells ink with their own
+// `*Foreground` role (§2.4), never each other's.
 //
 // Verified against a synthetic palette (init()/cleanup() below), not
-// Palette.fallback()'s real hex values: the Flexoki fallback sets
-// onAccent == onUrgent == background in both modes (dark ink #100F0F
-// doubles as the dark background; light paper #FFFCF0 doubles as the
-// light background), so hex-equality assertions against it can't
-// distinguish a correct role from a swapped one — every role below is
-// pairwise distinct so a wrong-role bug actually fails the assertion.
+// Palette.fallback()'s real hex values: a fallback set can coincidentally
+// share a hex across two different roles, which would make a hex-equality
+// assertion against it unable to distinguish a correct role from a swapped
+// one, so every role below is pairwise distinct.
 TestCase {
     id: testCase
     name: "CellHoverInversion"
@@ -27,17 +25,15 @@ TestCase {
 
     readonly property var sentinelColors: ({
         background: "#010101",
-        backgroundAlt: "#020202",
         foreground: "#eeeeee",
-        foregroundDim: "#aaaaaa",
-        foregroundFaint: "#888888",
-        rule: "#444444",
-        accent: "#1133ff",
-        onAccent: "#ffdd00",
-        urgent: "#ff2222",
-        onUrgent: "#22ff88",
+        mutedForeground: "#aaaaaa",
+        border: "#444444",
+        primary: "#1133ff",
+        primaryForeground: "#ffdd00",
+        destructive: "#ff2222",
+        destructiveForeground: "#22ff88",
         warning: "#ffaa00",
-        onWarning: "#001122"
+        warningForeground: "#001122"
     })
 
     property var _originalColor
@@ -93,21 +89,21 @@ TestCase {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true, accent: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.onAccent));
+        verify(Qt.colorEqual(cell.foreground, Theme.color.primaryForeground));
     }
 
     function test_urgent_wins_over_hover_inversion() {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true, urgent: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.onUrgent));
+        verify(Qt.colorEqual(cell.foreground, Theme.color.destructiveForeground));
     }
 
     function test_warning_wins_over_hover_inversion() {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true, warning: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.onWarning));
+        verify(Qt.colorEqual(cell.foreground, Theme.color.warningForeground));
     }
 
     // The ink button (DESIGN.md §2 item 11, M19 Task 4): fill priority is
@@ -130,7 +126,7 @@ TestCase {
         var cell = createTemporaryObject(cellComponent, testCase, { ink: true, warning: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.onWarning));
+        verify(Qt.colorEqual(cell.foreground, Theme.color.warningForeground));
     }
 
     // Hover/press on an ink cell keeps the accent-pair inversion, exactly
@@ -149,15 +145,15 @@ TestCase {
         var cell = createTemporaryObject(cellComponent, testCase, { ink: true, hovered: true, accent: true });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.foreground, Theme.color.onAccent));
+        verify(Qt.colorEqual(cell.foreground, Theme.color.primaryForeground));
     }
 
     // DESIGN.md §1.1's snap rule: under hover inversion, a meta caption
     // bound to `dimForeground` collapses into the same band as content ink
-    // instead of staying a dim variant on top of the accent fill (M20 Task
-    // 2 — MetaLabel captions like Clock's TIME / WeatherWidget's temperature
-    // used to hardcode `foregroundDim` and never invert at all).
-    function test_standalone_hover_promotes_dimForeground_to_onAccent() {
+    // instead of staying a dim variant on top of the primary fill (M20 Task
+    // 2, MetaLabel captions like Clock's TIME / WeatherWidget's temperature
+    // used to hardcode `mutedForeground` and never invert at all).
+    function test_standalone_hover_promotes_dimForeground_to_primaryForeground() {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: true });
         verify(cell);
         settle(cell);
@@ -168,7 +164,7 @@ TestCase {
         var cell = createTemporaryObject(cellComponent, testCase, { standalone: true, hovered: false });
         verify(cell);
         settle(cell);
-        verify(Qt.colorEqual(cell.dimForeground, Theme.color.foregroundDim));
+        verify(Qt.colorEqual(cell.dimForeground, Theme.color.mutedForeground));
     }
 
     function test_invertedNow_tracks_hover_inversion() {
@@ -186,24 +182,24 @@ TestCase {
     }
 
     // PanelOpenDot (DESIGN.md §1.1 amendment): stays visible against the
-    // hover-inverted accent fill by swapping to `onAccent` instead of
-    // vanishing as a plain accent dot on an accent background.
+    // hover-inverted primary fill by swapping to `primaryForeground` instead
+    // of vanishing as a plain primary dot on a primary background.
     Component {
         id: dotComponent
         PanelOpenDot {}
     }
 
-    function test_panel_open_dot_rests_at_accent() {
+    function test_panel_open_dot_rests_at_primary() {
         var dot = createTemporaryObject(dotComponent, testCase, { inverted: false });
         verify(dot);
         settle(dot);
-        verify(Qt.colorEqual(dot.color, Theme.color.accent));
+        verify(Qt.colorEqual(dot.color, Theme.color.primary));
     }
 
-    function test_panel_open_dot_flips_to_onAccent_when_inverted() {
+    function test_panel_open_dot_flips_to_primaryForeground_when_inverted() {
         var dot = createTemporaryObject(dotComponent, testCase, { inverted: true });
         verify(dot);
         settle(dot);
-        verify(Qt.colorEqual(dot.color, Theme.color.onAccent));
+        verify(Qt.colorEqual(dot.color, Theme.color.primaryForeground));
     }
 }
