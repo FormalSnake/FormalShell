@@ -595,6 +595,9 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_closed_path" 2>&1
+EOF
+fi
+
 if $osd_mode; then
   # Each trigger is screenshotted a second later, well inside the pill's
   # 1.6s auto-hide window, with enough gap between them that the previous
