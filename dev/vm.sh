@@ -157,13 +157,35 @@ cmd_run() {
   vm_run "$@"
 }
 
-# sync, run dev/smoke-niri.sh with the given flags, then pull the SMOKE_OK
+# sync, run the smoke rig with the given flags, then pull the SMOKE_OK
 # screenshot plus any other stdout (the dump/status/query JSON the smoke
 # script cats inline) back to ./artifacts/ on the mac.
+#
+# --compositor picks the rig: hyprland (dev/smoke.sh, the default and the
+# backend M41 onwards ships) or niri (dev/smoke-niri.sh, still the richer
+# script until M46 deletes that backend). It is consumed here, never passed
+# through to the script.
 cmd_smoke() {
+  local script="./dev/smoke.sh"
+  local flags=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --compositor)
+        case "${2:-}" in
+          hyprland) script="./dev/smoke.sh" ;;
+          niri) script="./dev/smoke-niri.sh" ;;
+          *) echo "usage: $0 smoke [--compositor hyprland|niri] [flags...]" >&2; exit 1 ;;
+        esac
+        shift 2
+        ;;
+      *) flags+=("$1"); shift ;;
+    esac
+  done
+  set -- ${flags[@]+"${flags[@]}"}
+
   cmd_sync
   local out status=0
-  out=$(vm_run "./dev/smoke-niri.sh $*" 2>&1) || status=$?
+  out=$(vm_run "$script $*" 2>&1) || status=$?
   echo "$out"
   if [ "$status" -ne 0 ]; then
     echo "testvm: smoke run failed (exit $status)" >&2
@@ -248,7 +270,7 @@ case "${1:-}" in
   smoke) shift; cmd_smoke "$@" ;;
   shell) cmd_shell ;;
   *)
-    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|shell}" >&2
+    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [--compositor hyprland|niri] [flags...]|shell}" >&2
     exit 1
     ;;
 esac

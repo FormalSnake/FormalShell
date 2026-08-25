@@ -105,7 +105,12 @@ nixpkgs.lib.nixosSystem {
         users.users.test = {
           isNormalUser = true;
           uid = 1000;
-          extraGroups = [ "wheel" ];
+          # seat: seatd's socket group, how dev/smoke.sh's Hyprland opens the
+          # vkms card without root. video: Mesa's own EGL device enumeration
+          # scans /dev/dri directly (it does not go through the seat), and
+          # with no read access there it finds no device and the DRM
+          # renderer never gets created.
+          extraGroups = [ "wheel" "seat" "video" "input" ];
           # Without lingering, the systemd --user instance (and the
           # compositor service below) only exists while "test" is logged
           # in; ssh command sessions don't count as a login for this
@@ -197,6 +202,23 @@ nixpkgs.lib.nixosSystem {
           };
         };
 
+        # M41: what dev/smoke.sh's Hyprland needs that the parent above
+        # cannot give it. aquamarine's wayland backend requires the parent to
+        # advertise zwp_linux_dmabuf_v1 and hands it the DRM node from that
+        # feedback; a pixman-rendered wlroots parent on a guest with no DRM
+        # device at all advertises neither, so nesting Hyprland inside it
+        # fails at CBackend::create() ("Missing protocols", then "no
+        # allocator available"). vkms is a real KMS device the kernel draws
+        # in software, which gives aquamarine a GBM allocator and a
+        # Virtual-1 output to render to, and seatd is what lets the
+        # unprivileged test user take it (Hyprland's built-in libseat
+        # backend is root-only, and it refuses to run as root without
+        # --i-am-really-stupid). dev/smoke.sh pins itself to the vkms card
+        # by driver name, so it can never take a real GPU on a real host.
+        # vkms itself rides the boot.kernelModules list further down, which
+        # mac80211_hwsim already owns.
+        services.seatd.enable = true;
+
         services.openssh = {
           enable = true;
           authorizedKeysFiles = [ "/var/keys/%u_ed25519.pub" ];
@@ -234,6 +256,10 @@ nixpkgs.lib.nixosSystem {
           # libdisplay-info to 0.4.0 out from under it, so pin niri to the
           # 0.2.0 branch nixpkgs kept around for exactly this skew.
           (pkgs.niri.override { libdisplay-info = pkgs.libdisplay-info_0_2; })
+          # M41: dev/smoke.sh's compositor, and hyprctl with it. The rig can
+          # fall back to `nix run nixpkgs#hyprland` on a host without it, but
+          # that resolves a flake ref on every run.
+          pkgs.hyprland
           pkgs.sway
           pkgs.imagemagick
           pkgs.libnotify
@@ -389,7 +415,9 @@ nixpkgs.lib.nixosSystem {
         # own hwsim test suite uses for the same reason
         # (nixos/tests/wpa_supplicant.nix: "the override is needed because
         # the wifi is disabled with mkVMOverride in qemu-vm.nix").
-        boot.kernelModules = [ "mac80211_hwsim" ];
+        # vkms is the software KMS device dev/smoke.sh's Hyprland renders on
+        # (see the services.seatd comment above).
+        boot.kernelModules = [ "mac80211_hwsim" "vkms" ];
         boot.extraModprobeConfig = "options mac80211_hwsim radios=3";
         networking.wireless.enable = lib.mkOverride 0 true;
         # Scopes the wireless module's own client/AP-conflict warning to just

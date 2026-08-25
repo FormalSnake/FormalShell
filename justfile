@@ -1,8 +1,10 @@
 default: build
 build:
     git add -A && nix build .#formalshell
-smoke:
-    ./dev/smoke-niri.sh
+smoke *FLAGS:
+    ./dev/smoke.sh {{FLAGS}}
+smoke-niri *FLAGS:
+    ./dev/smoke-niri.sh {{FLAGS}}
 lint:
     git add -A && nix flake check -L
 # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads shell/Menu/emoji.json,
@@ -25,6 +27,7 @@ vm-test:
 vm-lint:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'git add -A && nix flake check -L'
+# Flags pass through, including `--compositor niri` to run the old rig.
 vm-smoke *FLAGS:
     ./dev/vm.sh smoke {{FLAGS}}
 # nix/testvm.nix's services.greetd needs a rebuilt VM (`vm-down && vm-up`)
