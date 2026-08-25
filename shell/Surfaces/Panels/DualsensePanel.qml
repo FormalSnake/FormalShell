@@ -27,7 +27,7 @@ Panel {
 
     panelIcon: "gamepad-2"
     panelTitle: "DualSense"
-    panelWidth: Theme.space.popupWidthNarrow
+    panelWidth: Theme.space.popupWidthDefault
 
     // A chip, not a control: this panel writes nothing, and the header is
     // where that has to be said before the rows are read.
