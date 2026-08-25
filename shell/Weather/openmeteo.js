@@ -75,10 +75,8 @@ function parseResponse(status, bodyText) {
 }
 
 // WMO weather_code (open-meteo's own scheme) grouped down to the handful of
-// conditions WeatherPanel.qml has a Nerd Font glyph for. Deliberately
-// returns a semantic key rather than a glyph — glyph literals are raw
-// multi-byte codepoints and stay confined to the QML file per CLAUDE.md's
-// "targeted edits only" rule, never duplicated into this pure module.
+// conditions the panel draws an icon for. The key is semantic, so both the
+// label tables and the icon table below key off one grouping.
 var _conditions = {
     0: "clear", 1: "clear",
     2: "partly-cloudy",
@@ -114,46 +112,54 @@ function conditionLabel(code) {
     return _labels[conditionKey(code)];
 }
 
-// Uppercase three-letter weekday for a daily.time date-only string
-// ("2026-07-28"). Date-only ISO strings parse as UTC midnight, so this
-// reads the UTC day-of-week rather than the local one — using the local
-// getter would misdate the first/last forecast row whenever the host's
+// The same condition as body text rather than a marker (DESIGN.md §5:
+// uppercase belongs to section labels alone), for the panel hero's own
+// line. Derived from the one table so a new condition never has to be
+// written out twice.
+function conditionText(code) {
+    var label = conditionLabel(code);
+    return label.charAt(0) + label.slice(1).toLowerCase();
+}
+
+// Three-letter weekday for a daily.time date-only string ("2026-07-28"),
+// sentence case: a forecast row's day name is a word, so it reads in sans
+// and is not uppercased. Date-only ISO strings parse as UTC midnight, so
+// this reads the UTC day-of-week rather than the local one; the local
+// getter would misdate the first and last forecast rows whenever the host's
 // timezone sits west of UTC.
-var _weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+var _weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function weekdayLabel(dateStr) {
     return _weekdays[new Date(dateStr + "T00:00:00Z").getUTCDay()];
 }
 
-// Nerd Font weather glyphs (nix/testvm.nix's pinned nerd-fonts-jetbrains-mono
-// cmap, verified via fonttools ttx per the WeatherWidget.qml/GithubWidget.qml
-// precedent, never from memory): day/night pairs from the "weathericons"
-// glyph set for every condition key above; "overcast" has no day/night
-// distinction in the set (full cloud cover reads the same either way).
-// FALLBACK reuses weather-thermometer_exterior, the same glyph the bar cell
-// already shows before the first fetch lands, so an unmapped code degrades
-// to the existing honest "no data yet" look rather than a blank glyph.
-var _glyphs = {
-    "clear": { day: "", night: "" },
-    "partly-cloudy": { day: "", night: "" },
-    "overcast": { day: "", night: "" },
-    "fog": { day: "", night: "" },
-    "drizzle": { day: "", night: "" },
-    "freezing-rain": { day: "", night: "" },
-    "rain": { day: "", night: "" },
-    "snow": { day: "", night: "" },
-    "showers": { day: "", night: "" },
-    "thunderstorm": { day: "", night: "" }
+// Condition -> icon name (spec "Icons"): the panel and the bar cell both
+// render these through Components/Icon.qml, so the active set decides the
+// codepoint and no surface file carries one. Day and night differ only where
+// the sky itself is the subject; a rain or snow icon draws the same either
+// way in both sets. An unmapped code falls back to the thermometer, the same
+// "no reading yet" icon the bar cell shows before the first fetch lands.
+var _icons = {
+    "clear": { day: "sun", night: "moon" },
+    "partly-cloudy": { day: "cloud-sun", night: "cloud-moon" },
+    "overcast": { day: "cloudy", night: "cloudy" },
+    "fog": { day: "cloud-fog", night: "cloud-fog" },
+    "drizzle": { day: "cloud-drizzle", night: "cloud-drizzle" },
+    "freezing-rain": { day: "cloud-hail", night: "cloud-hail" },
+    "rain": { day: "cloud-rain", night: "cloud-rain" },
+    "snow": { day: "cloud-snow", night: "cloud-snow" },
+    "showers": { day: "cloud-rain-wind", night: "cloud-rain-wind" },
+    "thunderstorm": { day: "cloud-lightning", night: "cloud-lightning" }
 };
 
-var _fallbackGlyph = ""; // weather-thermometer_exterior, U+E34E
+var FALLBACK_ICON = "thermometer";
 
-// isDay defaults true (falls back to the day glyph) unless explicitly
-// false: open-meteo's `current.is_day` is 0/1, WeatherPanel.qml converts
-// to boolean before this ever runs, and a first-fetch caller with no
-// day/night signal yet should read as day rather than guessing night.
-function glyphForCode(code, isDay) {
-    var pair = _glyphs[conditionKey(code)];
-    if (!pair) return _fallbackGlyph;
+// isDay defaults true unless explicitly false: open-meteo's `current.is_day`
+// is 0/1, WeatherPanel.qml converts to boolean before this ever runs, and a
+// first-fetch caller with no day/night signal yet should read as day rather
+// than guessing night.
+function iconForCode(code, isDay) {
+    var pair = _icons[conditionKey(code)];
+    if (!pair) return FALLBACK_ICON;
     return isDay === false ? pair.night : pair.day;
 }

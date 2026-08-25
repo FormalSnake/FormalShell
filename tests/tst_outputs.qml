@@ -139,20 +139,6 @@ TestCase {
         compare(Outputs.modeLabel(_row({ enabled: false, width: 0, height: 0, refresh: 0 })), "");
     }
 
-    function test_status_line_reports_mode_then_scale() {
-        compare(Outputs.statusLine(_row({ width: 2560, height: 1440, refresh: 60, scale: 1.5 })),
-                "2560x1440@60 / 1.5X");
-    }
-
-    function test_status_line_names_the_mirror_source() {
-        compare(Outputs.statusLine(_row({ name: "DP-1", mirrorOf: "eDP-1" })),
-                "1920x1080@60 / 1X / MIRRORS eDP-1");
-    }
-
-    function test_status_line_of_a_disabled_output_claims_nothing_else() {
-        compare(Outputs.statusLine(_row({ enabled: false, width: 0, height: 0, refresh: 0 })), "DISABLED");
-    }
-
     function test_describe_joins_make_and_model() {
         compare(Outputs.describe(_row({ make: "Dell", model: "U2720Q" })), "Dell U2720Q");
     }

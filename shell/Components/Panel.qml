@@ -87,6 +87,11 @@ PanelWindow {
     // list, for a panel whose rows carry an adjustable track (Audio).
     property bool cursorStepsHorizontally: false
 
+    // Above 1, `cursorIndex` addresses a grid of this many columns rather
+    // than a list (Calendar's month): Up/Down step a whole week and
+    // Left/Right stop at the ends of their own week.
+    property int cursorColumns: 1
+
     signal cursorActivated(int index)
     // `x` on a row that has a destructive action (Bluetooth's forget).
     signal cursorDeleted(int index)
@@ -110,7 +115,7 @@ PanelWindow {
             root.cursorStepped(root.cursorIndex, dx > 0 ? 1 : -1);
             return;
         }
-        var next = Cursor.move(root.cursorIndex, root.cursorCount, root.cursorActive, dx, dy);
+        var next = Cursor.move(root.cursorIndex, root.cursorCount, root.cursorActive, dx, dy, root.cursorColumns);
         root.cursorIndex = next.index;
         root.cursorActive = next.active;
     }

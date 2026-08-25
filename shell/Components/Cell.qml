@@ -63,6 +63,13 @@ Item {
     // which is what makes the cursor findable at a glance.
     property bool cursor: false
 
+    // The concentric rule (spec "Radius"): a cell nested inside another
+    // bordered surface takes the outer radius minus the padding between
+    // them, floored at `radiusSm`. `radiusMd` is the free-standing case
+    // (bar cell, panel row); the calendar's day grid sits one level deeper
+    // and sets `radiusSm`.
+    property int radius: Theme.radiusMd
+
     property bool active: false
     property bool destructive: false
     property bool warning: false
@@ -197,7 +204,7 @@ Item {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
         visible: root.cursor
-        radius: Theme.radiusMd + Theme.ringWidth
+        radius: root.radius + Theme.ringWidth
         color: Theme.color.ring
         opacity: Theme.ringAlpha
     }
@@ -205,7 +212,7 @@ Item {
     // Fills snap; only the hover layer below fades.
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusMd
+        radius: root.radius
         color: root._active
             ? Theme.color.primary
             : root.selected
@@ -223,7 +230,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusMd
+        radius: root.radius
         color: Theme.color.accent
         opacity: root._hoverFillActive ? 1 : 0
 

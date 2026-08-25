@@ -175,46 +175,6 @@ function modeLabel(row) {
     return label;
 }
 
-// The uppercase meta line under an output's name: what it is doing right now,
-// never a placeholder. A disabled output has no mode and no scale to report,
-// so it says only that.
-function statusLine(row) {
-    if (!row)
-        return "";
-    if (!row.enabled)
-        return "DISABLED";
-
-    var parts = [];
-    var mode = modeLabel(row);
-    if (mode !== "")
-        parts.push(mode);
-    var scale = formatScale(row.scale);
-    if (scale !== "")
-        parts.push(scale);
-    if (row.mirrorOf !== "")
-        parts.push("MIRRORS " + row.mirrorOf);
-    return parts.join(" / ");
-}
-
-// The same uppercase meta line as statusLine(), minus the mode: for the row
-// whose own resolution the panel's hero already states above it (M28 Task
-// 5), so the row doesn't repeat the exact string the hero just printed.
-// Every other row still gets the full statusLine() with its mode included.
-function statusLineNoMode(row) {
-    if (!row)
-        return "";
-    if (!row.enabled)
-        return "DISABLED";
-
-    var parts = [];
-    var scale = formatScale(row.scale);
-    if (scale !== "")
-        parts.push(scale);
-    if (row.mirrorOf !== "")
-        parts.push("MIRRORS " + row.mirrorOf);
-    return parts.join(" / ");
-}
-
 // "DELL U2720Q" for the row's second meta line, "" when the compositor
 // reports neither half — never a placeholder standing in for hardware
 // identity we were not given.

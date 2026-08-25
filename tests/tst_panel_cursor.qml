@@ -26,6 +26,29 @@ TestCase {
         compare(Cursor.move(0, 5, true, 1, 1).index, 1);
     }
 
+    function test_a_grid_steps_a_whole_row_vertically() {
+        // Calendar's 7-column month: down from the first Monday lands on
+        // the second Monday, not on Tuesday.
+        compare(Cursor.move(0, 42, true, 0, 1, 7).index, 7);
+        compare(Cursor.move(14, 42, true, 0, -1, 7).index, 7);
+    }
+
+    function test_a_grid_stops_horizontally_at_the_ends_of_its_own_row() {
+        compare(Cursor.move(7, 42, true, -1, 0, 7).index, 7);
+        compare(Cursor.move(13, 42, true, 1, 0, 7).index, 13);
+        compare(Cursor.move(8, 42, true, -1, 0, 7).index, 7);
+    }
+
+    function test_a_grid_clamps_vertically_at_the_grid_edges() {
+        compare(Cursor.move(3, 42, true, 0, -1, 7).index, 0);
+        compare(Cursor.move(38, 42, true, 0, 1, 7).index, 41);
+    }
+
+    function test_one_column_behaves_exactly_like_a_list() {
+        compare(Cursor.move(2, 5, true, 0, 1, 1).index, 3);
+        compare(Cursor.move(2, 5, true, 1, 0, 1).index, 3);
+    }
+
     function test_move_clamps_at_both_ends() {
         compare(Cursor.move(0, 5, true, 0, -1).index, 0);
         compare(Cursor.move(4, 5, true, 0, 1).index, 4);

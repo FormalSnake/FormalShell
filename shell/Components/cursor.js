@@ -15,11 +15,22 @@ function clamp(index, count) {
 // (upstream's CursorSurface contract): the highlight has to appear somewhere
 // the eye can find it before anything under it moves. Vertical wins over
 // horizontal so one call covers both axes of a single-column list.
-function move(index, count, active, dx, dy) {
+//
+// `columns` above 1 makes the same index a grid position (the calendar's
+// month): vertical steps a whole row, and horizontal stops at the ends of
+// the row it is on rather than sliding into the neighbouring week. Omitted
+// or 1, every list behaves exactly as before.
+function move(index, count, active, dx, dy, columns) {
     if (!active)
         return { index: clamp(index, count), active: true };
-    var delta = dy !== 0 ? dy : dx;
-    return { index: clamp(index + delta, count), active: true };
+    var cols = columns > 1 ? columns : 1;
+    if (dy !== 0)
+        return { index: clamp(index + dy * cols, count), active: true };
+    if (cols === 1)
+        return { index: clamp(index + dx, count), active: true };
+    var rowStart = Math.floor(clamp(index, count) / cols) * cols;
+    var next = Math.max(rowStart, Math.min(rowStart + cols - 1, index + dx));
+    return { index: clamp(next, count), active: true };
 }
 
 // What activateCursor() reports, or -1 for nothing to activate. A section

@@ -5,38 +5,46 @@ import qs.Compositor
 import qs.Services
 import "../../Display/outputs.js" as Outputs
 
-// Display panel (DESIGN.md §Panels, M17): a ledger of every connected output
-// — one row each, the focused one inverted — carrying the three things the
-// owner asked for, on/off, scale, and mirror. Feature shape read off
-// omarchy's monitor panel (shell/plugins/panels/monitor/Panel.qml there:
-// internalMonitor/externalMonitor/internalEnabled/mirrorEnabled/monitorScale/
-// displays) and reimplemented in this shell's own language.
+// Display panel (DESIGN.md §3 "Panel", spec "Panels", M17): a hero for the
+// focused output, then `OUTPUTS (n)` as one row per connected output
+// carrying the three things the owner asked for (on/off, scale, mirror),
+// `BRIGHTNESS (n)` per backlight device, and the mirror control below them.
+// Feature shape read off omarchy's monitor panel and reimplemented in this
+// shell's own language.
 //
-// BRIGHTNESS (M33, owner reversal of the M16 call above: "move the display
-// things from battery to display, it makes no sense they were merged
-// anyway") sits between OUTPUTS and MIRROR — one row per BrightnessService
-// device, sharing this panel's own Up/Down cursor and h/l steps rather than
-// a separate hover system, since a second keyboard cursor on the same panel
-// would double-drive whichever row both happened to point at. The cursor
-// walks outputs first, then brightness devices, in the same top-to-bottom
-// order they render in.
+// BRIGHTNESS (M33, owner reversal of the M16 call: "move the display things
+// from battery to display, it makes no sense they were merged anyway") sits
+// between OUTPUTS and MIRROR, one row per BrightnessService device sharing
+// this panel's own cursor: a second keyboard cursor on the same panel would
+// double-drive whichever row both happened to point at.
+//
+// Keyboard (spec "Keyboard model"): one flat cursor walks outputs, then
+// backlight devices, then the mirror row, in the order they render. Enter
+// switches an output on or off and flips the mirror; Left and Right step
+// the scale on an output row and the percent on a brightness row (Panel's
+// `cursorStepsHorizontally`), the same 5% the wheel over either track
+// commits.
+//
+// The GPU annotation (M38 Task 9) names the card driving each connector,
+// which is a hardware identity, so it renders in mono like the make/model
+// line above it and is absent entirely on a single-card machine.
 //
 // Everything reads and writes through CompositorService's backend contract
-// (BackendBase's outputs/refreshOutputs/setOutput*), never `niri msg` or
-// `hyprctl` from here: the two compositors disagree about almost all of this
-// — niri configures outputs over its own JSON socket and has no mirroring
-// primitive at all, Hyprland goes through a `monitor` config keyword and
-// does — and that disagreement belongs in the backends. `backend` is a null
-// BackendBase when no compositor was detected, so "no compositor" needs no
-// branch of its own here: it simply has no outputs.
+// (BackendBase's outputs/refreshOutputs/setOutput*), never `hyprctl` from
+// here: the two compositors disagree about almost all of this, and that
+// disagreement belongs in the backends. `backend` is a null BackendBase when
+// no compositor was detected, so "no compositor" needs no branch of its own:
+// it simply has no outputs.
 //
 // SAFETY: nothing in this file reconfigures an output at startup or on open.
 // The panel's only unprompted compositor traffic is refreshOutputs(), a pure
-// read; every setOutput* call below hangs off a real click, wheel or keypress.
+// read; every setOutput* call below hangs off a real click, wheel or
+// keypress.
 Panel {
     id: root
 
-    panelTitle: "DISPLAY"
+    panelIcon: "monitor"
+    panelTitle: "Display"
     panelWidth: Theme.space.popupWidthDefault
 
     // Bound to the active backend directly rather than through a forwarding
@@ -49,49 +57,33 @@ Panel {
     readonly property var _mirrorPlan: Outputs.mirrorPlan(root._outputs, CompositorService.focusedOutputName)
     readonly property var _mirroring: Outputs.mirroredNames(root._outputs)
     readonly property bool _mirrorOn: root._mirroring.length > 0
+    readonly property bool _mirrorActionable: root._outputs.length > 0
+        && root._backend.mirrorSupported && root._mirrorPlan.ok
 
     // The hero's own subject (M28 Task 5): the focused output's own name and
-    // resolution — never a fabricated mode for an output with none to report.
+    // resolution, never a fabricated mode for an output with none to report.
     readonly property var _focusedOutput: Outputs.findOutput(root._outputs, CompositorService.focusedOutputName)
 
-    // Keyboard cursor over the sorted output rows, then the brightness
-    // device rows (PowerPanel's numeric _cursor idiom — this table is one
-    // flat walk, so an index fits where NetworkPanel's split sections needed
-    // a key). -1 is NetworkPanel's empty sentinel in numeric form: no cursor
-    // painted until the pointer or a navigation key puts one somewhere, so
-    // an untouched panel doesn't highlight its first row for no reason.
-    property int _cursor: -1
+    readonly property int _brightnessCount: BrightnessService.devices.count
+    // The mirror row is the last cursor stop, and only while it can act on
+    // anything.
+    readonly property int _mirrorIndex: root._mirrorActionable
+        ? root._outputs.length + root._brightnessCount
+        : -1
 
-    readonly property int _cursorCount: root._outputs.length + BrightnessService.devices.count
+    cursorCount: root._outputs.length + root._brightnessCount + (root._mirrorActionable ? 1 : 0)
+    // Left/Right belong to the track on the cursor row, not to the list.
+    cursorStepsHorizontally: true
 
-    on_OutputsChanged: if (root._cursor >= root._cursorCount) root._cursor = root._cursorCount - 1
-
-    Connections {
-        target: BrightnessService.devices
-        function onCountChanged() {
-            if (root._cursor >= root._cursorCount)
-                root._cursor = root._cursorCount - 1;
-        }
+    function _outputAt(index) {
+        return (index >= 0 && index < root._outputs.length) ? root._outputs[index] : null;
     }
 
-    onIsOpenChanged: {
-        if (!root.isOpen)
-            return;
-        root._cursor = -1;
-        root._backend.refreshOutputs();
-        BrightnessService.refreshDevices();
-    }
-
-    // Neither compositor pushes output changes: niri's event stream has no
-    // output event at all (niri-ipc's `Event` enum), and Hyprland's monitor
-    // events never mention the disabled outputs this panel exists to switch
-    // back on. So an open panel re-reads on a timer, the same 5s cadence
-    // omarchy's monitor panel uses. Read-only, and only while open.
-    Timer {
-        interval: 5000
-        repeat: true
-        running: root.isOpen
-        onTriggered: root._backend.refreshOutputs()
+    function _brightnessIdAt(index) {
+        var offset = index - root._outputs.length;
+        if (offset < 0 || offset >= root._brightnessCount)
+            return "";
+        return BrightnessService.devices.get(offset).deviceId;
     }
 
     function _toggleOutput(name) {
@@ -103,31 +95,6 @@ Panel {
 
     function _setScale(name, scale) {
         root._backend.setOutputScale(name, scale);
-    }
-
-    function _cursorRow() {
-        return (root._cursor >= 0 && root._cursor < root._outputs.length) ? root._outputs[root._cursor] : null;
-    }
-
-    function _stepScale(direction) {
-        var row = root._cursorRow();
-        if (!row || !row.enabled)
-            return;
-        root._setScale(row.name, Outputs.stepScale(row.scale, direction));
-    }
-
-    // The brightness half of the same combined cursor: indices from
-    // _outputs.length up to _cursorCount name a BrightnessService device.
-    function _cursorBrightnessId() {
-        if (root._cursor < root._outputs.length || root._cursor >= root._cursorCount)
-            return "";
-        return BrightnessService.devices.get(root._cursor - root._outputs.length).deviceId;
-    }
-
-    function _stepBrightness(delta) {
-        var id = root._cursorBrightnessId();
-        if (id !== "")
-            BrightnessService.stepDevicePercent(id, delta);
     }
 
     // MIRROR is one bounded action over the whole set, not a per-output
@@ -148,53 +115,45 @@ Panel {
             root._backend.setOutputMirror(root._mirrorPlan.targets[j], root._mirrorPlan.primary);
     }
 
-    // Panel.qml's shared keyboard-nav hook (M6 Task 7): Up/Down move the
-    // cursor across outputs then brightness devices, Enter switches an
-    // output row on or off, h/l step an output row's scale or a brightness
-    // row's percent depending which the cursor is on.
-    Connections {
-        target: root
-
-        function onKeyPressed(event) {
-            if (!root.isOpen || root._cursorCount === 0)
-                return;
-            switch (event.key) {
-            case Qt.Key_Up:
-                // The very first Up/Down (_cursor still -1) clamps straight
-                // to row 0 rather than stepping past it, so this already IS
-                // the reveal-only press (M26 Task 8, upstream's CursorSurface
-                // contract) — cursorActive just has to catch up to it.
-                root.cursorActive = true;
-                root._cursor = root._cursor <= 0 ? 0 : root._cursor - 1;
-                event.accepted = true;
-                return;
-            case Qt.Key_Down:
-                root.cursorActive = true;
-                root._cursor = Math.min(root._cursorCount - 1, root._cursor + 1);
-                event.accepted = true;
-                return;
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                var row = root._cursorRow();
-                if (row)
-                    root._toggleOutput(row.name);
-                event.accepted = true;
-                return;
-            }
-            // h/l act on whichever half of the cursor is live: a scale step
-            // on an output row, a brightness step on a device row — the two
-            // helpers below are no-ops outside their own half, so calling
-            // both is exactly one of them acting.
-            if (event.text === "h" || event.text === "H") {
-                root._stepScale(-1);
-                root._stepBrightness(-5);
-                event.accepted = true;
-            } else if (event.text === "l" || event.text === "L") {
-                root._stepScale(1);
-                root._stepBrightness(5);
-                event.accepted = true;
-            }
+    onCursorActivated: index => {
+        if (index === root._mirrorIndex) {
+            root._setMirror(!root._mirrorOn);
+            return;
         }
+        var row = root._outputAt(index);
+        if (row)
+            root._toggleOutput(row.name);
+    }
+
+    onCursorStepped: (index, direction) => {
+        var row = root._outputAt(index);
+        if (row) {
+            if (row.enabled)
+                root._setScale(row.name, Outputs.stepScale(row.scale, direction));
+            return;
+        }
+        var id = root._brightnessIdAt(index);
+        if (id !== "")
+            BrightnessService.stepDevicePercent(id, direction * 5);
+    }
+
+    onIsOpenChanged: {
+        if (!root.isOpen)
+            return;
+        root.cursorIndex = 0;
+        root._backend.refreshOutputs();
+        BrightnessService.refreshDevices();
+    }
+
+    // Neither compositor pushes output changes, and Hyprland's monitor
+    // events never mention the disabled outputs this panel exists to switch
+    // back on. So an open panel re-reads on a timer, the same 5s cadence
+    // omarchy's monitor panel uses. Read-only, and only while open.
+    Timer {
+        interval: 5000
+        repeat: true
+        running: root.isOpen
+        onTriggered: root._backend.refreshOutputs()
     }
 
     Component {
@@ -205,241 +164,170 @@ Panel {
             required property var modelData
             required property int index
             width: parent.width
-            selected: outCell.modelData.name === CompositorService.focusedOutputName
-            hovered: root.cursorActive && root._cursor === outCell.index
+            cursor: root.cursorActive && root.cursorIndex === outCell.index
+
+            // The focused output is marked on its icon, not by filling the
+            // row: `muted` and `accent` are the same zinc step in the dark
+            // fallback, so a `selected` fill under this row's scale track
+            // would swallow the track's own groove whole.
+            readonly property bool _focused: outCell.modelData.name === CompositorService.focusedOutputName
 
             readonly property bool _canToggle: root._backend.outputConfigAvailable
                 && Outputs.canToggle(root._outputs, outCell.modelData.name)
+            readonly property bool _configurable: outCell.modelData.enabled && root._backend.outputConfigAvailable
             readonly property string _identity: Outputs.describe(outCell.modelData)
-            // Which card drives this output, e.g. "NVIDIA / DISCRETE". ""
-            // on a single-GPU machine, or when the connector matches
-            // nothing in GpuService.cards (M38 Task 9).
+            readonly property string _mode: Outputs.modeLabel(outCell.modelData)
+            // Which card drives this output, e.g. "NVIDIA / DISCRETE". Empty
+            // on a single-GPU machine, or when the connector matches nothing
+            // in GpuService.cards (M38 Task 9).
             readonly property string _cardLabel: Outputs.outputCardLabel(outCell.modelData.name, GpuService.cards)
             // The screen `display.outputPriority` resolves to
             // (MainOutputService), marked only where the answer can be
             // anything else: on a one-output session naming it MAIN says
             // nothing the list above doesn't already.
-            readonly property string _mainLabel: (root._outputs.length > 1
-                && MainOutputService.isMain(outCell.modelData.name)) ? "MAIN DISPLAY" : ""
-            // The focused row's own resolution is already the hero's meta
-            // line above (M28 Task 5); this row keeps scale/mirror only, so
-            // the mode isn't printed twice.
-            readonly property string _status: outCell.selected
-                ? Outputs.statusLineNoMode(outCell.modelData)
-                : Outputs.statusLine(outCell.modelData)
-            // Same drop, completed: the focused row's own name is already
-            // the hero's title above, so this row's identity line goes
-            // blank rather than repeat it. The inversion (selected) is
-            // already what marks this row as the hero's row.
-            readonly property string _nameText: outCell.selected ? "" : outCell.modelData.name
+            readonly property bool _isMain: root._outputs.length > 1
+                && MainOutputService.isMain(outCell.modelData.name)
 
-            // Takes no buttons: the cell's own target sits under its content,
-            // so every control in the Column below stays above it and keeps
-            // its own hover, and this only follows the pointer to move the
-            // shared keyboard cursor onto the row it is over.
+            // Hover moves the shared cursor onto this row; the controls in
+            // the column below sit above the cell's own pointer layer and
+            // keep their own clicks.
             interactive: true
             acceptedButtons: Qt.NoButton
             onContainsPointerChanged: if (outCell.containsPointer) {
                 root.cursorActive = true;
-                root._cursor = outCell.index;
+                root.cursorIndex = outCell.index;
             }
 
             Column {
                 width: parent.width
-                spacing: Theme.space.xxs
+                spacing: Theme.space.xs
 
-                Row {
+                Item {
                     width: parent.width
-                    spacing: Theme.space.sm
+                    height: Math.max(outName.implicitHeight, enableButton.height)
 
-                    Text {
-                        width: parent.width - toggleLabel.width - parent.spacing
-                        text: outCell._nameText
-                        color: outCell.foreground
-                        elide: Text.ElideRight
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
+                    Icon {
+                        id: outIcon
+                        name: outCell.modelData.enabled ? "monitor" : "monitor-off"
+                        size: Theme.fontSize.body
+                        color: outCell._focused ? Theme.color.primary : outCell.foreground
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-                    // amendment): no cell chrome, armed state promotes
-                    // straight to accent instead of a fill/inversion. The
-                    // last enabled output has no OFF to offer, so its resting
-                    // ink stays dim rather than promoting on a control that
-                    // would do nothing.
-                    MetaLabel {
-                        id: toggleLabel
-                        text: outCell.modelData.enabled ? "ON" : "OFF"
-                        // The focused output's own row is already a full-bleed
-                        // accent fill (outCell.selected); accent ink on an
-                        // accent ground is unreadable, so this label collapses
-                        // to the row's own contrasting ink instead, matching
-                        // Cell.dimForeground's single-band precedent.
-                        color: outCell.selected
-                            ? outCell.foreground
-                            : (outCell.modelData.enabled && outCell._canToggle)
-                                ? Theme.color.primary
-                                : (toggleHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
+                    Text {
+                        id: outName
+                        anchors.left: outIcon.right
+                        anchors.leftMargin: Theme.space.iconGap
+                        anchors.right: scaleValue.visible ? scaleValue.left : enableButton.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: outCell.modelData.name
+                        color: outCell.foreground
+                        font.family: Theme.fontFamilySans
+                        font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
 
-                        MouseArea {
-                            id: toggleHover
-                            anchors.fill: parent
-                            enabled: outCell._canToggle
-                            hoverEnabled: outCell._canToggle
-                            cursorShape: outCell._canToggle ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onContainsMouseChanged: if (toggleHover.containsMouse) {
-                                root.cursorActive = true;
-                                root._cursor = outCell.index;
-                            }
-                            onClicked: root._toggleOutput(outCell.modelData.name)
-                        }
+                    Text {
+                        id: scaleValue
+                        anchors.right: enableButton.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: outCell._configurable
+                        text: Outputs.formatScale(outCell.modelData.scale)
+                        color: outCell.dimForeground
+                        font.family: Theme.fontFamilyMono
+                        font.pixelSize: Theme.fontSize.bodySmall
+                    }
+
+                    Button {
+                        id: enableButton
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        variant: outCell.modelData.enabled ? "default" : "outline"
+                        text: outCell.modelData.enabled ? "On" : "Off"
+                        enabled: outCell._canToggle
+                        onClicked: root._toggleOutput(outCell.modelData.name)
                     }
                 }
 
-                // Color collapses to the row's own ink when selected, the
-                // same single-band precedent the ON/OFF label above already
-                // follows: `mutedForeground` on the focused row's primary
-                // fill measures unreadable.
-                MetaLabel {
+                SectionLabel {
+                    visible: !outCell.modelData.enabled
+                    text: "DISABLED"
+                    color: outCell.dimForeground
+                }
+
+                SectionLabel {
+                    visible: outCell.modelData.mirrorOf !== ""
+                    text: "MIRRORS " + outCell.modelData.mirrorOf
+                    color: outCell.dimForeground
+                }
+
+                SectionLabel {
+                    visible: outCell._isMain
+                    text: "MAIN DISPLAY"
+                    color: outCell.dimForeground
+                }
+
+                // Mode, hardware identity and the card driving the connector
+                // are all values, so they take the mono face (DESIGN.md §1
+                // "Type") and each is absent rather than a placeholder when
+                // the compositor reports nothing for it.
+                Text {
                     width: parent.width
-                    visible: outCell._status !== ""
-                    text: outCell._status
-                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
+                    visible: outCell._mode !== ""
+                    text: outCell._mode
+                    color: outCell.dimForeground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
                     elide: Text.ElideRight
                 }
 
-                MetaLabel {
+                Text {
                     width: parent.width
                     visible: outCell._identity !== ""
                     text: outCell._identity
-                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
+                    color: outCell.dimForeground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
                     elide: Text.ElideRight
                 }
 
-                MetaLabel {
+                Text {
                     width: parent.width
                     visible: outCell._cardLabel !== ""
                     text: outCell._cardLabel
-                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
+                    color: outCell.dimForeground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
                     elide: Text.ElideRight
                 }
 
-                MetaLabel {
+                // Press and wheel each commit exactly one value; there is
+                // deliberately no drag-to-scrub the way AudioPanel's volume
+                // track has one, because every step here is a real output
+                // reconfiguration and a drag would fire dozens of them
+                // across the pointer's travel.
+                Track {
+                    id: scaleTrack
                     width: parent.width
-                    visible: outCell._mainLabel !== ""
-                    text: outCell._mainLabel
-                    color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
-                    elide: Text.ElideRight
-                }
+                    visible: outCell._configurable
+                    value: Outputs.fractionForScale(outCell.modelData.scale)
 
-                Column {
-                    width: parent.width
-                    visible: outCell.modelData.enabled && root._backend.outputConfigAvailable
-                    spacing: Theme.space.xxs
-
-                    Row {
-                        width: parent.width
-                        spacing: Theme.space.sm
-
-                        MetaLabel {
-                            width: parent.width - scaleValue.width - parent.spacing
-                            text: "SCALE"
-                            color: outCell.selected ? outCell.foreground : Theme.color.mutedForeground
-                        }
-
-                        Text {
-                            id: scaleValue
-                            text: Outputs.formatScale(outCell.modelData.scale)
-                            color: outCell.foreground
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize.caption
-                        }
-                    }
-
-                    // Flat accent fill, no thumb, no gauge — the shell's one
-                    // slider idiom. Press and wheel each commit exactly one
-                    // value; there is deliberately no drag-to-scrub the way
-                    // AudioPanel's volume track has one, because every step
-                    // here is a real output reconfiguration and a drag would
-                    // fire dozens of them across the pointer's travel.
-                    DitherFill {
-                        id: scaleTrack
-                        width: parent.width
-                        height: Theme.space.trackThickness
-
-                        Rectangle {
-                            width: parent.width * Outputs.fractionForScale(outCell.modelData.scale)
-                            height: parent.height
-                            color: Theme.color.primary
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onPressed: mouse => root._setScale(outCell.modelData.name, Outputs.scaleForFraction(mouse.x / scaleTrack.width))
-                            onWheel: wheel => {
-                                root._setScale(outCell.modelData.name, Outputs.stepScale(outCell.modelData.scale, wheel.angleDelta.y > 0 ? 1 : -1));
-                                wheel.accepted = true;
-                            }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onPressed: mouse => root._setScale(outCell.modelData.name, Outputs.scaleForFraction(mouse.x / scaleTrack.width))
+                        onWheel: wheel => {
+                            root._setScale(outCell.modelData.name, Outputs.stepScale(outCell.modelData.scale, wheel.angleDelta.y > 0 ? 1 : -1));
+                            wheel.accepted = true;
                         }
                     }
                 }
             }
         }
-    }
-
-    // The panel's own subject (M28 Task 5): the focused output's own name
-    // and resolution — hidden entirely when nothing is focused, the same
-    // honest-unavailable gate every other hero uses.
-    PanelHero {
-        visible: root._focusedOutput !== null
-        width: parent.width
-        glyph: "󰍹"
-        title: root._focusedOutput ? root._focusedOutput.name : ""
-        meta: root._focusedOutput ? Outputs.modeLabel(root._focusedOutput) : ""
-    }
-
-    // An empty list means two different things and only one of them licenses
-    // NO OUTPUTS — see BackendBase's outputsState. A failed hyprctl/niri query
-    // must not tell a session with two lit monitors it has no displays.
-    Cell {
-        visible: root._outputs.length === 0
-        width: parent.width
-
-        MetaLabel {
-            text: {
-                switch (root._backend.outputsState) {
-                case "failed": return "CANNOT READ OUTPUTS";
-                case "ok": return "NO OUTPUTS";
-                default: return "LOADING";
-                }
-            }
-        }
-    }
-
-    Cell {
-        visible: root._outputs.length > 0
-        width: parent.width
-
-        MetaLabel { text: "OUTPUTS"; colon: true }
-    }
-
-    Repeater {
-        model: root._outputs
-        delegate: outputRow
-    }
-
-    Cell {
-        width: parent.width
-
-        MetaLabel { text: "BRIGHTNESS"; colon: true }
-    }
-
-    Cell {
-        visible: BrightnessService.devices.count === 0
-        width: parent.width
-
-        MetaLabel { text: "NO BACKLIGHT" }
     }
 
     Component {
@@ -452,58 +340,66 @@ Panel {
             required property string label
             required property real percent
             width: parent.width
-            hovered: root.cursorActive && root._cursor === (root._outputs.length + brightnessCell.index)
+            cursor: root.cursorActive && root.cursorIndex === (root._outputs.length + brightnessCell.index)
 
-            // Same whole-row hover-to-cursor wiring as outputRow above: the
-            // cell's own pointer layer tracks hover across the row, the
-            // track's MouseArea below keeps its own press/wheel events.
             interactive: true
             acceptedButtons: Qt.NoButton
             onContainsPointerChanged: if (brightnessCell.containsPointer) {
                 root.cursorActive = true;
-                root._cursor = root._outputs.length + brightnessCell.index;
+                root.cursorIndex = root._outputs.length + brightnessCell.index;
             }
 
             Column {
                 width: parent.width
-                spacing: Theme.space.xxs
+                spacing: Theme.space.xs
 
-                Row {
+                Item {
                     width: parent.width
-                    spacing: Theme.space.sm
+                    height: brightnessLabel.implicitHeight
 
-                    Text {
-                        width: parent.width - percentText.width - parent.spacing
-                        text: brightnessCell.label
+                    Icon {
+                        id: brightnessIcon
+                        name: "sun"
+                        size: Theme.fontSize.body
                         color: brightnessCell.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
                     }
 
                     Text {
-                        id: percentText
-                        text: brightnessCell.percent + "%"
+                        id: brightnessLabel
+                        anchors.left: brightnessIcon.right
+                        anchors.leftMargin: Theme.space.iconGap
+                        anchors.right: brightnessPercent.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: brightnessCell.label
                         color: brightnessCell.foreground
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontFamilySans
                         font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        id: brightnessPercent
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: brightnessCell.percent + "%"
+                        color: brightnessCell.dimForeground
+                        font.family: Theme.fontFamilyMono
+                        font.pixelSize: Theme.fontSize.bodySmall
                     }
                 }
 
-                // Flat accent fill, no thumb — same idiom as the scale
-                // track above and every other slider in the shell.
-                DitherFill {
+                Track {
                     id: brightnessTrack
                     width: parent.width
-                    height: Theme.space.trackThickness
-
-                    Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, brightnessCell.percent / 100))
-                        height: parent.height
-                        color: Theme.color.primary
-                    }
+                    value: brightnessCell.percent / 100
 
                     MouseArea {
                         anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
                         function _setFromX(x) {
                             BrightnessService.setDevicePercent(brightnessCell.deviceId, (x / brightnessTrack.width) * 100);
                         }
@@ -519,67 +415,146 @@ Panel {
         }
     }
 
-    Repeater {
-        model: BrightnessService.devices
-        delegate: brightnessRow
+    // The panel's own subject (M28 Task 5): the focused output's own name and
+    // resolution, hidden entirely when nothing is focused, the same
+    // honest-unavailable gate every other hero uses.
+    PanelHero {
+        id: hero
+        visible: root._focusedOutput !== null
+        width: parent.width
+        title: root._focusedOutput ? root._focusedOutput.name : ""
+        meta: root._focusedOutput ? Outputs.modeLabel(root._focusedOutput) : ""
+        metaMono: true
+
+        leading: Component {
+            Icon {
+                name: "monitor"
+                size: Theme.fontSize.heading
+                color: hero.foreground
+            }
+        }
     }
 
+    // An empty list means two different things and only one of them licenses
+    // NO OUTPUTS, see BackendBase's outputsState. A failed hyprctl query must
+    // not tell a session with two lit monitors it has no displays.
     Cell {
+        visible: root._outputs.length === 0
+        width: parent.width
+
+        SectionLabel {
+            text: {
+                switch (root._backend.outputsState) {
+                case "failed": return "CANNOT READ OUTPUTS";
+                case "ok": return "NO OUTPUTS";
+                default: return "LOADING";
+                }
+            }
+        }
+    }
+
+    Column {
+        width: parent.width
         visible: root._outputs.length > 0
-        width: parent.width
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "MIRROR"; colon: true }
+        SectionLabel { text: "OUTPUTS"; count: root._outputs.length }
+
+        Repeater {
+            model: root._outputs
+            delegate: outputRow
+        }
     }
 
-    Cell {
-        visible: root._outputs.length > 0 && !root._backend.mirrorSupported
+    Column {
         width: parent.width
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "MIRROR UNSUPPORTED" }
-    }
+        SectionLabel { text: "BRIGHTNESS"; count: root._brightnessCount }
 
-    Cell {
-        visible: root._outputs.length > 0 && root._backend.mirrorSupported && !root._mirrorPlan.ok
-        width: parent.width
-
-        MetaLabel { text: "SINGLE DISPLAY" }
-    }
-
-    Cell {
-        id: mirrorCell
-        visible: root._outputs.length > 0 && root._backend.mirrorSupported && root._mirrorPlan.ok
-        width: parent.width
-
-        Row {
+        Cell {
+            visible: root._brightnessCount === 0
             width: parent.width
-            spacing: Theme.space.sm
 
-            Text {
-                width: parent.width - mirrorLabel.width - parent.spacing
-                // What the mirror is centred on: the live source while it is
-                // on, the primary the plan would pick while it is off.
-                text: root._mirrorOn ? Outputs.mirrorSource(root._outputs) : root._mirrorPlan.primary
-                color: mirrorCell.foreground
-                elide: Text.ElideRight
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
+            SectionLabel { text: "NO BACKLIGHT" }
+        }
+
+        Repeater {
+            model: BrightnessService.devices
+            delegate: brightnessRow
+        }
+    }
+
+    Column {
+        width: parent.width
+        visible: root._outputs.length > 0
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "MIRROR" }
+
+        Cell {
+            visible: !root._backend.mirrorSupported
+            width: parent.width
+
+            SectionLabel { text: "MIRROR UNSUPPORTED" }
+        }
+
+        Cell {
+            visible: root._backend.mirrorSupported && !root._mirrorPlan.ok
+            width: parent.width
+
+            SectionLabel { text: "SINGLE DISPLAY" }
+        }
+
+        Cell {
+            id: mirrorCell
+            visible: root._mirrorActionable
+            width: parent.width
+            cursor: root.cursorActive && root._mirrorIndex >= 0 && root.cursorIndex === root._mirrorIndex
+
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (mirrorCell.containsPointer && root._mirrorIndex >= 0) {
+                root.cursorActive = true;
+                root.cursorIndex = root._mirrorIndex;
             }
 
-            // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09
-            // amendment): no cell chrome, armed state promotes straight to
-            // accent instead of a fill/inversion.
-            MetaLabel {
-                id: mirrorLabel
-                text: root._mirrorOn ? "ON" : "OFF"
-                color: root._mirrorOn
-                    ? Theme.color.primary
-                    : (mirrorHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
+            Item {
+                width: parent.width
+                height: Math.max(mirrorSource.implicitHeight, mirrorButton.height)
 
-                MouseArea {
-                    id: mirrorHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
+                Icon {
+                    id: mirrorIcon
+                    name: "copy"
+                    size: Theme.fontSize.body
+                    color: mirrorCell.foreground
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // What the mirror is centred on: the live source while it is
+                // on, the primary the plan would pick while it is off. An
+                // output name, so mono.
+                Text {
+                    id: mirrorSource
+                    anchors.left: mirrorIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: mirrorButton.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root._mirrorOn ? Outputs.mirrorSource(root._outputs) : root._mirrorPlan.primary
+                    color: mirrorCell.foreground
+                    elide: Text.ElideRight
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.body
+                }
+
+                Button {
+                    id: mirrorButton
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    variant: root._mirrorOn ? "default" : "outline"
+                    text: root._mirrorOn ? "On" : "Off"
                     onClicked: root._setMirror(!root._mirrorOn)
                 }
             }

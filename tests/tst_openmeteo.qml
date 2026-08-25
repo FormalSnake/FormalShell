@@ -196,57 +196,64 @@ TestCase {
 
     // weekdayLabel
 
-    function test_weekday_label_formats_uppercase_three_letters() {
+    function test_weekday_label_formats_three_letters_sentence_case() {
         var label = Openmeteo.weekdayLabel("2026-07-28");
         compare(label.length, 3);
-        compare(label, label.toUpperCase());
+        compare(label, label.charAt(0).toUpperCase() + label.slice(1).toLowerCase());
     }
 
     function test_weekday_label_matches_known_date() {
         // 2026-07-28 is a Tuesday (UTC).
-        compare(Openmeteo.weekdayLabel("2026-07-28"), "TUE");
+        compare(Openmeteo.weekdayLabel("2026-07-28"), "Tue");
     }
 
-    // glyphForCode — codepoints asserted by charCodeAt against the pinned
-    // nerd-fonts-jetbrains-mono cmap (verified via fonttools ttx), never
-    // against literal PUA characters typed into this test file.
+    // conditionText
 
-    function test_glyph_for_code_clear_day_matches_pinned_codepoint() {
-        compare(Openmeteo.glyphForCode(0, true).charCodeAt(0), 0xe30d); // weather-day_sunny
+    function test_condition_text_is_the_label_in_sentence_case() {
+        compare(Openmeteo.conditionText(0), "Clear");
+        compare(Openmeteo.conditionText(2), "Partly cloudy");
+        compare(Openmeteo.conditionText(999), "Unavailable");
     }
 
-    function test_glyph_for_code_clear_night_matches_pinned_codepoint() {
-        compare(Openmeteo.glyphForCode(0, false).charCodeAt(0), 0xe32b); // weather-night_clear
+    // iconForCode - names only, never codepoints: the active icon set
+    // (theme.icons) decides what a name draws, and tst_icons.qml is what
+    // asserts every one of these resolves in both sets.
+
+    function test_icon_for_code_clear_splits_day_from_night() {
+        compare(Openmeteo.iconForCode(0, true), "sun");
+        compare(Openmeteo.iconForCode(0, false), "moon");
     }
 
-    function test_glyph_for_code_defaults_to_day_when_isday_omitted() {
-        compare(Openmeteo.glyphForCode(0).charCodeAt(0), Openmeteo.glyphForCode(0, true).charCodeAt(0));
+    function test_icon_for_code_partly_cloudy_splits_day_from_night() {
+        compare(Openmeteo.iconForCode(2, true), "cloud-sun");
+        compare(Openmeteo.iconForCode(2, false), "cloud-moon");
     }
 
-    function test_glyph_for_code_overcast_same_glyph_day_and_night() {
-        compare(Openmeteo.glyphForCode(3, true), Openmeteo.glyphForCode(3, false));
+    function test_icon_for_code_defaults_to_day_when_isday_omitted() {
+        compare(Openmeteo.iconForCode(0), Openmeteo.iconForCode(0, true));
     }
 
-    function test_glyph_for_code_day_and_night_differ_for_directional_conditions() {
-        [0, 2, 45, 51, 56, 61, 71, 80, 95].forEach(function (code) {
-            verify(Openmeteo.glyphForCode(code, true) !== Openmeteo.glyphForCode(code, false));
+    function test_icon_for_code_is_the_same_where_the_sky_is_not_the_subject() {
+        // Rain and snow draw the same whatever time it is; only the two
+        // sky conditions above carry a night variant.
+        [3, 45, 51, 56, 61, 71, 80, 95].forEach(function (code) {
+            compare(Openmeteo.iconForCode(code, true), Openmeteo.iconForCode(code, false));
         });
     }
 
-    function test_glyph_for_code_unknown_code_returns_fallback() {
-        compare(Openmeteo.glyphForCode(999, true).charCodeAt(0), 0xe34e); // weather-thermometer_exterior
-        compare(Openmeteo.glyphForCode(999, false).charCodeAt(0), 0xe34e);
+    function test_icon_for_code_unknown_code_returns_the_fallback() {
+        compare(Openmeteo.iconForCode(999, true), Openmeteo.FALLBACK_ICON);
+        compare(Openmeteo.iconForCode(999, false), Openmeteo.FALLBACK_ICON);
     }
 
-    function test_glyph_for_code_totality_every_documented_code_resolves() {
+    function test_icon_for_code_totality_every_documented_code_resolves() {
         // Every WMO code openmeteo.js's _conditions table maps, mirroring
-        // the conditionKey coverage above — none of these may fall back.
+        // the conditionKey coverage above: none of these may fall back.
         var codes = [0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 66, 67, 61, 63, 65,
             71, 73, 75, 77, 85, 86, 80, 81, 82, 95, 96, 99];
-        var fallback = 0xe34e;
         codes.forEach(function (code) {
-            verify(Openmeteo.glyphForCode(code, true).charCodeAt(0) !== fallback);
-            verify(Openmeteo.glyphForCode(code, false).charCodeAt(0) !== fallback);
+            verify(Openmeteo.iconForCode(code, true) !== Openmeteo.FALLBACK_ICON);
+            verify(Openmeteo.iconForCode(code, false) !== Openmeteo.FALLBACK_ICON);
         });
     }
 }

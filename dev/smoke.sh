@@ -233,6 +233,37 @@ cat > "$iso_home/.config/formalshell/settings.json" <<EOF
 {"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings}
 EOF
 
+# The calendar leg's own events, dated at run time so the fixture never goes
+# stale: --panel calendar's screenshot then proves real events render (the
+# dot on today's day cell, the rows under the TODAY label) rather than just
+# that the grid draws. Three of them, one all-day and two timed, since the
+# rows sort all-day first and the rest chronologically and only a timed one
+# prints a time column. Fixed hours rather than offsets from the run's own
+# clock: an "in progress" window computed at run time would cross midnight
+# on a late run and drop off today entirely. No other leg reads this file.
+today_ics=$(date -u +%Y%m%d)
+cat > "$iso_home/.local/share/formalshell/calendar/smoke-fixture.ics" <<EOF
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:smoke-fixture-1
+SUMMARY:Smoke fixture event
+DTSTART;VALUE=DATE:$today_ics
+END:VEVENT
+BEGIN:VEVENT
+UID:smoke-fixture-2
+SUMMARY:Smoke fixture standup
+DTSTART:${today_ics}T091500
+DTEND:${today_ics}T094500
+END:VEVENT
+BEGIN:VEVENT
+UID:smoke-fixture-3
+SUMMARY:Smoke fixture review
+DTSTART:${today_ics}T143000
+DTEND:${today_ics}T160000
+END:VEVENT
+END:VCALENDAR
+EOF
+
 # The fixture window's app id resolves against this entry, so ActiveWindow
 # renders a real display name and a real themed icon rather than whatever
 # the machine running the rig happens to have installed.

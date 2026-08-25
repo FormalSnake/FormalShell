@@ -30,8 +30,6 @@ Cell {
     readonly property string _format: Core.State.clockFormat !== "" ? Core.State.clockFormat : ClockModel.CLOCK_FORMATS[0]
     readonly property string _text: Qt.formatDateTime(root._now, ClockModel.substituteIsoWeek(root._format, root._now))
 
-    standalone: true
-
     // The ring's presets differ wildly in width ("hh:mm" versus
     // "yyyy-MM-dd hh:mm") — glide the swap instead of shoving every other
     // right-region cell instantly (DESIGN.md §4, M16 Task 2's contract).

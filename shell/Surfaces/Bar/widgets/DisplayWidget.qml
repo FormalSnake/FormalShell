@@ -2,22 +2,18 @@ import QtQuick
 import qs.Core
 import qs.Components
 
-// Bar cell for DisplayPanel (DESIGN.md §3 Bar, M36, plan at
-// docs/superpowers/plans/2026-08-19-m36-display-bar-cell.md): a single
-// monitor glyph, click toggles the display panel anchored under this cell,
-// marked open by the same `panelOpen` underline as every other
-// panel-bearing cell (BluetoothWidget.qml).
-// Unlike every device-status cell above it, this one has no absent state
-// to hide on — a session always has at least one output — so it carries
-// no `shown` gate and is always visible once placed in `bar.layout`. It
-// also carries no value text at all: the panel is a consult surface (per-
-// output on/off, scale, mirror, brightness), not a glance one, so there is
-// no single number this cell could summarize honestly. `showLabel` still
-// gates an uppercase "DISPLAY" caption next to the glyph (M23's opt-in-
-// label idiom, `bar.widgets.display.showLabel`), for a host running this
-// glyph next to others that could otherwise read ambiguously. Glyph
-// codepoint verified against the pinned nerd-fonts-jetbrains-mono cmap
-// (nix/testvm.nix) via fonttools ttx, not memory: md-monitor U+F0379.
+// Bar cell for DisplayPanel (DESIGN.md §3 "Bar", M36): one monitor icon,
+// click toggles the display panel anchored under this cell, marked open by
+// the same `panelOpen` underline as every other panel-bearing cell.
+// Unlike every device-status cell above it, this one has no absent state to
+// hide on (a session always has at least one output), so it carries no
+// `shown` gate and is always visible once placed in `bar.layout`. It also
+// carries no value at all: the panel is a consult surface (per-output
+// on/off, scale, mirror, brightness), not a glance one, so there is no
+// single number this cell could summarize honestly.
+// `bar.widgets.display.showLabel` opts a name back in beside the icon
+// (M23's opt-in-label idiom), for a host running this icon next to others
+// that could otherwise read ambiguously.
 Cell {
     id: root
 
@@ -25,43 +21,32 @@ Cell {
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
 
-    // Label-off by default, like every sibling whose glyph already says
-    // what the cell is (M23's weather/audio rule; owner 2026-08-19: "why
-    // does it show DISPLAY in big? no other panel does this"). The name
-    // lives in tooltipText; `bar.widgets.display.showLabel` opts the
-    // caption back in per install.
+    // Label-off by default, like every sibling whose icon already says what
+    // the cell is (M23's weather/audio rule; owner 2026-08-19: "why does it
+    // show DISPLAY in big? no other panel does this"). The name lives in
+    // tooltipText.
     readonly property bool _showLabel: Config.get("bar.widgets.display.showLabel", false)
 
-    standalone: true
     tooltipText: "DISPLAY"
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.xxs
+        spacing: Theme.space.xs
 
-        // Fixed-width slot (M26 Task 7), matching this cell's siblings even
-        // though this glyph itself never swaps.
-        Item {
-            id: glyphSlot
+        Icon {
             anchors.verticalCenter: parent.verticalCenter
-            width: Theme.space.huge
-            height: glyphText.implicitHeight
-
-            Text {
-                id: glyphText
-                anchors.centerIn: parent
-                text: "󰍹"
-                color: root.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-            }
+            name: "monitor"
+            color: root.foreground
         }
 
-        MetaLabel {
-            visible: root._showLabel
+        Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: "DISPLAY"
-            color: root.dimForeground
+            visible: root._showLabel
+            text: "Display"
+            color: root.foreground
+            font.family: Theme.fontFamilySans
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
         }
     }
 
