@@ -41,6 +41,17 @@ spec), niri (M46).
   false) gate `DitherImage` on the lock backdrop and the background; the
   components stay, the OSD/pending uses are already gone.
   `LockSurface.qml`'s header comment about `ScreencopyView` stays.
+  The locker itself is swappable (owner, 2026-08-25): `lock.command`
+  (argv list, default empty) names an external locker (`hyprlock`,
+  `swaylock`, `loginctl lock-session`). Every lock trigger (`lock lock`
+  over IPC, `formalshell-lock-before-sleep`, the `lock` hot corner,
+  `screensaver.lockAfterSeconds`, the power menu's Lock row) goes through
+  one `Services/LockService.lock()`, which spawns that command when set and
+  raises the built-in `WlSessionLock` otherwise; `lock status` reports
+  `external: true` and `isLocked` as unknown (`null`) in the external
+  case, since a foreign locker does not report back. The greeter is
+  already optional (the greetd nix module is opt-in; SDDM users never
+  enable it), and `docs/USAGE.md` says so next to `lock.command`.
 - D3: picker grid per spec "Picker": `radiusMd` thumbnails with a 1px
   `border`, ring cursor, `Dark | Light` as a segmented control (reuse
   M43's local one by promoting it to `Components/Segmented.qml` if M43
@@ -64,11 +75,16 @@ spec), niri (M46).
 
 ## Tasks
 
-### Task 1: lock, greeter, background
+### Task 1: lock, greeter, background, swappable locker
 
 D2. Files: `Lock.qml`, `LockSurface.qml`, `AuthPrompt.qml`, `greeter/*`
-QML that styles the prompt, `Background.qml`, `Config` defaults, tests,
-`docs/USAGE.md` (`lock.dither`, `wallpaper.dither` default). Verify
+QML that styles the prompt, `Background.qml`, `Config` defaults,
+`Services/LockService.qml` (new; `Ipc/LockIpc.qml`, `HotCorners.qml`,
+the screensaver's lock-after path, the power menu row and
+`nix/package.nix`'s `formalshell-lock-before-sleep` all call it), tests
+(`tst_lock_service.qml`: command set spawns argv and never maps the
+surface; unset raises it), `docs/USAGE.md` (`lock.command`, `lock.dither`,
+`wallpaper.dither` default, the greeter is optional). Verify
 `just vm-smoke --lock` and `--wallpaper` ported to `dev/smoke.sh` (the
 wallpaper leg's dither assertions become conditional on the setting; with
 the default off it asserts the solid fixture paints flat), `just vm-greeter`
