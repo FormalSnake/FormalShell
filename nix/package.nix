@@ -14,6 +14,11 @@ stdenvNoCC.mkDerivation {
     # in the repo, so Quickshell.shellPath("branding/...") still resolves it
     # once installed here alongside the copied shell tree.
     cp -r ${../branding} $out/share/formalshell/branding
+    # The shipped Hyprland config (blur layer rules, the colours source line,
+    # every default bind). Nothing in the shell reads it: a nix install has no
+    # checkout to copy it out of, so the closure has to carry it.
+    mkdir -p $out/share/formalshell/examples
+    cp -r ${../docs/examples}/. $out/share/formalshell/examples/
     # wtype (the menu's emoji instant-paste, M13 Task 6) is suffixed, not
     # prefixed: an environment wtype must stay able to shadow the bundled
     # one — the smoke rig substitutes an argv-logging shim to prove the

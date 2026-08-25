@@ -77,6 +77,66 @@ Hyprland:
 bind = SUPER, Space, exec, qs ipc --any-display -p <store-path>/share/formalshell call menu summon
 ```
 
+## Keybinds
+
+Every default bind ships as
+[`docs/examples/hyprland/formalshell.conf`](examples/hyprland/formalshell.conf),
+next to the blur layer rules and the `source` line for the colours file. A
+nix install carries the same file at
+`<store-path>/share/formalshell/examples/hyprland/formalshell.conf`. Copy it
+beside your own config, fill in `<store-path>` once at the `$fs` line, and
+source it:
+
+```conf
+# ~/.config/hypr/hyprland.conf
+source = ~/.config/hypr/formalshell.conf
+```
+
+Fifty binds in three groups. Utilities:
+
+| chord | action |
+| --- | --- |
+| `SUPER+SPACE` | `menu toggle`, the root launcher |
+| `SUPER+ALT+SPACE` | `menu summon apps` |
+| `SUPER+CTRL+E` | `menu summon emoji` |
+| `SUPER+CTRL+C` | `menu summon capture` |
+| `SUPER+CTRL+O` | `menu summon toggles` |
+| `SUPER+CTRL+S` | `menu summon share` |
+| `SUPER+CTRL+R` | `menu summon reminder` |
+| `SUPER+ESCAPE` | `menu summon system` |
+| `SUPER+K` | `menu summon keybinds`, this table as the shell sees it |
+| `SUPER+CTRL+Q` | `menu summon calc` |
+| `SUPER+CTRL+SPACE` | `menu summon wallpaper`, the picker grid |
+| `SUPER+SHIFT+CTRL+SPACE` | `menu summon theme` |
+| `SUPER+CTRL+A` / `B` / `W` / `P` / `D` / `ALT+D` | `panel toggle audio` / `bluetooth` / `network` / `power` / `display` / `calendar` |
+| `SUPER+CTRL+1..9` | `panel toggleAt n` |
+| `SUPER+comma` / `SHIFT` / `ALT` / `SHIFT+ALT` | `notifications dismissOne` / `dismissAll` / `invokeLast` / `showHistory` |
+| `SUPER+CTRL+comma` | `notifications toggleDnd` |
+| `SUPER+CTRL+I` | `screensaver stayAwakeToggle`, the idle inhibitor |
+| `SUPER+CTRL+N` | `nightlight toggle` |
+| `SUPER+SHIFT+SPACE` | `bar chevron toggle` |
+| `SUPER+CTRL+L` | `lock lock` |
+| `PRINT` | `screenshot pick smart default`, the picker with the toolbar |
+| `SUPER+CTRL+PRINT` | `capture text`, OCR straight to the clipboard |
+| `ALT+PRINT` | `record toggle screen none` |
+
+Media keys change the value first and then tell the OSD to show it, because
+brightness is read on demand and has no signal of its own to watch:
+`XF86AudioRaiseVolume` / `LowerVolume` / `Mute` run `wpctl` then
+`osd volume`, `XF86MonBrightnessUp` / `Down` run `brightnessctl` then
+`osd brightness`, and `XF86AudioPlay` / `Pause` / `Next` / `Prev` go
+straight to `media playPause` / `next` / `previous`. All of them are bound
+with Hyprland's `l` flag so they keep working over the lock screen.
+
+Clipboard is one bind, `SUPER+CTRL+V` for `menu summon clipboard`.
+
+Three of Omarchy's chords have no matching verb in this shell yet, so they
+are bound to the nearest one: `SUPER+CTRL+SPACE` opens the wallpaper picker
+instead of advancing to the next wallpaper, `SUPER+SHIFT+SPACE` collapses
+the bar's chevron group instead of hiding the whole bar, and `SUPER+CTRL+I`
+toggles Stay Awake, which is the idle inhibitor rather than the screensaver
+itself.
+
 ## Bar
 
 Three regions, `left`, `center` and `right`, each independently reorderable.
@@ -387,10 +447,11 @@ Colors come out of your wallpaper, with no restart anywhere in the loop:
    Runs are serialized, and a wallpaper change mid-run supersedes the
    pending one rather than killing the one in flight.
 3. The output is published atomically to
-   `$XDG_STATE_HOME/formalshell/theme.json` and `niri-border.kdl`.
+   `$XDG_STATE_HOME/formalshell/theme.json` and
+   `$XDG_CONFIG_HOME/hypr/formalshell-colors.conf`.
 4. The shell's color singleton watches `theme.json`, so every token
-   recolors on the next paint, and the compositor config is reloaded so
-   window borders follow.
+   recolors on the next paint. Hyprland re-reads the colours file itself,
+   so window borders follow with no reload call anywhere.
 
 With no wallpaper set, `theme.json` is written from the bundled shadcn zinc
 palette instead, in the variant matching the current mode, so
@@ -431,14 +492,36 @@ shipped default, and a pywal template ships alongside it
 its output at `$XDG_STATE_HOME/formalshell/theme.json`. The file watch picks
 up any writer.
 
-Add this to your niri config once so window borders track the theme:
+`formalshell-colors.conf` is the same palette in hyprlang, written to your
+own Hyprland config directory so window borders track the wallpaper:
 
-```kdl
-include "~/.local/state/formalshell/niri-border.kdl"
+```conf
+$primary = rgb(9ecafc)
+$primaryForeground = rgb(00325a)
+$background = rgb(101418)
+$foreground = rgb(e0e2e8)
+$border = rgb(42474e)
+$destructive = rgb(ffb4ab)
+$warning = rgb(bdc9d3)
 ```
 
-The file is created empty at startup if it doesn't exist yet, so the
-`include` never errors on a fresh install.
+Source it once, above anything that uses the variables. Hyprland watches
+every file it sourced, so each rewrite reloads the borders on its own and
+nothing calls back into the compositor:
+
+```conf
+# ~/.config/hypr/hyprland.conf
+source = ~/.config/hypr/formalshell-colors.conf
+
+general {
+    col.active_border = $primary
+    col.inactive_border = $border
+}
+```
+
+The file exists from the shell's first run whether or not a wallpaper is
+set: with none, the bundled zinc palette renders the same seven variables,
+so the `source` line never points at nothing.
 
 ### Radius, icons and translucency
 
@@ -455,7 +538,7 @@ that alpha is what lets a compositor blur read through. On Hyprland, copy
 this repo's `docs/examples/hyprland/formalshell.conf` next to your own
 config and source it: it turns the blur on and points it at the
 `formalshell:bar`, `formalshell:panel` and `formalshell:menu` layer
-namespaces, and it carries the `SUPER+CTRL+1..9` panel binds (fill in the
+namespaces, and it carries the whole default bind set (fill in the
 `<store-path>` at the top of the file first). Under a compositor with blur
 off the same alpha reads as a tint. Toasts, the OSD, the notification
 centre and the lock screen stay opaque either way.

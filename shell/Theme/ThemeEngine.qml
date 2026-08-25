@@ -9,7 +9,6 @@ import QtQuick
 // undefined at runtime instead of hitting the qs.Core singleton (verified
 // with a throwaway probe script). Core.State disambiguates it.
 import qs.Core as Core
-import qs.Compositor
 import "matugen.js" as Matugen
 import "palette.js" as Palette
 
@@ -21,8 +20,9 @@ import "palette.js" as Palette
 // Quickshell.Io has no directory-listing API — merges it via matugen.js's
 // buildConfig(), writes matugen-merged.toml, then runs matugen against it.
 // matugen's own template output_paths land on <state-dir>/{theme.json,
-// niri-border.kdl}.tmp; on success those are renamed into place atomically
-// and the niri border fragment is reapplied. No wallpaper set → skip matugen
+// formalshell-colors.conf}.tmp; on success those are renamed into place
+// atomically, theme.json into the state dir and the Hyprland colours into
+// the user's hypr config dir. No wallpaper set → skip matugen
 // entirely and write palette.fallback(State.mode) — the Flexoki variant for
 // the current mode, so `theme mode toggle` recolors every consumer live
 // through the exact same theme.json write a matugen run uses (M13b Task 3;
@@ -87,7 +87,9 @@ Singleton {
     readonly property string _dropInDir: (Quickshell.env("HOME") || "") + "/.config/formalshell/matugen.d"
     readonly property string _mergedConfigPath: root.stateDir + "/matugen-merged.toml"
     readonly property string _themeJsonPath: root.stateDir + "/theme.json"
-    readonly property string _borderKdlPath: root.stateDir + "/niri-border.kdl"
+    readonly property string _configDir: Quickshell.env("XDG_CONFIG_HOME") || (root._homeDir + "/.config")
+    readonly property string _hyprColorsTmp: root.stateDir + "/formalshell-colors.conf.tmp"
+    readonly property string _hyprColorsPath: root._configDir + "/hypr/formalshell-colors.conf"
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
 
     property bool running: false
@@ -124,6 +126,20 @@ Singleton {
             _onDone: onDone
         });
         proc.command = ["sh", "-c", 'printf \'%s\' "$2" > "$1"', "sh", path, content];
+        proc.running = true;
+    }
+
+    // The atomic twin of _writeFile, for a path another process watches:
+    // Hyprland re-reads a sourced file the moment it changes, so it must
+    // never catch one half written. Creates the parent directory too, since
+    // ~/.config/hypr need not exist on a fresh install.
+    function _publishFile(path, content, onDone) {
+        var proc = writeFileProcComponent.createObject(root, {
+            _onDone: onDone
+        });
+        proc.command = ["sh", "-c",
+            'mkdir -p "$(dirname "$1")" && printf \'%s\' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"',
+            "sh", path, content];
         proc.running = true;
     }
 
@@ -170,12 +186,20 @@ Singleton {
     function _start() {
         root._syncSystemScheme();
         if (Core.State.wallpaper === "") {
-            root._writeFile(root._themeJsonPath, JSON.stringify(Palette.fallback(Core.State.mode), null, 2), exitCode => {
+            var fb = Palette.fallback(Core.State.mode);
+            root._writeFile(root._themeJsonPath, JSON.stringify(fb, null, 2), exitCode => {
                 if (exitCode !== 0)
                     console.warn("ThemeEngine: failed to write fallback theme.json, code", exitCode);
                 else
                     root.themeJsonPresent = true;
-                root._finish();
+                // A hyprland.conf sourcing formalshell-colors.conf must find
+                // it whether or not a wallpaper was ever set, so the fallback
+                // palette renders the same variables matugen would.
+                root._publishFile(root._hyprColorsPath, Matugen.hyprlandColors(fb), colorsCode => {
+                    if (colorsCode !== 0)
+                        console.warn("ThemeEngine: failed to write fallback formalshell-colors.conf, code", colorsCode);
+                    root._finish();
+                });
             });
             return;
         }
@@ -246,10 +270,11 @@ Singleton {
                 root._finish();
                 return;
             }
-            renameProc.command = ["sh", "-c", 'mv -f "$1" "$2" && mv -f "$3" "$4"',
+            renameProc.command = ["sh", "-c",
+                'mv -f "$1" "$2" && mkdir -p "$(dirname "$4")" && mv -f "$3" "$4"',
                 "sh",
                 root.stateDir + "/theme.json.tmp", root._themeJsonPath,
-                root.stateDir + "/niri-border.kdl.tmp", root._borderKdlPath];
+                root._hyprColorsTmp, root._hyprColorsPath];
             renameProc.running = true;
         }
     }
@@ -259,12 +284,13 @@ Singleton {
 
         onExited: exitCode => {
             if (exitCode !== 0) {
-                console.warn("ThemeEngine: failed to publish theme.json/niri-border.kdl, code", exitCode);
+                console.warn("ThemeEngine: failed to publish theme.json/formalshell-colors.conf, code", exitCode);
                 root._finish();
                 return;
             }
             root.themeJsonPresent = true;
-            CompositorService.applyThemeFragment();
+            // Nothing tells Hyprland to reload: it watches every file it
+            // sourced and re-reads this one itself on the rename above.
             root._finish();
         }
     }
@@ -284,23 +310,6 @@ Singleton {
                 root.themeJsonPresent = false;
                 root.retheme();
             }
-        }
-    }
-
-    // Startup guarantee: a niri config's `include ".../niri-border.kdl"`
-    // must never hit a missing file. retheme() only ever produces this path
-    // via matugen's successful output, so a state dir that has never seen a
-    // successful run (fresh install, or wallpaper never set) leaves it
-    // absent — create it empty once, here, so the include is always safe.
-    // Never rewrites existing content: retheme()'s atomic rename is the only
-    // writer once matugen has actually run.
-    FileView {
-        id: borderProbe
-        path: root._borderKdlPath
-
-        onLoadFailed: error => {
-            if (error === FileViewError.FileNotFound)
-                root._writeFile(root._borderKdlPath, "", function () {});
         }
     }
 
