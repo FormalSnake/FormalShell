@@ -450,7 +450,8 @@ that alpha is what lets a compositor blur read through. On Hyprland, copy
 this repo's `docs/examples/hyprland/formalshell.conf` next to your own
 config and source it: it turns the blur on and points it at the
 `formalshell:bar`, `formalshell:panel` and `formalshell:menu` layer
-namespaces. Under a compositor with blur
+namespaces, and it carries the `SUPER+CTRL+1..9` panel binds (fill in the
+`<store-path>` at the top of the file first). Under a compositor with blur
 off the same alpha reads as a tint. Toasts, the OSD, the notification
 centre and the lock screen stay opaque either way.
 
@@ -1259,12 +1260,20 @@ naming the only screen there is says nothing).
 ```sh
 fs panel open audio
 fs panel toggle network
+fs panel toggleAt 3   # the nth panel cell of the right region
 fs panel close        # whichever is open
 fs panel state        # "" | "audio" | … | "plugin:<id>"
 ```
 
 An unknown name returns `error: unknown panel '<name>'` rather than a silent
 no-op.
+
+`toggleAt` counts the right region's cells from the screen centre outward,
+skipping the ones that open no panel (tray, bell, indicators) and counting
+the ones a collapsed chevron is currently hiding, so with the default layout
+1 to 5 are power, audio, network, bluetooth and weather; past the end it
+answers `no panel at <n>`. `docs/examples/hyprland/formalshell.conf` binds
+1..9 to `SUPER+CTRL+1..9`.
 
 ```kdl
 binds {
