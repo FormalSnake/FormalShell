@@ -6,6 +6,12 @@
 # pointer or key delivery into an OnDemand layer surface exists here), and
 # `theme status` is what proves the pick actually became the wallpaper.
 #
+# The second half of the route is the generic image selector: `picker select`
+# opens the same grid against a caller's directory and token, and the choose
+# that follows has to answer that request with `{token, value}` in
+# picker-selection.txt, the same request/answer handshake MenuIpc's select()
+# writes to menu-selection.txt.
+#
 # Then the Dark/Light half: the staged subdirectories are moved in
 # underneath the running shell, which also proves the scan re-runs per entry
 # (a listing cached at startup would still report the flat set), and `picker
@@ -34,6 +40,8 @@ picker_dark_status_path="$shot_dir/picker-status-dark.json"
 picker_light_status_path="$shot_dir/picker-status-light.json"
 picker_variant_reply_path="$shot_dir/picker-variant-reply.txt"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
+picker_select_reply_path="$shot_dir/picker-select-reply.txt"
+picker_selection_path="$shot_dir/picker-selection.txt"
 picker_dir="$iso_home/.local/share/formalshell/pictures"
 
 leg_picker_fixture() {
@@ -73,7 +81,7 @@ leg_picker_timing() {
   # grid up, so the run's own frame is that grid.
   local t0
   t0=$(picker_t0)
-  leg_timing $((20 + t0 - 4)) $((50 + t0 - 4))
+  leg_timing $((24 + t0 - 4)) $((56 + t0 - 4))
 }
 
 leg_picker_drive() {
@@ -89,6 +97,12 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
 sleep 3
 "$qs_bin" ipc -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call picker select "$picker_dir" tok-picker > "$picker_select_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
+sleep 1
+cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
 mv "$picker_dir/.stage/Dark" "$picker_dir/Dark"
 mv "$picker_dir/.stage/Light" "$picker_dir/Light"
 "$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
@@ -128,6 +142,20 @@ leg_picker_assert() {
   cat "$picker_theme_status_path"; echo
   if ! grep -q "\"wallpaper\":\"$picker_dir/img-3.png\"" "$picker_theme_status_path"; then
     fail "theme status did not report the picker-chosen wallpaper, got: $(cat "$picker_theme_status_path")"
+  fi
+  # Generic image-selector proof: the second choose(), made against a
+  # select()-mode request, must resolve that request's token with the chosen
+  # path.
+  if ! grep -qx 'ok' "$picker_select_reply_path" 2>/dev/null; then
+    fail "picker select was refused, got: $(cat "$picker_select_reply_path" 2>/dev/null)"
+  fi
+  if [ ! -s "$picker_selection_path" ]; then
+    fail "no picker-selection.txt produced"
+  fi
+  cat "$picker_selection_path"; echo
+  if ! grep -q '"token":"tok-picker"' "$picker_selection_path" \
+    || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
+    fail "picker-selection.txt did not resolve tok-picker with the chosen path, got: $(cat "$picker_selection_path")"
   fi
   # Then the same directory with the pair moved in underneath the running
   # shell: hasVariants, entered on the theme's own mode, listing that set.
