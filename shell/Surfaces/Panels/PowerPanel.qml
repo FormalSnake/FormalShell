@@ -33,10 +33,7 @@ Panel {
 
     panelIcon: root._hasBattery ? "battery" : "zap"
     panelTitle: "Power"
-    // A hero plus a short profile list, no ledger with competing columns:
-    // the same shape as Weather's own Narrow, and the closest sanctioned
-    // step to upstream's own 299px power panel.
-    panelWidth: Theme.space.popupWidthNarrow
+    panelWidth: Theme.space.popupWidthDefault
 
     readonly property var _device: UPower.displayDevice
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
