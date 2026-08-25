@@ -22,18 +22,15 @@ One process draws the bar, the launcher, the notifications, the lock screen
 and the rest of it, and every color on screen is pulled out of your wallpaper
 by matugen.
 
-The visual language is mid-redesign: `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
-is the approved design, and the screenshots below predate it (recaptured in
-M46).
-
 It looks like this:
 
-![FormalShell launcher, bar and toasts](docs/screenshots/menu-niri.png)
+![The FormalShell launcher over a wallpaper-derived palette](docs/screenshots/menu-hyprland.png)
 
-Radius 0. No blur, no shadows, monospace everywhere, borders that are exactly
-two pixels. That speckle in the background is the wallpaper being served
-through a six-color ordered dither, which is what this shell does instead of a
-gaussian blur.
+Radius 10, one-pixel borders, sans for words and mono for values, Lucide
+icons instead of Nerd Font glyphs. Surfaces sit at 85% opacity and Hyprland
+does the blurring behind them; the shell draws no shadow and no gradient of
+its own. The wallpaper used to come through a six-colour ordered dither, and
+that is still there behind `wallpaper.dither`, off by default.
 
 **Pre-alpha.** It boots, it is nice to use, and it will still surprise you.
 [`docs/SWITCHOVER.md`](docs/SWITCHOVER.md) tracks what has been proven on
@@ -50,7 +47,7 @@ is a bar at the bottom telling you what Enter is about to do.
 
 | | |
 | :---: | :---: |
-| <img src="docs/screenshots/notifications-center-niri.png" width="420"><br>Notification center, with DND and a real history | <img src="docs/screenshots/media-niri.png" width="420"><br>Now playing, over MPRIS |
+| <img src="docs/screenshots/notifications-center-hyprland.png" width="420"><br>Notification center, with DND and a real history | <img src="docs/screenshots/media-hyprland.png" width="420"><br>Now playing, over MPRIS |
 
 Sixteen panels hang off the bar cells (audio, network, bluetooth, calendar,
 weather, power, displays, system monitor, AirPods, and friends). A panel with
@@ -64,7 +61,7 @@ table you can kill things from), a screenshot and screen recording suite with
 its own region picker, OCR, a color picker, and reminders that survive the
 shell being restarted.
 
-<img src="docs/screenshots/lock-niri.png" width="420"> <img src="docs/media/screensaver-decrypt.gif" width="360">
+<img src="docs/screenshots/lock-hyprland.png" width="420"> <img src="docs/media/screensaver-decrypt.gif" width="360">
 
 The lock screen is a real `WlSessionLock` with PAM behind it, and the greeter
 is its twin at the login prompt. The screensaver runs
@@ -158,7 +155,8 @@ never a test target, which means you can run the lock screen and the
 notification server over and over without locking yourself out or stealing
 the D-Bus name from your actual desktop. Flags drive individual surfaces
 (`--menu`, `--notify`, `--lock`, `--tray`, `--media`, `--panel <name>`, and
-about twenty more); `CLAUDE.md` documents what each one proves. There is a
+forty more); each one is a file under `dev/smoke.d/` whose header says what
+it proves. There is a
 matching rig for developing on a Mac, where the whole thing runs in a headless
 aarch64 NixOS VM and hands the screenshots back.
 

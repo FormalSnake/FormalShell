@@ -625,7 +625,7 @@ programs.formalshell.settings.motion.enabled = false;
 One keyboard-driven surface is the app launcher, the system menu, and a
 dmenu replacement at once. Summon it, type, press Enter.
 
-![The menu at root](screenshots/menu-niri.png)
+![The menu at root](screenshots/menu-hyprland.png)
 
 ### The tree
 
@@ -979,7 +979,7 @@ A mako replacement: a freedesktop notification server, a three-tier model
 (`popups`, `pending`, `past`), toasts that are independent bordered cards,
 and a history center you can summon.
 
-![The notification center](screenshots/notifications-center-niri.png)
+![The notification center](screenshots/notifications-center-hyprland.png)
 
 A notification lands in `popups` unless DND is on, in which case it goes
 straight to `pending`. The popup cap is 4, and the oldest overflows into
@@ -1116,7 +1116,7 @@ outside. Opened over IPC with no cell to anchor to, it falls back to the
 bar's right region, because Wayland gives clients no global coordinates to
 anchor against.
 
-![The audio panel](screenshots/panels-niri.png)
+![The audio panel](screenshots/audio-panel-hyprland.png)
 
 On a multi-monitor rig a click on any other screen closes the panel too. The
 compositor only routes pointer input to the backdrop on the panel's own
@@ -1874,7 +1874,7 @@ The media service picks a player that is actually playing over the rest when
 several are registered, otherwise the first one, otherwise nothing at all.
 The bar cell is hidden entirely with no player present.
 
-![The media panel](screenshots/media-niri.png)
+![The media panel](screenshots/media-hyprland.png)
 
 The panel shows album art, a `NOW PLAYING / <app>` row, title and artist, a
 progress cell you can drag to seek where the player supports it, and
@@ -1943,7 +1943,7 @@ directly with no external binary, against a dedicated `formalshell-lock`
 service rather than `login`, whose console-specific checks a lock screen has
 no business inheriting.
 
-![The lock screen](screenshots/lock-niri.png)
+![The lock screen](screenshots/lock-hyprland.png)
 
 **A real deployment must declare
 `security.pam.services.formalshell-lock = { };` system-side.** The
@@ -2289,7 +2289,7 @@ as a grid of thumbnail cells with a 1px border and `radiusMd` corners; the
 cursor is a ring around the cell rather than a fill, since the thumbnail
 already covers it.
 
-![The picker grid](screenshots/picker-niri.png)
+![The picker grid](screenshots/picker-hyprland.png)
 
 Everything else is the menu's: the search field filters by filename, the
 arrow keys move the cursor in 2D, Enter confirms, Escape pops back out, and
