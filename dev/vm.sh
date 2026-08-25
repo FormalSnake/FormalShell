@@ -18,7 +18,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_root="$(pwd)"
 
-work_dir="dev/.testvm"
+# One VM per repository, not per checkout: a git worktree resolves its
+# common dir to the main checkout's .git, so every worktree shares that
+# checkout's dev/.testvm instead of building and booting a second VM.
+work_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/dev/.testvm"
 keys_dir="$work_dir/keys"
 disk_image="$work_dir/formalshell-testvm.qcow2"
 log_file="$work_dir/vm.log"
@@ -139,14 +142,19 @@ cmd_status() {
 }
 
 cmd_sync() {
+  # /.git stays out: in a worktree it is a gitdir file pointing at the mac,
+  # which leaves the VM's copy dangling and every `git add -A` there
+  # failing. The VM keeps its own repo instead (created below on first
+  # sync); the flake only needs the files tracked, not the history.
   rsync -az --delete \
     --exclude 'result*' \
-    --exclude '.git/index.lock' \
+    --exclude '/.git' \
     --exclude 'artifacts/' \
     --exclude '/dev/.linux-builder/' \
     --exclude '/dev/.testvm/' \
     -e "ssh ${ssh_opts[*]}" \
     "$repo_root/" test@localhost:formalshell/
+  vm_run 'cd ~/formalshell && { [ -d .git ] || git init -q; }'
 }
 
 cmd_run() {
