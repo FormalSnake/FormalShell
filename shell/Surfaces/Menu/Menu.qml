@@ -812,6 +812,16 @@ PanelWindow {
     // instead of shrinking to content height like every other level does.
     readonly property real _rowsAreaHeight: root._isSplitRoute ? root._rowsAreaCap : Math.min(root._viewContentHeight, root._rowsAreaCap)
 
+    // How far the live view is scrolled, whichever of the three owns the
+    // level. On `menu status` because a wheel notch is otherwise
+    // unobservable from the rig: a screenshot shows different rows, but
+    // nothing says the cursor stayed put rather than moved with them.
+    readonly property real scrollTop: root._isPickerRoute
+        ? gridView.contentY
+        : (root._isAppView
+            ? (root._appViewScroll ? root._appViewScroll.contentY : 0)
+            : rowsView.contentY)
+
     // The card's top edge sits at 30% of the output height (spec
     // "Launcher"), which is where the eye already is and which leaves the
     // list room to grow downward without the card moving. It replaced a
@@ -1943,6 +1953,8 @@ PanelWindow {
             // at repeat speed.
             highlightMoveDuration: 0
 
+            WheelScroll { flickable: rowsView }
+
             delegate: MenuRow {
                 current: root._cursorIndex === index
                 checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
@@ -1979,6 +1991,12 @@ PanelWindow {
             // arrow keys outrun the default animated highlight move and the
             // cursor cell ends up off-viewport.
             highlightMoveDuration: 0
+
+            // A row here is a row of thumbnails, not a text line.
+            WheelScroll {
+                flickable: gridView
+                step: gridView.cellHeight
+            }
 
             // The wrapper carries the GridView's own cell, so the `Cell`
             // inside it can hold the gutter between thumbnails in its

@@ -339,6 +339,8 @@ PanelWindow {
                 contentWidth: width
                 contentHeight: column.implicitHeight
 
+                WheelScroll { flickable: rowsFlickable }
+
                 // Never focused: the backdrop owns the keyboard, exactly as
                 // Panel.qml wires its own.
                 KeyCatcher {

@@ -416,6 +416,8 @@ PanelWindow {
                 contentWidth: width
                 contentHeight: contentColumn.implicitHeight
 
+                WheelScroll { flickable: contentFlickable }
+
                 // Never focused: the backdrop owns the keyboard (see its
                 // Keys.onPressed, which drives this by hand so `keyPressed`
                 // consumers get first refusal).

@@ -84,7 +84,11 @@ IpcHandler {
     function status(): string {
         if (!menu)
             return "error: menu not ready";
-        return JSON.stringify({ isOpen: menu.isOpen, level: menu.currentNodeId });
+        return JSON.stringify({
+            isOpen: menu.isOpen,
+            level: menu.currentNodeId,
+            scrollTop: Math.round(menu.scrollTop)
+        });
     }
 
     function select(prompt: string, optionsJson: string, token: string): string {

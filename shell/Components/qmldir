@@ -18,3 +18,4 @@ Segmented Segmented.qml
 Switch Switch.qml
 Tooltip Tooltip.qml
 Track Track.qml
+WheelScroll WheelScroll.qml

@@ -1000,6 +1000,8 @@ Item {
         // scrolled-down reader and leave contentY past its own end.
         onContentHeightChanged: statsPane.returnToBounds()
 
+        WheelScroll { flickable: statsPane }
+
         Item {
             id: statsColumns
             width: root.width
@@ -1376,6 +1378,11 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: root._rows
+
+        WheelScroll {
+            flickable: list
+            step: root._rowHeight
+        }
 
         // The palette's row, not a `Cell`: this list sits inside the
         // launcher card, and the launcher's lists carry no borders and no

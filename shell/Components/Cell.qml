@@ -260,7 +260,16 @@ Item {
         acceptedButtons: root.acceptedButtons
         cursorShape: root.acceptedButtons === Qt.NoButton ? Qt.ArrowCursor : Qt.PointingHandCursor
         onClicked: mouse => root.clicked(mouse)
-        onWheel: wheel => root.wheeled(wheel)
+        // Qt marks a wheel event accepted the moment anything is connected to
+        // MouseArea.onWheel, so this handler existing at all swallowed every
+        // notch that landed on a cell, before the flickable under it (the
+        // launcher's grid, a panel's column) ever saw it. Only a consumer of
+        // `wheeled` may put it back: the two that adjust something on scroll
+        // (AudioWidget, NowPlaying) set it themselves.
+        onWheel: wheel => {
+            wheel.accepted = false;
+            root.wheeled(wheel);
+        }
         onPositionChanged: event => root.pointerMoved(event.x, event.y)
     }
 

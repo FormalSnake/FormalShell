@@ -946,7 +946,7 @@ fs menu toggle                # no route: root summon if closed, close if open
 fs menu summon clipboard      # any node id or alias, "" for root
 fs menu close
 fs menu refresh               # re-read both jsonc files after an editor save
-fs menu status                # {isOpen, level}
+fs menu status                # {isOpen, level, scrollTop}
 fs menu activate <index>      # Enter on that row
 fs menu filter <text>         # type into the search field
 ```
@@ -954,6 +954,10 @@ fs menu filter <text>         # type into the search field
 `toggle` takes no argument on purpose: it is the verb to bind a bare menu
 key to, and a keybind passing no route to a route-taking toggle gets
 rejected by IPC arity checking before the handler ever runs.
+
+`status`'s `scrollTop` is how far the live view is scrolled, in pixels: the
+row list, the picker grid or an app view's table, whichever owns the level,
+0 at the top.
 
 `select` and `input` are the dmenu replacement. `qs ipc call` is
 synchronous but can't block on a UI answer, so both correlate by a
