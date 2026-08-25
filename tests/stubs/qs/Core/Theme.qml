@@ -31,7 +31,6 @@ QtObject {
     readonly property int ringWidth: 3
     readonly property real ringAlpha: 0.5
     readonly property var weight: Tokens.WEIGHTS
-    readonly property real fieldBorderWidth: Math.round(3 * fontScale)
 
     readonly property real fontBaseSize: 13
     readonly property real fontScale: Tokens.fontScale(fontBaseSize)
@@ -55,17 +54,5 @@ QtObject {
             marqueePxPerSec: m.marqueePxPerSec,
             marqueeHoldMs: m.marqueeHoldMs
         };
-    }
-
-    function inverted(role) {
-        return Tokens.invertedPair(color, role);
-    }
-
-    function stateAppearance(state) {
-        return Tokens.stateAppearance(state);
-    }
-
-    function resolveState(flags) {
-        return Tokens.resolveState(flags);
     }
 }

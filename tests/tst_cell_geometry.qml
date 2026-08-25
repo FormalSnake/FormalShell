@@ -2,14 +2,15 @@ import QtQuick
 import QtTest
 import "../shell/Components"
 
-// Geometry regression guard for THE ledger cell (shell/Components/Cell.qml).
+// Geometry regression guard for the shell's one item primitive
+// (shell/Components/Cell.qml).
 //
 // The real Theme singleton is a Quickshell Singleton, so these tests run
 // against tests/stubs/qs/Core/Theme.qml (same palette.js/tokens.js values)
 // via qmltestrunner's -import, wired up in the justfile/flake test calls.
-// space.controlPaddingX is 12, space.controlPaddingY is 6, borderWidth is 1
-// at the default scale; they are spelled out in the expectations so a
-// token change has to be a deliberate edit here too.
+// space.controlPaddingX is 12 and space.controlPaddingY is 6 at the default
+// scale; both are spelled out in the expectations so a token change has to be
+// a deliberate edit here too.
 TestCase {
     id: testCase
     name: "CellGeometry"
@@ -224,8 +225,8 @@ TestCase {
         // fill-anchored MouseArea's width (which is the cell's own width,
         // minus padding) straight back into it.
         var forget = row.probeForget;
-        compare(forget.implicitWidth, row.probeForgetLabel.implicitWidth + 12 * 2 + 1);
-        compare(forget.implicitHeight, row.probeForgetLabel.implicitHeight + 6 * 2 + 1);
+        compare(forget.implicitWidth, row.probeForgetLabel.implicitWidth + 12 * 2);
+        compare(forget.implicitHeight, row.probeForgetLabel.implicitHeight + 6 * 2);
         compare(forget.width, forget.implicitWidth);
         compare(forget.height, forget.implicitHeight);
         verify(forget.width < row.width / 2);
@@ -239,11 +240,11 @@ TestCase {
 
         // Name row (one body line, or the FORGET cell if taller) + 2px
         // column spacing + the caption status line + the cell's own
-        // vertical padding and rule reserve. A collapsed row renders
-        // nothing at all on a panel, which is the bug this guards.
+        // vertical padding. A collapsed row renders nothing at all on a
+        // panel, which is the bug this guards.
         var nameRowHeight = Math.max(row.probeName.implicitHeight, row.probeForget.height);
         compare(row.probeNameRow.height, nameRowHeight);
-        compare(row.implicitHeight, nameRowHeight + 2 + row.probeStatus.height + 6 * 2 + 1);
+        compare(row.implicitHeight, nameRowHeight + 2 + row.probeStatus.height + 6 * 2);
         compare(row.height, row.implicitHeight);
         verify(row.height > 0);
         verify(row.probeName.width > 0);
@@ -255,10 +256,10 @@ TestCase {
         verify(cell);
         settle(cell);
 
-        // standalone: no rule reserve, so padding is exactly
-        // space.controlPaddingX * 2 by space.controlPaddingY * 2 around the
-        // column. The `hit` layer (which is the cell's full size) and the
-        // vertically centred column's own offset must not contribute.
+        // Padding is exactly space.controlPaddingX * 2 by
+        // space.controlPaddingY * 2 around the column. The `hit` layer (which
+        // is the cell's full size) and the vertically centred column's own
+        // offset must not contribute.
         var column = cell.probeColumn;
         compare(cell.implicitWidth, column.implicitWidth + 12 * 2);
         compare(cell.implicitHeight, column.implicitHeight + 6 * 2);
@@ -338,17 +339,17 @@ TestCase {
         settle(cells);
 
         // The art slot, not the source image's own 192px implicit size.
-        compare(cells.probeArtCell.implicitHeight, 96 + 6 * 2 + 1);
+        compare(cells.probeArtCell.implicitHeight, 96 + 6 * 2);
         compare(cells.probeArtCell.height, cells.probeArtCell.implicitHeight);
 
         // A Rectangle has no implicit size at all, so measuring implicit
         // sizes alone would collapse the track row to its padding.
         compare(cells.probeTrack.height, 6);
-        compare(cells.probeTrackCell.implicitHeight, 6 + 6 * 2 + 1);
+        compare(cells.probeTrackCell.implicitHeight, 6 + 6 * 2);
         compare(cells.probeTrackCell.height, cells.probeTrackCell.implicitHeight);
         // The track stretches to the cell it was given, and reports that
         // width back as the cell's own implicit width.
-        compare(cells.probeTrack.width, 320 - 12 * 2 - 1);
+        compare(cells.probeTrack.width, 320 - 12 * 2);
         compare(cells.probeTrackCell.implicitWidth, 320);
     }
 
@@ -358,15 +359,15 @@ TestCase {
         verify(cell);
         settle(cell);
 
-        compare(cell.implicitWidth, cell.probeLabel.implicitWidth + 12 * 2 + 1);
-        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2 + 1);
+        compare(cell.implicitWidth, cell.probeLabel.implicitWidth + 12 * 2);
+        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2);
 
         // The label sits inside the cell's own padding, and the cell hugs
-        // it: leading gutter in, trailing gutter plus the rule reserve out.
+        // it: the same gutter leading and trailing.
         var origin = cell.probeLabel.mapToItem(cell, 0, 0);
         compare(origin.x, 12);
         compare(origin.y, 6);
-        compare(cell.width - (origin.x + cell.probeLabel.width), 12 + 1);
-        compare(cell.height - (origin.y + cell.probeLabel.height), 6 + 1);
+        compare(cell.width - (origin.x + cell.probeLabel.width), 12);
+        compare(cell.height - (origin.y + cell.probeLabel.height), 6);
     }
 }

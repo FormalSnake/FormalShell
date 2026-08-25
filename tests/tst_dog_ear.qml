@@ -27,6 +27,13 @@ TestCase {
 
     function settle(item) {
         waitForRendering(item);
+        // The Canvas paints on a render pass of its own, so a readback taken
+        // straight after the first frame comes back empty on a loaded
+        // machine (seen in the nix sandbox, never natively). Waiting for the
+        // corner pixel to exist at all is what makes the first paint
+        // observable; the recolor case below already has a painted corner
+        // and falls through to the same wait it always had.
+        tryVerify(function () { return _pixel(_findCanvas(item), 0, 0)[3] === 255; });
         wait(50);
     }
 

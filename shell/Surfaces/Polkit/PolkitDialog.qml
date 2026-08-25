@@ -269,12 +269,8 @@ PanelWindow {
                         anchors.fill: parent
                         radius: Theme.radius
                         color: "transparent"
-                        // Theme.fieldBorderWidth: the same 3px-equivalent
-                        // outline AuthPrompt.qml's own password field draws
-                        // (audit "auth-field border parity") — previously
-                        // computed here independently.
-                        border.width: Theme.fieldBorderWidth
-                        border.color: root.errorState ? Theme.color.destructive : Theme.color.border
+                        border.width: Theme.borderWidth
+                        border.color: root.errorState ? Theme.color.destructive : Theme.color.input
                     }
 
                     MetaLabel {

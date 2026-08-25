@@ -66,18 +66,9 @@ Item {
         ? Math.round(Theme.fontSize.title + Theme.space.md)
         : 0
 
-    // DESIGN.md §1.2: a border is a spec (color + widths), not a bare
-    // scalar — this is that vocabulary's first real consumer. The field's
-    // outline is deliberately its own uniform 3px-equivalent spec (not
-    // `Theme.borderWidth`, which stays the plate's own 2px framing below),
-    // the "field gains real mass" bullet made literal: it reads as thicker,
-    // more load-bearing than the frame around it. `Theme.fieldBorderWidth`
-    // is the one shared width PolkitDialog.qml's own password field also
-    // draws (audit "auth-field border parity") — previously each surface
-    // computed `Math.round(3 * fontScale)` independently.
-    readonly property var _fieldBorder: Theme.uniformBorderSpec(
-        root.errorState ? "urgent" : "rule",
-        Theme.fieldBorderWidth)
+    readonly property color _fieldBorderColor: root.errorState
+        ? Theme.color.destructive
+        : Theme.color.input
 
     readonly property string _displayLabel: root.checking ? "CHECKING…" : root.label
 
@@ -150,8 +141,8 @@ Item {
                 anchors.fill: parent
                 radius: Theme.radius
                 color: "transparent"
-                border.width: root._fieldBorder.widths.top
-                border.color: root._fieldBorder.color
+                border.width: Theme.borderWidth
+                border.color: root._fieldBorderColor
             }
 
             Column {

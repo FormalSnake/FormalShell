@@ -1,2 +1,3 @@
 module qs.Core
 singleton Theme Theme.qml
+singleton Config Config.qml

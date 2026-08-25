@@ -31,20 +31,6 @@ Singleton {
     // shadcn font-weight tokens (spec "Type").
     readonly property var weight: Tokens.WEIGHTS
 
-    // The lock/greeter password field's outline and the polkit dialog's own
-    // password field share this one 3px-equivalent width (DESIGN.md's lock
-    // brief, audit "auth-field border parity"): previously each surface
-    // computed `Math.round(3 * fontScale)` independently.
-    readonly property real fieldBorderWidth: Math.round(3 * fontScale)
-
-    // --- DESIGN.md §1 scale roots + state/border tokens -----------------
-    // Additive to the legacy `font`/`inverted()` below: nothing here
-    // renames or reuses an existing key, so every surface still consuming
-    // the legacy API keeps rendering identically until its own retrofit
-    // task (M8b plan, Tasks 3-7) switches it over. The legacy fixed
-    // `spacing` object (M16 Task 1) is gone — every surface now reads the
-    // scaling `space` set above.
-
     // fontBaseSize is the rem root (default 13, the shell's existing body
     // size, so fontScale is 1.0 out of the box). Retheming this one number
     // rescales every font token in `fontSize` proportionally.
@@ -161,66 +147,5 @@ Singleton {
         // token existed (or mid-write with one bad value) keeps every other
         // live matugen color and only substitutes Flexoki for that key.
         root.color = Palette.mergeWithFallback(parsed);
-    }
-
-    // { bg: primary, fg: primaryForeground }: the cursor-row/active-cell
-    // inversion pair Cell.qml and AuthPrompt.qml still read. `role` is
-    // accepted but ignored (Tokens.invertedPair, 2026-08-25 rebind);
-    // Task 3 drops the parameter along with Cell's mapped props.
-    function inverted(role) {
-        return Tokens.invertedPair(color, role);
-    }
-
-    // --- DESIGN.md §1.1 four-state model, resolved against a color token -
-
-    function _resolveColorToken(token) {
-        if (typeof token === "string" && token.length > 0 && token[0] === "#")
-            return token;
-        var key = token || "foreground";
-        return color[key] !== undefined ? color[key] : color.foreground;
-    }
-
-    // Raw alphas/width for a named state (`normal` / `hover-cursor` /
-    // `selected` / `focus` / `pressed`), color-independent.
-    function stateAppearance(state) {
-        return Tokens.stateAppearance(state);
-    }
-
-    // Which named state applies given a control's current flags — see
-    // `Tokens.resolveState` for the paint-priority rule.
-    function resolveState(flags) {
-        return Tokens.resolveState(flags);
-    }
-
-    // A named state resolved against a color token (a palette role or raw
-    // hex) for fill, in the { fill, fillAlpha, border, borderWidth,
-    // borderAlpha } shape. Border color is always `border` at alpha 1.0
-    // unless `borderToken` names a semantic exception (`destructive`,
-    // `primary`) for a surface whose own brief demands a meaning-carrying
-    // border; plain structural chrome never passes one.
-    function stateStyle(state, colorToken, borderToken) {
-        var col = _resolveColorToken(colorToken);
-        var appearance = Tokens.stateAppearance(state);
-        return {
-            fill: col, fillAlpha: appearance.fillAlpha,
-            border: _resolveColorToken(borderToken || "border"), borderWidth: appearance.borderWidth, borderAlpha: 1.0
-        };
-    }
-
-    // --- DESIGN.md §1.2 border specs --------------------------------------
-
-    // `widths` may be a partial per-side override ({ top: 0 }, say, so a
-    // menu row can drop its shared top edge); unset sides fall back to the
-    // state/control's own uniform width.
-    function borderSpec(colorToken, widths, defaultWidth, gradient) {
-        return Tokens.borderSpec(_resolveColorToken(colorToken), widths, defaultWidth === undefined ? borderWidth : defaultWidth, gradient);
-    }
-
-    function uniformBorderSpec(colorToken, width) {
-        return Tokens.uniformBorderSpec(_resolveColorToken(colorToken), width === undefined ? borderWidth : width);
-    }
-
-    function isUniformBorder(spec) {
-        return Tokens.isUniformBorder(spec);
     }
 }

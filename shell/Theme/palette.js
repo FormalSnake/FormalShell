@@ -4,11 +4,6 @@
 // 2026-08-25 redesign), plus the hex format matugen renders them in, and
 // the static zinc values Theme.qml falls back to when theme.json is absent
 // or fails validation.
-//
-// These roles are also the color tokens DESIGN.md §1's state/border token
-// system (Theme.qml's `stateStyle`/`borderSpec`, `tokens.js`) resolves
-// against: a state names a role (`foreground`, `primary`, `destructive`,
-// `background`) or a raw hex, never a new color key of its own.
 
 var COLOR_KEYS = ["background", "foreground", "card", "cardForeground",
     "popover", "popoverForeground", "primary", "primaryForeground",

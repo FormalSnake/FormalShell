@@ -1,54 +1,21 @@
 import QtQuick
 import qs.Core
 
-// THE ledger cell (DESIGN.md "cells not cards"): every row on every M4+
-// surface is one of these, so cell styling and the shared-rule border
-// contract exist in exactly one place.
+// The shadcn item (DESIGN.md §2): a `card` fill with a 1px `border` at
+// `radiusMd`. Every bar cell, list row and chip on every surface is one of
+// these, so the chrome lives in exactly one place.
 //
-// Shared-rule contract: a cell draws only its bottom and right rule: the
-// container arranging a grid of cells is responsible for the outer top/left
-// rule, so adjacent cells never double up their shared border.
-//
-// `urgent` (DESIGN.md §2.4, M8b Task 5) is `accent`'s sibling for the other
-// full-bleed case — a critical notification — filling with `Theme.color.destructive`
-// (a distinct palette role from `accent`, both matugen-driven) instead.
-//
-// `warning` (DESIGN.md §1.5/§2.4, M18 Task 7) is the third full-bleed
-// sibling — a degraded-but-not-critical state, e.g. low (not yet critical)
-// battery, filling with `Theme.color.warning`/`warningForeground`. Spent only where
-// a caller's own service layer already distinguishes a middle severity band;
-// see Battery.qml for the one consumer.
-//
-// `ink` (DESIGN.md §2 item 11, M19 Task 4) is the ink button: a committing
-// action's resting cell, full-bleed `Theme.color.foreground` carrying
-// `Theme.color.background` ink, borderless like `standalone`. It sits
-// between `warning` and `selected` in the fill priority (urgent > accent >
-// warning > ink > selected), and hover/press on it inverts to the accent
-// pair exactly like a standalone bar cell — a resting affordance, not a
-// second selection state.
-//
-// `standalone` (DESIGN.md §3 Bar retrofit) swaps that contract for
-// omarchy's own module chrome: borderless at rest, no persistent rule at
-// all — the bar's discrete widget cells opt into this. Every fused-ledger
-// consumer (menu rows, panel device lists, notification center, the lock
-// field) keeps the shared-rule default until its own scheduled retrofit
-// task.
-//
-// Bar-cell hover = full inversion (DESIGN.md §1.1/§3 amendment, owner
-// directive over a tint/underline): a standalone cell's hover-cursor state
-// swaps its fill and content to the primary pair (`Theme.inverted()`, same
-// `{ bg: primary, fg: primaryForeground }` the ledger's `selected` fill already uses
-// below) instead of the fill-alpha tint + border every other cell still
-// uses. `foreground` below is the one place that swap has to happen: every
-// widget's own Text/glyph already reads `root.foreground` (or a Cell id's
-// `.foreground` alias), so the inversion flows through with no per-widget
-// edit needed.
+// The old ledger props survive this milestone mapped onto the new states
+// (M41 plan D3): 59 files instantiate a Cell, and rewriting all of them here
+// would make one unreviewable commit. `accent` and `ink` mean `active`,
+// `urgent` means `destructive`, `standalone` and `pending` mean nothing at
+// all. M45 deletes them with their last consumers.
 Item {
     id: root
 
     default property alias data: content.data
 
-    // --- Pointer (DESIGN.md §1.1: the lit area is the hit area) ----------
+    // --- Pointer (the lit area is the hit area) --------------------------
     //
     // The cell owns the one pointer target that spans it, so no surface
     // builds its own. A MouseArea in the default slot cannot do this job:
@@ -91,35 +58,37 @@ Item {
     // both this and `pointer`, and keeps its own events.
     property alias hit: hitLayer.data
 
-    property bool selected: false
-    property bool accent: false
-    property bool urgent: false
+    // The keyboard cursor: the ring, and nothing else. The only place the
+    // wallpaper colour reaches chrome that is neither selected nor active,
+    // which is what makes the cursor findable at a glance.
+    property bool cursor: false
+
+    property bool active: false
+    property bool destructive: false
     property bool warning: false
-    // The ink button (DESIGN.md §2 item 11, M19 Task 4): a committing
-    // action's resting cell, full-bleed `foreground` fill carrying
-    // `background` ink — sits between `warning` and `selected` in the fill
-    // priority below. Hover/press inverts to the accent pair exactly like
-    // the standalone bar-cell case (`_hoverInverted` below), so this is a
-    // resting affordance only, never a second selection state.
-    property bool ink: false
+    property bool selected: false
     property bool hovered: root.containsPointer
+
+    // Mapped legacy props (D3). `standalone` and `pending` are inert.
+    property bool accent: false
+    property bool ink: false
+    property bool urgent: false
     property bool standalone: false
-    // Dithered resting backdrop (DESIGN.md §2.8) for a still-unseen row —
-    // NotificationCard.qml's pending notification-center rows, currently the
-    // only consumer. Rendered here, not by a child dropped into the default
-    // `data` slot below: that slot forwards into `content`, which is inset
-    // by the control padding, so a `DitherFill { anchors.fill: parent }`
-    // declared from outside would fill the padded text box instead of the
-    // row. Loader-gated like the tooltip below — most cells never set this,
-    // so most cells never pay for the Canvas.
     property bool pending: false
 
-    // Hover tooltip (owner directive, reversing the M16 audit's "bar
-    // tooltips" skip): a short uppercase line naming what this cell is and
-    // what it currently reads, shown after Tooltip.qml's own delay once the
-    // pointer settles and dropped the instant it leaves. Empty — the default
-    // — means no tooltip at all, so every cell that doesn't opt in is
-    // untouched, including the ones that never set `hovered`.
+    readonly property bool _active: root.active || root.accent || root.ink
+    readonly property bool _destructive: root.destructive || root.urgent
+
+    // PanelOpenDot binds this to keep its dot visible against a filled cell.
+    readonly property bool invertedNow: root._active
+
+    // Hover paints below both fills (active > selected > hover).
+    readonly property bool _hoverFillActive: root.hovered && !root._active && !root.selected
+
+    // Hover tooltip: a short line naming what this cell is and what it
+    // currently reads, shown after Tooltip.qml's own delay once the pointer
+    // settles and dropped the instant it leaves. Empty (the default) means no
+    // tooltip at all.
     //
     // ⚠️ The surface deliberately does not live in `content`: _measure()
     // below sizes the cell off EVERY direct child of `content` regardless of
@@ -129,68 +98,31 @@ Item {
     // which sits outside `content` and carries no size either way.
     property string tooltipText: ""
 
-    // Set when `tooltipText` is a foreign process's own string rather than
-    // wording this shell chose (tray item titles). Renders it verbatim instead
-    // of uppercasing it — see Tooltip.qml's label for the reasoning.
+    // Inert since the tooltip stopped uppercasing anything; tray items still
+    // set it.
     property bool tooltipVerbatim: false
 
-    // Bar cells only: hovered, and not already carrying one of the other
-    // full-bleed states (selected/accent/urgent/warning keep their own fill
-    // — no double treatment, DESIGN.md §2.4). `ink` is deliberately NOT in
-    // that exclusion list: its resting fill is only right at rest, so a
-    // hover still has to activate this layer to replace it with the accent
-    // pair below — the ink button's whole point (DESIGN.md §2 item 11).
-    readonly property bool _hoverFillActive: root.hovered && !root.selected && !root.accent && !root.urgent && !root.warning
-    // Standalone (bar) cells and ink cells both invert to the accent pair
-    // on hover, exactly the same swap — the only difference is what their
-    // resting fill looked like beforehand.
-    readonly property bool _hoverInverted: (root.standalone || root.ink) && root._hoverFillActive
-    // Public alias of the above for widgets that root themselves as a Cell
-    // and need the same condition outside `foreground`/`dimForeground` —
-    // PanelOpenDot's own `inverted` binding (DESIGN.md §1.1 amendment: hover
-    // inverts the whole cell, dot included) is the one consumer so far.
-    readonly property bool invertedNow: root._hoverInverted
+    readonly property color foreground: root._active
+        ? Theme.color.primaryForeground
+        : root._destructive
+            ? Theme.color.destructive
+            : root.warning
+                ? Theme.color.warning
+                : root.selected
+                    ? Theme.color.accentForeground
+                    : Theme.color.foreground
 
-    readonly property color foreground: urgent
-        ? Theme.color.destructiveForeground
-        : accent
-            ? Theme.color.primaryForeground
-            : warning
-                ? Theme.color.warningForeground
-                : root._hoverInverted
-                    ? Theme.inverted().fg
-                    : ink
-                        ? Theme.color.background
-                        : selected
-                            ? Theme.inverted().fg
-                            : Theme.color.foreground
-
-    // Band-2 (meta) ink that stays legible when this cell is itself
-    // full-bleed or inverted (DESIGN.md §1.4 ink hierarchy): `mutedForeground`
-    // is the default resting color, but a dim caption drawn straight onto
-    // an accent/urgent/warning/ink fill or the inverted cursor fill measures
-    // under 1.1:1 contrast (M18 Task 2/4 regression) — so any of those
-    // states promote a meta label to the same ink `foreground` above
-    // already resolves for content, matching the single-band-loudness
-    // model the inversion itself uses. Every meta caption bound to a
-    // Cell's own state (MenuRow's desc/dim text, MetaLabel captions on
-    // Battery/UsageWidget/NotificationCard/Osd) reads this instead of
-    // hardcoding `Theme.color.mutedForeground`.
-    readonly property color dimForeground: (urgent || accent || warning || ink || root._hoverInverted || selected)
+    // Band-2 (meta) ink. A dim caption drawn onto a filled cell measures
+    // under 1.1:1 contrast, so a fill promotes it to the same ink
+    // `foreground` resolves for content. A destructive or warning cell is not
+    // filled (its colour is on the border and the label), so its captions
+    // stay dim.
+    readonly property color dimForeground: (root._active || root.selected)
         ? foreground
         : Theme.color.mutedForeground
 
-    readonly property var _hoverAppearance: Theme.stateAppearance("hover-cursor")
-
-    // The borderWidth term reserves room for the bottom/right rules below —
-    // a standalone or ink cell draws neither (DESIGN.md §2 item 11: the ink
-    // button is borderless, same as the bar's standalone cells), so
-    // reserving it anyway leaves the content sitting visibly high-left of
-    // the cell's true center.
-    readonly property real _ruleReserve: (standalone || ink) ? 0 : Theme.borderWidth
-
-    implicitWidth: root._measure(false) + Theme.space.controlPaddingX * 2 + _ruleReserve
-    implicitHeight: root._measure(true) + Theme.space.controlPaddingY * 2 + _ruleReserve
+    implicitWidth: root._measure(false) + Theme.space.controlPaddingX * 2
+    implicitHeight: root._measure(true) + Theme.space.controlPaddingY * 2
 
     // How big the content wants to be. This used to be `content`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
@@ -242,10 +174,10 @@ Item {
     // Live while shown: a cell's value moves under a parked pointer (volume
     // ticking, a battery estimate settling), and the card is meant to read
     // as the cell's own state, not a snapshot of when the pointer arrived.
-    // Never re-opens through _openTooltip() once the surface exists — that
+    // Never re-opens through _openTooltip() once the surface exists: that
     // would restart its show delay and blink the card on every tick. The
-    // else branch covers the one case a text change IS an open: the cell had
-    // nothing to say when the pointer arrived and now does.
+    // else branch covers the one case a text change IS an open, where the
+    // cell had nothing to say when the pointer arrived and now does.
     onTooltipTextChanged: {
         if (tooltipLoader.item)
             tooltipLoader.item.text = root.tooltipText;
@@ -253,50 +185,41 @@ Item {
             root._openTooltip();
     }
 
-    // Full-bleed state fills snap (DESIGN.md §4.3: accent/selection swaps
-    // are states, not transitions) — only the hover layer below fades.
+    // The focus ring's outer halo (shadcn's `ring-[3px] ring-ring/50`), drawn
+    // as a larger rounded rectangle behind the body rather than a shader, so
+    // only the band outside the body's own edge is ever visible.
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radius
-        color: root.urgent
-            ? Theme.color.destructive
-            : root.accent
-                ? Theme.color.primary
+        anchors.margins: -Theme.ringWidth
+        visible: root.cursor
+        radius: Theme.radiusMd + Theme.ringWidth
+        color: Theme.color.ring
+        opacity: Theme.ringAlpha
+    }
+
+    // Fills snap; only the hover layer below fades.
+    Rectangle {
+        anchors.fill: parent
+        radius: Theme.radiusMd
+        color: root._active
+            ? Theme.color.primary
+            : root.selected
+                ? Theme.color.accent
+                : Theme.color.card
+        border.width: Theme.borderWidth
+        border.color: root.cursor
+            ? Theme.color.ring
+            : root._destructive
+                ? Theme.color.destructive
                 : root.warning
                     ? Theme.color.warning
-                    : root.ink
-                        ? Theme.color.foreground
-                        : root.selected
-                            ? Theme.inverted().bg
-                            : "transparent"
+                    : Theme.color.border
     }
 
-    // Pending backdrop (DESIGN.md §2.8): dropped the instant a fuller-bleed
-    // state already owns the cell — §2.4's "no double treatment" applies to
-    // this ornament too. `active` gates the Canvas itself, not just
-    // visibility, so the common case (pending false) never allocates one.
-    Loader {
-        anchors.fill: parent
-        active: root.pending && !root.urgent && !root.accent && !root.warning && !root.ink && !root.selected
-        sourceComponent: DitherFill {
-            anchors.fill: parent
-        }
-    }
-
-    // Hover fill on its own layer so it can fade (DESIGN.md §4.1,
-    // Theme.motion.fast) without ever animating the state fills above —
-    // the fade stays on this layer even for the standalone/bar case below;
-    // only the swap itself (this fill's own color, and `foreground` above)
-    // is instant, matching every other ledger inversion (DESIGN.md §4.3).
-    // Standalone (bar) cells and ink cells both get a full opaque accent fill
-    // — `Theme.inverted().bg`, the same pair the ledger's `selected` fill
-    // below uses — instead of every other cell's low-alpha tint.
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radius
-        color: (root.standalone || root.ink)
-            ? Theme.inverted().bg
-            : Qt.rgba(Theme.color.foreground.r, Theme.color.foreground.g, Theme.color.foreground.b, root._hoverAppearance.fillAlpha)
+        radius: Theme.radiusMd
+        color: Theme.color.accent
         opacity: root._hoverFillActive ? 1 : 0
 
         Behavior on opacity {
@@ -329,49 +252,27 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: Theme.space.controlPaddingX
         anchors.topMargin: Theme.space.controlPaddingY
-        anchors.rightMargin: Theme.space.controlPaddingX + root._ruleReserve
-        anchors.bottomMargin: Theme.space.controlPaddingY + root._ruleReserve
+        anchors.rightMargin: Theme.space.controlPaddingX
+        anchors.bottomMargin: Theme.space.controlPaddingY
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size
         // onto an item whose geometry those same children track.
     }
 
-    Rectangle {
-        visible: !root.standalone && !root.ink
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: Theme.borderWidth
-        color: Theme.color.border
-    }
-
-    Rectangle {
-        visible: !root.standalone && !root.ink
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        width: Theme.borderWidth
-        color: Theme.color.border
-    }
-
-    // Loaded by URL rather than declared as a `Tooltip {}`, for two reasons.
-    // Tooltip.qml pulls in Quickshell and Quickshell.Wayland, while Cell.qml
-    // is instantiated head-on by tests/tst_cell_geometry.qml and
-    // tst_cell_hover_inversion.qml under a plain qmltestrunner that has no
-    // Quickshell module at all; and Tooltip.qml's card is itself built from
-    // a Cell, so a type reference would ask QML to resolve each of the two
-    // files while compiling the other. A URL resolves only when the Loader
-    // activates — which no test ever does, and which the tooltip's own inner
-    // Cell never does either, since nothing gives it a tooltipText.
+    // Loaded by URL rather than declared as a `Tooltip {}`: Tooltip.qml pulls
+    // in Quickshell and Quickshell.Wayland, while Cell.qml is instantiated
+    // head-on by tests/tst_cell_geometry.qml and tst_cell_states.qml under a
+    // plain qmltestrunner that has no Quickshell module at all. A URL
+    // resolves only when the Loader activates, which no test ever does.
     //
     // `active` starts false (Loader's own default is true) and is written
     // imperatively from onHoveredChanged above, never bound: that load has
     // to have completed by the next statement, which only a synchronous
-    // activation guarantees. It then stays loaded — unloading on pointer
-    // exit would cut the exit fade short and re-pay the surface's creation
-    // on every pass along the bar, while every cell in the shell loading one
-    // up front would cost a layer-shell window per cell per output for cells
+    // activation guarantees. It then stays loaded, since unloading on pointer
+    // exit would cut the exit fade short and re-pay the surface's creation on
+    // every pass along the bar, while every cell in the shell loading one up
+    // front would cost a layer-shell window per cell per output for cells
     // that may never be hovered at all.
     Loader {
         id: tooltipLoader

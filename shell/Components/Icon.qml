@@ -20,6 +20,11 @@ Text {
     color: Theme.color.foreground
     font.family: root._family === "" ? Theme.fontFamily : root._family
     font.pixelSize: root.size
-    implicitWidth: root.size
+    // A square the size of the neighbouring text, so a row lays the glyph
+    // out like a character whatever advance width the icon font gives it.
+    // Written as `width`, not `implicitWidth`: QQuickText redeclares that one
+    // read-only, since its implicit size is the text metric.
+    width: root.size
+    horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
 }

@@ -4,19 +4,11 @@ import Quickshell.Wayland
 import qs.Core
 import qs.Notifications
 
-// The bar's hover tooltip (DESIGN.md §"Floating chrome (menu, panels,
-// notifications, OSD, tooltips)", owner directive re-opening what the M16
-// audit had filed under "deliberately NOT ported"): one omarchy card under
-// the hovered cell carrying a single uppercase meta row that names what the
-// cell is and what it currently reads.
-//
-// The audit's objection was to a generic floating rounded card with fade-in
-// chrome of its own, so none of that is here: this is structurally Osd.qml's
-// card — the frame draws the top and left rule, the one Cell inside draws
-// its own bottom and right per Cell.qml's shared-rule contract — on the same
-// tokens as every other surface (radius 0, borderWidth 2 in `rule`, no blur,
-// no shadow, `background` fill), entering with the §4 fade-plus-slide the
-// panels and the OSD already use rather than a transition of its own.
+// The bar's hover tooltip (DESIGN.md §2): a `popover` card at `radiusSm`
+// with a 1px `border`, six pixels under the hovered cell, carrying one
+// caption line that names what the cell is and what it currently reads. It
+// enters with the same fade-plus-slide the panels and the OSD use rather
+// than a transition of its own.
 //
 // Its own layer surface rather than an item inside the bar: the bar's
 // PanelWindow is exactly one cell tall and carries an exclusive zone, so
@@ -45,8 +37,9 @@ PanelWindow {
     property string text: ""
     property bool shown: false
 
-    // Set for text this shell did not author (a tray item's own title), which
-    // is rendered exactly as its process published it. See the label below.
+    // Inert: nothing here uppercases any more, so a foreign process's own
+    // string (a tray item's title) already renders as published. Cell.qml
+    // still hands it over.
     property bool verbatim: false
 
     // A tray item's title is arbitrary text from another process, so the row
@@ -131,14 +124,18 @@ PanelWindow {
 
     mask: Region {}
 
-    Item {
+    Rectangle {
         id: frame
         x: root._frameX
-        y: Theme.barHeight + Theme.space.panelGap
-        implicitWidth: labelCell.implicitWidth + Theme.borderWidth
-        implicitHeight: labelCell.implicitHeight + Theme.borderWidth
+        y: Theme.barHeight + Theme.space.md
+        implicitWidth: label.width + Theme.space.controlPaddingX * 2
+        implicitHeight: label.implicitHeight + Theme.space.controlPaddingY * 2
         width: implicitWidth
         height: implicitHeight
+        radius: Theme.radiusSm
+        color: Theme.color.popover
+        border.width: Theme.borderWidth
+        border.color: Theme.color.border
 
         // Enter/exit (DESIGN.md §4): fade plus a slide down from under the
         // bar, one animated scalar so re-hovering mid-exit reverses from
@@ -154,56 +151,18 @@ PanelWindow {
             NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
         }
 
-        // The window is transparent (it spans the output so the frame can be
-        // placed anywhere under the bar), so the card paints its own surface
-        // — Cell.qml's background only opaques on selected/accent/hovered.
-        Rectangle {
-            anchors.fill: parent
-            color: Theme.color.background
-        }
-
-        // Outer top/left rule only: the Cell below draws its own bottom and
-        // right, per its shared-rule contract, so the card closes on all
-        // four edges with a single line each.
-        Rectangle {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: Theme.borderWidth
-            color: Theme.color.border
-        }
-
-        Rectangle {
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            width: Theme.borderWidth
-            color: Theme.color.border
-        }
-
-        Cell {
-            id: labelCell
-            x: Theme.borderWidth
-            y: Theme.borderWidth
-
-            MetaLabel {
-                // Bound to its own implicit width so the card hugs short
-                // text and only the overlong outliers elide; MetaLabel is a
-                // Text, whose implicitWidth stays the unelided metric
-                // regardless of the width assigned here.
-                width: Math.min(implicitWidth, root._maxTextWidth)
-                elide: Text.ElideRight
-                color: labelCell.foreground
-                text: root.text
-                // DESIGN.md §2.3's uppercase meta convention covers labels
-                // that NAME what a piece of content is. A tray item's title is
-                // another process's own string — it is the content — so
-                // uppercasing it would rewrite data that isn't ours to rewrite
-                // ("OBS: 1080p60" -> "OBS: 1080P60"). The width cap still
-                // applies: a card cannot grow past the bar, and an elide is
-                // visibly a truncation rather than a silent edit.
-                font.capitalization: root.verbatim ? Font.MixedCase : Font.AllUppercase
-            }
+        Text {
+            id: label
+            anchors.centerIn: parent
+            // Bound to its own implicit width so the card hugs short text and
+            // only the overlong outliers elide; implicitWidth stays the
+            // unelided metric regardless of the width assigned here.
+            width: Math.min(implicitWidth, root._maxTextWidth)
+            elide: Text.ElideRight
+            text: root.text
+            color: Theme.color.popoverForeground
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize.caption
         }
     }
 }
