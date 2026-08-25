@@ -184,7 +184,7 @@ id with the title in front; nothing focused hides the cell.
 **Tray** renders every `org.kde.StatusNotifierItem` on the session bus as
 its own cell. Left click activates, middle click secondary-activates, right
 click opens the item's DBusMenu. Items whose `ItemIsMenu` flag says so get
-the menu on left click too. The menu is drawn by the shell as a ledger card
+the menu on left click too. The menu is drawn by the shell as a card
 under the cell: disabled rows dim, a checked row takes the cursor fill, and
 submenus expand in place instead of cascading. The strip has no length limit
 of its own; bounding a long tray is the chevron's job.
@@ -358,7 +358,7 @@ themselves: `BLUETOOTH / NO ADAPTER`, `GITHUB / NOT AUTHENTICATED`,
 | Clock | Calendar panel | Cycle the format ring | Middle: calendar panel |
 | Weather | Forecast panel | Refresh | Middle: forecast panel |
 | Audio | Audio panel | Mute | Scroll: volume |
-| Battery | Power panel | Toggle the `BAT / NN%` label | Middle: power panel |
+| Battery | Power panel | Toggle the percentage | Middle: power panel |
 | Network | Network panel | Toggle the Wi-Fi radio | Middle: network panel |
 | Bluetooth | Bluetooth panel | Toggle the adapter radio | Middle: bluetooth panel |
 | Now playing | Media panel | Next track | Scroll: previous/next |
@@ -1000,7 +1000,7 @@ binds {
 
 ## Panels
 
-Sixteen popouts share one component: a ledger table on the top layer,
+Sixteen popouts share one component: a card on the top layer,
 anchored under the bar cell that opened it, closing on Escape and on a click
 outside. Opened over IPC with no cell to anchor to, it falls back to the
 bar's right region, because Wayland gives clients no global coordinates to
@@ -1040,7 +1040,8 @@ exclusive-focus surface regardless of which output the cursor is over.
 | `dualsense` | sysfs, read-only | `dualsense` |
 | `monitor` | `/proc`, `/sys/class/drm`, `nvidia-smi` | `monitor` |
 
-Every bar cell carries an accent dot while its panel is open. Panels that
+Every bar cell draws a 2px `primary` line inside its bottom edge while its
+panel is open. Panels that
 poll do it in the panel rather than the widget, so opening one over IPC
 works fully even when its bar cell was never placed; the widget stays the
 switch for background polling.
@@ -1125,7 +1126,7 @@ Crossing `warnPercent` while discharging fires a `LOW BATTERY` toast;
 goes fully urgent at that point. Both thresholds re-arm the moment the
 battery starts charging, so unplugging again while still low warns again.
 
-**Weather** shows current conditions and a forecast ledger, one row per
+**Weather** shows current conditions and a forecast list, one row per
 daily period, falling back to `NO LOCATION` or `UNAVAILABLE` with the
 specific failure code rather than a stale forecast.
 
@@ -1162,7 +1163,7 @@ speaks JSON-RPC to `codex app-server` over stdin and stdout, matching replies
 by id; missing binary reads `NO CODEX`, any RPC failure reads `ERROR`.
 
 **Tailscale** pairs a `STATUS` cell (`CONNECTED` or `STOPPED`) and your own
-hostname and IP with a `MACHINES` ledger, one row per peer. Clicking a row
+hostname and IP with a `MACHINES` list, one row per peer. Clicking a row
 copies that IP. Enter or a click on `STATUS` runs `tailscale up` or `down`;
 a non-operator user gets an inline `NOT OPERATOR` rather than a pretend
 success (see [`SWITCHOVER.md`](SWITCHOVER.md) for
@@ -1172,8 +1173,8 @@ success (see [`SWITCHOVER.md`](SWITCHOVER.md) for
 **App menu** is the focused app's menu, in the place its name already sits.
 It is sourced entirely from what the desktop already publishes: the desktop
 entry's own `Actions=` become `ACTIONS` rows, the compositor's window list
-filtered by app id becomes `WINDOWS` rows (current one inverted, click
-another to focus it), plus a `Close window` row.
+filtered by app id becomes `WINDOWS` rows (the current one carries the
+selected fill, click another to focus it), plus a `Close window` row.
 
 It is deliberately not a global menu bar. Reading an app's real File and
 Edit menus needs `org.gtk.Menus` (GTK4 apps that set a menubar, which
@@ -1262,6 +1263,38 @@ everywhere one screen has to be picked: the screensaver's animated head, the
 monitor panel's `MAIN DISPLAY` row, the launcher's monitor view, and this
 panel's own marker (which only appears with more than one output, since
 naming the only screen there is says nothing).
+
+### Keyboard
+
+Every panel takes keys through the same catcher. Escape closes, Up/Down walk
+the cursor, `hjkl` do the same, Tab and Shift+Tab wrap through the panel's
+sections, Enter and Space activate the cursor row, `x` deletes where a row
+has a delete. The cursor is the ring, and it stays hidden until the first
+navigation key or the first hover, so a panel opened with the pointer shows
+no stale position. A panel with one section ignores Tab; a panel whose rows
+carry no action ignores Enter.
+
+| Panel | Enter | `x` | Left/Right | Tab |
+| --- | --- | --- | --- | --- |
+| `audio` | Make the device default, or mute a stream | none | Volume by 5% on the row under the cursor | none |
+| `bluetooth` | Connect or disconnect the device | Forget, on a paired row | Move the cursor | `PAIRED` / `AVAILABLE` |
+| `network` | Connect or disconnect, or run the speed test | none | Move the cursor | Networks / speed test |
+| `power` | Apply the profile | none | Move the cursor | none |
+| `calendar` | Select the day | none | Move across the week (`[` and `]` step the month) | none |
+| `weather` | none | none | Move the cursor | none |
+| `display` | Enable or disable the output, or toggle mirroring | none | Output scale one notch, or brightness by 5% | none |
+| `media` | Press the transport button, play/pause, or switch player | none | Seek, or player volume, in the tracks section | Transport / tracks / `PLAYERS` |
+| `monitor` | Open the full monitor view | none | Move the cursor | Metrics / open view |
+| `appmenu` | Run the action, focus that window, or close it | none | Move the cursor | none |
+| `usage` | Refresh both providers | none | Move the cursor | none |
+| `github` | Open the PR or issue and close the panel | none | Move the cursor | none |
+| `systemupdate` | Re-check the inputs | none | Move the cursor | Inputs / check |
+| `tailscale` | Toggle the connection, or copy the row's IP | none | Move the cursor | none |
+| `airpods` | The row's own action: set the noise mode, toggle awareness or one-bud, cycle ear detection | none | Adaptive noise level by 5 | none |
+| `dualsense` | none | none | Move the cursor | none |
+
+`audio` also takes `m` to mute the row under the cursor. `PLAYERS` only
+exists in `media` while a second MPRIS player is on the bus.
 
 ### Panel IPC
 
@@ -1642,12 +1675,13 @@ window-rule {
 
 ## Calendar
 
-A month grid with a year-progress bar under it, plus a dated ledger of the
+A month grid with a year-progress bar under it, plus a dated list of the
 selected day's events.
 
-Every day cell is clickable: the ledger lists that day's events and its
-header reads `TODAY` or the uppercase date. The selected cell inverts and
-today's cell keeps its accent marker, so both are visible when they differ.
+Every day cell is clickable: the rows below list that day's events and their
+section label reads `TODAY` or the date. The selected cell takes the
+selected fill and today's cell the active one, so both are visible when they
+differ.
 Clicking a padding day from an adjacent month selects it and aligns the view
 to that month. Month navigation resets the selection to today rather than
 clamping the day of month, and so does reopening the panel.
@@ -1743,9 +1777,9 @@ the progress track once more than one is on the bus. Clicking one pins the
 bar cell, the panel and the IPC routes to it until that player quits.
 
 Every control is gated on the player's own capability flag, so a player that
-implements none of them renders the panel it always did. Toggles carry state
-as inversion: an inverted shuffle cell means shuffle is on, not that your
-pointer is over it. Volume here is the player's own, unrelated to the sink
+implements none of them renders the panel it always did. A toggle that is on
+carries the active fill, so a filled shuffle cell means shuffle is on, not
+that your pointer is over it. Volume here is the player's own, unrelated to the sink
 volume the audio panel owns.
 
 **Liking a track is deliberately absent.** MPRIS has no set-rating call.

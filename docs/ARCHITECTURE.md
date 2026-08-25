@@ -68,12 +68,12 @@ shell/
   shell.qml                  ShellRoot; Variants over Quickshell.screens -> Bar/Background per screen
   Core/
     State.qml                 singleton: state.json (wallpaper, mode), FileView+JsonAdapter
-    Theme.qml                 singleton: Theme.color live off theme.json, Flexoki fallback statics
+    Theme.qml                 singleton: Theme.color live off theme.json, shadcn zinc fallback statics
     Config.qml                 singleton: read-only watched settings.json (menu.customPowerButtons, …)
     qmldir
   Theme/
     matugen.js                 pure JS, .pragma library: merged matugen TOML config builder
-    palette.js                 pure JS, .pragma library: theme.json validate() + Flexoki fallback()
+    palette.js                 pure JS, .pragma library: theme.json validate() + shadcn zinc fallback()
     ThemeEngine.qml             singleton: serialized matugen Process queue
     templates/
       theme.json.tmpl           matugen template rendering theme.json
@@ -251,13 +251,13 @@ shell/
         LauncherWidget.qml      leads the default left region: the "[F]" mark, toggles shell.qml's single Menu instance: the launcher's only pointer-reachable summon path
         Workspaces.qml          Repeater over CompositorService.workspaces
         ActiveWindow.qml        focused window's appId + title
-        Clock.qml                center region: TIME meta label + live clock, opens the calendar panel
-        AudioWidget.qml          volume glyph + %, panel-open accent dot
-        Battery.qml               BAT / NN% meta idiom, hidden entirely when isLaptopBattery is false (exposes `shown`)
-        NetworkWidget.qml         connection-state glyph, panel-open accent dot
-        BluetoothWidget.qml       adapter-state glyph, panel-open accent dot
-        WeatherWidget.qml         thermometer glyph + WEATHER label, panel-open accent dot
-        NowPlaying.qml             note glyph + elided title + panel-open accent dot, hidden entirely with no MPRIS player (exposes `shown`)
+        Clock.qml                center region: live clock, opens the calendar panel
+        AudioWidget.qml          volume icon + %, primary underline while its panel is open
+        Battery.qml               battery icon + NN%, right click hides the percent, hidden entirely when isLaptopBattery is false (exposes `shown`)
+        NetworkWidget.qml         connection-state icon, primary underline while its panel is open
+        BluetoothWidget.qml       adapter-state icon, primary underline while its panel is open
+        WeatherWidget.qml         condition icon + rounded temperature, primary underline while its panel is open
+        NowPlaying.qml             note icon + elided title, primary underline while its panel is open, hidden entirely with no MPRIS player (exposes `shown`)
         Tray.qml                   SNI tray over Quickshell.Services.SystemTray, a plain strip (exposes `shown`)
         Indicators.qml              recording / reminder / stay-awake / night-light glyphs, hidden entirely when none holds (exposes `shown`)
         MicWidget.qml               opt-in: default-source mute glyph, honest NO MIC label with no capture device
@@ -353,6 +353,8 @@ tests/
   tst_osd_icon.qml               qmltestrunner tests for Surfaces/Osd/icon.js
   tst_tooltip_placement.qml      qmltestrunner tests for Components/tooltip.js
 dev/
+  smoke.sh                      nested-Hyprland build+screenshot loop, the rig since M41; --panel <name>
+                                 covers every name PanelIpc registers, one run per panel
   smoke-niri.sh                 nested-niri build+screenshot loop, dbus-run-session isolated; one mode
                                  flag per surface (--wallpaper, --menu, --notify, --osd, --panel <name>,
                                  --lock, --screensaver, --picker, --tray, --bar-layout, --screenshot,
@@ -821,11 +823,11 @@ the cursor as plain properties (`cursorIndex`, `cursorCount`, `cursorSection`,
 `moveSection(direction)` wraps `cursorSection` through the panel's sections.
 A `Components/KeyCatcher.qml` wraps the content column and drives these
 three; it never holds focus itself; `keyPressed(event)` fires from the
-backdrop's own `Keys.onPressed` **before** the catcher runs, on purpose: a
-panel whose keyboard model predates the cursor (PowerPanel's profile picker,
-BluetoothPanel's row list) gets first refusal on the raw event, and only
-what nobody accepted reaches the catcher's dispatch. Reversing that order
-would let the catcher swallow Up/Down/Enter out from under those panels.
+backdrop's own `Keys.onPressed` **before** the catcher runs, so a surface
+that has to see a raw event gets first refusal and only what nobody accepted
+reaches the catcher's dispatch. No panel takes that path since M42; the one
+consumer left is `TrayMenu.qml`, which composes the same `Panel.qml` and
+drives its own row cursor.
 The cursor stays hidden until `cursorActive` flips true, which happens on
 the first navigation key or the first row hover, so a panel opened by
 pointer shows no stale cursor position on open. `catcherBlocked()` mutes
@@ -842,6 +844,21 @@ own `open()`/`toggle()`, `close()` closes whichever panel is currently open
 (scans the registry for `isOpen`), `state()` returns that same panel's name
 or `""`. An unknown name returns `"error: unknown panel '<name>'"` from both
 `open()` and `toggle()`, never a silent no-op.
+
+`toggleAt(n)` is the positional keybind (M42 D4). It resolves the bar layout
+here rather than reading it off a `Bar` instance, for the reason `BarIpc`
+does the same: `Bar.qml` exists once per screen while this handler answers
+for the whole shell, and `Layout.resolve` is pure. `shell/Bar/panels.js`
+holds the widget-name to panel-name table and `panelAt()` walks the resolved
+right region in order, skipping cells that open no panel and counting the
+ones a collapsed chevron is hiding. Out of range returns `no panel at <n>`.
+
+Every name in that registry has a `dev/smoke.sh --panel <name>` leg, run one
+panel per invocation: the leg asserts `panel open <name>` answered `ok` and
+that `panel state` names that panel and no other, then screenshots the open
+card. The rig's honest empty states (`NO ADAPTER`, `NO CONTROLLER`, an
+absent battery hero) are what a headless VM has to show, so the frame is
+read for the chrome rather than for a populated list.
 
 ## Bar layout resolution + tray/custom-module lifecycle
 
