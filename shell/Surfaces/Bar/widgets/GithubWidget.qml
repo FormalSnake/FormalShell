@@ -2,23 +2,20 @@ import QtQuick
 import qs.Core
 import qs.Components
 
-// Bar cell for GitHub activity (DESIGN.md §Bar, M12 Task 8, M13 Task 3):
-// glyph + "N/M" meta label for open PRs authored by the user and open
-// issues assigned to them. The poll itself lives in GithubPanel.qml since
-// M13 Task 3 (one shared `gh api graphql` Process instead of one per
-// screen's bar; see that file's header for the IPC-open rationale) — this
-// cell just flips the panel's pollEnabled on (the widget being named in
-// bar.layout is the user's opt-in to background gh calls; it's never part
-// of layout.js's DEFAULT_LAYOUT, so the no-config bar is unchanged) and
-// binds the results. Click toggles the panel anchored under this cell (the
-// AudioWidget accent-dot idiom) instead of the old xdg-open jump. Honest
-// states mirror the panel's poll state: gh missing hides the cell entirely
-// (Battery's `shown` pattern — see Bar.qml's header for why `shown`, not
-// `visible`, crosses the Loader boundary); auth failure renders a dim NO
-// AUTH cell; any other failure a dim NO GH cell — never stale counts,
-// never invented ones. Hidden until the first poll returns at all. Glyph
-// from the pinned nerd-fonts-jetbrains-mono cmap (nix/testvm.nix) via
-// fonttools ttx, not memory: oct-mark_github U+F408.
+// Bar cell for GitHub activity (DESIGN.md §3 "Bar"): a branch icon plus
+// "n/m" in mono for open PRs authored by the user and open issues assigned
+// to them. The poll itself lives in GithubPanel.qml (one shared `gh api
+// graphql` Process instead of one per screen's bar; see that file's header
+// for the IPC-open rationale), so this cell just flips the panel's
+// pollEnabled on (the widget being named in bar.layout is the user's opt-in
+// to background gh calls; it's never part of layout.js's DEFAULT_LAYOUT, so
+// the no-config bar is unchanged) and binds the results. Click toggles the
+// panel anchored under this cell. Honest states mirror the panel's poll
+// state: gh missing hides the cell entirely (Battery's `shown` pattern, see
+// Bar.qml's header for why `shown` and not `visible` crosses the Loader
+// boundary); auth failure renders a dim NO AUTH label, any other failure a
+// dim NO GH one, never stale counts and never invented ones. Hidden until
+// the first poll returns at all.
 Cell {
     id: root
 
@@ -33,12 +30,11 @@ Cell {
     // keep their reading unless a user who added the widget opts back out.
     readonly property bool _showLabel: Config.get("bar.widgets.github.showLabel", true)
 
-    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment.
     readonly property bool shown: root._state !== "unknown" && root._state !== "missing"
 
     visible: root.shown
-    standalone: true
 
     // "3/7" is unreadable without knowing which number is which.
     tooltipText: root._state === "ok"
@@ -50,44 +46,43 @@ Cell {
             root.panel.pollEnabled = true;
     }
 
-    // The PR/issue counts resize this cell as they change — glide the
-    // width instead of shoving the bar's other widgets instantly
-    // (DESIGN.md §4, M16 Task 2's contract, extended to every numeric bar
-    // cell by M26 Task 7).
+    // The PR/issue counts resize this cell as they change: glide the width
+    // instead of shoving the bar's other widgets instantly (DESIGN.md §1
+    // "Motion").
     Behavior on implicitWidth {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
     }
 
+    // A Row rather than siblings dropped straight into the cell: Cell's own
+    // _measure() sizes off every direct child regardless of visibility, so
+    // the counts state would otherwise stay as wide as the NO AUTH label.
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.xxs
+        spacing: Theme.space.xs
 
-        // Fixed-width slot (M26 Task 7), matching this cell's siblings even
-        // though this glyph itself never swaps — one idiom for the bar's
-        // leading icon column rather than two.
-        Item {
-            id: glyphSlot
+        Icon {
             anchors.verticalCenter: parent.verticalCenter
-            width: Theme.space.huge
-            height: glyphText.implicitHeight
-
-            Text {
-                id: glyphText
-                anchors.centerIn: parent
-                text: ""
-                color: root._state === "ok" ? root.foreground : root.dimForeground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-            }
+            name: "git-branch"
+            color: root._state === "ok" ? root.foreground : root.dimForeground
         }
 
-        MetaLabel {
-            visible: root._showLabel
+        Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: root._state === "ok"
-                ? root._prs + "/" + root._issues
-                : (root._state === "noauth" ? "NO AUTH" : "NO GH")
-            color: root._state === "ok" ? root.foreground : root.dimForeground
+            visible: root._showLabel && root._state === "ok"
+            text: root._prs + "/" + root._issues
+            color: root.foreground
+            font.family: Theme.fontFamilyMono
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
+        }
+
+        // The honest states are words, so they render as the one label that
+        // is allowed to uppercase (MicWidget's own NO MIC idiom).
+        SectionLabel {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root._showLabel && root._state !== "ok"
+            text: root._state === "noauth" ? "NO AUTH" : "NO GH"
+            color: root.dimForeground
         }
     }
 

@@ -51,6 +51,7 @@ var ICONS = {
     "hard-drive": "\u{F02CA}",
     "thermometer": "\u{F050F}",
     "activity": "\u{F0430}",
+    "gauge": "\u{F029A}",
     "download": "\u{F01DA}",
     "upload": "\u{F0552}",
     "arrow-up": "\u{F005D}",
@@ -79,7 +80,11 @@ var ICONS = {
     "clipboard": "\u{F0147}",
     "keyboard": "\u{F030C}",
     "terminal": "\u{F018D}",
+    "git-branch": "\u{F062C}",
     "package": "\u{F03D3}",
+    // md-package_up is MDI's own "there is an update" box; lucide
+    // draws the same idea as a package with a plus.
+    "package-plus": "\u{F03D5}",
     "cloud": "\u{F015F}",
     "cloudy": "\u{F0590}",
     "cloud-fog": "\u{F0591}",
@@ -106,6 +111,7 @@ var ICONS = {
     "star": "\u{F04CE}",
     "heart": "\u{F02D1}",
     "globe": "\u{F01E7}",
+    "network": "\u{F0317}",
     "map-pin": "\u{F034E}",
     "user": "\u{F0004}",
     "users": "\u{F0849}",

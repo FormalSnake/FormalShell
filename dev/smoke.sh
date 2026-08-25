@@ -229,8 +229,20 @@ if $console_mode; then
   # shell through the compositor, against the session's PATH.
   console_settings=', "console": {"command": ["'"$foot_bin"'", "--app-id=formalshell-console", "--override=colors.background=1f6feb", "--override=colors.foreground=f4f4f4", "sh", "-c", "echo FORMALSHELL QUAKE CONSOLE; sleep 600"], "appId": "formalshell-console", "share": 0.5}'
 fi
+
+# --panel systemupdate needs a real flake to read, and this repo is one: the
+# panel parses flake.lock itself (no nix invocation), so pointing it here
+# renders the actual input rows instead of the honest NO FLAKE cell. Only
+# that leg gets the key, so every other run keeps proving the unset default.
+# The upstream probes are the one part that needs network; a VM with none
+# lands on NO NETWORK, which is an honest state and still shows the rows.
+systemupdate_settings=""
+if $panel_mode && [ "$panel_name" = "systemupdate" ]; then
+  systemupdate_settings=', "systemUpdate": {"flakeDir": "'"$PWD"'"}'
+fi
+
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings}
 EOF
 
 # The calendar leg's own events, dated at run time so the fixture never goes

@@ -2,22 +2,20 @@ import QtQuick
 import qs.Core
 import qs.Components
 
-// Bar cell for AI usage — Claude Code / Codex rate limits (DESIGN.md §Bar,
-// M14 Task 7): glyph plus the worst tracked window's percent, alarming
-// full-bleed urgent at >=90% utilization (DESIGN.md §2.4, Cell's own
-// `urgent` full-bleed contract). The poll itself lives in UsagePanel.qml
-// (GithubWidget's own precedent — see that file's header for the IPC-open
-// rationale): this cell just flips the panel's pollEnabled on (naming
-// "usage" in bar.layout is the opt-in to background credential reads and
-// `codex app-server` spawns; it's never part of layout.js's DEFAULT_LAYOUT)
-// and reflects its state. Click toggles the panel (AudioWidget's accent-dot
-// idiom), and on a STALE Claude leg also asks the panel to have Claude Code
+// Bar cell for AI usage, Claude Code and Codex rate limits (DESIGN.md §3
+// "Bar"): a gauge icon plus the worst tracked window's percent in mono,
+// taking the cell's `destructive` border and ink at or past 90%. The poll
+// itself lives in UsagePanel.qml (GithubWidget's own precedent, see that
+// file's header for the IPC-open rationale): this cell just flips the
+// panel's pollEnabled on (naming "usage" in bar.layout is the opt-in to
+// background credential reads and `codex app-server` spawns; it's never part
+// of layout.js's DEFAULT_LAYOUT) and reflects its state. Click toggles the
+// panel, and on a STALE Claude leg also asks the panel to have Claude Code
 // refresh its own OAuth pair. Hidden until at least one enabled provider
-// (usage.claude/usage.codex, both default true) has answered at all — an honest NO AUTH/
-// NO CODEX cell counts as an answer; only the pre-first-poll "unknown"
-// state hides the cell, same as GithubWidget's own `shown`. Glyph from the
-// pinned nerd-fonts-jetbrains-mono cmap (nix/testvm.nix) via fonttools ttx,
-// not memory: md-robot_excited U+F16A3.
+// (usage.claude/usage.codex, both default true) has answered at all: an
+// honest NO AUTH/NO CODEX state counts as an answer, and only the
+// pre-first-poll "unknown" state hides the cell, same as GithubWidget's own
+// `shown`.
 Cell {
     id: root
 
@@ -27,66 +25,64 @@ Cell {
     readonly property bool _codexSettled: root.panel ? (root.panel.codexEnabled && root.panel.codexState !== "unknown") : false
     readonly property real _worstPercent: root.panel ? root.panel.worstPercent : -1
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
+    readonly property string _statusLabel: root.panel ? root.panel.statusLabel : ""
 
-    // Read by Bar.qml's regionDelegate instead of `visible` directly — see
+    // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment.
     readonly property bool shown: root._claudeSettled || root._codexSettled
-
-    readonly property color _textColor: root._worstPercent >= 0 ? root.foreground : root.dimForeground
 
     // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
     // keep their reading unless a user who added the widget opts back out.
     readonly property bool _showLabel: Config.get("bar.widgets.usage.showLabel", true)
 
     visible: root.shown
-    standalone: true
-    urgent: root._worstPercent >= 0.9
+    destructive: root._worstPercent >= 0.9
 
     // No prior tooltip existed since the label was always on; now that the
     // label can be hidden per-widget, this carries the same percent/status
     // reading so hiding it never deletes information.
-    tooltipText: "USAGE / " + (root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : (root.panel ? root.panel.statusLabel : "UNAVAILABLE"))
+    tooltipText: "USAGE / " + (root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : (root._statusLabel !== "" ? root._statusLabel : "UNAVAILABLE"))
 
     Component.onCompleted: {
         if (root.panel)
             root.panel.pollEnabled = true;
     }
 
-    // The worst-window percent resizes this cell — glide the width
-    // instead of shoving the bar's other widgets instantly (DESIGN.md §4,
-    // M16 Task 2's contract, extended to every numeric bar cell by M26
-    // Task 7).
+    // The worst-window percent resizes this cell: glide the width instead of
+    // shoving the bar's other widgets instantly (DESIGN.md §1 "Motion").
     Behavior on implicitWidth {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
     }
 
+    // A Row rather than siblings dropped straight into the cell: Cell's own
+    // _measure() sizes off every direct child regardless of visibility, so
+    // the percent state would otherwise stay as wide as the status label.
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Theme.space.xxs
+        spacing: Theme.space.xs
 
-        // Fixed-width slot (M26 Task 7), matching this cell's siblings even
-        // though this glyph itself never swaps — one idiom for the bar's
-        // leading icon column rather than two.
-        Item {
-            id: glyphSlot
+        Icon {
             anchors.verticalCenter: parent.verticalCenter
-            width: Theme.space.huge
-            height: glyphText.implicitHeight
-
-            Text {
-                id: glyphText
-                anchors.centerIn: parent
-                text: "󱚣"
-                color: root._textColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-            }
+            name: "gauge"
+            color: root._worstPercent >= 0 ? root.foreground : root.dimForeground
         }
 
-        MetaLabel {
-            visible: root._showLabel
+        Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : (root.panel ? root.panel.statusLabel : "")
+            visible: root._showLabel && root._worstPercent >= 0
+            text: root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : ""
+            color: root.foreground
+            font.family: Theme.fontFamilyMono
+            font.pixelSize: Theme.fontSize.body
+            font.weight: Theme.weight.medium
+        }
+
+        // The honest states are words, so they render as the one label that
+        // is allowed to uppercase (MicWidget's own NO MIC idiom).
+        SectionLabel {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root._showLabel && root._worstPercent < 0 && root._statusLabel !== ""
+            text: root._statusLabel
             color: root.dimForeground
         }
     }

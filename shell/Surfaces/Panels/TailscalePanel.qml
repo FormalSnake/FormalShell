@@ -5,41 +5,40 @@ import qs.Components
 import qs.Services
 import "../../Tailscale/model.js" as Tailscale
 
-// Tailscale panel (DESIGN.md §Panels, M16 Task 8): the popout behind
-// TailscaleWidget's bar cell — GithubPanel's poll-in-panel pattern (the one
-// `tailscale status --json` poll lives HERE, not in the widget, so `panel
-// open tailscale` over IPC renders honestly even when bar.layout never
-// names the widget; the widget flips pollEnabled true from its own
+// Tailscale panel (DESIGN.md §3 "Panel", spec "Panels"): the popout behind
+// TailscaleWidget's bar cell, on GithubPanel's poll-in-panel pattern (the
+// one `tailscale status --json` poll lives HERE, not in the widget, so
+// `panel open tailscale` over IPC renders honestly even when bar.layout
+// never names the widget; the widget flips pollEnabled true from its own
 // Component.onCompleted, same opt-in idiom). Honest states: `tailscale`
 // missing from PATH (exit 127) or an unparsable/empty response both render
 // dim NO TAILSCALE (Tailscale/model.js's own `ok:false`, the same shape a
-// daemon-unreachable run produces — its error text is plain, not JSON);
-// BackendState "NeedsLogin" renders dim NEEDS LOGIN; pre-first-answer
+// daemon-unreachable run produces, since its error text is plain rather than
+// JSON); BackendState "NeedsLogin" renders dim NEEDS LOGIN; pre-first-answer
 // renders LOADING.
 //
-// STATUS is one action cell (CONNECTED/STOPPED, running state inverted like
-// NetworkPanel's connected row) that toggles `tailscale up`/`down` on
-// click or Enter — a permission failure (verified against the real 1.98.8
-// binary's own "Access denied: %v" wrapper, strings-dumped from the pinned
-// nix store closure, not guessed) renders NOT OPERATOR inline instead of
-// pretending the toggle worked; SWITCHOVER.md documents `tailscale set
-// --operator=$USER` as the host-side prerequisite for it to ever succeed
-// from this unprivileged shell. Below it, a self hostname+IP row (click
-// copies the IP via a plain `wl-copy` Process, ClipboardService's own
-// copy-back idiom). MACHINES lists every peer (name, dim IP, an
-// ONLINE/OFFLINE indicator that only breathes — PowerPanel's charging-pulse
-// idiom — while our own `tailscale up` is in flight), click copies that
-// peer's IP.
+// The hero names this machine and carries the backend's connection state,
+// the header's `power` button runs `tailscale up`/`down`, and a permission
+// failure (verified against the real 1.98.8 binary's own "Access denied: %v"
+// wrapper, strings-dumped from the pinned nix store closure, not guessed)
+// renders NOT OPERATOR inline instead of pretending the toggle worked;
+// SWITCHOVER.md documents `tailscale set --operator=$USER` as the host-side
+// prerequisite for it to ever succeed from this unprivileged shell. Below
+// it, this machine's own IP row (activating it copies the address via a
+// plain `wl-copy` Process, ClipboardService's own copy-back idiom), then
+// `PEERS (n)`: a reachability dot, the hostname in mono, the platform and
+// address as a caption. The dot is what breathes while our own `tailscale
+// up` is in flight (PowerPanel's charging-pulse idiom).
 //
-// Keyboard nav (M14 pattern, Panel.keyPressed): a single numeric cursor
-// spans the STATUS row (index 0) then each MACHINES row in order, Up/Down
-// moves it, Enter activates whatever it's on — toggling STATUS or copying
-// the cursored peer's IP. The self-hostname row and the NEEDS LOGIN/NO
-// TAILSCALE honest states stay mouse-only, same as GithubPanel's rows.
+// Keyboard (spec "Keyboard model"): one numeric cursor spans the hero
+// (index 0), the IP row when there is one, then each peer. Enter toggles the
+// connection on the hero and copies the address on any other row. The
+// NEEDS LOGIN and NO TAILSCALE honest states carry no cursor.
 Panel {
     id: root
 
-    panelTitle: "TAILSCALE"
+    panelIcon: "network"
+    panelTitle: "Tailscale"
     panelWidth: Theme.space.popupWidthDefault
 
     property bool pollEnabled: false
@@ -62,10 +61,10 @@ Panel {
 
     onPollEnabledChanged: if (root.pollEnabled) root._poll()
     onIsOpenChanged: {
-        if (root.isOpen) {
-            root._poll();
-            root._cursor = 0;
-        }
+        if (!root.isOpen)
+            return;
+        root._poll();
+        root.cursorIndex = 0;
     }
 
     Timer {
@@ -75,7 +74,7 @@ Panel {
         onTriggered: root._poll()
     }
 
-    // Tailscale's own state usually flips with the underlying link — poll
+    // Tailscale's own state usually flips with the underlying link, poll
     // right after a reconnect instead of showing the pre-drop answer for up
     // to a minute (ConnectivityService).
     Connections {
@@ -111,7 +110,7 @@ Panel {
 
     // One toggle in flight at a time: "" | "up" | "down".
     property string _actionKind: ""
-    // "" | "NOT OPERATOR" | "FAILED" | "TIMED OUT" — cleared on the next
+    // "" | "NOT OPERATOR" | "FAILED" | "TIMED OUT", cleared on the next
     // attempt, otherwise sticks until then (NetworkPanel/BluetoothPanel's
     // own failure text persists the same way).
     property string _actionError: ""
@@ -127,9 +126,9 @@ Panel {
     }
 
     // Real 1.98.8 binary text (strings-dumped from the pinned nix store
-    // closure): API access-denied conditions — including the exact "must be
+    // closure): API access-denied conditions, including the exact "must be
     // root, or be an operator" case a non-operator `tailscale up`/`down`
-    // hits — all wrap through one `Access denied: %v` format string.
+    // hits, all wrap through one `Access denied: %v` format string.
     Process {
         id: actionProc
         stderr: StdioCollector {
@@ -149,8 +148,8 @@ Panel {
 
     // Safety net (NetworkPanel/BluetoothPanel's actionTimeout idiom): if
     // `tailscale up`/`down` never exits, stop waiting on it honestly rather
-    // than showing CONNECTING…/DISCONNECTING… forever. The process itself
-    // isn't killed — same choice those two panels make — so a late real
+    // than showing Connecting/Disconnecting forever. The process itself
+    // isn't killed, same choice those two panels make, so a late real
     // exit still lands (harmlessly re-polling) once it happens.
     Timer {
         id: actionTimeout
@@ -172,125 +171,104 @@ Panel {
         id: copyProc
     }
 
-    // Merged keyboard-cursor space: index 0 is the STATUS toggle, 1..n are
-    // MACHINES rows in their already-sorted (online-first, then
-    // alphabetical) order.
+    readonly property string _selfIp: (root.pollState === "ok" && root.status)
+        ? (Tailscale.selfIp(root.status) || "")
+        : ""
+
+    readonly property var _peers: (root.pollState === "ok" && root.status) ? root.status.peers : []
+
+    // One numeric cursor space over everything that answers Enter: index 0
+    // is the hero (the connection toggle), then this machine's own IP row
+    // when it has one, then each peer in its already-sorted (online-first,
+    // then alphabetical) order.
+    readonly property int _peerOffset: 1 + (root._selfIp !== "" ? 1 : 0)
+
     readonly property var _rows: {
         if (root.pollState !== "ok")
             return [];
         var list = [{ kind: "status" }];
-        var peers = root.status ? root.status.peers : [];
-        for (var i = 0; i < peers.length; i++)
-            list.push({ kind: "peer", peer: peers[i] });
+        if (root._selfIp !== "")
+            list.push({ kind: "self" });
+        for (var i = 0; i < root._peers.length; i++)
+            list.push({ kind: "peer", peer: root._peers[i] });
         return list;
     }
 
-    property int _cursor: 0
-    on_RowsChanged: root._cursor = Math.max(0, Math.min(root._cursor, root._rows.length - 1))
+    cursorCount: root._rows.length
 
-    function _activateCursor() {
-        if (root._cursor === 0) {
-            root._toggle();
+    onCursorActivated: index => {
+        var row = (index >= 0 && index < root._rows.length) ? root._rows[index] : null;
+        if (!row)
             return;
-        }
-        var row = root._rows[root._cursor];
-        if (row && row.kind === "peer")
+        if (row.kind === "status")
+            root._toggle();
+        else if (row.kind === "self")
+            root._copyIp(root._selfIp);
+        else
             root._copyIp(row.peer.ip);
     }
 
-    Connections {
-        target: root
-
-        function onKeyPressed(event) {
-            if (!root.isOpen || root.pollState !== "ok")
-                return;
-            // First Up/Down only reveals the cursor on the status row
-            // (M26 Task 8, upstream's CursorSurface contract) — it does not
-            // also move it, so the highlight appears where the user can see
-            // it before anything happens.
-            if (!root.cursorActive && (event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
-                root.cursorActive = true;
-                event.accepted = true;
-                return;
-            }
-            switch (event.key) {
-            case Qt.Key_Up:
-                root._cursor = Math.max(0, root._cursor - 1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Down:
-                root._cursor = Math.min(root._rows.length - 1, root._cursor + 1);
-                event.accepted = true;
-                break;
-            case Qt.Key_Return:
-            case Qt.Key_Enter:
-                root._activateCursor();
-                event.accepted = true;
-                break;
-            }
-        }
+    function _pointAt(index) {
+        root.cursorActive = true;
+        root.cursorIndex = index;
     }
+
+    titleActions: [
+        IconButton {
+            name: "power"
+            enabled: root.pollState === "ok" && root._actionKind === ""
+            onClicked: root._toggle()
+        },
+        IconButton {
+            name: "refresh-cw"
+            onClicked: root._poll()
+        }
+    ]
 
     Cell {
         visible: root.pollState === "unknown"
         width: parent.width
 
-        MetaLabel { text: "LOADING" }
+        SectionLabel { text: "LOADING" }
     }
 
     Cell {
         visible: root.pollState === "missing" || root.pollState === "error"
         width: parent.width
 
-        MetaLabel { text: "NO TAILSCALE" }
+        SectionLabel { text: "NO TAILSCALE" }
     }
 
     Cell {
         visible: root.pollState === "needsLogin"
         width: parent.width
 
-        MetaLabel { text: "NEEDS LOGIN" }
+        SectionLabel { text: "NEEDS LOGIN" }
     }
 
-    // The panel's own subject (M28 Task 5): this machine's own tailnet name,
-    // the backend's connection state, connect/disconnect promoted into the
-    // trailing slot — replaces the old STATUS row outright, which said the
-    // same two things (running state, and the toggle itself).
+    // The panel's own subject: this machine's tailnet name and the backend's
+    // connection state. The header's power button flips it, and so does Enter
+    // with the cursor here.
     PanelHero {
         id: statusHero
         visible: root.pollState === "ok"
         width: parent.width
-        glyph: "󰌘"
-        title: (root.status && root.status.selfName) ? root.status.selfName : "UNKNOWN"
-        meta: root._actionKind === "up" ? "CONNECTING…" : root._actionKind === "down" ? "DISCONNECTING…" : (root.status && root.status.running ? "CONNECTED" : "STOPPED")
-        trailing: statusToggle
-        hovered: root.cursorActive && root._cursor === 0
+        title: (root.status && root.status.selfName) ? root.status.selfName : "Unknown"
+        meta: root._actionKind === "up"
+            ? "Connecting"
+            : root._actionKind === "down"
+                ? "Disconnecting"
+                : (root.status && root.status.running ? "Connected" : "Stopped")
+        cursor: root.cursorActive && root.cursorIndex === 0
         interactive: true
         acceptedButtons: Qt.NoButton
-        onContainsPointerChanged: if (statusHero.containsPointer) {
-            root.cursorActive = true;
-            root._cursor = 0;
-        }
-    }
+        onContainsPointerChanged: if (statusHero.containsPointer) root._pointAt(0)
 
-    Component {
-        id: statusToggle
-
-        // Bare-label ink promotion (DESIGN.md §1.1's 2026-08-09 amendment):
-        // no cell chrome, armed state promotes straight to accent instead
-        // of a fill/inversion.
-        MetaLabel {
-            text: (root.status && root.status.running) ? "DISCONNECT" : "CONNECT"
-            color: root._actionKind !== ""
-                ? Theme.color.primary
-                : (statusToggleHover.containsMouse ? Theme.color.foreground : Theme.color.mutedForeground)
-
-            MouseArea {
-                id: statusToggleHover
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root._toggle()
+        leading: Component {
+            Icon {
+                name: "network"
+                size: Theme.fontSize.heading
+                color: statusHero.foreground
             }
         }
     }
@@ -298,40 +276,47 @@ Panel {
     Cell {
         visible: root.pollState === "ok" && root._actionError !== ""
         width: parent.width
+        destructive: true
 
-        MetaLabel { text: root._actionError; color: Theme.color.destructive }
+        SectionLabel { text: root._actionError; color: Theme.color.destructive }
     }
 
     // The hero above already names this machine; the IP is the one fact it
     // doesn't carry, so this row narrows to just that.
     Cell {
         id: selfCell
-        visible: root.pollState === "ok" && root.status && Tailscale.selfIp(root.status) !== null
+        visible: root._selfIp !== ""
         width: parent.width
-
-        Row {
-            width: parent.width
-            spacing: Theme.space.sm
-
-            MetaLabel { text: "IP" }
-
-            Text {
-                text: root.status ? (Tailscale.selfIp(root.status) || "") : ""
-                color: selfCell.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize.body
-            }
-        }
+        cursor: root.cursorActive && root.cursorIndex === 1
 
         interactive: true
-        onClicked: root._copyIp(root.status ? Tailscale.selfIp(root.status) : null)
-    }
+        onContainsPointerChanged: if (selfCell.containsPointer) root._pointAt(1)
+        onClicked: root._copyIp(root._selfIp)
 
-    Cell {
-        visible: root.pollState === "ok"
-        width: parent.width
+        Item {
+            width: parent.width
+            height: Math.max(selfLabel.implicitHeight, selfValue.implicitHeight)
 
-        MetaLabel { text: "MACHINES / " + (root.status ? root.status.peers.length : 0) }
+            SectionLabel {
+                id: selfLabel
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "IP"
+            }
+
+            // An address is an identifier, so it takes the mono face (spec
+            // "Type").
+            Text {
+                id: selfValue
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: root._selfIp
+                color: selfCell.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.body
+                font.weight: Theme.weight.medium
+            }
+        }
     }
 
     Component {
@@ -342,76 +327,107 @@ Panel {
             required property var modelData
             required property int index
             width: parent.width
-            hovered: root.cursorActive && root._cursor === (index + 1)
-            onContainsPointerChanged: if (peerCell.containsPointer) {
-                root.cursorActive = true;
-                root._cursor = index + 1;
-            }
 
-            Column {
+            readonly property int _cursorIndex: peerCell.index + root._peerOffset
+
+            cursor: root.cursorActive && root.cursorIndex === peerCell._cursorIndex
+
+            interactive: peerCell.modelData.ip !== null
+            onContainsPointerChanged: if (peerCell.containsPointer) root._pointAt(peerCell._cursorIndex)
+            onClicked: root._copyIp(peerCell.modelData.ip)
+
+            Item {
                 width: parent.width
-                spacing: Theme.space.xxs
+                height: peerColumn.implicitHeight
 
-                Row {
-                    width: parent.width
-                    spacing: Theme.space.sm
+                // The reachability mark (DESIGN.md §3's own dot idiom):
+                // `primary` for a peer that is up, muted for one that is not.
+                Rectangle {
+                    id: onlineDot
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.space.sm
+                    height: width
+                    radius: width / 2
+                    color: peerCell.modelData.online ? Theme.color.primary : Theme.color.mutedForeground
 
+                    // Gated on root.isOpen too (M16 Task 12 hidden-surface
+                    // audit): panel content stays instantiated behind a
+                    // hidden window after close(), so an in-flight
+                    // `tailscale up` closed mid-connect would otherwise keep
+                    // this pulsing off-screen until the process exits.
+                    SequentialAnimation on opacity {
+                        running: root._actionKind === "up" && root.isOpen
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                        NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                    }
+                }
+
+                Column {
+                    id: peerColumn
+                    anchors.left: onlineDot.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: parent.right
+                    spacing: Theme.space.xxs
+
+                    // A hostname is an identifier, so it takes the mono face
+                    // (spec "Type").
                     Text {
-                        width: parent.width - onlineText.width - parent.spacing
+                        width: parent.width
                         text: peerCell.modelData.name
                         color: peerCell.foreground
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontFamilyMono
                         font.pixelSize: Theme.fontSize.body
+                        font.weight: Theme.weight.medium
                         elide: Text.ElideRight
                     }
 
-                    Text {
-                        id: onlineText
-                        text: peerCell.modelData.online ? "ONLINE" : "OFFLINE"
-                        color: peerCell.modelData.online ? peerCell.dimForeground : Theme.color.mutedForeground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.caption
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: Theme.letterSpacing.meta
+                    Row {
+                        width: parent.width
+                        spacing: Theme.space.iconGap
 
-                        // Gated on root.isOpen too (M16 Task 12 hidden-
-                        // surface audit): panel content stays instantiated
-                        // behind a hidden window after close(), so an
-                        // in-flight `tailscale up` closed mid-connect would
-                        // otherwise keep this pulsing off-screen until the
-                        // process exits.
-                        SequentialAnimation on opacity {
-                            running: root._actionKind === "up" && root.isOpen
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
-                            NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                        // The platform name is a word and the address a
+                        // value, so the caption sets each by that rule
+                        // rather than switching family inside one string.
+                        Text {
+                            visible: peerCell.modelData.os !== null
+                            text: peerCell.modelData.os || ""
+                            color: peerCell.dimForeground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.caption
+                        }
+
+                        Text {
+                            visible: peerCell.modelData.ip !== null
+                            text: peerCell.modelData.ip || ""
+                            color: peerCell.dimForeground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.caption
                         }
                     }
                 }
-
-                Text {
-                    visible: peerCell.modelData.ip !== null
-                    text: peerCell.modelData.ip || ""
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.caption
-                }
             }
-
-            interactive: peerCell.modelData.ip !== null
-            onClicked: root._copyIp(peerCell.modelData.ip)
         }
     }
 
-    Repeater {
-        model: root.pollState === "ok" ? root.status.peers : []
-        delegate: peerRow
-    }
-
-    Cell {
-        visible: root.pollState === "ok" && root.status && root.status.peers.length === 0
+    Column {
         width: parent.width
+        visible: root.pollState === "ok"
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "NONE" }
+        SectionLabel { text: "PEERS"; count: root._peers.length }
+
+        Cell {
+            visible: root._peers.length === 0
+            width: parent.width
+
+            SectionLabel { text: "NONE" }
+        }
+
+        Repeater {
+            model: root._peers
+            delegate: peerRow
+        }
     }
 }

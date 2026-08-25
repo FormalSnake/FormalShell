@@ -173,6 +173,15 @@ function _capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// A window label as body copy rather than as a section label. `_bucketLabel`
+// answers uppercase because the panel's rows render it through
+// `SectionLabel`, and only a section label uppercases (DESIGN.md §5), so the
+// hero's own sentence-case meta line reads it back through this.
+function sentenceLabel(label) {
+    var s = String(label === undefined || label === null ? "" : label).toLowerCase();
+    return s === "" ? "" : _capitalize(s);
+}
+
 // "RESETS 2H 14M" / "RESETS 1D 3H" / "RESETS NOW" / "" for no timestamp.
 function formatReset(nowMs, resetsAtIso) {
     if (!resetsAtIso)

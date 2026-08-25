@@ -181,6 +181,20 @@ TestCase {
         compare(Usage.tierLabel("", ""), "");
     }
 
+    // sentenceLabel
+
+    function test_sentence_label_lowercases_a_bucket_label() {
+        compare(Usage.sentenceLabel("5-HOUR"), "5-hour");
+        compare(Usage.sentenceLabel("WEEKLY"), "Weekly");
+        compare(Usage.sentenceLabel("WEEKLY OPUS"), "Weekly opus");
+    }
+
+    function test_sentence_label_empty_for_nothing_to_say() {
+        compare(Usage.sentenceLabel(""), "");
+        compare(Usage.sentenceLabel(null), "");
+        compare(Usage.sentenceLabel(undefined), "");
+    }
+
     // formatReset
 
     function test_format_reset_hours_and_minutes() {

@@ -25,14 +25,43 @@ import "../../SystemUpdate/model.js" as Update
 //
 // pollState is the honest-state axis, and SystemUpdate/model.js's
 // summaryLabel() turns it plus the counts into the one string both this
-// panel's header and the bar cell render, so the two can never disagree.
+// panel's hero and the bar cell render, so the two can never disagree.
 // An input type with no cheap probe (path, tarball, indirect, sourcehut)
 // is "?" forever rather than a fabricated CURRENT.
+//
+// Layout (DESIGN.md §3 "Panel"): a hero naming the flake and carrying the
+// summary, an `INPUTS (n)` section of rows (name in sans, locked rev in
+// mono, status as a section label that goes `warning` on BEHIND), and a
+// footer pairing an outline Check button with the behind count.
+//
+// Keyboard (spec "Keyboard model"): the cursor walks the input rows, which
+// carry no action of their own the way MonitorPanel's readouts don't, and
+// Tab reaches the footer where Enter re-runs the check. The panel never
+// applies an update: it answers whether the inputs are behind, and running
+// a rebuild is the user's own call at their own terminal.
 Panel {
     id: root
 
-    panelTitle: "SYSTEM UPDATE"
+    panelIcon: "package"
+    panelTitle: "System update"
     panelWidth: Theme.space.popupWidthDefault
+
+    titleActions: [
+        IconButton {
+            name: "refresh-cw"
+            enabled: root.flakeDir !== ""
+            onClicked: root._poll()
+        }
+    ]
+
+    cursorCount: root.inputs.length
+    // 0 is the input list, 1 is the footer's check button.
+    sectionCount: 2
+
+    onCursorActivated: {
+        if (root.cursorSection === 1)
+            root._poll();
+    }
 
     property bool pollEnabled: false
 
@@ -48,9 +77,9 @@ Panel {
     readonly property var counts: Update.countBehind(root.inputs, root.heads)
     readonly property string summary: Update.summaryLabel(root.pollState, root.counts)
 
-    // The hero's own subject (M28 Task 5): which flake this is (the
-    // directory's own basename — the instance, not the panel's generic
-    // "flake inputs" noun) and how many inputs are behind.
+    // The hero's own subject: which flake this is (the directory's own
+    // basename, the instance rather than the panel's generic "flake inputs"
+    // noun) and how many inputs are behind.
     readonly property string _flakeName: {
         var parts = root.flakeDir.split("/").filter(function (p) { return p !== ""; });
         return parts.length > 0 ? parts[parts.length - 1] : "";
@@ -169,7 +198,13 @@ Panel {
     }
 
     onPollEnabledChanged: if (root.pollEnabled) root._poll()
-    onIsOpenChanged: if (root.isOpen) root._poll()
+    onIsOpenChanged: {
+        if (!root.isOpen)
+            return;
+        root._poll();
+        root.cursorIndex = 0;
+        root.cursorSection = 0;
+    }
 
     Timer {
         interval: root._interval
@@ -188,38 +223,34 @@ Panel {
         }
     }
 
-    // NOFLAKE/NOLOCK/CHECKING/OFFLINE all stay this one honest text line —
-    // there is no real subject to promote until a poll actually resolves.
+    // No flake directory configured at all means there is no subject to
+    // promote, so the hero gives way to the model's own one-line answer.
     Cell {
-        visible: root.pollState !== "ok"
+        visible: root.flakeDir === ""
         width: parent.width
 
-        MetaLabel { text: root.summary }
+        SectionLabel { text: root.summary }
     }
 
-    // The panel's own subject once a poll resolves (M28 Task 5): which
-    // flake, and how many of its inputs are behind.
+    // The panel's own subject once a directory is named: which flake, what
+    // the last check said, and how many of its inputs are behind. The
+    // readout only carries a number while a poll has actually resolved, so
+    // CHECKING and NO NETWORK never sit under a stale count.
     PanelHero {
-        visible: root.pollState === "ok"
+        id: hero
+        visible: root.flakeDir !== ""
         width: parent.width
-        glyph: root.counts.behind > 0 ? "󰏕" : "󰏓"
         title: root._flakeName
-        meta: "INPUTS BEHIND"
-        readout: String(root.counts.behind)
-    }
+        meta: root.summary
+        readout: root.pollState === "ok" ? String(root.counts.behind) : ""
 
-    Cell {
-        visible: root.pollState === "ok" && root.counts.unknown > 0
-        width: parent.width
-
-        MetaLabel { text: root.counts.unknown + " UNKNOWN" }
-    }
-
-    Cell {
-        visible: root.inputs.length > 0
-        width: parent.width
-
-        MetaLabel { text: "INPUTS"; colon: true }
+        leading: Component {
+            Icon {
+                name: "package"
+                size: Theme.fontSize.heading
+                color: hero.foreground
+            }
+        }
     }
 
     Component {
@@ -227,45 +258,123 @@ Panel {
 
         Cell {
             id: inputCell
+            required property int index
             required property var modelData
             width: parent.width
 
             readonly property string _status: Update.rowStatus(inputCell.modelData, root.heads)
 
-            Row {
+            cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === inputCell.index
+            warning: inputCell._status === "BEHIND"
+
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (inputCell.containsPointer) {
+                root.cursorActive = true;
+                root.cursorSection = 0;
+                root.cursorIndex = inputCell.index;
+            }
+
+            Item {
                 width: parent.width
-                spacing: Theme.space.sm
+                height: Math.max(nameText.implicitHeight, revText.implicitHeight, statusText.implicitHeight)
 
                 Text {
-                    width: parent.width - revText.width - statusText.width - parent.spacing * 2
+                    id: nameText
+                    anchors.left: parent.left
+                    anchors.right: revText.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
                     text: inputCell.modelData.name
                     color: inputCell.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
                     elide: Text.ElideRight
                 }
 
+                // A locked revision is an identifier, so it takes the mono
+                // face (spec "Type").
                 Text {
                     id: revText
+                    anchors.right: statusText.left
+                    anchors.rightMargin: Theme.space.iconGap
                     anchors.verticalCenter: parent.verticalCenter
                     text: Update.shortRev(inputCell.modelData.rev)
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
+                    color: inputCell.dimForeground
+                    font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.caption
                 }
 
-                MetaLabel {
+                SectionLabel {
                     id: statusText
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: inputCell._status
-                    color: inputCell._status === "BEHIND" ? Theme.color.warning : Theme.color.mutedForeground
+                    color: inputCell._status === "BEHIND" ? Theme.color.warning : inputCell.dimForeground
                 }
             }
         }
     }
 
-    Repeater {
-        model: root.inputs
-        delegate: inputRow
+    Column {
+        width: parent.width
+        visible: root.inputs.length > 0
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "INPUTS"; count: root.inputs.length }
+
+        Cell {
+            visible: root.pollState === "ok" && root.counts.unknown > 0
+            width: parent.width
+
+            SectionLabel { text: root.counts.unknown + " UNKNOWN" }
+        }
+
+        Repeater {
+            model: root.inputs
+            delegate: inputRow
+        }
+    }
+
+    // Footer (spec "Panels"): the outline action on the left, the figure it
+    // produces on the right.
+    Item {
+        width: parent.width
+        height: Math.max(checkButton.height, behindRow.implicitHeight)
+
+        Button {
+            id: checkButton
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            variant: "outline"
+            icon: "refresh-cw"
+            text: root.pollState === "checking" ? "Checking" : "Check"
+            enabled: root.flakeDir !== "" && root.pollState !== "checking"
+            cursor: root.cursorActive && root.cursorSection === 1
+            onClicked: root._poll()
+        }
+
+        Row {
+            id: behindRow
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.space.xs
+
+            Text {
+                id: behindValue
+                text: root.pollState === "ok" ? String(root.counts.behind) : "--"
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.display
+                font.weight: Theme.weight.semibold
+            }
+
+            SectionLabel {
+                text: "BEHIND"
+                anchors.bottom: behindValue.bottom
+                anchors.bottomMargin: Theme.space.xs
+            }
+        }
     }
 }

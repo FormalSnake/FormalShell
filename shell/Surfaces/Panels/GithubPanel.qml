@@ -5,38 +5,45 @@ import qs.Components
 import qs.Compositor
 import qs.Services
 
-// GitHub panel (DESIGN.md §Panels, M13 Task 3): the popout behind
-// GithubWidget's bar cell — two ledger sections, "PULL REQUESTS / n" then
-// "ISSUES / n", each row a title plus dimmed repo slug, click spawns
-// xdg-open on the row's url and closes the panel. The single `gh api
-// graphql` poll lives HERE, not in the widget (the one deliberate deviation
-// from the M13 plan's wording): `panel open github` over IPC must render
-// honestly even when bar.layout never names the github widget, and a
-// widget-owned poll would leave this surface permanently empty in that
-// case. The widget stays the opt-in switch for background polling
-// (pollEnabled below, flipped on from its Component.onCompleted — never
-// unset, a mid-session layout edit that drops the widget just leaves the
+// GitHub panel (DESIGN.md §3 "Panel", spec "Panels"): the popout behind
+// GithubWidget's bar cell. A hero promoting the signed-in account and the
+// total awaiting it, then `PULL REQUESTS (n)` and `ISSUES (n)` sections of
+// `Cell` rows, each carrying the repo slug in mono over the title in sans.
+//
+// Keyboard (spec "Keyboard model"): the cursor spans both lists in one
+// numeric space, pull requests first, and Enter opens the row's url through
+// xdg-open and closes the panel, the same thing a click on it does. There is
+// no per-row dismiss on this surface, so `x` is unbound.
+//
+// The single `gh api graphql` poll lives HERE, not in the widget (the one
+// deliberate deviation from the M13 plan's wording): `panel open github`
+// over IPC must render honestly even when bar.layout never names the github
+// widget, and a widget-owned poll would leave this surface permanently empty
+// in that case. The widget stays the opt-in switch for background polling
+// (pollEnabled below, flipped on from its Component.onCompleted, never
+// unset, so a mid-session layout edit that drops the widget just leaves the
 // timer running until restart); opening the panel always re-polls, which is
 // also what makes the no-widget IPC path work. Honest states, keyed off
 // the sh wrapper's exit code exactly as the widget's poll always was:
 // `gh` missing (exit 127) or any other failure/unparsable output renders a
 // dim NO GH cell, gh's documented authentication exit code 4 renders NO
-// AUTH, pre-first-answer renders LOADING (a poll is genuinely in flight —
+// AUTH, pre-first-answer renders LOADING (a poll is genuinely in flight,
 // open always fires one), and an empty list renders a dim NONE row under
-// its section header — never stale rows, never invented ones.
+// its section header, never stale rows and never invented ones.
 Panel {
     id: root
 
-    panelTitle: "GITHUB"
-    panelWidth: Theme.space.popupWidthWide
+    panelIcon: "git-branch"
+    panelTitle: "GitHub"
+    panelWidth: Theme.space.popupWidthDefault
 
-    // Flipped true by GithubWidget when bar.layout actually names it — the
+    // Flipped true by GithubWidget when bar.layout actually names it: the
     // widget is opt-in precisely so users who never asked for it don't get
     // background `gh` network calls, and the panel honors the same opt-in.
     property bool pollEnabled: false
 
-    // "unknown" (pre-first-answer) | "missing" | "noauth" | "error" | "ok"
-    // — `state` itself is Item's built-in state-machine property, hence the
+    // "unknown" (pre-first-answer) | "missing" | "noauth" | "error" | "ok".
+    // `state` itself is Item's built-in state-machine property, hence the
     // prefix. Read by GithubWidget for its counts cell and `shown` logic.
     property string pollState: "unknown"
     property int prCount: 0
@@ -45,9 +52,34 @@ Panel {
     // nodes per list.
     property var prRows: []
     property var issueRows: []
-    // The authenticated account itself (M28 Task 5's hero subject) — "" until
-    // a poll answers, never a guess at who's signed in.
+    // The authenticated account itself (the hero's subject): "" until a poll
+    // answers, never a guess at who's signed in.
     property string viewerLogin: ""
+
+    // The cursor spans both lists at once, pull requests first, so each row
+    // carries the index Panel addresses it by rather than the Repeater's own
+    // list-local one.
+    readonly property var _prRowModel: (root.pollState === "ok" ? root.prRows : []).map(function (row, i) {
+        return { row: row, cursor: i };
+    })
+    readonly property var _issueRowModel: (root.pollState === "ok" ? root.issueRows : []).map(function (row, i) {
+        return { row: row, cursor: (root.pollState === "ok" ? root.prRows.length : 0) + i };
+    })
+
+    cursorCount: root._prRowModel.length + root._issueRowModel.length
+
+    onCursorActivated: index => {
+        var rows = root._prRowModel.concat(root._issueRowModel);
+        if (index >= 0 && index < rows.length)
+            root._openRow(rows[index].row);
+    }
+
+    function _openRow(row) {
+        if (!row)
+            return;
+        CompositorService.spawn(["xdg-open", row.url]);
+        root.close();
+    }
 
     readonly property int _interval: {
         var v = Config.get("github.intervalMs", 300000);
@@ -78,7 +110,12 @@ Panel {
     }
 
     onPollEnabledChanged: if (root.pollEnabled) root._poll()
-    onIsOpenChanged: if (root.isOpen) root._poll()
+    onIsOpenChanged: {
+        if (!root.isOpen)
+            return;
+        root._poll();
+        root.cursorIndex = 0;
+    }
 
     Timer {
         interval: root._interval
@@ -139,33 +176,41 @@ Panel {
         visible: root.pollState === "unknown"
         width: parent.width
 
-        MetaLabel { text: "LOADING" }
+        SectionLabel { text: "LOADING" }
     }
 
     Cell {
         visible: root.pollState === "missing" || root.pollState === "error"
         width: parent.width
 
-        MetaLabel { text: "NO GH" }
+        SectionLabel { text: "NO GH" }
     }
 
     Cell {
         visible: root.pollState === "noauth"
         width: parent.width
 
-        MetaLabel { text: "NO AUTH" }
+        SectionLabel { text: "NO AUTH" }
     }
 
-    // The panel's own subject (M28 Task 5): the signed-in account, and how
-    // many things await it. The two counts below still carry their own
-    // breakdown (PRs vs. issues); this only promotes the total.
+    // The panel's own subject: the signed-in account, and how many things
+    // await it. The two sections below still carry their own breakdown (PRs
+    // vs. issues); this only promotes the total.
     PanelHero {
+        id: hero
         visible: root.pollState === "ok"
         width: parent.width
-        glyph: ""
-        title: root.viewerLogin !== "" ? root.viewerLogin : "GITHUB"
-        meta: "OPEN ITEMS"
+        title: root.viewerLogin !== "" ? root.viewerLogin : "GitHub"
+        meta: "Open items"
         readout: String(root.prCount + root.issueCount)
+
+        leading: Component {
+            Icon {
+                name: "git-branch"
+                size: Theme.fontSize.heading
+                color: hero.foreground
+            }
+        }
     }
 
     Component {
@@ -176,73 +221,84 @@ Panel {
             required property var modelData
             width: parent.width
 
+            readonly property var _row: rowCell.modelData.row
+            readonly property int _cursorIndex: rowCell.modelData.cursor
+
+            cursor: root.cursorActive && root.cursorIndex === rowCell._cursorIndex
+
             Column {
                 width: parent.width
                 spacing: Theme.space.xxs
 
+                // A repo slug is an identifier, so it takes the mono face;
+                // the title beside it is prose (spec "Type").
                 Text {
+                    visible: rowCell._row.repo !== ""
                     width: parent.width
-                    text: rowCell.modelData.title
-                    color: rowCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
+                    text: rowCell._row.repo
+                    color: rowCell.dimForeground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.caption
                     elide: Text.ElideRight
                 }
 
                 Text {
-                    visible: rowCell.modelData.repo !== ""
                     width: parent.width
-                    text: rowCell.modelData.repo
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.caption
+                    text: rowCell._row.title
+                    color: rowCell.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
                     elide: Text.ElideRight
                 }
             }
 
             interactive: true
-            onClicked: {
-                CompositorService.spawn(["xdg-open", rowCell.modelData.url]);
-                root.close();
+            onContainsPointerChanged: if (rowCell.containsPointer) {
+                root.cursorActive = true;
+                root.cursorIndex = rowCell._cursorIndex;
             }
+            onClicked: root._openRow(rowCell._row)
         }
     }
 
-    Cell {
+    Column {
+        width: parent.width
         visible: root.pollState === "ok"
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "PULL REQUESTS"; count: root.prCount }
+
+        Cell {
+            visible: root.prRows.length === 0
+            width: parent.width
+
+            SectionLabel { text: "NONE" }
+        }
+
+        Repeater {
+            model: root._prRowModel
+            delegate: itemRow
+        }
+    }
+
+    Column {
         width: parent.width
-
-        MetaLabel { text: "PULL REQUESTS / " + root.prCount }
-    }
-
-    Repeater {
-        model: root.pollState === "ok" ? root.prRows : []
-        delegate: itemRow
-    }
-
-    Cell {
-        visible: root.pollState === "ok" && root.prRows.length === 0
-        width: parent.width
-
-        MetaLabel { text: "NONE" }
-    }
-
-    Cell {
         visible: root.pollState === "ok"
-        width: parent.width
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "ISSUES / " + root.issueCount }
-    }
+        SectionLabel { text: "ISSUES"; count: root.issueCount }
 
-    Repeater {
-        model: root.pollState === "ok" ? root.issueRows : []
-        delegate: itemRow
-    }
+        Cell {
+            visible: root.issueRows.length === 0
+            width: parent.width
 
-    Cell {
-        visible: root.pollState === "ok" && root.issueRows.length === 0
-        width: parent.width
+            SectionLabel { text: "NONE" }
+        }
 
-        MetaLabel { text: "NONE" }
+        Repeater {
+            model: root._issueRowModel
+            delegate: itemRow
+        }
     }
 }

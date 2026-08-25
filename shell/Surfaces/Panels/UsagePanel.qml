@@ -5,25 +5,35 @@ import qs.Core
 import qs.Components
 import "../../Usage/usage.js" as Usage
 
-// AI usage panel (DESIGN.md §Panels, M14 Task 7): the popout behind
-// UsageWidget's bar cell — a CLAUDE section (Anthropic OAuth usage) and a
-// CODEX section (`codex app-server` JSON-RPC), each an uppercase tier meta
-// row followed by one row per rate-limit window (label, percent, a
-// full-width flat accent/urgent fill track per DESIGN.md's slider idiom,
-// dim RESETS meta). GithubPanel's poll-in-panel pattern verbatim: the poll
-// lives HERE, not in the widget, so `panel open usage` renders honestly
-// even when bar.layout never names the usage widget (the widget stays the
-// opt-in switch for background polling; opening the panel always
-// re-polls). `usage.claude`/`usage.codex` (settings.json, default true)
-// independently gate each provider's section and polling entirely — a
-// disabled provider renders no section at all, not an honest-empty one.
+// AI usage panel (DESIGN.md §3 "Panel", spec "Panels"): the popout behind
+// UsageWidget's bar cell. A hero promoting the window closest to its limit,
+// then a `CLAUDE` section (Anthropic OAuth usage) and a `CODEX` section
+// (`codex app-server` JSON-RPC), each a section label carrying the tier over
+// one `Cell` per rate-limit window: the window name as a section label, the
+// percentage as a `display` mono figure, a `Track` under it, and the reset
+// countdown as a mono caption. A window at or past 90% takes the cell's
+// `destructive` border and ink rather than a fill.
+//
+// Keyboard (spec "Keyboard model"): the cursor walks both providers' windows
+// in one numeric space, CLAUDE first, and Enter re-polls (the header's
+// refresh button does the same, forcing a stale Claude leg's own refresh).
+// The honest-state cells are not navigable.
+//
+// GithubPanel's poll-in-panel pattern verbatim: the poll lives HERE, not in
+// the widget, so `panel open usage` renders honestly even when bar.layout
+// never names the usage widget (the widget stays the opt-in switch for
+// background polling; opening the panel always re-polls).
+// `usage.claude`/`usage.codex` (settings.json, default true) independently
+// gate each provider's section and polling entirely: a disabled provider
+// renders no section at all, and an enabled one that answered with no
+// windows renders `NO DATA` rather than an empty section.
 //
 // Claude leg: `~/.claude/.credentials.json`'s `.claudeAiOauth.accessToken`
-// (never logged, never exposed on any IPC/debug surface — Constraints)
+// (never logged, never exposed on any IPC/debug surface, Constraints)
 // authenticates a GET against Anthropic's OAuth usage endpoint
 // (`api.anthropic.com/api/oauth/usage`, headers `Authorization: Bearer
 // <token>` + `anthropic-beta: oauth-2025-04-20` + `Accept:
-// application/json` — WeatherPanel's own XMLHttpRequest idiom). Missing
+// application/json`, WeatherPanel's own XMLHttpRequest idiom). Missing
 // credentials or an empty token render an honest `NO AUTH`.
 //
 // An *expired* access token is a third state, not `NO AUTH`: the file's
@@ -52,8 +62,8 @@ import "../../Usage/usage.js" as Usage
 // `usage.intervalMs`, so `_applyCredentials` also arms a one-shot at the
 // token's own expiry to re-poll (and therefore refresh) right when it lapses.
 //
-// The local `expiresAt` is advisory — a skewed clock or a changed field
-// meaning must not be able to hide real usage numbers — so a probe fires
+// The local `expiresAt` is advisory, a skewed clock or a changed field
+// meaning must not be able to hide real usage numbers, so a probe fires
 // whenever a token exists at all and the server's own verdict settles the
 // state: 2xx wins outright, 401/403 falls back to `STALE` (refresh token
 // present) or `NO AUTH` (none), anything else is `ERROR`. `expiresAt` only
@@ -62,7 +72,7 @@ import "../../Usage/usage.js" as Usage
 // Codex leg: `codex -s read-only -a untrusted app-server` speaks
 // newline-delimited JSON-RPC over stdin/stdout (verified against
 // `~/Developer/omarchy/shell/plugins/model-usage/scripts/
-// codex_usage_scanner.py`'s `rpc_request()` — one JSON object per line, no
+// codex_usage_scanner.py`'s `rpc_request()`, one JSON object per line, no
 // Content-Length framing) via a real quickshell Process
 // (`Process.write()`/`stdinEnabled`, the same stdin idiom NetworkPanel's
 // enterprise-EAP flow already uses, including its "check the binary exists
@@ -71,7 +81,7 @@ import "../../Usage/usage.js" as Usage
 // scanner's own id-checked `rpc_request()` rather than blind sequencing.
 // `codex` missing from PATH (`sh -c`'s `command -v` guard, exit 127)
 // renders `NO CODEX`; any RPC-level failure (timeout, malformed reply,
-// missing fields) renders `ERROR` rather than a fake number — this repo has
+// missing fields) renders `ERROR` rather than a fake number, this repo has
 // no way to exercise a real codex binary in the VM rig, so this leg's
 // correctness rides on usage.js's own parser tests plus qmllint, stated
 // honestly in the commit, the same allowance BluetoothPanel's pairing flow
@@ -79,10 +89,18 @@ import "../../Usage/usage.js" as Usage
 Panel {
     id: root
 
-    panelTitle: "USAGE"
+    panelIcon: "gauge"
+    panelTitle: "Usage"
     panelWidth: Theme.space.popupWidthDefault
 
-    // Flipped true by UsageWidget when bar.layout actually names it — see
+    titleActions: [
+        IconButton {
+            name: "refresh-cw"
+            onClicked: root._refresh()
+        }
+    ]
+
+    // Flipped true by UsageWidget when bar.layout actually names it, see
     // GithubWidget's own header for why background polling stays opt-in.
     property bool pollEnabled: false
 
@@ -134,7 +152,7 @@ Panel {
     property var codexRows: []
     property string _codexPlanType: ""
 
-    // The single number UsageWidget's bar cell shows — the highest
+    // The single number UsageWidget's bar cell shows: the highest
     // utilization across every currently-`ok` window from every enabled
     // provider; -1 when neither provider has a real percentage to show.
     readonly property real worstPercent: {
@@ -202,8 +220,32 @@ Panel {
             root.codexState = "unknown";
     }
 
+    // The header button and Enter on a row both mean "ask again now". A
+    // stale Claude leg gets the forced refresh the bar cell's own click
+    // takes, since an explicit ask skips the cooldown.
+    function _refresh() {
+        if (root.claudeEnabled && root.claudeState === "stale")
+            root.refreshClaudeToken(true);
+        root._poll();
+    }
+
+    // The rows the cursor can reach: only a provider that actually answered
+    // has windows to walk. The honest-state cells below are not navigable,
+    // the same split GithubPanel's own rows take.
+    readonly property var _claudeVisibleRows: (root.claudeEnabled && root.claudeState === "ok") ? root.claudeRows : []
+    readonly property var _codexVisibleRows: (root.codexEnabled && root.codexState === "ok") ? root.codexRows : []
+
+    cursorCount: root._claudeVisibleRows.length + root._codexVisibleRows.length
+
+    onCursorActivated: root._refresh()
+
     onPollEnabledChanged: if (root.pollEnabled) root._poll()
-    onIsOpenChanged: if (root.isOpen) root._poll()
+    onIsOpenChanged: {
+        if (!root.isOpen)
+            return;
+        root._poll();
+        root.cursorIndex = 0;
+    }
 
     Timer {
         interval: root._interval
@@ -243,7 +285,7 @@ Panel {
     // terminate because the shell writes settings.json/theme.json itself, so
     // the file always eventually appears. Nothing here ever creates
     // `.credentials.json`, so an unbounded retry would be a permanent 3.3Hz
-    // stat loop on every machine without Claude Code installed — including the
+    // stat loop on every machine without Claude Code installed, including the
     // VM smoke rig, and the honest NO AUTH state itself. A rename gap closes in
     // milliseconds, so a short burst covers it; after that the normal poll and
     // the FileView's own watch are what pick the file up.
@@ -296,7 +338,7 @@ Panel {
     }
 
     // `expiredLocally` only picks the in-flight label (STALE reads truer than
-    // LOADING when the file already says the token is dead) — the reply below
+    // LOADING when the file already says the token is dead), the reply below
     // settles the state either way.
     function _probeClaudeUsage(expiredLocally) {
         if (root._claudeAccessToken === "") {
@@ -439,7 +481,7 @@ Panel {
 
     // Safety net for a codex binary that starts, authenticates, but never
     // replies to all three requests (a hung app-server, a permissions
-    // prompt with nothing on the other end to answer it) — clears a stuck
+    // prompt with nothing on the other end to answer it), clears a stuck
     // "loading" state to an honest "ERROR" instead of forever.
     Timer {
         id: codexTimeout
@@ -478,6 +520,16 @@ Panel {
 
     // ---- Shared row rendering ----
 
+    // The cursor spans both providers' windows in one numeric space, CLAUDE
+    // first, so each row carries the index Panel's cursor addresses it by
+    // rather than the Repeater's own list-local one.
+    readonly property var _claudeRowModel: root._claudeVisibleRows.map(function (row, i) {
+        return { row: row, cursor: i };
+    })
+    readonly property var _codexRowModel: root._codexVisibleRows.map(function (row, i) {
+        return { row: row, cursor: root._claudeVisibleRows.length + i };
+    })
+
     Component {
         id: usageRow
 
@@ -485,35 +537,47 @@ Panel {
             id: rowCell
             required property var modelData
             width: parent.width
-            readonly property bool _urgent: rowCell.modelData.percent >= 0.9
+
+            readonly property var _row: rowCell.modelData.row
+            readonly property int _cursorIndex: rowCell.modelData.cursor
+
+            // A window at its limit carries that on the border and the ink;
+            // a filled row is for buttons and active toggles (DESIGN.md §5).
+            destructive: rowCell._row.percent >= 0.9
+            cursor: root.cursorActive && root.cursorIndex === rowCell._cursorIndex
+
+            interactive: true
+            acceptedButtons: Qt.NoButton
+            onContainsPointerChanged: if (rowCell.containsPointer) {
+                root.cursorActive = true;
+                root.cursorIndex = rowCell._cursorIndex;
+            }
 
             Column {
                 width: parent.width
                 spacing: Theme.space.xxs
 
-                MetaLabel { text: rowCell.modelData.label }
+                SectionLabel { text: rowCell._row.label }
 
                 Text {
-                    text: Math.round(rowCell.modelData.percent * 100) + "%"
+                    text: Math.round(rowCell._row.percent * 100) + "%"
                     color: rowCell.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize.body
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.display
+                    font.weight: Theme.weight.semibold
                 }
 
-                DitherFill {
+                Track {
                     width: parent.width
-                    height: Theme.space.trackThickness
-
-                    Rectangle {
-                        width: parent.width * Math.max(0, Math.min(1, rowCell.modelData.percent))
-                        height: parent.height
-                        color: rowCell._urgent ? Theme.color.destructive : Theme.color.primary
-                    }
+                    value: rowCell._row.percent
                 }
 
-                MetaLabel {
-                    visible: rowCell.modelData.resetsAt !== ""
-                    text: Usage.formatReset(Date.now(), rowCell.modelData.resetsAt)
+                // A countdown is a value, so the label takes the mono face
+                // (NetworkPanel's own unit-label idiom).
+                SectionLabel {
+                    visible: rowCell._row.resetsAt !== ""
+                    text: Usage.formatReset(Date.now(), rowCell._row.resetsAt)
+                    font.family: Theme.fontFamilyMono
                 }
             }
         }
@@ -527,53 +591,79 @@ Panel {
     // header, so the hero and the CLAUDE/CODEX headers below state different
     // facts instead of the same one twice.
     PanelHero {
+        id: hero
         width: parent.width
-        glyph: "󱚣"
         title: "Usage"
-        meta: root._peakRow ? root._peakRow.label : (root.claudeEnabled ? "LOADING" : "DISABLED")
+        meta: root._peakRow
+            ? Usage.sentenceLabel(root._peakRow.label)
+            : (root.claudeEnabled || root.codexEnabled ? "Loading" : "Disabled")
         readout: root._peakRow ? Math.round(root._peakRow.percent * 100) + "%" : ""
         rail: root._peakRow ? root._peakRow.percent : -1
+
+        leading: Component {
+            Icon {
+                name: "gauge"
+                size: Theme.fontSize.heading
+                color: hero.foreground
+            }
+        }
     }
 
     // ---- CLAUDE section ----
 
-    Cell {
+    Column {
+        width: parent.width
         visible: root.claudeEnabled
-        width: parent.width
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "CLAUDE" + (root.claudeTier !== "" ? " / " + root.claudeTier : "") }
-    }
+        SectionLabel { text: root.claudeTier !== "" ? "CLAUDE / " + root.claudeTier : "CLAUDE" }
 
-    Cell {
-        visible: root.claudeEnabled && root.claudeState !== "ok"
-        width: parent.width
+        Cell {
+            visible: root.claudeState !== "ok"
+            width: parent.width
 
-        MetaLabel { text: root.claudeHintText() }
-    }
+            SectionLabel { text: root.claudeHintText() }
+        }
 
-    Repeater {
-        model: root.claudeEnabled && root.claudeState === "ok" ? root.claudeRows : []
-        delegate: usageRow
+        Cell {
+            visible: root.claudeState === "ok" && root._claudeVisibleRows.length === 0
+            width: parent.width
+
+            SectionLabel { text: "NO DATA" }
+        }
+
+        Repeater {
+            model: root._claudeRowModel
+            delegate: usageRow
+        }
     }
 
     // ---- CODEX section ----
 
-    Cell {
+    Column {
+        width: parent.width
         visible: root.codexEnabled
-        width: parent.width
+        spacing: Theme.space.rowGap
 
-        MetaLabel { text: "CODEX" + (root.codexTier !== "" ? " / " + root.codexTier : "") }
-    }
+        SectionLabel { text: root.codexTier !== "" ? "CODEX / " + root.codexTier : "CODEX" }
 
-    Cell {
-        visible: root.codexEnabled && root.codexState !== "ok"
-        width: parent.width
+        Cell {
+            visible: root.codexState !== "ok"
+            width: parent.width
 
-        MetaLabel { text: root.codexState === "unknown" ? "LOADING" : root.codexStatusText() }
-    }
+            SectionLabel { text: root.codexState === "unknown" ? "LOADING" : root.codexStatusText() }
+        }
 
-    Repeater {
-        model: root.codexEnabled && root.codexState === "ok" ? root.codexRows : []
-        delegate: usageRow
+        Cell {
+            visible: root.codexState === "ok" && root._codexVisibleRows.length === 0
+            width: parent.width
+
+            SectionLabel { text: "NO DATA" }
+        }
+
+        Repeater {
+            model: root._codexRowModel
+            delegate: usageRow
+        }
     }
 }
