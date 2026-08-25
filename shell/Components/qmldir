@@ -6,6 +6,7 @@ DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
 DogEar DogEar.qml
+Icon Icon.qml
 MarqueeText MarqueeText.qml
 MetaLabel MetaLabel.qml
 Panel Panel.qml

@@ -64,7 +64,8 @@
           formalshell-eds = pkgs.callPackage ./nix/eds-package.nix { };
           tensaku = pkgs.callPackage ./nix/tensaku-package.nix { };
           ttfx = pkgs.callPackage ./nix/ttfx-package.nix { };
-          formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; inherit formalshell-eds tensaku ttfx; };
+          lucide-font = pkgs.callPackage ./nix/lucide-font.nix { };
+          formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; inherit formalshell-eds tensaku ttfx lucide-font; };
           formalshell-greeter = pkgs.callPackage ./nix/greeter-package.nix { quickshell = qsFor system; };
           default = formalshell;
         }));

@@ -539,7 +539,12 @@ nixpkgs.lib.nixosSystem {
         # override is the actually-exercised path.
 
         fonts = {
-          packages = [ pkgs.nerd-fonts.jetbrains-mono ];
+          # lucide-font also reaches the wrapper directly via
+          # nix/package.nix's XDG_DATA_DIRS prefix; it is listed here too so
+          # fc-list sees it system-wide, the same double coverage the mono
+          # nerd font already gets (fonts.packages here, PATH tools that
+          # shell out to fc-match elsewhere).
+          packages = [ pkgs.nerd-fonts.jetbrains-mono self.packages.aarch64-linux.lucide-font ];
           fontconfig.enable = true;
         };
 

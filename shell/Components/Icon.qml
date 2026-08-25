@@ -1,0 +1,25 @@
+import QtQuick
+import qs.Core
+import "../Theme/icons.js" as Icons
+
+// Named icon glyph (spec "Icons", D2): `Icon { name: "wifi" }`. The set is
+// `theme.icons` (`lucide` default, an installed icon font; `nerd` renders in
+// the mono font itself). Surface files never contain a raw codepoint here,
+// which is the point: the glyph-corruption-on-rewrite hazard (CLAUDE.md)
+// only threatens files that carry raw codepoints at all.
+Text {
+    id: root
+
+    required property string name
+    property real size: Theme.fontSize.body
+
+    readonly property string _set: Config.get("theme.icons", "lucide")
+    readonly property string _family: Icons.family(root._set)
+
+    text: Icons.glyph(root._set, root.name)
+    color: Theme.color.foreground
+    font.family: root._family === "" ? Theme.fontFamily : root._family
+    font.pixelSize: root.size
+    implicitWidth: root.size
+    verticalAlignment: Text.AlignVCenter
+}

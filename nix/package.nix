@@ -1,5 +1,5 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
-, matugen, qrencode, cava, ddcutil, tensaku, ttfx
+, matugen, qrencode, cava, ddcutil, tensaku, ttfx, lucide-font
 , wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
@@ -22,6 +22,10 @@ stdenvNoCC.mkDerivation {
     # ttfx animates the screensaver banner (the shell parses its ANSI frame
     # stream); without it on PATH the screensaver falls back to effect.js's
     # five builtin effects rather than going blank.
+    # lucide-font is prefixed onto XDG_DATA_DIRS rather than PATH: fontconfig's
+    # default config scans "$dir/fonts" for every dir named there, which is
+    # what makes Icon.qml's "lucide" font.family resolve without depending
+    # on the host also declaring it in fonts.packages.
     # matugen/qrencode/cava/ddcutil back shipped features (theming, the Wi-Fi
     # QR share, the visualizer widget, external-monitor brightness) and were
     # only ever on PATH because nix/testvm.nix lists them in
@@ -47,6 +51,7 @@ stdenvNoCC.mkDerivation {
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv ]} \
       --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
+      --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \

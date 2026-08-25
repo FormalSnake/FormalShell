@@ -435,6 +435,25 @@ include "~/.local/state/formalshell/niri-border.kdl"
 The file is created empty at startup if it doesn't exist yet, so the
 `include` never errors on a fresh install.
 
+### Radius and icons
+
+`theme.radius` sets the corner radius root every surface derives its
+`sm`/`md`/`lg`/`xl` steps from (shadcn's own `--radius`, default 10).
+`theme.icons` picks which glyph set `Icon { name: "…" }` renders: `lucide`
+(the default, the bundled Lucide icon font) or `nerd` (the same mono font
+every other glyph in the shell already uses). A name missing from a set
+falls back to that set's own `circle-help`.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "theme": { "radius": 10, "icons": "lucide" } }
+```
+
+```nix
+# home-manager
+programs.formalshell.settings.theme = { radius = 10; icons = "lucide"; };
+```
+
 ### Wallpaper dither
 
 The wallpaper renders through a 90s limited-palette pass: six colors are
