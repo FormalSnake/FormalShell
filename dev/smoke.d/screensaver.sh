@@ -1,0 +1,254 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154,SC2016  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
+# --screensaver shortens screensaver.timeoutSeconds to 3s through the settings
+# fixture (a real IdleMonitor, never a faked clock) and plays a real MPRIS
+# track so MediaService.isPlaying is genuinely true. Three claims off one
+# timeline: the live media guard holds the screensaver off while the session
+# is already idle; killing the player alone auto-activates it, with no
+# `screensaver start` call involved; and the manual IPC start/stop path works
+# independently of the idle timer. The activation's own output is checked
+# against the compositor's monitor list, and a read-only frameInfo poll
+# watches the cycle counter leave 0, which is the effect converging, holding
+# and rerolling with nothing nudging it.
+#
+# The rest of the multi-head rules (port prefixes, the internal/external
+# aliases, what a plug or unplug does to a run in flight) live in
+# tests/tst_display_priority.qml, since this session has one head.
+leg_screensaver_flag="--screensaver"
+leg_screensaver_order=230
+leg_screensaver_needs="mpv ffmpeg jq"
+
+# Shared with dev/smoke.d/visualizer.sh, which the scaffold sources on every
+# run: the VM's mpv is pre-wrapped with mpvScripts.mpris baked into its
+# --script= flags (nix/testvm.nix), so plain `mpv` on PATH already announces
+# itself over MPRIS. A host without that gets the same wrapped derivation from
+# this repo's own pinned nixpkgs, since `.override` is not expressible as a
+# flake installable attribute path.
+need_mpv() {
+  if [ -n "${mpv_bin:-}" ]; then return 0; fi
+  if command -v mpv >/dev/null 2>&1; then
+    mpv_bin=$(command -v mpv)
+  else
+    mpv_bin=$(nix build --no-link --print-out-paths --impure --expr '
+      let
+        flake = builtins.getFlake (toString ./.);
+        pkgs = flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem};
+      in
+        pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; }
+    ')/bin/mpv
+  fi
+}
+
+need_ffmpeg() {
+  if [ -n "${ffmpeg_bin:-}" ]; then return 0; fi
+  if command -v ffmpeg >/dev/null 2>&1; then
+    ffmpeg_bin=$(command -v ffmpeg)
+  else
+    ffmpeg_bin=$(nix build --no-link --print-out-paths 'nixpkgs#ffmpeg-headless^out')/bin/ffmpeg
+  fi
+}
+
+# This leg's own clock, the same rule menu_t0 and lock_t0 draw: the screensaver
+# covers the whole output, so under --wallpaper it starts after that leg's last
+# frame (t=14). The guard holds until this clock runs out either way, since the
+# fixture track is still playing.
+screensaver_t0() {
+  if leg_on wallpaper; then echo 16; else echo 4; fi
+}
+
+ss_pid_path="$shot_dir/ss-mpv.pid"
+ss_track_path="$shot_dir/ss-track.flac"
+ss_guard_status_path="$shot_dir/screensaver-guard-status.json"
+ss_auto_path="$shot_dir/screensaver-auto.png"
+ss_auto_status_path="$shot_dir/screensaver-auto-status.json"
+ss_outputs_path="$shot_dir/screensaver-outputs.json"
+ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
+ss_manual_path="$shot_dir/screensaver-manual.png"
+ss_cycle_info1_path="$shot_dir/screensaver-cycle-info-1.json"
+ss_cycle_info2_path="$shot_dir/screensaver-cycle-info-2.json"
+ss_final_status_path="$shot_dir/screensaver-final-status.json"
+
+leg_screensaver_fixture() {
+  local effect_json="" ascii_json="" ascii_path
+  # SCREENSAVER_EFFECT (optional, additive, unset by every caller except a
+  # per-effect verification run) pins screensaver.effect for this run's
+  # screensaver-manual.png instead of leaving it at the default "random".
+  if [ -n "${SCREENSAVER_EFFECT:-}" ]; then
+    effect_json=', "effect": "'"$SCREENSAVER_EFFECT"'"'
+  fi
+  # SCREENSAVER_ASCII_TEXT (same rationale): writes a custom banner file and
+  # points screensaver.asciiPath at it, proving the bundled art is really
+  # swappable rather than hardcoded.
+  if [ -n "${SCREENSAVER_ASCII_TEXT:-}" ]; then
+    ascii_path="$iso_home/.config/formalshell/custom-screensaver.txt"
+    printf '%s\n' "$SCREENSAVER_ASCII_TEXT" > "$ascii_path"
+    ascii_json=', "asciiPath": "'"$ascii_path"'"'
+  fi
+  # Long enough to outlive the guard proof even under --wallpaper's own
+  # clock: the drive script is what ends playback, never the track running
+  # out. Silent by design, nothing here listens to it.
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "anullsrc=r=48000:cl=stereo" -t 90 \
+    -metadata "title=FormalShell Smoke Track" -metadata "artist=FormalShell Test Artist" \
+    -c:a flac -y "$ss_track_path"
+  # holdSeconds is shortened the same way timeoutSeconds is: the cycle proof
+  # waits out a real convergence and hold, just on an affordable schedule.
+  #
+  # display.outputPriority names two entries this session cannot match before
+  # one it can, so the mainOutput assertion below is about the list being
+  # walked in order rather than a single-output session having one obvious
+  # answer. "internal" is in there as the alias that must NOT match (nothing
+  # here hangs off eDP/LVDS/DSI), so a run that started matching it would be
+  # reporting the alias broke. Where the niri rig could name its nested
+  # output literally ("winit"), Hyprland's own name depends on which backend
+  # brought the session up, so the entry that lands is the "external" alias.
+  # The key is shell-wide, not screensaver-owned: the screensaver is one
+  # reader of it.
+  settings_fragment ', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2'"$effect_json$ascii_json"'}, "display": {"outputPriority": ["HDMI-A-9", "internal", "external"]}'
+}
+
+leg_screensaver_timing() {
+  # ss-drive.sh's cycle poll can run to its own deadline (the worst first
+  # random pick spends a fixed 15s before it even starts resolving) and the
+  # final status dump lands a couple of seconds after the poll breaks. The
+  # run's own frame is taken past that worst case, showing the ordinary
+  # session with the screensaver dismissed for good.
+  local t0
+  t0=$(screensaver_t0)
+  leg_timing $((80 + t0 - 4)) $((100 + t0 - 4))
+}
+
+leg_screensaver_drive() {
+  local t0 play_script="$shot_dir/ss-media-play.sh" script="$shot_dir/ss-drive.sh"
+  t0=$(screensaver_t0)
+  # The pid is recorded before the exec: exec replaces this shell's process
+  # image without forking, so $$ here is exactly mpv's eventual pid and the
+  # drive script below can end playback precisely.
+  write_script "$play_script" <<EOF
+#!/usr/bin/env bash
+sleep 1
+echo \$\$ > "$ss_pid_path"
+exec "$mpv_bin" --no-video --really-quiet "$ss_track_path"
+EOF
+
+  # Ordered: the guard proof first (mpv still playing), then the kill and the
+  # auto-trigger proof, then the manual start/stop last, since a manual
+  # activation deliberately suppresses the auto-trigger for the rest of the
+  # run and nothing after it depends on auto-triggering again. The cycle proof
+  # rides the manual activation because its start time is deterministic.
+  write_script "$script" <<EOF
+#!/usr/bin/env bash
+sleep $((t0 + 4))
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_guard_status_path" 2>&1
+if [ -f "$ss_pid_path" ]; then
+  kill "\$(cat "$ss_pid_path")" 2>/dev/null || true
+fi
+sleep 5
+"$grim_bin" "$ss_auto_path" > /dev/null 2>&1
+# The compositor's own monitor list, so the output status names as the
+# animating one can be checked against a real connector rather than merely
+# being a non-empty string.
+"$hyprctl_bin" -j monitors > "$ss_outputs_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_dismiss_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver start > /dev/null 2>&1
+sleep 1
+"$grim_bin" "$ss_manual_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
+while [ "\$SECONDS" -lt $((t0 + 71)) ]; do
+  "$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
+  grep -q '"cycles":0}' "$ss_cycle_info2_path" || break
+  sleep 1
+done
+"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
+EOF
+  echo "exec-once = bash $play_script"
+  echo "exec-once = bash $script"
+}
+
+leg_screensaver_assert() {
+  local ss_main_output ss_hypr_output ss_cycle_effect1 ss_cycle_effect2
+  # Guard proof: mpv still playing, the 3s idle timeout long since elapsed
+  # with no real input anywhere in this session, so isIdle has to be true and
+  # the guard has to keep active false anyway.
+  if [ ! -s "$ss_guard_status_path" ]; then
+    fail "no screensaver guard-status produced"
+  fi
+  cat "$ss_guard_status_path"; echo
+  if ! grep -q '"isIdle":true' "$ss_guard_status_path"; then
+    fail "screensaver status did not report isIdle:true while mpv was still playing, got: $(cat "$ss_guard_status_path")"
+  fi
+  if ! grep -q '"active":false' "$ss_guard_status_path"; then
+    fail "screensaver activated despite the media guard while mpv was still playing, got: $(cat "$ss_guard_status_path")"
+  fi
+  if ! grep -q '"mediaPlaying":true' "$ss_guard_status_path"; then
+    fail "screensaver status did not report mediaPlaying:true while mpv was still playing, got: $(cat "$ss_guard_status_path")"
+  fi
+  # Auto-trigger proof: mpv killed, no `screensaver start` call at all, so the
+  # guard clearing alone has to flip active true.
+  if [ ! -f "$ss_auto_path" ]; then
+    fail "no screensaver-auto screenshot produced"
+  fi
+  echo "SMOKE_SCREENSAVER_AUTO $ss_auto_path"
+  if [ ! -s "$ss_auto_status_path" ]; then
+    fail "no screensaver auto-status produced"
+  fi
+  cat "$ss_auto_status_path"; echo
+  if ! grep -q '"active":true' "$ss_auto_status_path"; then
+    fail "screensaver did not auto-activate once the media guard cleared, got: $(cat "$ss_auto_status_path")"
+  fi
+  # One output animates (shell/Display/priority.js), the rest hold the
+  # converged banner. The fixture's list is walked past two entries this
+  # session cannot match, so this asserts it landed on a real connector name,
+  # never "" (nothing animating) and never an invented one.
+  if [ ! -s "$ss_outputs_path" ]; then
+    fail "no hyprland monitor dump produced for the screensaver"
+  fi
+  cat "$ss_outputs_path"; echo
+  ss_main_output=$(sed -n 's/.*"mainOutput":"\([^"]*\)".*/\1/p' "$ss_auto_status_path" | head -n1)
+  ss_hypr_output=$("$jq_bin" -r '.[0].name' "$ss_outputs_path")
+  if [ -z "$ss_main_output" ] || [ "$ss_main_output" != "$ss_hypr_output" ]; then
+    fail "screensaver mainOutput '$ss_main_output' is not hyprland's output '$ss_hypr_output', got: $(cat "$ss_auto_status_path")"
+  fi
+  if [ ! -s "$ss_dismiss_status_path" ] || ! grep -q '"active":false' "$ss_dismiss_status_path"; then
+    fail "screensaver stop IPC call did not flip active back to false, got: $(cat "$ss_dismiss_status_path" 2>/dev/null)"
+  fi
+  # Manual IPC start/stop proof, independent of the idle timer.
+  if [ ! -f "$ss_manual_path" ]; then
+    fail "no screensaver-manual screenshot produced"
+  fi
+  echo "SMOKE_SCREENSAVER_MANUAL $ss_manual_path"
+  # Continuous cycling proof: the baseline frameInfo has to be cycle 0 of the
+  # manual activation, and the read-only poll has to have seen the counter
+  # leave 0 with no IPC nudge, the reroll coming purely from the effect
+  # converging and the hold elapsing.
+  if [ ! -s "$ss_cycle_info1_path" ] || ! grep -q '"cycles":0}' "$ss_cycle_info1_path"; then
+    fail "screensaver frameInfo baseline was not cycles:0 right after the manual start, got: $(cat "$ss_cycle_info1_path" 2>/dev/null)"
+  fi
+  cat "$ss_cycle_info1_path"; echo
+  if [ ! -s "$ss_cycle_info2_path" ] || ! grep -q '"cycles":' "$ss_cycle_info2_path" || grep -q '"cycles":0}' "$ss_cycle_info2_path"; then
+    fail "screensaver cycles never left 0 within the drive's deadline, got: $(cat "$ss_cycle_info2_path" 2>/dev/null)"
+  fi
+  cat "$ss_cycle_info2_path"; echo
+  ss_cycle_effect1=$(grep -o '"effect":"[a-z]*"' "$ss_cycle_info1_path")
+  ss_cycle_effect2=$(grep -o '"effect":"[a-z]*"' "$ss_cycle_info2_path")
+  if [ -n "${SCREENSAVER_EFFECT:-}" ]; then
+    # A pinned effect has to replay itself across the reroll.
+    if [ "$ss_cycle_effect1" != "$ss_cycle_effect2" ]; then
+      fail "pinned screensaver effect changed across the reroll ($ss_cycle_effect1 -> $ss_cycle_effect2)"
+    fi
+  else
+    # The default "random" must never repeat the immediately previous effect,
+    # so cycle 1's report has to differ from cycle 0's.
+    if [ "$ss_cycle_effect1" = "$ss_cycle_effect2" ]; then
+      fail "random screensaver reroll repeated the previous effect ($ss_cycle_effect1)"
+    fi
+  fi
+  echo "SMOKE_SCREENSAVER_CYCLE $ss_cycle_effect1 -> $ss_cycle_effect2"
+  if [ ! -s "$ss_final_status_path" ] || ! grep -q '"active":false' "$ss_final_status_path"; then
+    fail "screensaver did not report active:false after the final stop, got: $(cat "$ss_final_status_path" 2>/dev/null)"
+  fi
+}

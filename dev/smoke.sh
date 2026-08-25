@@ -400,6 +400,15 @@ host_notifications_owner() {
 }
 host_notifications_owner_before=$(host_notifications_owner)
 
+# A leg that cannot share the single session below takes the run over here,
+# with the build done, the binaries resolved and the bus baseline captured,
+# and exits itself: --screensaver-gif pins screensaver.effect through the
+# settings fixture, which a session reads at startup, so recording five
+# effects means five sessions.
+for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
+  if declare -F "leg_${leg_name}_takeover" >/dev/null; then "leg_${leg_name}_takeover"; fi
+done
+
 shot_path="$shot_dir/smoke.png"
 shell_log_path="$shot_dir/shell.log"
 hypr_log_path="$shot_dir/hyprland.log"
