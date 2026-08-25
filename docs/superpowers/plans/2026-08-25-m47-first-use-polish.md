@@ -1,7 +1,7 @@
 # M47: polish from the first live session
 
 **Date:** 2026-08-25
-**Status:** approved, pre-implementation
+**Status:** implemented 2026-08-25 (rebuild of both boxes pending their return)
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict; this plan amends its "Bar" paragraph, see D1).
 
