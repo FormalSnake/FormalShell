@@ -21,8 +21,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 - `dev/smoke.sh` (`just vm-smoke <flags>`) is the rig now: nested Hyprland
   by default, `--compositor niri` runs the old `dev/smoke-niri.sh` instead.
   Legs ported so far: base, `--menu`, `--notify`, `--panel <name>`,
-  `--console`, `--wallpaper`, `--lock`; every other leg documented below
-  still lives only in the niri script until M46 deletes it. `--wallpaper`
+  `--console`, `--picker`, `--hotcorner`, `--wallpaper`, `--lock`; every
+  other leg documented below still lives only in the niri script until M46
+  deletes it. `--hotcorner` reads `hyprctl -j layers` and asserts both
+  corner surfaces sit on level 2, Hyprland's `top`. `--wallpaper`
   here reads the dither setting rather than assuming it: the run writes no
   `wallpaper.dither` key, so it asserts the plain image reached the screen
   (a full-width strip of the gradient fixture carries far more colors than

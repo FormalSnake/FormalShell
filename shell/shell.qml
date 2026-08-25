@@ -122,8 +122,9 @@ ShellRoot {
     // the screensaver handle directly and locks through LockService rather
     // than going through either IPC target, so a corner behaves identically
     // to `lock lock` / `screensaver start` without a round trip through the
-    // socket.
-    HotCorners { screensaver: screensaver }
+    // socket. The launcher handle is for the corners configured with an
+    // action string, which resolve exactly as the launcher's own rows do.
+    HotCorners { screensaver: screensaver; menu: menuInstance }
 
     // Same "one controller, shown on the focused screen at trigger time"
     // reasoning as Osd — but this one's trigger is a real polkit

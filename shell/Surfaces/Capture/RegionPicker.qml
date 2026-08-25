@@ -797,15 +797,14 @@ Scope {
                     // selection already made (RecordingService's FS_SLURP_
                     // BORDER) — one look for "this is about to record".
                     border.color: root._recording ? Core.Theme.color.destructive : Core.Theme.color.primary
-                    border.width: Core.Theme.borderWidth
-                    radius: 0
+                    border.width: Core.Theme.borderWidth * 2
                 }
 
                 // Readout rides just outside the top-left corner, flipping
                 // inside when the selection is against the screen edge.
                 Cell {
                     id: readout
-                    standalone: true
+                    radius: Core.Theme.radiusSm
                     visible: selectionChrome.sel !== null
                     x: selectionChrome.sel ? Math.max(0, surface.toLocalX(selectionChrome.sel.x)) : 0
                     y: {
@@ -818,15 +817,17 @@ Scope {
                     Row {
                         spacing: Core.Theme.space.sm
 
-                        MetaLabel {
+                        Text {
                             text: selectionChrome.sel
                                 ? Math.round(selectionChrome.sel.width) + "×" + Math.round(selectionChrome.sel.height)
                                 : ""
                             color: readout.foreground
+                            font.family: Core.Theme.fontFamilyMono
+                            font.pixelSize: Core.Theme.fontSize.caption
                         }
-                        MetaLabel {
+                        SectionLabel {
                             visible: text.length > 0
-                            text: root._current && root._current.kind !== "drag" ? root._current.label.toUpperCase() : ""
+                            text: root._current && root._current.kind !== "drag" ? root._current.label : ""
                             color: readout.dimForeground
                         }
                     }

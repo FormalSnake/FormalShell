@@ -25,6 +25,11 @@ Item {
     // than erroring. Locking needs no handle, it goes through LockService
     // like every other lock trigger.
     property var screensaver: null
+    // The launcher, for the corners carrying an action string. It owns the
+    // shell's one action resolver (`@ipc:` dispatch and the spawn path), so
+    // a corner reaches it rather than growing a second dispatch table that
+    // would drift from the rows and the keybinds.
+    property var menu: null
 
     readonly property var config: Corners.resolve(Core.Config.get("hotCorners", undefined))
 
@@ -37,6 +42,9 @@ Item {
     // the trigger itself (firing lock while locked is a no-op), and the
     // re-arming rule below, which needs to tell "the pointer left the corner"
     // from "our own action's surface took the pointer away from it".
+    // A launcher action has no surface of its own to be already up, so it is
+    // never active: it fires on every entry, and re-arms on the next leave
+    // like any other corner.
     function actionActive(action) {
         // `isLocked` is null while an external locker owns the session
         // (LockService's header): unknown is not active, so a corner entry
@@ -55,6 +63,8 @@ Item {
             LockService.lock();
         else if (action === "screensaver" && root.screensaver)
             root.screensaver.start();
+        else if (Corners.isLauncherAction(action) && root.menu)
+            root.menu._runAction(action);
     }
 
     Variants {

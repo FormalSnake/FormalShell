@@ -9,16 +9,15 @@ import qs.Services
 // The shell's polkit consent surface (M16 Task 4, laptop feature parity
 // with omarchy — reimplemented against `~/Developer/omarchy/shell/plugins/
 // polkit/PolkitAgent.qml`'s flow-tracking, read-reference only, never
-// copied). One centered omarchy-card (DESIGN.md §Panels chrome) shown for
-// as long as PolkitService.isActive holds a live authentication request:
-// an uppercase "AUTHENTICATION REQUIRED" header, the action's own message,
-// the identity being asked to authenticate as a dim meta row, and the
-// AuthPrompt field idiom (masked `●` input, "CHECKING…" while a submitted
-// attempt is in flight, "WRONG PASSWORD" in urgent italic on retry) —
-// deliberately without AuthPrompt.qml's clock/date, which belong to the
-// lock screen alone. No shake (the plan drops it — the lock screen's own
-// idiom is the urgent border plus italic message, nothing more physical),
-// no fingerprint branch (password-only here).
+// copied). One centred card over the modal scrim, shown for as long as
+// PolkitService.isActive holds a live authentication request (M45 D4): a
+// section label, the action's own message in sans, the identity being
+// asked to authenticate as a section label over its mono name, the shadcn
+// input, and an outline Cancel beside a default Authenticate.
+// Deliberately without AuthPrompt.qml's clock/date, which belong to the
+// lock screen alone. No shake (the lock screen's own idiom is the field's
+// error state, nothing more physical), no fingerprint branch
+// (password-only here).
 //
 // The typed password only ever reaches `flow.submit()` below — never
 // logged, never mirrored into settings/state, never touched by the
@@ -48,15 +47,14 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
 
-    readonly property real _cardWidth: Theme.space.popupWidthWide
     readonly property bool _inputEnabled: !!(root._flow && root._flow.isResponseRequired) && !root.submitted
 
-    function _identityLabel() {
+    function _identityName() {
         var flow = root._flow;
         if (!flow || !flow.selectedIdentity)
             return "";
         var identity = flow.selectedIdentity;
-        return "AS " + (identity.displayName || identity.string || "");
+        return identity.displayName || identity.string || "";
     }
 
     // PAM's own conversation prompt, verbatim (trimmed) — never the
@@ -92,7 +90,7 @@ PanelWindow {
 
     function _refocus() {
         if (root._active && root._inputEnabled)
-            passwordInput.forceActiveFocus();
+            passwordInput.forceFocus();
     }
 
     // A fresh request (this flip going true, not just any change while
@@ -135,7 +133,7 @@ PanelWindow {
         // asks twice would otherwise leave `submitted` latched from the
         // first `_submit()` forever (it's only ever cleared by a fresh
         // request or a failed one), stranding the card on "CHECKING…"
-        // with the field permanently hidden.
+        // with the field permanently disabled.
         function onIsResponseRequiredChanged() {
             if (root._flow && root._flow.isResponseRequired)
                 root.submitted = false;
@@ -182,33 +180,35 @@ PanelWindow {
 
         Keys.onEscapePressed: root._cancel()
 
+        // The modal scrim (spec "Depth"): plain black at half opacity, the
+        // same one the launcher and the lock screen draw, fading with the
+        // card so a request arrives as one motion.
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            opacity: root._active ? 0.5 : 0
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+            }
+        }
+
         MouseArea {
             anchors.fill: parent
             onClicked: root._refocus()
         }
 
-        Item {
+        Card {
             id: card
             anchors.centerIn: parent
-            width: root._cardWidth
-            implicitHeight: column.implicitHeight + Theme.space.panelPadding * 2
-            height: implicitHeight
 
-            // Enter/exit fade (DESIGN.md §4): opacity only, no slide — a
-            // screen-centered card has no edge to slide in from, the same
+            // Enter/exit fade (DESIGN.md §4): opacity only, no slide. A
+            // screen-centred card has no edge to slide in from, the same
             // reasoning the screensaver's own entrance carve-out documents.
             opacity: root._active ? 1 : 0
 
             Behavior on opacity {
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: Theme.radius
-                color: Theme.color.background
-                border.width: Theme.borderWidth
-                border.color: Theme.color.border
             }
 
             MouseArea {
@@ -218,87 +218,75 @@ PanelWindow {
 
             Column {
                 id: column
-                anchors.centerIn: parent
-                width: parent.width - Theme.space.panelPadding * 2
-                spacing: Theme.space.lg
+                // The field's own width carries the card: the request text
+                // wraps to it and the footer sits under it.
+                width: Theme.space.popupWidthNarrow
+                spacing: Theme.space.sectionGap
 
-                MetaLabel {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: "AUTHENTICATION REQUIRED"
+                SectionLabel {
+                    text: "Authentication required"
                 }
 
                 Text {
                     width: parent.width
                     text: root._flow ? root._flow.message : ""
                     color: Theme.color.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
                     wrapMode: Text.WordWrap
-                    horizontalAlignment: Text.AlignHCenter
                 }
 
-                MetaLabel {
+                Column {
                     width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: root._identityLabel()
-                }
+                    spacing: Theme.space.rowGap
+                    visible: root._identityName() !== ""
 
-                // Only shown for a state worth calling out (checking/error),
-                // same rule AuthPrompt.qml's own `showLabel` documents — the
-                // field below stays visible and typable through both states
-                // (bar the brief window while an attempt is actually in
-                // flight), so "on retry" reads as this line appearing above
-                // an already-usable field, never the field disappearing.
-                MetaLabel {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    visible: root.submitted || root.errorState
-                    text: root.submitted ? "CHECKING…" : "WRONG PASSWORD"
-                    color: root.errorState ? Theme.color.destructive : Theme.color.mutedForeground
-                    font.italic: root.errorState
-                }
-
-                Item {
-                    id: fieldBox
-                    width: parent.width
-                    height: passwordInput.implicitHeight + Theme.space.lg * 2
-                    visible: !root.submitted
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Theme.radius
-                        color: "transparent"
-                        border.width: Theme.borderWidth
-                        border.color: root.errorState ? Theme.color.destructive : Theme.color.input
+                    SectionLabel {
+                        text: "Identity"
                     }
 
-                    MetaLabel {
-                        anchors.centerIn: parent
-                        visible: passwordInput.text.length === 0
-                        text: root._fieldPlaceholder()
-                        // Faint placeholders (DESIGN.md §1.4, M19 Task 4):
-                        // one band under the field's own label/status text
-                        // above, which stays mutedForeground/destructive.
+                    // An account name, so mono (spec "Type").
+                    Text {
+                        width: parent.width
+                        text: root._identityName()
                         color: Theme.color.mutedForeground
+                        font.family: Theme.fontFamilyMono
+                        font.pixelSize: Theme.fontSize.bodySmall
+                        elide: Text.ElideRight
+                    }
+                }
+
+                // The field stays mounted through a submitted attempt so the
+                // card does not resize under the pointer; it is the disabled
+                // state, and the placeholder, that say an attempt is in
+                // flight.
+                Input {
+                    id: passwordInput
+                    width: parent.width
+                    enabled: root._inputEnabled
+                    echoMode: (root._flow && root._flow.responseVisible) ? TextInput.Normal : TextInput.Password
+                    placeholder: root.submitted ? "Checking" : root._fieldPlaceholder()
+                    error: root.errorState
+                    errorText: "Wrong password"
+
+                    Keys.onEscapePressed: root._cancel()
+                    onAccepted: root._submit()
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    spacing: Theme.space.controlGap
+
+                    Button {
+                        variant: "outline"
+                        text: "Cancel"
+                        onClicked: root._cancel()
                     }
 
-                    TextInput {
-                        id: passwordInput
-                        anchors.fill: parent
-                        anchors.margins: Theme.space.xxl
-                        horizontalAlignment: TextInput.AlignHCenter
-                        verticalAlignment: TextInput.AlignVCenter
-                        color: Theme.color.foreground
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize.body
-                        echoMode: (root._flow && root._flow.responseVisible) ? TextInput.Normal : TextInput.Password
-                        passwordCharacter: "●"
+                    Button {
+                        text: "Authenticate"
                         enabled: root._inputEnabled
-                        selectByMouse: true
-
-                        Keys.onEscapePressed: root._cancel()
-                        onAccepted: root._submit()
+                        onClicked: root._submit()
                     }
                 }
             }

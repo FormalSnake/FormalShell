@@ -6,10 +6,9 @@
 #
 # dev/smoke-niri.sh is the reference for what each leg proves and stays the
 # richer script until M46 deletes the niri backend. Legs here: the base bar
-# shot, --dump, --menu, --notify, --center, --panel <name>, --panel-at <n>,
-# --console, --wallpaper, --lock.
-# shot, --dump, --menu, --notify, --osd, --panel <name> (with --tooltip),
-# --console.
+# shot, --dump, --menu, --notify, --center, --osd, --panel <name>
+# (with --tooltip), --panel-at <n>, --console, --wallpaper, --lock,
+# --picker, --hotcorner.
 #
 # --osd drives the bottom-centre pill three ways off one timeline: a manual
 # `osd volume` (osd-manual.png), a real `wpctl set-volume` (the
@@ -78,6 +77,8 @@ tooltip_mode=false
 console_mode=false
 wallpaper_mode=false
 lock_mode=false
+picker_mode=false
+hotcorner_mode=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dump) dump_mode=true; shift ;;
@@ -91,7 +92,9 @@ while [ $# -gt 0 ]; do
     --lock) lock_mode=true; shift ;;
     --osd) osd_mode=true; shift ;;
     --tooltip) tooltip_mode=true; shift ;;
-    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock]" >&2; exit 1 ;;
+    --picker) picker_mode=true; shift ;;
+    --hotcorner) hotcorner_mode=true; shift ;;
+    *) echo "usage: $0 [--dump] [--menu] [--notify] [--center] [--osd] [--panel <name> [--tooltip]] [--panel-at <n>] [--console] [--wallpaper] [--lock] [--picker] [--hotcorner]" >&2; exit 1 ;;
   esac
 done
 
@@ -127,7 +130,7 @@ fi
 # dev/smoke-niri.sh draws.
 fixture_window_mode=true
 if $dump_mode || $menu_mode || $notify_mode || $center_mode || $osd_mode || $panel_mode \
-  || $panel_at_mode || $console_mode || $wallpaper_mode || $lock_mode; then
+  || $panel_at_mode || $console_mode || $wallpaper_mode || $lock_mode || $picker_mode; then
   fixture_window_mode=false
 fi
 
@@ -190,7 +193,7 @@ if $osd_mode; then
   fi
 fi
 
-if $fixture_window_mode || $wallpaper_mode; then
+if $fixture_window_mode || $wallpaper_mode || $picker_mode; then
   if command -v convert >/dev/null 2>&1; then
     convert_bin=convert
   else
@@ -206,6 +209,16 @@ if $lock_mode; then
     wtype_bin=$(command -v wtype)
   else
     wtype_bin=$(nix build 'nixpkgs#wtype^out' --no-link --print-out-paths)/bin/wtype
+  fi
+fi
+
+# --hotcorner reads a layer tree rather than a flat status line, and the
+# claim is per-level, so it is parsed rather than grepped.
+if $hotcorner_mode; then
+  if command -v jq >/dev/null 2>&1; then
+    jq_bin=$(command -v jq)
+  else
+    jq_bin=$(nix build --no-link --print-out-paths 'nixpkgs#jq^out')/bin/jq
   fi
 fi
 
@@ -332,6 +345,15 @@ lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
 lock_status_path="$shot_dir/lock-status.json"
 lock_call_rc_path="$shot_dir/lock-call-rc.txt"
 lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
+picker_grid_path="$shot_dir/picker-grid.png"
+picker_variant_path="$shot_dir/picker-variant.png"
+picker_flat_status_path="$shot_dir/picker-status-flat.json"
+picker_dark_status_path="$shot_dir/picker-status-dark.json"
+picker_light_status_path="$shot_dir/picker-status-light.json"
+picker_variant_reply_path="$shot_dir/picker-variant-reply.txt"
+picker_theme_status_path="$shot_dir/picker-theme-status.json"
+picker_selection_path="$shot_dir/picker-selection.txt"
+hotcorner_layers_path="$shot_dir/hotcorner-layers.json"
 cfg="$shot_dir/hyprland.conf"
 
 # lock-before-sleep's exit-0-always proof (spec §8), run BEFORE the session
@@ -382,8 +404,37 @@ if $wallpaper_mode && [ "${SMOKE_WALLPAPER_DITHER:-0}" = "1" ]; then
   wallpaper_settings=', "wallpaper": {"dither": true}'
 fi
 
+# --picker points picker.directory at a fixture directory of generated
+# solid-color PNGs, so the grid renders real image cells rather than the
+# honest empty one. Twenty of them, which is several rows at the route's own
+# column count. The Dark/Light pair is STAGED under a dot directory the
+# shell's own scan cannot see (it globs one level down from the directory
+# and its Dark/Light children, never a hidden one), because the drive script
+# moves it into place under the running shell to prove the scan re-runs per
+# entry rather than caching at startup.
+picker_settings=""
+picker_dir="$iso_home/.local/share/formalshell/pictures"
+if $picker_mode; then
+  mkdir -p "$picker_dir" "$picker_dir/.stage/Dark" "$picker_dir/.stage/Light"
+  picker_settings=', "picker": {"directory": "'"$picker_dir"'"}'
+  picker_colors=(c0392b 27ae60 2980b9 f1c40f 8e44ad e67e22 16a085 2c3e50 d35400 c2185b 00838f 5d4037 7cb342 512da8 0097a7 ff7043 78909c 43a047 6d4c41 3949ab)
+  for i in "${!picker_colors[@]}"; do
+    $convert_bin -size 1920x1080 "xc:#${picker_colors[$i]}" "$picker_dir/img-$i.png"
+  done
+  # Deliberately different counts per variant, so a status dump reporting
+  # the wrong set is a wrong number rather than a plausible one.
+  picker_dark_colors=(1b2a4a 24344f 2f3f5c 3a4a68 111c33)
+  picker_light_colors=(f5efe0 e8dcc3 fbf7ee)
+  for i in "${!picker_dark_colors[@]}"; do
+    $convert_bin -size 960x540 "xc:#${picker_dark_colors[$i]}" "$picker_dir/.stage/Dark/dark-$i.png"
+  done
+  for i in "${!picker_light_colors[@]}"; do
+    $convert_bin -size 960x540 "xc:#${picker_light_colors[$i]}" "$picker_dir/.stage/Light/light-$i.png"
+  done
+fi
+
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings$wallpaper_settings}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$console_settings$systemupdate_settings$wallpaper_settings$picker_settings}
 EOF
 
 # The calendar leg's own events, dated at run time so the fixture never goes
@@ -788,6 +839,63 @@ sleep 1
 EOF
 fi
 
+# --picker drives the whole route over IPC: `summon` opens the wallpaper-mode
+# grid (the cursor sits on the first cell with no keypress at all, which is
+# what makes the ring photographable here), `choose` picks a non-first
+# fixture by path (the same function Enter or a click on that cell calls, and
+# the only one reachable from a rig with no proven pointer or keyboard
+# delivery into a layer surface), and `theme status` proves the pick really
+# became the wallpaper. `select` then reopens the same directory in the
+# generic image-selector mode with a caller token, and picker-selection.txt
+# is read back to confirm the {token, value} write. Only then are the staged
+# Dark/Light sets moved in and the route re-summoned, so the variant legs
+# also prove the scan re-runs per entry.
+if $picker_mode; then
+  picker_script="$shot_dir/picker-drive.sh"
+  write_script "$picker_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$picker_grid_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_flat_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker select "$picker_dir" tok-picker > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
+sleep 1
+cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
+mv "$picker_dir/.stage/Dark" "$picker_dir/Dark"
+mv "$picker_dir/.stage/Light" "$picker_dir/Light"
+"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_dark_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker variant light > "$picker_variant_reply_path" 2>&1
+sleep 2
+"$grim_bin" "$picker_variant_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_light_status_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call picker close > /dev/null 2>&1
+EOF
+fi
+
+# --hotcorner asks the compositor itself what layer surfaces exist, which is
+# the only honest headless proof available: the rig has no synthetic pointer,
+# so entering a corner cannot be simulated, but whether the corner surfaces
+# mapped at all, on the right level, is entirely observable. That is also the
+# part most likely to be silently wrong, since PanelWindow.anchors is driven
+# per-corner from a resolved config here rather than from the literal edges
+# every other surface in this shell uses.
+if $hotcorner_mode; then
+  hotcorner_script="$shot_dir/hotcorner-drive.sh"
+  write_script "$hotcorner_script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+"$hyprctl_bin" -j layers > "$hotcorner_layers_path" 2>&1
+EOF
+fi
+
 screenshot_delay=8
 session_timeout=40
 if $console_mode; then
@@ -812,6 +920,13 @@ if $center_mode; then
   # again and the front toast gone.
   screenshot_delay=25
   session_timeout=70
+fi
+if $picker_mode; then
+  # Past picker-drive.sh's own last step, so the run's own frame is the
+  # ordinary session with the picker already closed. The two frames that
+  # matter here are the ones the drive takes while it is open.
+  screenshot_delay=22
+  session_timeout=60
 fi
 tail_gap=1
 if $menu_mode; then
@@ -912,6 +1027,12 @@ EOF
   fi
   if $lock_mode; then
     echo "exec-once = bash $lock_script"
+  fi
+  if $picker_mode; then
+    echo "exec-once = bash $picker_script"
+  fi
+  if $hotcorner_mode; then
+    echo "exec-once = bash $hotcorner_script"
   fi
   echo "exec-once = bash $shot_script"
 } > "$cfg"
@@ -1275,6 +1396,91 @@ if $lock_mode; then
   if cmp -s "$lock_locked_path" "$lock_unlocked_path"; then
     fail "lock-locked and lock-unlocked screenshots are byte-identical: the lock surface never mapped"
   fi
+fi
+
+if $picker_mode; then
+  if [ ! -f "$picker_grid_path" ]; then
+    fail "no picker-grid screenshot produced"
+  fi
+  echo "SMOKE_PICKER_GRID $picker_grid_path"
+  if [ ! -f "$picker_variant_path" ]; then
+    fail "no picker-variant screenshot produced"
+  fi
+  echo "SMOKE_PICKER_VARIANT $picker_variant_path"
+
+  if [ ! -s "$picker_flat_status_path" ]; then
+    fail "no flat picker status produced"
+  fi
+  cat "$picker_flat_status_path"; echo
+  if ! grep -q '"hasVariants":false' "$picker_flat_status_path" \
+    || ! grep -q '"variant":"none"' "$picker_flat_status_path" \
+    || ! grep -q '"count":20' "$picker_flat_status_path"; then
+    fail "the flat listing did not report all 20 images with no variants. Got: $(cat "$picker_flat_status_path")"
+  fi
+
+  if [ ! -s "$picker_theme_status_path" ]; then
+    fail "no picker theme-status produced"
+  fi
+  cat "$picker_theme_status_path"; echo
+  if ! grep -q "\"wallpaper\":\"$picker_dir/img-3.png\"" "$picker_theme_status_path"; then
+    fail "theme status did not report the picker-chosen wallpaper. Got: $(cat "$picker_theme_status_path")"
+  fi
+
+  if [ ! -s "$picker_selection_path" ]; then
+    fail "no picker-selection.txt produced"
+  fi
+  cat "$picker_selection_path"; echo
+  if ! grep -q '"token":"tok-picker"' "$picker_selection_path" \
+    || ! grep -q "\"value\":\"$picker_dir/img-1.png\"" "$picker_selection_path"; then
+    fail "picker-selection.txt did not resolve tok-picker with the chosen path. Got: $(cat "$picker_selection_path")"
+  fi
+
+  # The variant legs: the sets were moved in under the running shell, so a
+  # scan cached at startup would still answer with the flat listing here.
+  if [ ! -s "$picker_dark_status_path" ]; then
+    fail "no dark-variant picker status produced"
+  fi
+  cat "$picker_dark_status_path"; echo
+  if ! grep -q '"hasVariants":true' "$picker_dark_status_path" \
+    || ! grep -q '"variant":"dark"' "$picker_dark_status_path" \
+    || ! grep -q '"darkCount":5' "$picker_dark_status_path" \
+    || ! grep -q '"lightCount":3' "$picker_dark_status_path" \
+    || ! grep -q '"count":5' "$picker_dark_status_path"; then
+    fail "the variant listing did not report the dark set on entry. Got: $(cat "$picker_dark_status_path")"
+  fi
+  if ! grep -qx 'ok' "$picker_variant_reply_path" 2>/dev/null; then
+    fail "picker variant light was refused. Got: $(cat "$picker_variant_reply_path" 2>/dev/null)"
+  fi
+  if [ ! -s "$picker_light_status_path" ]; then
+    fail "no light-variant picker status produced"
+  fi
+  cat "$picker_light_status_path"; echo
+  if ! grep -q '"variant":"light"' "$picker_light_status_path" \
+    || ! grep -q '"count":3' "$picker_light_status_path"; then
+    fail "the switcher did not swap the listing to the light set. Got: $(cat "$picker_light_status_path")"
+  fi
+fi
+
+if $hotcorner_mode; then
+  if [ ! -s "$hotcorner_layers_path" ]; then
+    fail "no hyprland layer dump produced for the hot corners"
+  fi
+  cat "$hotcorner_layers_path"; echo
+  hotcorner_count=$("$jq_bin" '[.[].levels[]?[]? | select(.namespace == "formalshell:hotcorner")] | length' "$hotcorner_layers_path")
+  # Level 2 is Hyprland's `top`, the layer HotCorners.qml asks for so the
+  # screensaver and the lock surface can still cover a corner once fired.
+  hotcorner_top=$("$jq_bin" '[.[].levels."2"[]? | select(.namespace == "formalshell:hotcorner")] | length' "$hotcorner_layers_path")
+  # Two, not four: shell/HotCorners/corners.js leaves both TOP corners at
+  # "none" by default (the bar owns that edge), and this run writes no
+  # `hotCorners` config at all, so the count doubles as proof that a corner
+  # set to "none" costs no surface rather than a mapped but inert one.
+  if [ "$hotcorner_count" != "2" ]; then
+    fail "expected 2 formalshell:hotcorner layer surfaces, found $hotcorner_count"
+  fi
+  if [ "$hotcorner_top" != "2" ]; then
+    fail "expected both hot corner surfaces on the top layer, found $hotcorner_top there"
+  fi
+  echo "SMOKE_HOTCORNER_LAYERS $hotcorner_layers_path"
 fi
 
 # A crashed shell still leaves a perfectly good screenshot of quickshell's

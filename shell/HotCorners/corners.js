@@ -9,7 +9,24 @@
 
 var CORNERS = ["topLeft", "topRight", "bottomLeft", "bottomRight"];
 
+// The actions the surface performs itself. Anything else is a launcher action
+// string, handed to the same resolver the launcher uses (HotCorners.qml).
 var ACTIONS = ["none", "screensaver", "lock"];
+
+// A launcher action string is either the in-process form ("@ipc:<target>.<fn>"
+// with an optional ":<arg>") or a command line the compositor spawns.
+//
+// A bare word is neither, and stays a typo rather than becoming a command:
+// "lok" would otherwise spawn a shell that fails silently, on a surface the
+// pointer reaches by accident. A single binary gets in as an absolute path or
+// with its arguments.
+function isLauncherAction(action) {
+    if (typeof action !== "string" || action === "")
+        return false;
+    if (action.indexOf("@ipc:") === 0)
+        return /^@ipc:[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(:.+)?$/.test(action);
+    return /\s/.test(action) || action.indexOf("/") >= 0;
+}
 
 // Both top corners default to "none": Bar.qml anchors top/left/right, so a
 // hot corner up there would take its trigger square out of the bar's own
@@ -52,7 +69,7 @@ function resolve(hotCorners) {
             corners[name] = DEFAULT_CORNERS[name];
             continue;
         }
-        if (typeof action !== "string" || ACTIONS.indexOf(action) < 0) {
+        if (typeof action !== "string" || (ACTIONS.indexOf(action) < 0 && !isLauncherAction(action))) {
             warnings.push("hotCorners." + name + ": unknown action " + JSON.stringify(action) + ", leaving the corner inert");
             corners[name] = "none";
             continue;

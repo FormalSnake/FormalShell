@@ -21,6 +21,7 @@ what you can drive over IPC. The product overview is in
 - [Polkit](#polkit)
 - [Night light](#night-light)
 - [Screensaver](#screensaver)
+- [Hot corners](#hot-corners)
 - [Picker](#picker)
 - [Screenshots](#screenshots)
 - [Text and color capture](#text-and-color-capture)
@@ -1925,14 +1926,15 @@ instead.
 
 ## Polkit
 
-The shell registers a native polkit agent and shows one centered card for as
-long as a real authentication request is in flight: an
-`AUTHENTICATION REQUIRED` header, the requesting action's own message, the
-identity being asked for as a dim row, and the same masked field the lock
-screen uses (`CHECKING…` while an attempt is in flight, `WRONG PASSWORD` in
-urgent italic on retry). Escape cancels the request. The typed password only
-ever reaches the agent's own submit call: never logged, never mirrored into
-state, never visible on the debug dump.
+The shell registers a native polkit agent and shows one centred card over a
+half-opacity scrim for as long as a real authentication request is in
+flight: an `AUTHENTICATION REQUIRED` label, the requesting action's own
+message, the identity being asked for under an `IDENTITY` label, a masked
+field, and Cancel beside Authenticate. Enter submits and Escape cancels; a
+wrong password puts the field into its error state with `Wrong password`
+under it, and the field goes quiet while an attempt is in flight. The typed
+password only ever reaches the agent's own submit call: never logged, never
+mirrored into state, never visible on the debug dump.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -2095,6 +2097,81 @@ fs screensaver stayAwakeToggle
 fs screensaver status     # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…,"stayAwake":…}
 fs screensaver frameInfo  # {"engine":…,"effect":…,"convergenceFrame":…,"cycles":…}
 ```
+
+## Hot corners
+
+Throw the pointer into a screen corner and that corner fires its action.
+Each active corner is its own tiny layer surface (`hotCorners.size` pixels
+square, transparent, no content, on every output), so a corner set to
+`none` maps nothing at all rather than sitting there inert over live pixels.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{
+  "hotCorners": {
+    "enabled": true,
+    "size": 4,
+    "delayMs": 400,
+    "topLeft": "none",
+    "topRight": "none",
+    "bottomLeft": "screensaver",
+    "bottomRight": "lock"
+  }
+}
+```
+
+```nix
+# home-manager
+programs.formalshell.settings.hotCorners = {
+  bottomLeft = "screensaver";
+  bottomRight = "lock";
+};
+```
+
+The four corner keys are `topLeft`, `topRight`, `bottomLeft` and
+`bottomRight`. The defaults are the two shown above: `bottomLeft` shows the
+screensaver, `bottomRight` locks. Both top corners default to `none`,
+because the bar owns that edge and a trigger square up there would take the
+leftmost pixels of the workspace cell (and the rightmost of the indicators
+cell) out of the bar's own input region.
+
+`size` is the trigger square in pixels (default 4, clamped to 64) and
+`delayMs` the dwell before the action fires (default 400, clamped to
+10000), so a pointer merely passing through a corner never locks the
+session. A click on the square fires straight away: those pixels stop
+reaching the window underneath either way, so a click there is deliberate.
+`enabled: false` maps no corner surfaces at all.
+
+Three action names are built in: `none`, `screensaver` and `lock`. Beyond
+those a corner takes any launcher action string, resolved by exactly the
+same code the launcher's own rows go through:
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{
+  "hotCorners": {
+    "topLeft": "@ipc:theme.toggleMode",
+    "topRight": "qs ipc --any-display -p <store-path>/share/formalshell call menu summon apps"
+  }
+}
+```
+
+`@ipc:<target>.<function>` (with an optional `:<argument>`) runs in the
+shell's own process. The names are the ones the menu tree already uses:
+`theme.toggleMode`, `nightlight.toggle`, `screensaver.stayAwakeToggle`,
+`notifications.toggleDnd`, `notifications.showHistory`, `reminder.set`,
+`reminder.show`, `reminder.clear`, `clipboard.copy:<id>` and
+`clipssh.send:<alias>`. Anything else is a command line, spawned through
+the compositor with `sh -c`, which is how a corner reaches an IPC verb that
+has no `@ipc:` name of its own.
+
+A bare word that is neither a built-in name nor one of those two forms is
+read as a typo: the corner is left inert and one warning names it in the
+log. So a single binary needs either its arguments or an absolute path
+(`/usr/bin/hyprlock`), never a bare `hyprlock`.
+
+There is no IPC target. A corner is a pointer gesture, and every action it
+can fire is already reachable by its own verb or keybind.
 
 ## Picker
 

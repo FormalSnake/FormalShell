@@ -17,6 +17,7 @@ Panel Panel.qml
 PanelHero PanelHero.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
+Segmented Segmented.qml
 Switch Switch.qml
 Tooltip Tooltip.qml
 Track Track.qml

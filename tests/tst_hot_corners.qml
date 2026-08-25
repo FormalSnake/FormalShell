@@ -31,11 +31,53 @@ TestCase {
         compare(c.corners.bottomLeft, "screensaver");
     }
 
+    // The launcher action strings (M45 D5): the same two forms Menu.qml's own
+    // _runAction resolves, kept verbatim so HotCorners hands it the string it
+    // was configured with.
+    function test_an_ipc_action_string_is_kept_verbatim() {
+        var c = Corners.resolve({ topLeft: "@ipc:notifications.showHistory" });
+        compare(c.corners.topLeft, "@ipc:notifications.showHistory");
+        compare(c.warnings.length, 0);
+        verify(Corners.isLauncherAction("@ipc:notifications.showHistory"));
+        verify(Corners.isLauncherAction("@ipc:clipboard.copy:3"));
+    }
+
+    function test_a_command_line_is_kept_verbatim() {
+        var c = Corners.resolve({ topRight: "hyprctl dispatch workspace 1" });
+        compare(c.corners.topRight, "hyprctl dispatch workspace 1");
+        compare(c.warnings.length, 0);
+        verify(Corners.isLauncherAction("/usr/bin/hyprlock"));
+    }
+
+    function test_a_custom_action_reaches_the_window_list() {
+        var c = Corners.resolve({ bottomLeft: "@ipc:theme.toggleMode" });
+        var wins = Corners.windows(c, ["HDMI-1"]);
+        compare(wins.length, 2);
+        compare(wins[0].action, "@ipc:theme.toggleMode");
+    }
+
+    // The built-ins are the surface's own, never the launcher's: routing
+    // "lock" through the resolver would spawn a shell command called lock.
+    function test_the_built_in_names_are_not_launcher_actions() {
+        verify(!Corners.isLauncherAction("lock"));
+        verify(!Corners.isLauncherAction("screensaver"));
+        verify(!Corners.isLauncherAction("none"));
+    }
+
+    // A malformed one is a typo like any other, so it takes the same path.
+    function test_a_malformed_ipc_string_is_refused() {
+        verify(!Corners.isLauncherAction("@ipc:showHistory"));
+        var c = Corners.resolve({ topLeft: "@ipc:showHistory" });
+        compare(c.corners.topLeft, "none");
+        compare(c.warnings.length, 1);
+    }
+
     function test_unknown_action_warns_and_falls_back_to_none() {
         var c = Corners.resolve({ bottomLeft: "explode" });
         compare(c.corners.bottomLeft, "none");
         compare(c.warnings.length, 1);
         verify(c.warnings[0].indexOf("bottomLeft") >= 0);
+        verify(!Corners.isLauncherAction("explode"));
     }
 
     function test_non_string_action_warns_rather_than_throwing() {
