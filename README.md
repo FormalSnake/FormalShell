@@ -22,6 +22,10 @@ One process draws the bar, the launcher, the notifications, the lock screen
 and the rest of it, and every color on screen is pulled out of your wallpaper
 by matugen.
 
+The visual language is mid-redesign: `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
+is the approved design, and the screenshots below predate it (recaptured in
+M46).
+
 It looks like this:
 
 ![FormalShell launcher, bar and toasts](docs/screenshots/menu-niri.png)
