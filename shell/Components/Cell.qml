@@ -210,7 +210,7 @@ Item {
             ? Theme.color.primary
             : root.selected
                 ? Theme.color.accent
-                : Theme.color.card
+                : Theme.surface(Theme.color.card)
         border.width: Theme.borderWidth
         border.color: root.cursor
             ? Theme.color.ring

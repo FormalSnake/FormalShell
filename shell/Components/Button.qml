@@ -100,7 +100,7 @@ Item {
             id: label
             text: root.text
             color: root._ink
-            font.family: Theme.fontFamily
+            font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.body
             font.weight: Theme.weight.medium
         }

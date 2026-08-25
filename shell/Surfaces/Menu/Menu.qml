@@ -1717,9 +1717,12 @@ PanelWindow {
             NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
         }
 
+        // Translucent, so Hyprland's blur reads through the launcher card
+        // (DESIGN.md §1 "Translucency and blur"); the scrim behind it stays
+        // opaque black at 0.5.
         Rectangle {
             anchors.fill: parent
-            color: Core.Theme.color.background
+            color: Core.Theme.surface(Core.Theme.color.card)
         }
 
         // Swallows presses that land on the card's own padding gutters

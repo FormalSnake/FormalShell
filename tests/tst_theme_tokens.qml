@@ -118,6 +118,35 @@ TestCase {
         compare(Tokens.WEIGHTS.semibold, 600);
     }
 
+    // clamp (shadcn redesign, spec "Depth"): what holds
+    // `theme.surfaceOpacity` inside 0..1.
+
+    function test_clamp_passes_a_value_already_in_range() {
+        compare(Tokens.clamp(0.85, 0, 1, 0.85), 0.85);
+        compare(Tokens.clamp(0, 0, 1, 0.85), 0);
+        compare(Tokens.clamp(1, 0, 1, 0.85), 1);
+    }
+
+    function test_clamp_holds_a_value_at_the_bounds() {
+        compare(Tokens.clamp(-3, 0, 1, 0.85), 0);
+        compare(Tokens.clamp(42, 0, 1, 0.85), 1);
+    }
+
+    // A malformed alpha resolves to the caller's own default rather than to
+    // `min`, which would paint every card invisible.
+    function test_clamp_falls_back_on_anything_that_is_not_a_number() {
+        compare(Tokens.clamp(undefined, 0, 1, 0.85), 0.85);
+        compare(Tokens.clamp(null, 0, 1, 0.85), 0.85);
+        compare(Tokens.clamp("opaque", 0, 1, 0.85), 0.85);
+        compare(Tokens.clamp(NaN, 0, 1, 0.85), 0.85);
+        compare(Tokens.clamp(Infinity, 0, 1, 0.85), 0.85);
+    }
+
+    // A JSON number arriving as a string still reads as the number it is.
+    function test_clamp_accepts_a_numeric_string() {
+        compare(Tokens.clamp("0.5", 0, 1, 0.85), 0.5);
+    }
+
     // letter-spacing tokens
 
     function test_letter_spacing_tokens_at_scale_one() {

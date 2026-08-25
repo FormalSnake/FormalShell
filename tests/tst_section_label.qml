@@ -68,6 +68,12 @@ TestCase {
         verify(Qt.colorEqual(text.color, Theme.color.mutedForeground));
     }
 
+    // Sans, because a section label is words (DESIGN.md §1 "Type").
+    function test_the_face_is_sans() {
+        var label = make(labelComponent, { text: "NETWORKS" });
+        compare(labelOf(label).font.family, Theme.fontFamilySans);
+    }
+
     function test_implicit_size_tracks_the_label() {
         var label = make(labelComponent, { text: "NETWORKS" });
         var text = labelOf(label);

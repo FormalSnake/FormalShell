@@ -58,7 +58,7 @@ Item {
             verticalAlignment: Text.AlignVCenter
             text: root.placeholder
             color: Theme.color.mutedForeground
-            font.family: Theme.fontFamily
+            font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.body
             elide: Text.ElideRight
         }
@@ -70,7 +70,7 @@ Item {
             anchors.rightMargin: Theme.space.controlPaddingX
             verticalAlignment: TextInput.AlignVCenter
             color: Theme.color.foreground
-            font.family: Theme.fontFamily
+            font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.body
             selectByMouse: true
             selectionColor: Theme.color.primary
@@ -88,7 +88,7 @@ Item {
         visible: root._showsError
         text: root.errorText
         color: Theme.color.destructive
-        font.family: Theme.fontFamily
+        font.family: Theme.fontFamilySans
         font.pixelSize: Theme.fontSize.caption
         wrapMode: Text.WordWrap
     }

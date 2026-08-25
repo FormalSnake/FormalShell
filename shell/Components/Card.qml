@@ -10,7 +10,7 @@ Rectangle {
     default property alias content: inner.data
     property real padding: Theme.space.panelPadding
 
-    color: Theme.color.card
+    color: Theme.surface(Theme.color.card)
     radius: Theme.radiusXl
     border.width: Theme.borderWidth
     border.color: Theme.color.border

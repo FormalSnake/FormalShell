@@ -133,7 +133,7 @@ PanelWindow {
         width: implicitWidth
         height: implicitHeight
         radius: Theme.radiusSm
-        color: Theme.color.popover
+        color: Theme.surface(Theme.color.popover)
         border.width: Theme.borderWidth
         border.color: Theme.color.border
 
@@ -161,7 +161,7 @@ PanelWindow {
             elide: Text.ElideRight
             text: root.text
             color: Theme.color.popoverForeground
-            font.family: Theme.fontFamily
+            font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.caption
         }
     }

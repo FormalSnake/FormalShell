@@ -38,7 +38,18 @@ QtObject {
     readonly property var space: Tokens.spacingTokens(fontScale)
     readonly property var letterSpacing: Tokens.letterSpacingTokens(fontScale)
 
-    readonly property string fontFamily: "monospace"
+    readonly property string fontFamilySans: "sans-serif"
+    readonly property string fontFamilyMono: "monospace"
+    readonly property string fontFamily: root.fontFamilyMono
+
+    readonly property real surfaceOpacity: Tokens.clamp(0.85, 0, 1, 0.85)
+
+    // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
+    // strings, which have no .r/.g/.b to read, and Qt.rgba on those three
+    // undefined values silently paints black at the right alpha.
+    function surface(c) {
+        return Qt.alpha(c, root.surfaceOpacity);
+    }
 
     readonly property bool motionEnabled: true
 

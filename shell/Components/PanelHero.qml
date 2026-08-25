@@ -31,6 +31,9 @@ Cell {
     property string glyph: ""
     property string title: ""
     property string meta: ""
+    // A meta line carrying an identifier or a number is a value, so it takes
+    // the mono face (DESIGN.md §1 "Type"). Words stay sans.
+    property bool metaMono: false
     property string readout: ""
     // "display" (26px) or "displayLarge" (30px), DESIGN.md §1.3.
     property string readoutSize: "display"
@@ -70,7 +73,7 @@ Cell {
                     anchors.centerIn: parent
                     text: root.glyph
                     color: root.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.heading
                 }
 
@@ -99,7 +102,7 @@ Cell {
                     width: parent.width
                     text: root.title
                     color: root.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.subtitle
                     elide: Text.ElideRight
                 }
@@ -109,12 +112,13 @@ Cell {
                     visible: root.meta !== ""
                     text: root.meta
                     color: root.dimForeground
+                    font.family: root.metaMono ? Theme.fontFamilyMono : Theme.fontFamilySans
                     elide: Text.ElideRight
                 }
             }
 
-            // Monospace tabular digits by construction: the readout never
-            // jitters as its value ticks.
+            // Mono, so the digits stay tabular and the readout never jitters
+            // as its value ticks.
             Text {
                 id: readoutText
                 anchors.right: trailingLoader.active ? trailingLoader.left : parent.right
@@ -123,7 +127,7 @@ Cell {
                 visible: root.readout !== ""
                 text: root.readout
                 color: root.foreground
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilyMono
                 font.pixelSize: root.readoutSize === "displayLarge" ? Theme.fontSize.displayLarge : Theme.fontSize.display
             }
 

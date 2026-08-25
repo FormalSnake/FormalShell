@@ -572,8 +572,21 @@ nixpkgs.lib.nixosSystem {
           # fc-list sees it system-wide, the same double coverage the mono
           # nerd font already gets (fonts.packages here, PATH tools that
           # shell out to fc-match elsewhere).
-          packages = [ pkgs.nerd-fonts.jetbrains-mono self.packages.aarch64-linux.lucide-font ];
+          packages = [
+            pkgs.nerd-fonts.jetbrains-mono
+            self.packages.aarch64-linux.lucide-font
+            pkgs.geist-font
+          ];
           fontconfig.enable = true;
+          # The shell asks fontconfig for `sans-serif` and `monospace` and
+          # never names a family (DESIGN.md §1 "Type"), so this is where the
+          # rig decides which pair the screenshots show. Geist Sans and Geist
+          # Mono are the intended pair, and they are visibly different faces,
+          # which is what makes a wrong `font.family` legible in a PNG.
+          fontconfig.defaultFonts = {
+            sansSerif = [ "Geist" ];
+            monospace = [ "Geist Mono" ];
+          };
         };
 
         nix.settings = {

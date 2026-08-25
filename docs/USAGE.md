@@ -435,7 +435,7 @@ include "~/.local/state/formalshell/niri-border.kdl"
 The file is created empty at startup if it doesn't exist yet, so the
 `include` never errors on a fresh install.
 
-### Radius and icons
+### Radius, icons and translucency
 
 `theme.radius` sets the corner radius root every surface derives its
 `sm`/`md`/`lg`/`xl` steps from (shadcn's own `--radius`, default 10).
@@ -444,14 +444,38 @@ The file is created empty at startup if it doesn't exist yet, so the
 every other glyph in the shell already uses). A name missing from a set
 falls back to that set's own `circle-help`.
 
+`theme.surfaceOpacity` (0 to 1, default 0.85) is the alpha of the bar
+cells, the panels and the launcher card. The shell blurs nothing itself:
+that alpha is what lets a compositor blur read through. On Hyprland, copy
+this repo's `docs/examples/hyprland/formalshell.conf` next to your own
+config and source it: it turns the blur on and points it at the
+`formalshell:bar`, `formalshell:panel` and `formalshell:menu` layer
+namespaces. Under a compositor with blur
+off the same alpha reads as a tint. Toasts, the OSD, the notification
+centre and the lock screen stay opaque either way.
+
+```conf
+# ~/.config/hypr/hyprland.conf
+source = ~/.config/hypr/formalshell.conf
+```
+
+The shell asks fontconfig for `sans-serif` and `monospace` and never names
+a family, so the pair of faces is yours to pick. Geist Sans and Geist Mono
+are what the design targets:
+
 ```jsonc
 // ~/.config/formalshell/settings.json
-{ "theme": { "radius": 10, "icons": "lucide" } }
+{ "theme": { "radius": 10, "icons": "lucide", "surfaceOpacity": 0.85 } }
 ```
 
 ```nix
 # home-manager
-programs.formalshell.settings.theme = { radius = 10; icons = "lucide"; };
+programs.formalshell.settings.theme = { radius = 10; icons = "lucide"; surfaceOpacity = 0.85; };
+
+# NixOS
+fonts.packages = [ pkgs.geist-font ];
+fonts.fontconfig.defaultFonts.sansSerif = [ "Geist" ];
+fonts.fontconfig.defaultFonts.monospace = [ "Geist Mono" ];
 ```
 
 ### Wallpaper dither

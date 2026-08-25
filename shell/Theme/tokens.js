@@ -92,6 +92,21 @@ function letterSpacingTokens(scale) {
 // font axis value, not a size.
 var WEIGHTS = { normal: 400, medium: 500, semibold: 600 };
 
+// Holds a settings-supplied number inside a range. Anything that is not a
+// finite number resolves to `fallback` rather than to `min`, which for an
+// alpha would mean a surface nobody can see. Same shape as
+// HotCorners/corners.js's own `_clampedNumber`, minus the rounding and the
+// warning, since a fraction is not an integer and Theme has no warning
+// channel.
+function clamp(value, min, max, fallback) {
+    if (value === undefined || value === null)
+        return fallback;
+    var n = Number(value);
+    if (!isFinite(n))
+        return fallback;
+    return Math.max(min, Math.min(max, n));
+}
+
 // Radius tokens (spec "Radius"): sm/md/lg/xl step off the settings-driven
 // base by fixed 2-4px offsets, floored at 2 so a base pinned near 0 never
 // produces a negative or invisible radius.

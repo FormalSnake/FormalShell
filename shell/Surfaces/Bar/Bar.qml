@@ -75,6 +75,11 @@ PanelWindow {
     screen: modelData
     anchors { top: true; left: true; right: true }
 
+    // What a compositor layer rule addresses this strip by: the shipped
+    // Hyprland example (docs/examples/hyprland/formalshell.conf) blurs
+    // `formalshell:bar` behind the translucent cells.
+    WlrLayershell.namespace: "formalshell:bar"
+
     function _resolveLayout() {
         var result = Layout.resolve(Config.get("bar", null), PluginService.barPlugins);
         for (var i = 0; i < result.warnings.length; i++)

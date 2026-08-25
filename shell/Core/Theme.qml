@@ -54,12 +54,28 @@ Singleton {
     // the window before the first Bar instance maps.
     property real barHeight: space.barCellHeight + space.barMargin * 2
 
-    // Always the fontconfig `monospace` alias (DESIGN.md §1.3, CLAUDE.md
-    // hard rule) — never a hardcoded family, never a second display face.
-    // Replaces the legacy `font` object (M18 Task 6): every consumer only
-    // ever read `.family`, so the stale size math (duplicating `fontSize`
-    // above under different names) is gone with it.
-    readonly property string fontFamily: "monospace"
+    // Two faces by context (spec "Type", DESIGN.md §1): sans carries words,
+    // mono carries values. Both are fontconfig aliases, never a hardcoded
+    // family (CLAUDE.md hard rule). The intended pair is Geist Sans and
+    // Geist Mono, chosen through the user's own fontconfig defaults.
+    readonly property string fontFamilySans: "sans-serif"
+    readonly property string fontFamilyMono: "monospace"
+    // The pre-M41 name, still read by every surface not yet ported. M45
+    // deletes it with the last of them.
+    readonly property string fontFamily: root.fontFamilyMono
+
+    // The alpha of every `card`/`popover` fill on the three surfaces
+    // Hyprland blurs behind (DESIGN.md §1 "Translucency and blur"): the bar
+    // cells, the panels and the launcher card. The shell blurs nothing
+    // itself; this alpha is what lets the compositor's blur read through.
+    readonly property real surfaceOpacity: Tokens.clamp(Config.get("theme.surfaceOpacity", 0.85), 0, 1, 0.85)
+
+    // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
+    // strings, which have no .r/.g/.b to read, and Qt.rgba on those three
+    // undefined values silently paints black at the right alpha.
+    function surface(c) {
+        return Qt.alpha(c, root.surfaceOpacity);
+    }
 
     // --- DESIGN.md §4 motion tokens -----------------------------------------
     // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the

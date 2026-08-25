@@ -96,11 +96,27 @@ TestCase {
         var cell = makeCell({});
         var rects = layers(cell);
         verify(!rects[0].visible);
-        verify(Qt.colorEqual(rects[1].color, Theme.color.card));
+        verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));
         verify(Qt.colorEqual(rects[1].border.color, Theme.color.border));
         compare(rects[2].opacity, 0);
         verify(Qt.colorEqual(cell.foreground, Theme.color.foreground));
         verify(Qt.colorEqual(cell.dimForeground, Theme.color.mutedForeground));
+    }
+
+    // The rest fill is the card colour at `theme.surfaceOpacity`, which is
+    // what lets Hyprland's blur read through a bar cell (DESIGN.md §1
+    // "Translucency and blur"). The channels are checked against the
+    // sentinel's own literal, not against another Theme.surface() call: a
+    // surface() that dropped the colour entirely and painted black at the
+    // right alpha would satisfy a self-comparison, and did.
+    function test_rest_fill_carries_the_surface_alpha() {
+        var cell = makeCell({});
+        var rects = layers(cell);
+        compare(rects[1].color.a, Theme.surfaceOpacity);
+        verify(Theme.surfaceOpacity < 1);
+        compare(Math.round(rects[1].color.r * 255), 0x15);
+        compare(Math.round(rects[1].color.g * 255), 0x15);
+        compare(Math.round(rects[1].color.b * 255), 0x15);
     }
 
     function test_hover_fades_in_the_accent_layer() {
@@ -110,7 +126,7 @@ TestCase {
         // The layer fades on Theme.motion.fast, so it is still climbing
         // when settle() returns.
         tryCompare(rects[2], "opacity", 1);
-        verify(Qt.colorEqual(rects[1].color, Theme.color.card));
+        verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));
         verify(Qt.colorEqual(cell.foreground, Theme.color.foreground));
     }
 
@@ -156,7 +172,7 @@ TestCase {
     function test_destructive_colours_the_border_and_the_ink() {
         var cell = makeCell({ destructive: true });
         var rects = layers(cell);
-        verify(Qt.colorEqual(rects[1].color, Theme.color.card));
+        verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));
         verify(Qt.colorEqual(rects[1].border.color, Theme.color.destructive));
         verify(Qt.colorEqual(cell.foreground, Theme.color.destructive));
         verify(Qt.colorEqual(cell.dimForeground, Theme.color.mutedForeground));
@@ -171,7 +187,7 @@ TestCase {
     function test_warning_colours_the_border_and_the_ink() {
         var cell = makeCell({ warning: true });
         var rects = layers(cell);
-        verify(Qt.colorEqual(rects[1].color, Theme.color.card));
+        verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));
         verify(Qt.colorEqual(rects[1].border.color, Theme.color.warning));
         verify(Qt.colorEqual(cell.foreground, Theme.color.warning));
     }
@@ -196,7 +212,7 @@ TestCase {
         var cell = makeCell({ standalone: true, pending: true });
         var rects = layers(cell);
         compare(rects.length, 4);
-        verify(Qt.colorEqual(rects[1].color, Theme.color.card));
+        verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));
         verify(Qt.colorEqual(cell.foreground, Theme.color.foreground));
     }
 

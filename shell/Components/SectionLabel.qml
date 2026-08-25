@@ -29,7 +29,7 @@ Item {
         id: label
         anchors.fill: parent
         color: Theme.color.mutedForeground
-        font.family: Theme.fontFamily
+        font.family: Theme.fontFamilySans
         font.pixelSize: Theme.fontSize.caption
         font.weight: Theme.weight.medium
         font.capitalization: Font.AllUppercase

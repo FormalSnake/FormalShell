@@ -165,6 +165,12 @@ TestCase {
         compare(layers(ghost)[1].opacity, 1);
     }
 
+    // Sans, because a button label is words (DESIGN.md §1 "Type").
+    function test_the_label_face_is_sans() {
+        var button = make(buttonComponent, { text: "Speed test" });
+        compare(findText(button, "Speed test").font.family, Theme.fontFamilySans);
+    }
+
     function test_disabled_dims_the_whole_button() {
         var button = make(buttonComponent, { text: "Connect", enabled: false });
         compare(button.opacity, 0.5);

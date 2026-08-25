@@ -1041,7 +1041,7 @@ Panel {
                     anchors.verticalCenter: parent.verticalCenter
                     text: wiredCell.modelData.network.name || "(unnamed)"
                     color: wiredCell.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
                     font.weight: Theme.weight.medium
                     elide: Text.ElideRight
@@ -1144,7 +1144,7 @@ Panel {
                         anchors.verticalCenter: parent.verticalCenter
                         text: wifiCell._ssid !== "" ? wifiCell._ssid : "Hidden network"
                         color: wifiCell._ssid !== "" ? wifiCell.foreground : Theme.color.mutedForeground
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontFamilySans
                         font.pixelSize: Theme.fontSize.body
                         font.weight: Theme.weight.medium
                         elide: Text.ElideRight
@@ -1160,7 +1160,7 @@ Panel {
                             visible: typeof wifiCell._network.signalStrength === "number"
                             text: Math.round(wifiCell._network.signalStrength * 100) + "%"
                             color: wifiCell.dimForeground
-                            font.family: Theme.fontFamily
+                            font.family: Theme.fontFamilyMono
                             font.pixelSize: Theme.fontSize.bodySmall
                         }
 
@@ -1269,6 +1269,7 @@ Panel {
         width: parent.width
         title: root._wifiHeroTitle
         meta: root._wifiHeroMeta
+        metaMono: root._wifiDeviceAddress !== "" && root._connectedWifiSsid !== ""
 
         leading: Component {
             Icon {
@@ -1283,7 +1284,7 @@ Panel {
                 visible: root._connectedSignalText !== ""
                 text: root._connectedSignalText
                 color: hero.dimForeground
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.bodySmall
             }
         }
@@ -1321,7 +1322,7 @@ Panel {
                             id: downValue
                             text: root._downText + " Mbps"
                             color: statsCell.foreground
-                            font.family: Theme.fontFamily
+                            font.family: Theme.fontFamilyMono
                             font.pixelSize: Theme.fontSize.body
                             font.weight: Theme.weight.medium
                         }
@@ -1348,7 +1349,7 @@ Panel {
                             id: upValue
                             text: root._upText + " Mbps"
                             color: statsCell.foreground
-                            font.family: Theme.fontFamily
+                            font.family: Theme.fontFamilyMono
                             font.pixelSize: Theme.fontSize.body
                             font.weight: Theme.weight.medium
                         }
@@ -1435,7 +1436,7 @@ Panel {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Share network"
                     color: shareCell.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
                     font.weight: Theme.weight.medium
                 }
@@ -1561,7 +1562,7 @@ Panel {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "Password"
                         color: passwordCell.foreground
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontFamilySans
                         font.pixelSize: Theme.fontSize.body
                         font.weight: Theme.weight.medium
                     }
@@ -1585,7 +1586,7 @@ Panel {
                     width: parent.width
                     text: root._pwPhase === "shown" ? root._pwText : root._pwMask
                     color: root._pwPhase === "shown" ? passwordCell.foreground : Theme.color.mutedForeground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.body
                     wrapMode: Text.WrapAnywhere
                 }
@@ -1625,13 +1626,16 @@ Panel {
                 id: resultValue
                 text: root._downText
                 color: Theme.color.foreground
-                font.family: Theme.fontFamily
+                font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.display
                 font.weight: Theme.weight.semibold
             }
 
+            // The unit belongs to the figure beside it, so it takes the
+            // figure's face rather than a section label's.
             SectionLabel {
                 text: "MBPS"
+                font.family: Theme.fontFamilyMono
                 anchors.bottom: resultValue.bottom
                 anchors.bottomMargin: Theme.space.xs
             }

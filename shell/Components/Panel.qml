@@ -349,7 +349,7 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.panelTitle
                     color: Theme.color.foreground
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.subtitle
                     font.weight: Theme.weight.semibold
                     elide: Text.ElideRight

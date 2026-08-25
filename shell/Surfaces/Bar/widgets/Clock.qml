@@ -43,7 +43,7 @@ Cell {
         anchors.verticalCenter: parent.verticalCenter
         text: root._text
         color: root.foreground
-        font.family: Core.Theme.fontFamily
+        font.family: Core.Theme.fontFamilyMono
         font.pixelSize: Core.Theme.fontSize.body
         font.weight: Core.Theme.weight.medium
     }

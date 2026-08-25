@@ -65,6 +65,7 @@ Cell {
             anchors.verticalCenter: parent.verticalCenter
             text: String(root._pending)
             color: root.foreground
+            font.family: Theme.fontFamilyMono
         }
     }
 
