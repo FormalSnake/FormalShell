@@ -64,6 +64,53 @@ function fallback(mode) {
     };
 }
 
+// A wallpaper whose path carries "flexoki" (any case, the substring test
+// the DMS-era flexoki-pin reconciler used) is pinned to Flexoki
+// (stephango.com/flexoki) instead of themed off its pixels: the shell skips
+// matugen for it and writes this palette the way it writes zinc with no
+// wallpaper. Base tones fill the surfaces (black/b950/b900 dark, paper/b50/
+// b100 light), blue is `primary` and `ring` (the colour Flexoki's own site
+// links in), the 400 stops sit on dark and the 600 stops on light, and
+// chart1..5 walk the accents since this palette has real ones to draw from.
+function pinsFlexoki(wallpaperPath) {
+    return typeof wallpaperPath === "string" && /flexoki/i.test(wallpaperPath);
+}
+
+function flexoki(mode) {
+    if (mode === "light") {
+        return {
+            mode: "light",
+            background: "#fffcf0", foreground: "#100f0f",
+            card: "#f2f0e5", cardForeground: "#100f0f",
+            popover: "#e6e4d9", popoverForeground: "#100f0f",
+            primary: "#205ea6", primaryForeground: "#fffcf0",
+            secondary: "#e6e4d9", secondaryForeground: "#100f0f",
+            muted: "#e6e4d9", mutedForeground: "#6f6e69",
+            accent: "#dad8ce", accentForeground: "#100f0f",
+            destructive: "#af3029", destructiveForeground: "#fffcf0",
+            warning: "#bc5215", warningForeground: "#fffcf0",
+            border: "#dad8ce", input: "#dad8ce", ring: "#205ea6",
+            chart1: "#205ea6", chart2: "#24837b", chart3: "#bc5215",
+            chart4: "#66800b", chart5: "#5e409d"
+        };
+    }
+    return {
+        mode: "dark",
+        background: "#100f0f", foreground: "#cecdc3",
+        card: "#1c1b1a", cardForeground: "#cecdc3",
+        popover: "#282726", popoverForeground: "#cecdc3",
+        primary: "#4385be", primaryForeground: "#100f0f",
+        secondary: "#282726", secondaryForeground: "#cecdc3",
+        muted: "#282726", mutedForeground: "#878580",
+        accent: "#343331", accentForeground: "#cecdc3",
+        destructive: "#d14d41", destructiveForeground: "#100f0f",
+        warning: "#da702c", warningForeground: "#100f0f",
+        border: "#403e3c", input: "#403e3c", ring: "#4385be",
+        chart1: "#4385be", chart2: "#3aa99f", chart3: "#da702c",
+        chart4: "#879a39", chart5: "#8b7ec8"
+    };
+}
+
 // Per-key backward-tolerant merge: a theme.json written before a key existed
 // (or mid-write with one bad value) falls back to zinc for that key alone,
 // never the whole object, so a live matugen run stays themed everywhere

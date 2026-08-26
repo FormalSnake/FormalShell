@@ -452,6 +452,13 @@ palette instead, in the variant matching the current mode, so
 `theme mode toggle` flips the whole shell through the same file write a
 matugen run uses.
 
+A wallpaper whose path contains `flexoki` (any case, so
+`Moraine_Lake-flexoki.webp` or a `flexoki/` directory) takes the same static
+route with the bundled Flexoki palette in the current mode; rename a file to
+opt it in. Only `theme.json` and the Hyprland colours files are written for a
+pinned wallpaper: your own matugen templates keep the last matugen run's
+output.
+
 ```sh
 fs wallpaper set /path/to/image.jpg
 fs theme mode toggle          # dark <-> light

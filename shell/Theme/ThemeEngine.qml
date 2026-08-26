@@ -30,7 +30,11 @@ import "palette.js" as Palette
 // the current mode, so `theme mode toggle` recolors every consumer live
 // through the exact same theme.json write a matugen run uses (M13b Task 3;
 // before that the fallback was static dark and toggling without a wallpaper
-// visibly did nothing). theme.json's own FileView drives the "run once if
+// visibly did nothing). A wallpaper whose path carries "flexoki" takes the
+// same static route with palette.flexoki(State.mode): its pixels never seed
+// a scheme, Flexoki's own tones stand in (the near-black field of an ASCII
+// wallpaper otherwise seeds a lavender scheme off the hue of its noise).
+// theme.json's own FileView drives the "run once if
 // absent" startup behavior declaratively; State.mode defaults to dark, so
 // the seeded first-boot theme.json stays the dark variant.
 //
@@ -257,17 +261,19 @@ Singleton {
 
     function _start() {
         root._syncSystemScheme();
-        if (Core.State.wallpaper === "") {
-            var fb = Palette.fallback(Core.State.mode);
-            root._writeFile(root._themeJsonPath, JSON.stringify(fb, null, 2), exitCode => {
+        var pinned = Core.State.wallpaper === "" ? Palette.fallback(Core.State.mode)
+            : Palette.pinsFlexoki(Core.State.wallpaper) ? Palette.flexoki(Core.State.mode)
+            : null;
+        if (pinned) {
+            root._writeFile(root._themeJsonPath, JSON.stringify(pinned, null, 2), exitCode => {
                 if (exitCode !== 0)
-                    console.warn("ThemeEngine: failed to write fallback theme.json, code", exitCode);
+                    console.warn("ThemeEngine: failed to write static theme.json, code", exitCode);
                 else
                     root.themeJsonPresent = true;
                 // A hyprland config reading either colours file must find it
-                // whether or not a wallpaper was ever set, so the fallback
+                // whether or not a wallpaper was ever set, so the static
                 // palette renders the same variables matugen would.
-                root._publishHyprColors(fb, function () {
+                root._publishHyprColors(pinned, function () {
                     root._reloadHyprland();
                     root._finish();
                 });

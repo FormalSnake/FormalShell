@@ -111,6 +111,50 @@ TestCase {
         compare(f.ring, "#a1a1aa");
     }
 
+    // Flexoki on the same role set: black/b950/b900 surfaces, blue-400 as
+    // primary and ring, b800 borders. Every role validates so the static
+    // write path can hand it to theme.json unchanged.
+    function test_flexoki_dark() {
+        var f = P.flexoki("dark");
+        verify(P.validate(f).ok);
+        compare(f.mode, "dark");
+        compare(f.background, "#100f0f");
+        compare(f.card, "#1c1b1a");
+        compare(f.foreground, "#cecdc3");
+        compare(f.primary, "#4385be");
+        compare(f.ring, "#4385be");
+        compare(f.border, "#403e3c");
+        compare(f.destructive, "#d14d41");
+        compare(f.warning, "#da702c");
+    }
+
+    function test_flexoki_light() {
+        var f = P.flexoki("light");
+        verify(P.validate(f).ok);
+        compare(f.mode, "light");
+        compare(f.background, "#fffcf0");
+        compare(f.card, "#f2f0e5");
+        compare(f.foreground, "#100f0f");
+        compare(f.primary, "#205ea6");
+        compare(f.ring, "#205ea6");
+        compare(f.border, "#dad8ce");
+        compare(f.destructive, "#af3029");
+        compare(f.warning, "#bc5215");
+    }
+
+    function test_flexoki_no_arg_is_dark() {
+        compare(JSON.stringify(P.flexoki()), JSON.stringify(P.flexoki("dark")));
+    }
+
+    function test_pins_flexoki_is_a_case_insensitive_path_substring() {
+        verify(P.pinsFlexoki("/w/dark/Moraine_Lake-flexoki.webp"));
+        verify(P.pinsFlexoki("/w/dark/FLEXOKI-dark-orb.png"));
+        verify(P.pinsFlexoki("/w/flexoki/anything.png"));
+        verify(!P.pinsFlexoki("/w/dark/wallhaven-yq2zwl.png"));
+        verify(!P.pinsFlexoki(""));
+        verify(!P.pinsFlexoki(null));
+    }
+
     function test_merge_with_fallback_fills_missing_keys() {
         // A theme.json written before a role existed: the roles it does
         // carry pass through untouched, the ones it lacks fall back
