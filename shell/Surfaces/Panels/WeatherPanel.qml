@@ -215,61 +215,69 @@ Panel {
             count: root._forecast.length
         }
 
-        Repeater {
-            model: root._forecast
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
 
-            delegate: Cell {
-                id: dayCell
-                required property var modelData
-                required property int index
-                width: parent.width
-                // Hover-only: a forecast row has nothing to activate, so the
-                // pointer moves the cursor onto it and answers no click.
-                interactive: true
-                acceptedButtons: Qt.NoButton
-                cursor: root.cursorActive && root.cursorIndex === dayCell.index
+            Repeater {
+                model: root._forecast
 
-                onContainsPointerChanged: if (dayCell.containsPointer) {
-                    root.cursorActive = true;
-                    root.cursorIndex = dayCell.index;
-                }
-
-                Item {
+                delegate: Cell {
+                    id: dayCell
+                    required property var modelData
+                    required property int index
                     width: parent.width
-                    height: dayName.implicitHeight
+                    ghost: true
+                    // Hover-only: a forecast row has nothing to activate, so the
+                    // pointer moves the cursor onto it and answers no click.
+                    interactive: true
+                    acceptedButtons: Qt.NoButton
+                    cursor: root.cursorActive && root.cursorIndex === dayCell.index
 
-                    Icon {
-                        id: dayIcon
-                        name: Openmeteo.iconForCode(dayCell.modelData.code, true)
-                        size: Theme.fontSize.body
-                        color: dayCell.foreground
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
+                    onContainsPointerChanged: if (dayCell.containsPointer) {
+                        root.cursorActive = true;
+                        root.cursorIndex = dayCell.index;
                     }
 
-                    Text {
-                        id: dayName
-                        anchors.left: dayIcon.right
-                        anchors.leftMargin: Theme.space.iconGap
-                        anchors.right: dayTemps.left
-                        anchors.rightMargin: Theme.space.iconGap
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: Openmeteo.weekdayLabel(dayCell.modelData.date)
-                        color: dayCell.foreground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.body
-                        font.weight: Theme.weight.medium
-                        elide: Text.ElideRight
-                    }
+                    Item {
+                        width: parent.width
+                        height: dayName.implicitHeight
 
-                    Text {
-                        id: dayTemps
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: Math.round(dayCell.modelData.high) + "° / " + Math.round(dayCell.modelData.low) + "°"
-                        color: dayCell.dimForeground
-                        font.family: Theme.fontFamilyMono
-                        font.pixelSize: Theme.fontSize.bodySmall
+                        Icon {
+                            id: dayIcon
+                            name: Openmeteo.iconForCode(dayCell.modelData.code, true)
+                            size: Theme.fontSize.body
+                            color: dayCell.foreground
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Text {
+                            id: dayName
+                            anchors.left: dayIcon.right
+                            anchors.leftMargin: Theme.space.iconGap
+                            anchors.right: dayTemps.left
+                            anchors.rightMargin: Theme.space.iconGap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Openmeteo.weekdayLabel(dayCell.modelData.date)
+                            color: dayCell.foreground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            id: dayTemps
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Math.round(dayCell.modelData.high) + "° / " + Math.round(dayCell.modelData.low) + "°"
+                            color: dayCell.dimForeground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.bodySmall
+                        }
                     }
                 }
             }

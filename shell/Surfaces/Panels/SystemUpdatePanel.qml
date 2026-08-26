@@ -260,6 +260,7 @@ Panel {
             required property int index
             required property var modelData
             width: parent.width
+            ghost: true
 
             readonly property string _status: Update.rowStatus(inputCell.modelData, root.heads)
 
@@ -333,9 +334,16 @@ Panel {
             text: root.counts.unknown + " UNKNOWN"
         }
 
-        Repeater {
-            model: root.inputs
-            delegate: inputRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root.inputs
+                delegate: inputRow
+            }
         }
     }
 

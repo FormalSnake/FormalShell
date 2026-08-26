@@ -485,6 +485,7 @@ Panel {
             id: btCell
             required property var modelData
             width: parent.width
+            ghost: true
             interactive: root._actionKind === ""
 
             readonly property var _device: btCell.modelData.device
@@ -695,9 +696,16 @@ Panel {
             count: root._pairedSection.length
         }
 
-        Repeater {
-            model: root._pairedSection
-            delegate: deviceRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._pairedSection
+                delegate: deviceRow
+            }
         }
     }
 
@@ -712,9 +720,14 @@ Panel {
             count: root._availableSection.length
         }
 
-        Repeater {
-            model: root._availableSection
-            delegate: deviceRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._availableSection
+                delegate: deviceRow
+            }
         }
     }
 }

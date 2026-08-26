@@ -111,6 +111,7 @@ Panel {
             required property int index
             required property var modelData
             width: parent.width
+            ghost: true
             interactive: true
             cursor: root.cursorActive && root.cursorIndex === actionCell.index
             onContainsPointerChanged: if (actionCell.containsPointer) root._pointAt(actionCell.index)
@@ -144,6 +145,7 @@ Panel {
             readonly property int _cursorIndex: root._actions.length + windowCell.index
 
             width: parent.width
+            ghost: true
             interactive: true
             selected: windowCell._isCurrent
             cursor: root.cursorActive && root.cursorIndex === windowCell._cursorIndex
@@ -248,9 +250,16 @@ Panel {
             text: "NO ACTIONS"
         }
 
-        Repeater {
-            model: root._window !== null ? root._actions : []
-            delegate: actionRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._window !== null ? root._actions : []
+                delegate: actionRow
+            }
         }
     }
 
@@ -265,9 +274,14 @@ Panel {
             count: root._appWindows.length
         }
 
-        Repeater {
-            model: root._window !== null ? root._appWindows : []
-            delegate: windowRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._window !== null ? root._appWindows : []
+                delegate: windowRow
+            }
         }
 
         // The menu separator (spec "Panels"): the close row acts on the
@@ -283,6 +297,7 @@ Panel {
             id: closeCell
             visible: root._window !== null
             width: parent.width
+            ghost: true
             interactive: true
             cursor: root.cursorActive && root.cursorIndex === root._closeIndex
             onContainsPointerChanged: if (closeCell.containsPointer) root._pointAt(root._closeIndex)

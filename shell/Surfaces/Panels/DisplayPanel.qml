@@ -165,6 +165,7 @@ Panel {
             required property var modelData
             required property int index
             width: parent.width
+            ghost: true
             cursor: root.cursorActive && root.cursorIndex === outCell.index
 
             // The focused output is marked on its icon, not by filling the
@@ -344,6 +345,7 @@ Panel {
             required property string label
             required property real percent
             width: parent.width
+            ghost: true
             cursor: root.cursorActive && root.cursorIndex === (root._outputs.length + brightnessCell.index)
 
             interactive: true
@@ -465,9 +467,16 @@ Panel {
             count: root._outputs.length
         }
 
-        Repeater {
-            model: root._outputs
-            delegate: outputRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._outputs
+                delegate: outputRow
+            }
         }
     }
 
@@ -487,9 +496,14 @@ Panel {
             text: "NO BACKLIGHT"
         }
 
-        Repeater {
-            model: BrightnessService.devices
-            delegate: brightnessRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: BrightnessService.devices
+                delegate: brightnessRow
+            }
         }
     }
 

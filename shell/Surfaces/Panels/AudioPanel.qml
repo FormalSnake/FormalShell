@@ -270,6 +270,7 @@ Panel {
             id: deviceCell
             required property var modelData
             width: parent.width
+            ghost: true
             interactive: true
             selected: deviceCell.modelData.isOutput
                 ? (root._sink !== null && deviceCell.modelData.node.id === root._sink.id)
@@ -330,6 +331,7 @@ Panel {
             id: streamCell
             required property var modelData
             width: parent.width
+            ghost: true
             interactive: true
             cursor: root.cursorActive && root._cursorKey === streamCell.modelData.cursorKey
 
@@ -483,9 +485,16 @@ Panel {
             }
         }
 
-        Repeater {
-            model: root._outputRows
-            delegate: deviceRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._outputRows
+                delegate: deviceRow
+            }
         }
     }
 
@@ -603,9 +612,14 @@ Panel {
             }
         }
 
-        Repeater {
-            model: root._inputRows
-            delegate: deviceRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._inputRows
+                delegate: deviceRow
+            }
         }
     }
 
@@ -620,9 +634,14 @@ Panel {
             count: root._streamRows.length
         }
 
-        Repeater {
-            model: root._streamRows
-            delegate: streamRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._streamRows
+                delegate: streamRow
+            }
         }
     }
 }

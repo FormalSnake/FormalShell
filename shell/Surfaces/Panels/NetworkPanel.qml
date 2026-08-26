@@ -11,7 +11,7 @@ import "../../Network/wifiqr.js" as WifiQr
 // built on the shadcn primitives. Panel draws the header (wifi icon, title,
 // the radio power `Switch` and a rescan button, close); the content is a hero
 // card for the connected AP, a stats card carrying the last measured rates,
-// a WIRED section, a `NETWORKS (n)` section of bordered rows, the share and
+// a WIRED section, a `NETWORKS (n)` section of flat rows, the share and
 // password rows, and a footer pairing an outline Speed test button with the
 // download figure.
 //
@@ -1015,6 +1015,7 @@ Panel {
             id: wiredCell
             required property var modelData
             width: parent.width
+            ghost: true
             interactive: true
             onClicked: {
                 if (wiredCell.modelData.network.connected)
@@ -1072,6 +1073,7 @@ Panel {
             required property int index
             required property var modelData
             width: parent.width
+            ghost: true
             interactive: true
             cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === wifiCell.index
 
@@ -1387,9 +1389,16 @@ Panel {
             count: root._wiredEntries.length
         }
 
-        Repeater {
-            model: root._wiredEntries
-            delegate: wiredRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._wiredEntries
+                delegate: wiredRow
+            }
         }
     }
 
@@ -1410,9 +1419,14 @@ Panel {
             text: Networking.wifiEnabled ? "SCANNING" : "RADIO OFF"
         }
 
-        Repeater {
-            model: root._wifiSorted
-            delegate: wifiRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._wifiSorted
+                delegate: wifiRow
+            }
         }
     }
 

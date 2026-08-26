@@ -490,56 +490,63 @@ Panel {
             text: "NO EVENTS"
         }
 
-        Repeater {
-            model: root._selectedEvents
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
 
-            delegate: Cell {
-                id: eventCell
-                required property var modelData
-                width: parent.width
-                ghost: true
+            Repeater {
+                model: root._selectedEvents
 
-                readonly property string _status: Agenda.status(eventCell.modelData, root._today)
-
-                Item {
+                delegate: Cell {
+                    id: eventCell
+                    required property var modelData
                     width: parent.width
-                    height: Math.max(eventTime.implicitHeight, eventSummary.implicitHeight)
+                    ghost: true
 
-                    Text {
-                        id: eventTime
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: agendaGauge.implicitWidth
-                        text: Agenda.timeLabel(eventCell.modelData, root._twelveHour)
-                        color: eventCell._status === "past" ? Core.Theme.color.mutedForeground : eventCell.foreground
-                        font.family: Core.Theme.fontFamilyMono
-                        font.pixelSize: Core.Theme.fontSize.bodySmall
-                    }
+                    readonly property string _status: Agenda.status(eventCell.modelData, root._today)
 
-                    Text {
-                        id: eventSummary
-                        anchors.left: eventTime.right
-                        anchors.leftMargin: Core.Theme.space.iconGap
-                        anchors.right: nowMark.left
-                        anchors.rightMargin: Core.Theme.space.iconGap
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: eventCell.modelData.summary
-                        color: eventCell.foreground
-                        elide: Text.ElideRight
-                        font.family: Core.Theme.fontFamilySans
-                        font.pixelSize: Core.Theme.fontSize.body
-                        font.weight: Core.Theme.weight.medium
-                    }
+                    Item {
+                        width: parent.width
+                        height: Math.max(eventTime.implicitHeight, eventSummary.implicitHeight)
 
-                    // The running event carries the mark rather than a
-                    // full-bleed fill (DESIGN.md §5).
-                    SectionLabel {
-                        id: nowMark
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: eventCell._status === "now"
-                        text: "NOW"
-                        color: Core.Theme.color.primary
+                        Text {
+                            id: eventTime
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: agendaGauge.implicitWidth
+                            text: Agenda.timeLabel(eventCell.modelData, root._twelveHour)
+                            color: eventCell._status === "past" ? Core.Theme.color.mutedForeground : eventCell.foreground
+                            font.family: Core.Theme.fontFamilyMono
+                            font.pixelSize: Core.Theme.fontSize.bodySmall
+                        }
+
+                        Text {
+                            id: eventSummary
+                            anchors.left: eventTime.right
+                            anchors.leftMargin: Core.Theme.space.iconGap
+                            anchors.right: nowMark.left
+                            anchors.rightMargin: Core.Theme.space.iconGap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: eventCell.modelData.summary
+                            color: eventCell.foreground
+                            elide: Text.ElideRight
+                            font.family: Core.Theme.fontFamilySans
+                            font.pixelSize: Core.Theme.fontSize.body
+                            font.weight: Core.Theme.weight.medium
+                        }
+
+                        // The running event carries the mark rather than a
+                        // full-bleed fill (DESIGN.md §5).
+                        SectionLabel {
+                            id: nowMark
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: eventCell._status === "now"
+                            text: "NOW"
+                            color: Core.Theme.color.primary
+                        }
                     }
                 }
             }

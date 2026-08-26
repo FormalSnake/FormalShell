@@ -243,6 +243,7 @@ Panel {
             id: battCell
             required property var modelData
             width: parent.width
+            ghost: true
 
             Column {
                 width: parent.width
@@ -305,9 +306,16 @@ Panel {
 
         SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "BATTERY" }
 
-        Repeater {
-            model: root._batteryRows
-            delegate: batteryRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._batteryRows
+                delegate: batteryRow
+            }
         }
     }
 
@@ -409,106 +417,113 @@ Panel {
 
         SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "OPTIONS" }
 
-        Cell {
-            id: caCell
+        Column {
             width: parent.width
-            cursor: root.cursorActive && root._cursorKey === "ca"
-            interactive: true
-            onContainsPointerChanged: if (caCell.containsPointer) root._pointAt("ca")
-            onClicked: root._toggleCa()
+            spacing: 0
 
-            Item {
+            Cell {
+                id: caCell
                 width: parent.width
-                height: Math.max(caColumn.implicitHeight, caButton.height)
+                ghost: true
+                cursor: root.cursorActive && root._cursorKey === "ca"
+                interactive: true
+                onContainsPointerChanged: if (caCell.containsPointer) root._pointAt("ca")
+                onClicked: root._toggleCa()
 
-                Column {
-                    id: caColumn
-                    anchors.left: parent.left
-                    anchors.right: caButton.left
-                    anchors.rightMargin: Theme.space.iconGap
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.space.xxs
+                Item {
+                    width: parent.width
+                    height: Math.max(caColumn.implicitHeight, caButton.height)
 
-                    Text {
-                        width: parent.width
-                        text: "Conversation awareness"
-                        color: caCell.foreground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.body
-                        font.weight: Theme.weight.medium
-                        elide: Text.ElideRight
+                    Column {
+                        id: caColumn
+                        anchors.left: parent.left
+                        anchors.right: caButton.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.xxs
+
+                        Text {
+                            width: parent.width
+                            text: "Conversation awareness"
+                            color: caCell.foreground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Lowers volume when you talk"
+                            color: caCell.dimForeground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.bodySmall
+                            elide: Text.ElideRight
+                        }
                     }
 
-                    Text {
-                        width: parent.width
-                        text: "Lowers volume when you talk"
-                        color: caCell.dimForeground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.bodySmall
-                        elide: Text.ElideRight
+                    // An on/off state is a `Switch` (DESIGN.md §2), never a
+                    // button whose label is the state. Enter on the row calls
+                    // the same `_toggleCa`, so keyboard and pointer say one
+                    // thing.
+                    Switch {
+                        id: caButton
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: root._status.conversationalAwareness
+                        onToggled: root._toggleCa()
                     }
-                }
-
-                // An on/off state is a `Switch` (DESIGN.md §2), never a
-                // button whose label is the state. Enter on the row calls
-                // the same `_toggleCa`, so keyboard and pointer say one
-                // thing.
-                Switch {
-                    id: caButton
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: root._status.conversationalAwareness
-                    onToggled: root._toggleCa()
                 }
             }
-        }
 
-        Cell {
-            id: oneBudCell
-            width: parent.width
-            cursor: root.cursorActive && root._cursorKey === "onebud"
-            interactive: true
-            onContainsPointerChanged: if (oneBudCell.containsPointer) root._pointAt("onebud")
-            onClicked: root._toggleOneBud()
-
-            Item {
+            Cell {
+                id: oneBudCell
                 width: parent.width
-                height: Math.max(oneBudColumn.implicitHeight, oneBudButton.height)
+                ghost: true
+                cursor: root.cursorActive && root._cursorKey === "onebud"
+                interactive: true
+                onContainsPointerChanged: if (oneBudCell.containsPointer) root._pointAt("onebud")
+                onClicked: root._toggleOneBud()
 
-                Column {
-                    id: oneBudColumn
-                    anchors.left: parent.left
-                    anchors.right: oneBudButton.left
-                    anchors.rightMargin: Theme.space.iconGap
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.space.xxs
+                Item {
+                    width: parent.width
+                    height: Math.max(oneBudColumn.implicitHeight, oneBudButton.height)
 
-                    Text {
-                        width: parent.width
-                        text: "One-bud ANC"
-                        color: oneBudCell.foreground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.body
-                        font.weight: Theme.weight.medium
-                        elide: Text.ElideRight
+                    Column {
+                        id: oneBudColumn
+                        anchors.left: parent.left
+                        anchors.right: oneBudButton.left
+                        anchors.rightMargin: Theme.space.iconGap
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.space.xxs
+
+                        Text {
+                            width: parent.width
+                            text: "One-bud ANC"
+                            color: oneBudCell.foreground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Keeps ANC with one pod in"
+                            color: oneBudCell.dimForeground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.bodySmall
+                            elide: Text.ElideRight
+                        }
                     }
 
-                    Text {
-                        width: parent.width
-                        text: "Keeps ANC with one pod in"
-                        color: oneBudCell.dimForeground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.bodySmall
-                        elide: Text.ElideRight
+                    Switch {
+                        id: oneBudButton
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: root._status.oneBudAnc
+                        onToggled: root._toggleOneBud()
                     }
-                }
-
-                Switch {
-                    id: oneBudButton
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: root._status.oneBudAnc
-                    onToggled: root._toggleOneBud()
                 }
             }
         }

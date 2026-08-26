@@ -537,6 +537,7 @@ Panel {
             id: rowCell
             required property var modelData
             width: parent.width
+            ghost: true
 
             readonly property var _row: rowCell.modelData.row
             readonly property int _cursorIndex: rowCell.modelData.cursor
@@ -641,9 +642,16 @@ Panel {
             text: "NO DATA"
         }
 
-        Repeater {
-            model: root._claudeRowModel
-            delegate: usageRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._claudeRowModel
+                delegate: usageRow
+            }
         }
     }
 
@@ -671,9 +679,14 @@ Panel {
             text: "NO DATA"
         }
 
-        Repeater {
-            model: root._codexRowModel
-            delegate: usageRow
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._codexRowModel
+                delegate: usageRow
+            }
         }
     }
 }

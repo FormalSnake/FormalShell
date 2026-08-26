@@ -175,14 +175,17 @@ Rectangle carries a `// primitive-exempt:` comment saying what no primitive
 covers (an indicator dot, a colour swatch, a QR module).
 
 **Panel.** Header, then sections. A panel is ONE card. A section is a
-`SectionLabel` and a column of `Cell` rows `rowGap` apart, and what those
-rows draw at rest depends on whether they do anything (owner, 2026-08-26,
-"there's a too big usage of cards everywhere"): a row that clicks, holds the
-cursor or carries a state keeps its `radiusMd` fill and border, because that
-is what makes a control read as a control; a block that only reports a
-number, and an empty state that only says `NO DEVICES`, is `Cell { ghost:
-true }` or no `Cell` at all. Every state still draws on a ghost, so nothing
-is lost but the resting box. A hero (the connected AP, the active sink) is
+`SectionLabel` and a column of `Cell` rows `rowGap` apart, and almost nothing in
+one draws a box at rest (owner, 2026-08-26, "there's a too big usage of
+cards everywhere"). A repeating list row in a section where every row is
+interactive is `Cell { ghost: true }` at `spacing: 0`, the shape the tray
+menu and the notification centre already had: uniform rows need no border to
+read as controls, the hover wash and the cursor ring say it. A block that
+only reports a number, and an empty state that only says `NO DEVICES`, is a
+ghost or no `Cell` at all. What keeps its `radiusMd` fill and border is what
+a reader could otherwise mistake: a lone control that is not part of a list,
+and every row of a section that mixes clickable rows with static ones. Every
+state still draws on a ghost, so nothing is lost but the resting box. A hero (the connected AP, the active sink) is
 an inner `Card` with `radiusMd`, and it keeps it precisely because the
 blocks around it no longer have one: the border is what says this block
 outranks the rest. Footer: `outline` Button left, `display`

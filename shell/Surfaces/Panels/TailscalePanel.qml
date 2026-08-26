@@ -328,6 +328,7 @@ Panel {
             required property var modelData
             required property int index
             width: parent.width
+            ghost: true
 
             readonly property int _cursorIndex: peerCell.index + root._peerOffset
 
@@ -431,9 +432,16 @@ Panel {
             text: "NONE"
         }
 
-        Repeater {
-            model: root._peers
-            delegate: peerRow
+        // A borderless row leaves no box for a gap to sit between, so the rows
+        // in a section abut and only `sectionGap` separates the sections.
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._peers
+                delegate: peerRow
+            }
         }
     }
 }
