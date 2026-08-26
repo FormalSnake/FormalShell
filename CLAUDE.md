@@ -123,7 +123,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `panel_keys.sh` `--panel-keys`: row-level keyboard navigation inside a
   panel, driven by real keystrokes rather than the IPC shortcuts.
 - `picker.sh` `--picker`: the wallpaper grid, the pick becoming the
-  wallpaper, the select token round trip, and the Dark/Light variants.
+  wallpaper, the select token round trip, the Dark/Light variants, and
+  ThumbnailService's prerendered cache backing every cell (the cache
+  directory's own contents, since a warmed cell and a fallback cell paint
+  the same picture).
 - `plugins.sh` `--plugins`: a plugin directory dropped into the config home
   placing its own bar cell, no `bar` key involved.
 - `polkit.sh` `--polkit`: a real `pkexec` conversation through the shell's

@@ -21,4 +21,5 @@ singleton PolkitService PolkitService.qml
 singleton ProcessService ProcessService.qml
 singleton RecordingService RecordingService.qml
 singleton SystemMonitorService SystemMonitorService.qml
+singleton ThumbnailService ThumbnailService.qml
 singleton VisualizerService VisualizerService.qml

@@ -642,6 +642,28 @@ function imageBasename(path) {
     return cut >= 0 ? p.slice(cut + 1) : p;
 }
 
+// The picker directory scan, as one argv. Quickshell has no
+// directory-listing QML type (same rationale as CalendarEventsService's own
+// `find`-backed read), and two callers need the same answer: the picker
+// route re-scans on every entry so a directory edited between opens is
+// picked up, and ThumbnailService scans the configured directory at startup
+// to prerender its thumbnails. One definition of what counts as a pickable
+// image, so the grid and the cache can never disagree about the listing.
+//
+// Both variant subdirectories are named as starting points alongside the
+// directory itself: `find` reports a missing one on stderr (swallowed) and
+// carries on with the rest, so one invocation covers every layout, and
+// `-maxdepth 1` per starting point is what keeps an unrelated subdirectory
+// of wallpapers out of the listing. `sort -u` because a case-insensitive
+// filesystem answers both `Dark` and `dark` with the same directory.
+function pickerScanCommand(dir) {
+    return ["sh", "-c",
+        'find "$1" "$1/Dark" "$1/dark" "$1/Light" "$1/light" -maxdepth 1 -type f'
+        + ' \\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.bmp" \\)'
+        + ' 2>/dev/null | sort -u',
+        "sh", String(dir || "")];
+}
+
 // Dark/Light variant split (owner, 2026-08-12: "for wallpapers, i want them
 // to read the Dark/Light folders if they exist in the wallpaper folders, if
 // not read just the root wallpaper folders"). The scan hands over everything

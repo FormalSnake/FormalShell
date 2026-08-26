@@ -40,6 +40,8 @@ picker_dark_status_path="$shot_dir/picker-status-dark.json"
 picker_light_status_path="$shot_dir/picker-status-light.json"
 picker_variant_reply_path="$shot_dir/picker-variant-reply.txt"
 picker_theme_status_path="$shot_dir/picker-theme-status.json"
+picker_cached_status_path="$shot_dir/picker-status-cached.json"
+picker_cache_listing_path="$shot_dir/picker-thumb-cache.txt"
 picker_select_reply_path="$shot_dir/picker-select-reply.txt"
 picker_selection_path="$shot_dir/picker-selection.txt"
 picker_dir="$iso_home/.local/share/formalshell/pictures"
@@ -112,6 +114,9 @@ sleep 2
 sleep 2
 "$grim_bin" "$picker_variant_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call picker status > "$picker_light_status_path" 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_cached_status_path" 2>&1
+ls -1 "$iso_home/.cache/formalshell/thumbnails" > "$picker_cache_listing_path" 2>&1
 touch "$picker_done_path"
 EOF
   echo "exec-once = bash $script"
@@ -183,4 +188,27 @@ leg_picker_assert() {
     fail "no picker-variant screenshot produced"
   fi
   echo "SMOKE_PICKER_VARIANT $picker_variant_png"
+  # ThumbnailService: the grid draws prerendered 512px crops rather than
+  # decoding the wallpapers themselves, and a warm and a fallback paint the
+  # same picture, so the frame above cannot tell the two apart. The cache
+  # directory and `cachedThumbnails` can. All twenty fixtures, the twelve
+  # flat ones warmed off the configured directory at startup and the eight
+  # staged ones warmed when the second summon re-scanned.
+  if [ ! -s "$picker_cache_listing_path" ]; then
+    fail "no thumbnail cache directory produced"
+  fi
+  cat "$picker_cache_listing_path"
+  local cached
+  cached=$(grep -c '\.jpg$' "$picker_cache_listing_path" || true)
+  if [ "$cached" -ne 20 ]; then
+    fail "expected 20 cached thumbnails, got $cached: $(cat "$picker_cache_listing_path")"
+  fi
+  if grep -q '\.part\.jpg$' "$picker_cache_listing_path"; then
+    fail "the thumbnail warm left partial files behind: $(cat "$picker_cache_listing_path")"
+  fi
+  cat "$picker_cached_status_path"; echo
+  if ! grep -q '"count":3' "$picker_cached_status_path" \
+    || ! grep -q '"cachedThumbnails":3' "$picker_cached_status_path"; then
+    fail "the light listing is not fully backed by cached thumbnails, got: $(cat "$picker_cached_status_path")"
+  fi
 }
