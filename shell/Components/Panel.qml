@@ -388,6 +388,18 @@ PanelWindow {
                 onClicked: {}
             }
 
+            // The pointer leaving the card takes the cursor with it. A row
+            // the pointer enters takes the cursor (every panel's own
+            // `_pointAt`), and with nothing to clear it the last row kept
+            // its ring after the pointer had gone, which reads as a hover
+            // that never ended (owner, 2026-08-26). The next key or the next
+            // row entered puts it back. On `frame` itself, padding included,
+            // so crossing the card's own gutter is not a leave.
+            HoverHandler {
+                parent: frame
+                onHoveredChanged: if (!hovered) root.cursorActive = false
+            }
+
             // A header row is `controlHeight` tall (DESIGN.md §1 Padding),
             // stated rather than inferred from whichever control inside it
             // happens to be tallest.
