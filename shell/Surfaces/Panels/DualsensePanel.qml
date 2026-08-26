@@ -14,9 +14,12 @@ import "../../Dualsense/model.js" as DualsenseModel
 // Honest state first: no matching power_supply node at all renders one dim
 // NO CONTROLLER row. Past that gate the hero carries the battery percent as
 // its oversized readout (unlike AirPods, this panel's whole subject IS one
-// number) with DualsenseModel.stateLine() as its meta and the charge level
-// as its rail. LIGHTBAR and PLAYER LEDS each render only while their own
-// sysfs node was actually readable, independent of each other.
+// number) with DualsenseModel.stateLine() as its meta, the charge level as
+// its rail and a gamepad-2 leading icon. LIGHTBAR and PLAYER LEDS share one
+// STATUS section, side by side, each half a Cell with its own leading icon
+// (lightbulb, circle-dot) that renders only while its own sysfs node was
+// actually readable; the surviving half takes the row alone when the other
+// is absent.
 //
 // Keyboard (spec "Keyboard model"): the cursor walks the readout rows and
 // nothing more. There is deliberately no cursorActivated handler, since
@@ -117,107 +120,144 @@ Panel {
 
     Column {
         width: parent.width
-        visible: root._present && root._lightbar !== null
+        visible: root._present && (root._lightbar !== null || root._playerLeds !== null)
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "LIGHTBAR" }
+        SectionLabel { text: "STATUS" }
 
-        Cell {
-            id: lightbarCell
+        Row {
             width: parent.width
-            cursor: root.cursorActive && root.cursorIndex === root._rowIndex("lightbar")
-            interactive: true
-            acceptedButtons: Qt.NoButton
-            onContainsPointerChanged: if (lightbarCell.containsPointer) root._pointAt(root._rowIndex("lightbar"))
+            spacing: Theme.space.rowGap
 
-            Item {
-                width: parent.width
-                height: Math.max(lightbarSwatch.height, lightbarValue.implicitHeight)
+            Cell {
+                id: lightbarCell
+                visible: root._lightbar !== null
+                width: (root._lightbar !== null && root._playerLeds !== null)
+                    ? (parent.width - Theme.space.rowGap) / 2
+                    : parent.width
+                cursor: root.cursorActive && root.cursorIndex === root._rowIndex("lightbar")
+                interactive: true
+                acceptedButtons: Qt.NoButton
+                onContainsPointerChanged: if (lightbarCell.containsPointer) root._pointAt(root._rowIndex("lightbar"))
 
-                // primitive-exempt: the lightbar's own colour, drawn as a swatch. The
-                // fill IS the value here, so no primitive can own it.
-                Rectangle {
-                    id: lightbarSwatch
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Theme.fontSize.body
-                    height: Theme.fontSize.body
-                    radius: Theme.radiusSm
-                    color: root._lightbar || Theme.color.background
-                    border.width: Theme.borderWidth
-                    border.color: Theme.color.border
-                }
+                Column {
+                    width: parent.width
+                    spacing: Theme.space.xxs
 
-                // A hex triplet is an identifier, so it takes the mono face
-                // (spec "Type").
-                Text {
-                    id: lightbarValue
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root._lightbar || ""
-                    color: lightbarCell.foreground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.body
-                    font.weight: Theme.weight.medium
-                }
-            }
-        }
-    }
+                    SectionLabel { text: "LIGHTBAR" }
 
-    Column {
-        width: parent.width
-        visible: root._present && root._playerLeds !== null
-        spacing: Theme.space.rowGap
+                    Item {
+                        width: parent.width
+                        height: Math.max(lightbarIcon.height, lightbarSwatch.height, lightbarValue.implicitHeight)
 
-        SectionLabel { text: "PLAYER LEDS" }
+                        Icon {
+                            id: lightbarIcon
+                            name: "lightbulb"
+                            size: Theme.fontSize.body
+                            color: lightbarCell.foreground
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
 
-        Cell {
-            id: ledsCell
-            width: parent.width
-            cursor: root.cursorActive && root.cursorIndex === root._rowIndex("leds")
-            interactive: true
-            acceptedButtons: Qt.NoButton
-            onContainsPointerChanged: if (ledsCell.containsPointer) root._pointAt(root._rowIndex("leds"))
-
-            Item {
-                width: parent.width
-                height: Math.max(ledsRow.height, ledsValue.implicitHeight)
-
-                // The pips a real DualSense always exposes all five of
-                // (DESIGN.md §3's own dot idiom): lit ones carry `primary`,
-                // the rest stay muted.
-                Row {
-                    id: ledsRow
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.space.sm
-
-                    Repeater {
-                        model: 5
-
-                        // primitive-exempt: one of five player-LED pips, a hardware readout
-                        // drawn at the size the LEDs are. An indicator, not a surface.
+                        // primitive-exempt: the lightbar's own colour, drawn as a swatch. The
+                        // fill IS the value here, so no primitive can own it.
                         Rectangle {
-                            required property int index
-                            width: Theme.space.md
-                            height: Theme.space.md
-                            radius: width / 2
-                            color: root._playerLeds !== null && index < root._playerLeds
-                                ? Theme.color.primary
-                                : Theme.color.mutedForeground
+                            id: lightbarSwatch
+                            anchors.left: lightbarIcon.right
+                            anchors.leftMargin: Theme.space.iconGap
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Theme.fontSize.body
+                            height: Theme.fontSize.body
+                            radius: Theme.radiusSm
+                            color: root._lightbar || Theme.color.background
+                            border.width: Theme.borderWidth
+                            border.color: Theme.color.border
+                        }
+
+                        // A hex triplet is an identifier, so it takes the mono face
+                        // (spec "Type").
+                        Text {
+                            id: lightbarValue
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root._lightbar || ""
+                            color: lightbarCell.foreground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
                         }
                     }
                 }
+            }
 
-                Text {
-                    id: ledsValue
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root._playerLeds !== null ? root._playerLeds + " / 5" : ""
-                    color: ledsCell.foreground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.body
-                    font.weight: Theme.weight.medium
+            Cell {
+                id: ledsCell
+                visible: root._playerLeds !== null
+                width: (root._lightbar !== null && root._playerLeds !== null)
+                    ? (parent.width - Theme.space.rowGap) / 2
+                    : parent.width
+                cursor: root.cursorActive && root.cursorIndex === root._rowIndex("leds")
+                interactive: true
+                acceptedButtons: Qt.NoButton
+                onContainsPointerChanged: if (ledsCell.containsPointer) root._pointAt(root._rowIndex("leds"))
+
+                Column {
+                    width: parent.width
+                    spacing: Theme.space.xxs
+
+                    SectionLabel { text: "PLAYER LEDS" }
+
+                    Item {
+                        width: parent.width
+                        height: Math.max(ledsIcon.height, ledsRow.height, ledsValue.implicitHeight)
+
+                        Icon {
+                            id: ledsIcon
+                            name: "circle-dot"
+                            size: Theme.fontSize.body
+                            color: ledsCell.foreground
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        // The pips a real DualSense always exposes all five of
+                        // (DESIGN.md §3's own dot idiom): lit ones carry `primary`,
+                        // the rest stay muted.
+                        Row {
+                            id: ledsRow
+                            anchors.left: ledsIcon.right
+                            anchors.leftMargin: Theme.space.iconGap
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.space.sm
+
+                            Repeater {
+                                model: 5
+
+                                // primitive-exempt: one of five player-LED pips, a hardware readout
+                                // drawn at the size the LEDs are. An indicator, not a surface.
+                                Rectangle {
+                                    required property int index
+                                    width: Theme.space.md
+                                    height: Theme.space.md
+                                    radius: Theme.pillRadius(width)
+                                    color: root._playerLeds !== null && index < root._playerLeds
+                                        ? Theme.color.primary
+                                        : Theme.color.mutedForeground
+                                }
+                            }
+                        }
+
+                        Text {
+                            id: ledsValue
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root._playerLeds !== null ? root._playerLeds + " / 5" : ""
+                            color: ledsCell.foreground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.body
+                            font.weight: Theme.weight.medium
+                        }
+                    }
                 }
             }
         }
