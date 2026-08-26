@@ -385,7 +385,7 @@ PanelWindow {
     // this covers a wallpaper added since as well as every directory
     // `picker select` is pointed at. Already-cached paths cost the warm a
     // `test` apiece, so re-warming on every entry is close to free.
-    on_PickerScannedChanged: ThumbnailService.warm(root._pickerScanned)
+    on_PickerScannedChanged: ThumbnailService.warm(root._pickerScanned, "cover")
 
     function _enterPickerRoute() {
         if (!root._pickerRequestPending) {
@@ -483,7 +483,7 @@ PanelWindow {
             // a first run and equal to `count` once the warm has caught up;
             // the only way the rig can see the cache at all, since a warm
             // and a fallback draw the same picture.
-            cachedThumbnails: ThumbnailService.cachedCount(root._pickerImages),
+            cachedThumbnails: ThumbnailService.cachedCount(root._pickerImages, "cover"),
             darkCount: root._pickerVariants.dark.length,
             lightCount: root._pickerVariants.light.length,
             cursor: root._cursorIndex
@@ -567,6 +567,23 @@ PanelWindow {
     // exactly as fresh as before for as long as the menu stays open.
     readonly property var _liveClipboardItems: root.isOpen ? ClipboardService.items : []
 
+    // Prerender the ledger's image captures the moment the live list
+    // resolves, `fit` rather than the picker's `cover` (MenuRow's own thumb
+    // slot letterboxes). Gated behind isOpen by construction, since
+    // _liveClipboardItems is empty while closed, so a capture landing on a
+    // closed launcher warms nothing. A ledger of text entries warms nothing
+    // either: the filter is what decides there is work at all.
+    // `kind`/`path` are the service's own field names; `thumbSource` is what
+    // clipboardProvider renames `path` to on the row it builds, and this
+    // reads the service rather than the rows so it does not wait on a tree
+    // rebuild to notice a new capture.
+    on_LiveClipboardItemsChanged: {
+        var images = (root._liveClipboardItems || []).filter(function (item) {
+            return item && item.kind === "image" && (item.path || "") !== "";
+        }).map(function (item) { return item.path; });
+        ThumbnailService.warm(images, "fit");
+    }
+
     // The same gate, for the same reason, on the compositor's window list.
     // The apps provider decorates each app row with its running windows, and
     // it reads this inside _tree's binding, so an ungated read subscribed the
@@ -630,9 +647,8 @@ PanelWindow {
         // for a rebuild. Date.now() is read at rebuild time, so the recency
         // decay is as fresh as the tree itself.
         apps: function () {
-            return AppMatch.decorateAppRows(Providers.appsProvider(DesktopEntries.applications.values, function (name) {
-                return Quickshell.iconPath(name, true);
-            }, Core.State.appLaunches, Date.now()), root._liveWindows);
+            return AppMatch.decorateAppRows(Providers.appsProvider(DesktopEntries.applications.values,
+                root._resolveAppIcon, Core.State.appLaunches, Date.now()), root._liveWindows);
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, "copy", Core.Config.get("clipboard.paste", true)); },
         shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, "share"); },
@@ -648,6 +664,24 @@ PanelWindow {
         gpu: function () { return Providers.gpuProvider(GpuService.cards); }
     })
     readonly property var _nodes: root._tree.nodes
+
+    // Icon-name -> resolved path, memoised for the process. Quickshell's
+    // iconPath is an XDG icon-theme lookup, which means probing the theme
+    // directories on disk, and appsProvider calls it once per installed app
+    // on every tree rebuild. The answer only changes when the system icon
+    // theme does, which does not happen under a running shell.
+    //
+    // Lives here rather than in providers.js because the resolver is this
+    // file's own closure over Quickshell: a cache inside the provider would
+    // be shared across callers passing different resolvers, which is exactly
+    // what its tests do.
+    property var _appIconCache: ({})
+
+    function _resolveAppIcon(name) {
+        if (root._appIconCache[name] === undefined)
+            root._appIconCache[name] = Quickshell.iconPath(name, true);
+        return root._appIconCache[name];
+    }
 
     // True while the current level's own node carries an unsatisfied (or
     // not-yet-resolved) `when` gate, see _displayRows' own comment for why
@@ -2265,7 +2299,7 @@ PanelWindow {
                         // what this cell did before the cache existed: a
                         // cold cache, an install with no ffmpeg, and a
                         // format ffmpeg cannot decode all land on it.
-                        readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path)
+                        readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path, "cover")
                         source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
                         fillMode: Image.PreserveAspectCrop
                         // PreserveAspectCrop paints past its own bounds

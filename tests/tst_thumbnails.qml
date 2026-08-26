@@ -35,6 +35,27 @@ TestCase {
         verify(Thumbs.cacheFileName("/pics/a.jpg", 512) !== Thumbs.cacheFileName("/pics/a.jpg", 256));
     }
 
+    // Two modes of one picture are two files. A caller asking for the
+    // letterboxed copy must never be handed the square crop, which is the
+    // one way this cache could show the wrong pixels rather than none.
+    function test_the_mode_is_part_of_the_name() {
+        var cover = Thumbs.cacheFileName("/pics/a.jpg", size, "cover");
+        var fit = Thumbs.cacheFileName("/pics/a.jpg", size, "fit");
+        verify(cover !== fit);
+        verify(cover.indexOf("cover") >= 0);
+        verify(fit.indexOf("fit") >= 0);
+    }
+
+    // Anything that is not "fit" is the square crop the picker has always
+    // used, so an old call site that passes no mode keeps its files.
+    function test_an_absent_or_unknown_mode_is_cover() {
+        var plain = Thumbs.cacheFileName("/pics/a.jpg", size);
+        compare(plain, Thumbs.cacheFileName("/pics/a.jpg", size, "cover"));
+        compare(plain, Thumbs.cacheFileName("/pics/a.jpg", size, "nonsense"));
+        compare(Thumbs.normalizeMode(undefined), "cover");
+        compare(Thumbs.normalizeMode("fit"), "fit");
+    }
+
     // The key is what a fanned-out directory actually stresses: hundreds of
     // paths sharing a long prefix and differing late.
     function test_no_collisions_across_a_fanned_out_directory() {
@@ -86,12 +107,13 @@ TestCase {
     // The generator walks argv two at a time, so the flattening and the path
     // the grid reads back have to be the same function.
     function test_warm_args_flatten_src_dst_pairs() {
-        var args = Thumbs.warmArgs(dir, ["/pics/a.jpg", "/pics/b.png"], size);
+        var args = Thumbs.warmArgs(dir, ["/pics/a.jpg", "/pics/b.png"], size, "fit");
         compare(args.length, 4);
         compare(args[0], "/pics/a.jpg");
-        compare(args[1], Thumbs.cachePath(dir, "/pics/a.jpg", size));
+        compare(args[1], Thumbs.cachePath(dir, "/pics/a.jpg", size, "fit"));
         compare(args[2], "/pics/b.png");
-        compare(args[3], Thumbs.cachePath(dir, "/pics/b.png", size));
+        compare(args[3], Thumbs.cachePath(dir, "/pics/b.png", size, "fit"));
+        verify(args[1].indexOf("fit") >= 0);
     }
 
     function test_warm_args_of_nothing_is_nothing() {
@@ -111,6 +133,11 @@ TestCase {
         verify(script.indexOf('-nt "$dst"') >= 0);
         verify(script.indexOf("|| { rm -f \"$tmp\"; exit 0; }") >= 0);
         verify(script.indexOf("-P 4") >= 0);
+        // Both crops, picked by $mode rather than by two scripts.
+        verify(script.indexOf("force_original_aspect_ratio=increase") >= 0);
+        verify(script.indexOf("force_original_aspect_ratio=decrease") >= 0);
+        // fit must not enlarge a source already smaller than the box.
+        verify(script.indexOf("min(iw,$size)") >= 0);
         // An empty listing must not reach ffmpeg with unset positionals.
         verify(script.indexOf("xargs -0 -r") >= 0);
     }

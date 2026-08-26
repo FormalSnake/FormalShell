@@ -33,6 +33,7 @@ clip_activate_path="$shot_dir/clipboard-activate.txt"
 clip_activate_paste_path="$shot_dir/clipboard-activate-paste.txt"
 clip_image_fixture_path="$shot_dir/clip-image.png"
 clip_route_png="$shot_dir/clipboard-route.png"
+clip_thumb_cache_path="$shot_dir/clipboard-thumb-cache.txt"
 
 leg_clipboard_fixture() {
   # The ledger's image entry: a small solid PNG copied last, so the route's
@@ -100,6 +101,7 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
 sleep 3
 "$grim_bin" "$clip_route_png" > /dev/null 2>&1
+ls -1 "$iso_home/.cache/formalshell/thumbnails" > "$clip_thumb_cache_path" 2>&1
 EOF
   echo "exec-once = bash $script"
 }
@@ -126,6 +128,21 @@ leg_clipboard_assert() {
   fi
   if ! grep -q '^ok$' "$clip_copy_path" 2>/dev/null; then
     fail "clipboard copy did not answer ok, got: $(cat "$clip_copy_path" 2>/dev/null)"
+  fi
+  # ThumbnailService's `fit` half. The ledger's image row draws a
+  # prerendered letterboxed copy rather than decoding the capture itself,
+  # and a warmed row and a fallback row paint the same pixels, so the frame
+  # cannot tell them apart. The cache filename can: `fit` rather than the
+  # picker's `cover`, which is the mode this route asks for.
+  if [ ! -s "$clip_thumb_cache_path" ]; then
+    fail "no thumbnail cache directory produced for the clipboard route"
+  fi
+  cat "$clip_thumb_cache_path"
+  if ! grep -q 'fit[0-9]*\.jpg$' "$clip_thumb_cache_path"; then
+    fail "the clipboard capture was never prerendered in fit mode, cache holds: $(cat "$clip_thumb_cache_path")"
+  fi
+  if grep -q '\.part\.jpg$' "$clip_thumb_cache_path"; then
+    fail "the thumbnail warm left partial files behind: $(cat "$clip_thumb_cache_path")"
   fi
   # wl-paste --no-newline leaves this file without one of its own, so the
   # explicit echo keeps the next line from landing appended to it.

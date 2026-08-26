@@ -1555,6 +1555,12 @@ Item {
     // unchanged.
     ListView {
         id: list
+        // The shell's one genuinely long list: a few hundred processes,
+        // re-sorted on every poll. Delegates recycle rather than being
+        // destroyed and rebuilt, which is safe because this delegate is
+        // required properties plus bindings off them, with no
+        // Component.onCompleted work a reused item would skip.
+        reuseItems: true
         anchors.top: procChrome.bottom
         anchors.topMargin: Core.Theme.space.rowGap
         anchors.left: parent.left

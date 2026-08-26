@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Core
 import qs.Components
+import qs.Services
 import "../../Menu/icons.js" as MenuIcons
 import "../../Menu/hints.js" as MenuHints
 
@@ -214,17 +215,32 @@ Item {
             // row exists to pick a capture out of the ledger, so it has to
             // show the capture as it is.
             Image {
+                id: rowThumb
                 y: (contentRow.height - height) / 2
                 visible: root._isImage
-                source: root._isImage ? "file://" + root.node.thumbSource : ""
+                // ThumbnailService's prerendered `fit` copy when there is
+                // one, the capture itself otherwise, the same fallback
+                // contract the wallpaper grid takes. `fit` rather than
+                // `cover` because this slot is 3:1 and letterboxes: a centre
+                // square crop of a screenshot throws away the part that
+                // identifies which screenshot it is.
+                //
+                // sourceSize alone was not enough (M16 Task 12 capped it at
+                // the rendered size and that stays as the fallback's cap):
+                // a PNG has to be fully decoded before it can be scaled
+                // down, so a 4K capture cost a full decode for a 78x26 slot
+                // every time the ledger drew.
+                readonly property string cachedUrl: root._isImage
+                    ? ThumbnailService.urlFor(root.node.thumbSource, "fit")
+                    : ""
+                source: rowThumb.cachedUrl !== ""
+                    ? rowThumb.cachedUrl
+                    : (root._isImage ? "file://" + root.node.thumbSource : "")
                 height: root._thumbHeight
                 width: root._thumbHeight * 3
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: false
-                // Decode capped at the rendered thumb size (M16 Task 12): a
-                // multi-MB screenshot capture otherwise decodes at full
-                // resolution for a row-height slot.
                 sourceSize.width: root._thumbHeight * 3
                 sourceSize.height: root._thumbHeight
             }

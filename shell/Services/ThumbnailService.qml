@@ -53,25 +53,29 @@ Singleton {
     property var _ready: ({})
     property var _pending: []
 
-    function pathFor(src) {
-        return Thumbs.cachePath(root.cacheDir, src, root.size);
+    function _readyKey(src, mode) {
+        return Thumbs.normalizeMode(mode) + "\u0000" + src;
+    }
+
+    function pathFor(src, mode) {
+        return Thumbs.cachePath(root.cacheDir, src, root.size, mode);
     }
 
     // "" means "not cached", which every caller has to treat as "draw the
     // source instead" rather than as an error.
-    function thumbFor(src) {
-        return root._ready[src] === true ? root.pathFor(src) : "";
+    function thumbFor(src, mode) {
+        return root._ready[root._readyKey(src, mode)] === true ? root.pathFor(src, mode) : "";
     }
 
-    function urlFor(src) {
-        const p = root.thumbFor(src);
+    function urlFor(src, mode) {
+        const p = root.thumbFor(src, mode);
         return p === "" ? "" : "file://" + p;
     }
 
-    function cachedCount(paths) {
+    function cachedCount(paths, mode) {
         var n = 0;
         (paths || []).forEach(function (p) {
-            if (root._ready[p] === true)
+            if (root._ready[root._readyKey(p, mode)] === true)
                 n++;
         });
         return n;
@@ -83,24 +87,30 @@ Singleton {
     // ffmpeg fleet at a time: the picker opening mid-warm must not stack a
     // second one on top, and the newer listing is the one worth building, so
     // the request is coalesced rather than queued.
-    property var _queued: null
+    property var _queue: []
+    property string _runningMode: ""
 
-    function warm(paths) {
+    function warm(paths, mode) {
         if (!paths || paths.length === 0)
             return;
+        const m = Thumbs.normalizeMode(mode);
         if (warmProc.running) {
-            root._queued = paths;
+            var next = root._queue.filter(function (job) { return job.mode !== m; });
+            next.push({ paths: paths, mode: m });
+            root._queue = next;
             return;
         }
-        root._queued = null;
+        root._runningMode = m;
         warmProc.command = ["sh", "-c", Thumbs.warmScript(root.concurrency), "sh",
-            root.cacheDir, String(root.size)].concat(Thumbs.warmArgs(root.cacheDir, paths, root.size));
+            root.cacheDir, String(root.size), m].concat(Thumbs.warmArgs(root.cacheDir, paths, root.size, m));
         warmProc.running = true;
     }
 
     // The directory form, for the startup warm and for `picker select`'s
     // arbitrary directory: same scan the picker route itself runs, from the
-    // one place that decides what counts as a pickable image.
+    // one place that decides what counts as a pickable image. Always
+    // `cover`, because the only consumer of a scanned directory is the
+    // picker's square grid.
     function warmDirectory(dir) {
         if (!dir || dir === "")
             return;
@@ -111,7 +121,7 @@ Singleton {
     Process {
         id: scanProc
         stdout: StdioCollector {
-            onStreamFinished: root.warm(text.split("\n").filter(function (l) { return l.length > 0; }))
+            onStreamFinished: root.warm(text.split("\n").filter(function (l) { return l.length > 0; }), "cover")
         }
     }
 
@@ -121,7 +131,7 @@ Singleton {
             splitMarker: "\n"
             onRead: data => {
                 if (data.length > 0)
-                    root._pending.push(data);
+                    root._pending.push(root._readyKey(data, root._runningMode));
                 flushTimer.start();
             }
         }
@@ -131,11 +141,11 @@ Singleton {
         // on.
         onExited: {
             root._flush();
-            const queued = root._queued;
-            root._queued = null;
+            const queue = root._queue;
+            root._queue = [];
             warmProc.running = false;
-            if (queued !== null)
-                root.warm(queued);
+            for (var i = 0; i < queue.length; i++)
+                root.warm(queue[i].paths, queue[i].mode);
         }
     }
 
