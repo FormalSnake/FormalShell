@@ -13,12 +13,15 @@ frame, teardown) and sources every file here. A leg defines:
   `leg_<n>_timing` `leg_timing <delay> <timeout> [tail_gap]`, max-merged.
 - `leg_<n>_drive` writes the drive scripts, echoes their `exec-once` lines,
   may `add_cleanup '<line>'`; `leg_<n>_assert` prints `SMOKE_*`, calls `fail`.
+- `leg_<n>_wayland_debug=1` runs the shell under `WAYLAND_DEBUG`, so
+  `$shell_log_path` carries its wire traffic for an assert that has to read
+  what the shell sent rather than what the screen shows (`--frame`).
 - `leg_<n>_takeover` runs the whole thing itself and exits, for a leg that
   cannot share the one session (`--screensaver-gif` needs one per effect).
   It runs with the build done, the binaries resolved and the bus baseline
   taken, and owns its own `SMOKE_OK` line.
 
-Exported: `shot_dir`, `iso_home`, `shell_path`, `*_bin`, `write_script`,
-`leg_on <n>`, `host_notifications_owner_after`. Legs sharing a surface wait
+Exported: `shot_dir`, `iso_home`, `shell_path`, `shell_log_path`, `*_bin`,
+`write_script`, `leg_on <n>`, `host_notifications_owner_after`. Legs sharing a surface wait
 on the owner's marker (`picker_done_path`); one covering the whole output
 starts at its `<n>_t0`, past any desktop sampler (`--wallpaper` sets 16).

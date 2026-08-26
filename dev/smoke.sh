@@ -486,6 +486,17 @@ Type=Threshold
 EOF
 fi
 
+# The shell's own wire traffic, for a leg that has to assert on what the
+# shell said rather than on what the screen shows: a layer surface's
+# exclusive zone is committed once and never read back, so a wrong one is
+# invisible in a screenshot and in `hyprctl layers` alike (frame.sh). Opt-in
+# per leg because it is a protocol dump: `leg_<n>_wayland_debug=1`.
+wayland_debug_line=""
+for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
+  wayland_debug_var="leg_${leg_name}_wayland_debug"
+  if [ "${!wayland_debug_var:-0}" = 1 ]; then wayland_debug_line="export WAYLAND_DEBUG=1"; fi
+done
+
 shell_start_script="$shot_dir/shell-start.sh"
 write_script "$shell_start_script" <<EOF
 #!/usr/bin/env bash
@@ -501,6 +512,7 @@ export LIBGL_ALWAYS_SOFTWARE=1
 # Backgrounded rather than exec'd so the shell's pid lands in a file the
 # screenshot script reads for its memory sample; the wrapper execs
 # quickshell in place, so the pid stays the shell's own.
+$wayland_debug_line
 "$PWD/result/bin/formalshell" > "$shell_log_path" 2>&1 &
 echo \$! > "$shot_dir/shell.pid"
 wait
