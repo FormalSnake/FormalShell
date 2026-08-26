@@ -31,6 +31,12 @@ import "../../Compositor/appmatch.js" as AppMatch
 // Escape/backspace-on-empty pop one level, confirm-gated actions need a
 // second Enter.
 //
+// The list is cmdk's (M48 D6): inset `xs` inside the card, rows at
+// `radiusSm`, a `SectionLabel` heading wherever the group changes
+// (Menu/model.js's sectionsFor, a node's own `section` key at the root),
+// a right-aligned chord or count per row (Menu/hints.js), and one
+// `No results found.` line where a level or a query has nothing.
+//
 // Tree assembly: default-menu.jsonc (read once, it ships inside the
 // package) merged with Config's customPowerButtons (system.custom.N,
 // providers.customPowerButtonEntries()) go through Model.buildTree(), then
@@ -510,6 +516,41 @@ PanelWindow {
     readonly property string _appViewSource: root._mode === "menu" ? AppViews.viewFor(root.currentNodeId) : ""
     readonly property bool _isAppView: root._appViewSource !== ""
 
+    // --- Emoji grid (M48 D5) ---------------------------------------------
+    //
+    // The emoji route is the picker's grid over a different cell: 3,944
+    // glyphs are something you hunt for by eye, not something you read down
+    // a column one name per line (owner, 2026-08-26). The ":e" trigger draws
+    // the same grid from any level, because it lists the same rows; the
+    // route-local surfaces that are checked ahead of it in _displayRows (the
+    // picker's own grid, the clipboard split) keep their rows, so the guard
+    // here mirrors that order rather than restating it.
+    readonly property int emojiColumns: 8
+    readonly property bool _isEmojiGrid: root._mode === "menu"
+        && !root._isPickerRoute && !root._isSplitRoute && !root._isAppView
+        && (root.currentNodeId === "emoji" || Providers.emojiTriggerQuery(searchInput.text) !== null)
+
+    readonly property bool _isGrid: root._isPickerRoute || root._isEmojiGrid
+
+    // How far one Up/Down press moves the cursor: a row list moves a row, a
+    // grid moves a whole row of cells. On `menu status` because a grid and a
+    // list are otherwise indistinguishable in a JSON dump.
+    readonly property int cursorColumns: root._isPickerRoute
+        ? root.pickerColumns
+        : (root._isEmojiGrid ? root.emojiColumns : 1)
+
+    // True while the rows are a whole-tree ranked list rather than one
+    // level's own children: every route-local surface (the picker grid, the
+    // clipboard split, emoji, nix, keybinds, calc) filters its own data
+    // instead of falling through to Search.rank, and its rows belong to that
+    // level rather than to a set of results.
+    readonly property bool _searching: root._mode === "menu"
+        && searchInput.text.length > 0
+        && !root._isPickerRoute && !root._isSplitRoute && !root._isEmojiGrid
+        && root.currentNodeId !== "nix" && Providers.nixTriggerQuery(searchInput.text) === null
+        && root.currentNodeId !== "keybinds" && Keybinds.triggerQuery(searchInput.text) === null
+        && root.currentNodeId !== "calc"
+
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop),
     // the ternary's closed branch never reads ClipboardService.items, so
@@ -684,6 +725,33 @@ PanelWindow {
 
     readonly property var _cursorNode: root._displayRows[root._cursorIndex] || null
 
+    readonly property int rowCount: root._displayRows.length
+
+    // One heading per row (M48 D6), index-aligned with _displayRows: the
+    // delegate draws its `SectionLabel` wherever this array changes value,
+    // so nothing is ever reordered to make a group. A level that is all one
+    // group comes back blank, since its breadcrumb already names it, and so
+    // do the grids, which have nowhere to put a full-width band between two
+    // cells of a row.
+    readonly property var rowSections: Model.sectionsFor(root._displayRows, {
+        mode: root._mode,
+        grid: root._isGrid,
+        searching: root._searching,
+        level: root.currentNodeId,
+        levelLabel: (root.currentNodeId !== null && root._nodes[root.currentNodeId])
+            ? root._nodes[root.currentNodeId].label
+            : ""
+    })
+
+    // The distinct headings, in order, for `menu status`: what a heading
+    // says is otherwise only observable by reading pixels off a frame.
+    readonly property var sectionNames: Model.sectionNames(root.rowSections)
+
+    // shadcn's `CommandEmpty`. Never in input mode, whose row list is empty
+    // by design, and never on an app view, which is its own whole surface.
+    readonly property bool _showEmpty: root._mode !== "input" && !root._isAppView
+        && root._displayRows.length === 0
+
     // Split-pane preview content (M30), derived from the cursor row: a
     // note row (clipboardEmptyRow/clipboardNoMatchRow) renders an empty
     // pane, an image row (thumbSource set) renders the full image, and
@@ -716,7 +784,7 @@ PanelWindow {
         mode: root._mode,
         node: root._cursorNode,
         atRoot: root.currentNodeId === null,
-        grid: root._isPickerRoute,
+        grid: root._isGrid,
         pickerSelect: root._pickerMode === "select",
         // The variant Tab would switch TO, null wherever Tab does nothing.
         variantSwitch: root._isPickerRoute && root._pickerHasVariants
@@ -751,9 +819,16 @@ PanelWindow {
 
     readonly property bool _breadcrumbVisible: root.breadcrumb.length > 0
 
-    // What the empty field says it is for. In select/input that is the
-    // caller's own prompt, which is the whole of what those modes ask (D5).
-    readonly property string _placeholder: root._mode === "menu" ? "Search" : root._selectPrompt
+    // What the empty field says it is for: shadcn's Command line at the
+    // root, the level's own prompt inside one (its `prompt` key, or "Search
+    // <label>", Model.promptFor), and in select/input the caller's own
+    // prompt, which is the whole of what those modes ask (M43 D5).
+    readonly property string placeholder: {
+        if (root._mode !== "menu")
+            return root._selectPrompt;
+        var node = root.currentNodeId !== null ? root._nodes[root.currentNodeId] : null;
+        return node ? Model.promptFor(node) : "Type a command or search...";
+    }
 
     readonly property var _screen: {
         var name = CompositorService.focusedOutputName;
@@ -786,6 +861,18 @@ PanelWindow {
     // every child below anchors straight to the slot's edges and this is
     // the width they get.
     readonly property real _contentWidth: root._cardWidth - Core.Theme.space.panelPadding * 2
+    // cmdk's `p-1` on the list (M48 D6): the row list sits `xs` inside the
+    // card's own padding, so a cursor row's fill stops short of the card
+    // edge instead of running into it. The input row, the breadcrumb and the
+    // footer take the same inset on top of their `controlPaddingX`, which is
+    // what keeps the search icon in the same column as the row icons under
+    // it (DESIGN.md §1 Padding). The grids are not inset: their cells carry
+    // the same gutter in their own margins.
+    readonly property real _listInset: Core.Theme.space.xs
+    readonly property real _headerInset: Core.Theme.space.controlPaddingX + root._listInset
+    readonly property real _listWidth: (root._isSplitRoute
+        ? Math.round(root._contentWidth / 2)
+        : root._contentWidth) - root._listInset * 2
     readonly property real _chrome: Core.Theme.space.panelPadding * 2
     // Everything above the view: the input row, the rule under it, and the
     // two optional bands (the breadcrumb chips, the picker's variant
@@ -803,14 +890,25 @@ PanelWindow {
     // inside whatever it gets.
     readonly property real _viewContentHeight: root._isPickerRoute
         ? gridView.contentHeight
-        : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight)
+        : (root._isEmojiGrid
+            ? emojiGrid.contentHeight
+            : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight))
+    // The empty state is a row of its own: with no floor the card would
+    // collapse onto the input line and say nothing at all.
+    readonly property real _emptyHeight: root._showEmpty ? Core.Theme.space.controlHeight : 0
+    // The emoji grid's caption band, zero everywhere else.
+    readonly property real _captionBand: emojiCaption.height > 0
+        ? Core.Theme.space.rowGap + emojiCaption.height
+        : 0
     readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - root._headerHeight
-        - Core.Theme.space.rowGap * 2 - actionBar.height)
+        - Core.Theme.space.rowGap * 2 - root._captionBand - actionBar.height)
     // Fixed height on the split route (M30, omarchy parity): the preview
     // pane needs to be genuinely useful, not sized to whatever row count a
     // filter happens to leave, so this route always takes the full cap
     // instead of shrinking to content height like every other level does.
-    readonly property real _rowsAreaHeight: root._isSplitRoute ? root._rowsAreaCap : Math.min(root._viewContentHeight, root._rowsAreaCap)
+    readonly property real _rowsAreaHeight: root._isSplitRoute
+        ? root._rowsAreaCap
+        : Math.min(Math.max(root._viewContentHeight, root._emptyHeight), root._rowsAreaCap)
 
     // How far the live view is scrolled, whichever of the three owns the
     // level. On `menu status` because a wheel notch is otherwise
@@ -818,9 +916,11 @@ PanelWindow {
     // nothing says the cursor stayed put rather than moved with them.
     readonly property real scrollTop: root._isPickerRoute
         ? gridView.contentY
-        : (root._isAppView
-            ? (root._appViewScroll ? root._appViewScroll.contentY : 0)
-            : rowsView.contentY)
+        : (root._isEmojiGrid
+            ? emojiGrid.contentY
+            : (root._isAppView
+                ? (root._appViewScroll ? root._appViewScroll.contentY : 0)
+                : rowsView.contentY))
 
     // The card's top edge sits at 30% of the output height (spec
     // "Launcher"), which is where the eye already is and which leaves the
@@ -1261,7 +1361,7 @@ PanelWindow {
         id: pointerGate
     }
 
-    // `delta` is ±1 for the row list and ±`pickerColumns` for the grid's
+    // `delta` is ±1 for the row list and ±`cursorColumns` for a grid's
     // vertical moves, so the wrap has to survive a step larger than the row
     // count itself, the old `(i + delta + n) % n` only ever saw ±1 and
     // returns a negative index the moment |delta| > n.
@@ -1615,7 +1715,7 @@ PanelWindow {
         ? Core.Theme.space.popupWidthMenuApp
         : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
     readonly property real _cardHeight: root._chrome + root._headerHeight
-        + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + actionBar.height
+        + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + actionBar.height
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -1697,9 +1797,9 @@ PanelWindow {
             id: searchRow
             anchors.top: parent.top
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.space.controlPaddingX
+            anchors.leftMargin: root._headerInset
             anchors.right: parent.right
-            anchors.rightMargin: Core.Theme.space.controlPaddingX
+            anchors.rightMargin: root._headerInset
             height: Core.Theme.space.controlHeight
 
             Icon {
@@ -1727,7 +1827,7 @@ PanelWindow {
                 Text {
                     anchors.fill: parent
                     visible: searchInput.text.length === 0
-                    text: root._placeholder
+                    text: root.placeholder
                     color: Core.Theme.color.mutedForeground
                     font: searchInput.font
                     verticalAlignment: Text.AlignVCenter
@@ -1767,27 +1867,27 @@ PanelWindow {
                         if (root._isAppView)
                             root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
                         else
-                            root._moveCursor(root._isPickerRoute ? -root.pickerColumns : -1);
+                            root._moveCursor(-root.cursorColumns);
                         event.accepted = true;
                         break;
                     case Qt.Key_Down:
                         if (root._isAppView)
                             root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
                         else
-                            root._moveCursor(root._isPickerRoute ? root.pickerColumns : 1);
+                            root._moveCursor(root.cursorColumns);
                         event.accepted = true;
                         break;
                     // Left/Right belong to the search field's own text
-                    // cursor everywhere except the grid, so they're
+                    // cursor everywhere except a grid, so they're
                     // claimed only there, never accepted otherwise.
                     case Qt.Key_Left:
-                        if (root._isPickerRoute) {
+                        if (root._isGrid) {
                             root._moveCursor(-1);
                             event.accepted = true;
                         }
                         break;
                     case Qt.Key_Right:
-                        if (root._isPickerRoute) {
+                        if (root._isGrid) {
                             root._moveCursor(1);
                             event.accepted = true;
                         }
@@ -1878,6 +1978,7 @@ PanelWindow {
             anchors.top: searchRule.bottom
             anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.rowGap : 0
             anchors.left: parent.left
+            anchors.leftMargin: root._headerInset
             spacing: Core.Theme.space.xs
             visible: root._breadcrumbVisible
             height: root._breadcrumbVisible ? implicitHeight : 0
@@ -1935,17 +2036,18 @@ PanelWindow {
             anchors.top: variantRow.bottom
             anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left
+            anchors.leftMargin: root._listInset
             // Split route (M30): the list keeps the left half of
             // _contentWidth so the preview pane below can own the right
             // half. Every other route is unchanged, full width.
-            width: root._isSplitRoute ? Math.round(root._contentWidth / 2) : root._contentWidth
+            width: root._listWidth
             height: root._rowsAreaHeight
-            visible: !root._isPickerRoute && !root._isAppView
+            visible: !root._isGrid && !root._isAppView
             clip: true
-            // Emptied, not merely hidden, on the grid's and an app view's
+            // Emptied, not merely hidden, on the grids' and an app view's
             // routes: an unread model keeps its delegates alive, and
             // _viewContentHeight above needs the idle view to measure 0.
-            model: (root._isPickerRoute || root._isAppView) ? [] : root._displayRows
+            model: (root._isGrid || root._isAppView) ? [] : root._displayRows
             currentIndex: root._cursorIndex
             // ListView tracks the cursor through its (always present, even
             // with no `highlight` component) highlight item, and the
@@ -1964,6 +2066,12 @@ PanelWindow {
                 current: root._cursorIndex === index
                 checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
                 confirming: root._confirmPendingId === node.id
+                // A heading rides the row that opens its group, so a row
+                // whose section matches the one above it carries none.
+                section: root.rowSections[index] === (index > 0 ? root.rowSections[index - 1] : "")
+                    ? ""
+                    : (root.rowSections[index] || "")
+                sectionFirst: index === 0
 
                 onActivate: root._activateFromPointer(index)
                 onHoverMoved: (source, x, y) => {
@@ -1971,6 +2079,25 @@ PanelWindow {
                         root._setCursor(index);
                 }
             }
+        }
+
+        // shadcn's `CommandEmpty` (M48 D6). Drawn in the row area rather
+        // than as a row of the list: it answers nothing, and a cursor
+        // sitting on it would offer a verb the footer would then have to
+        // take back.
+        Text {
+            id: emptyState
+            anchors.top: rowsView.top
+            anchors.left: rowsView.left
+            anchors.right: rowsView.right
+            height: root._rowsAreaHeight
+            visible: root._showEmpty
+            text: "No results found."
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            color: Core.Theme.color.mutedForeground
+            font.family: Core.Theme.fontFamilySans
+            font.pixelSize: Core.Theme.fontSize.body
         }
 
         // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
@@ -2076,6 +2203,82 @@ PanelWindow {
                             root._setCursor(imageSlot.index);
                     }
                     onClicked: root._activateFromPointer(imageSlot.index)
+                }
+            }
+        }
+
+        // The emoji route's grid (M48 D5). A second GridView rather than a
+        // kind-branching delegate inside the one above: the two share their
+        // geometry and their cursor, and nothing else. One holds a decoded
+        // image with a capped source size and its own cropping rules, the
+        // other holds a glyph.
+        GridView {
+            id: emojiGrid
+            anchors.top: variantRow.bottom
+            anchors.topMargin: Core.Theme.space.rowGap
+            anchors.left: parent.left
+            width: root._contentWidth
+            height: root._rowsAreaHeight
+            visible: root._isEmojiGrid
+            clip: true
+            model: root._isEmojiGrid ? root._displayRows : []
+            cellWidth: root._contentWidth / root.emojiColumns
+            cellHeight: emojiGrid.cellWidth
+            currentIndex: root._cursorIndex
+            // Same hard-jump follow as the two views above, for the same
+            // reason: held arrow keys outrun the default animated highlight
+            // move and the cursor cell ends up off-viewport.
+            highlightMoveDuration: 0
+
+            WheelScroll {
+                flickable: emojiGrid
+                step: emojiGrid.cellHeight
+            }
+
+            // The wrapper carries the GridView's own cell so the `Cell`
+            // inside it can hold the gutter between glyphs in its margins,
+            // exactly as the wallpaper grid does.
+            delegate: Item {
+                id: emojiSlot
+                required property int index
+                required property var modelData
+
+                width: emojiGrid.cellWidth
+                height: emojiGrid.cellHeight
+
+                Cell {
+                    id: emojiCell
+                    anchors.fill: parent
+                    anchors.margins: Core.Theme.space.xs
+                    radius: Core.Theme.radiusSm
+                    // Ghost, so a grid of 40 glyphs is 40 glyphs rather than
+                    // 40 boxes; hover fills `accent` and the cursor is the
+                    // ring, the same two states every other cell draws.
+                    ghost: true
+                    cursor: emojiSlot.index === root._cursorIndex
+                    interactive: true
+                    // Same gate as the row list: filtering re-renders cells
+                    // under a parked pointer, and Qt delivers that as a
+                    // hover move indistinguishable from a real one.
+                    onPointerMoved: (x, y) => {
+                        if (pointerGate.moved(emojiCell, x, y))
+                            root._setCursor(emojiSlot.index);
+                    }
+                    onClicked: root._activateFromPointer(emojiSlot.index)
+
+                    // The glyph IS the row's icon (providers.js's emojiRows),
+                    // carried in the mono font that renders it. At `display`
+                    // rather than `heading`: a cell eight columns into
+                    // `popupWidthMenu` is wide enough that a heading-sized
+                    // glyph read as a scatter of dots rather than as a
+                    // picture to pick from (read off menu-emoji.png).
+                    Text {
+                        anchors.centerIn: parent
+                        text: emojiSlot.modelData.icon
+                        color: Core.Theme.color.foreground
+                        font.family: Core.Theme.fontFamilyMono
+                        font.pixelSize: Core.Theme.fontSize.display
+                    }
                 }
             }
         }
@@ -2204,20 +2407,39 @@ PanelWindow {
             }
         }
 
+        // What the cursor cell is (M48 D5). A grid cell is a picture with no
+        // room for a name, so the name goes here, under the grid and above
+        // the footer, where it changes as the cursor moves rather than
+        // waiting for a pointer to hover something. Absent entirely (zero
+        // height, no reserved gutter) on every other route.
+        SectionLabel {
+            id: emojiCaption
+            anchors.top: rowsView.bottom
+            anchors.topMargin: visible ? Core.Theme.space.rowGap : 0
+            anchors.left: parent.left
+            anchors.leftMargin: root._headerInset
+            anchors.right: parent.right
+            anchors.rightMargin: root._headerInset
+            visible: root._isEmojiGrid && root._cursorNode !== null
+            height: visible ? implicitHeight : 0
+            elide: Text.ElideRight
+            text: root._cursorNode ? root._cursorNode.label : ""
+        }
+
         // The footer hint line (spec "Launcher"): what Enter does to the
         // row under the cursor, plus the keys that always apply.
         // Menu/actions.js owns the wording.
         MenuActionBar {
             id: actionBar
-            anchors.top: rowsView.bottom
+            anchors.top: emojiCaption.bottom
             anchors.topMargin: Core.Theme.space.rowGap
-            // Same `controlPaddingX` the rows and the input row take, so the
-            // legend starts under the column of labels rather than under the
-            // card's edge (DESIGN.md §1 Padding).
+            // Same inset the rows and the input row take, so the legend
+            // starts under the column of labels rather than under the card's
+            // edge (DESIGN.md §1 Padding).
             anchors.left: parent.left
-            anchors.leftMargin: Core.Theme.space.controlPaddingX
+            anchors.leftMargin: root._headerInset
             anchors.right: parent.right
-            anchors.rightMargin: Core.Theme.space.controlPaddingX
+            anchors.rightMargin: root._headerInset
             primary: root._actionBar.primary
             hints: root._actionBar.hints
 

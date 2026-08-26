@@ -707,6 +707,22 @@ xdg.configFile."formalshell/menu.jsonc".text = builtins.toJSON {
 };
 ```
 
+Two keys are about how a node reads rather than what it does. `section` is
+the heading its row sits under, which is how the root splits into
+`Suggestions` and `Commands`, and `prompt` is what the search field says
+while you are standing inside that node. Both override per key like any
+other field, so moving your own row into the suggestions block is one line:
+
+```jsonc
+// ~/.config/formalshell/menu.jsonc
+{
+    "system.custom-user-node": { "section": "Suggestions", "prompt": "Search my scripts" }
+}
+```
+
+Rows are never reordered to build a group, so a `section` only reads as one
+block while the entries carrying it are declared together.
+
 For the common case of an extra entry under `System`, there is a config key
 and no jsonc needed. `confirm: true` makes the row wait for a second Enter
 (`CONFIRM <label>?`) before it runs:
@@ -766,16 +782,42 @@ The card centers on the focused output, its top edge starting at 30% of the
 output height, over a plain black scrim at half opacity. The input row is a
 search icon, the text field, and a 1px rule underneath; a breadcrumb chip for
 each level below the root sits under that rule, one chip per step, hidden
-outright at the root where the field is already the whole surface. The
-cursor row, and a hovered row, fill `accent`; the row list itself has no rule
-between rows and no separate focus ring, since the cursor is the only thing
-a modal surface needs to mark.
+outright at the root where the field is already the whole surface. The empty
+field reads `Type a command or search...` at the root and the level's own
+prompt inside one (`Search apps`, `Search emoji`, `Type an expression`), and
+a level or a query with nothing to show says `No results found.` rather than
+leaving the card blank.
+
+The list sits just inside the card's padding and its rows are rounded, so
+the cursor row's `accent` fill stops short of the card edge instead of
+running into it. A hovered row fills the same way; there is no rule between
+rows and no separate focus ring, since the cursor is the only thing a modal
+surface needs to mark.
+
+Rows come in groups, each under an uppercase heading with a hairline rule
+above it: `Suggestions` then `Commands` at the root, `Recent` then `Apps`
+inside the apps route once you have launched something, `Results` for a
+query that ranks the whole tree, and `Options` in select mode. A level whose
+rows are all one group draws no heading at all, since its breadcrumb chip
+already names it. Nothing is reordered to make a group: the heading appears
+wherever the run of rows changes, which is why the root's own grouping is a
+matter of the order entries are declared in `default-menu.jsonc`.
 
 A row's icon is a name, not a hardcoded glyph: `Menu/icons.js` maps the
 shipped route ids onto Lucide names, rendered through whichever set
 `theme.icons` selects. A route id missing from that map, an emoji row, a
 provider row carrying its own glyph, or an entry from your own `menu.jsonc`,
 falls back to the row's own glyph string in the mono font.
+
+A row's right edge carries a hint in mono, where it has one: the chord that
+summons that route directly (`Super+Ctrl+E` on `Emoji`), or, for a route
+whose children are a listing rather than a handful of commands, how many
+rows it holds. The chords are the ones in
+[`docs/examples/hyprland/formalshell.conf`](examples/hyprland/formalshell.conf),
+not a read of your live bindings: they are what the shipped config binds, and
+a test fails the build if the two ever disagree. Rebind a route and the hint
+still names the shipped chord, so change both or drop the entry from
+`shell/Menu/hints.js`.
 
 The bottom row of the card names what Enter will do to the row under the
 cursor, then the keys that always apply. The verb comes from the row's own
@@ -789,8 +831,8 @@ app row at the root the line reads:
 ↑↓ move  ⏎ open  esc back
 ```
 
-`move` covers the row list; on the picker grid it becomes `←→↑↓`, since the
-cursor moves in two dimensions there. `esc` reads `back` wherever there is a
+`move` covers the row list; on a grid (wallpaper, emoji) it becomes
+`←→↑↓`, since the cursor moves in two dimensions there. `esc` reads `back` wherever there is a
 level to pop, `close` at the root, and `cancel` in select/input mode. Two
 more hints show only when they mean something: `Tab` names the picker's
 other Dark/Light set while its switcher is up, and `Shift+Enter` opens the
@@ -800,8 +842,8 @@ on the right are legends, not buttons.
 
 | Key | Does |
 | --- | --- |
-| `↑` / `↓` | Move the cursor a row (a grid row in the picker); scrolls an app view's own content when the view has no row cursor of its own |
-| `←` / `→` | Move the cursor a column, picker route only; the text field's own cursor everywhere else |
+| `↑` / `↓` | Move the cursor a row, or a whole row of cells on a grid; scrolls an app view's own content when the view has no row cursor of its own |
+| `←` / `→` | Move the cursor a column, on the wallpaper and emoji grids only; the text field's own cursor everywhere else |
 | `Page Up` / `Page Down` | Scroll an app view's content by a page, one row kept for context; text field navigation everywhere else |
 | `Home` / `End` | Jump an app view's content to its start or end; text field navigation everywhere else |
 | `Enter` | Submit (input mode); otherwise activate the row under the cursor |
@@ -816,10 +858,11 @@ otherwise yanks the keyboard cursor to wherever your mouse happens to be
 resting on every keystroke. Typing, arrows, a level change and close all
 re-arm the gate, and the first real pointer movement takes the cursor back.
 
-The card also stays clamped to fit on screen. While a query stands, the top
-edge freezes where it was when you started typing, so the card grows
-downward instead of jumping on every keystroke. Clearing the query,
-changing level, or a fresh summon releases the freeze.
+The card's top edge is fixed at 30% of the output height and only its bottom
+edge moves, so a row count that changes on every keystroke grows the card
+downward instead of shifting it under your eye. It stays clamped to fit on
+screen whatever the row count does, and the list scrolls past roughly 60% of
+the output height.
 
 ### Toggles
 
@@ -919,7 +962,10 @@ result. A parse failure is silent: no row, no error row.
 
 **Emoji.** `menu summon emoji`, or `:e <query>` from anywhere, fuzzy
 searches a vendored Unicode dataset (Emoji 17.0, regenerate with
-`dev/gen-emoji.sh`, never edit by hand). Enter copies the char and, after
+`dev/gen-emoji.sh`, never edit by hand). It draws as a grid of eight
+columns, not a row list: the glyph fills the cell, the arrows move in two
+dimensions, hover fills the cell and the cursor rings it, and the name of
+whatever the cursor is on reads under the grid. Enter copies the char and, after
 the surface closes and a 150ms settle, pastes it into whatever window focus
 returned to. That is the same paste the clipboard history does, on the same
 `clipboard.paste` and `clipboard.pasteChord` keys (see
@@ -975,7 +1021,7 @@ fs menu toggle                # no route: root summon if closed, close if open
 fs menu summon clipboard      # any node id or alias, "" for root
 fs menu close
 fs menu refresh               # re-read both jsonc files after an editor save
-fs menu status                # {isOpen, level, scrollTop}
+fs menu status                # {isOpen, level, scrollTop, placeholder, sections, columns, rows}
 fs menu activate <index>      # Enter on that row
 fs menu filter <text>         # type into the search field
 ```
@@ -985,8 +1031,12 @@ key to, and a keybind passing no route to a route-taking toggle gets
 rejected by IPC arity checking before the handler ever runs.
 
 `status`'s `scrollTop` is how far the live view is scrolled, in pixels: the
-row list, the picker grid or an app view's table, whichever owns the level,
-0 at the top.
+row list, either grid or an app view's table, whichever owns the level,
+0 at the top. `placeholder` is what the empty field currently says,
+`sections` the group headings in the order they appear, `rows` how many rows
+or cells the level is showing, and `columns` how many cells wide it is: `1`
+for a row list, the grid's own count on the wallpaper and emoji routes,
+which is the only way to tell a grid from a list without measuring pixels.
 
 `select` and `input` are the dmenu replacement. `qs ipc call` is
 synchronous but can't block on a UI answer, so both correlate by a

@@ -31,6 +31,10 @@
         QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
       } ''
         cp -r ${./.}/shell shell; cp -r ${./.}/tests tests
+        # The one file tst_menu_hints.qml reads out of docs/, copied by
+        # itself: the rest of that tree is screenshots and recorded GIFs.
+        mkdir -p docs/examples/hyprland
+        cp ${./docs/examples/hyprland/formalshell.conf} docs/examples/hyprland/formalshell.conf
         # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads
         # shell/Menu/emoji.json, outside the test's own directory subtree.
         # -import tests/stubs: resolves the `qs.Core` module for the tests

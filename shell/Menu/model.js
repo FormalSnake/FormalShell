@@ -152,6 +152,8 @@ function buildTree(defaultObj, userObj) {
         if (entry.dim !== undefined) node.dim = entry.dim;
         if (entry.keepOpen !== undefined) node.keepOpen = entry.keepOpen;
         if (entry.routeOnly !== undefined) node.routeOnly = entry.routeOnly;
+        if (entry.section !== undefined) node.section = entry.section;
+        if (entry.prompt !== undefined) node.prompt = entry.prompt;
         nodes[id] = node;
     });
 
@@ -166,6 +168,83 @@ function buildTree(defaultObj, userObj) {
     });
 
     return { rootIds: rootIds, nodes: nodes };
+}
+
+// The heading a level's rows fall back to when nothing declares one. The
+// root's own rows are the shell's commands; a level's rows are named by the
+// level itself.
+var ROOT_SECTION = "Commands";
+
+// One heading per row, index-aligned with `rows` (M48 D6). The launcher
+// draws a `SectionLabel` wherever this array CHANGES value, so a heading
+// costs nothing when the whole list belongs to one group, and no row is
+// ever reordered to fit a group: a section that is not contiguous in the
+// rows it was handed simply gets its heading twice, which is the honest
+// picture of a list ordered by something other than its sections.
+//
+// `ctx` is { mode, grid, searching, level, levelLabel }: the two dmenu modes
+// name themselves, a grid has nowhere to draw a full-width band between two
+// cells of a row so it has no headings at all, a query that ranks the whole
+// tree names its results (a row's own declared section would otherwise cut a
+// ranked list into a heading per row), and everything else is either the
+// row's declared `section` key, the frecency head of a provider that marks
+// one (`recent`), or the level.
+function sectionsFor(rows, ctx) {
+    rows = rows || [];
+    ctx = ctx || {};
+    var out = [];
+    for (var i = 0; i < rows.length; i++)
+        out.push(_sectionOf(rows[i], ctx));
+    return _collapseSingleLevelGroup(out, ctx);
+}
+
+// A level whose rows are all one group is already named, by the breadcrumb
+// chip directly above them: "Clipboard" followed by a CLIPBOARD heading says
+// the word twice and separates nothing. A level that does split (the apps
+// route's Recent) keeps every heading, because there the names are what tell
+// the two runs apart.
+function _collapseSingleLevelGroup(sections, ctx) {
+    if (ctx.level === null || ctx.level === undefined || ctx.searching === true)
+        return sections;
+    if (ctx.mode !== undefined && ctx.mode !== "menu")
+        return sections;
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i] !== "" && sections[i] !== ctx.levelLabel)
+            return sections;
+    }
+    return sections.map(function () { return ""; });
+}
+
+function _sectionOf(row, ctx) {
+    if (ctx.mode === "select") return "Options";
+    if (ctx.mode === "input") return "";
+    if (ctx.grid === true) return "";
+    if (ctx.searching === true) return "Results";
+    if (row && row.recent === true) return "Recent";
+    if (row && row.section) return row.section;
+    if (ctx.level === null || ctx.level === undefined) return ROOT_SECTION;
+    return ctx.levelLabel || "";
+}
+
+// The distinct headings of a `sectionsFor` result, in the order they first
+// appear. `menu status` reports this, since a heading is otherwise only
+// observable by reading pixels off a screenshot.
+function sectionNames(sections) {
+    var out = [];
+    for (var i = 0; i < (sections || []).length; i++) {
+        var s = sections[i];
+        if (s !== "" && out.indexOf(s) < 0) out.push(s);
+    }
+    return out;
+}
+
+// What the empty search field says a level is for: the level's own `prompt`
+// key, or its label. The root has no node and reads the command palette's
+// own line instead (Menu.qml).
+function promptFor(node) {
+    if (!node) return "";
+    if (node.prompt) return node.prompt;
+    return "Search " + node.label;
 }
 
 function isWhenVisible(node, condResults) {

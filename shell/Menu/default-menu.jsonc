@@ -10,6 +10,13 @@
 // Core.State.toggleMode()). Use this for anything that must run in the
 // shell's own process rather than as a detached command.
 //
+// Grouping: `section` is the heading the launcher draws above a run of rows
+// that share it (model.js's sectionsFor), and rows are never reordered to
+// fit one, so the declaration order here is what makes a section one block.
+// A node with no `section` falls back to the level it sits in, which is
+// "Commands" at the root. `prompt` overrides what the search field says
+// while standing inside that node ("Search <label>" otherwise).
+//
 // Live state: a `checked` value prefixed `@state:` resolves in-process from
 // Menu.qml's `_stateSnapshot` against toggles.js's closed allow-list, never
 // through `sh -c` and never cached, so the checkmark repaints the instant the
@@ -17,34 +24,26 @@
 // carrying it is refused with a warning and the node hides. `"keepOpen":
 // true` on an action row leaves the menu open after activation.
 {
-    "apps": { "provider": "apps" },
-    "clipboard": { "provider": "clipboard" },
+    // The six routes anyone opens the launcher for lead the root under one
+    // heading; everything after them falls back to "Commands".
+    "apps": { "provider": "apps", "section": "Suggestions", "prompt": "Search apps" },
+    "clipboard": { "provider": "clipboard", "section": "Suggestions", "prompt": "Search clipboard history" },
     // "calc" registers no provider fn, the node exists as a summonable
     // route (`menu summon calc`) whose level Menu.qml special-cases to show
     // only the live CALC result row for the typed expression (calc.js).
-    "calc": { "label": "Calculator", "provider": "calc" },
+    "calc": { "label": "Calculator", "provider": "calc", "section": "Suggestions", "prompt": "Type an expression" },
     // "emoji" registers no provider fn either: a summonable route
-    // (`menu summon emoji`) whose level Menu.qml points at the vendored
-    // emoji dataset (emoji.json) instead of the tree; ":e <query>" reaches
-    // the same rows from anywhere.
-    "emoji": { "label": "Emoji", "provider": "emoji" },
-    // "nix" registers no provider fn either: a summonable route
-    // (`menu summon nix`) whose level Menu.qml fills from the debounced
-    // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
-    // from anywhere. No nix on PATH renders a single dim NO NIX row.
-    "nix": { "label": "Nix Run", "provider": "nix" },
-    // "keybinds" registers no provider fn either: a summonable route
-    // (`menu summon keybinds`) whose level Menu.qml fills from the parsed
-    // compositor binds (Compositor/keybinds.js); ":k <query>" reaches the
-    // same rows from anywhere. Rows are inert notes, never activatable.
-    "keybinds": { "label": "Keybinds", "provider": "keybinds", "aliases": ["keys", "hotkeys", "shortcuts"] },
+    // (`menu summon emoji`) whose level Menu.qml renders as a GRID over the
+    // vendored emoji dataset (emoji.json) instead of the tree; ":e <query>"
+    // reaches the same grid from anywhere.
+    "emoji": { "label": "Emoji", "provider": "emoji", "section": "Suggestions", "prompt": "Search emoji" },
     // "wallpaper" registers no provider fn either: a summonable route
     // (`menu summon wallpaper`, and the whole `picker` IPC target) whose
     // level Menu.qml renders as an image GRID over `picker.directory`
     // rather than as rows, the wallpaper picker lives inside the menu now
     // instead of being a popout of its own. The search field filters it by
     // filename like any other level.
-    "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "aliases": ["picker", "background"] },
+    "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "aliases": ["picker", "background"], "section": "Suggestions", "prompt": "Search wallpapers" },
     // "monitor" registers no provider fn either, on the same footing as
     // "wallpaper" above: a summonable route (`menu summon monitor`) whose
     // level Menu.qml renders as a whole APP VIEW rather than as rows:
@@ -57,7 +56,18 @@
     // The process table lives inside that view (btop's layout), so the
     // aliases for it are this route's too: `ps`, `top` and `htop` are what
     // someone reaching for a process list actually types.
-    "monitor": { "label": "System Monitor", "provider": "monitor", "aliases": ["sysmon", "system", "cpu", "gpu", "ps", "top", "htop", "processes", "kill", "task", "tasks", "activity"] },
+    "monitor": { "label": "System Monitor", "provider": "monitor", "aliases": ["sysmon", "system", "cpu", "gpu", "ps", "top", "htop", "processes", "kill", "task", "tasks", "activity"], "section": "Suggestions", "prompt": "Filter processes" },
+
+    // "nix" registers no provider fn either: a summonable route
+    // (`menu summon nix`) whose level Menu.qml fills from the debounced
+    // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
+    // from anywhere. No nix on PATH renders a single dim NO NIX row.
+    "nix": { "label": "Nix Run", "provider": "nix", "prompt": "Search nixpkgs" },
+    // "keybinds" registers no provider fn either: a summonable route
+    // (`menu summon keybinds`) whose level Menu.qml fills from the parsed
+    // compositor binds (Compositor/keybinds.js); ":k <query>" reaches the
+    // same rows from anywhere. Rows are inert notes, never activatable.
+    "keybinds": { "label": "Keybinds", "provider": "keybinds", "aliases": ["keys", "hotkeys", "shortcuts"], "prompt": "Search keybinds" },
 
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"

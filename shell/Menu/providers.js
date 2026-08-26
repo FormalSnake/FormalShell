@@ -42,9 +42,20 @@
 // `startupClass` and `id` off it to decide whether activating a row focuses
 // a running window instead of launching a new one, so the back-reference
 // carries more weight than it used to.
+//
+// `recent` marks the head of that frecency order for the launcher's own
+// `Recent` heading (M48 D6). It is capped rather than "everything with a
+// launch record": the score of a launch decays but never reaches zero, so
+// an uncapped rule would eventually file every app anyone has ever opened
+// under Recent and leave the heading meaning nothing. Five is what a reader
+// takes in without scanning, and the rows below it are the whole list in
+// the same order, so nothing is hidden by the split.
+var APPS_RECENT_MAX = 5;
+
 function appsProvider(entries, resolveIcon, launches, nowMs) {
-    var ordered = Frecency.order(entries || [], launches, nowMs === undefined ? Date.now() : nowMs);
-    return ordered.map(function (entry) {
+    var now = nowMs === undefined ? Date.now() : nowMs;
+    var ordered = Frecency.order(entries || [], launches, now);
+    return ordered.map(function (entry, i) {
         var iconName = entry.icon || "";
         return {
             id: "apps." + entry.id,
@@ -55,6 +66,7 @@ function appsProvider(entries, resolveIcon, launches, nowMs) {
             title: entry.genericName || "",
             aliases: [],
             kind: "app",
+            recent: i < APPS_RECENT_MAX && Frecency.score(launches, entry.id, now) > 0,
             childIds: [],
             _entry: entry
         };

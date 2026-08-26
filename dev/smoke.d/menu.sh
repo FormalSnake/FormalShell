@@ -1,9 +1,16 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --menu: the launcher summoned at root, its fuzzy ranking against the live
-# tree (`debug query`), and the select round trip. The run's own smoke.png
-# lands in select mode; menu-root.png is the root level, where the row icons
-# and the tree's own chrome are.
+# tree (`debug query`), the emoji route's grid, and the select round trip.
+# The run's own smoke.png lands in select mode; menu-root.png is the root
+# level, where the row icons, the group headings and the tree's own chrome
+# are, and menu-emoji.png is the grid.
+#
+# The chrome that a frame cannot state is asserted off `menu status` instead
+# (M48): the field's placeholder, the group headings in the order they
+# appear, and the column count. That last one is what tells a grid from a
+# list at all, since a frame cannot say whether eight glyphs on one line are
+# eight cells of a grid or one wide row of a list.
 leg_menu_flag="--menu"
 leg_menu_order=20
 
@@ -17,13 +24,16 @@ menu_t0() {
 query_path="$shot_dir/query.json"
 selection_path="$shot_dir/menu-selection.txt"
 menu_root_path="$shot_dir/menu-root.png"
+menu_emoji_path="$shot_dir/menu-emoji.png"
+menu_status_root_path="$shot_dir/menu-status-root.json"
+menu_status_emoji_path="$shot_dir/menu-status-emoji.json"
 
 leg_menu_timing() {
-  # menu-finish.sh's own read-back lands 7s after menu_t0, so the session has
-  # to outlive that, not just the screenshot.
+  # menu-finish.sh's own read-back lands 11s after menu_t0, so the session
+  # has to outlive that, not just the screenshot.
   local t0
   t0=$(menu_t0)
-  leg_timing $((8 + t0 - 3)) $((40 + t0 - 3)) 4
+  leg_timing $((12 + t0 - 3)) $((44 + t0 - 3)) 4
 }
 
 leg_menu_drive() {
@@ -40,6 +50,14 @@ sleep $t0
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call debug query 'e' > "$query_path" 2>&1
 "$grim_bin" "$menu_root_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_root_path" 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon emoji > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu filter smiling > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$menu_emoji_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_emoji_path" 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
@@ -50,13 +68,17 @@ EOF
   local menu_finish_script="$shot_dir/menu-finish.sh"
   write_script "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
-sleep $((t0 + 6))
+sleep $((t0 + 10))
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 EOF
   echo "exec-once = bash $menu_script"
   echo "exec-once = bash $menu_finish_script"
+}
+
+menu_field() {
+  sed -n 's/.*"'"$2"'":\([0-9-]*\).*/\1/p' "$1"
 }
 
 leg_menu_assert() {
@@ -71,6 +93,50 @@ leg_menu_assert() {
     fail "no root-level menu screenshot produced"
   fi
   echo "SMOKE_MENU_ROOT $menu_root_path"
+  # The root's own chrome: shadcn's placeholder, the two group headings in
+  # declaration order, and a row list rather than a grid.
+  if [ ! -s "$menu_status_root_path" ]; then
+    fail "no root menu status produced"
+  fi
+  cat "$menu_status_root_path"; echo
+  if ! grep -q '"placeholder":"Type a command or search..."' "$menu_status_root_path"; then
+    fail "the root field did not carry the command-palette placeholder, got: $(cat "$menu_status_root_path")"
+  fi
+  if ! grep -q '"sections":\["Suggestions","Commands"\]' "$menu_status_root_path"; then
+    fail "the root rows did not group into Suggestions then Commands, got: $(cat "$menu_status_root_path")"
+  fi
+  if ! grep -q '"columns":1' "$menu_status_root_path"; then
+    fail "the root level reported a grid rather than a row list, got: $(cat "$menu_status_root_path")"
+  fi
+  # The emoji route: a grid, filtered, with the route's own prompt in the
+  # field. More columns than one is the whole claim, and it is not readable
+  # off the frame.
+  if [ ! -f "$menu_emoji_path" ]; then
+    fail "no emoji-grid screenshot produced"
+  fi
+  echo "SMOKE_MENU_EMOJI $menu_emoji_path"
+  if [ ! -s "$menu_status_emoji_path" ]; then
+    fail "no emoji menu status produced"
+  fi
+  cat "$menu_status_emoji_path"; echo
+  if ! grep -q '"level":"emoji"' "$menu_status_emoji_path" \
+    || ! grep -q '"placeholder":"Search emoji"' "$menu_status_emoji_path"; then
+    fail "the emoji route did not report itself, got: $(cat "$menu_status_emoji_path")"
+  fi
+  # A grid draws no group headings, so it must not report any either.
+  if ! grep -q '"sections":\[\]' "$menu_status_emoji_path"; then
+    fail "the emoji grid claimed group headings it cannot draw, got: $(cat "$menu_status_emoji_path")"
+  fi
+  local emoji_columns emoji_rows
+  emoji_columns=$(menu_field "$menu_status_emoji_path" columns)
+  emoji_rows=$(menu_field "$menu_status_emoji_path" rows)
+  if [ -z "$emoji_columns" ] || [ "$emoji_columns" -le 1 ]; then
+    fail "the emoji route rendered $emoji_columns column(s), so it is still a row list"
+  fi
+  if [ -z "$emoji_rows" ] || [ "$emoji_rows" -le "$emoji_columns" ]; then
+    fail "the filtered emoji grid holds $emoji_rows cell(s), too few to fill a row of $emoji_columns"
+  fi
+  echo "SMOKE_MENU_GRID $emoji_rows emoji in $emoji_columns columns"
   if [ -s "$selection_path" ] && grep -q '"cancelled":true' "$selection_path"; then
     cat "$selection_path"
   else

@@ -81,13 +81,24 @@ IpcHandler {
     // Debug/verification hook (the smoke rig asserts the toggle round trip
     // through it): open/closed plus the current level's node id, null at
     // root. Same status() idiom as the lock/screenshot/tray targets.
+    //
+    // `placeholder`, `sections` and `columns` are the launcher's chrome
+    // (M48): what the empty field says it is for, the group headings above
+    // the rows in the order they appear, and how many cells wide the level
+    // is (1 for a row list, the grid's own count for the wallpaper and emoji
+    // routes). All three are otherwise only readable by measuring pixels off
+    // a screenshot, which cannot tell a wide row from a grid at all.
     function status(): string {
         if (!menu)
             return "error: menu not ready";
         return JSON.stringify({
             isOpen: menu.isOpen,
             level: menu.currentNodeId,
-            scrollTop: Math.round(menu.scrollTop)
+            scrollTop: Math.round(menu.scrollTop),
+            placeholder: menu.placeholder,
+            sections: menu.sectionNames,
+            columns: menu.cursorColumns,
+            rows: menu.rowCount
         });
     }
 
