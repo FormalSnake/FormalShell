@@ -195,6 +195,11 @@ PanelWindow {
         id: nowPlayingComponent
         NowPlaying {
             panel: bar.mediaPanel
+            // The widget's own default cap, scaled down on a strip too
+            // short to afford it: a vertical bar is a third of a wide
+            // bar's length and the title marquee is the one cell that can
+            // take whatever it is given.
+            maxWidth: Math.min(220, bar._along * 0.15)
             // M16 Task 11: gates the marquee off while the bar's own
             // PanelWindow isn't on screen.
             windowVisible: bar.visible
@@ -513,6 +518,16 @@ PanelWindow {
     // and `cellInset` in from the strip's outer edge. `left` is the start
     // of the strip and `right` its end whichever way it runs.
     //
+    // Room along the strip is shared in a fixed order. The centre sits at
+    // the middle while it can, and slides toward the shorter end once the
+    // two end regions together with it outgrow the strip, the start region
+    // winning over the end one. What still does not fit clips at the
+    // centre's side of each end region, never at the strip's own end, so
+    // the cells against the screen edge (an end region's permanent cells,
+    // past its chevron) stay whatever an expanded group costs: a vertical
+    // bar has a third of a wide bar's length, and a right region long
+    // enough to be worth a chevron overflows it the moment it opens.
+    //
     // Placed by x/y rather than anchors on purpose: the edge can change
     // while the regions exist (settings.json lands after the first frame),
     // and rebinding `anchors.top` to undefined and `anchors.bottom` to the
@@ -520,37 +535,49 @@ PanelWindow {
     // system writes the height itself, and Qt 6 drops the QML binding on
     // that write, which left the end region stuck at a negative height
     // (VM, 2026-08-26).
-    Rail {
+    Item {
         id: leftRegion
-        vertical: bar._vertical
         x: bar._vertical ? bar._strip.cellInset : bar._strip.edgeInset
         y: bar._vertical ? bar._strip.edgeInset : bar._strip.cellInset
-        spacing: Theme.space.sm
         clip: true
-        // A settings-driven left region can outgrow the gap before the
-        // center region (custom command/qml modules have no fixed count),
-        // so it is capped to whatever space actually remains before
-        // centerRegion and overflow clips here instead of drawing over
-        // the clock.
+        // Capped to whatever space actually remains before centerRegion
+        // (custom command/qml modules have no fixed count), so overflow
+        // clips here instead of drawing over the clock.
         width: bar._vertical
-            ? implicitWidth
-            : Math.min(implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
+            ? leftRail.implicitWidth
+            : Math.min(leftRail.implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
         height: bar._vertical
-            ? Math.min(implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
-            : implicitHeight
+            ? Math.min(leftRail.implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
+            : leftRail.implicitHeight
 
-        Repeater {
-            id: leftRepeater
-            model: bar._layout.regions.left
-            delegate: regionDelegate
+        Rail {
+            id: leftRail
+            vertical: bar._vertical
+            spacing: Theme.space.sm
+
+            Repeater {
+                id: leftRepeater
+                model: bar._layout.regions.left
+                delegate: regionDelegate
+            }
         }
     }
 
     Rail {
         id: centerRegion
         vertical: bar._vertical
-        x: bar._vertical ? bar._strip.cellInset : (parent.width - centerRegion.width) / 2
-        y: bar._vertical ? (parent.height - centerRegion.height) / 2 : bar._strip.cellInset
+        // The start region's natural extent plus a gap is the least the
+        // centre can be pushed to; the end region's is the most.
+        readonly property real _floor: bar._strip.edgeInset + Theme.space.sm
+            + (bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth)
+        readonly property real _ceiling: (bar._vertical ? parent.height : parent.width) - bar._strip.edgeInset
+            - Theme.space.sm - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
+            - (bar._vertical ? centerRegion.height : centerRegion.width)
+        readonly property real _middle: ((bar._vertical ? parent.height : parent.width)
+            - (bar._vertical ? centerRegion.height : centerRegion.width)) / 2
+        readonly property real _along: Math.max(centerRegion._floor, Math.min(centerRegion._middle, centerRegion._ceiling))
+        x: bar._vertical ? bar._strip.cellInset : centerRegion._along
+        y: bar._vertical ? centerRegion._along : bar._strip.cellInset
         spacing: Theme.space.sm
 
         Repeater {
@@ -560,27 +587,35 @@ PanelWindow {
         }
     }
 
-    Rail {
+    Item {
         id: rightRegion
-        vertical: bar._vertical
         x: bar._vertical ? bar._strip.cellInset : parent.width - bar._strip.edgeInset - rightRegion.width
         y: bar._vertical ? parent.height - bar._strip.edgeInset - rightRegion.height : bar._strip.cellInset
-        spacing: Theme.space.sm
         clip: true
         // Mirror of leftRegion's cap: never draws back past centerRegion's
         // far edge, regardless of how many built-ins plus custom modules
         // settings.json's bar.layout.right names.
         width: bar._vertical
-            ? implicitWidth
-            : Math.min(implicitWidth, Math.max(0, parent.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
+            ? rightRail.implicitWidth
+            : Math.min(rightRail.implicitWidth, Math.max(0, parent.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
         height: bar._vertical
-            ? Math.min(implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
-            : implicitHeight
+            ? Math.min(rightRail.implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
+            : rightRail.implicitHeight
 
-        Repeater {
-            id: rightRepeater
-            model: bar._layout.regions.right
-            delegate: regionDelegate
+        // Held against the region's own end, so what the clip removes is
+        // the start of the rail, on the centre's side.
+        Rail {
+            id: rightRail
+            vertical: bar._vertical
+            x: bar._vertical ? 0 : rightRegion.width - rightRail.width
+            y: bar._vertical ? rightRegion.height - rightRail.height : 0
+            spacing: Theme.space.sm
+
+            Repeater {
+                id: rightRepeater
+                model: bar._layout.regions.right
+                delegate: regionDelegate
+            }
         }
     }
 }
