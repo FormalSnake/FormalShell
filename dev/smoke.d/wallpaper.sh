@@ -42,6 +42,10 @@ leg_wallpaper_fixture() {
   if [ "${SMOKE_WALLPAPER_DITHER:-0}" = "1" ]; then
     wallpaper_dither=true
     settings_fragment ', "wallpaper": {"dither": true}'
+  elif leg_on retro; then
+    # The retro preset turns `theme.dither` on and `wallpaper.dither`
+    # defaults to it, so the quantized strip is the expected frame here.
+    wallpaper_dither=true
   fi
   # Seeded before Hyprland starts, because the config below sources it and
   # the shell does not write its own copy until a second or two into the

@@ -1,7 +1,7 @@
 # M49: the retro preset, and three live-session fixes
 
 **Date:** 2026-08-26
-**Status:** in progress
+**Status:** implemented 2026-08-26
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook.
 
