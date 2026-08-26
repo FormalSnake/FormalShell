@@ -272,7 +272,15 @@ this file under the baseline.
   --tooltip` (PanelIpc open, toggleAt, the tooltip over a header button).
   Read every PNG.
 
-## Deferred: lazy panels (finding 7)
+Task 7 landed in fcc5e93 (swept into the peer's commit, same content as
+verified: 1878 tests, `--wifi --panel-keys` green, `--panel calendar
+--tooltip` and `--panel-at 2` green as separate sessions; the two cannot
+share one session, each asserts it owns the only open panel). Both hosts
+run it. e1504g two minutes after a fresh start reads 528 MB RSS under the
+same Bluetooth and PipeWire churn as before, so no clean before/after for
+memory exists yet; the honest claim is ten panel trees fewer at startup.
+
+## Lazy panels, the original deferral note (finding 7)
 
 11 of the 16 panels (AppMenu, Audio, Calendar, Network, Bluetooth,
 Airpods, Dualsense, Power, Media, Display, Monitor) expose nothing to their
