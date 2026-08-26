@@ -112,7 +112,7 @@ Cell {
             width: glyph.implicitHeight
             height: glyph.implicitHeight
 
-            Image {
+            Picture {
                 anchors.fill: parent
                 source: MediaService.artUrl
                 sourceSize.width: coverSlot.width
@@ -123,7 +123,7 @@ Cell {
 
             // M35: shares AnimatedCoverFrameSource's frames with the panel's
             // own AnimatedAlbumArt.qml rather than decoding a second Video.
-            Image {
+            Picture {
                 anchors.fill: parent
                 visible: AnimatedCoverFrameSource.active && AnimatedCoverFrameSource.frameUrl !== ""
                 source: AnimatedCoverFrameSource.frameUrl

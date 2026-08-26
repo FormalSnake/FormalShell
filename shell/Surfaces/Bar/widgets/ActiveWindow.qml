@@ -72,7 +72,7 @@ Cell {
 
         // The bar's one image-icon exception (DESIGN.md §3 "Bar"), sized to
         // the label beside it, and only when the entry resolves one.
-        Image {
+        Picture {
             id: appIcon
             visible: root.iconSource !== ""
             source: root.iconSource

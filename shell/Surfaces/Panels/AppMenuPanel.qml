@@ -201,7 +201,7 @@ Panel {
             width: Theme.space.xxl * 2
             height: Theme.space.xxl * 2
 
-            Image {
+            Picture {
                 anchors.fill: parent
                 visible: root._iconSource !== ""
                 source: root._iconSource

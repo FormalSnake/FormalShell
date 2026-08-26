@@ -13,6 +13,7 @@ KeyCatcher KeyCatcher.qml
 MarqueeText MarqueeText.qml
 Panel Panel.qml
 PanelHero PanelHero.qml
+Picture Picture.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
 Segmented Segmented.qml

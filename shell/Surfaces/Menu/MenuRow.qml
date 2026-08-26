@@ -172,7 +172,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusSm
-            color: Theme.color.accent
+            color: Theme.hoverFill
             opacity: (root._hovered && !root.current) ? 1 : 0
 
             Behavior on opacity {
@@ -210,7 +210,9 @@ Item {
             // Clipboard image thumbnail (M14 Task 6): a plain file:// Image at
             // twice the body row height, width capped so a wide capture doesn't
             // stretch the row, PreserveAspectFit letterboxes rather than
-            // cropping.
+            // cropping. Stays an `Image` under `theme.dither` (M49 D3): this
+            // row exists to pick a capture out of the ledger, so it has to
+            // show the capture as it is.
             Image {
                 y: (contentRow.height - height) / 2
                 visible: root._isImage
@@ -232,7 +234,7 @@ Item {
             // exception. `iconSource` is already check-resolved by the provider,
             // so a failed lookup is "" and the slot simply doesn't render (never
             // a missing-texture box).
-            Image {
+            Picture {
                 y: (contentRow.height - height) / 2
                 visible: (root.node.iconSource || "") !== ""
                 source: root.node.iconSource || ""

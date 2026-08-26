@@ -141,7 +141,7 @@ Card {
                         border.color: Theme.color.border
                         clip: true
 
-                        Image {
+                        Picture {
                             id: appImage
                             anchors.fill: parent
                             anchors.margins: Theme.borderWidth
