@@ -1415,10 +1415,14 @@ Item {
             width: parent.width
             height: Core.Theme.space.controlHeight
 
+            // Same inset the ledger's own section labels take above the
+            // seam: both are headings on one surface, so they share a
+            // column rather than staggering across the rule between them.
             SectionLabel {
                 id: headerLabel
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "Processes"
                 count: root._rows.length
             }
@@ -1456,6 +1460,7 @@ Item {
             Text {
                 id: sortChord
                 anchors.right: parent.right
+                anchors.rightMargin: Core.Theme.space.controlPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 text: "^S"
                 color: Core.Theme.color.mutedForeground
