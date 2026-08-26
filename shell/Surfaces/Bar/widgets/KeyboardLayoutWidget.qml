@@ -1,7 +1,7 @@
 import QtQuick
-import Quickshell.Io
 import qs.Core
 import qs.Components
+import qs.Services
 import "../../../Compositor/keyboard.js" as Keyboard
 
 // Bar cell for the active keyboard layout, opt-in via bar.layout and never
@@ -9,13 +9,9 @@ import "../../../Compositor/keyboard.js" as Keyboard
 // nerd-fonts-jetbrains-mono cmap (nix/testvm.nix), read out of the font's
 // own format-12 subtable rather than memory: md-keyboard U+F030C.
 //
-// The poll lives here rather than in the compositor backend: Hyprland
-// publishes no layout event, so the cell asks `hyprctl devices -j` on a
-// timer and the reply goes through Compositor/keyboard.js.
-//
-// Known cost of that placement, stated rather than hidden: Bar.qml is
-// instantiated once per output, so an N-monitor session runs N of these
-// timers and spawns N processes every interval.
+// State comes from KeyboardLayoutService, shared by every bar (Bar.qml is
+// instantiated once per output): one `hyprctl devices -j` query plus
+// Hyprland's `activelayout`/`configreloaded` events, no polling here.
 //
 // Two honest states, both required:
 //   - the compositor cannot be asked at all (the query failed, or the
@@ -31,13 +27,11 @@ import "../../../Compositor/keyboard.js" as Keyboard
 Cell {
     id: root
 
-    property var layout: Keyboard.unavailable()
-
-    property bool _answered: false
+    readonly property var layout: KeyboardLayoutService.layout
 
     // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment.
-    readonly property bool shown: root._answered && (!root.layout.available || Keyboard.hasChoice(root.layout))
+    readonly property bool shown: KeyboardLayoutService.answered && (!root.layout.available || Keyboard.hasChoice(root.layout))
 
     // Visible by default (M23): opt-in builtins absent from DEFAULT_LAYOUT
     // keep their reading unless a user who added the widget opts back out.
@@ -45,37 +39,6 @@ Cell {
 
     visible: root.shown
     tooltipText: Keyboard.tooltipText(root.layout)
-
-    function _poll() {
-        if (layoutProc.running)
-            return;
-        layoutProc.command = ["hyprctl", "devices", "-j"];
-        layoutProc.running = true;
-    }
-
-    Component.onCompleted: root._poll()
-
-    Timer {
-        interval: 2000
-        repeat: true
-        running: true
-        onTriggered: root._poll()
-    }
-
-    Process {
-        id: layoutProc
-        stdout: StdioCollector {
-            id: layoutCollector
-        }
-        onExited: exitCode => {
-            root._answered = true;
-            if (exitCode !== 0) {
-                root.layout = Keyboard.unavailable();
-                return;
-            }
-            root.layout = Keyboard.parseHyprlandLayouts(layoutCollector.text);
-        }
-    }
 
     Row {
         anchors.verticalCenter: parent.verticalCenter

@@ -12,6 +12,7 @@ singleton DualsenseService DualsenseService.qml
 singleton GpuService GpuService.qml
 singleton IdleService IdleService.qml
 InstanceLock InstanceLock.qml
+singleton KeyboardLayoutService KeyboardLayoutService.qml
 singleton LockService LockService.qml
 singleton LocationService LocationService.qml
 singleton MainOutputService MainOutputService.qml

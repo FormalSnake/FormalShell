@@ -106,4 +106,22 @@ TestCase {
         compare(Keyboard.tooltipText(Keyboard.unavailable()), "NO LAYOUT");
         compare(Keyboard.tooltipText(undefined), "NO LAYOUT");
     }
+
+    function test_apply_active_layout_sets_current_from_the_event_data() {
+        var l = Keyboard.parseHyprlandLayouts(hyprlandFixture);
+        var updated = Keyboard.applyActiveLayout(l, "at-translated-set-2-keyboard,English (US)");
+        compare(updated.available, true);
+        compare(updated.current, "English (US)");
+        compare(updated.names, l.names);
+    }
+
+    function test_apply_active_layout_leaves_an_unavailable_layout_untouched() {
+        var l = Keyboard.unavailable();
+        compare(Keyboard.applyActiveLayout(l, "kb,German"), l);
+    }
+
+    function test_apply_active_layout_with_no_comma_leaves_the_layout_unchanged() {
+        var l = Keyboard.parseHyprlandLayouts(hyprlandFixture);
+        compare(Keyboard.applyActiveLayout(l, "nocommahere"), l);
+    }
 }

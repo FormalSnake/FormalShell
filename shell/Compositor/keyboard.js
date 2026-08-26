@@ -3,9 +3,10 @@
 // Keyboard layout, normalized for the bar cell. Pure, so it's testable
 // head-on (tests/tst_keyboard_layout.qml) without a compositor.
 //
-// The widget owns the polling: it runs `hyprctl devices -j` in its own
-// Process and feeds the raw stdout to the parser here. The backend file is
-// not touched.
+// Services/KeyboardLayoutService.qml owns the query: one `hyprctl devices
+// -j` at boot and on `configreloaded`, `activelayout` events applied in
+// place through applyActiveLayout below. The compositor backend file is not
+// touched.
 //
 // Normalized shape, produced by the parser and by unavailable():
 //   { available: bool, names: [string], currentIdx: int, current: string }
@@ -100,6 +101,24 @@ function parseHyprlandLayouts(text) {
         return unavailable();
 
     return { available: true, names: names, currentIdx: -1, current: current };
+}
+
+// Applies an `activelayout` event (`data` = "KEYBOARDNAME,LAYOUTNAME") to an
+// already-parsed layout, returning a new object with `current` set from the
+// text after the first comma. The keyboard name itself never contains a
+// comma, so the first one is the split point. `names`/`currentIdx` pass
+// through unchanged (see the file header on why the two vocabularies don't
+// map). A layout that isn't `available`, or data with no comma, is returned
+// as-is: there's nothing parsed yet to update.
+function applyActiveLayout(layout, data) {
+    var l = layout || unavailable();
+    if (l.available !== true)
+        return l;
+    var text = String(data || "");
+    var comma = text.indexOf(",");
+    if (comma === -1)
+        return l;
+    return { available: true, names: l.names, currentIdx: l.currentIdx, current: text.slice(comma + 1) };
 }
 
 // The bar cell's `shown` gate. A single-layout session has nothing to
