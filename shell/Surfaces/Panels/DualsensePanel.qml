@@ -128,8 +128,14 @@ Panel {
             width: parent.width
             spacing: Theme.space.rowGap
 
+            // Flat (DESIGN.md §1's ladder, rung 5): both halves of this row
+            // report a device state and answer no button, so neither draws a
+            // box. They stay `Cell`s for the keyboard cursor, which still
+            // rings a ghost, and for the padding that lines them up with the
+            // section label over them.
             Cell {
                 id: lightbarCell
+                ghost: true
                 visible: root._lightbar !== null
                 width: (root._lightbar !== null && root._playerLeds !== null)
                     ? (parent.width - Theme.space.rowGap) / 2
@@ -191,6 +197,7 @@ Panel {
 
             Cell {
                 id: ledsCell
+                ghost: true
                 visible: root._playerLeds !== null
                 width: (root._lightbar !== null && root._playerLeds !== null)
                     ? (parent.width - Theme.space.rowGap) / 2

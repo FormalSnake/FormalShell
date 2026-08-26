@@ -118,6 +118,13 @@ does this boundary have to go".
    just a panel, and max one card", "one card for the preview so it didn't
    count as nested").
 
+   A surface here is a thing that floats with nothing behind it, not a
+   window. The capture overlay and the plugin overlay are transparent and
+   full-screen, so the blocks inside them (the region readout, the toolbar,
+   the unnamed-window list, the plugin error) each sit on the raw desktop and
+   each is its own frame. Two cards in one of those files is two surfaces,
+   not a surface spending twice.
+
    Where each surface spends the allowance, or doesn't. The launcher's split
    route spends it on the preview pane: flat `MenuRow`s down one side and the
    card down the other, so the pane reads as the thing the list is pointing

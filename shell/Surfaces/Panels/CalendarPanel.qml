@@ -561,8 +561,14 @@ Panel {
 
         SectionLabel { leftPadding: Core.Theme.space.controlPaddingX; text: "PROGRESS" }
 
+        // Flat (DESIGN.md §1's ladder, rung 5): a label over a track reports
+        // a value and answers no pointer, so it draws no box. The
+        // double-click below is deliberately undiscoverable, which is the
+        // second reason this must not wear a control's chrome: a box would
+        // advertise a gesture that is meant to be found by accident.
         Cell {
             id: yearCell
+            ghost: true
             width: parent.width
 
             Column {
@@ -613,8 +619,10 @@ Panel {
             }
         }
 
+        // Flat for the same reason as `yearCell` above.
         Cell {
             id: lifeCell
+            ghost: true
             width: parent.width
             visible: root._showLifeProgress
 

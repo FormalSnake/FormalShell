@@ -526,8 +526,14 @@ Panel {
             text: "SINGLE DISPLAY"
         }
 
+        // Flat (DESIGN.md §1's ladder, rung 5): the control on this row is
+        // `mirrorButton`, which draws its own chrome. A box around it marks
+        // the container rather than the control, and says the whole row is
+        // pressable when only the button is (`acceptedButtons: Qt.NoButton`
+        // below states the same thing).
         Cell {
             id: mirrorCell
+            ghost: true
             visible: root._mirrorActionable
             width: parent.width
             cursor: root.cursorActive && root._mirrorIndex >= 0 && root.cursorIndex === root._mirrorIndex
