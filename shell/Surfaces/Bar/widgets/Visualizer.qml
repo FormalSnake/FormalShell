@@ -123,7 +123,14 @@ Cell {
                     // primitive-exempt: the bar's fill. `Track` fills left to right; a
                     // spectrum bar fills bottom to top.
                     Rectangle {
-                        anchors.bottom: parent.bottom
+                        // Grows from the strip's outer edge inward: up
+                        // from the row's floor on a horizontal bar, and on
+                        // a vertical one from the screen edge toward the
+                        // desktop, which after the cell's turn is the row's
+                        // ceiling on either side (owner, 2026-08-26: a base
+                        // on the inner edge read as bars pointing the wrong
+                        // way).
+                        y: root.contentRotation !== 0 ? 0 : parent.height - height
                         width: parent.width
                         // Never shorter than a full pair of rounded ends: a fill
                         // below that squashes into a different shape at every

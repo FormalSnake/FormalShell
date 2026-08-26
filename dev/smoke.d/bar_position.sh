@@ -7,10 +7,13 @@
 # On a left or right bar that box is the strip's thickness wide and the
 # whole output tall; on a bottom bar it ends on the output's last row.
 #
-# It carries chevron.sh's own layout (a right region with the five governed
-# cells ahead of one `chevron`), so the collapse boundary is exercised along
-# the new axis the same way: collapsed frame, `bar chevron expand`, expanded
-# frame, the two asserted to differ. Then `panel open audio` hangs a panel
+# It carries a right region long enough to be worth a chevron (thirteen
+# governed cells ahead of it, battery/audio/network outboard), which on a
+# 1080-tall vertical strip is more than fits under the centre once opened:
+# the expanded frame is where the overflow rule shows, the outboard cells
+# still against the screen edge and the group clipped on the centre's side
+# (Bar.qml's region comment). Collapsed frame, `bar chevron expand`,
+# expanded frame, the two asserted to differ. Then `panel open audio` hangs a panel
 # off the bar's inner edge for the run's own frame, with `panel state`
 # agreeing it is the open one. This leg owns the `bar` key, so it does not
 # combine with --chevron or --bar-layout, which write the same key.
@@ -43,7 +46,7 @@ leg_bar_position_validate() {
 }
 
 leg_bar_position_fixture() {
-  settings_fragment ', "bar": {"position": "'"$(leg_arg bar_position)"'", "layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "chevron", "battery", "audio", "network"]}}'
+    settings_fragment ', "bar": {"position": "'"$(leg_arg bar_position)"'", "layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "monitor", "keyboardLayout", "display", "github", "usage", "tailscale", "systemUpdate", "clock", "chevron", "battery", "audio", "network"]}}'
 }
 
 leg_bar_position_timing() {
@@ -112,7 +115,7 @@ leg_bar_position_assert() {
     fail "bar strip is $thickness thick, which is not a cell row plus its margin band"
   fi
 
-  local hidden_names='"bluetooth","weather","tray","bell","indicators"'
+  local hidden_names='"bluetooth","weather","tray","bell","indicators","monitor","keyboardLayout","display","github","usage","tailscale","systemUpdate","clock"'
   if ! grep -q "\"collapsed\":true,\"collapses\":\[$hidden_names\],\"hidden\":\[$hidden_names\]" "$bar_position_status_collapsed_path" 2>/dev/null; then
     fail "bar chevron status did not report the governed names hidden while collapsed. Got: $(cat "$bar_position_status_collapsed_path" 2>/dev/null)"
   fi
