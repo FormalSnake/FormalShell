@@ -498,7 +498,12 @@ write_script "$shell_start_script" <<EOF
 export LIBGL_ALWAYS_SOFTWARE=1
 # Captured, not discarded: a shell that dies on a QML error at startup would
 # otherwise fail every assertion below with no way to see why.
-exec "$PWD/result/bin/formalshell" > "$shell_log_path" 2>&1
+# Backgrounded rather than exec'd so the shell's pid lands in a file the
+# screenshot script reads for its memory sample; the wrapper execs
+# quickshell in place, so the pid stays the shell's own.
+"$PWD/result/bin/formalshell" > "$shell_log_path" 2>&1 &
+echo \$! > "$shot_dir/shell.pid"
+wait
 EOF
 
 if $fixture_window_mode; then
@@ -574,6 +579,14 @@ write_script "$shot_script" <<EOF
 sleep $screenshot_delay
 "$grim_bin" "$shot_path" > "$shot_dir/grim.log" 2>&1
 sleep $tail_gap
+# Memory sample of the shell at the end of the run, once every leg has
+# driven what it drives: RSS and the QML JS heap (QV4's memfd chunks), the
+# two numbers a memory regression shows up in first.
+if shell_pid=\$(cat "$shot_dir/shell.pid" 2>/dev/null) && [ -r "/proc/\$shell_pid/smaps" ]; then
+  rss_kb=\$(awk '/^VmRSS/{print \$2}' "/proc/\$shell_pid/status")
+  js_kb=\$(awk '/^[0-9a-f]+-[0-9a-f]+ /{n=\$6} /^Rss:/{if (n ~ /JSGCHeap/) s+=\$2} END{print s+0}' "/proc/\$shell_pid/smaps")
+  echo "SMOKE_MEM rss_kb=\$rss_kb jsheap_kb=\$js_kb" > "$shot_dir/mem.txt"
+fi
 $fixture_cleanup
 "$hyprctl_bin" dispatch exit
 EOF
@@ -621,6 +634,12 @@ fail() {
   tail -20 "$shell_log_path" >&2 2>/dev/null || true
   exit 1
 }
+
+# Printed ahead of the asserts so a failing leg still reports what the
+# shell weighed at the end of its run.
+if [ -f "$shot_dir/mem.txt" ]; then
+  cat "$shot_dir/mem.txt"
+fi
 
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_assert" >/dev/null; then "leg_${leg_name}_assert"; fi
