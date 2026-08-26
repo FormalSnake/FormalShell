@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Core as Core
 import qs.Compositor
 import qs.Services
+import "../../Screensaver/blocks.js" as Blocks
 import "../../Screensaver/effect.js" as Effect
 import "../../Screensaver/ttfx.js" as Ttfx
 
@@ -328,10 +329,10 @@ Item {
                 // banner's cell size reflects real metrics rather than a
                 // guessed constant, same technique Osd.qml's own calibration
                 // Text items use. Ten cells, not one, so per-glyph side
-                // bearing amortizes into a true advance: every run this
-                // surface paints is positioned at col * _cellWidth, and a
-                // fraction of a pixel of error per cell would smear a
-                // 96-column canvas by tens of pixels.
+                // bearing amortizes into a true advance: every cell this
+                // surface paints is placed at col * _cellWidth, row *
+                // _cellHeight, and a fraction of a pixel of error per cell
+                // would smear a 96-column canvas by tens of pixels.
                 Text {
                     id: metric
                     visible: false
@@ -355,7 +356,15 @@ Item {
                     : Core.Theme.fontSize.body * 2.4
                 readonly property real _fontSize: Math.max(8, Math.min(Core.Theme.fontSize.body * 2.4, surface._fitFontSize))
                 readonly property real _cellWidth: Math.max(1, surface._fontSize * surface._advanceRatio)
-                readonly property real _cellHeight: Math.max(1, surface._fontSize * surface._lineRatio * 1.15)
+                // The font's own line spacing, with nothing added. This used
+                // to carry a 1.15 multiplier, which is 13% of every cell
+                // painted as background between one row of blocks and the
+                // next: at the shipped size that is a 6px stripe through a
+                // solid banner, in any font. A terminal's cell IS the line
+                // box, which is why omarchy's ttfx-in-a-terminal has no such
+                // stripe, and the block rectangles below tile only if this
+                // matches.
+                readonly property real _cellHeight: Math.max(1, surface._fontSize * surface._lineRatio)
                 readonly property int _columns: surface.visible ? Math.max(1, Math.floor(width / surface._cellWidth)) : 0
                 readonly property int _rows: surface.visible ? Math.max(1, Math.floor(height / surface._cellHeight)) : 0
 
@@ -620,6 +629,73 @@ Item {
                         on_AccentChanged: canvas.requestPaint()
                         on_BackgroundChanged: canvas.requestPaint()
 
+                        // One run of cells laid on a strict grid, in whatever
+                        // fillStyle the caller has already set.
+                        //
+                        // A block element is a rectangle covering the exact
+                        // fraction of the cell its codepoint denotes
+                        // (blocks.js), never a glyph: fonts are under no
+                        // obligation to make U+2588 fill its advance box, and
+                        // Geist Mono's rasterizes about a pixel narrow at the
+                        // shipped size, which is the vertical seam down every
+                        // column of a solid banner. Painting the fraction
+                        // takes the font out of the question entirely.
+                        //
+                        // Everything else is the font's glyph, placed at its
+                        // own column rather than after the previous glyph's
+                        // advance, so a rounding difference cannot accumulate
+                        // across a 96-column canvas.
+                        //
+                        // Edges are snapped to whole pixels because two
+                        // antialiased rectangles meeting on a fractional one
+                        // each cover about half of it, which composites to a
+                        // seam of exactly the kind this is here to remove.
+                        function paintCells(ctx, text, startCol, gridRow, alpha) {
+                            var cw = surface._cellWidth;
+                            var ch = surface._cellHeight;
+                            var i = 0;
+                            while (i < text.length) {
+                                var code = text.charCodeAt(i);
+                                if (code === 0x20) {
+                                    i += 1;
+                                    continue;
+                                }
+                                var rects = Blocks.rectsFor(code);
+                                if (rects === null) {
+                                    // Unrounded, unlike the rectangles below:
+                                    // a glyph has to sit exactly on its
+                                    // column so nothing accumulates across
+                                    // the canvas, and snapping it to a whole
+                                    // pixel would break the one effect that
+                                    // rules a line out of repeated box-drawing
+                                    // characters (synthgrid).
+                                    ctx.globalAlpha = alpha;
+                                    ctx.fillText(text.charAt(i), (startCol + i) * cw, gridRow * ch);
+                                    i += 1;
+                                    continue;
+                                }
+                                // A horizontal run of the same full-cell block
+                                // is one fill rather than one per column. The
+                                // banner is mostly these.
+                                var span = 1;
+                                if (Blocks.isFullCell(rects)) {
+                                    while (i + span < text.length && text.charCodeAt(i + span) === code)
+                                        span += 1;
+                                }
+                                for (var k = 0; k < rects.length; k++) {
+                                    var rc = rects[k];
+                                    ctx.globalAlpha = alpha * rc.alpha;
+                                    var x0 = Math.round((startCol + i + rc.x) * cw);
+                                    var x1 = Math.round((startCol + i + span - 1 + rc.x + rc.w) * cw);
+                                    var y0 = Math.round((gridRow + rc.y) * ch);
+                                    var y1 = Math.round((gridRow + rc.y + rc.h) * ch);
+                                    ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+                                }
+                                i += span;
+                            }
+                            ctx.globalAlpha = 1;
+                        }
+
                         onPaint: {
                             var ctx = canvas.getContext("2d");
                             ctx.fillStyle = Core.Theme.color.background;
@@ -650,22 +726,21 @@ Item {
                                     for (var i = 0; i < runs.length; i++) {
                                         var run = runs[i];
                                         ctx.fillStyle = run.color.length > 0 ? run.color : Core.Theme.color.foreground;
-                                        ctx.fillText(run.text, run.col * surface._cellWidth, gr * surface._cellHeight);
+                                        canvas.paintCells(ctx, run.text, run.col, gr, 1);
                                     }
                                 }
                                 return;
                             }
 
                             var grid = Effect.frameState(root._effectiveEffect, surface._renderFrame, banner);
+                            ctx.fillStyle = Core.Theme.color.primary;
                             for (var r = 0; r < grid.length; r++) {
                                 var rowCells = grid[r];
                                 for (var c = 0; c < rowCells.length; c++) {
                                     var cell = rowCells[c];
                                     if (cell.opacity <= 0)
                                         continue;
-                                    ctx.globalAlpha = cell.opacity;
-                                    ctx.fillStyle = Core.Theme.color.primary;
-                                    ctx.fillText(cell.char, (offsetCol + c) * surface._cellWidth, (offsetRow + r) * surface._cellHeight);
+                                    canvas.paintCells(ctx, cell.char, offsetCol + c, offsetRow + r, cell.opacity);
                                 }
                             }
                             ctx.globalAlpha = 1;

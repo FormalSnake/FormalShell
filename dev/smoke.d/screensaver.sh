@@ -16,7 +16,7 @@
 # tests/tst_display_priority.qml, since this session has one head.
 leg_screensaver_flag="--screensaver"
 leg_screensaver_order=230
-leg_screensaver_needs="mpv ffmpeg jq"
+leg_screensaver_needs="mpv ffmpeg jq convert"
 
 # Shared with dev/smoke.d/visualizer.sh, which the scaffold sources on every
 # run: the VM's mpv is pre-wrapped with mpvScripts.mpris baked into its
@@ -66,6 +66,9 @@ ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
 ss_manual_path="$shot_dir/screensaver-manual.png"
 ss_cycle_info1_path="$shot_dir/screensaver-cycle-info-1.json"
 ss_cycle_info2_path="$shot_dir/screensaver-cycle-info-2.json"
+ss_solid_info_path="$shot_dir/screensaver-solid-frameinfo.json"
+ss_solid_path="$shot_dir/screensaver-solid.png"
+ss_solid_mask_path="$shot_dir/screensaver-solid-mask.png"
 ss_final_status_path="$shot_dir/screensaver-final-status.json"
 
 leg_screensaver_fixture() {
@@ -111,10 +114,12 @@ leg_screensaver_timing() {
   # random pick spends a fixed 15s before it even starts resolving) and the
   # final status dump lands a couple of seconds after the poll breaks. The
   # run's own frame is taken past that worst case, showing the ordinary
-  # session with the screensaver dismissed for good.
+  # session with the screensaver dismissed for good. The solidity capture
+  # after the poll costs another seven seconds of pinning before the final
+  # stop, which is where the extra ten come from.
   local t0
   t0=$(screensaver_t0)
-  leg_timing $((80 + t0 - 4)) $((100 + t0 - 4))
+  leg_timing $((90 + t0 - 4)) $((110 + t0 - 4))
 }
 
 leg_screensaver_drive() {
@@ -161,6 +166,22 @@ while [ "\$SECONDS" -lt $((t0 + 71)) ]; do
   grep -q '"cycles":0}' "$ss_cycle_info2_path" || break
   sleep 1
 done
+# The converged banner, reached by pinning rather than by waiting: pinning
+# frame 0 is what makes a streaming ttfx run's frame count knowable at all
+# (screensaver_gif.sh's own header explains why), and the last frame of any
+# effect is the banner itself, so this frame is the same picture whichever
+# effect the reroll happened to land on. A pin also suspends cycling, so
+# nothing rerolls out from under grim.
+"$qs_bin" ipc -p "$shell_path" call screensaver frame 0 > /dev/null 2>&1
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_solid_info_path" 2>&1
+ss_convergence=\$(grep -o '"convergenceFrame":[0-9]*' "$ss_solid_info_path" | cut -d: -f2)
+if [ -z "\$ss_convergence" ] || [ "\$ss_convergence" -lt 1 ]; then
+  ss_convergence=1
+fi
+"$qs_bin" ipc -p "$shell_path" call screensaver frame \$((ss_convergence - 1)) > /dev/null 2>&1
+sleep 3
+"$grim_bin" "$ss_solid_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
@@ -169,8 +190,32 @@ EOF
   echo "exec-once = bash $script"
 }
 
+# Reduces the converged-banner frame to a two-colour mask: every pixel within
+# fuzz of the surface's own background becomes black, everything the banner
+# painted becomes white. The background is read out of the frame's own corner
+# rather than assumed, since --wallpaper recolours the theme.
+screensaver_write_mask() {
+  local bg
+  bg=$($convert_bin "$1" -crop 1x1+2+2 +repage txt:- 2>/dev/null \
+    | sed -n 's/.*#\([0-9A-Fa-f]\{6\}\).*/\1/p' | head -n1)
+  [ -n "$bg" ] || return 1
+  # Two fuzz values on purpose: 8% forgives the compositor's own rounding on
+  # the background fill, 2% then keeps only near-exact black as background, so
+  # a half-covered antialiased pixel counts as ink rather than as a gap.
+  $convert_bin "$1" -alpha off -fuzz 8% -fill black -opaque "#$bg" \
+    -fuzz 2% -fill white +opaque black "$2" 2>/dev/null
+}
+
+# Per-scanline ink, one mean grey per row of the mask: 0 is a row the banner
+# did not touch at all.
+screensaver_row_profile() {
+  $convert_bin "$1" -scale "1x$2!" -depth 8 txt:- 2>/dev/null \
+    | sed -n 's/^[0-9]*,\([0-9]*\): (\([0-9]*\).*/\1 \2/p'
+}
+
 leg_screensaver_assert() {
   local ss_main_output ss_hypr_output ss_cycle_effect1 ss_cycle_effect2
+  local ss_height ss_width ss_profile ss_first ss_last ss_gap_rows ss_busy ss_run
   # Guard proof: mpv still playing, the 3s idle timeout long since elapsed
   # with no real input anywhere in this session, so isIdle has to be true and
   # the guard has to keep active false anyway.
@@ -248,6 +293,54 @@ leg_screensaver_assert() {
     fi
   fi
   echo "SMOKE_SCREENSAVER_CYCLE $ss_cycle_effect1 -> $ss_cycle_effect2"
+  # Solidity (M48): the banner is block characters, and a block character has
+  # to fill its whole cell. It stopped doing that when the shell's monospace
+  # alias moved to Geist Mono, whose U+2588 inks 1.30em against a cell the
+  # painter had padded to 1.495em, so a 6px background stripe ran through
+  # every row of a supposedly solid banner. The painter draws the block
+  # elements as rectangles on the cell grid now (shell/Screensaver/blocks.js),
+  # which is font-independent, and this is the claim: inside the banner's own
+  # vertical span there is no scanline the banner failed to touch. A stripe
+  # between two rows of solid blocks is exactly such a scanline, so the
+  # regression cannot come back quietly.
+  if [ ! -s "$ss_solid_info_path" ] || ! grep -q '"convergenceFrame":' "$ss_solid_info_path"; then
+    fail "no screensaver frameInfo for the pinned converged frame, got: $(cat "$ss_solid_info_path" 2>/dev/null)"
+  fi
+  cat "$ss_solid_info_path"; echo
+  [ -f "$ss_solid_path" ] || fail "no converged-banner screenshot produced"
+  ss_height=$($convert_bin "$ss_solid_path" -format '%h' info: 2>/dev/null)
+  ss_width=$($convert_bin "$ss_solid_path" -format '%w' info: 2>/dev/null)
+  if [ -z "$ss_height" ] || [ -z "$ss_width" ]; then
+    fail "could not read the converged-banner screenshot's size"
+  fi
+  screensaver_write_mask "$ss_solid_path" "$ss_solid_mask_path" \
+    || fail "could not reduce the converged banner to an ink mask"
+  ss_profile=$(screensaver_row_profile "$ss_solid_mask_path" "$ss_height")
+  if [ -z "$ss_profile" ]; then
+    fail "could not read a row profile out of the converged-banner mask"
+  fi
+  ss_first=$(printf '%s\n' "$ss_profile" | awk '$2 > 0 { print $1; exit }')
+  ss_last=$(printf '%s\n' "$ss_profile" | awk '$2 > 0 { row = $1 } END { print row }')
+  if [ -z "$ss_first" ] || [ -z "$ss_last" ] || [ "$ss_last" -le "$ss_first" ]; then
+    fail "the converged banner has no vertical extent at all, so nothing rendered"
+  fi
+  ss_gap_rows=$(printf '%s\n' "$ss_profile" \
+    | awk -v a="$ss_first" -v b="$ss_last" '$1 >= a && $1 <= b && $2 == 0 { n++ } END { print n + 0 }')
+  if [ "$ss_gap_rows" -ne 0 ]; then
+    fail "the converged banner carries $ss_gap_rows background-only scanline(s) between rows $ss_first and $ss_last, so the block cells are still not tiling"
+  fi
+  # The horizontal half of the same claim, on the row the banner inked most:
+  # its longest unbroken run of ink, which for a banner whose widest solid
+  # stretch is seven full blocks has to be several cells wide rather than one.
+  ss_busy=$(printf '%s\n' "$ss_profile" | awk '$2 > best { best = $2; row = $1 } END { print row }')
+  ss_run=$($convert_bin "$ss_solid_mask_path" -crop "${ss_width}x1+0+${ss_busy}" +repage txt:- 2>/dev/null \
+    | sed -n 's/.*#\([0-9A-Fa-f]\{6\}\).*/\1/p' \
+    | awk 'toupper($0) == "FFFFFF" { run++; if (run > best) best = run; next } { run = 0 } END { print best + 0 }')
+  if [ "${ss_run:-0}" -lt 80 ]; then
+    fail "the converged banner's busiest scanline (row $ss_busy) breaks after ${ss_run:-0}px of ink, so its block cells are separated"
+  fi
+  echo "SMOKE_SCREENSAVER_SOLID $ss_gap_rows background scanlines across rows $ss_first-$ss_last, longest unbroken ink run ${ss_run}px on row $ss_busy"
+  echo "SMOKE_SCREENSAVER_BANNER $ss_solid_path"
   if [ ! -s "$ss_final_status_path" ] || ! grep -q '"active":false' "$ss_final_status_path"; then
     fail "screensaver did not report active:false after the final stop, got: $(cat "$ss_final_status_path" 2>/dev/null)"
   fi

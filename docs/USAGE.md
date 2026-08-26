@@ -2163,6 +2163,14 @@ and their colors, since each arrives in its own upstream gradient (decrypt
 amber, matrix green, rain blue), which is what makes a random effect change
 the color too.
 
+The block characters the banner is built from are painted as rectangles on
+the cell grid rather than as glyphs, so the banner is solid in whatever font
+fontconfig resolves `monospace` to. A terminal fills part of its own cell to
+draw one; a font is under no such obligation, and a face whose blocks are
+inset from the advance box (or absent, leaving fontconfig to substitute one
+that is) puts a stripe through the middle of the banner. Everything else on
+the canvas is still the font's own glyph.
+
 `beams` `binarypath` `blackhole` `bouncyballs` `bubbles` `burn` `colorshift`
 `crumble` `decrypt` `errorcorrect` `expand` `fireworks` `highlight`
 `laseretch` `matrix` `middleout` `orbittingvolley` `overflow` `pour` `print`
