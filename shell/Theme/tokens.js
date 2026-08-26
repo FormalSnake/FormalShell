@@ -119,15 +119,53 @@ function clamp(value, min, max, fallback) {
 
 // Radius tokens (spec "Radius"): sm/md/lg/xl step off the settings-driven
 // base by fixed 2-4px offsets, floored at 2 so a base pinned near 0 never
-// produces a negative or invisible radius.
+// produces a negative or invisible radius. A base of 0 is not "near 0": it
+// is the retro preset (M49 D2) asking for square corners, so it returns
+// zeros and the floor only applies once the base is positive. Anything that
+// is not a number reads as 0 and squares the same way.
 function radiusTokens(base) {
     var b = typeof base === "number" ? base : 0;
+    if (!(b > 0))
+        return { sm: 0, md: 0, lg: 0, xl: 0 };
     return {
         sm: Math.max(2, b - 4),
         md: Math.max(2, b - 2),
         lg: Math.max(2, b),
         xl: Math.max(2, b + 4)
     };
+}
+
+// --- Interaction states -------------------------------------------------
+
+// What hover and press paint on a surface the compositor blurs behind.
+// `accent` is the right colour on an opaque shadcn page, but every surface
+// here is drawn at `surfaceOpacity`, so what the pointer actually lands on
+// is the card colour mixed with whatever the wallpaper left behind it. An
+// opaque `accent` chip on top of that lands at a delta the wallpaper
+// decides: a bright wallpaper lifts the surface past `accent` and the hover
+// reads as a dark patch, and a wallpaper close to `card` leaves no delta to
+// see at all, which is what made the bar's hover all but invisible. A wash
+// of the surface's own ink stacks on top of whatever resolved there
+// instead, so the lift keeps its size and its direction over every
+// wallpaper. That is what `accent` already is on an opaque page: zinc's
+// `#27272a` is `card` under white at 0.07, `#f4f4f5` is `card` under black
+// at 0.043. `hover` takes a larger step than either, since a bar cell sits
+// on `card` rather than on `background` and has that much less room between
+// the two to read against; `press` is the same wash one step further on.
+//
+// `filledHover`/`filledPress` are shadcn's `hover:bg-primary/90` for a
+// control that already carries a colour: the fill blended toward
+// `background` and left opaque. Dropping the fill's own opacity instead is
+// what shadcn's `/90` means on an opaque page and something else here, a
+// primary button on a translucent panel goes see-through and the wallpaper
+// reads straight through its label.
+var STATE_ALPHA = {
+    dark: { hover: 0.1, press: 0.16, filledHover: 0.1, filledPress: 0.18 },
+    light: { hover: 0.06, press: 0.1, filledHover: 0.1, filledPress: 0.18 }
+};
+
+function stateAlpha(mode) {
+    return mode === "light" ? STATE_ALPHA.light : STATE_ALPHA.dark;
 }
 
 // --- §4 motion tokens ---------------------------------------------------

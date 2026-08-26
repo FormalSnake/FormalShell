@@ -21,6 +21,17 @@ QtObject {
     // a swapped one.
     property var color: Palette.fallback()
 
+    // The shadcn preset's own table, written out: this stub cannot import
+    // Config, and shell/Theme/presets.js resolves against it. A component
+    // under test therefore sees exactly what an unconfigured shell renders.
+    readonly property string preset: "shadcn"
+    readonly property string iconSet: "lucide"
+    readonly property string fonts: "pair"
+    readonly property bool dither: false
+    readonly property bool wallpaperDither: false
+    readonly property bool lockDither: false
+    readonly property bool blurBehind: true
+
     readonly property int borderWidth: 1
     readonly property int radius: 10
     readonly property var _radiusTokens: Tokens.radiusTokens(radius)
@@ -30,6 +41,11 @@ QtObject {
     readonly property int radiusXl: _radiusTokens.xl
     readonly property int ringWidth: 3
     readonly property real ringAlpha: 0.5
+
+    function pillRadius(extent) {
+        return root.radius > 0 ? extent / 2 : 0;
+    }
+
     readonly property var weight: Tokens.WEIGHTS
 
     readonly property real fontBaseSize: 13
@@ -49,6 +65,18 @@ QtObject {
     // undefined values silently paints black at the right alpha.
     function surface(c) {
         return Qt.alpha(c, root.surfaceOpacity);
+    }
+
+    readonly property var _stateAlpha: Tokens.stateAlpha(root.color.mode)
+    readonly property color hoverFill: Qt.alpha(root.color.foreground, root._stateAlpha.hover)
+    readonly property color pressFill: Qt.alpha(root.color.foreground, root._stateAlpha.press)
+
+    function hoverFilled(c) {
+        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledHover));
+    }
+
+    function pressFilled(c) {
+        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledPress));
     }
 
     readonly property bool motionEnabled: true

@@ -16,7 +16,7 @@ import QtQuick
 // it never starts, M7 Task 4), lock.command (array of strings, default [],
 // an external locker LockService spawns instead of raising the built-in
 // surface: ["hyprlock"], ["loginctl", "lock-session"]; empty keeps the
-// built-in one, M45) and lock.dither (bool, default false, the retro
+// built-in one, M45) and lock.dither (bool, default theme.dither, the retro
 // dither pass over the lock backdrop; off means the plain wallpaper
 // draws, M45). screensaver.timeoutSeconds (number, default
 // 300, IdleService's IdleMonitor.timeout), screensaver.guardMediaPlayback
@@ -43,7 +43,7 @@ import QtQuick
 // (number, default 400, clamped 0..10000, how long the pointer must dwell
 // in the corner before the action fires; a click fires immediately
 // regardless). Resolved by shell/HotCorners/corners.js.
-// wallpaper.dither (bool, default false since M45: true renders the
+// wallpaper.dither (bool, default theme.dither: true renders the
 // wallpaper through the same image-derived-palette retro pass the album
 // covers use (DESIGN.md §2 item 12), on a grid sized in screen pixels
 // rather than source pixels, and off draws the plain undithered
@@ -212,6 +212,19 @@ import QtQuick
 // synthesizes, in wtype's own modifier vocabulary, e.g. "ctrl+shift+v" for
 // a terminal-first session). A chord naming a modifier wtype does not know
 // pastes nothing and warns, rather than sending some other keystroke.
+// theme.preset (string, default "shadcn", one of "shadcn" | "retro"): a
+// table of chrome defaults, not a mode (M49 D1). It sets theme.radius,
+// theme.icons, theme.fonts, theme.surfaceOpacity, theme.blur and
+// theme.dither, and any of those written explicitly wins over it; an
+// unknown name resolves to "shadcn". theme.fonts (string, "pair" on
+// shadcn: sans for words and mono for values; "mono" on retro points both
+// aliases at the mono face, and an unrecognised value takes the preset's).
+// theme.blur (bool, true on shadcn): whether the compositor blurs behind
+// the bar, panels and launcher, the shell blurring nothing itself.
+// theme.dither (bool, false on shadcn): the one texture knob, on it renders
+// content imagery through the retro dither pass, and it is the default for
+// wallpaper.dither and lock.dither above. Resolved by
+// shell/Theme/presets.js, read by Core/Theme.qml alone.
 Singleton {
     id: root
 

@@ -6,6 +6,7 @@ import QtQuick
 // same pattern as AppleMusicArtService's `import qs.Services`.
 import qs.Core
 import "../Theme/palette.js" as Palette
+import "../Theme/presets.js" as Presets
 import "../Theme/tokens.js" as Tokens
 
 Singleton {
@@ -13,13 +14,24 @@ Singleton {
 
     property var color: Palette.fallback()
 
+    // theme.preset (M49 D1): one table of defaults behind the chrome knobs
+    // below, resolved once here. An explicit settings key always wins over
+    // the table, and no surface ever reads a `theme.*` key or the preset
+    // name itself. `_presetDefaults` is what a malformed number falls back
+    // to, since the preset's own value is the right answer there, not
+    // shadcn's.
+    readonly property var _preset: Presets.resolve(Config.get("theme.preset", "shadcn"), Config.get)
+    readonly property var _presetDefaults: Presets.defaults(root._preset.preset)
+    readonly property string preset: root._preset.preset
+
     // shadcn's border/ring pair (spec "Depth", 2026-08-25): a 1px border
-    // everywhere, plus a 3px ring halo at 0.5 alpha on focus. `radius`
-    // reads `theme.radius` from settings.json (default 10, shadcn's own
-    // `--radius: 0.625rem`); radiusSm/Md/Lg/Xl derive from it per
-    // `Tokens.radiusTokens`.
+    // everywhere, plus a 3px ring halo at 0.5 alpha on focus. `radius` is
+    // the preset's base (10 on shadcn, shadcn's own `--radius: 0.625rem`;
+    // 0 on retro) with an explicit `theme.radius` winning over it;
+    // radiusSm/Md/Lg/Xl derive from it per `Tokens.radiusTokens`, which
+    // squares every step at a base of 0.
     readonly property int borderWidth: 1
-    readonly property int radius: Config.get("theme.radius", 10)
+    readonly property int radius: Math.round(Tokens.clamp(root._preset.radius, 0, Infinity, root._presetDefaults.radius))
     readonly property var _radiusTokens: Tokens.radiusTokens(radius)
     readonly property int radiusSm: _radiusTokens.sm
     readonly property int radiusMd: _radiusTokens.md
@@ -27,6 +39,15 @@ Singleton {
     readonly property int radiusXl: _radiusTokens.xl
     readonly property int ringWidth: 3
     readonly property real ringAlpha: 0.5
+
+    // The pill shapes (the switch track and knob, the workspace dots and
+    // pill, the bell badge, the LED pips, the calendar and unread dots) are
+    // half their own extent while the base radius is positive, and square at
+    // 0 (M49 D2). Tied to the radius rather than the preset, so
+    // `theme.radius: 0` squares them on shadcn too.
+    function pillRadius(extent) {
+        return root.radius > 0 ? extent / 2 : 0;
+    }
 
     // shadcn font-weight tokens (spec "Type").
     readonly property var weight: Tokens.WEIGHTS
@@ -58,20 +79,63 @@ Singleton {
     // mono carries values. Both are fontconfig aliases, never a hardcoded
     // family (CLAUDE.md hard rule). The intended pair is Geist Sans and
     // Geist Mono, chosen through the user's own fontconfig defaults.
-    readonly property string fontFamilySans: "sans-serif"
+    // `theme.fonts: "mono"` (retro's default) points the sans alias at the
+    // mono face, so every surface draws in one face without a single one of
+    // them branching on the key.
+    readonly property string fonts: root._preset.fonts
+    readonly property string fontFamilySans: root._preset.fonts === "mono" ? "monospace" : "sans-serif"
     readonly property string fontFamilyMono: "monospace"
+
+    // Which set `Components/Icon.qml` looks a name up in, `lucide` or
+    // `nerd`; anything else falls back to lucide in shell/Theme/icons.js.
+    readonly property string iconSet: root._preset.icons
 
     // The alpha of every `card`/`popover` fill on the three surfaces
     // Hyprland blurs behind (DESIGN.md §1 "Translucency and blur"): the bar
     // cells, the panels and the launcher card. The shell blurs nothing
-    // itself; this alpha is what lets the compositor's blur read through.
-    readonly property real surfaceOpacity: Tokens.clamp(Config.get("theme.surfaceOpacity", 0.85), 0, 1, 0.85)
+    // itself; this alpha is what lets the compositor's blur read through,
+    // and `blurBehind` is what says whether the compositor blurs there at
+    // all. Retro sets 1.0 and no blur, so the same cards read as solid.
+    readonly property real surfaceOpacity: Tokens.clamp(root._preset.surfaceOpacity, 0, 1, root._presetDefaults.surfaceOpacity)
+    readonly property bool blurBehind: root._preset.blur
+
+    // `theme.dither` is the one texture knob (M49 D3): on, content imagery
+    // renders through the retro dither pass instead of drawing plain.
+    // The two full-screen passes take their own keys, defaulting to this
+    // one, so a preset carries the texture everywhere and either surface
+    // can still opt out.
+    readonly property bool dither: root._preset.dither
+    readonly property bool wallpaperDither: root._preset.wallpaperDither
+    readonly property bool lockDither: root._preset.lockDither
 
     // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
     // strings, which have no .r/.g/.b to read, and Qt.rgba on those three
     // undefined values silently paints black at the right alpha.
     function surface(c) {
         return Qt.alpha(c, root.surfaceOpacity);
+    }
+
+    // --- Interaction states -------------------------------------------------
+    // Hover and press, as a wash of the surface's own ink rather than an
+    // opaque `accent` chip. Every surface that takes a hover is drawn at
+    // `surfaceOpacity`, so an opaque fill on top of it lands at a delta the
+    // wallpaper behind the blur decides, and a bright wallpaper cancels the
+    // lift outright. `Tokens.stateAlpha`'s header carries the arithmetic.
+    // `accent` keeps the states that are not the pointer's: selected, and a
+    // list's own cursor row.
+    readonly property var _stateAlpha: Tokens.stateAlpha(root.color.mode)
+    readonly property color hoverFill: Qt.alpha(root.color.foreground, root._stateAlpha.hover)
+    readonly property color pressFill: Qt.alpha(root.color.foreground, root._stateAlpha.press)
+
+    // The same two states for a control that already carries a fill, where a
+    // wash of the ink would read as the fill going muddy: shadcn's
+    // `hover:bg-primary/90`, blended toward `background` and left opaque.
+    function hoverFilled(c) {
+        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledHover));
+    }
+
+    function pressFilled(c) {
+        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledPress));
     }
 
     // --- DESIGN.md §4 motion tokens -----------------------------------------

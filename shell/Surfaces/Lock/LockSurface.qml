@@ -26,10 +26,10 @@ import qs.Components
 // shows on the desktop layer) and never the screen. Never reintroduce
 // ScreencopyView here or anywhere lock-adjacent.
 //
-// That image draws plain under a 0.5 black scrim. `lock.dither` (default
-// false, M45 D2) puts the retro dither pass back over it for anyone who
-// wants it; nothing here has ever blurred, and DESIGN.md's one named blur
-// exception is spent and gone.
+// That image draws plain under a 0.5 black scrim on the shadcn preset.
+// `lock.dither` (M45 D2, defaulting to `theme.dither`, which the preset
+// sets) puts the retro dither pass back over it; nothing here has ever
+// blurred, and DESIGN.md's one named blur exception is spent and gone.
 //
 // `Core.State` (qualified), not the bare `State` this file's other
 // unqualified `import qs.Core` would suggest: QtQuick's own built-in `State`
@@ -69,7 +69,7 @@ WlSessionLockSurface {
 
     property date _now: new Date()
 
-    readonly property bool _dither: Core.Config.get("lock.dither", false)
+    readonly property bool _dither: Core.Theme.lockDither
 
     // Matches every other top-layer surface's own opaque-frame precaution
     // (Panel.qml/Center.qml): WlSessionLockSurface.color's own doc warns
