@@ -567,6 +567,16 @@ PanelWindow {
     // exactly as fresh as before for as long as the menu stays open.
     readonly property var _liveClipboardItems: root.isOpen ? ClipboardService.items : []
 
+    // The same gate, for the same reason, on the compositor's window list.
+    // The apps provider decorates each app row with its running windows, and
+    // it reads this inside _tree's binding, so an ungated read subscribed the
+    // whole tree to every window open, close AND TITLE CHANGE: a browser tab
+    // switch rebuilt the JSONC merge, every provider, the frecency sort and a
+    // Quickshell.iconPath call per installed app, with the launcher closed
+    // and nobody looking. Closed, the app rows carry no window matches, which
+    // is exactly as observable as the clipboard being empty up there.
+    readonly property var _liveWindows: root.isOpen ? (CompositorService.windows || []) : []
+
     readonly property var _defaultObj: {
         if (!root._defaultMenuText) return {};
         var parsed;
@@ -622,7 +632,7 @@ PanelWindow {
         apps: function () {
             return AppMatch.decorateAppRows(Providers.appsProvider(DesktopEntries.applications.values, function (name) {
                 return Quickshell.iconPath(name, true);
-            }, Core.State.appLaunches, Date.now()), CompositorService.windows || []);
+            }, Core.State.appLaunches, Date.now()), root._liveWindows);
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, "copy", Core.Config.get("clipboard.paste", true)); },
         shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, "share"); },
@@ -2087,6 +2097,11 @@ PanelWindow {
 
         ListView {
             id: rowsView
+            // Delegates recycle rather than being destroyed and rebuilt on
+            // every flick. Safe here because every delegate in this file is
+            // required properties plus bindings off them, with no
+            // Component.onCompleted work that a reused item would skip.
+            reuseItems: true
             anchors.top: variantRow.bottom
             anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left
@@ -2162,6 +2177,11 @@ PanelWindow {
         // anchor to whichever of the two is live without knowing which.
         GridView {
             id: gridView
+            // Delegates recycle rather than being destroyed and rebuilt on
+            // every flick. Safe here because every delegate in this file is
+            // required properties plus bindings off them, with no
+            // Component.onCompleted work that a reused item would skip.
+            reuseItems: true
             anchors.top: variantRow.bottom
             anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left
@@ -2277,6 +2297,11 @@ PanelWindow {
         // other holds a glyph.
         GridView {
             id: emojiGrid
+            // Delegates recycle rather than being destroyed and rebuilt on
+            // every flick. Safe here because every delegate in this file is
+            // required properties plus bindings off them, with no
+            // Component.onCompleted work that a reused item would skip.
+            reuseItems: true
             anchors.top: variantRow.bottom
             anchors.topMargin: Core.Theme.space.rowGap
             anchors.left: parent.left

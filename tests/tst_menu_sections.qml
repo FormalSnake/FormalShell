@@ -97,12 +97,17 @@ TestCase {
 
     // A grid draws no headings, so it must not claim any either: `menu
     // status` is the only place a heading is observable from the rig.
+    // A grid answers with nothing at all rather than one "" per row: it has
+    // nowhere to put a heading, and the delegate that reads this array by
+    // index is the row list, which a grid route does not render. The empty
+    // answer is what keeps a 3944-cell emoji browse off three passes over
+    // the row list per keystroke.
     function test_a_grid_has_no_headings() {
         var rows = [{ id: "emoji.a" }, { id: "emoji.b" }];
         var sections = Model.sectionsFor(rows, {
             mode: "menu", grid: true, level: "emoji", levelLabel: "Emoji"
         });
-        compare(sections, ["", ""]);
+        compare(sections, []);
         compare(Model.sectionNames(sections), []);
     }
 

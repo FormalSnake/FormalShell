@@ -189,9 +189,17 @@ var ROOT_SECTION = "Commands";
 // ranked list into a heading per row), and everything else is either the
 // row's declared `section` key, the frecency head of a provider that marks
 // one (`recent`), or the level.
+// Index-aligned with the rows it was given, EXCEPT for a grid, which gets an
+// empty array: _sectionOf answers "" for every row of one (a grid has
+// nowhere to put a full-width band between two cells), and the row delegate
+// that reads this by index is not the one a grid renders, so there is
+// nothing to stay aligned with. Worth the exception because the emoji grid
+// browses 3944 rows and rebuilds this on every keystroke.
 function sectionsFor(rows, ctx) {
     rows = rows || [];
     ctx = ctx || {};
+    if (ctx.grid === true)
+        return [];
     var out = [];
     for (var i = 0; i < rows.length; i++)
         out.push(_sectionOf(rows[i], ctx));

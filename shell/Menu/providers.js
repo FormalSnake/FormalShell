@@ -365,22 +365,21 @@ function emojiSearch(list, query) {
     list = list || [];
     var q = String(query || "").trim().toLowerCase();
     if (!q) return list.slice();
-    var results = [];
+    // Four buckets rather than a comparator sort. There are exactly four
+    // tiers, and the scan already visits the list in file order, so pushing
+    // into a bucket and concatenating them highest-first produces the same
+    // order (tier descending, file order within a tier) in one linear pass.
+    // A one-letter query matches most of the 3944 entries, and sorting that
+    // many with a comparator was the single biggest cost left on the route.
+    var exact = [], prefix = [], wordStart = [], substring = [];
     for (var i = 0; i < list.length; i++) {
         var name = _emojiName(list[i]);
-        var tier;
-        if (name === q) tier = 4;
-        else if (name.indexOf(q) === 0) tier = 3;
-        else if (name.indexOf(" " + q) >= 0) tier = 2;
-        else if (name.indexOf(q) >= 0) tier = 1;
-        else continue;
-        results.push({ entry: list[i], tier: tier, index: i });
+        if (name === q) exact.push(list[i]);
+        else if (name.indexOf(q) === 0) prefix.push(list[i]);
+        else if (name.indexOf(" " + q) >= 0) wordStart.push(list[i]);
+        else if (name.indexOf(q) >= 0) substring.push(list[i]);
     }
-    results.sort(function (a, b) {
-        if (b.tier !== a.tier) return b.tier - a.tier;
-        return a.index - b.index;
-    });
-    return results.map(function (r) { return r.entry; });
+    return exact.concat(prefix, wordStart, substring);
 }
 
 // The lowercased name, memoised onto the entry. Every keystroke rescans all
@@ -408,22 +407,35 @@ function _emojiName(entry) {
 // typed the char itself with `wtype <char>`, which only lands where the
 // focused client accepts a remapped keysym off a virtual keyboard; a paste
 // works wherever the user's own paste chord already works.
+// The row objects are memoised onto the entry, one per paste mode, for the
+// same reason the lowercase name is: with the cap gone a broad query maps
+// most of the 3944 entries on every keystroke, and building a twelve-field
+// object apiece was measured at 8.85ms a keystroke against 0.60ms for
+// everything else the route does per keystroke combined. Cached, a repeat
+// query costs the array and nothing else. A row is read-only everywhere it
+// travels (the grid delegate binds to it, `_activateRow` reads it), so
+// handing the same object back twice is safe; the memo lives on the entry,
+// never on the row, so nothing downstream can see it.
 function emojiRows(list, query, paste) {
     var pasteAfter = paste !== false;
+    var key = pasteAfter ? "_rowPaste" : "_rowCopy";
     return emojiSearch(list, query).map(function (e) {
-        return {
-            id: "emoji." + e.ch,
-            parentId: null,
-            label: e.name.toUpperCase(),
-            icon: e.ch,
-            title: "",
-            aliases: [],
-            kind: "action",
-            verb: pasteAfter ? "Paste" : "Copy",
-            action: "wl-copy -- '" + e.ch + "'",
-            pasteAfter: pasteAfter,
-            childIds: []
-        };
+        if (e[key] === undefined) {
+            e[key] = {
+                id: "emoji." + e.ch,
+                parentId: null,
+                label: e.name.toUpperCase(),
+                icon: e.ch,
+                title: "",
+                aliases: [],
+                kind: "action",
+                verb: pasteAfter ? "Paste" : "Copy",
+                action: "wl-copy -- '" + e.ch + "'",
+                pasteAfter: pasteAfter,
+                childIds: []
+            };
+        }
+        return e[key];
     });
 }
 

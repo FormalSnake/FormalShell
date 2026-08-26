@@ -63,6 +63,24 @@ TestCase {
         compare(rows[0].icon, "🐈");
     }
 
+    // All four tiers in one query, in order. The ranking is a four-bucket
+    // pass rather than a comparator sort (a one-letter query matches most of
+    // the dataset), so the tier boundaries and the file order inside a tier
+    // are what a regression would break.
+    function test_the_four_tiers_rank_in_order() {
+        var fixture = [
+            { ch: "1", name: "red apple", group: "g" },      // substring
+            { ch: "2", name: "cat face", group: "g" },       // prefix
+            { ch: "3", name: "cat", group: "g" },            // exact
+            { ch: "4", name: "black cat", group: "g" },      // word start
+            { ch: "5", name: "cat with tears", group: "g" }  // prefix, later in file order
+        ];
+        var order = Providers.emojiRows(fixture, "cat").map(function (r) { return r.icon; });
+        // exact, then the two prefixes in file order, then word start.
+        // "red apple" has no "cat" in it at all and must not appear.
+        compare(order, ["3", "2", "5", "4"]);
+    }
+
     function test_trigger_query() {
         compare(Providers.emojiTriggerQuery(":e thumbs"), "thumbs");
         compare(Providers.emojiTriggerQuery(":e "), "");

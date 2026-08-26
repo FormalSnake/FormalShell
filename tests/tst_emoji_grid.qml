@@ -56,6 +56,25 @@ TestCase {
         verify(elapsed < 500, "five repeat searches took " + elapsed + "ms");
     }
 
+    // A grid draws no headings, so the per-row section pass has nothing to
+    // produce and must not walk the list to say so.
+    function test_a_grid_skips_the_section_pass() {
+        compare(Model.sectionsFor(Providers.emojiRows(list, ""), { grid: true, mode: "menu" }).length, 0);
+    }
+
+    // The row memo hands the same object back for the same entry, which is
+    // what makes a repeat query cost the array and nothing else. Two paste
+    // modes are two rows, because `verb` and `action` differ.
+    function test_a_row_is_built_once_per_entry() {
+        var first = Providers.emojiRows(list, "grinning face")[0];
+        var second = Providers.emojiRows(list, "grinning face")[0];
+        verify(first === second);
+        var copyMode = Providers.emojiRows(list, "grinning face", false)[0];
+        verify(copyMode !== first);
+        compare(copyMode.verb, "Copy");
+        compare(first.verb, "Paste");
+    }
+
     // The load-bearing assumption behind showing all 3944: a GridView whose
     // height is capped (Menu.qml's _rowsAreaCap) instantiates delegates for
     // what it can see plus its cache buffer, never for the model. If this
