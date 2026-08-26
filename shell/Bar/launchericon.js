@@ -10,9 +10,9 @@
 //   "formalshell"   the shell's own mark, which is that same sign until a
 //                   real one exists. Named separately so the day a mark
 //                   lands there is one place to change.
-//   "distro"        the machine's own distro logo, resolved below: the icon
-//                   theme if it has one, otherwise the real logo from the
-//                   font-logos table the wrapper ships
+//   "distro"        the machine's own distro logo, resolved below: the real
+//                   logo from the font-logos table the wrapper ships, or the
+//                   icon theme for a distro that table has never heard of
 //   "<name>"        any icon name the active set knows ("snowflake",
 //                   "terminal"), through Components/Icon.qml like every
 //                   other icon in the shell
@@ -72,13 +72,20 @@ function distroIconName(osRelease) {
 // the theme has no such icon. Passed in rather than called here so this
 // stays pure and the test can drive both branches.
 //
-// The distro order is: the machine's own icon theme first, because a user who
-// installed nixos-icons or a Papirus-style distributor-logo set meant that
-// one to win; then the bundled font-logos glyph, which is a REAL logo and is
-// always present because the wrapper ships the font; then Tux for a Linux the
-// table has never heard of. The shell's own mark is not in that chain at all,
+// The distro order is: the bundled font-logos glyph first, then the machine's
+// own icon theme, then Tux. The shell's own mark is not in that chain at all,
 // since a caller asking for "distro" asked for a distro.
-function resolve(configValue, osRelease, themeIcon, distroGlyph) {
+//
+// Glyph before theme, which is the opposite of what this did first (owner,
+// 2026-08-26: "the logo is tiny and has a white background"). A themed distro
+// icon is a full-colour raster with its own padding baked in: dropped into a
+// 13px bar slot it renders smaller than the glyphs beside it AND keeps its
+// own light fill, so the mark read as a tiny white blob in a row of
+// monochrome chrome. The font glyph is drawn on the text baseline and tints
+// with `foreground` like every other bar icon. Anyone who actually wants the
+// colour logo points `bar.launcherIcon` at the file, which is what the path
+// form is for.
+function resolve(configValue, osRelease, themeIcon, distroGlyph, tuxGlyph) {
     var value = String(configValue || "").trim();
     // Unset means the machine's own logo (owner, 2026-08-26). The command
     // sign is still reachable by naming it, and is still where the distro
@@ -92,14 +99,20 @@ function resolve(configValue, osRelease, themeIcon, distroGlyph) {
     if (value !== "distro")
         return { kind: "icon", value: value };
 
+    var id = String((osRelease || {}).ID || "").trim();
+    var glyph = (id !== "" && distroGlyph) ? distroGlyph(id) : "";
+    if (glyph !== "" && glyph !== undefined && glyph !== null)
+        return { kind: "glyph", value: String(glyph) };
+
+    // Only reached by a distro the font table has never heard of, which is
+    // the one case where a themed raster beats drawing Tux at it.
     var name = distroIconName(osRelease);
     var resolved = (name !== "" && themeIcon) ? themeIcon(name) : "";
     if (resolved !== "" && resolved !== undefined && resolved !== null)
         return { kind: "image", value: String(resolved) };
 
-    var id = String((osRelease || {}).ID || "").trim();
-    var glyph = distroGlyph ? distroGlyph(id) : "";
-    if (glyph !== "" && glyph !== undefined && glyph !== null)
-        return { kind: "glyph", value: String(glyph) };
+    // We know it is a Linux, we just cannot name it.
+    if (id !== "" && tuxGlyph)
+        return { kind: "glyph", value: String(tuxGlyph) };
     return { kind: "icon", value: DEFAULT_NAME };
 }

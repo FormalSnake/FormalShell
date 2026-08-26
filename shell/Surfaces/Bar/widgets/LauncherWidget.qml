@@ -34,7 +34,7 @@ Cell {
     readonly property var _spec: {
         var spec = LauncherIcon.resolve(root._configured, root._osRelease,
             function (name) { return Quickshell.iconPath(name, true); },
-            Distro.glyphOrTux);
+            Distro.glyph, Distro.FALLBACK);
         if (spec.kind !== "image")
             return spec;
         // `~` is the caller's to expand, launchericon.js stays pure and

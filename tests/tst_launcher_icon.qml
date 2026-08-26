@@ -19,19 +19,19 @@ TestCase {
     // naming it gets you, and still where a machine with no os-release ends
     // up, but it is no longer what an untouched settings.json shows.
     function test_the_default_is_the_machines_own_logo() {
-        var spec = LauncherIcon.resolve("", nixos, themeMiss, Distro.glyphOrTux);
+        var spec = LauncherIcon.resolve("", nixos, themeMiss, Distro.glyph, Distro.FALLBACK);
         compare(spec.kind, "glyph");
         compare(spec.value, Distro.LOGOS["nixos"]);
     }
 
     function test_naming_the_command_sign_still_gets_it() {
-        compare(LauncherIcon.resolve("command", {}, themeMiss, Distro.glyphOrTux).value, "command");
-        compare(LauncherIcon.resolve("command", nixos, themeHit, Distro.glyphOrTux).kind, "icon");
+        compare(LauncherIcon.resolve("command", {}, themeMiss, Distro.glyph, Distro.FALLBACK).value, "command");
+        compare(LauncherIcon.resolve("command", nixos, themeHit, Distro.glyph, Distro.FALLBACK).kind, "icon");
     }
 
     // A machine with no os-release at all still has to draw something.
     function test_the_default_on_a_machine_with_no_os_release() {
-        var spec = LauncherIcon.resolve("", {}, themeMiss, function () { return ""; });
+        var spec = LauncherIcon.resolve("", {}, themeMiss, function () { return ""; }, "");
         compare(spec.kind, "icon");
         compare(spec.value, "command");
     }
@@ -40,35 +40,46 @@ TestCase {
     // exists there is one place to change, not a search for every caller
     // that happened to spell it "command".
     function test_formalshell_is_the_shells_mark_today() {
-        compare(LauncherIcon.resolve("formalshell", {}, themeMiss, Distro.glyphOrTux).value, "command");
+        compare(LauncherIcon.resolve("formalshell", {}, themeMiss, Distro.glyph, Distro.FALLBACK).value, "command");
     }
 
     function test_a_bare_name_is_an_icon_name() {
-        var spec = LauncherIcon.resolve("snowflake", {}, themeMiss, Distro.glyphOrTux);
+        var spec = LauncherIcon.resolve("snowflake", {}, themeMiss, Distro.glyph, Distro.FALLBACK);
         compare(spec.kind, "icon");
         compare(spec.value, "snowflake");
     }
 
     function test_a_path_is_an_image() {
         ["/opt/mark.svg", "~/.config/mark.png", "file:///opt/mark.svg"].forEach(function (p) {
-            var spec = LauncherIcon.resolve(p, {}, themeMiss, Distro.glyphOrTux);
+            var spec = LauncherIcon.resolve(p, {}, themeMiss, Distro.glyph, Distro.FALLBACK);
             compare(spec.kind, "image", p + " should be an image");
             compare(spec.value, p);
         });
     }
 
-    // LOGO is what the freedesktop spec provides for exactly this, and it is
-    // preferred over ID because a distro that ships an icon names it there.
-    function test_distro_prefers_the_logo_key() {
-        var spec = LauncherIcon.resolve("distro", nixos, themeHit, Distro.glyphOrTux);
-        compare(spec.kind, "image");
-        verify(spec.value.indexOf("nix-snowflake") >= 0);
+    // The monochrome glyph wins even where the icon theme HAS the logo: a
+    // themed distro icon is a full-colour raster with its own padding, which
+    // in a 13px bar slot reads as a tiny pale blob among monochrome glyphs.
+    function test_the_glyph_beats_a_themed_raster() {
+        var spec = LauncherIcon.resolve("distro", nixos, themeHit, Distro.glyph, Distro.FALLBACK);
+        compare(spec.kind, "glyph");
+        compare(spec.value, Distro.LOGOS["nixos"]);
     }
 
-    function test_distro_falls_back_to_id_when_there_is_no_logo() {
-        var spec = LauncherIcon.resolve("distro", { ID: "debian" }, themeHit, Distro.glyphOrTux);
+    // The theme is only consulted for a distro the font table cannot name,
+    // where a raster beats drawing Tux at it. LOGO is preferred over ID
+    // because a distro that ships an icon names it there.
+    function test_an_unknown_distro_tries_the_theme_before_tux() {
+        var spec = LauncherIcon.resolve("distro", { ID: "temple", LOGO: "temple-os" },
+            themeHit, Distro.glyph, Distro.FALLBACK);
         compare(spec.kind, "image");
-        verify(spec.value.indexOf("debian") >= 0);
+        verify(spec.value.indexOf("temple-os") >= 0);
+    }
+
+    function test_an_unknown_distro_with_no_logo_key_tries_its_id() {
+        var spec = LauncherIcon.resolve("distro", { ID: "temple" }, themeHit, Distro.glyph, Distro.FALLBACK);
+        compare(spec.kind, "image");
+        verify(spec.value.indexOf("temple") >= 0);
     }
 
     // The common NixOS case: no nixos-icons installed, so the icon theme
@@ -76,7 +87,7 @@ TestCase {
     // is what the bundled font-logos table is for. It must never be Lucide's
     // generic weather snowflake, which is the bug the owner reported.
     function test_the_real_logo_is_used_when_the_theme_has_nothing() {
-        var spec = LauncherIcon.resolve("distro", nixos, themeMiss, Distro.glyphOrTux);
+        var spec = LauncherIcon.resolve("distro", nixos, themeMiss, Distro.glyph, Distro.FALLBACK);
         compare(spec.kind, "glyph");
         compare(spec.value, Distro.LOGOS["nixos"]);
         verify(spec.value !== "snowflake");
@@ -84,14 +95,14 @@ TestCase {
 
     // An unrecognised Linux still gets a Linux mark rather than the shell's
     // own: asking for "distro" asked for a distro.
-    function test_an_unknown_distro_still_gets_tux() {
-        var spec = LauncherIcon.resolve("distro", { ID: "temple" }, themeMiss, Distro.glyphOrTux);
+    function test_an_unknown_distro_with_no_theme_icon_still_gets_tux() {
+        var spec = LauncherIcon.resolve("distro", { ID: "temple" }, themeMiss, Distro.glyph, Distro.FALLBACK);
         compare(spec.kind, "glyph");
         compare(spec.value, Distro.FALLBACK);
     }
 
     function test_distro_with_no_os_release_at_all_is_the_shell_mark() {
-        var spec = LauncherIcon.resolve("distro", {}, themeMiss, function () { return ""; });
+        var spec = LauncherIcon.resolve("distro", {}, themeMiss, function () { return ""; }, "");
         compare(spec.kind, "icon");
         compare(spec.value, "command");
     }

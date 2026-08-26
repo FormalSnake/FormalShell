@@ -12,14 +12,17 @@ So: every `Rectangle` under the scanned trees that assigns `border.width` or
 `primitive-exempt:` and says why. The exemption is a comment rather than a
 path list so it travels with the code it describes and cannot go stale.
 
-The second rule is the card count. A surface is ONE card (DESIGN.md §1's
-separation ladder, rung 5): the frame at its outer edge, and nothing inside
-it. A `Card` opened inside another `Card` in the same file is an error with
-no exemption, which is what MediaPanel's album-art frame and the launcher's
-split preview pane both were before 2026-08-26. Same-file only, so a
-component that is itself a `Card` and gets embedded in one elsewhere
-(NotificationCard inside the centre) is out of reach here and stays the
-reviewer's job; that one carries a `flat` property for exactly this reason.
+The second rule is the card depth. A surface is its own frame plus at most
+one card inside it, on the block the rest of the surface points at (DESIGN.md
+§1's separation ladder, rung 5): the launcher's split preview is that card,
+and nothing goes a level deeper. So a `Card` opened inside two enclosing
+`Card` blocks is an error with no exemption.
+
+Depth is all this can see. It is same-file, so a component that is itself a
+`Card` and gets embedded in one elsewhere (NotificationCard inside the
+centre) is out of reach here, as is a surface spending the allowance twice on
+sibling blocks. Both stay the reviewer's job; NotificationCard carries a
+`flat` property for exactly this reason.
 
 Run by hand as `dev/check-primitives.py`; `nix flake check` runs it too.
 """
@@ -83,7 +86,7 @@ def scan(path):
 
 
 def nested_cards(path):
-    """Line numbers of every `Card {` opened inside another one."""
+    """Line numbers of every `Card {` opened two or more cards deep."""
     lines = path.read_text().splitlines()
     cards = []
     depth = 0
@@ -91,7 +94,7 @@ def nested_cards(path):
     for index, line in enumerate(lines):
         stripped = line.split("//", 1)[0]
         if CARD_OPENER.match(line):
-            if cards:
+            if len(cards) >= 2:
                 problems.append(index + 1)
             cards.append(depth)
         depth += stripped.count("{") - stripped.count("}")
@@ -113,9 +116,10 @@ def main():
             for line_no, text in scan(path):
                 failures.append(f"{path.relative_to(root)}:{line_no}: {text}")
     if nested:
-        print("A surface is one card, and nothing inside it is a card")
-        print("(DESIGN.md \u00a71, the separation ladder's rung 5). Mark the")
-        print("block off with a Separator, a SectionLabel or space instead.")
+        print("A surface is its own frame plus at most one card inside it")
+        print("(DESIGN.md \u00a71, the separation ladder's rung 5), and this")
+        print("one goes a level deeper. Mark the block off with a Separator,")
+        print("a SectionLabel or space instead.")
         print("")
         for line in nested:
             print(line)

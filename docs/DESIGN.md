@@ -108,12 +108,24 @@ does this boundary have to go".
    block of text. Those rows take a rule between them. The test is the row's
    height, not the list's length: uniform `controlHeight` rows still abut at
    `spacing: 0` and still take nothing.
-5. **A card.** `Card`, and it is the surface itself. There is exactly one
-   per surface, drawn at its outer edge: the panel's frame, the launcher's,
-   a toast's, the OSD pill, the notification centre's. **Nothing inside a
-   card is a card.** A block inside one that needs marking off takes rung 4
-   or lower, however much it outranks its neighbours (owner, 2026-08-26:
-   "no nested cards anywhere, just a panel, and max one card").
+5. **A card.** `Card`. Every floating surface is one, drawn at its outer
+   edge: the panel's frame, the launcher's, a toast's, the OSD pill, the
+   notification centre's. Inside that frame a surface may spend one more, on
+   the single block the rest of it points at, and it never spends that twice.
+   Nothing goes a level deeper: a card inside that card does not exist, and a
+   block that needs marking off inside one takes rung 4 or lower however much
+   it outranks its neighbours (owner, 2026-08-26: "no nested cards anywhere,
+   just a panel, and max one card", "one card for the preview so it didn't
+   count as nested").
+
+   Where each surface spends the allowance, or doesn't. The launcher's split
+   route spends it on the preview pane: flat `MenuRow`s down one side and the
+   card down the other, so the pane reads as the thing the list is pointing
+   at. A panel spends it on nothing: the header's rule and `sectionGap`
+   already rank the hero over the sections under it, and the border the hero
+   used to draw was the "too big usage of cards everywhere" the owner called
+   out. The notification centre spends it on nothing either: its rows are the
+   list, not a block the list points at.
 
    What a resting box actually marks decides whether it is one. A fill and a
    border at rest say *the pointer or the keyboard acts on this*: a
@@ -270,9 +282,10 @@ with a bottom rule only; a shadcn Breadcrumb under it (ancestors in
 `mutedForeground`, the level in `foreground`, a `chevron-right` between,
 no fill and no frame); rows with the cursor row in
 `accent`; hint footer in `caption` `mutedForeground`. Modal over a 0.5 black
-scrim. The split route's preview pane is flat, divided from the row list by a
-vertical `Separator` with a `panelPadding` gutter either side: one card, and
-the seam does what a second frame used to.
+scrim. The split route's preview pane is the one card this surface spends
+inside its own frame (§1's ladder, rung 5): `radiusMd`, an `sm` gutter off
+the list, flat rows beside it. Nothing inside the pane draws a frame of its
+own, the preview picture included.
 
 **Toasts.** The sonner stack as built. `Card` chrome; critical is a
 `destructive` border and icon, not a fill. The card's icon slot resolves the
