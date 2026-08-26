@@ -75,6 +75,38 @@ fontconfig aliases, Geist Sans and Geist Mono by intent. Sizes `caption` 11,
 the gap inside a card, `screenPadding` the gap outside a floating surface;
 they share a value and describe different things.
 
+**Separation**: one ladder, five rungs, and a boundary takes exactly one of
+them. Reaching for a rung is a claim that the one below it was tried and was
+not enough, so the question is never "does this need a box" but "how far up
+does this boundary have to go".
+
+1. **Nothing.** Rows inside one group. A row is `controlHeight` tall with
+   `controlPaddingX` either side, and that padding is the gap. Rows in a
+   uniformly interactive list abut at `spacing: 0`; the hover wash and the
+   cursor ring are what a pointer needs, and neither is a resting mark.
+2. **Space.** `sectionGap` between sections against `rowGap` inside one, a
+   4x ratio, so the grouping reads before anything is drawn at all. This is
+   the rung most boundaries stop at, and a boundary that still reads wrong
+   with `sectionGap` under it usually wants a name, not a line.
+3. **A name.** A `SectionLabel` over the group, inset to the row text under
+   it. A heading both separates and says what the group is, which no amount
+   of space or ink can do, so a group worth separating is usually a group
+   worth naming.
+4. **A rule.** `Separator`, a 1px `border` line, full-bleed across the
+   surface or `inset` to the row text. For a seam space cannot carry: two
+   halves of one surface that differ in kind (the monitor ledger above its
+   process table), a header or footer against the content it frames, or a
+   divider a data source itself declares (a D-Bus menu's own separator
+   entries). Never between every row of a list, which is rung 1's job, and
+   never directly under a `SectionLabel`, which is rung 3 doing the same
+   work twice.
+5. **A card.** `Card`, or `Cell` with its resting border. Reserved for a
+   surface that floats over the desktop with nothing behind it, and for the
+   one block inside a surface that outranks the rest (`PanelHero`, the
+   split route's preview pane). A card inside a card is the one combination
+   this ladder forbids outright: a block inside a card that needs marking
+   off takes rung 4 or lower.
+
 **Padding**: one rule, on every surface. A card insets its content by
 `panelPadding`. A row is `controlHeight` tall with `controlPaddingX` either
 side and its content vertically centred; it is taller only when its own
@@ -168,7 +200,8 @@ dot grows a step, and an urgent dot is `destructive` and pulses once.
 label is its own state and never an icon that flips between an on and an off
 name. A choice among several, or a row of actions belonging to one thing, is
 a `ButtonGroup`. A level is a `Track`. Text entry is an `Input`. A badge
-inside a row is `Cell { chip: true }`. A heading is a `SectionLabel`. A
+inside a row is `Cell { chip: true }`. A heading is a `SectionLabel`. A seam is a
+`Separator`. A
 surface that draws its own bordered or rounded `Rectangle` is drawing chrome
 a primitive owns; `dev/check-primitives.py` fails the build unless that
 Rectangle carries a `// primitive-exempt:` comment saying what no primitive

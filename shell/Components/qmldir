@@ -16,6 +16,7 @@ PanelHero PanelHero.qml
 Picture Picture.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
+Separator Separator.qml
 Segmented Segmented.qml
 Switch Switch.qml
 Tooltip Tooltip.qml
