@@ -130,12 +130,10 @@ Cell {
         }
     }
 
-    Text {
+    CellLabel {
         anchors.verticalCenter: parent.verticalCenter
         text: root._text
-        color: root.foreground
-        font.family: Theme.fontFamilyMono
-        font.pixelSize: Theme.fontSize.body
+        font.weight: Theme.weight.normal
     }
 
     // Hover only: a command module has no click action of its own, so this

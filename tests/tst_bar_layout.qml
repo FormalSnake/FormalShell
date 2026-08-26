@@ -412,7 +412,7 @@ TestCase {
     // all, so the geometry it draws lives in layout.js and is checked here
     // against the shipped spacing scale.
     function test_strip_is_the_cell_row_plus_a_margin_band() {
-        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 }, "top");
+        var g = Layout.stripGeometry({ barCellHeight: 28, barCellWidth: 44, barMargin: 6, md: 12 }, "top");
         compare(g.thickness, 40);
         compare(g.cellThickness, 28);
         compare(g.cellInset, 6);
@@ -422,26 +422,37 @@ TestCase {
 
     // The same box on every edge; only which way it runs changes.
     function test_strip_stands_up_on_a_side_edge() {
-        var space = { barCellHeight: 28, barMargin: 6, md: 12 };
+        var space = { barCellHeight: 28, barCellWidth: 44, barMargin: 6, md: 12 };
         var left = Layout.stripGeometry(space, "left");
         compare(left.vertical, true);
-        compare(left.thickness, 40);
         compare(left.position, "left");
         compare(Layout.stripGeometry(space, "right").vertical, true);
         compare(Layout.stripGeometry(space, "bottom").vertical, false);
     }
 
+    // A cell stacks its icon over its label on a side edge instead of
+    // running the two along the strip, so the strip is `barCellWidth` wide
+    // there rather than `barCellHeight` tall.
+    function test_a_side_strip_takes_the_wider_cell() {
+        var space = { barCellHeight: 28, barCellWidth: 44, barMargin: 6, md: 12 };
+        compare(Layout.stripGeometry(space, "left").cellThickness, 44);
+        compare(Layout.stripGeometry(space, "left").thickness, 56);
+        compare(Layout.stripGeometry(space, "right").thickness, 56);
+        compare(Layout.stripGeometry(space, "top").cellThickness, 28);
+        compare(Layout.stripGeometry(space, "top").thickness, 40);
+    }
+
     // The screen edges are further away than the strip's own sides: a cell
     // sits `md` in from the edge, not `barMargin`.
     function test_strip_insets_the_regions_by_md_not_by_the_margin_band() {
-        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 }, "top");
+        var g = Layout.stripGeometry({ barCellHeight: 28, barCellWidth: 44, barMargin: 6, md: 12 }, "top");
         compare(g.edgeInset, 12);
         verify(g.edgeInset > g.cellInset);
     }
 
     // Every term is a token, so a scaled Theme.space scales the whole strip.
     function test_strip_follows_the_spacing_scale() {
-        var g = Layout.stripGeometry({ barCellHeight: 42, barMargin: 9, md: 18 }, "top");
+        var g = Layout.stripGeometry({ barCellHeight: 42, barCellWidth: 66, barMargin: 9, md: 18 }, "top");
         compare(g.thickness, 60);
         compare(g.cellThickness, 42);
         compare(g.cellInset, 9);
@@ -487,12 +498,14 @@ TestCase {
         compare(JSON.stringify(Layout.edgeVector("right")), JSON.stringify({ x: 1, y: 0 }));
     }
 
-    // A cell's content turns only on a side edge: bottom to top on the
-    // left, top to bottom on the right, upright on either horizontal bar.
-    function test_content_turns_only_on_a_side_edge() {
-        compare(Layout.contentRotation("left"), -90);
-        compare(Layout.contentRotation("right"), 90);
-        compare(Layout.contentRotation("top"), 0);
-        compare(Layout.contentRotation("bottom"), 0);
+    // The one thing that turns on a side edge is a line of free text
+    // (a window title, a track): bottom to top on the left, top to bottom
+    // on the right, upright on either horizontal bar. Everything else in a
+    // cell stacks upright whatever edge the bar is on.
+    function test_only_free_text_turns_and_only_on_a_side_edge() {
+        compare(Layout.labelRotation("left"), -90);
+        compare(Layout.labelRotation("right"), 90);
+        compare(Layout.labelRotation("top"), 0);
+        compare(Layout.labelRotation("bottom"), 0);
     }
 }

@@ -83,18 +83,21 @@ Cell {
 
     // Track title changes resize this cell, animate the width instead of
     // shoving the bar's other widgets instantly (DESIGN.md §4, M16 Task 2).
+    // Both axes, since which one the cell grows along is the bar's edge.
     Behavior on implicitWidth {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    Behavior on implicitHeight {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
+    CellRow {
         spacing: Theme.space.xxs
 
         Icon {
             id: glyph
             visible: MediaService.artUrl === ""
-            anchors.verticalCenter: parent.verticalCenter
             name: "music"
             size: Theme.fontSize.body
             color: root.foreground
@@ -113,10 +116,6 @@ Cell {
         Cover {
             id: coverSlot
             visible: MediaService.artUrl !== ""
-            anchors.verticalCenter: parent.verticalCenter
-            // Upright on a vertical bar (Icon.qml's turn-back, for a
-            // picture); the animated overlay inside turns with it.
-            rotation: -root.contentRotation
             width: glyph.implicitHeight
             height: glyph.implicitHeight
             source: MediaService.artUrl
@@ -143,12 +142,25 @@ Cell {
         // a clipped two-copy marquee, ON ONLY when the title genuinely
         // overflows `maxWidth`, gated on Theme.motionEnabled AND the bar
         // window actually being on screen.
-        MarqueeText {
-            anchors.verticalCenter: parent.verticalCenter
-            text: MediaService.title !== "" ? MediaService.title : MediaService.identity
-            color: root.foreground
-            maxWidth: root.maxWidth
-            windowVisible: root.windowVisible
+        // Turned rather than stacked on a vertical bar, the same exception
+        // ActiveWindow.qml's title makes and for the same reason: a track
+        // title is free text of no fixed length (Bar/layout.js's
+        // labelRotation). The slot swaps the marquee's own box, since a
+        // rotated item still measures by the box it had before the turn.
+        Item {
+            id: titleSlot
+            width: root.vertical ? title.height : title.width
+            height: root.vertical ? title.width : title.height
+
+            MarqueeText {
+                id: title
+                anchors.centerIn: parent
+                rotation: root.labelRotation
+                text: MediaService.title !== "" ? MediaService.title : MediaService.identity
+                color: root.foreground
+                maxWidth: root.maxWidth
+                windowVisible: root.windowVisible
+            }
         }
     }
 

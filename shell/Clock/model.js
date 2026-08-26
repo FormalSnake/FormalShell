@@ -49,6 +49,18 @@ function substituteIsoWeek(format, date) {
     return format.replace(/ww/g, week);
 }
 
+// The rendered clock split into upright lines for a vertical bar, which has
+// no room to run one across it. Every separator the ring's own presets use
+// (the colon between hours and minutes, the spaces between fields, the
+// dashes in the ISO date) becomes a line break, so each line is a whole
+// field: `09:41` stacks as `09` over `41`, never a hard wrap mid-number.
+// Nothing rotates (shell/Bar/layout.js documents why).
+function stackedLines(text) {
+    return String(text).split(/[\s:\-]+/).filter(function (part) {
+        return part !== "";
+    });
+}
+
 // Which notation a ring entry writes. Every 12-hour preset above is its
 // 24-hour neighbour's twin with Qt's AP specifier added, so the calendar
 // panel's agenda reads the live format here rather than carrying a second
@@ -73,6 +85,7 @@ if (typeof module !== "undefined") {
         pad2: pad2,
         isoWeek: isoWeek,
         substituteIsoWeek: substituteIsoWeek,
+        stackedLines: stackedLines,
         usesMeridiem: usesMeridiem,
         nextFormat: nextFormat
     };

@@ -3,6 +3,8 @@ Button Button.qml
 ButtonGroup ButtonGroup.qml
 Card Card.qml
 Cell Cell.qml
+CellLabel CellLabel.qml
+CellRow CellRow.qml
 Cover Cover.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml

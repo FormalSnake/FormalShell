@@ -77,6 +77,14 @@ Cell {
     readonly property real _trackWidth: Theme.space.trackThickness
     readonly property real _trackHeight: Theme.fontSize.body
 
+    // The spectrum is the one lockup on a vertical bar that turns as a
+    // whole (Bar/layout.js's labelRotation covers what turning is for): a
+    // row of plain bars has no upright reading of its own, so turning it is
+    // the same picture drawn the other way round rather than a readout on
+    // its side, and it keeps the fill growing from the screen edge toward
+    // the desktop. The NO CAVA state is words and stays upright.
+    readonly property bool _turned: root.vertical && root._state !== "missing"
+
     // A Loader, not two always-present siblings: Cell's own _measure()
     // sizes the cell off every direct child of its content slot regardless
     // of that child's `visible` (see Cell.qml's header), and the NO CAVA
@@ -84,16 +92,27 @@ Cell {
     // Text vs a Row of columns), not swappable content on one element the
     // way the old single-Text version was. Loading exactly one of them
     // keeps _measure reading only the shape that's actually shown.
-    Loader {
+    //
+    // The slot around it swaps the box, since a rotated item still measures
+    // by the box it had before the turn.
+    Item {
         anchors.verticalCenter: parent.verticalCenter
-        sourceComponent: root._state === "missing" ? noCavaComponent : tracksComponent
+        width: root._turned ? spectrum.height : spectrum.width
+        height: root._turned ? spectrum.width : spectrum.height
+
+        Loader {
+            id: spectrum
+            anchors.centerIn: parent
+            rotation: root._turned ? root.labelRotation : 0
+            sourceComponent: root._state === "missing" ? noCavaComponent : tracksComponent
+        }
     }
 
     Component {
         id: noCavaComponent
-        SectionLabel {
+        CellLabel {
+            meta: true
             text: "NO CAVA"
-            color: root.dimForeground
         }
     }
 
@@ -130,7 +149,7 @@ Cell {
                         // ceiling on either side (owner, 2026-08-26: a base
                         // on the inner edge read as bars pointing the wrong
                         // way).
-                        y: root.contentRotation !== 0 ? 0 : parent.height - height
+                        y: root._turned ? 0 : parent.height - height
                         width: parent.width
                         // Never shorter than a full pair of rounded ends: a fill
                         // below that squashes into a different shape at every

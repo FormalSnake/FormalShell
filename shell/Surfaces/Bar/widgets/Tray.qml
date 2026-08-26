@@ -135,9 +135,6 @@ Rail {
             IconImage {
                 id: icon
                 anchors.verticalCenter: parent.verticalCenter
-                // Upright on a vertical bar, the same turn-back Icon.qml
-                // makes for a glyph; a vendor's mark on its side is wrong.
-                rotation: -itemCell.contentRotation
                 asynchronous: true
                 smooth: false
                 width: Theme.fontSize.body

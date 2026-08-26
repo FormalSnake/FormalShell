@@ -72,15 +72,13 @@ Cell {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xxs
 
         // Fixed-width slot (M26 Task 7), matching this cell's siblings even
         // though this icon itself never swaps.
         Item {
             id: glyphSlot
-            anchors.verticalCenter: parent.verticalCenter
             width: Theme.space.huge
             height: glyphIcon.implicitHeight
 
@@ -93,24 +91,16 @@ Cell {
             }
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
             text: "C" + root._pct(root._cpu.aggregate) + " M" + root._pct(root._mem.available ? root._mem.usedFraction : null)
                 + (root._gpuCard ? " G" + root._pct(root._gpuCard.metrics.busy) : "")
             color: root.dimForeground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
 
-        Text {
+        CellLabel {
             visible: root._showLabel
-            anchors.verticalCenter: parent.verticalCenter
             text: "Monitor"
-            color: root.foreground
             font.family: Theme.fontFamilySans
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
     }
 

@@ -425,8 +425,8 @@ TestCase {
         compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2);
         verify(cell.implicitHeight < 32);
     }
-    // A bar cell on a left bar (Cell.barEdge): the same content, turned
-    // along the strip, so the cell is as tall as its row was long.
+    // A bar cell on a left bar (Cell.barEdge): the same content, stacked
+    // down the strip rather than run across it, and nothing rotated.
     Component {
         id: turnedCellComponent
 
@@ -434,11 +434,11 @@ TestCase {
             id: turnedCell
 
             readonly property Item probeLabel: turnedLabel
+
             barEdge: "left"
 
             Text {
                 id: turnedLabel
-                anchors.verticalCenter: parent.verticalCenter
                 text: "09:41"
                 color: turnedCell.foreground
                 font.family: "monospace"
@@ -447,34 +447,162 @@ TestCase {
         }
     }
 
-    function test_a_turned_cell_swaps_its_axes() {
+    function test_a_vertical_cell_swaps_its_axes_without_turning() {
         failOnWarning(/Binding loop/);
         var cell = createTemporaryObject(turnedCellComponent, testCase);
         verify(cell);
         settle(cell);
 
-        compare(cell.contentRotation, -90);
-        // As tall as the label is long plus the row's end padding either
-        // side, and as wide as a row is tall.
-        compare(cell.implicitHeight, cell.probeLabel.implicitWidth + 12 * 2);
-        compare(cell.implicitWidth, 32);
-
-        // The label's own box, mapped into the cell, stands up: its long
-        // side runs down the cell, a padding in from the top, centred across.
+        verify(cell.vertical);
+        // The label itself never turns, so its box is the box it was
+        // authored with.
+        compare(cell.probeLabel.rotation, 0);
         var box = cell.probeLabel.mapToItem(cell, 0, 0, cell.probeLabel.width, cell.probeLabel.height);
-        fuzzyCompare(box.width, cell.probeLabel.height, 0.5);
-        fuzzyCompare(box.height, cell.probeLabel.width, 0.5);
-        fuzzyCompare(box.y, 12, 0.5);
-        fuzzyCompare(box.x, (32 - cell.probeLabel.height) / 2, 0.5);
+        fuzzyCompare(box.width, cell.probeLabel.width, 0.5);
+        fuzzyCompare(box.height, cell.probeLabel.height, 0.5);
+
+        // The stack runs down the cell, so the row's end padding is on the
+        // height and the across padding is on the width.
+        compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 12 * 2);
+        compare(cell.implicitWidth, cell.probeLabel.implicitWidth + 6 * 2);
+    }
+
+    // What a label may take across a vertical strip: the strip's own width
+    // less the padding either side, never this cell's measured width, which
+    // is what the children reading it decide.
+    function test_a_vertical_cell_publishes_the_strip_s_own_room() {
+        var cell = createTemporaryObject(turnedCellComponent, testCase);
+        verify(cell);
+        settle(cell);
+        compare(cell.contentAcross, 44 - 6 * 2);
     }
 
     // Every cell off the bar, and every cell on a horizontal one, keeps
     // its row exactly as authored.
-    function test_a_cell_off_the_bar_does_not_turn() {
+    function test_a_cell_off_the_bar_is_not_vertical() {
         var cell = createTemporaryObject(barCellComponent, testCase);
         verify(cell);
-        compare(cell.contentRotation, 0);
+        verify(!cell.vertical);
         cell.barEdge = "bottom";
-        compare(cell.contentRotation, 0);
+        verify(!cell.vertical);
+    }
+
+    // The lockup itself: a row across a horizontal bar, a column down a
+    // vertical one, and the children never turn either way.
+    Component {
+        id: lockupCellComponent
+
+        Cell {
+            id: lockupCell
+
+            property alias probeRow: lockupRow
+            property alias probeFirst: firstBox
+            property alias probeSecond: secondBox
+
+            CellRow {
+                id: lockupRow
+                spacing: 4
+
+                Rectangle {
+                    id: firstBox
+                    width: 10
+                    height: 10
+                }
+
+                Rectangle {
+                    id: secondBox
+                    width: 10
+                    height: 10
+                }
+            }
+        }
+    }
+
+    function test_a_cell_row_runs_across_a_horizontal_bar() {
+        var cell = createTemporaryObject(lockupCellComponent, testCase);
+        verify(cell);
+        cell.barEdge = "top";
+        settle(cell);
+
+        verify(!cell.probeRow.vertical);
+        verify(cell.probeSecond.x > cell.probeFirst.x);
+        compare(cell.probeSecond.y, cell.probeFirst.y);
+        compare(cell.probeFirst.rotation, 0);
+    }
+
+    function test_a_cell_row_stands_up_on_a_vertical_bar() {
+        var cell = createTemporaryObject(lockupCellComponent, testCase);
+        verify(cell);
+        cell.barEdge = "right";
+        settle(cell);
+
+        verify(cell.probeRow.vertical);
+        verify(cell.probeSecond.y > cell.probeFirst.y);
+        compare(cell.probeSecond.x, cell.probeFirst.x);
+        // Nothing turns: the whole point of stacking rather than rotating.
+        compare(cell.probeRow.rotation, 0);
+        compare(cell.probeFirst.rotation, 0);
+    }
+
+    // A vertical strip is a fixed width, so a label either fits it, wraps
+    // into it, or stands down.
+    Component {
+        id: labelCellComponent
+
+        Cell {
+            id: labelCell
+
+            property alias probeLabel: valueLabel
+            property alias labelText: valueLabel.text
+
+            CellLabel {
+                id: valueLabel
+                text: "84%"
+            }
+        }
+    }
+
+    function test_a_short_label_fits_a_vertical_strip() {
+        var cell = createTemporaryObject(labelCellComponent, testCase);
+        verify(cell);
+        cell.barEdge = "left";
+        settle(cell);
+
+        verify(cell.probeLabel.visible);
+        verify(cell.probeLabel.contentWidth <= cell.contentAcross);
+    }
+
+    function test_a_two_word_label_wraps_into_a_vertical_strip() {
+        // "NO MIC" is one of the bar's real unavailable states, and the
+        // reason the gate below wraps before it hides: both words fit the
+        // strip on their own even though the line does not.
+        var cell = createTemporaryObject(labelCellComponent, testCase);
+        verify(cell);
+        cell.barEdge = "left";
+        cell.labelText = "NO MIC";
+        settle(cell);
+
+        verify(cell.probeLabel.visible);
+        verify(cell.probeLabel.lineCount > 1);
+        verify(cell.probeLabel.contentWidth <= cell.contentAcross);
+    }
+
+    // One word too wide to break is the case wrapping cannot save, and a
+    // label overflowing the strip is worse than one absent: the icon above
+    // it and the tooltip already name the cell.
+    function test_a_label_no_wrap_can_save_stands_down() {
+        var cell = createTemporaryObject(labelCellComponent, testCase);
+        verify(cell);
+        cell.barEdge = "left";
+        cell.labelText = "SUPERCALIFRAGILISTIC";
+        settle(cell);
+
+        verify(cell.probeLabel.contentWidth > cell.contentAcross);
+        verify(!cell.probeLabel.visible);
+
+        // The same label on a horizontal bar is never gated.
+        cell.barEdge = "top";
+        settle(cell);
+        verify(cell.probeLabel.visible);
     }
 }

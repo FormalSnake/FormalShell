@@ -91,11 +91,16 @@ function isVertical(pos) {
 // a cell sits further from the screen edge than from the strip's own edges.
 function stripGeometry(space, pos) {
     var resolved = position(pos);
+    var vertical = isVertical(resolved);
+    // A vertical strip is wider than a horizontal one is tall, because a
+    // cell stacks its icon over its label there instead of running the two
+    // along the strip (`space.barCellWidth`, Theme/tokens.js).
+    var cellThickness = vertical ? space.barCellWidth : space.barCellHeight;
     return {
         position: resolved,
-        vertical: isVertical(resolved),
-        thickness: space.barCellHeight + space.barMargin * 2,
-        cellThickness: space.barCellHeight,
+        vertical: vertical,
+        thickness: cellThickness + space.barMargin * 2,
+        cellThickness: cellThickness,
         cellInset: space.barMargin,
         edgeInset: space.md
     };
@@ -129,13 +134,20 @@ function edgeVector(pos) {
     return { x: 0, y: -1 };
 }
 
-// How a cell's content turns on a vertical bar, in degrees: the row of
-// icon and label is authored for a horizontal strip and rotates as one
-// piece, so a label runs along the bar. A left bar reads bottom to top and
-// a right bar top to bottom, the way a spine or a side tab does, so the
-// text's baseline faces the desktop on both. Icons turn back upright
-// inside that (Components/Icon.qml); a mark on its side is wrong on either.
-function contentRotation(pos) {
+// How a free-running line of text turns on a vertical bar, in degrees.
+//
+// Nothing else in a cell turns: a vertical bar stacks each cell's icon
+// over its label upright (Components/Cell.qml's content box), because a
+// battery reading `84%` on its side is a puzzle rather than a readout, and
+// a strip where the glyphs stand up and the words lie down reads as two
+// orientations fighting. The one exception is text of arbitrary length and
+// no fixed vocabulary, which is the window title and the now-playing
+// track: those cannot be abbreviated into 44px and are worth more turned
+// than dropped, so they alone rotate, on their own, inside an otherwise
+// upright cell. A left bar reads bottom to top and a right bar top to
+// bottom, the way a spine or a side tab does, so the baseline faces the
+// desktop on both.
+function labelRotation(pos) {
     switch (position(pos)) {
     case "left": return -90;
     case "right": return 90;

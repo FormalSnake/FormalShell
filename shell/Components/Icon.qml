@@ -17,22 +17,6 @@ Text {
     readonly property string _set: Theme.iconSet
     readonly property string _family: Icons.family(root._set)
 
-    // The nearest enclosing Cell, if any, found by walking up rather than
-    // handed in: on a vertical bar a cell turns its whole content row along
-    // the strip (Cell.contentRotation) and every glyph inside it, at any
-    // depth, has to turn back upright, since a battery on its side reads as
-    // a different state. Reactive to reparenting because each `parent` read
-    // is a dependency; a glyph outside any cell (a panel header) resolves
-    // null and keeps its rotation at 0.
-    readonly property Item _cell: {
-        var item = root.parent;
-        while (item && item.contentRotation === undefined)
-            item = item.parent;
-        return item;
-    }
-
-    rotation: root._cell ? -root._cell.contentRotation : 0
-
     text: Icons.glyph(root._set, root.name)
     color: Theme.color.foreground
     font.family: root._family === "" ? Theme.fontFamilyMono : root._family

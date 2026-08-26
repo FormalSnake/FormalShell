@@ -82,17 +82,23 @@ Item {
     // or empty for a cell anywhere else. Bar.qml sets it on every cell it
     // hosts, next to `ghost`. It decides which edge the open-panel mark
     // lands on (the one facing the desktop), which side the tooltip opens
-    // to, and, on a left or right bar, that the content turns along the
-    // strip.
+    // to, and, on a left or right bar, that the cell's content stacks
+    // along the strip instead of running across it.
     property string barEdge: ""
 
-    // How far the content row turns, in degrees (Bar/layout.js's
-    // contentRotation: -90 on a left bar, 90 on a right one, 0 elsewhere).
-    // The whole content box turns as one piece, so a widget authored as a
-    // Row of icon and label needs nothing of its own to stand up; an Icon
-    // finds this through its parent chain and turns back upright.
-    readonly property int contentRotation: root.barEdge === "left" ? -90 : root.barEdge === "right" ? 90 : 0
-    readonly property bool _rotated: root.contentRotation !== 0
+    // On a left or right bar. The content box then runs down the strip
+    // rather than across it: a widget authored as a `CellRow` of icon and
+    // label lays that row out as an upright column
+    // (Components/CellRow.qml), and every glyph in it stands up exactly as
+    // it does on a horizontal bar. Nothing rotates
+    // (Bar/layout.js's labelRotation carries the one exception).
+    readonly property bool vertical: root.barEdge === "left" || root.barEdge === "right"
+
+    // How far a line of free text turns, in degrees, for the two cells that
+    // carry one: the window title and the now-playing track
+    // (Bar/layout.js's labelRotation documents why those two alone turn).
+    // Everything else in the cell ignores it.
+    readonly property int labelRotation: root.barEdge === "left" ? -90 : root.barEdge === "right" ? 90 : 0
 
     // The only border a ghost draws is one a state asked for.
     readonly property bool _borderless: root.ghost && !root.cursor
@@ -146,25 +152,30 @@ Item {
     // row around it reads as a second row.
     property bool chip: false
 
-    // The content's own two extents, in its own (unturned) space: how long
-    // the row is, and how tall.
-    readonly property real _alongExtent: root._measure(false) + Theme.space.controlPaddingX * 2
+    // The content's own two extents. `along` runs the way the content is
+    // laid out (a row's length, or a vertical cell's column of stacked
+    // children); `across` is the other side of it. Which screen axis each
+    // lands on is the only thing `vertical` changes.
+    readonly property real _contentAlong: root._measure(root.vertical)
+    readonly property real _contentAcross: root._measure(!root.vertical)
+
+    readonly property real _alongExtent: root._contentAlong + Theme.space.controlPaddingX * 2
     // A row is `controlHeight` tall (DESIGN.md §1 Padding). Content that
     // needs more (a two-line row, a clipboard thumbnail) still grows past
     // it; the padding alone never decides the height of a one-line row,
     // which is what left every list in the shell a few pixels short of the
     // controls beside it.
     readonly property real _acrossExtent: Math.max(root.chip ? 0 : Theme.space.controlHeight,
-        root._measure(true) + Theme.space.controlPaddingY * 2)
+        root._contentAcross + Theme.space.controlPaddingY * 2)
 
-    // A turned cell is as tall as its content is long, and as wide as it is
-    // tall.
-    implicitWidth: root._rotated ? root._acrossExtent : root._alongExtent
-    implicitHeight: root._rotated ? root._alongExtent : root._acrossExtent
+    // A cell on a vertical bar is as tall as its stack is long, and as wide
+    // as that stack is broad.
+    implicitWidth: root.vertical ? root._acrossExtent : root._alongExtent
+    implicitHeight: root.vertical ? root._alongExtent : root._acrossExtent
 
-    // The cell's own extent across the content row: its height, or on a
-    // turned cell its width.
-    readonly property real _across: root._rotated ? root.width : root.height
+    // The cell's own extent across the content: its height, or on a
+    // vertical bar its width.
+    readonly property real _across: root.vertical ? root.width : root.height
 
     // Content is centred across the row (DESIGN.md §1 Padding), so the
     // inset grows past `controlPaddingY` whenever the cell is taller than
@@ -172,8 +183,18 @@ Item {
     // explicit height (a calendar day, a bar cell). Equal insets either
     // side of the content box are what do the centring; the children
     // themselves need no anchor of their own.
-    readonly property real _insetY: Math.max(Theme.space.controlPaddingY,
-        (root._across - root._measure(true)) / 2)
+    readonly property real _insetAcross: Math.max(Theme.space.controlPaddingY,
+        (root._across - root._contentAcross) / 2)
+
+    // How much room a child has across the content on a vertical bar, which
+    // there is the whole question: the strip is a fixed width and a label
+    // that does not fit it hides rather than overflowing
+    // (Components/CellLabel.qml reads this, and CellRow.qml finds its cell
+    // by it). The strip's own width, not this cell's: a cell's width is
+    // what the children being measured decide, so reading it here would ask
+    // a child how much room it has and answer with how much it took.
+    readonly property real contentAcross: Math.max(0,
+        Theme.space.barCellWidth - Theme.space.controlPaddingY * 2)
 
     // How big the content wants to be. This used to be `content`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
@@ -190,15 +211,15 @@ Item {
     // much room the content needs, and a child anchored to fill the cell
     // takes its size from the cell, so it can't be what determines it.
     //
-    // `vertical` picks the axis, one function, since the two differ by
+    // `downward` picks the axis, one function, since the two differ by
     // nothing but the property pair.
-    function _measure(vertical) {
+    function _measure(downward) {
         var max = 0;
         for (var i = 0; i < content.children.length; i++) {
             var child = content.children[i];
             if (child.anchors.fill === content)
                 continue;
-            var extent = vertical ? child.height : child.width;
+            var extent = downward ? child.height : child.width;
             if (extent > max)
                 max = extent;
         }
@@ -292,7 +313,7 @@ Item {
     Rectangle {
         id: panelMark
         visible: root.panelOpen
-        readonly property bool _sideways: root.barEdge === "left" || root.barEdge === "right"
+        readonly property bool _sideways: root.vertical
         readonly property real _edgeMargin: root._borderless ? 0 : Theme.borderWidth
         width: panelMark._sideways ? Theme.borderWidth * 2 : root.width - Theme.space.xs * 2
         height: panelMark._sideways ? root.height - Theme.space.xs * 2 : Theme.borderWidth * 2
@@ -340,18 +361,17 @@ Item {
     }
 
     // The content box: the cell less `controlPaddingX` at both ends of the
-    // row and `_insetY` either side of it, in the row's own space. On a
-    // turned cell that box is as long as the cell is tall, and it rotates
-    // about its centre (Item's own default origin), so a box of width W
-    // and height H centred in the cell covers the cell's H by W. Placed by
-    // x/y rather than fill anchors, since an anchored item cannot turn.
+    // content and `_insetAcross` either side of it. On a vertical bar the
+    // two insets swap axes with the content, so the end padding runs down
+    // the strip and the centring runs across it. Placed by x/y rather than
+    // fill anchors, so the box is the measurement's own size on both axes
+    // rather than the cell's on one of them.
     Item {
         id: content
-        width: (root._rotated ? root.height : root.width) - Theme.space.controlPaddingX * 2
-        height: root._across - root._insetY * 2
+        width: root.width - (root.vertical ? root._insetAcross : Theme.space.controlPaddingX) * 2
+        height: root.height - (root.vertical ? Theme.space.controlPaddingX : root._insetAcross) * 2
         x: (root.width - content.width) / 2
         y: (root.height - content.height) / 2
-        rotation: root.contentRotation
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size

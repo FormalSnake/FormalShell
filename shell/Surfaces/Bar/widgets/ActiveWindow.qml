@@ -57,17 +57,22 @@ Cell {
     readonly property real _contentMaxWidth: Math.max(0, root.maxWidth - Theme.space.controlPaddingX * 2)
 
     // Focus/title changes resize this cell (window switch, title rename),
-    // animate the width instead of shoving the bar's other widgets
-    // instantly (DESIGN.md §4, M16 Task 2).
+    // animate the extent instead of shoving the bar's other widgets
+    // instantly (DESIGN.md §4, M16 Task 2). Both axes, since which one the
+    // cell grows along is the bar's edge.
     Behavior on implicitWidth {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
-    Row {
+    Behavior on implicitHeight {
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
+    CellRow {
         id: row
-        anchors.verticalCenter: parent.verticalCenter
         spacing: Theme.space.xxs
-        width: Math.min(implicitWidth, root._contentMaxWidth)
+        width: root.vertical ? implicitWidth : Math.min(implicitWidth, root._contentMaxWidth)
+        height: root.vertical ? Math.min(implicitHeight, root._contentMaxWidth) : implicitHeight
         clip: true
 
         // The bar's one image-icon exception (DESIGN.md §3 "Bar"), sized to
@@ -75,8 +80,6 @@ Cell {
         Picture {
             id: appIcon
             visible: root.iconSource !== ""
-            // Upright on a vertical bar (Icon.qml's turn-back, for an image).
-            rotation: -root.contentRotation
             source: root.iconSource
             width: primaryText.implicitHeight
             height: primaryText.implicitHeight
@@ -87,7 +90,11 @@ Cell {
 
         Text {
             id: primaryText
-            visible: text !== ""
+            // Dropped on a vertical bar: an app name is words, and 44px of
+            // strip holds none of them upright. The icon above it says which
+            // app this is and the tooltip spells it out, so the strip spends
+            // its length on the title instead.
+            visible: text !== "" && !root.vertical
             // Entry found: its name leads in foreground. No entry: the raw
             // appId, dimmed, today's exact fallback rendering.
             text: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
@@ -109,22 +116,36 @@ Cell {
         // extracted from NowPlaying.qml's M16 Task 11 now-playing ticker).
         // `leftPadding` widens the gap to the app name without touching
         // `row.spacing`, that stays tight (xxs) for the icon+name lockup.
-        MarqueeText {
-            id: titleText
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.title
-            // Roles swap once an entry is found: the title follows dimmed
-            // instead of leading foreground.
-            color: root.desktopEntry ? root.dimForeground : root.foreground
-            leftPadding: Theme.space.md
-            windowVisible: root.windowVisible
-            maxWidth: {
-                var used = 0;
-                if (appIcon.visible)
-                    used += appIcon.width + row.spacing;
-                if (primaryText.visible)
-                    used += primaryText.width + row.spacing;
-                return Math.max(0, root._contentMaxWidth - used);
+        //
+        // It is also the one thing on the bar that turns rather than
+        // stacking: a title is free text of no fixed length, so 44px of
+        // strip cannot hold it upright and abbreviating it would leave the
+        // cell saying nothing (Bar/layout.js's labelRotation). The slot
+        // swaps the marquee's own box, since a rotated item still measures
+        // by the box it had before the turn.
+        Item {
+            id: titleSlot
+            width: root.vertical ? titleText.height : titleText.width
+            height: root.vertical ? titleText.width : titleText.height
+
+            MarqueeText {
+                id: titleText
+                anchors.centerIn: parent
+                rotation: root.labelRotation
+                text: root.title
+                // Roles swap once an entry is found: the title follows dimmed
+                // instead of leading foreground.
+                color: root.desktopEntry ? root.dimForeground : root.foreground
+                leftPadding: root.vertical ? 0 : Theme.space.md
+                windowVisible: root.windowVisible
+                maxWidth: {
+                    var used = 0;
+                    if (appIcon.visible)
+                        used += appIcon.width + row.spacing;
+                    if (primaryText.visible)
+                        used += primaryText.width + row.spacing;
+                    return Math.max(0, root._contentMaxWidth - used);
+                }
             }
         }
     }

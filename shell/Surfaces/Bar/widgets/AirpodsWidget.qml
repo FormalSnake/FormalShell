@@ -70,24 +70,17 @@ Cell {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: "headphones"
             color: root.foreground
         }
 
-        Text {
+        CellLabel {
             visible: root._showLabel
-            anchors.verticalCenter: parent.verticalCenter
             text: root._worstLevel + "%"
-            color: root.foreground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
     }
 

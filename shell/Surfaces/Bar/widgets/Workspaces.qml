@@ -69,12 +69,17 @@ Cell {
     // delegates have no ids to reach each other by. -1 means no slot.
     property int _hoveredIndex: -1
 
-    // On a left bar the cell's content turns anticlockwise
-    // (Cell.contentRotation), which would put the first workspace at the
-    // bottom; the row is reversed there so the workspaces still read top
-    // to bottom, the same order the bar's own regions run in. A right bar
-    // turns the other way and needs no reversal.
-    readonly property bool _reversed: root.contentRotation < 0
+    // The dot row is the one lockup on a vertical bar that turns as a whole
+    // (Bar/layout.js's labelRotation covers what turning is for): dots and
+    // a pill have no upright reading of their own, so turning them is the
+    // same picture drawn the other way round rather than a readout on its
+    // side, and the travelling pill keeps one set of geometry either way.
+    //
+    // A left bar turns anticlockwise, which would put the first workspace
+    // at the bottom; the row is reversed there so the workspaces still read
+    // top to bottom, the same order the bar's own regions run in. A right
+    // bar turns the other way and needs no reversal.
+    readonly property bool _reversed: root.labelRotation < 0
 
     function _slotX(index) {
         var slot = root._reversed ? root.visibleWorkspaces.length - 1 - index : index;
@@ -90,137 +95,146 @@ Cell {
             + " / " + root._focusedWindows + (root._focusedWindows === 1 ? " WINDOW" : " WINDOWS")
         : "WORKSPACES / " + root.visibleWorkspaces.length
 
+    // The slot swaps the box, since a rotated item still measures by the
+    // box it had before the turn.
     Item {
-        id: strip
         anchors.verticalCenter: parent.verticalCenter
-        width: dotRow.width
-        height: root._rowHeight
+        width: root.vertical ? strip.height : strip.width
+        height: root.vertical ? strip.width : strip.height
 
-        Row {
-            id: dotRow
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: root._slotSpacing
-            layoutDirection: root._reversed ? Qt.RightToLeft : Qt.LeftToRight
+        Item {
+            id: strip
+            anchors.centerIn: parent
+            rotation: root.labelRotation
+            width: dotRow.width
+            height: root._rowHeight
 
-            Repeater {
-                model: root.visibleWorkspaces
+            Row {
+                id: dotRow
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: root._slotSpacing
+                layoutDirection: root._reversed ? Qt.RightToLeft : Qt.LeftToRight
 
-                Item {
-                    id: slot
-                    required property int index
-                    required property var modelData
-                    readonly property var ws: modelData
+                Repeater {
+                    model: root.visibleWorkspaces
 
-                    width: root._slotWidth
-                    height: root._rowHeight
+                    Item {
+                        id: slot
+                        required property int index
+                        required property var modelData
+                        readonly property var ws: modelData
 
-                    readonly property bool urgent: slot.ws.isUrgent
-                    onUrgentChanged: if (slot.urgent) urgentPulse.restart()
+                        width: root._slotWidth
+                        height: root._rowHeight
 
-                    // primitive-exempt: one workspace dot, an indicator at the size dots
-                    // are, not a bordered box.
-                    Rectangle {
-                        id: dot
-                        anchors.centerIn: parent
-                        // The pointer's own answer that this is a target,
-                        // a step the dot grows on hover. The focused slot's
-                        // dot sits still: the pill over it is what answers
-                        // the hover there instead.
-                        width: (pointer.containsMouse && !slot.ws.isFocused) ? Theme.space.lg : root._dotSize
-                        height: dot.width
-                        radius: Theme.pillRadius(dot.height)
-                        color: slot.ws.isUrgent
-                            ? Theme.color.destructive
-                            : (slot.ws.isFocused ? Theme.color.primary : Theme.color.mutedForeground)
+                        readonly property bool urgent: slot.ws.isUrgent
+                        onUrgentChanged: if (slot.urgent) urgentPulse.restart()
 
-                        Behavior on width {
-                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        // primitive-exempt: one workspace dot, an indicator at the size dots
+                        // are, not a bordered box.
+                        Rectangle {
+                            id: dot
+                            anchors.centerIn: parent
+                            // The pointer's own answer that this is a target,
+                            // a step the dot grows on hover. The focused slot's
+                            // dot sits still: the pill over it is what answers
+                            // the hover there instead.
+                            width: (pointer.containsMouse && !slot.ws.isFocused) ? Theme.space.lg : root._dotSize
+                            height: dot.width
+                            radius: Theme.pillRadius(dot.height)
+                            color: slot.ws.isUrgent
+                                ? Theme.color.destructive
+                                : (slot.ws.isFocused ? Theme.color.primary : Theme.color.mutedForeground)
+
+                            Behavior on width {
+                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                            }
+
+                            // The dot under the pill takes the pill's own colour
+                            // so the two read as one shape while the pill is
+                            // arriving, and fades back once it has left.
+                            Behavior on color {
+                                ColorAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                            }
+
+                            // One pulse when a workspace turns urgent, not a
+                            // loop: the destructive colour is the standing
+                            // state, the pulse is the thing that just happened.
+                            SequentialAnimation {
+                                id: urgentPulse
+                                NumberAnimation { target: dot; property: "opacity"; to: 0.3; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+                                NumberAnimation { target: dot; property: "opacity"; to: 1; duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                            }
+
                         }
 
-                        // The dot under the pill takes the pill's own colour
-                        // so the two read as one shape while the pill is
-                        // arriving, and fades back once it has left.
-                        Behavior on color {
-                            ColorAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
-                        }
-
-                        // One pulse when a workspace turns urgent, not a
-                        // loop: the destructive colour is the standing
-                        // state, the pulse is the thing that just happened.
-                        SequentialAnimation {
-                            id: urgentPulse
-                            NumberAnimation { target: dot; property: "opacity"; to: 0.3; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-                            NumberAnimation { target: dot; property: "opacity"; to: 1; duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
-                        }
-
-                    }
-
-                    // A dot is too small to aim at, so its own target reaches
-                    // out to the cell's padding band. Declared inside the slot
-                    // rather than on the cell: the cell holds several of these
-                    // and each focuses a different workspace.
-                    MouseArea {
-                        id: pointer
-                        anchors.fill: parent
-                        anchors.topMargin: -Theme.space.md
-                        anchors.bottomMargin: -Theme.space.md
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: CompositorService.focusWorkspace(slot.ws.id)
-                        onContainsMouseChanged: {
-                            if (pointer.containsMouse)
-                                root._hoveredIndex = slot.index;
-                            else if (root._hoveredIndex === slot.index)
-                                root._hoveredIndex = -1;
+                        // A dot is too small to aim at, so its own target reaches
+                        // out to the cell's padding band. Declared inside the slot
+                        // rather than on the cell: the cell holds several of these
+                        // and each focuses a different workspace.
+                        MouseArea {
+                            id: pointer
+                            anchors.fill: parent
+                            anchors.topMargin: -Theme.space.md
+                            anchors.bottomMargin: -Theme.space.md
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: CompositorService.focusWorkspace(slot.ws.id)
+                            onContainsMouseChanged: {
+                                if (pointer.containsMouse)
+                                    root._hoveredIndex = slot.index;
+                                else if (root._hoveredIndex === slot.index)
+                                    root._hoveredIndex = -1;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // The moving pill. `_lead` and `_trail` chase the same slot at
-        // different speeds, so the span between them opens on the way out
-        // and closes on the way in; which of the two is the leading edge
-        // falls out of the arithmetic rather than needing the direction.
-        // primitive-exempt: the focused-workspace indicator itself. A moving
-        // pill is not a surface, and nothing else in the shell draws one.
-        Rectangle {
-            id: pill
-            visible: root._focusedIndex >= 0
-            anchors.verticalCenter: parent.verticalCenter
-            radius: Theme.pillRadius(pill.height)
-            color: Theme.color.primary
+            // The moving pill. `_lead` and `_trail` chase the same slot at
+            // different speeds, so the span between them opens on the way out
+            // and closes on the way in; which of the two is the leading edge
+            // falls out of the arithmetic rather than needing the direction.
+            // primitive-exempt: the focused-workspace indicator itself. A moving
+            // pill is not a surface, and nothing else in the shell draws one.
+            Rectangle {
+                id: pill
+                visible: root._focusedIndex >= 0
+                anchors.verticalCenter: parent.verticalCenter
+                radius: Theme.pillRadius(pill.height)
+                color: Theme.color.primary
 
-            // The pointer's own answer that this is a target, same as a
-            // plain dot's, since the focused slot's dot never grows: this
-            // is the shape that has to carry the hover state instead.
-            readonly property bool hovered: root._focusedIndex >= 0
-                && root._hoveredIndex === root._focusedIndex
+                // The pointer's own answer that this is a target, same as a
+                // plain dot's, since the focused slot's dot never grows: this
+                // is the shape that has to carry the hover state instead.
+                readonly property bool hovered: root._focusedIndex >= 0
+                    && root._hoveredIndex === root._focusedIndex
 
-            // Held apart from `lead`/`trail` below so hovering never
-            // disturbs the pace those two set for the travel animation.
-            property real growth: pill.hovered ? (Theme.space.lg - root._dotSize) : 0
+                // Held apart from `lead`/`trail` below so hovering never
+                // disturbs the pace those two set for the travel animation.
+                property real growth: pill.hovered ? (Theme.space.lg - root._dotSize) : 0
 
-            Behavior on growth {
-                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
-            }
+                Behavior on growth {
+                    NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                }
 
-            height: root._dotSize + pill.growth
+                height: root._dotSize + pill.growth
 
-            readonly property real target: root._slotX(Math.max(0, root._focusedIndex))
+                readonly property real target: root._slotX(Math.max(0, root._focusedIndex))
 
-            property real lead: pill.target
-            property real trail: pill.target
+                property real lead: pill.target
+                property real trail: pill.target
 
-            x: Math.min(pill.lead, pill.trail) - pill.growth / 2
-            width: Math.abs(pill.lead - pill.trail) + root._slotWidth + pill.growth
+                x: Math.min(pill.lead, pill.trail) - pill.growth / 2
+                width: Math.abs(pill.lead - pill.trail) + root._slotWidth + pill.growth
 
-            Behavior on lead {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.emphasizedEasing }
-            }
+                Behavior on lead {
+                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.emphasizedEasing }
+                }
 
-            Behavior on trail {
-                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                Behavior on trail {
+                    NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                }
             }
         }
     }

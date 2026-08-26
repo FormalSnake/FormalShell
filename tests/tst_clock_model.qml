@@ -70,6 +70,37 @@ TestCase {
         compare(ClockModel.substituteIsoWeek("hh:mm", d), "hh:mm");
     }
 
+    // stackedLines
+
+    function test_stacked_lines_break_the_time_into_upright_fields() {
+        compare(JSON.stringify(ClockModel.stackedLines("09:41")), JSON.stringify(["09", "41"]));
+        compare(JSON.stringify(ClockModel.stackedLines("9:41 AM")), JSON.stringify(["9", "41", "AM"]));
+        compare(JSON.stringify(ClockModel.stackedLines("Mon 09:41")), JSON.stringify(["Mon", "09", "41"]));
+    }
+
+    // The ISO date's dashes are field separators like any other, so the
+    // year, month and day each get their own line rather than one line
+    // nothing on a 44px strip could hold.
+    function test_stacked_lines_break_an_iso_date_on_its_dashes() {
+        compare(JSON.stringify(ClockModel.stackedLines("2026-08-17 09:41")),
+            JSON.stringify(["2026", "08", "17", "09", "41"]));
+    }
+
+    function test_stacked_lines_drop_empty_pieces() {
+        compare(JSON.stringify(ClockModel.stackedLines("")), JSON.stringify([]));
+        compare(JSON.stringify(ClockModel.stackedLines("  09 : 41  ")), JSON.stringify(["09", "41"]));
+    }
+
+    // Every preset in the ring produces at least one line, so no format
+    // renders a vertical clock with nothing in it.
+    function test_every_preset_stacks_into_at_least_one_line() {
+        var ring = ClockModel.formats();
+        for (var i = 0; i < ring.length; i++) {
+            var rendered = ClockModel.substituteIsoWeek(ring[i], new Date(2026, 7, 17));
+            verify(ClockModel.stackedLines(rendered).length > 0);
+        }
+    }
+
     // formats / nextFormat
 
     function test_formats_returns_a_copy() {

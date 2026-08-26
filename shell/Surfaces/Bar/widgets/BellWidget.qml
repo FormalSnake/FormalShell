@@ -39,12 +39,10 @@ Cell {
         ? "NOTIFICATIONS / DND ON"
         : (root._pending > 0 ? "NOTIFICATIONS / " + root._pending + " PENDING" : "NOTIFICATIONS / NONE PENDING")
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xxs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: root._dnd ? "bell-off" : "bell"
             color: root.foreground
 
@@ -61,12 +59,9 @@ Cell {
             }
         }
 
-        SectionLabel {
+        CellLabel {
             visible: root._showLabel && root._pending > 0
-            anchors.verticalCenter: parent.verticalCenter
             text: String(root._pending)
-            color: root.foreground
-            font.family: Theme.fontFamilyMono
         }
     }
 

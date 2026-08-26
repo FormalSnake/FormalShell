@@ -57,33 +57,25 @@ Cell {
     // A Row rather than siblings dropped straight into the cell: Cell's own
     // _measure() sizes off every direct child regardless of visibility, so
     // the percent state would otherwise stay as wide as the status label.
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: "gauge"
             color: root._worstPercent >= 0 ? root.foreground : root.dimForeground
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
             visible: root._showLabel && root._worstPercent >= 0
             text: root._worstPercent >= 0 ? Math.round(root._worstPercent * 100) + "%" : ""
-            color: root.foreground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
 
         // The honest states are words, so they render as the one label that
         // is allowed to uppercase (MicWidget's own NO MIC idiom).
-        SectionLabel {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
+            meta: true
             visible: root._showLabel && root._worstPercent < 0 && root._statusLabel !== ""
             text: root._statusLabel
-            color: root.dimForeground
         }
     }
 

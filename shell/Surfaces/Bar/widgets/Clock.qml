@@ -30,20 +30,33 @@ Cell {
     readonly property string _format: Core.State.clockFormat !== "" ? Core.State.clockFormat : ClockModel.CLOCK_FORMATS[0]
     readonly property string _text: Qt.formatDateTime(root._now, ClockModel.substituteIsoWeek(root._format, root._now))
 
-    // The ring's presets differ wildly in width ("hh:mm" versus
+    // The ring's presets differ wildly in extent ("hh:mm" versus
     // "yyyy-MM-dd hh:mm"), glide the swap instead of shoving every other
-    // right-region cell instantly (DESIGN.md §4, M16 Task 2's contract).
+    // cell in the region instantly (DESIGN.md §4, M16 Task 2's contract).
+    // Both axes, since which one the swap moves is the bar's edge.
     Behavior on implicitWidth {
         NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
     }
 
-    Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: root._text
-        color: root.foreground
-        font.family: Core.Theme.fontFamilyMono
-        font.pixelSize: Core.Theme.fontSize.body
-        font.weight: Core.Theme.weight.medium
+    Behavior on implicitHeight {
+        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+    }
+
+    // One line per field on a vertical bar (ClockModel.stackedLines), the
+    // whole preset on one line anywhere else. The same lockup either way, so
+    // the digits stand up on all four edges: 44px of strip holds "09" over
+    // "41" but nothing holds "09:41" across it.
+    CellRow {
+        spacing: root.vertical ? 0 : Core.Theme.space.xs
+
+        Repeater {
+            model: root.vertical ? ClockModel.stackedLines(root._text) : [root._text]
+
+            CellLabel {
+                required property string modelData
+                text: modelData
+            }
+        }
     }
 
     panelOpen: root._panelOpen

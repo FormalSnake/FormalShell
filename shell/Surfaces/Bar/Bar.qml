@@ -54,8 +54,9 @@ import "../../Bar/layout.js" as Layout
 // Which output edge it runs along is `bar.position` (Theme.barPosition):
 // top by default, or bottom, left, right. On a left or right bar the same
 // three regions run top to bottom (`left` at the top, `right` at the
-// bottom), every region is a column, and each cell turns its content along
-// the strip (Cell.barEdge); nothing about the layout keys changes.
+// bottom), every region is a column, and each cell stacks its content
+// upright down the strip rather than turning it (Cell.barEdge,
+// Bar/layout.js's labelRotation); nothing about the layout keys changes.
 PanelWindow {
     id: bar
     required property var modelData

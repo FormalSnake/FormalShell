@@ -49,24 +49,17 @@ Cell {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: root._icon
             color: root._hasCurrent ? root.foreground : root.dimForeground
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
             visible: root._showLabel && root._hasCurrent
             text: root._hasCurrent ? Math.round(root.panel.currentTemp) + "°" : ""
-            color: root.foreground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
     }
 

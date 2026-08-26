@@ -44,25 +44,21 @@ Cell {
         return head + " / MIDDLE AUDIO PANEL";
     }
 
-    // A Row rather than two siblings dropped straight into the cell: Cell's
-    // own _measure() sizes off every direct child regardless of visibility,
-    // so the icon state would otherwise stay as wide as the NO MIC label.
-    // Row measures only its visible children.
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
-
+    // A CellRow rather than two siblings dropped straight into the cell:
+    // Cell's own _measure() sizes off every direct child regardless of
+    // visibility, so the icon state would otherwise stay as wide as the NO
+    // MIC label. A positioner lays out only its visible children.
+    CellRow {
         Icon {
             visible: root._state !== "unavailable"
-            anchors.verticalCenter: parent.verticalCenter
             name: root._state === "muted" ? "mic-off" : "mic"
             color: root.foreground
         }
 
-        SectionLabel {
+        CellLabel {
+            meta: true
             visible: root._state === "unavailable"
-            anchors.verticalCenter: parent.verticalCenter
             text: "NO MIC"
-            color: root.dimForeground
         }
     }
 

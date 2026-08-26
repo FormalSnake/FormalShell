@@ -126,23 +126,17 @@ Rail {
             ? ReminderService.pending[0].message + " / " + ReminderService.barLabel
             : ""
 
-        Row {
-            anchors.verticalCenter: parent.verticalCenter
+        CellRow {
             spacing: Theme.space.xxs
 
             Icon {
-                anchors.verticalCenter: parent.verticalCenter
                 name: "alarm-clock"
                 color: reminderCell.foreground
             }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
+            CellLabel {
                 text: ReminderService.barLabel
                 color: reminderCell.dimForeground
-                font.family: Theme.fontFamilyMono
-                font.pixelSize: Theme.fontSize.body
-                font.weight: Theme.weight.medium
             }
         }
 

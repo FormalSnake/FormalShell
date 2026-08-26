@@ -55,6 +55,7 @@ TestCase {
         var s = Tokens.spacingTokens(1.0);
         compare(s.controlHeight, 32);
         compare(s.barCellHeight, 28);
+        compare(s.barCellWidth, 44);
         compare(s.barMargin, 6);
         compare(s.controlPaddingX, 12);
         compare(s.controlPaddingY, 6);

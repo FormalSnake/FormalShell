@@ -67,8 +67,8 @@ fontconfig aliases, Geist Sans and Geist Mono by intent. Sizes `caption` 11,
 
 **Space** (`Theme.space.*`): the raw steps are `xxs` 2, `xs` 3, `sm` 4,
 `md` 6, `lg` 8, `xl` 10, `xxl` 12, `huge` 18; the semantic keys are
-`controlHeight` 32, `barCellHeight` 28, `barMargin` 6, `controlPaddingX` 12,
-`controlPaddingY` 6, `rowGap` 4, `iconGap` 8, `panelPadding` 12,
+`controlHeight` 32, `barCellHeight` 28, `barCellWidth` 44, `barMargin` 6,
+`controlPaddingX` 12, `controlPaddingY` 6, `rowGap` 4, `iconGap` 8, `panelPadding` 12,
 `sectionGap` 16, `trackThickness` 6; `screenPadding` 12,
 `popupWidthNarrow` 320, `Default` 380,
 `Wide` 480, `Menu` 560, `MenuSplit` 840, `MenuApp` 900. `panelPadding` is
@@ -241,16 +241,23 @@ thing.
 
 **Bar.** One continuous strip along one edge of the output (`bar.position`,
 top by default): `card` fill at `surfaceOpacity`, a 1px `border` along its
-inner edge and no other edge, `barCellHeight + 2 * barMargin` thick, no
-margin on the edge it sits on. Regions inset `md` from both ends of the
-strip; cells sit `barMargin` in from the outer edge and are `barCellHeight`
-thick, `sm` apart, grouped where Omarchy groups (workspaces, indicators).
+inner edge and no other edge, `barCellHeight + 2 * barMargin` thick on a
+top or bottom bar and `barCellWidth + 2 * barMargin` on a left or right
+one, no margin on the edge it sits on. Regions inset `md` from both ends of
+the strip; cells sit `barMargin` in from the outer edge and are the strip's
+own cell thickness, `sm` apart, grouped where Omarchy groups (workspaces,
+indicators).
 On a left or right bar the same three regions run top to bottom (`left` at
-the top) and each cell turns its content along the strip, reading bottom to
-top on the left and top to bottom on the right, with icons and pictures
-turned back upright; the open-panel mark and the tooltip go to the side
-facing the desktop, and a panel hangs `barMargin` off that side at the
-cell that opened it. Cells are ghost `Cell`s: no fill and no border at rest, since
+the top) and nothing turns: each cell stacks its icon over its label
+upright, which is why the strip is wider than a horizontal one is tall. A
+label too wide for the strip wraps into it and stands down only when a
+single word still does not fit, leaving the icon and the tooltip to carry
+the cell. The two exceptions turn because they cannot do either: a window
+title and a now-playing track are free text of no fixed length, so those
+alone rotate, reading bottom to top on the left and top to bottom on the
+right. The open-panel mark and the tooltip go to the side facing the
+desktop, and a panel hangs `barMargin` off that side at the cell that
+opened it. Cells are ghost `Cell`s: no fill and no border at rest, since
 the strip already carries both. Hover, cursor, active, selected,
 destructive and warning draw as they do anywhere else. A cell whose panel is
 open draws a 2px `primary` line along its bottom edge. Workspace dots are

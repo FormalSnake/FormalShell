@@ -56,33 +56,25 @@ Cell {
     // A Row rather than siblings dropped straight into the cell: Cell's own
     // _measure() sizes off every direct child regardless of visibility, so
     // the counts state would otherwise stay as wide as the NO AUTH label.
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: "git-branch"
             color: root._state === "ok" ? root.foreground : root.dimForeground
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
             visible: root._showLabel && root._state === "ok"
             text: root._prs + "/" + root._issues
-            color: root.foreground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
 
         // The honest states are words, so they render as the one label that
         // is allowed to uppercase (MicWidget's own NO MIC idiom).
-        SectionLabel {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
+            meta: true
             visible: root._showLabel && root._state !== "ok"
             text: root._state === "noauth" ? "NO AUTH" : "NO GH"
-            color: root.dimForeground
         }
     }
 

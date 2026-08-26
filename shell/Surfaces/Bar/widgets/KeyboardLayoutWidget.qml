@@ -40,31 +40,24 @@ Cell {
     visible: root.shown
     tooltipText: Keyboard.tooltipText(root.layout)
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xxs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: "keyboard"
             color: root.layout.available ? root.foreground : root.dimForeground
         }
 
-        Text {
+        CellLabel {
             visible: root._showLabel && root.layout.available
-            anchors.verticalCenter: parent.verticalCenter
             text: Keyboard.shortLabel(root.layout.current)
             color: root.dimForeground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
 
-        SectionLabel {
+        CellLabel {
+            meta: true
             visible: root._showLabel && !root.layout.available
-            anchors.verticalCenter: parent.verticalCenter
             text: "NO LAYOUT"
-            color: root.dimForeground
         }
     }
 

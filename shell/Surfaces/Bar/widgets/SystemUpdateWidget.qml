@@ -50,12 +50,10 @@ Cell {
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: root._behind > 0 ? "package-plus" : "package"
             color: root.foreground
         }
@@ -63,11 +61,10 @@ Cell {
         // The summary is the model's own one tested string, states and
         // counts alike, so it renders as the one label that is allowed to
         // uppercase rather than being split into a figure and a word here.
-        SectionLabel {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
+            meta: true
             visible: root._showLabel
             text: root._summary
-            color: root.dimForeground
         }
     }
 

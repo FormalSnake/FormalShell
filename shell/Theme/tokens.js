@@ -45,6 +45,16 @@ var SPACING_BASE = {
 // one padding rule (DESIGN.md §1) leaves every floating surface sitting
 // `panelPadding` off the edge it hangs from, so a fourth number had nothing
 // left to describe.
+// `barCellWidth` (44) is `barCellHeight`'s counterpart on a vertical bar,
+// and it is wider rather than equal because the two strips carry content
+// differently: a horizontal cell reads an icon and its label side by side
+// along the strip, while a vertical one stacks them upright (Cell.qml's
+// content box, Components/CellRow.qml), so the strip has to be as wide as
+// the widest label instead of as tall as one line. 44 holds four mono
+// characters at the default `fontBaseSize` plus `controlPaddingY` either
+// side, which is every percentage and temperature the bar renders; a label
+// longer than that hides itself rather than overflowing
+// (Components/CellLabel.qml).
 // `screenPadding` (M48 D3) is the one distance every floating surface keeps
 // from a screen edge it hangs from: panels sit `barMargin` under the bar and
 // `screenPadding` in from the side, the notification centre takes it on
@@ -68,7 +78,7 @@ var SPACING_BASE = {
 // whatever room is left over.
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
-    controlHeight: 32, barCellHeight: 28, barMargin: 6,
+    controlHeight: 32, barCellHeight: 28, barCellWidth: 44, barMargin: 6,
     popupRowHeight: 28, rowGap: 4, iconGap: 8,
     panelPadding: 12, sectionGap: 16, screenPadding: 12,
     trackThickness: 6,

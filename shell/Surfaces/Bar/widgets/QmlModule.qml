@@ -28,7 +28,8 @@ Cell {
             : ""
     }
 
-    SectionLabel {
+    CellLabel {
+        meta: true
         visible: loader.status === Loader.Error
         anchors.verticalCenter: parent.verticalCenter
         text: "MODULE ERROR"

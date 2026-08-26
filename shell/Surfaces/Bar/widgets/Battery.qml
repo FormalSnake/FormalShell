@@ -109,24 +109,17 @@ Cell {
         NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
     }
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Core.Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: root._icon
             color: root.foreground
         }
 
-        Text {
+        CellLabel {
             visible: root._showLabel
-            anchors.verticalCenter: parent.verticalCenter
             text: root._percent + "%"
-            color: root.foreground
-            font.family: Core.Theme.fontFamilyMono
-            font.pixelSize: Core.Theme.fontSize.body
-            font.weight: Core.Theme.weight.medium
         }
     }
 

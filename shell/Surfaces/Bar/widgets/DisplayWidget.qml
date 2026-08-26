@@ -29,24 +29,18 @@ Cell {
 
     tooltipText: "DISPLAY"
 
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
+    CellRow {
         spacing: Theme.space.xs
 
         Icon {
-            anchors.verticalCenter: parent.verticalCenter
             name: "monitor"
             color: root.foreground
         }
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
+        CellLabel {
             visible: root._showLabel
             text: "Display"
-            color: root.foreground
             font.family: Theme.fontFamilySans
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
         }
     }
 

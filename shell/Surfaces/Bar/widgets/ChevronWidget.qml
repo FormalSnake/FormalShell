@@ -68,13 +68,12 @@ Cell {
     // where the glyph stays upright (Icon.qml) and so has to be named for
     // the screen direction rather than the row's.
     readonly property bool _pointsAfter: Layout.governsBefore(root.region) ? !root.collapsed : root.collapsed
-    readonly property bool _vertical: root.barEdge === "left" || root.barEdge === "right"
 
     tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
 
     Icon {
         anchors.verticalCenter: parent.verticalCenter
-        name: root._vertical
+        name: root.vertical
             ? (root._pointsAfter ? "chevron-down" : "chevron-up")
             : (root._pointsAfter ? "chevron-right" : "chevron-left")
         color: root.foreground

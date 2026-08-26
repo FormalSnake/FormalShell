@@ -1,2 +1,6 @@
 module qs.Components
 Cell 1.0 ../../../../shell/Components/Cell.qml
+CellLabel 1.0 ../../../../shell/Components/CellLabel.qml
+CellRow 1.0 ../../../../shell/Components/CellRow.qml
+Icon 1.0 ../../../../shell/Components/Icon.qml
+Rail 1.0 ../../../../shell/Components/Rail.qml

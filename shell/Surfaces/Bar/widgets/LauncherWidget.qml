@@ -74,9 +74,6 @@ Cell {
     Text {
         anchors.verticalCenter: parent.verticalCenter
         visible: root._spec.kind === "glyph"
-        // A distro mark is a picture drawn as a glyph, so it stays upright
-        // on a vertical bar like the image and the Icon do.
-        rotation: -root.contentRotation
         text: root._spec.kind === "glyph" ? root._spec.value : ""
         color: root.foreground
         font.family: Distro.FAMILY
@@ -91,8 +88,6 @@ Cell {
     Image {
         anchors.verticalCenter: parent.verticalCenter
         visible: root._spec.kind === "image"
-        // Upright on a vertical bar (Icon.qml's turn-back, for an image).
-        rotation: -root.contentRotation
         source: root._spec.kind === "image" ? root._spec.value : ""
         width: Theme.fontSize.body
         height: Theme.fontSize.body
