@@ -489,7 +489,7 @@ PanelWindow {
             visible: row.unread
             width: Theme.space.md
             height: width
-            radius: width / 2
+            radius: Theme.pillRadius(width)
             color: Theme.color.primary
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter

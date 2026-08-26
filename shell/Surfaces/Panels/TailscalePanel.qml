@@ -354,7 +354,7 @@ Panel {
                     anchors.verticalCenter: parent.verticalCenter
                     width: Theme.space.md
                     height: width
-                    radius: width / 2
+                    radius: Theme.pillRadius(width)
                     color: peerCell.modelData.online ? Theme.color.primary : Theme.color.mutedForeground
 
                     // Gated on root.isOpen too (M16 Task 12 hidden-surface

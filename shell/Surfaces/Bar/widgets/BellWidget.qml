@@ -56,7 +56,7 @@ Cell {
                 anchors.top: parent.top
                 width: Theme.space.md
                 height: Theme.space.md
-                radius: height / 2
+                radius: Theme.pillRadius(height)
                 color: Theme.color.primary
             }
         }

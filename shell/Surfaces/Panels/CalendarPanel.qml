@@ -405,7 +405,7 @@ Panel {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 width: Core.Theme.space.xs
                                 height: Core.Theme.space.xs
-                                radius: width / 2
+                                radius: Core.Theme.pillRadius(width)
                                 color: (dayCell.active || dayCell.selected) ? dayCell.foreground : Core.Theme.color.primary
                                 opacity: CalGrid.showsEventDot(dayCell.modelData, dayCell._eventCount) ? 1 : 0
 

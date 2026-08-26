@@ -43,7 +43,7 @@ Item {
         anchors.fill: track
         anchors.margins: -Theme.ringWidth
         visible: root.cursor
-        radius: height / 2
+        radius: Theme.pillRadius(height)
         color: Theme.color.ring
         opacity: Theme.ringAlpha
     }
@@ -54,7 +54,7 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         height: Theme.space.huge
-        radius: height / 2
+        radius: Theme.pillRadius(height)
         color: root.checked ? Theme.color.primary : Theme.color.muted
         // A filled track has no border of its own, so the cursor's border
         // swap is the only thing that gives it one.
@@ -66,7 +66,7 @@ Item {
         id: knob
         width: track.height - root._inset * 2
         height: width
-        radius: height / 2
+        radius: Theme.pillRadius(height)
         y: track.y + root._inset
         x: root.checked ? root.width - width - root._inset : root._inset
         color: Theme.color.background
