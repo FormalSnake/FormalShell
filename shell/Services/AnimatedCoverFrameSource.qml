@@ -13,15 +13,15 @@ import qs.Services
 // mini cover paints from the exact same frames instead of a second decode
 // for a slot this small.
 //
-// `media.animatedBarCover` (off by default) is what lets `_barWanters`
-// reach the gate: off, the decode, the grab timer and MediaPanel's
+// `media.animatedBarCover` (on by default) is what lets `_barWanters`
+// reach the gate. Off, the decode, the grab timer and MediaPanel's
 // `keepMapped` exist only while the panel itself is open, like any other
-// popout, since a 16px bar cover is not worth a video decode on a small
-// machine. On, the bar's mini cover animates for as long as music plays.
+// popout: the escape hatch for a machine where a video decode behind a
+// 16px bar cover is not worth it.
 Singleton {
     id: root
 
-    readonly property bool barEnabled: Config.get("media.animatedBarCover", false)
+    readonly property bool barEnabled: Config.get("media.animatedBarCover", true)
     property bool panelWants: false
     property int _barWanters: 0
 

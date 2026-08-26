@@ -140,6 +140,8 @@ committed or the pull goes through.
   today's M35 behaviour, unchanged. A knob with one reader is justified
   here because M35 was an explicit owner request and this reverses its
   default; the owner turns it back on where the machine can afford it.
+  Owner's call the same day: the default goes back to true ("it barely
+  appears and it's easy to render"), the knob stays as the escape hatch.
 - D3 Keyboard layout state moves into `Services/KeyboardLayoutService.qml`,
   a singleton every bar reads: one `hyprctl devices -j` at boot (and on
   `configreloaded`, where Hyprland can change the layout list), then

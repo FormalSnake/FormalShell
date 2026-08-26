@@ -9,7 +9,7 @@ import QtQuick
 // v1 keys: menu.customPowerButtons: [{ label, icon, command, confirm? }],
 // bar.position (reserved), theme.fontDisplay (reserved), media.appleMusicArt
 // (bool, default false, AppleMusicArtService's opt-in, M7 Task 2).
-// media.animatedBarCover (bool, default false, whether the bar's mini cover
+// media.animatedBarCover (bool, default true, whether the bar's mini cover
 // animates too; off, the animated cover decode exists only while the media
 // panel is open).
 // lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank

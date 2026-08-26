@@ -2132,13 +2132,13 @@ setting off means no network call happens at all. A hit downloads an MP4 to
 without animated art is not re-fetched every play, and a 30-day prune runs
 at startup. The muted loop plays while the panel is open, and the bar's
 cover dither-paints the same frames the panel grabbed instead of decoding
-its own. The bar's mini cover animates only with
-`media.animatedBarCover: true` (default false); off, the decode stops when
-the panel closes instead of running for as long as music plays.
+its own. `media.animatedBarCover: false` keeps the bar's mini cover static
+so the decode stops when the panel closes instead of running for as long
+as music plays.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
-{ "media": { "animatedBarCover": true } }
+{ "media": { "animatedBarCover": false } }
 ```
 
 ```sh

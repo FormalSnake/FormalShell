@@ -299,8 +299,8 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 - A shadow, a gradient, or a blur drawn by the shell (blur is the
   compositor's, behind a translucent card). Dither only behind
   `wallpaper.dither` or `lock.dither`, both off by default. The bar's own
-  mini cover animates only behind `media.animatedBarCover`, off by
-  default; the media panel's own cover animates unconditionally.
+  mini cover stops animating behind `media.animatedBarCover: false`; the
+  media panel's own cover animates unconditionally.
 - A card inside a card, and a resting fill-and-border around any block that
   only groups its children or only reports a value.
 - Foreground/background inversion for selection.
