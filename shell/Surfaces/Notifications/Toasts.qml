@@ -126,10 +126,7 @@ PanelWindow {
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // The distance every floating surface keeps from the screen's own edges
-    // (M48 D3). `panelPadding` is that number (12) until Theme.space
-    // carries `screenPadding`, which replaces this line.
-    readonly property real _screenPadding: Theme.space.panelPadding
+    readonly property real _screenPadding: Theme.space.screenPadding
 
     // Anchored on all four sides, so the surface is exactly the output and
     // its geometry never changes for as long as it is mapped (M48): the

@@ -185,10 +185,7 @@ PanelWindow {
 
     readonly property int cardWidth: Theme.space.popupWidthWide
 
-    // The distance every floating surface keeps from the screen's own edges
-    // (M48 D3). `panelPadding` is that number (12) until Theme.space
-    // carries `screenPadding`, which replaces this line.
-    readonly property real _screenPadding: Theme.space.panelPadding
+    readonly property real _screenPadding: Theme.space.screenPadding
 
     // The card's own height, before the cap: the header, the gap under it,
     // both row sections, and the Card's padding either side.
