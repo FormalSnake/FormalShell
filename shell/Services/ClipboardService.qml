@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../Clipboard/history.js" as History
+import "../Core/proc.js" as Proc
 
 // Capture via `wl-paste --type text --watch <cmd>` under a long-running
 // Process (verified against the wl-clipboard 2.3.0 man page in the store):
@@ -128,8 +129,8 @@ Singleton {
     // CLIPBOARD_STATE says the selection is a password-manager hint.
     Process {
         id: watcher
-        command: ["wl-paste", "--type", "text", "--watch", "sh", "-c",
-            "[ \"$CLIPBOARD_STATE\" = sensitive ] && exit 0; cat; printf '\\0'"]
+        command: Proc.dieWithParent(["wl-paste", "--type", "text", "--watch", "sh", "-c",
+            "[ \"$CLIPBOARD_STATE\" = sensitive ] && exit 0; cat; printf '\\0'"])
         running: true
         stdout: SplitParser {
             splitMarker: "\u0000"
@@ -156,7 +157,7 @@ Singleton {
     // fresh temp file and reuses the existing one.
     Process {
         id: imageWatcher
-        command: ["wl-paste", "--type", "image/png", "--watch", "sh", "-c",
+        command: Proc.dieWithParent(["wl-paste", "--type", "image/png", "--watch", "sh", "-c",
             "[ \"$CLIPBOARD_STATE\" = sensitive ] && exit 0; " +
             "dir=\"$0\"; mkdir -p \"$dir\" || exit 0; " +
             "tmp=$(mktemp \"$dir/tmp.XXXXXX\") || exit 0; cat > \"$tmp\"; " +
@@ -164,7 +165,7 @@ Singleton {
             "hash=$(sha256sum \"$tmp\" | cut -d ' ' -f1); file=\"$dir/$hash.png\"; " +
             "if [ -e \"$file\" ]; then rm -f \"$tmp\"; else mv \"$tmp\" \"$file\"; fi; " +
             "printf '%s\\0' \"$file\"",
-            root._imagesDir]
+            root._imagesDir])
         running: true
         stdout: SplitParser {
             splitMarker: "\u0000"

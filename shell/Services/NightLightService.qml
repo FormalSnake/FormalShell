@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Core as Core
+import "../Core/proc.js" as Proc
 
 // Opt-in night light (M16 Task 6, laptop feature parity with omarchy, that
 // shell drives Hyprland's own hyprsunset IPC directly; this compositor has
@@ -54,7 +55,7 @@ Singleton {
             return;
         root.lastError = "";
         root._phase = "awaiting-high";
-        proc.command = ["wlsunset", "-t", String(root.temp), "-S", "06:00", "-s", "18:00"];
+        proc.command = Proc.dieWithParent(["wlsunset", "-t", String(root.temp), "-S", "06:00", "-s", "18:00"]);
         proc.running = true;
     }
 

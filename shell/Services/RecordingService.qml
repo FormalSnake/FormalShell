@@ -6,6 +6,7 @@ import qs.Core as Core
 import qs.Compositor
 import qs.Notifications
 import "../Capture/model.js" as Capture
+import "../Core/proc.js" as Proc
 
 // Screen recording (M22): one wf-recorder child, the transient
 // PipeWire/Pulse mix modules the desktop+mic mode needs, and the two-pass
@@ -371,7 +372,7 @@ Singleton {
         // correct answer. Taken at call time, never cached. A caller-supplied
         // rectangle brings its own output (startAt), since the rectangle it
         // picked need not be on the focused one.
-        recProc.command = Capture.recorderArgv({
+        recProc.command = Proc.dieWithParent(Capture.recorderArgv({
             path: root._pendingPath,
             framerate: Core.Config.get("recording.framerate", 30),
             output: root._pendingOutput || CompositorService.focusedOutputName,
@@ -381,7 +382,7 @@ Singleton {
             noDmabuf: Core.Config.get("recording.noDmabuf", false) === true,
             audioDevice: device,
             audioBackend: Core.Config.get("recording.audioBackend", "")
-        });
+        }));
         root.startedMs = Date.now();
         root._nowMs = root.startedMs;
         root._stopping = false;

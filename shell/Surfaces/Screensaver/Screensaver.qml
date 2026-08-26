@@ -8,6 +8,7 @@ import qs.Services
 import "../../Screensaver/blocks.js" as Blocks
 import "../../Screensaver/effect.js" as Effect
 import "../../Screensaver/ttfx.js" as Ttfx
+import "../../Core/proc.js" as Proc
 
 // Idle-driven screensaver (DESIGN.md's terminal-text-effect exception, spec
 // §10, M7 Task 5): one controller (this Item) decides WHEN to show, the
@@ -425,7 +426,7 @@ Item {
                     // by re-running costs a few tens of milliseconds and
                     // needs no frame buffer at all.
                     var pinned = root._pinnedFrame >= 0;
-                    ttfxProc.command = Ttfx.command({
+                    ttfxProc.command = Proc.dieWithParent(Ttfx.command({
                         bannerPath: root._asciiPath,
                         columns: surface._columns,
                         rows: surface._rows,
@@ -433,7 +434,7 @@ Item {
                         frameRate: pinned ? 0 : root.frameRate,
                         background: String(Core.Theme.color.background),
                         seed: root._activationSeed + root.cycles
-                    });
+                    }));
                     frameParser.splitMarker = Ttfx.frameDelimiter(surface._rows);
                     ttfxProc.running = true;
                 }

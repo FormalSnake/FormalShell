@@ -1,6 +1,6 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, lucide-font, nerd-fonts
-, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv }:
+, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv, util-linux }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -56,9 +56,14 @@ stdenvNoCC.mkDerivation {
     # system-update widget. mpv backs the recording.webcam overlay
     # (RecordingService spawns it against a v4l2 device through the
     # compositor, never through this wrapper's own child process tree).
+    # util-linux is here for setpriv alone (shell/Core/proc.js): quickshell
+    # takes no SIGTERM handler, so a `systemctl --user restart` leaves every
+    # long-lived child it owned running, and PR_SET_PDEATHSIG is what closes
+    # that. Unlike the optional CLIs above this one has no fallback state,
+    # which is why it is wired here rather than guarded with `command -v`.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux ]} \
       --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \

@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Core
 import qs.Services
 import "../Visualizer/model.js" as Model
+import "../Core/proc.js" as Proc
 
 // Shared cava backend for the bar's ASCII visualizer widget (owner ask:
 // "next to the now playing it would be nice to have an ASCII style audio
@@ -164,7 +165,7 @@ Singleton {
     Process {
         id: cavaProc
         running: root._shouldRun
-        command: ["sh", "-c", 'command -v cava >/dev/null 2>&1 || exit 127; exec cava -p "$1"', "sh", root._configPath]
+        command: Proc.dieWithParent(["sh", "-c", 'command -v cava >/dev/null 2>&1 || exit 127; exec cava -p "$1"', "sh", root._configPath])
         stdout: SplitParser {
             onRead: line => root.levels = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL)
         }
