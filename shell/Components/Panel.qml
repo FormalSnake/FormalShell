@@ -173,11 +173,11 @@ PanelWindow {
     // x and y follows the cell and which hangs off the bar.
     readonly property real _frameX: root._screen
         ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root.panelWidth,
-            Theme.barInset, Theme.space.barMargin, Theme.space.screenPadding)
+            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding)
         : 0
     readonly property real _frameY: root._screen
         ? Geometry.frameY(Theme.barPosition, root.anchorY, root._screen.height, root._frameHeight,
-            Theme.barInset, Theme.space.barMargin, Theme.space.screenPadding)
+            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding)
         : 0
 
     // Where the frame slides in from: the bar's edge.
@@ -192,7 +192,7 @@ PanelWindow {
     // below) rather than the panel running off the display, which the
     // notification centre and a long calendar month both did.
     readonly property real _maxFrameHeight: root._screen
-        ? Geometry.maxFrameHeight(Theme.barPosition, root._screen.height, Theme.barInset,
+        ? Geometry.maxFrameHeight(Theme.barPosition, root._screen.height, Theme.edgeInset,
             Theme.space.barMargin, Theme.space.screenPadding)
         : 400
     // Header, the rule under it, then the content column (DESIGN.md §3

@@ -8,7 +8,7 @@
 //
 // A panel hangs off the bar, `barMargin` from the bar's inner edge, and
 // sits along the bar at the cell that opened it. `barPosition` says which
-// edge that is; `insets` is Theme.barInset, the bar's thickness on its own
+// edge that is; `insets` is Theme.edgeInset, the bar's thickness on its own
 // edge and 0 elsewhere.
 
 function _vertical(barPosition) {
@@ -19,13 +19,15 @@ function _vertical(barPosition) {
 // coordinate of the bar cell that opened the panel, or a negative number
 // for an IPC open with no cell, which falls back to the end of the bar
 // (the right region, where every widget cell lives). Either way the frame
-// is held one `screenPadding` in from both ends; a panel longer than the
-// screen minus both paddings gives up the far clamp rather than being
-// pushed off the near edge.
-function frameAlong(anchor, screenExtent, frameExtent, screenPadding) {
-    var far = screenExtent - frameExtent - screenPadding;
+// is held one `screenPadding` in from whatever the two ends already give
+// up (`insetStart`/`insetEnd`, the screen frame's band when there is one);
+// a panel longer than the room between gives up the far clamp rather than
+// being pushed off the near edge.
+function frameAlong(anchor, screenExtent, frameExtent, insetStart, insetEnd, screenPadding) {
+    var near = insetStart + screenPadding;
+    var far = screenExtent - insetEnd - frameExtent - screenPadding;
     var at = anchor >= 0 ? anchor : far;
-    return Math.max(screenPadding, Math.min(at, Math.max(screenPadding, far)));
+    return Math.max(near, Math.min(at, Math.max(near, far)));
 }
 
 // Top or bottom bar: x along the bar, y off its inner edge.
@@ -34,7 +36,7 @@ function frameX(barPosition, anchorX, screenWidth, panelWidth, insets, barMargin
         return insets.left + barMargin;
     if (barPosition === "right")
         return screenWidth - insets.right - barMargin - panelWidth;
-    return frameAlong(anchorX, screenWidth, panelWidth, screenPadding);
+    return frameAlong(anchorX, screenWidth, panelWidth, insets.left, insets.right, screenPadding);
 }
 
 // Left or right bar: y along the bar, x off its inner edge.
@@ -42,17 +44,18 @@ function frameY(barPosition, anchorY, screenHeight, frameHeight, insets, barMarg
     if (barPosition === "bottom")
         return screenHeight - insets.bottom - barMargin - frameHeight;
     if (_vertical(barPosition))
-        return frameAlong(anchorY, screenHeight, frameHeight, screenPadding);
+        return frameAlong(anchorY, screenHeight, frameHeight, insets.top, insets.bottom, screenPadding);
     return insets.top + barMargin;
 }
 
 // The tallest the frame may be. Under a horizontal bar: the screen minus
 // the bar, the `barMargin` it hangs off the bar by, and one `screenPadding`
 // at the far edge. Beside a vertical bar the frame hangs off nothing above
-// or below it, so only the two paddings come off.
+// or below it, so only the two paddings (and the screen frame's band, when
+// there is one) come off.
 function maxFrameHeight(barPosition, screenHeight, insets, barMargin, screenPadding) {
     if (_vertical(barPosition))
-        return Math.max(0, screenHeight - screenPadding * 2);
+        return Math.max(0, screenHeight - insets.top - insets.bottom - screenPadding * 2);
     return Math.max(0, screenHeight - insets.top - insets.bottom - barMargin - screenPadding);
 }
 

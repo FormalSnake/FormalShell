@@ -86,6 +86,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and coming back with the same window id.
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
   run's JSON sidecar and read by other legs for what the shell resolved.
+- `frame.sh` `--frame`: pins `frame.thickness` in the settings fixture so the
+  screen frame paints round the bar, and reads its painter and its three
+  exclusion zones off the compositor's own layer list.
 - `gallery.sh` `--gallery`: the dev gallery sheet, every shared component
   drawn against the live theme.
 - `gpu.sh` `--gpu`: both cards of a hybrid laptop this rig is not, and the

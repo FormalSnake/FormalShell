@@ -73,6 +73,10 @@ QtObject {
     readonly property bool barVertical: false
     readonly property real barThickness: space.barCellHeight + space.barMargin * 2
     readonly property var barInset: ({ top: root.barThickness, bottom: 0, left: 0, right: 0 })
+    readonly property real frameThickness: 0
+    readonly property bool frameEnabled: false
+    readonly property real frameRadius: 20
+    readonly property var edgeInset: root.barInset
 
     // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
     // strings, which have no .r/.g/.b to read, and Qt.rgba on those three

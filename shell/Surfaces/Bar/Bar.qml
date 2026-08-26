@@ -126,7 +126,7 @@ PanelWindow {
     exclusiveZone: bar._strip.thickness
 
     // Every surface that has to clear the bar (panels, toasts, the center,
-    // the console) reads this, through Theme.barInset: Wayland gives
+    // the console) reads this, through Theme.edgeInset: Wayland gives
     // clients no cross-window geometry, so the strip publishes its own
     // occupied edge.
     Binding {
@@ -143,9 +143,12 @@ PanelWindow {
         // The hairline that separates the strip from the desktop, and the
         // only edge the bar draws: the one facing inward. A `border` on the
         // fill above would ring all four sides, three of which are the
-        // screen's own edges.
+        // screen's own edges. With the screen frame on, the frame's own
+        // stroke runs this side too, round the corners into its band, so
+        // the strip draws none of its own.
         Rectangle {
             id: hairline
+            visible: !Theme.frameEnabled
             width: bar._vertical ? Theme.borderWidth : parent.width
             height: bar._vertical ? parent.height : Theme.borderWidth
             x: bar._position === "left" ? parent.width - hairline.width : 0

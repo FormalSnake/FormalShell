@@ -21,7 +21,7 @@ function clampShare(share) {
 
 // `screen` is the output's LOGICAL box ({x, y, width, height}, Quickshell.
 // screens, the same space windows[].rect and the placement dispatchers use,
-// never the output mode's physical pixels). `insets` is Theme.barInset, the
+// never the output mode's physical pixels). `insets` is Theme.edgeInset, the
 // exclusive zone the bar already took off its own edge; the console drops
 // from the top of what is left and covers `share` of its height, full width
 // less one margin either side.

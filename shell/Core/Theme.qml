@@ -91,11 +91,23 @@ Singleton {
     // before the first Bar instance maps.
     property real barThickness: space.barCellHeight + space.barMargin * 2
 
-    // That thickness on the bar's own edge and 0 on the other three, which
-    // is what every surface that has to clear the bar (panels, toasts, the
-    // centre, the console) reads: Wayland gives clients no cross-window
-    // geometry, so the strip publishes its own occupied edge.
-    readonly property var barInset: BarLayout.insets(root.barPosition, root.barThickness)
+    // The screen frame (Surfaces/Frame/Frame.qml): `frame.thickness` is
+    // its band on the three edges the bar is not on, 0 (the default) means
+    // no frame at all, and `frame.radius` is the corner of the rounded
+    // cut-out it leaves for the desktop, squared along with everything
+    // else when the base radius is 0.
+    readonly property real frameThickness: Math.round(Tokens.clamp(Config.get("frame.thickness", 0), 0, Infinity, 0))
+    readonly property bool frameEnabled: root.frameThickness > 0
+    readonly property real frameRadius: Math.round(Tokens.clamp(Config.get("frame.radius", root.radius > 0 ? 20 : 0), 0, Infinity, 0))
+
+    // The bar's thickness on its own edge and 0 on the other three
+    // (Frame.qml paints around exactly this), and the same with the frame's
+    // band on those three, which is what every surface that has to clear
+    // the edges (panels, toasts, the centre, the console) reads: Wayland
+    // gives clients no cross-window geometry, so the strip publishes its
+    // own occupied edge.
+    readonly property var barInset: BarLayout.insets(root.barPosition, root.barThickness, 0)
+    readonly property var edgeInset: BarLayout.insets(root.barPosition, root.barThickness, root.frameThickness)
 
     // Two faces by context (spec "Type", DESIGN.md §1): sans carries words,
     // mono carries values. Both are fontconfig aliases, never a hardcoded
