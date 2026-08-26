@@ -39,6 +39,31 @@ Panel {
 
     readonly property var _device: UPower.displayDevice
     readonly property bool _hasBattery: root._device ? root._device.isLaptopBattery : false
+
+    // The physical battery behind the aggregate. UPower's DisplayDevice is
+    // explicitly "an aggregate device and not a physical one, meaning you
+    // will not find it in devices" (quickshell src/services/upower/
+    // core.hpp:73), and it publishes only what an aggregate can answer:
+    // percentage, state, energy, changeRate and the two time estimates.
+    // Capacity and NativePath are per-battery facts it leaves at their
+    // defaults, so on both of the owner's laptops DisplayDevice reads
+    // `Capacity 0` and `NativePath ""` while battery_BAT0 reads 96.7 and
+    // "BAT0" (verified over busctl, 2026-08-26). Reading health or the
+    // sysfs path off the aggregate therefore silently answered "no health
+    // support" and "no charge limit" on every machine that has both.
+    //
+    // isLaptopBattery is the same test the aggregate itself passes (type
+    // Battery and powerSupply, device.cpp:72), which is what makes it the
+    // right filter here: it picks the internal pack and skips a mouse, a
+    // headset or a UPS on the same bus.
+    readonly property var _physicalBattery: {
+        const devices = UPower.devices ? UPower.devices.values : [];
+        for (var i = 0; i < devices.length; i++) {
+            if (devices[i].isLaptopBattery)
+                return devices[i];
+        }
+        return null;
+    }
     readonly property bool _charging: root._hasBattery && root._device.state === UPowerDeviceState.Charging
     readonly property int _percent: root._hasBattery ? Math.round(root._device.percentage * 100) : 0
     readonly property real _timeToEmpty: root._hasBattery ? root._device.timeToEmpty : 0
@@ -219,13 +244,14 @@ Panel {
     // nothing about a limit -- so this is the one power reading the panel
     // takes from sysfs directly rather than off the bus.
     //
-    // The path is built from nativePath ("BAT0") instead of globbing so the
+    // The path is built from the physical battery's nativePath ("BAT0")
+    // instead of globbing so the
     // read is a plain `cat` to argv with no shell, the same idiom the RAPL
     // sampler above uses. Read once per open: a limit changes only when
     // something outside this shell writes it, never on its own.
     property var chargeLimitPercent: null
 
-    readonly property string _batteryNativePath: root._hasBattery ? root._device.nativePath : ""
+    readonly property string _batteryNativePath: root._physicalBattery ? root._physicalBattery.nativePath : ""
 
     function _readChargeLimit() {
         if (chargeLimitProc.running || root._batteryNativePath === "")
@@ -315,7 +341,9 @@ Panel {
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.space.controlPaddingX
                 anchors.verticalCenter: parent.verticalCenter
-                text: root._hasBattery ? Power.formatHealthPercent(root._device.healthPercentage, root._device.healthSupported) : ""
+                text: root._physicalBattery
+                    ? Power.formatHealthPercent(root._physicalBattery.healthPercentage, root._physicalBattery.healthSupported)
+                    : ""
                 color: Theme.color.foreground
                 font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.body
