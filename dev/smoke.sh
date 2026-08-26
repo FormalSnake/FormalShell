@@ -663,6 +663,19 @@ if grep -q "has crashed" "$shell_log_path" 2>/dev/null; then
   fail "the shell crashed during the run"
 fi
 
+# A missing property or a missing import is a load error the QML engine
+# reports once and then carries on from, so the surface it broke keeps
+# drawing something plausible and no assert here ever looks at it: the
+# display panel spent three weeks telling a session with an empty output
+# list it was still LOADING, because one contract property was never
+# declared on the backend (added 2026-08-06, found on e1504g 2026-08-26).
+# Neither pattern can fire transiently, so this is a check on every run
+# rather than a leg of its own.
+if grep -qE "Cannot assign to non-existent property|is not a type" "$shell_log_path" 2>/dev/null; then
+  grep -nE "Cannot assign to non-existent property|is not a type" "$shell_log_path" | head -5 >&2
+  fail "the shell logged a QML load error (lines above)"
+fi
+
 if [ -f "$shot_path" ]; then
   echo "SMOKE_OK $shot_path"
 else
