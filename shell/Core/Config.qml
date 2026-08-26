@@ -268,6 +268,31 @@ Singleton {
         onTriggered: settingsFile.reload()
     }
 
+    // A watch resolves the path once and then follows the inode, so a write
+    // that REPLACES settings.json rather than editing it in place leaves the
+    // watch on the old inode and the file stops reaching the shell for the
+    // rest of the session. Both writers that matter do exactly that:
+    // home-manager retargets the symlink on activation (a nixos-rebuild moved
+    // bar.position and the running shell never saw it, g815 2026-08-26), and
+    // an editor that saves by renaming a temp file over the target, which is
+    // vim's default, swaps the inode the same way. FileView's own directory
+    // watch does not cover it either: it reports a file that did not exist
+    // and now does, and a replacement is never that (quickshell
+    // src/io/fileview.cpp, onWatchedDirectoryChanged).
+    //
+    // reload() re-runs the whole open, so a tick reads through the new
+    // symlink AND re-attaches the watch to the new inode: one tick after a
+    // replacement, in-place edits are instant again and this is back to
+    // costing nothing. _applySettings() below publishes only when the bytes
+    // actually changed, so a tick that finds the file the same touches no
+    // binding in the shell.
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        onTriggered: settingsFile.reload()
+    }
+
     FileView {
         id: settingsFile
         path: root._configDir + "/settings.json"
@@ -275,20 +300,38 @@ Singleton {
         onFileChanged: reload()
         onLoaded: root._applySettings()
         onLoadFailed: error => {
-            root.settings = {};
+            root._publish("");
             root.loaded = true;
             if (error === FileViewError.FileNotFound)
                 rewatchTimer.restart();
         }
     }
 
-    function _applySettings() {
+    // The bytes last published, so a reload that finds the file unchanged
+    // does nothing at all. `settings` is the object every binding in the
+    // shell hangs off, so reassigning it re-evaluates all of them, and both
+    // the tick above and rewatchTimer's own retry loop run whether or not
+    // anything changed.
+    property string _publishedText: ""
+
+    function _publish(text) {
+        if (root.loaded && text === root._publishedText)
+            return;
+        root._publishedText = text;
+        if (text === "") {
+            root.settings = ({});
+            return;
+        }
         try {
-            root.settings = JSON.parse(settingsFile.text());
+            root.settings = JSON.parse(text);
         } catch (e) {
             console.warn("Config: failed to parse settings.json:", e.message);
             // Keep the last good value rather than falling back to {}.
         }
+    }
+
+    function _applySettings() {
+        root._publish(settingsFile.text());
         root.loaded = true;
     }
 

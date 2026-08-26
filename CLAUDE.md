@@ -82,6 +82,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   activation, with the image entry's preview in the frame.
 - `clipssh.sh` `--clipssh`: the clipssh route's send, its bar indicator and
   its copied/failed toasts, against a shimmed binary.
+- `config_reload.sh` `--config-reload`: a settings.json whose symlink is
+  retargeted (what home-manager does on every activation, the one write a
+  file watch cannot see) still reaching a running shell, read off the bar's
+  own edge moving right to left.
 - `console.sh` `--console`: the quake console parking on a special workspace
   and coming back with the same window id.
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
