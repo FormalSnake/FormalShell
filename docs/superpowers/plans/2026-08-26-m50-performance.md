@@ -280,6 +280,29 @@ run it. e1504g two minutes after a fresh start reads 528 MB RSS under the
 same Bluetooth and PipeWire churn as before, so no clean before/after for
 memory exists yet; the honest claim is ten panel trees fewer at startup.
 
+## Memory on g815, looked at 2026-08-26 evening
+
+Fresh, the g815 shell weighs ~930 MB RSS (two screens, NVIDIA; the
+5760x3232 wallpaper decodes to two capped layers per screen). Over an
+hour in use it drifts to 1.0 to 1.6 GB, and twice the QML JS heap
+(`/memfd:JSGCHeap:QtQml`) jumped inside two minutes, 64 to 336 MB and,
+in an earlier instance, to 673 MB, with RSS following (+900 MB). Neither
+recurred in a later nine-minute watch, and the trigger never showed up in
+the VM: with the new `SMOKE_MEM` line (48ba76b) the launcher root, the
+emoji grid, the wallpaper picker, the clipboard ledger and the screensaver
+all end their legs at 18 to 25 MB of JS heap. Ruled out on the host:
+album-art video (QtMultimedia is not even mapped in the process), the
+clipboard ledger (captures during the watch moved nothing), calendar
+(EDS returns 14 events, expansion is windowed), input files (largest is
+clipboard.json at 77 KB), icon re-reads (none in 30 s of `openat`).
+Still open: something that happens while the machine is in use with
+Discord (equibop) focused. The rig can now answer "how much does this
+leg cost" for any new suspicion; on the host, the reading that catches it
+is the JS heap size from `/proc/<pid>/maps` sampled every 15 s.
+
+The `--screensaver` leg fails its banner-scanline assert on `main` as of
+92cb65b7, before and after the rig edit; not this plan's.
+
 ## Lazy panels, the original deferral note (finding 7)
 
 11 of the 16 panels (AppMenu, Audio, Calendar, Network, Bluetooth,
