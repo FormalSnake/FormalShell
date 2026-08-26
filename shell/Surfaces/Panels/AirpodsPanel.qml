@@ -25,19 +25,20 @@ import "../../Airpods/model.js" as AirpodsModel
 // host-side daemon policy and stays visible whenever anything about the
 // device is known at all, in-case included.
 //
-// Keyboard (spec "Keyboard model"): one cursor walks every actionable row
-// in visual order, the listening modes, the adaptive track, the two
-// toggles, then ear detection. Enter applies the mode or flips the toggle
-// under it; Left/Right steps the adaptive level by 5, the same move the
-// track's own wheel makes. The cursor is keyed by row identity rather than
-// by index (AudioPanel's idiom): a mode list that grows an Adaptive entry
-// mid-session must not slide the highlight onto a different row.
+// Keyboard (spec "Keyboard model"): one cursor walks the actionable stops
+// in visual order, the listening-mode group, the adaptive track, the two
+// toggles, then the ear-detection group. On a group stop Left and Right
+// walk the buttons inside it and Enter presses the one under the ring; on
+// the adaptive track they step the level by 5, the same move the track's
+// own wheel makes. The cursor is keyed by stop identity rather than by
+// index (AudioPanel's idiom): a section that appears mid-session must not
+// slide the highlight onto a different stop.
 Panel {
     id: root
 
     panelIcon: "headphones"
     panelTitle: "AirPods"
-    panelWidth: Theme.space.popupWidthDefault
+    panelWidth: Theme.space.popupWidthWide
 
     readonly property var _status: AirpodsService.status
     readonly property var _batteryRows: AirpodsModel.batteryRows(root._status)
@@ -52,11 +53,41 @@ Panel {
 
     readonly property string _heroTitle: root._status.deviceName !== "" ? root._status.deviceName : "AirPods"
 
+    // Keyed the way modesFor() keys its rows: the list gains and loses Off
+    // and Adaptive per model, so a positional array would pair the wrong
+    // glyph with the wrong mode.
+    readonly property var _modeIcons: ({
+        "off": "circle-off",
+        "anc": "ear-off",
+        "transparency": "ear",
+        "adaptive": "audio-waveform"
+    })
+
+    readonly property var _modeOptions: root._modes.map(function (mode) {
+        return { icon: root._modeIcons[mode.key], label: mode.label, value: mode.verb, active: mode.active };
+    })
+
+    // -1 while the daemon reports no noise mode, which leaves the group with
+    // no selected button instead of pointing at Off.
+    readonly property int _activeModeIndex: {
+        for (var i = 0; i < root._modes.length; i++)
+            if (root._modes[i].active)
+                return i;
+        return -1;
+    }
+
+    // Position matches the daemon's own ear_detection_behavior numbering
+    // (0 one out, 1 both out, 2 never), so `index` binds straight to it.
+    readonly property var _earOptions: [
+        { label: "One", value: "ear:one" },
+        { label: "Both", value: "ear:both" },
+        { label: "Off", value: "ear:off" }
+    ]
+
     readonly property var _cursorEntries: {
         var out = [];
         if (root._controlsVisible) {
-            for (var i = 0; i < root._modes.length; i++)
-                out.push({ key: "mode:" + root._modes[i].key, kind: "mode", mode: root._modes[i] });
+            out.push({ key: "modes", kind: "group" });
             if (root._adaptiveVisible)
                 out.push({ key: "adaptive", kind: "adaptive" });
             if (root._togglesVisible) {
@@ -65,7 +96,7 @@ Panel {
             }
         }
         if (root._heroVisible)
-            out.push({ key: "ear", kind: "ear" });
+            out.push({ key: "ear", kind: "group" });
         return out;
     }
 
@@ -107,17 +138,28 @@ Panel {
         AirpodsService.send("adaptive:" + Math.round(Math.max(0, Math.min(100, level))));
     }
 
-    // 0 (pause when one out) -> 1 (when both out) -> 2 (never) -> 0, the
-    // same cycle the daemon's three `ear:*` verbs name in order.
-    function _cycleEar() {
-        var verbs = ["ear:one", "ear:both", "ear:off"];
-        var next = (root._status.earDetection + 1) % 3;
-        AirpodsService.send(verbs[next]);
+    function _groupFor(key) {
+        if (key === "modes")
+            return modeGroup;
+        if (key === "ear")
+            return earGroup;
+        return null;
+    }
+
+    // The groups are controlled, so a press writes the verb and moves only
+    // the ring; `index` follows once the daemon reports the new state back.
+    function _pressGroup(group, index) {
+        var verb = group.valueAt(index);
+        if (verb === undefined)
+            return;
+        group.cursorIndex = index;
+        AirpodsService.send(verb);
     }
 
     cursorCount: root._cursorEntries.length
-    // Left/Right belongs to the adaptive track under the cursor, not to the
-    // list: a single column already walks with Up/Down.
+    // Left/Right belongs to whatever the cursor sits on, a group's buttons
+    // or the adaptive track, not to the list: a single column already walks
+    // with Up/Down.
     cursorStepsHorizontally: true
 
     onCursorIndexChanged: root._cursorKey = root._keyAt(root.cursorIndex)
@@ -132,21 +174,22 @@ Panel {
         var entry = root._entryAt(index);
         if (!entry)
             return;
-        if (entry.kind === "mode")
-            AirpodsService.send(entry.mode.verb);
+        if (entry.kind === "group")
+            root._groupFor(entry.key).activate();
         else if (entry.kind === "ca")
             root._toggleCa();
         else if (entry.kind === "onebud")
             root._toggleOneBud();
-        else if (entry.kind === "ear")
-            root._cycleEar();
     }
 
     onCursorStepped: (index, direction) => {
         var entry = root._entryAt(index);
-        if (!entry || entry.kind !== "adaptive")
+        if (!entry)
             return;
-        root._setAdaptive(root._status.adaptiveNoiseLevel + direction * 5);
+        if (entry.kind === "group")
+            root._groupFor(entry.key).step(direction);
+        else if (entry.kind === "adaptive")
+            root._setAdaptive(root._status.adaptiveNoiseLevel + direction * 5);
     }
 
     onIsOpenChanged: {
@@ -154,6 +197,10 @@ Panel {
             root.cursorIndex = 0;
             root.cursorSection = 0;
             root._cursorKey = root._keyAt(0);
+            // Each ring starts on what is already selected, so the
+            // reveal-only first keypress shows it where the eye is.
+            modeGroup.cursorIndex = Math.max(0, root._activeModeIndex);
+            earGroup.cursorIndex = Math.max(0, root._status.earDetection);
             AirpodsService.acquire();
         } else {
             root._cursorKey = "";
@@ -266,51 +313,6 @@ Panel {
         }
     }
 
-    Component {
-        id: modeRow
-
-        Cell {
-            id: modeCell
-            required property var modelData
-            readonly property string _key: "mode:" + modeCell.modelData.key
-            width: parent.width
-            selected: modeCell.modelData.active
-            cursor: root.cursorActive && root._cursorKey === modeCell._key
-            interactive: true
-            onContainsPointerChanged: if (modeCell.containsPointer) root._pointAt(modeCell._key)
-            onClicked: AirpodsService.send(modeCell.modelData.verb)
-
-            Item {
-                width: parent.width
-                height: modeLabel.implicitHeight
-
-                Text {
-                    id: modeLabel
-                    anchors.left: parent.left
-                    anchors.right: modeCheck.left
-                    anchors.rightMargin: Theme.space.iconGap
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: modeCell.modelData.label
-                    color: modeCell.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.body
-                    font.weight: Theme.weight.medium
-                    elide: Text.ElideRight
-                }
-
-                Icon {
-                    id: modeCheck
-                    name: "check"
-                    size: Theme.fontSize.body
-                    visible: modeCell.selected
-                    color: Theme.color.primary
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-        }
-    }
-
     Column {
         width: parent.width
         visible: root._controlsVisible
@@ -318,9 +320,19 @@ Panel {
 
         SectionLabel { text: "LISTENING MODE" }
 
-        Repeater {
-            model: root._controlsVisible ? root._modes : []
-            delegate: modeRow
+        ButtonGroup {
+            id: modeGroup
+            width: parent.width
+            options: root._modeOptions
+            index: root._activeModeIndex
+            cursor: root.cursorActive && root._cursorKey === "modes"
+            onChanged: index => root._pressGroup(modeGroup, index)
+            onHovered: (index, isHovered) => {
+                if (!isHovered)
+                    return;
+                root._pointAt("modes");
+                modeGroup.cursorIndex = index;
+            }
         }
 
         // The adaptive level belongs to the Adaptive mode above it, so it
@@ -393,14 +405,13 @@ Panel {
 
     Column {
         width: parent.width
-        visible: root._heroVisible
+        visible: root._togglesVisible
         spacing: Theme.space.rowGap
 
         SectionLabel { text: "OPTIONS" }
 
         Cell {
             id: caCell
-            visible: root._togglesVisible
             width: parent.width
             cursor: root.cursorActive && root._cursorKey === "ca"
             interactive: true
@@ -455,7 +466,6 @@ Panel {
 
         Cell {
             id: oneBudCell
-            visible: root._togglesVisible
             width: parent.width
             cursor: root.cursorActive && root._cursorKey === "onebud"
             interactive: true
@@ -503,45 +513,27 @@ Panel {
                 }
             }
         }
+    }
 
-        Cell {
-            id: earCell
-            visible: root._heroVisible
+    Column {
+        width: parent.width
+        visible: root._heroVisible
+        spacing: Theme.space.rowGap
+
+        SectionLabel { text: "EAR DETECTION" }
+
+        ButtonGroup {
+            id: earGroup
             width: parent.width
+            options: root._earOptions
+            index: root._status.earDetection
             cursor: root.cursorActive && root._cursorKey === "ear"
-            interactive: true
-            onContainsPointerChanged: if (earCell.containsPointer) root._pointAt("ear")
-            onClicked: root._cycleEar()
-
-            Item {
-                width: parent.width
-                height: Math.max(earLabel.implicitHeight, earValue.implicitHeight)
-
-                SectionLabel {
-                    id: earLabel
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "EAR DETECTION"
-                }
-
-                // Bounded on both sides, not just right-anchored: the
-                // longest earDetectionLabel() string does not fit beside
-                // the label at this width, and a right-aligned Text wider
-                // than its own box overflows left, back over the label.
-                Text {
-                    id: earValue
-                    anchors.left: earLabel.right
-                    anchors.leftMargin: Theme.space.iconGap
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    horizontalAlignment: Text.AlignRight
-                    text: AirpodsModel.earDetectionLabel(root._status.earDetection)
-                    color: earCell.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.body
-                    font.weight: Theme.weight.medium
-                    elide: Text.ElideRight
-                }
+            onChanged: index => root._pressGroup(earGroup, index)
+            onHovered: (index, isHovered) => {
+                if (!isHovered)
+                    return;
+                root._pointAt("ear");
+                earGroup.cursorIndex = index;
             }
         }
     }

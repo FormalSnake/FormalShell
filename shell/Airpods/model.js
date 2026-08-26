@@ -27,7 +27,7 @@ var NoiseMode = {
 
 var _NOISE_MODE_TITLE = {
     0: "Off",
-    1: "Noise Cancellation",
+    1: "ANC",
     2: "Transparency",
     3: "Adaptive"
 };

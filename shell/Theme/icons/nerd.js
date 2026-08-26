@@ -163,7 +163,16 @@ var ICONS = {
     "bot": "\u{F16A3}",              // md-robot_excited
     "fingerprint": "\u{F0237}",
     "circle-dot": "\u{F0EC2}",       // md-record_circle
-    "app-window": "\u{F05AF}"        // md-window_maximize
+    "app-window": "\u{F05AF}",       // md-window_maximize
+
+    // M49: the AirPods listening modes. MDI has no dedicated
+    // transparency glyph, so the plain hearing ear stands for it and
+    // the struck-through one for noise cancellation, which is the
+    // pairing lucide draws with ear/ear-off.
+    "circle-off": "\u{F073A}",       // md-cancel
+    "ear": "\u{F07C5}",              // md-ear_hearing
+    "ear-off": "\u{F0A45}",          // md-ear_hearing_off
+    "audio-waveform": "\u{F147D}"    // md-waveform
 };
 
 var FAMILY = "";
