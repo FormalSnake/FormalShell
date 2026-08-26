@@ -241,28 +241,40 @@ Panel {
                             text: "SEPARATOR"
                         }
 
-                        Separator {
-                            width: parent.width
-                        }
+                        // Each variant is its own caption over its own rule
+                        // at `rowGap`, with `sectionGap` between the three.
+                        // A rule sitting equidistant between two captions
+                        // reads as belonging to neither, which is the same
+                        // ambiguity the ladder's own "never directly under a
+                        // SectionLabel" clause is about.
+                        Repeater {
+                            model: [
+                                { name: "FULL BLEED", inset: 0, vertical: false },
+                                { name: "INSET", inset: Theme.space.controlPaddingX, vertical: false },
+                                { name: "VERTICAL", inset: 0, vertical: true }
+                            ]
 
-                        SectionLabel {
-                            leftPadding: Theme.space.controlPaddingX
-                            text: "INSET"
-                        }
+                            delegate: Column {
+                                id: sepSpec
+                                required property var modelData
 
-                        Separator {
-                            width: parent.width
-                            inset: Theme.space.controlPaddingX
-                        }
+                                width: parent.width
+                                topPadding: sepSpec.modelData.name === "FULL BLEED" ? 0 : Theme.space.sectionGap - Theme.space.rowGap
+                                spacing: Theme.space.rowGap
 
-                        SectionLabel {
-                            leftPadding: Theme.space.controlPaddingX
-                            text: "VERTICAL"
-                        }
+                                SectionLabel {
+                                    leftPadding: Theme.space.controlPaddingX
+                                    text: sepSpec.modelData.name
+                                }
 
-                        Separator {
-                            vertical: true
-                            height: Theme.space.controlHeight
+                                Separator {
+                                    width: sepSpec.modelData.vertical ? undefined : sepSpec.width
+                                    height: sepSpec.modelData.vertical ? Theme.space.controlHeight : undefined
+                                    vertical: sepSpec.modelData.vertical
+                                    inset: sepSpec.modelData.inset
+                                    x: sepSpec.modelData.vertical ? Theme.space.controlPaddingX : 0
+                                }
+                            }
                         }
                     }
 
