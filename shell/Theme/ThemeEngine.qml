@@ -9,6 +9,7 @@ import QtQuick
 // undefined at runtime instead of hitting the qs.Core singleton (verified
 // with a throwaway probe script). Core.State disambiguates it.
 import qs.Core as Core
+import "chrome.js" as Chrome
 import "matugen.js" as Matugen
 import "palette.js" as Palette
 
@@ -94,6 +95,8 @@ Singleton {
     readonly property string _hyprColorsPath: root._configDir + "/hypr/formalshell-colors.conf"
     readonly property string _hyprColorsLuaTmp: root.stateDir + "/formalshell-colors.lua.tmp"
     readonly property string _hyprColorsLuaPath: root._configDir + "/hypr/formalshell-colors.lua"
+    readonly property string _hyprChromePath: root._configDir + "/hypr/formalshell-chrome.conf"
+    readonly property string _hyprChromeLuaPath: root._configDir + "/hypr/formalshell-chrome.lua"
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
 
     property bool running: false
@@ -159,6 +162,31 @@ Singleton {
             root._publishFile(root._hyprColorsLuaPath, Matugen.hyprlandColorsLua(palette), luaCode => {
                 if (luaCode !== 0)
                     console.warn("ThemeEngine: failed to write fallback formalshell-colors.lua, code", luaCode);
+                onDone();
+            });
+        });
+    }
+
+    // The rounding and blur twin of _publishHyprColors, and the reason it sits
+    // outside the matugen pipeline: both values come from settings.json, which
+    // no matugen template can read, and neither has anything to do with the
+    // wallpaper. Runs on startup as well as on change so a hyprland config
+    // reading $rounding/$blur finds them from the shell's first run, the same
+    // guarantee the colours file gives. Deliberately clear of running/pending:
+    // _publishFile is atomic per file, so two overlapping writes of the same
+    // content cannot tear, and queueing them behind a matugen run would only
+    // delay a value that is already known.
+    function _publishHyprChrome(onDone) {
+        var chrome = {
+            rounding: Core.Theme.radius,
+            blur: Core.Theme.blurBehind
+        };
+        root._publishFile(root._hyprChromePath, Chrome.hyprlandChrome(chrome), confCode => {
+            if (confCode !== 0)
+                console.warn("ThemeEngine: failed to write formalshell-chrome.conf, code", confCode);
+            root._publishFile(root._hyprChromeLuaPath, Chrome.hyprlandChromeLua(chrome), luaCode => {
+                if (luaCode !== 0)
+                    console.warn("ThemeEngine: failed to write formalshell-chrome.lua, code", luaCode);
                 onDone();
             });
         });
@@ -348,12 +376,20 @@ Singleton {
         id: themeProbe
         path: root._themeJsonPath
 
-        onLoaded: root.themeJsonPresent = true
+        onLoaded: {
+            root.themeJsonPresent = true;
+            root._publishHyprChrome(function () {
+                root._reloadHyprland();
+            });
+        }
         onLoadFailed: error => {
             if (error === FileViewError.FileNotFound) {
                 root.themeJsonPresent = false;
                 root.retheme();
             }
+            root._publishHyprChrome(function () {
+                root._reloadHyprland();
+            });
         }
     }
 
@@ -361,5 +397,22 @@ Singleton {
         target: Core.State
         function onWallpaperChanged() { root.retheme(); }
         function onModeChanged() { root.retheme(); }
+    }
+
+    // A live settings.json edit moves these two without any wallpaper or mode
+    // change behind it, so the chrome file has its own trigger rather than
+    // riding the retheme one.
+    Connections {
+        target: Core.Theme
+        function onRadiusChanged() {
+            root._publishHyprChrome(function () {
+                root._reloadHyprland();
+            });
+        }
+        function onBlurBehindChanged() {
+            root._publishHyprChrome(function () {
+                root._reloadHyprland();
+            });
+        }
     }
 }
