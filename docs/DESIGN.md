@@ -84,10 +84,12 @@ being one (`Cell { chip: true }`) hugs its label. A `SectionLabel` sits
 above it and `rowGap` above its rows, and the rows inside a section are
 `rowGap` apart. An icon and the label beside it are `iconGap` apart. A
 header row is `controlHeight` tall and takes the same horizontal padding as
-the rows under it: none of its own where those rows draw their own border
-(a panel), `controlPaddingX` where they do not, which is why the launcher's
-input row and footer line up with its row labels rather than with the card
-edge. A floating surface sits `screenPadding` off the screen edge it hangs
+the rows under it: none of its own where those rows draw their own border,
+`controlPaddingX` where they do not, which is why the launcher's input row
+and footer line up with its row labels rather than with the card edge. A
+`SectionLabel` follows the same rule against the rows it heads, so a section
+of flat rows takes `controlPaddingX` and a section of bordered rows takes
+none. A floating surface sits `screenPadding` off the screen edge it hangs
 from and `barMargin` off the bar or the item it is anchored to, and is no
 taller than the screen minus the bar and those two paddings: past that its
 content scrolls (`WheelScroll`) rather than the surface running off the
@@ -172,14 +174,25 @@ a primitive owns; `dev/check-primitives.py` fails the build unless that
 Rectangle carries a `// primitive-exempt:` comment saying what no primitive
 covers (an indicator dot, a colour swatch, a QR module).
 
-**Panel.** Header, then sections. A section is a `SectionLabel` and a column
-of `Cell` rows `rowGap` apart. A hero (the connected AP, the active sink) is
-an inner `Card` with `radiusMd`. Footer: `outline` Button left, `display`
+**Panel.** Header, then sections. A panel is ONE card. A section is a
+`SectionLabel` and a column of `Cell` rows `rowGap` apart, and what those
+rows draw at rest depends on whether they do anything (owner, 2026-08-26,
+"there's a too big usage of cards everywhere"): a row that clicks, holds the
+cursor or carries a state keeps its `radiusMd` fill and border, because that
+is what makes a control read as a control; a block that only reports a
+number, and an empty state that only says `NO DEVICES`, is `Cell { ghost:
+true }` or no `Cell` at all. Every state still draws on a ghost, so nothing
+is lost but the resting box. A hero (the connected AP, the active sink) is
+an inner `Card` with `radiusMd`, and it keeps it precisely because the
+blocks around it no longer have one: the border is what says this block
+outranks the rest. Footer: `outline` Button left, `display`
 number right. Width `Default`; `Wide` for media, monitor, calendar. Nothing
 in a panel scrolls except a row list longer than the screen.
 
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
-with a bottom rule only; breadcrumb chips; rows with the cursor row in
+with a bottom rule only; a shadcn Breadcrumb under it (ancestors in
+`mutedForeground`, the level in `foreground`, a `chevron-right` between,
+no fill and no frame); rows with the cursor row in
 `accent`; hint footer in `caption` `mutedForeground`. Modal over a 0.5 black
 scrim.
 

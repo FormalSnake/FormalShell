@@ -30,10 +30,13 @@ import "palette.js" as Palette
 // the current mode, so `theme mode toggle` recolors every consumer live
 // through the exact same theme.json write a matugen run uses (M13b Task 3;
 // before that the fallback was static dark and toggling without a wallpaper
-// visibly did nothing). A wallpaper whose path carries "flexoki" takes the
-// same static route with palette.flexoki(State.mode): its pixels never seed
-// a scheme, Flexoki's own tones stand in (the near-black field of an ASCII
-// wallpaper otherwise seeds a lavender scheme off the hue of its noise).
+// visibly did nothing). A wallpaper whose path carries "flexoki" still runs
+// matugen, but as `color hex` seeded with Flexoki blue rather than `image`,
+// so the user's own templates rerender onto a scheme in Flexoki's hue (the
+// near-black field of an ASCII wallpaper otherwise seeds a lavender scheme
+// off the hue of its noise); the shell's own outputs of that run are
+// discarded and theme.json plus both Hyprland palettes take
+// palette.flexoki(State.mode) through the static write instead.
 // theme.json's own FileView drives the "run once if
 // absent" startup behavior declaratively; State.mode defaults to dark, so
 // the seeded first-boot theme.json stays the dark variant.
@@ -105,6 +108,10 @@ Singleton {
 
     property bool running: false
     property bool pending: false
+    // Captured when the run's matugen command is built, not re-read at exit:
+    // a wallpaper flip mid-run must not send this run's outputs down the
+    // other publish path (the pending rerun covers the new wallpaper).
+    property bool _pinnedRun: false
 
     // Existence check for ThemeIpc's status(), tracked by hand rather than
     // via FileView.loaded + watchChanges: QFileSystemWatcher silently fails
@@ -259,25 +266,29 @@ Singleton {
         proc.running = true;
     }
 
+    // The static write the no-wallpaper zinc path and a Flexoki pin both end
+    // on: theme.json straight from the palette object, then both Hyprland
+    // colours files, then one reload.
+    function _publishStatic(palette) {
+        root._writeFile(root._themeJsonPath, JSON.stringify(palette, null, 2), exitCode => {
+            if (exitCode !== 0)
+                console.warn("ThemeEngine: failed to write static theme.json, code", exitCode);
+            else
+                root.themeJsonPresent = true;
+            // A hyprland config reading either colours file must find it
+            // whether or not a wallpaper was ever set, so the static
+            // palette renders the same variables matugen would.
+            root._publishHyprColors(palette, function () {
+                root._reloadHyprland();
+                root._finish();
+            });
+        });
+    }
+
     function _start() {
         root._syncSystemScheme();
-        var pinned = Core.State.wallpaper === "" ? Palette.fallback(Core.State.mode)
-            : Palette.pinsFlexoki(Core.State.wallpaper) ? Palette.flexoki(Core.State.mode)
-            : null;
-        if (pinned) {
-            root._writeFile(root._themeJsonPath, JSON.stringify(pinned, null, 2), exitCode => {
-                if (exitCode !== 0)
-                    console.warn("ThemeEngine: failed to write static theme.json, code", exitCode);
-                else
-                    root.themeJsonPresent = true;
-                // A hyprland config reading either colours file must find it
-                // whether or not a wallpaper was ever set, so the static
-                // palette renders the same variables matugen would.
-                root._publishHyprColors(pinned, function () {
-                    root._reloadHyprland();
-                    root._finish();
-                });
-            });
+        if (Core.State.wallpaper === "") {
+            root._publishStatic(Palette.fallback(Core.State.mode));
             return;
         }
         readConfigsProc.command = ["sh", "-c",
@@ -305,6 +316,18 @@ Singleton {
                     if (exitCode !== 0) {
                         console.warn("ThemeEngine: failed to write matugen-merged.toml, code", exitCode);
                         root._finish();
+                        return;
+                    }
+                    root._pinnedRun = Palette.pinsFlexoki(Core.State.wallpaper);
+                    if (root._pinnedRun) {
+                        // Seeded with Flexoki blue instead of the image: the
+                        // user's own templates rerender onto a scheme in
+                        // Flexoki's hue, and the run's outputs of the shell's
+                        // own templates are dropped on exit for the real
+                        // palette. No probe, the source is already known.
+                        matugenProc.command = ["matugen", "color", "hex", Palette.FLEXOKI_SOURCE,
+                            "-m", Core.State.mode, "-c", root._mergedConfigPath];
+                        matugenProc.running = true;
                         return;
                     }
                     // Extraction only: --dry-run writes no template and runs
@@ -345,6 +368,17 @@ Singleton {
             if (exitCode !== 0) {
                 console.warn("ThemeEngine: matugen exited with code", exitCode);
                 root._finish();
+                return;
+            }
+            if (root._pinnedRun) {
+                var discard = writeFileProcComponent.createObject(root, {
+                    _onDone: function () {
+                        root._publishStatic(Palette.flexoki(Core.State.mode));
+                    }
+                });
+                discard.command = ["rm", "-f", root.stateDir + "/theme.json.tmp",
+                    root._hyprColorsTmp, root._hyprColorsLuaTmp];
+                discard.running = true;
                 return;
             }
             // One mkdir covers both Hyprland paths, they share a directory.

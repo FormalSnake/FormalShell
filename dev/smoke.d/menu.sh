@@ -59,6 +59,10 @@ sleep 2
 "$grim_bin" "$menu_emoji_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_emoji_path" 2>&1
 sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon system.plugins > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$menu_root_path" > /dev/null 2>&1
+sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
 

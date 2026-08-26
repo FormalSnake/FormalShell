@@ -76,6 +76,12 @@ function pinsFlexoki(wallpaperPath) {
     return typeof wallpaperPath === "string" && /flexoki/i.test(wallpaperPath);
 }
 
+// What a pinned run hands `matugen color hex` in place of the image, so the
+// user's own templates land in Flexoki's hue: blue-400, the dark primary
+// below. The light primary is the same hue toned down, so one source serves
+// both modes and the hue family never flips on a mode toggle.
+var FLEXOKI_SOURCE = "4385BE";
+
 function flexoki(mode) {
     if (mode === "light") {
         return {

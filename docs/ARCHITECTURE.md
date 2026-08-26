@@ -501,7 +501,8 @@ Theme.ThemeEngine (running/pending queue; a retheme() mid-run just sets pending)
   |  Theme.matugen.js#buildConfig() -> matugen-merged.toml (spec merge order)
   |  Process: matugen image <wallpaper> -m <mode> -c matugen-merged.toml --prefer darkness|lightness
   |    (no wallpaper set: skip matugen, write Theme.palette.js#fallback() as theme.json directly;
-  |     path contains `flexoki`: the same static write with Theme.palette.js#flexoki())
+  |     path contains `flexoki`: `matugen color hex 4385BE` for the user's templates, then
+  |     the same static write with Theme.palette.js#flexoki() for the shell's own outputs)
   v
 matugen renders templates/theme.json.tmpl + templates/hyprland-colors.conf.tmpl
   -> <state-dir>/{theme.json,formalshell-colors.conf}.tmp

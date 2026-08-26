@@ -453,11 +453,12 @@ palette instead, in the variant matching the current mode, so
 matugen run uses.
 
 A wallpaper whose path contains `flexoki` (any case, so
-`Moraine_Lake-flexoki.webp` or a `flexoki/` directory) takes the same static
-route with the bundled Flexoki palette in the current mode; rename a file to
-opt it in. Only `theme.json` and the Hyprland colours files are written for a
-pinned wallpaper: your own matugen templates keep the last matugen run's
-output.
+`Moraine_Lake-flexoki.webp` or a `flexoki/` directory) pins the bundled
+Flexoki palette in the current mode; rename a file to opt it in. The shell,
+`theme.json` and the Hyprland colours files get Flexoki itself. matugen still
+runs for such a wallpaper, as `matugen color hex 4385BE` (Flexoki blue)
+instead of `matugen image`, so your own templates rerender onto a Material
+scheme in Flexoki's hue rather than the true Flexoki tones.
 
 ```sh
 fs wallpaper set /path/to/image.jpg

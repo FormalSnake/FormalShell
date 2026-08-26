@@ -24,7 +24,7 @@ import "../../Compositor/appmatch.js" as AppMatch
 // Launcher): a single keyboard-exclusive top-layer window covering the
 // focused output, carrying a plain black scrim with the card sitting at 30%
 // of the output height on top of it. Top of the card is the input row (a
-// search icon, the field, a rule under it), then the breadcrumb chips, then
+// search icon, the field, a rule under it), then the breadcrumb, then
 // rows that are either search.rank() matches (query non-empty) or
 // model.visibleChildren() of the current level (query empty), then the
 // footer hint line. Whole-tree search, cursor wraps,
@@ -358,26 +358,17 @@ PanelWindow {
     // wallpaper-mode open and resets both.
     property bool _pickerRequestPending: false
 
-    // Quickshell has no directory-listing QML type (same rationale as
-    // CalendarEventsService's own `find`-backed read), re-scanned on every
-    // entry into the route, so a directory edited between opens is picked up.
-    // Both variant subdirectories are named as starting points alongside the
-    // directory itself: `find` reports a missing one on stderr (swallowed)
-    // and carries on with the rest, so one invocation covers every layout,
-    // and `-maxdepth 1` per starting point is what keeps an unrelated
-    // subdirectory of wallpapers out of the listing. `sort -u` because a
-    // case-insensitive filesystem answers both `Dark` and `dark` with the
-    // same directory.
+    // Re-scanned on every entry into the route, so a directory edited
+    // between opens is picked up. The command itself is
+    // Providers.pickerScanCommand: ThumbnailService runs the identical scan
+    // at startup to prerender the grid's thumbnails, and the two must never
+    // disagree about what the listing is.
     function _scanPickerDir() {
         if (root._pickerDir === "") {
             root._pickerScanned = [];
             return;
         }
-        pickerScanProc.command = ["sh", "-c",
-            'find "$1" "$1/Dark" "$1/dark" "$1/Light" "$1/light" -maxdepth 1 -type f'
-            + ' \\( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.bmp" \\)'
-            + ' 2>/dev/null | sort -u',
-            "sh", root._pickerDir];
+        pickerScanProc.command = Providers.pickerScanCommand(root._pickerDir);
         pickerScanProc.running = true;
     }
 
@@ -388,6 +379,13 @@ PanelWindow {
             onStreamFinished: root._pickerScanned = text.split("\n").filter(function (l) { return l.length > 0; })
         }
     }
+
+    // Whatever the scan just found gets a thumbnail built for it if it has
+    // none yet: the startup warm covers the configured picker directory, and
+    // this covers a wallpaper added since as well as every directory
+    // `picker select` is pointed at. Already-cached paths cost the warm a
+    // `test` apiece, so re-warming on every entry is close to free.
+    on_PickerScannedChanged: ThumbnailService.warm(root._pickerScanned)
 
     function _enterPickerRoute() {
         if (!root._pickerRequestPending) {
@@ -406,8 +404,9 @@ PanelWindow {
 
     // Dropping the listing destroys every decoded thumbnail with the grid
     // delegates that held them, the whole point of the old panel's close()
-    // override (M16 Task 12), kept. Re-entering re-scans and re-decodes,
-    // which is cheap; the decodes were the cost.
+    // override (M16 Task 12), kept. Re-entering re-scans and re-decodes off
+    // ThumbnailService's 512px cache rather than off the wallpapers
+    // themselves, which is what makes re-entry cheap at all.
     function _leavePickerRoute() {
         root._abandonPendingPicker();
         root._pickerScanned = [];
@@ -480,6 +479,11 @@ PanelWindow {
             count: root._pickerImages.length,
             variant: root._pickerHasVariants ? root._pickerVariant : "none",
             hasVariants: root._pickerHasVariants,
+            // Prerendered thumbnails backing the listing on screen. Cold on
+            // a first run and equal to `count` once the warm has caught up;
+            // the only way the rig can see the cache at all, since a warm
+            // and a fallback draw the same picture.
+            cachedThumbnails: ThumbnailService.cachedCount(root._pickerImages),
             darkCount: root._pickerVariants.dark.length,
             lightCount: root._pickerVariants.light.length,
             cursor: root._cursorIndex
@@ -798,8 +802,8 @@ PanelWindow {
         discreteGpu: GpuService.defaultDiscrete() !== null
     })
 
-    // The path from the root to the current level, one chip per part
-    // (M43 D2). Empty at the root, where the chip row is hidden outright:
+    // The path from the root to the current level, one label per part
+    // (M43 D2). Empty at the root, where the line is hidden outright:
     // the search field is already the whole surface there. The select and
     // input modes have no tree level, so they name themselves instead and
     // hand their prompt to the field's placeholder (D5).
@@ -870,17 +874,30 @@ PanelWindow {
     // the same gutter in their own margins.
     readonly property real _listInset: Core.Theme.space.xs
     readonly property real _headerInset: Core.Theme.space.controlPaddingX + root._listInset
+    // What one breadcrumb label may take of the header line: an equal share
+    // of it, minus the chevron and the two gaps every crumb past the first
+    // costs. A share is a ceiling, not a width, so the ordinary short path
+    // is never elided at all; a deep or long one gives up the middle of each
+    // label rather than running off the card.
+    readonly property real _crumbMaxWidth: {
+        var crumbs = root.breadcrumb.length;
+        if (crumbs < 1)
+            return 0;
+        var separators = (crumbs - 1) * (Core.Theme.fontSize.bodySmall + Core.Theme.space.md * 2);
+        return Math.max(0, (root._contentWidth - root._headerInset * 2 - separators) / crumbs);
+    }
     readonly property real _listWidth: (root._isSplitRoute
         ? Math.round(root._contentWidth / 2)
         : root._contentWidth) - root._listInset * 2
     readonly property real _chrome: Core.Theme.space.panelPadding * 2
     // Everything above the view: the input row, the rule under it, and the
-    // two optional bands (the breadcrumb chips, the picker's variant
-    // switcher), each with the `rowGap` that precedes it when it is there
-    // at all.
+    // two optional bands (the breadcrumb, the picker's variant switcher),
+    // each with the gap that precedes it when it is there at all. `lg`
+    // rather than `rowGap` on both, and both have to match the margins the
+    // bands themselves declare or the card grows or loses a gutter.
     readonly property real _headerHeight: searchRow.height + searchRule.height
-        + (breadcrumbRow.height > 0 ? Core.Theme.space.rowGap + breadcrumbRow.height : 0)
-        + (variantRow.height > 0 ? Core.Theme.space.rowGap + variantRow.height : 0)
+        + (breadcrumbRow.height > 0 ? Core.Theme.space.lg + breadcrumbRow.height : 0)
+        + (variantRow.height > 0 ? Core.Theme.space.lg + variantRow.height : 0)
     // Whichever view owns the level: the grid on the wallpaper route, the
     // loaded component on an app-view route, the row list everywhere else.
     // The idle ones are emptied or unloaded rather than merely hidden (see
@@ -1969,35 +1986,70 @@ PanelWindow {
             color: Core.Theme.color.border
         }
 
-        // The breadcrumb (spec "Launcher"): one chip per level below the
-        // root, hidden outright at the root, where the field is already the
-        // whole surface. The chips state the path; they are not a control,
-        // so nothing in the row answers a click.
+        // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text
+        // line naming the path down to the level, hidden outright at the
+        // root, where the field is already the whole surface. It states
+        // where the level sits; it is not a control, so nothing in it
+        // answers a click. `_headerInset` puts the first label in the same
+        // column as the search icon above it and the row icons below it,
+        // which a chip could not do: its own `controlPaddingX` pushed the
+        // text a further 12px in and left it floating off every edge on the
+        // surface (owner, live shell, 2026-08-26).
+        //
+        // The gap above is wider than the `rowGap` between two filled bands
+        // because what precedes it is a hairline rule, which bare text lands
+        // on at `rowGap`.
         Row {
             id: breadcrumbRow
             anchors.top: searchRule.bottom
-            anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.rowGap : 0
+            anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.lg : 0
             anchors.left: parent.left
             anchors.leftMargin: root._headerInset
-            spacing: Core.Theme.space.xs
+            spacing: Core.Theme.space.md
             visible: root._breadcrumbVisible
             height: root._breadcrumbVisible ? implicitHeight : 0
 
             Repeater {
                 model: root.breadcrumb
 
-                delegate: Cell {
+                // Separator then label, so the outer row's spacing lands on
+                // both sides of the chevron and the whole path reads at one
+                // rhythm. The first crumb's separator is not merely blank:
+                // a Row skips an invisible child's spacing too.
+                delegate: Row {
                     id: crumb
                     required property string modelData
+                    required property int index
 
-                    radius: Core.Theme.radiusSm
-                    selected: true
+                    spacing: Core.Theme.space.md
+                    height: crumbLabel.implicitHeight
+
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: crumb.index > 0
+                        name: "chevron-right"
+                        size: Core.Theme.fontSize.bodySmall
+                        color: Core.Theme.color.mutedForeground
+                    }
 
                     Text {
+                        id: crumbLabel
                         text: crumb.modelData
-                        color: crumb.foreground
+                        // The level is the page and everything above it is
+                        // the path to it (shadcn's BreadcrumbPage against
+                        // BreadcrumbLink). Colour is the whole difference:
+                        // neither one is bolder than the other.
+                        color: crumb.index === root.breadcrumb.length - 1
+                            ? Core.Theme.color.foreground
+                            : Core.Theme.color.mutedForeground
                         font.family: Core.Theme.fontFamilySans
-                        font.pixelSize: Core.Theme.fontSize.caption
+                        font.pixelSize: Core.Theme.fontSize.bodySmall
+                        // Elided in the middle rather than at the tail: a
+                        // level's head and tail are what tell two of them
+                        // apart, and the path has to stay on one line at any
+                        // depth.
+                        elide: Text.ElideMiddle
+                        width: Math.min(implicitWidth, root._crumbMaxWidth)
                     }
                 }
             }
@@ -2010,11 +2062,13 @@ PanelWindow {
         //
         // Both views below anchor to this rather than to the header, so the
         // switcher pushes the grid down without either of them knowing
-        // whether it is there.
+        // whether it is there. It takes the same gap the breadcrumb takes
+        // above it: at `rowGap` a 32px trough sitting that close to a bare
+        // text line reads as one block with it.
         Segmented {
             id: variantRow
             anchors.top: breadcrumbRow.bottom
-            anchors.topMargin: visible ? Core.Theme.space.rowGap : 0
+            anchors.topMargin: visible ? Core.Theme.space.lg : 0
             anchors.left: parent.left
             visible: root._isPickerRoute && root._pickerHasVariants
             height: visible ? implicitHeight : 0
@@ -2163,15 +2217,17 @@ PanelWindow {
                     // resolution into a ~130px cell, ~96MB of resident RGBA
                     // per thumbnail, times every file in the directory.
                     //
-                    // The 2x factor matters: sourceSize with both dimensions set
-                    // decodes to FIT INSIDE that box (Qt's KeepAspectRatio), not
-                    // to cover it, so a non-square source into this square cell
-                    // would decode short on one axis and PreserveAspectCrop
-                    // would upscale it back out, visibly blurrier than an
-                    // uncapped decode. A box 2x the cell's side keeps the
-                    // fit-inside decode covering the cell for any source up to
-                    // 2:1 either way, comfortably past 16:9, while still capping
-                    // memory to a small multiple of the cell.
+                    // The 2x factor matters on the fallback path: sourceSize with
+                    // both dimensions set decodes to FIT INSIDE that box (Qt's
+                    // KeepAspectRatio), not to cover it, so a non-square source
+                    // into this square cell would decode short on one axis and
+                    // PreserveAspectCrop would upscale it back out, visibly
+                    // blurrier than an uncapped decode. A box 2x the cell's side
+                    // keeps the fit-inside decode covering the cell for any
+                    // source up to 2:1 either way, comfortably past 16:9, while
+                    // still capping memory to a small multiple of the cell. A
+                    // cached thumbnail is already a square crop, so the same box
+                    // is simply generous for it.
                     // Sized off the GridView's own cell rather than off
                     // `imageCell`: a `Cell` measures its content to publish
                     // an implicit size, so a child measured back off the
@@ -2183,7 +2239,14 @@ PanelWindow {
                         anchors.centerIn: parent
                         width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
                         height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                        source: "file://" + imageSlot.modelData.path
+                        // ThumbnailService's prerendered square crop when
+                        // there is one, the wallpaper itself otherwise. The
+                        // fallback is not a degraded mode, it is exactly
+                        // what this cell did before the cache existed: a
+                        // cold cache, an install with no ffmpeg, and a
+                        // format ffmpeg cannot decode all land on it.
+                        readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path)
+                        source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
                         fillMode: Image.PreserveAspectCrop
                         // PreserveAspectCrop paints past its own bounds
                         // without this, over the cells beside it.

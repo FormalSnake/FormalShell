@@ -126,6 +126,9 @@ TestCase {
         compare(f.border, "#403e3c");
         compare(f.destructive, "#d14d41");
         compare(f.warning, "#da702c");
+        // The source a pinned matugen run is seeded with is the dark primary
+        // itself, so the user's templates and the shell agree on the hue.
+        compare("#" + P.FLEXOKI_SOURCE.toLowerCase(), f.primary);
     }
 
     function test_flexoki_light() {
