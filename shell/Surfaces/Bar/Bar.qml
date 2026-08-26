@@ -101,6 +101,17 @@ PanelWindow {
         left: bar._framed || bar._position !== "right"
         right: bar._framed || bar._position !== "left"
     }
+    // The reservation is this one property and never `exclusiveZone`:
+    // quickshell's setter for that property also writes exclusionMode back
+    // to Normal (WlrLayershell::setExclusiveZone), which kills the binding
+    // here, and the pair then freezes at whatever the first evaluation
+    // produced. A bar created before settings.json landed froze on the
+    // default strip's own zone and a bar created after it froze on 0, and a
+    // framed window with a zone of 0 is boxed by Frame.qml's zones instead
+    // of covering the output: the whole ring, strip included, drew one bar
+    // thickness in from the edge and off the far side (e1504g, 2026-08-26).
+    // Auto reserves the strip's thickness off the window's own implicit
+    // size, which is the same number the explicit zone used to carry.
     WlrLayershell.exclusionMode: bar._framed ? ExclusionMode.Ignore : ExclusionMode.Auto
     mask: bar._framed ? stripMask : null
 
@@ -146,7 +157,6 @@ PanelWindow {
     // edge; this only decides what is behind that fill's own alpha.
     color: "transparent"
 
-    exclusiveZone: bar._framed ? 0 : bar._strip.thickness
 
     // Every surface that has to clear the bar (panels, toasts, the center,
     // the console) reads this, through Theme.edgeInset: Wayland gives
