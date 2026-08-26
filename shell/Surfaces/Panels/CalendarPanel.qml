@@ -480,7 +480,9 @@ Panel {
                 anchors.rightMargin: Core.Theme.space.controlPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root._agendaNow || root._agendaNext !== null
-                text: root._agendaNow ? "NOW" : "NEXT " + Agenda.clockTime(root._agendaNext.start, root._twelveHour)
+                text: root._agendaNow
+                    ? "NOW"
+                    : root._agendaNext !== null ? "NEXT " + Agenda.clockTime(root._agendaNext.start, root._twelveHour) : ""
             }
         }
 
