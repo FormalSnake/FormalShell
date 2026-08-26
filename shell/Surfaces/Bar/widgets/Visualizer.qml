@@ -111,7 +111,10 @@ Cell {
                     id: track
                     width: root._trackWidth
                     height: root._trackHeight
-                    radius: Theme.radiusSm
+                    // Capped at half the width so the radius is a number the
+                    // fill's minimum height below can be derived from, rather
+                    // than whatever Qt clamps an oversized one to.
+                    radius: Math.min(Theme.radiusSm, width / 2)
                     color: Theme.color.muted
 
                     readonly property real _level: VisualizerService.levels[index] || 0
@@ -122,7 +125,12 @@ Cell {
                     Rectangle {
                         anchors.bottom: parent.bottom
                         width: parent.width
-                        height: parent.height * track._level
+                        // Never shorter than a full pair of rounded ends: a fill
+                        // below that squashes into a different shape at every
+                        // level, so a low level draws one whole dot instead.
+                        height: track._level > 0
+                            ? Math.max(parent.height * track._level, track.radius * 2)
+                            : 0
                         radius: track.radius
                         color: track._band === "accent"
                             ? Theme.color.primary
