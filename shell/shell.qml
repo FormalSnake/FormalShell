@@ -35,6 +35,24 @@ ShellRoot {
     // InstanceLock.qml's own header comment for the takeover protocol.
     InstanceLock {}
 
+    // Construction site for two singletons nothing else builds at startup.
+    // Quickshell builds a singleton on its first read, and every other read
+    // of these two sits behind the launcher's `isOpen` gate
+    // (Surfaces/Menu/Menu.qml's `_liveClipboardItems` and its
+    // `on_LiveClipboardItemsChanged`), so neither existed until the launcher
+    // had been summoned once. ClipboardService owns the two
+    // `wl-paste --watch` children, so a session recorded nothing it copied
+    // before that first summon; ThumbnailService counted its three-second
+    // boot warm from the summon rather than from startup, which is the
+    // opposite of the prerender it exists for. That first summon also paid
+    // for building both, and rebuilt the launcher tree a second time as
+    // clipboard.json landed behind it.
+    //
+    // This reads the singletons and none of their properties, so the
+    // launcher tree stays unsubscribed from their churn, which is what the
+    // gate is there for.
+    readonly property var _startupServices: [ClipboardService, ThumbnailService]
+
     Variants {
         model: Quickshell.screens
 

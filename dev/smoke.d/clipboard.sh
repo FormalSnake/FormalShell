@@ -3,10 +3,13 @@
 # --clipboard drives both directions: wl-copy seeds the ledger, wl-paste
 # reads the system clipboard back to prove what the shell put there.
 #
-# ClipboardService's wl-paste watcher can take several seconds to come
-# online in a fresh session, so a warmup copy is polled into the ledger
-# until capture provably works and then cleared, leaving the real fixture
-# sequence starting from the same empty state the count assertions expect.
+# The head is one copy, one settle, one read, and it is an assertion of its
+# own: the ledger has to hold something copied before anything had read it.
+# ClipboardService owns the two `wl-paste --watch` children and is built at
+# startup (shell.qml's `_startupServices`), not by its first reader. It is
+# cleared afterwards so the fixture sequence starts from the same empty
+# state the count assertions expect. Polling the ledger here instead would
+# construct the service itself and prove nothing.
 #
 # Two list dumps prove capture, newest-first order, and that re-copying an
 # existing entry moves it to the front rather than duplicating it. Then the
@@ -34,6 +37,7 @@ clip_activate_paste_path="$shot_dir/clipboard-activate-paste.txt"
 clip_image_fixture_path="$shot_dir/clip-image.png"
 clip_route_png="$shot_dir/clipboard-route.png"
 clip_thumb_cache_path="$shot_dir/clipboard-thumb-cache.txt"
+clip_warmup_path="$shot_dir/clipboard-warmup.json"
 
 leg_clipboard_fixture() {
   # The ledger's image entry: a small solid PNG copied last, so the route's
@@ -43,9 +47,9 @@ leg_clipboard_fixture() {
 }
 
 leg_clipboard_timing() {
-  # The warmup poll makes this leg's head elastic (up to 8s), and every
-  # frame after it stacks on top. The end state (the route summoned over the
-  # image entry) is stable, so a generous delay only ever lands on it.
+  # The head costs a fixed 4s and every frame after it stacks on top. The
+  # end state (the route summoned over the image entry) is stable, so a
+  # generous delay only ever lands on it.
   leg_timing 42 70
   # Sharing the launcher surface with --picker costs this leg the whole
   # picker timeline before its own route can be summoned.
@@ -59,13 +63,9 @@ leg_clipboard_drive() {
   fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-for _ in \$(seq 1 8); do
-  "$wl_copy_bin" "clipboard smoke warmup"
-  sleep 1
-  if "$qs_bin" ipc -p "$shell_path" call clipboard list 2>/dev/null | grep -qF warmup; then
-    break
-  fi
-done
+"$wl_copy_bin" "clipboard smoke warmup"
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_warmup_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call clipboard clear > /dev/null 2>&1
 sleep 1
 "$wl_copy_bin" "clipboard smoke one"
@@ -113,6 +113,13 @@ leg_clipboard_assert() {
       fail "no clipboard list produced at $f"
     fi
   done
+  # A copy made before anything read the ledger. It fails if the two
+  # `wl-paste --watch` children only start when something first reads
+  # ClipboardService, which is what the poll this replaced was papering over.
+  cat "$clip_warmup_path"; echo
+  if ! grep -qF 'clipboard smoke warmup' "$clip_warmup_path"; then
+    fail "a copy made before anything read the ledger was never captured: $(cat "$clip_warmup_path" 2>/dev/null)"
+  fi
   cat "$clip_list1_path"; echo
   cat "$clip_list2_path"; echo
   if ! grep -qF 'clipboard smoke three' "$clip_list1_path"; then
