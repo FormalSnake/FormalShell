@@ -544,14 +544,51 @@ what re-runs the config and picks the new colours up. That call only fires
 when `HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed
 `hyprctl` under niri.
 
-### Radius, icons and translucency
+### Presets
+
+`theme.preset` picks the table of defaults the keys in the next section
+fall back to. `shadcn` (the default) is the look documented here. `retro`
+is the shell's earlier language as a setting of this one: everything
+square, every word in the mono face, Nerd Font glyphs, opaque surfaces,
+no compositor blur, and dithered imagery. Any key you write explicitly
+wins over the preset, so `retro` with `"radius": 4` is the retro look on
+slightly rounded corners.
+
+| key | `shadcn` | `retro` |
+| --- | --- | --- |
+| `theme.radius` | 10 | 0 |
+| `theme.icons` | `lucide` | `nerd` |
+| `theme.fonts` | `pair` | `mono` |
+| `theme.surfaceOpacity` | 0.85 | 1 |
+| `theme.blur` | true | false |
+| `theme.dither` | false | true |
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "theme": { "preset": "retro" } }
+```
+
+```nix
+# home-manager
+programs.formalshell.settings.theme.preset = "retro";
+```
+
+The palette is untouched by the preset: matugen, `theme.json`, the pywal
+template and the Hyprland colours files all work the same way under
+either one.
+
+### Radius, icons, fonts and translucency
 
 `theme.radius` sets the corner radius root every surface derives its
-`sm`/`md`/`lg`/`xl` steps from (shadcn's own `--radius`, default 10).
+`sm`/`md`/`lg`/`xl` steps from (shadcn's own `--radius`, default 10). At
+0 every step is 0 and every pill shape (switches, workspace dots, badges)
+is square too.
 `theme.icons` picks which glyph set `Icon { name: "…" }` renders: `lucide`
 (the default, the bundled Lucide icon font) or `nerd` (the same mono font
 every other glyph in the shell already uses). A name missing from a set
 falls back to that set's own `circle-help`.
+`theme.fonts` is `pair` (sans for words, mono for values) or `mono` (the
+mono alias for both).
 
 `theme.surfaceOpacity` (0 to 1, default 0.85) is the alpha of the bar
 cells, the panels and the launcher card. The shell blurs nothing itself:
@@ -575,17 +612,55 @@ are what the design targets:
 
 ```jsonc
 // ~/.config/formalshell/settings.json
-{ "theme": { "radius": 10, "icons": "lucide", "surfaceOpacity": 0.85 } }
+{ "theme": { "radius": 10, "icons": "lucide", "fonts": "pair", "surfaceOpacity": 0.85 } }
 ```
 
 ```nix
 # home-manager
-programs.formalshell.settings.theme = { radius = 10; icons = "lucide"; surfaceOpacity = 0.85; };
+programs.formalshell.settings.theme = { radius = 10; icons = "lucide"; fonts = "pair"; surfaceOpacity = 0.85; };
 
 # NixOS
 fonts.packages = [ pkgs.geist-font ];
 fonts.fontconfig.defaultFonts.sansSerif = [ "Geist" ];
 fonts.fontconfig.defaultFonts.monospace = [ "Geist Mono" ];
+```
+
+### Hyprland rounding and blur
+
+The shell publishes `formalshell-chrome.conf` next to the colours file,
+carrying `$rounding` (the value of `theme.radius`) and `$blur`
+(`theme.blur`), rewritten whenever either changes. The example config
+sources it and reads both, so window corners and the blur behind the
+shell's surfaces follow the preset:
+
+```conf
+# ~/.config/hypr/hyprland.conf
+source = ~/.config/hypr/formalshell-chrome.conf
+
+decoration {
+    rounding = $rounding
+    blur {
+        enabled = $blur
+    }
+}
+```
+
+`formalshell-chrome.lua` is the same two values as a table for a
+`hyprland.lua`, published and reloaded the way the colours table is.
+
+### Dither
+
+`theme.dither` is the one texture switch: on, the launcher's app icons,
+the active-window icon, notification images and album art render through
+the limited-palette pass below, track grooves take a 1-bit checker, and
+`wallpaper.dither` and `lock.dither` default to on. Tray icons, the
+wallpaper picker and clipboard thumbnails stay true colour, since those
+exist to show a picture as it is. The `retro` preset turns it on; set it
+by hand under `shadcn` for the texture alone.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "theme": { "dither": true } }
 ```
 
 ### Wallpaper dither
@@ -604,8 +679,9 @@ times as many. The image is cover-cropped first with nearest-neighbor, so
 the scale never introduces a color the file didn't have.
 
 matugen reads the wallpaper file itself, never this rendering, so the dither
-can't influence the color scheme. It is off by default: the wallpaper draws
-as the file has it. Turn it on for the limited-palette look, and raise the
+can't influence the color scheme. It follows `theme.dither`, so it is off
+under `shadcn` and on under `retro`; `wallpaper.dither` overrides that for
+the wallpaper alone. Turn it on for the limited-palette look, and raise the
 palette for a subtler pass, since more colors means less of the image dithers
 at all:
 
@@ -620,7 +696,7 @@ programs.formalshell.settings.wallpaper = { dither = true; ditherColors = 12; };
 ```
 
 `lock.dither` is the same pass over the lock screen's own backdrop, with the
-same default.
+same default and its own override.
 
 ### Motion
 

@@ -134,6 +134,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   wf-recorder child, with the bar's recording cell mid-run.
 - `reminder.sh` `--reminder`: a real countdown firing inside the run and
   bypassing DND into the popup tier.
+- `retro.sh` `--retro`: pins `theme.preset` to `retro` in the settings
+  fixture and rides any other leg, so `--retro --gallery` is the sheet
+  square, mono and dithered.
 - `screensaver.sh` `--screensaver`: the live media guard, auto-activation off
   the idle timer alone, and the manual start/stop path.
 - `screensaver_gif.sh` `--screensaver-gif`: five ttfx effects recorded frame
