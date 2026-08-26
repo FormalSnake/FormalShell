@@ -59,11 +59,26 @@ leg_bar_position_drive() {
   local script="$shot_dir/bar-position-drive.sh"
   write_script "$script" <<EOS
 #!/usr/bin/env bash
-sleep 5
+# Waits for the shell to have read settings.json rather than sleeping a
+# fixed count at it. The bar maps as a default top strip and only moves to
+# bar.position once Config reaches Theme.barPosition, and the shell's own
+# first map lands somewhere either side of five seconds on this rig, so a
+# bare sleep read either an empty layer list or a top bar depending on how
+# loaded the host was, and the assert below called both a bar on the wrong
+# edge. A bar chevron status answering with the governed names is the
+# config having landed, which is the same edit that moves the strip; the
+# beat after it is the one frame the move takes.
+#
+# No backticks in here: this script is written through an unquoted heredoc,
+# so a quoted identifier in a comment runs as a command.
+for _ in \$(seq 1 40); do
+  "$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_collapsed_path" 2>&1
+  grep -q '"collapses":\[' "$bar_position_status_collapsed_path" && break
+  sleep 0.5
+done
+sleep 1
 "$hyprctl_bin" -j layers > "$bar_position_layers_path" 2>&1
 "$hyprctl_bin" -j monitors > "$bar_position_monitors_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_collapsed_path" 2>&1
-sleep 1
 "$grim_bin" "$bar_position_collapsed_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call bar chevron expand > "$bar_position_expand_reply_path" 2>&1
 sleep 2
@@ -115,11 +130,13 @@ leg_bar_position_assert() {
       ;;
   esac
   # The strip is one cell row plus its margin band, never a stretched
-  # window: 60 is well past the 40 the default scale resolves and well
+  # window: 68 is well past what the default scale resolves (40 on a
+  # horizontal bar, 56 on a vertical one, which stacks each cell's icon
+  # over its label instead of running the two along the strip) and well
   # short of anything a wrongly sized surface would report.
   local thickness=$bh
   case "$edge" in left|right) thickness=$bw ;; framed) thickness=0 ;; esac
-  if [ "$thickness" -gt 60 ]; then
+  if [ "$thickness" -gt 68 ]; then
     fail "bar strip is $thickness thick, which is not a cell row plus its margin band"
   fi
 
