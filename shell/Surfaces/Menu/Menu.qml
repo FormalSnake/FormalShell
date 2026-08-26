@@ -2400,7 +2400,12 @@ PanelWindow {
             visible: root._isSplitRoute
             anchors.top: rowsView.top
             anchors.left: rowsView.right
-            anchors.leftMargin: Core.Theme.space.sm
+            // `panelPadding`, not the `sm` the pane took while it was a card:
+            // the card's own border and inset used to do the separating, and
+            // 4px between a cursor row and the preview beside it reads as a
+            // collision once neither is drawn (better-layout's 2x rule, the
+            // rows inside the list being `rowGap` apart).
+            anchors.leftMargin: Core.Theme.space.panelPadding
             anchors.right: parent.right
             height: rowsView.height
 
