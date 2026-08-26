@@ -58,21 +58,38 @@ function templateBlock(name, inputPath, outputPath) {
         "output_path = '" + outputPath + "'\n";
 }
 
-// The no-wallpaper twin of hyprland-colors.conf.tmpl. matugen only runs
-// against an image, so the fallback palette has to render the same seven
-// variables itself: without this a hyprland.conf sourcing that path would
-// source a file that never appears until the first wallpaper is set. Keep the
-// name list and the header in step with the template.
+// The no-wallpaper twins of hyprland-colors.conf.tmpl and
+// hyprland-colors.lua.tmpl. matugen only runs against an image, so the
+// fallback palette has to render the same seven variables itself: without
+// this a hyprland.conf sourcing that path (or a hyprland.lua dofile-ing it)
+// would read a file that never appears until the first wallpaper is set. Keep
+// the name list and the headers in step with both templates.
 var HYPRLAND_VARS = ["primary", "primaryForeground", "background", "foreground",
     "border", "destructive", "warning"];
+
+function _hyprRgb(value) {
+    return "rgb(" + String(value).replace("#", "") + ")";
+}
 
 function hyprlandColors(palette) {
     var out = "# Rendered by matugen (ThemeEngine) into ~/.config/hypr/formalshell-colors.conf\n"
         + "# on every wallpaper/mode change; `source` it from hyprland.conf.\n";
     HYPRLAND_VARS.forEach(function (name) {
-        out += "$" + name + " = rgb(" + String(palette[name]).replace("#", "") + ")\n";
+        out += "$" + name + " = " + _hyprRgb(palette[name]) + "\n";
     });
     return out;
+}
+
+// Hyprland 0.55 replaced hyprlang with Lua, and a Lua config cannot source
+// hyprlang, so the same palette also ships as a table a `dofile` returns.
+function hyprlandColorsLua(palette) {
+    var out = "-- Rendered by matugen (ThemeEngine) into ~/.config/hypr/formalshell-colors.lua\n"
+        + "-- on every wallpaper/mode change; `dofile` it from hyprland.lua.\n"
+        + "return {\n";
+    HYPRLAND_VARS.forEach(function (name) {
+        out += "  " + name + " = \"" + _hyprRgb(palette[name]) + "\",\n";
+    });
+    return out + "}\n";
 }
 
 function buildConfig(opts) {
@@ -90,13 +107,16 @@ function buildConfig(opts) {
         opts.shellTemplateDir + "/theme.json.tmpl", opts.stateDir + "/theme.json.tmp"));
     parts.push(templateBlock("formalshell-hyprland",
         opts.shellTemplateDir + "/hyprland-colors.conf.tmpl", opts.stateDir + "/formalshell-colors.conf.tmp"));
+    parts.push(templateBlock("formalshell-hyprland-lua",
+        opts.shellTemplateDir + "/hyprland-colors.lua.tmpl", opts.stateDir + "/formalshell-colors.lua.tmp"));
 
     // App-facing palettes, written straight to their final config paths: only
     // theme.json and the Hyprland colours need the .tmp + rename dance (the
-    // shell watches one, Hyprland reloads the other on write, so neither can
-    // afford a torn read); GTK and Qt apps read these at launch, so a direct
-    // matugen write is fine. gtk.css imports formalshell-colors.css; the
-    // qt{5,6}ct.conf color_scheme_path points at colors/matugen.conf.
+    // shell watches one, Hyprland re-reads the others the moment they change,
+    // so none can afford a torn read); GTK and Qt apps read these at launch,
+    // so a direct matugen write is fine. gtk.css imports
+    // formalshell-colors.css; the qt{5,6}ct.conf color_scheme_path points at
+    // colors/matugen.conf.
     parts.push(templateBlock("formalshell-gtk3",
         opts.shellTemplateDir + "/gtk-colors.css.tmpl", opts.homeDir + "/.config/gtk-3.0/formalshell-colors.css"));
     parts.push(templateBlock("formalshell-gtk4",

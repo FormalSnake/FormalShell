@@ -11,6 +11,11 @@
 # the screen. SMOKE_WALLPAPER_DITHER=1 turns the opt-in on for one run and
 # flips the assertion with it, so both sides of the setting are provable
 # without a second flag.
+#
+# The same retheme also publishes the compositor's own palette, so the leg
+# reads both hypr files back and then asks the running Hyprland what its
+# active border actually is: the files being right proves the write, and only
+# the running value proves the reload.
 leg_wallpaper_flag="--wallpaper"
 leg_wallpaper_order=100
 leg_wallpaper_needs="convert"
@@ -23,11 +28,40 @@ wp_path="$shot_dir/wp.png"
 wp2_path="$shot_dir/wp2.png"
 wallpaper_dither=false
 
+# The palette's second half: theme.json themes the shell, these two theme the
+# compositor. hyprland_border_path is what proves the reload, see the fixture.
+hypr_dir="$iso_home/.config/hypr"
+hypr_conf_path="$hypr_dir/formalshell-colors.conf"
+hypr_lua_path="$hypr_dir/formalshell-colors.lua"
+hypr_border_path="$shot_dir/hyprland-border.txt"
+theme_json_path="$iso_home/.local/state/formalshell/theme.json"
+# Neither palette can ever produce it, so it can only be the seeded file.
+hypr_sentinel="ff00ff"
+
 leg_wallpaper_fixture() {
   if [ "${SMOKE_WALLPAPER_DITHER:-0}" = "1" ]; then
     wallpaper_dither=true
     settings_fragment ', "wallpaper": {"dither": true}'
   fi
+  # Seeded before Hyprland starts, because the config below sources it and
+  # the shell does not write its own copy until a second or two into the
+  # session. Every value is the sentinel, so anything else read back off
+  # `hyprctl getoption` later came from a rewrite the shell published.
+  #
+  # The rig's config carries `disable_autoreload = true`, which is what makes
+  # that read an assertion rather than a coincidence: with the watcher off,
+  # the only thing that can put a new colour into the running compositor is
+  # the explicit `hyprctl reload` ThemeEngine issues after each publish.
+  mkdir -p "$hypr_dir"
+  cat > "$hypr_conf_path" <<EOF
+\$primary = rgb($hypr_sentinel)
+\$primaryForeground = rgb($hypr_sentinel)
+\$background = rgb($hypr_sentinel)
+\$foreground = rgb($hypr_sentinel)
+\$border = rgb($hypr_sentinel)
+\$destructive = rgb($hypr_sentinel)
+\$warning = rgb($hypr_sentinel)
+EOF
   # 1920x1080, not something small: a source below the screen's own size
   # never exercises Background/LockSurface's sourceSize cap at all (Qt only
   # scales a decode down), so a fixture has to at least meet the screen to
@@ -45,7 +79,7 @@ leg_wallpaper_fixture() {
 }
 
 leg_wallpaper_timing() {
-  leg_timing 16 50
+  leg_timing 18 55
 }
 
 leg_wallpaper_drive() {
@@ -64,8 +98,17 @@ sleep 4
 "$qs_bin" ipc -p "$shell_path" call wallpaper get > "$wallpaper_get_path" 2>&1
 sleep 1
 "$grim_bin" "$wallpaper_gradient_path" > /dev/null 2>&1
+sleep 2
+"$hyprctl_bin" getoption general:col.active_border > "$hypr_border_path" 2>&1
 EOF
   echo "exec-once = bash $script"
+  # The compositor half of the palette, wired the way docs/USAGE.md tells a
+  # hyprlang user to wire it. Appended after the base config's own `general`
+  # block, so this is the value that survives.
+  echo "source = $hypr_conf_path"
+  echo "general {"
+  echo "    col.active_border = \$primary"
+  echo "}"
 }
 
 # Reads whole pixels out of a cropped patch. The trailing [,)] tolerates an
@@ -78,10 +121,50 @@ wallpaper_read_patch() {
 
 leg_wallpaper_assert() {
   local f wallpaper_solid_pixels wallpaper_solid_off wallpaper_patch_pixels wallpaper_patch_colors
+  local theme_primary lua_primary conf_primary
   if [ ! -s "$theme_status_path" ]; then
     fail "no theme status produced"
   fi
   cat "$theme_status_path"; echo
+
+  # The compositor palette. `theme status` reports the wallpaper and the mode
+  # but not a colour, so theme.json is the primary's source of truth here and
+  # the two hypr files are checked against it rather than against each other.
+  theme_primary=$(sed -n 's/.*"primary": "#\([0-9a-fA-F]\{6\}\)".*/\1/p' "$theme_json_path" 2>/dev/null | head -1)
+  if [ -z "$theme_primary" ]; then
+    fail "no primary in $theme_json_path"
+  fi
+  for f in "$hypr_conf_path" "$hypr_lua_path"; do
+    [ -s "$f" ] || fail "no Hyprland palette written at $f"
+  done
+  # dofile is what a hyprland.lua reads this with, so a file that is not a
+  # table literal comes back nil and every colour silently falls through to
+  # the config's static fallback.
+  head -c 8 "$hypr_lua_path" | grep -q '^--' || fail "$hypr_lua_path does not start with a Lua comment"
+  grep -q '^return {' "$hypr_lua_path" || fail "$hypr_lua_path has no 'return {' table literal"
+  lua_primary=$(sed -n 's/^ *primary = "rgb(\([0-9a-fA-F]\{6\}\))",$/\1/p' "$hypr_lua_path" | head -1)
+  conf_primary=$(sed -n 's/^\$primary = rgb(\([0-9a-fA-F]\{6\}\))$/\1/p' "$hypr_conf_path" | head -1)
+  if [ "$lua_primary" != "$theme_primary" ]; then
+    fail "formalshell-colors.lua primary is '$lua_primary', theme.json's is '$theme_primary'"
+  fi
+  if [ "$conf_primary" != "$theme_primary" ]; then
+    fail "formalshell-colors.conf primary is '$conf_primary', theme.json's is '$theme_primary'"
+  fi
+  echo "SMOKE_WALLPAPER_HYPRCOLORS primary $theme_primary in theme.json, formalshell-colors.conf and formalshell-colors.lua"
+
+  # And the claim neither file can make on its own: the value reached the
+  # RUNNING compositor. The rig disables Hyprland's config watcher, so the
+  # only way the sentinel the fixture seeded can be gone is the `hyprctl
+  # reload` ThemeEngine issues after publishing.
+  [ -s "$hypr_border_path" ] || fail "no hyprctl getoption dump produced"
+  cat "$hypr_border_path"; echo
+  if grep -qiF "$hypr_sentinel" "$hypr_border_path"; then
+    fail "general:col.active_border still carries the seeded sentinel, so no hyprctl reload reached the compositor"
+  fi
+  if ! grep -qiF "$theme_primary" "$hypr_border_path"; then
+    fail "general:col.active_border does not carry the wallpaper primary $theme_primary. Got: $(cat "$hypr_border_path")"
+  fi
+  echo "SMOKE_WALLPAPER_HYPRRELOAD general:col.active_border is $theme_primary after the shell's hyprctl reload"
   if [ ! -s "$wallpaper_get_path" ] || ! grep -qF "$wp2_path" "$wallpaper_get_path"; then
     fail "wallpaper get did not report the second wallpaper. Got: $(cat "$wallpaper_get_path" 2>/dev/null)"
   fi

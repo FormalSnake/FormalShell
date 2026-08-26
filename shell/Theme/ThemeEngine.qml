@@ -20,9 +20,11 @@ import "palette.js" as Palette
 // Quickshell.Io has no directory-listing API, merges it via matugen.js's
 // buildConfig(), writes matugen-merged.toml, then runs matugen against it.
 // matugen's own template output_paths land on <state-dir>/{theme.json,
-// formalshell-colors.conf}.tmp; on success those are renamed into place
-// atomically, theme.json into the state dir and the Hyprland colours into
-// the user's hypr config dir. No wallpaper set → skip matugen
+// formalshell-colors.conf, formalshell-colors.lua}.tmp; on success those are
+// renamed into place atomically, theme.json into the state dir and both
+// Hyprland palettes (hyprlang for a hyprland.conf that sources it, a Lua
+// table for a hyprland.lua that dofiles it) into the user's hypr config dir,
+// followed by one `hyprctl reload`. No wallpaper set → skip matugen
 // entirely and write palette.fallback(State.mode) — the zinc variant for
 // the current mode, so `theme mode toggle` recolors every consumer live
 // through the exact same theme.json write a matugen run uses (M13b Task 3;
@@ -90,6 +92,8 @@ Singleton {
     readonly property string _configDir: Quickshell.env("XDG_CONFIG_HOME") || (root._homeDir + "/.config")
     readonly property string _hyprColorsTmp: root.stateDir + "/formalshell-colors.conf.tmp"
     readonly property string _hyprColorsPath: root._configDir + "/hypr/formalshell-colors.conf"
+    readonly property string _hyprColorsLuaTmp: root.stateDir + "/formalshell-colors.lua.tmp"
+    readonly property string _hyprColorsLuaPath: root._configDir + "/hypr/formalshell-colors.lua"
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
 
     property bool running: false
@@ -129,10 +133,11 @@ Singleton {
         proc.running = true;
     }
 
-    // The atomic twin of _writeFile, for a path another process watches:
-    // Hyprland re-reads a sourced file the moment it changes, so it must
-    // never catch one half written. Creates the parent directory too, since
-    // ~/.config/hypr need not exist on a fresh install.
+    // The atomic twin of _writeFile, for a path another process reads out of
+    // band: Hyprland re-reads a sourced file the moment it changes, and
+    // dofiles the Lua one on the reload below, so neither can be caught half
+    // written. Creates the parent directory too, since ~/.config/hypr need
+    // not exist on a fresh install.
     function _publishFile(path, content, onDone) {
         var proc = writeFileProcComponent.createObject(root, {
             _onDone: onDone
@@ -141,6 +146,45 @@ Singleton {
             'mkdir -p "$(dirname "$1")" && printf \'%s\' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"',
             "sh", path, content];
         proc.running = true;
+    }
+
+    // Both Hyprland palettes at once, for the no-wallpaper path: matugen
+    // renders them from its own templates on a real run, but the fallback
+    // has to write them itself or a hyprland config reading either one finds
+    // nothing until the first wallpaper is set.
+    function _publishHyprColors(palette, onDone) {
+        root._publishFile(root._hyprColorsPath, Matugen.hyprlandColors(palette), confCode => {
+            if (confCode !== 0)
+                console.warn("ThemeEngine: failed to write fallback formalshell-colors.conf, code", confCode);
+            root._publishFile(root._hyprColorsLuaPath, Matugen.hyprlandColorsLua(palette), luaCode => {
+                if (luaCode !== 0)
+                    console.warn("ThemeEngine: failed to write fallback formalshell-colors.lua, code", luaCode);
+                onDone();
+            });
+        });
+    }
+
+    // Hyprland re-reads a hyprlang file it sourced itself the moment it
+    // changes, so formalshell-colors.conf needs no call. Hyprland 0.55's Lua
+    // config cannot source hyprlang and reads formalshell-colors.lua with
+    // dofile instead, which is not a sourced file and gets no re-read, so
+    // that half has to be asked for. Guarded on the env var for the same
+    // reason HyprlandBackend.refreshOutputs() is: this singleton runs under
+    // niri too. One call per publish: retheme() queues rather than
+    // overlapping, so a run in flight can never land a second one here.
+    function _reloadHyprland() {
+        if (!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || reloadProc.running)
+            return;
+        reloadProc.running = true;
+    }
+
+    Process {
+        id: reloadProc
+        command: ["hyprctl", "reload"]
+        onExited: exitCode => {
+            if (exitCode !== 0)
+                console.warn("ThemeEngine: hyprctl reload exited with code", exitCode);
+        }
     }
 
     Component {
@@ -192,12 +236,11 @@ Singleton {
                     console.warn("ThemeEngine: failed to write fallback theme.json, code", exitCode);
                 else
                     root.themeJsonPresent = true;
-                // A hyprland.conf sourcing formalshell-colors.conf must find
-                // it whether or not a wallpaper was ever set, so the fallback
+                // A hyprland config reading either colours file must find it
+                // whether or not a wallpaper was ever set, so the fallback
                 // palette renders the same variables matugen would.
-                root._publishFile(root._hyprColorsPath, Matugen.hyprlandColors(fb), colorsCode => {
-                    if (colorsCode !== 0)
-                        console.warn("ThemeEngine: failed to write fallback formalshell-colors.conf, code", colorsCode);
+                root._publishHyprColors(fb, function () {
+                    root._reloadHyprland();
                     root._finish();
                 });
             });
@@ -270,11 +313,13 @@ Singleton {
                 root._finish();
                 return;
             }
+            // One mkdir covers both Hyprland paths, they share a directory.
             renameProc.command = ["sh", "-c",
-                'mv -f "$1" "$2" && mkdir -p "$(dirname "$4")" && mv -f "$3" "$4"',
+                'mv -f "$1" "$2" && mkdir -p "$(dirname "$4")" && mv -f "$3" "$4" && mv -f "$5" "$6"',
                 "sh",
                 root.stateDir + "/theme.json.tmp", root._themeJsonPath,
-                root._hyprColorsTmp, root._hyprColorsPath];
+                root._hyprColorsTmp, root._hyprColorsPath,
+                root._hyprColorsLuaTmp, root._hyprColorsLuaPath];
             renameProc.running = true;
         }
     }
@@ -284,13 +329,12 @@ Singleton {
 
         onExited: exitCode => {
             if (exitCode !== 0) {
-                console.warn("ThemeEngine: failed to publish theme.json/formalshell-colors.conf, code", exitCode);
+                console.warn("ThemeEngine: failed to publish theme.json/formalshell-colors.{conf,lua}, code", exitCode);
                 root._finish();
                 return;
             }
             root.themeJsonPresent = true;
-            // Nothing tells Hyprland to reload: it watches every file it
-            // sourced and re-reads this one itself on the rename above.
+            root._reloadHyprland();
             root._finish();
         }
     }

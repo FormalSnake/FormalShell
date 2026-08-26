@@ -439,11 +439,13 @@ Colors come out of your wallpaper, with no restart anywhere in the loop:
    Runs are serialized, and a wallpaper change mid-run supersedes the
    pending one rather than killing the one in flight.
 3. The output is published atomically to
-   `$XDG_STATE_HOME/formalshell/theme.json` and
-   `$XDG_CONFIG_HOME/hypr/formalshell-colors.conf`.
+   `$XDG_STATE_HOME/formalshell/theme.json`,
+   `$XDG_CONFIG_HOME/hypr/formalshell-colors.conf` and
+   `$XDG_CONFIG_HOME/hypr/formalshell-colors.lua`.
 4. The shell's color singleton watches `theme.json`, so every token
-   recolors on the next paint. Hyprland re-reads the colours file itself,
-   so window borders follow with no reload call anywhere.
+   recolors on the next paint. Hyprland re-reads a `source`d colours file
+   itself; for the Lua one the shell runs `hyprctl reload` once per publish,
+   and only when `HYPRLAND_INSTANCE_SIGNATURE` is set.
 
 With no wallpaper set, `theme.json` is written from the bundled shadcn zinc
 palette instead, in the variant matching the current mode, so
@@ -514,6 +516,33 @@ general {
 The file exists from the shell's first run whether or not a wallpaper is
 set: with none, the bundled zinc palette renders the same seven variables,
 so the `source` line never points at nothing.
+
+Hyprland 0.55 replaced hyprlang with Lua, and a `hyprland.lua` cannot
+`source` hyprlang, so the same seven roles also ship as
+`formalshell-colors.lua`, a table a `dofile` returns:
+
+```lua
+-- ~/.config/hypr/hyprland.lua
+local colors = {
+  primary = "rgb(9ecafc)",
+  border = "rgb(42474e)",
+  destructive = "rgb(ffb4ab)",
+}
+local ok, loaded = pcall(dofile, os.getenv("HOME") .. "/.config/hypr/formalshell-colors.lua")
+if ok and type(loaded) == "table" then colors = loaded end
+
+hl.config({
+  general = { col = { active_border = colors.primary, inactive_border = colors.border } },
+})
+```
+
+Keep the literal table as a fallback: the file is absent until the shell's
+first run, and `pcall` is what stops that from killing the rest of the
+config. A `dofile`d file is not a `source`d one, so Hyprland does not watch
+it; the shell runs `hyprctl reload` itself after every publish, which is
+what re-runs the config and picks the new colours up. That call only fires
+when `HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed
+`hyprctl` under niri.
 
 ### Radius, icons and translucency
 
