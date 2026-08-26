@@ -89,6 +89,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   four PRIME offload variables reaching a launched child.
 - `hotcorner.sh` `--hotcorner`: both hot corner surfaces mapped on the right
   layer, which is all a rig with no synthetic pointer can observe.
+- `hotcorner_relock.sh` `--hotcorner-relock`: locks from the corner, unlocks
+  by typing, proves the corner stays quiet while the pointer sits in it and
+  fires again only after a leave plus the 400ms cooldown.
 - `instance.sh` `--instance`: a second daemon taking the lock, exactly one
   survivor, and the survivor being the new pid.
 - `keybinds.sh` `--keybinds`: the launcher's binds route rendering rows off
@@ -158,6 +161,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   crossfade to a second one, and both sides of the opt-in dither key.
 - `wifi.sh` `--wifi`: the network panel against two real hostapd radios:
   scan, wrong password, connect, forget, and the enterprise round trip.
+- `wheel.sh` `--wheel`: a virtual-pointer scroll moves the picker grid
+  (`menu status` `scrollTop`) without moving the cursor, and a wheel over the
+  bar's audio cell still steps the volume.
 - `workspaces.sh` `--workspaces`: the bar's workspace indicator as one pill
   that travels, read off the bar region alone before, 80ms into, and after a
   workspace switch.

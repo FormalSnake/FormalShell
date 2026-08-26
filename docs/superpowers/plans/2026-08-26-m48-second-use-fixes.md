@@ -1,7 +1,7 @@
 # M48: fixes from the second live session
 
 **Date:** 2026-08-26
-**Status:** approved, pre-implementation
+**Status:** implemented 2026-08-26
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook.
 
