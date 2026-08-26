@@ -2385,29 +2385,25 @@ PanelWindow {
         }
 
         // The split route's right half (M30, M43 D4): the cursor row's full
-        // content beside the list, separated by the `sm` gutter and nothing
-        // else. Positioned by anchoring off rowsView itself (whichever width
+        // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
+        // list. Positioned by anchoring off rowsView itself (whichever width
         // it currently has) rather than an independent x/width pair, so the
         // two views can never drift apart.
         //
-        // A plain `Item`, not a `Card`: the launcher is already a card, and
-        // an image row used to land inside three nested frames (the card,
-        // this pane, the picture's own well), which is the "extra card
-        // around a picture" the owner named on 2026-08-26. The gutter and
-        // the picture's own outline carry the split on their own.
-        Item {
+        // The split is one card beside a list, never two cards (owner,
+        // 2026-08-26): the left half is flat `MenuRow`s and this half is the
+        // card, so the pane reads as the thing the list is pointing at. What
+        // that rules out is a second frame INSIDE it, which is what an image
+        // row used to get.
+        Card {
             id: previewPane
             visible: root._isSplitRoute
             anchors.top: rowsView.top
             anchors.left: rowsView.right
-            // `panelPadding`, not the `sm` the pane took while it was a card:
-            // the card's own border and inset used to do the separating, and
-            // 4px between a cursor row and the preview beside it reads as a
-            // collision once neither is drawn (better-layout's 2x rule, the
-            // rows inside the list being `rowGap` apart).
-            anchors.leftMargin: Core.Theme.space.panelPadding
+            anchors.leftMargin: Core.Theme.space.sm
             anchors.right: parent.right
             height: rowsView.height
+            radius: Core.Theme.radiusMd
 
             Row {
                 id: previewHeader
@@ -2448,48 +2444,25 @@ PanelWindow {
 
             // True-color (menu thumbnails are never dithered) full preview of
             // the cursor row's capture, decode capped at the slot's own size
-            // for the picker grid's reason. It fits rather than fills, so the
-            // slot is almost always wider or taller than the picture in it.
-            //
-            // The outline hugs the PAINTED image rather than the slot: a
-            // frame around the slot would be a box mostly containing empty
-            // card, which is what made this read as a second card around a
-            // picture. paintedWidth/paintedHeight are Image's own report of
-            // where the pixels actually landed under PreserveAspectFit.
-            Item {
-                id: previewImageBox
+            // for the picker grid's reason. Bare: no well, no frame, no
+            // outline. The pane around it is already a card, and a second
+            // border inside one is the nesting the owner called out. It fits
+            // rather than fills, so the card's own ground shows around it,
+            // which is what a letterboxed capture is supposed to sit on.
+            Image {
+                id: previewImage
                 anchors.top: previewHeader.bottom
                 anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 visible: root._previewIsImage
-
-                Image {
-                    id: previewImage
-                    anchors.fill: parent
-                    source: root._previewIsImage ? ("file://" + root._cursorNode.thumbSource) : ""
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    cache: false
-                    sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
-                    sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
-                }
-
-                // primitive-exempt: an outline on a picture, not a frame
-                // around a slot (DESIGN.md §5 forbids the second, better-ui
-                // asks for the first). No primitive draws a border sized to
-                // another item's painted content.
-                Rectangle {
-                    anchors.centerIn: previewImage
-                    width: Math.ceil(previewImage.paintedWidth)
-                    height: Math.ceil(previewImage.paintedHeight)
-                    visible: previewImage.status === Image.Ready && width > 0 && height > 0
-                    color: "transparent"
-                    radius: Core.Theme.radiusSm
-                    border.width: Core.Theme.borderWidth
-                    border.color: Core.Theme.color.border
-                }
+                source: root._previewIsImage ? ("file://" + root._cursorNode.thumbSource) : ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                cache: false
+                sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
+                sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
             }
         }
 

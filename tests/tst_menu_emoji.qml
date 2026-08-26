@@ -72,11 +72,34 @@ TestCase {
         verify(Providers.emojiTriggerQuery("") === null);
     }
 
-    function test_browse_and_cap() {
-        // Empty query browses the head of the list; results are capped.
-        compare(Providers.emojiRows(list, "").length, 40);
-        compare(Providers.emojiRows(list, "face").length, 40);
-        compare(Providers.emojiRows(list, "zzzznotanemoji").length, 0);
+    // Uncapped since 2026-08-26: the route is a scrolling grid, and the old
+    // 40-result ceiling put all but five rows of the set out of reach.
+    function test_browse_shows_the_whole_set() {
+        compare(Providers.emojiRows(list, "").length, list.length);
         compare(Providers.emojiRows(list, "")[0].label, "GRINNING FACE");
+        compare(Providers.emojiRows(list, "zzzznotanemoji").length, 0);
+    }
+
+    // A one-letter query matches most of the dataset. Every match has to
+    // survive to the grid: the cell the owner is looking for is exactly as
+    // likely to be the 400th as the 4th.
+    function test_a_broad_query_is_not_truncated() {
+        var broad = Providers.emojiRows(list, "a");
+        var expected = 0;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].name.toLowerCase().indexOf("a") >= 0)
+                expected++;
+        }
+        compare(broad.length, expected);
+        verify(broad.length > 40);
+    }
+
+    // The memo on `name` must never reach a row: rows are built from the
+    // entry's own fields, and a stray `_lcName` on one would be an
+    // undeclared field in the model every consumer of a row can see.
+    function test_the_search_memo_does_not_leak_into_rows() {
+        var rows = Providers.emojiRows(list, "face");
+        verify(rows.length > 0);
+        verify(rows[0]._lcName === undefined);
     }
 }
