@@ -1,5 +1,7 @@
 .pragma library
 
+.import "flexoki.js" as Flexoki
+
 // Builds a matugen `-c` TOML config from the spec-mandated merge order:
 // user [config] verbatim, then the shell's own template blocks, then the
 // user's [templates.*] section verbatim, then any drop-in fragments.
@@ -136,4 +138,153 @@ function buildConfig(opts) {
     });
 
     return parts.join("\n");
+}
+
+
+// --- Flexoki pin: rewriting a template before matugen renders it ----------
+//
+// matugen has no way to be handed an exact palette. Its scheme always grows
+// out of one source colour, so a Flexoki-pinned run seeded with Flexoki blue
+// still renders every template as a single-hue Material scheme: a terminal
+// whose ANSI slots read primary/secondary/tertiary comes out blue where it
+// asked for green, yellow and magenta.
+//
+// So the pin rewrites the templates instead. Each {{colors.*}} and
+// {{base16.*}} value expression is replaced with the literal Flexoki tone in
+// the format it asked for, and matugen renders the rewritten copy.
+// Everything else in the file is matugen's: {{image}}, {{mode}}, post_hook,
+// output_path, and the templates the user's own config declares.
+//
+// A filter pipeline survives the rewrite only on a `.hex` value, as
+// `{{ "#4385be" | to_color | <filters> }}`: matugen 4.1.0 rejects a colour
+// filter applied straight to a string (ParseError::ColorFilterOnString) and
+// `to_color` renders hex whatever went in, so an rgb/hsl/hex_stripped value
+// under a filter would come out in the wrong syntax and, wrapped in an
+// `rgb(...)` the way a hyprland config wraps hex_stripped, would break the
+// file it lands in. Those keep matugen's own value and are named in
+// `skipped` instead. No template in the tree uses one.
+
+function _rgbParts(hex) {
+    var h = hex.replace("#", "");
+    return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)];
+}
+
+// matugen prints hsl rounded to whole degrees and whole percent
+// (`hsl(210, 92%, 80%)`), so this rounds the same way rather than carrying
+// decimals a template would render differently from a non-pinned run.
+function _hslParts(hex) {
+    var rgb = _rgbParts(hex);
+    var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var l = (max + min) / 2;
+    var d = max - min;
+    var h = 0, s = 0;
+    if (d !== 0) {
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+    }
+    return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function formatColor(hex, format) {
+    var rgb, hsl;
+    switch (format) {
+    case "hex":
+        return hex;
+    case "hex_stripped":
+        return hex.replace("#", "");
+    case "rgb":
+        rgb = _rgbParts(hex);
+        return "rgb(" + rgb[0] + ", " + rgb[1] + ", " + rgb[2] + ")";
+    case "rgba":
+        rgb = _rgbParts(hex);
+        return "rgba(" + rgb[0] + ", " + rgb[1] + ", " + rgb[2] + ", 1)";
+    case "hsl":
+        hsl = _hslParts(hex);
+        return "hsl(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%)";
+    case "hsla":
+        hsl = _hslParts(hex);
+        return "hsla(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%, 1)";
+    }
+    return null;
+}
+
+var _EXPR_RE = /\{\{\s*(colors|base16)\.([A-Za-z0-9_]+)\.(default|light|dark)\.([A-Za-z_]+)\s*(\|[^{}]*?)?\}\}/g;
+
+// Replaces every color expression this table can answer. An expression it
+// cannot (a custom_colors entry the user declared, a format matugen grew
+// since) is left verbatim for matugen to render from its own scheme, and
+// named in `skipped` so the caller can say so once rather than silently
+// shipping one blue value in an otherwise Flexoki file.
+function substituteFlexoki(text, mode) {
+    if (!text)
+        return { text: text, substituted: 0, skipped: [] };
+    var tables = {
+        colors: { light: Flexoki.materialRoles("light"), dark: Flexoki.materialRoles("dark") },
+        base16: { light: Flexoki.base16("light"), dark: Flexoki.base16("dark") }
+    };
+    var fallbackScheme = mode === "light" ? "light" : "dark";
+    var count = 0;
+    var skipped = [];
+    var out = text.replace(_EXPR_RE, function (match, group, name, scheme, format, filters) {
+        var table = tables[group][scheme === "default" ? fallbackScheme : scheme];
+        var key = name;
+        if (!(key in table) && group === "base16") {
+            // matugen dumps base0a, the matugen-themes templates write
+            // base0A; Flexoki's own base16 tables use the upper form.
+            for (var candidate in table) {
+                if (candidate.toLowerCase() === name.toLowerCase()) {
+                    key = candidate;
+                    break;
+                }
+            }
+        }
+        var value = table[key];
+        var rendered = value ? formatColor(value, format) : null;
+        if (rendered === null || (filters && format !== "hex")) {
+            if (skipped.indexOf(group + "." + name + "." + format) === -1)
+                skipped.push(group + "." + name + "." + format);
+            return match;
+        }
+        count++;
+        return filters ? '{{ "' + rendered + '" | to_color ' + filters.trim() + " }}" : rendered;
+    });
+    return { text: out, substituted: count, skipped: skipped };
+}
+
+// matugen expands a leading ~ in input_path/output_path itself; a rewritten
+// copy is read by this shell first, so the same expansion has to happen here.
+function expandHome(path, home) {
+    if (path === "~")
+        return home;
+    return path.indexOf("~/") === 0 ? home + path.substring(1) : path;
+}
+
+var _INPUT_RE = /^([ \t]*input_path[ \t]*=[ \t]*)(['"])([^'"\n]*)\2/gm;
+
+function templateInputs(configText) {
+    var found = [];
+    if (!configText)
+        return found;
+    configText.replace(_INPUT_RE, function (match, lead, quote, path) {
+        found.push(path);
+        return match;
+    });
+    return found;
+}
+
+// Repoints each [templates.*] at its rewritten copy, in the order
+// templateInputs() returned them. A mapper answering null leaves that entry
+// on its original file, which is what an unreadable template gets: matugen
+// then fails on it exactly as it would have without the pin.
+function rewriteTemplateInputs(configText, mapper) {
+    var i = 0;
+    return configText.replace(_INPUT_RE, function (match, lead, quote, path) {
+        var next = mapper(path, i++);
+        return next === null ? match : lead + "'" + next + "'";
+    });
 }

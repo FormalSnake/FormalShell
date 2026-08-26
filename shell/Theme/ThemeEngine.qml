@@ -30,13 +30,18 @@ import "palette.js" as Palette
 // the current mode, so `theme mode toggle` recolors every consumer live
 // through the exact same theme.json write a matugen run uses (M13b Task 3;
 // before that the fallback was static dark and toggling without a wallpaper
-// visibly did nothing). A wallpaper whose path carries "flexoki" still runs
-// matugen, but as `color hex` seeded with Flexoki blue rather than `image`,
-// so the user's own templates rerender onto a scheme in Flexoki's hue (the
-// near-black field of an ASCII wallpaper otherwise seeds a lavender scheme
-// off the hue of its noise); the shell's own outputs of that run are
-// discarded and theme.json plus both Hyprland palettes take
-// palette.flexoki(State.mode) through the static write instead.
+// visibly did nothing).
+//
+// A wallpaper whose path carries "flexoki" still runs matugen, but nothing
+// on that run reads matugen's scheme: every template is rewritten first
+// (matugen.js's substituteFlexoki, against flexoki.js's Material-role and
+// base16 views) and matugen renders the rewritten copies out of
+// <state-dir>/flexoki-templates, so the GTK/Qt palettes and every template
+// the user declared land on real Flexoki tones rather than a Material scheme
+// grown from one blue seed. The run itself is `color hex` on Flexoki blue
+// rather than `image`, which only seeds the keywords no rewrite covers; the
+// shell's own outputs of it are discarded and theme.json plus both Hyprland
+// palettes take palette.flexoki(State.mode) through the static write.
 // theme.json's own FileView drives the "run once if
 // absent" startup behavior declaratively; State.mode defaults to dark, so
 // the seeded first-boot theme.json stays the dark variant.
@@ -105,6 +110,10 @@ Singleton {
     readonly property string _hyprChromePath: root._configDir + "/hypr/formalshell-chrome.conf"
     readonly property string _hyprChromeLuaPath: root._configDir + "/hypr/formalshell-chrome.lua"
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
+    readonly property string _templateBoundary: "#--formalshell-template-boundary--"
+    // Where a Flexoki-pinned run stages the rewritten copy of every template
+    // it is about to hand matugen. Regenerated per run, never read back.
+    readonly property string _flexokiDir: root.stateDir + "/flexoki-templates"
 
     property bool running: false
     property bool pending: false
@@ -112,6 +121,12 @@ Singleton {
     // a wallpaper flip mid-run must not send this run's outputs down the
     // other publish path (the pending rerun covers the new wallpaper).
     property bool _pinnedRun: false
+    // The pinned run's merged config between the template read and the write,
+    // the input paths it was read from (positional, matching the config's own
+    // order), and the expressions no Flexoki value answered.
+    property string _pinnedConfig: ""
+    property var _pinnedInputs: []
+    property var _pinnedSkipped: []
 
     // Existence check for ThemeIpc's status(), tracked by hand rather than
     // via FileView.loaded + watchChanges: QFileSystemWatcher silently fails
@@ -312,30 +327,118 @@ Singleton {
                     userConfigText: userConfigText,
                     dropInTexts: dropInsText ? [dropInsText] : []
                 });
-                root._writeFile(root._mergedConfigPath, cfg, exitCode => {
+                root._pinnedRun = Palette.pinsFlexoki(Core.State.wallpaper);
+                if (root._pinnedRun) {
+                    root._rewriteTemplates(cfg);
+                    return;
+                }
+                root._publishConfig(cfg);
+            }
+        }
+    }
+
+    // Reads every template the merged config points at, rewrites each one's
+    // colour expressions to Flexoki tones, and stages the copies for matugen
+    // to render. post_hook strings are rendered by matugen's own engine too,
+    // so the config text goes through the same rewrite. A config declaring no
+    // template at all (nothing to rewrite) goes straight on.
+    function _rewriteTemplates(cfg) {
+        var rewritten = Matugen.substituteFlexoki(cfg, Core.State.mode);
+        root._pinnedConfig = rewritten.text;
+        root._pinnedSkipped = rewritten.skipped;
+        root._pinnedInputs = Matugen.templateInputs(root._pinnedConfig).map(function (path) {
+            return Matugen.expandHome(path, root._homeDir);
+        });
+        if (root._pinnedInputs.length === 0) {
+            root._publishConfig(root._pinnedConfig);
+            return;
+        }
+        // $0 is the boundary, $@ the paths: one Process for the whole set,
+        // since Quickshell.Io reads a file at a time and a config with a
+        // dozen templates would otherwise be a dozen round trips. A path that
+        // cannot be read comes back as an empty section and keeps its
+        // original input_path, so matugen fails on it exactly as it would
+        // have without the pin.
+        readTemplatesProc.command = ["sh", "-c",
+            "for f in \"$@\"; do printf '%s\\n' \"$0\"; cat \"$f\" 2>/dev/null; done",
+            root._templateBoundary].concat(root._pinnedInputs);
+        readTemplatesProc.running = true;
+    }
+
+    function _writeTemplateCopies(pairs, onDone) {
+        var proc = writeFileProcComponent.createObject(root, {
+            _onDone: onDone
+        });
+        proc.command = ["sh", "-c",
+            'mkdir -p "$1" || exit 1; rm -f "$1"/*.tmpl; shift; while [ "$#" -ge 2 ]; do printf \'%s\' "$2" > "$1" || exit 1; shift 2; done',
+            "sh", root._flexokiDir].concat(pairs);
+        proc.running = true;
+    }
+
+    // The tail both paths share: the merged config is written once, already
+    // repointed at the staged copies on a pinned run, and the run that reads
+    // it starts. A pinned run needs no source probe, its source is known.
+    function _publishConfig(cfg) {
+        root._writeFile(root._mergedConfigPath, cfg, exitCode => {
+            if (exitCode !== 0) {
+                console.warn("ThemeEngine: failed to write matugen-merged.toml, code", exitCode);
+                root._finish();
+                return;
+            }
+            if (root._pinnedRun) {
+                matugenProc.command = ["matugen", "color", "hex", Palette.FLEXOKI_SOURCE,
+                    "-m", Core.State.mode, "-c", root._mergedConfigPath];
+                matugenProc.running = true;
+                return;
+            }
+            // Extraction only: --dry-run writes no template and runs
+            // no command, and -d is what prints the ranking. -q would
+            // silence that ranking, so it is deliberately absent.
+            sourceProbeProc.command = ["matugen", "-d", "image", Core.State.wallpaper, "--dry-run",
+                "--prefer", "saturation"];
+            sourceProbeProc.running = true;
+        });
+    }
+
+    Process {
+        id: readTemplatesProc
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var sections = text.split(root._templateBoundary + "\n");
+                var staged = ({});
+                var pairs = [];
+                var skipped = root._pinnedSkipped.slice();
+                for (var i = 0; i < root._pinnedInputs.length; i++) {
+                    // sections[0] is the run-in before the first boundary.
+                    var body = sections[i + 1];
+                    if (!body)
+                        continue;
+                    var out = Matugen.substituteFlexoki(body, Core.State.mode);
+                    out.skipped.forEach(function (expr) {
+                        if (skipped.indexOf(expr) === -1)
+                            skipped.push(expr);
+                    });
+                    staged[i] = root._flexokiDir + "/" + i + ".tmpl";
+                    pairs.push(staged[i], out.text);
+                }
+                if (skipped.length > 0)
+                    console.warn("ThemeEngine: Flexoki pin left", skipped.length,
+                        "expression(s) on matugen's own scheme:", skipped.join(", "));
+                var cfg = Matugen.rewriteTemplateInputs(root._pinnedConfig, function (path, index) {
+                    return staged[index] !== undefined ? staged[index] : null;
+                });
+                if (pairs.length === 0) {
+                    root._publishConfig(cfg);
+                    return;
+                }
+                root._writeTemplateCopies(pairs, function (exitCode) {
                     if (exitCode !== 0) {
-                        console.warn("ThemeEngine: failed to write matugen-merged.toml, code", exitCode);
+                        console.warn("ThemeEngine: failed to stage rewritten Flexoki templates, code", exitCode);
                         root._finish();
                         return;
                     }
-                    root._pinnedRun = Palette.pinsFlexoki(Core.State.wallpaper);
-                    if (root._pinnedRun) {
-                        // Seeded with Flexoki blue instead of the image: the
-                        // user's own templates rerender onto a scheme in
-                        // Flexoki's hue, and the run's outputs of the shell's
-                        // own templates are dropped on exit for the real
-                        // palette. No probe, the source is already known.
-                        matugenProc.command = ["matugen", "color", "hex", Palette.FLEXOKI_SOURCE,
-                            "-m", Core.State.mode, "-c", root._mergedConfigPath];
-                        matugenProc.running = true;
-                        return;
-                    }
-                    // Extraction only: --dry-run writes no template and runs
-                    // no command, and -d is what prints the ranking. -q would
-                    // silence that ranking, so it is deliberately absent.
-                    sourceProbeProc.command = ["matugen", "-d", "image", Core.State.wallpaper, "--dry-run",
-                        "--prefer", "saturation"];
-                    sourceProbeProc.running = true;
+                    root._publishConfig(cfg);
                 });
             }
         }
@@ -371,6 +474,12 @@ Singleton {
                 return;
             }
             if (root._pinnedRun) {
+                // The rewritten templates rendered these three in Flexoki
+                // too, but theme.json and both Hyprland palettes stay the
+                // static write's: palette.flexoki() is the shell's own
+                // authority for them (the greeter reads the same table with
+                // no matugen in reach), and its chart ramp walks accents no
+                // Material role carries.
                 var discard = writeFileProcComponent.createObject(root, {
                     _onDone: function () {
                         root._publishStatic(Palette.flexoki(Core.State.mode));

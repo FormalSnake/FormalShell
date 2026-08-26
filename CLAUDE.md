@@ -90,6 +90,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and coming back with the same window id.
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
   run's JSON sidecar and read by other legs for what the shell resolved.
+- `flexoki.sh` `--flexoki`: a wallpaper under a `flexoki/` directory, and
+  the rewrite reaching a user template, its `post_hook`, and the shell's own
+  GTK and Qt palettes: Flexoki green and yellow, which no Material scheme
+  seeded on Flexoki blue can produce.
 - `frame.sh` `--frame`: pins `frame.thickness` in the settings fixture so the
   bar's window grows to the output and paints the frame round it, and reads
   that box and the four exclusion zones off the compositor's own layer list.

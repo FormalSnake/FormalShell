@@ -466,11 +466,48 @@ matugen run uses.
 
 A wallpaper whose path contains `flexoki` (any case, so
 `Moraine_Lake-flexoki.webp` or a `flexoki/` directory) pins the bundled
-Flexoki palette in the current mode; rename a file to opt it in. The shell,
-`theme.json` and the Hyprland colours files get Flexoki itself. matugen still
-runs for such a wallpaper, as `matugen color hex 4385BE` (Flexoki blue)
-instead of `matugen image`, so your own templates rerender onto a Material
-scheme in Flexoki's hue rather than the true Flexoki tones.
+Flexoki palette in the current mode; rename a file to opt it in. Nothing on
+that run reads matugen's own scheme: every template the merged config points
+at, the shell's GTK and Qt ones and yours alike, is rewritten before matugen
+sees it, so `{{colors.primary.default.hex}}` renders Flexoki blue and
+`{{colors.surface.default.hex}}` Flexoki black. `post_hook` strings are
+rewritten the same way, since matugen renders those through its own engine
+too. matugen still runs, as `matugen color hex 4385BE` instead of `matugen
+image`; it seeds nothing a template reads.
+
+Every role matugen emits is answered, in both schemes (`.dark`, `.light` and
+`.default`) and in `hex`, `hex_stripped`, `rgb`, `rgba`, `hsl` and `hsla`, and
+so is `base16.base00`..`base0F` in Flexoki's own base16 mapping. Eight hue
+names ride along past matugen's list, for the templates Material cannot serve:
+
+| role | dark | light |
+| --- | --- | --- |
+| `red` `orange` `yellow` `green` `cyan` `blue` `purple` `magenta` | the 400 stop | the 600 stop |
+| the same eight with `_alt` | the 600 stop | the 400 stop |
+
+Material has no green and no yellow, so a terminal theme reading its ANSI
+slots off `primary`/`secondary`/`tertiary` paints them in the accent's own hue
+and comes out one colour. Read ANSI 1-6 off the eight above and 9-14 off their
+`_alt` twins, which is how Flexoki's own terminal ports spend the two stops.
+Declare the same names under `[config.custom_colors]` in
+`~/.config/matugen/config.toml` (`blend = false` keeps each hue and only tones
+it for the mode) and the same template gets a wallpaper-derived ramp on every
+other wallpaper:
+
+```toml
+[config.custom_colors]
+green = { color = "#879A39", blend = false }
+green_alt = { color = "#66800B", blend = false }
+```
+
+Two limits worth knowing. A colour filter survives the rewrite only on a
+`.hex` value, as `{{ "#4385be" | to_color | <filters> }}`: matugen rejects a
+filter applied straight to a string, and `to_color` renders hex whatever went
+in, so an `rgb`/`hsl`/`hex_stripped` value under a filter keeps matugen's own
+colour instead of coming out in the wrong syntax. And a name no Flexoki role
+answers (a `custom_colors` entry of your own) keeps matugen's value too. Both
+are named in a `ThemeEngine: Flexoki pin left N expression(s)` warning rather
+than passing silently.
 
 ```sh
 fs wallpaper set /path/to/image.jpg
