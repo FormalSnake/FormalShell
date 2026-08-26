@@ -7,7 +7,8 @@ import "../shell/Components/geometry.js" as Geometry
 // head-on, the same split tst_panel_cursor and tst_theme_tokens use.
 //
 // The numbers below are the shipped tokens at spacingScale 1.0: barMargin 6,
-// screenPadding 12, panelPadding 12, sectionGap 16, and a 40px bar.
+// screenPadding 12, panelPadding 12, a 25px header seam (panelPadding either
+// side of a 1px rule), and a 40px bar.
 TestCase {
     id: testCase
     name: "PanelGeometry"
@@ -16,7 +17,7 @@ TestCase {
     readonly property real barMargin: 6
     readonly property real screenPadding: 12
     readonly property real panelPadding: 12
-    readonly property real sectionGap: 16
+    readonly property real headerGap: 25
     readonly property real headerHeight: 32
 
     function test_an_ipc_open_sits_one_screen_padding_from_the_right_edge() {
@@ -57,25 +58,25 @@ TestCase {
     function test_content_gets_the_cap_minus_the_frames_own_chrome() {
         var maxFrame = Geometry.maxFrameHeight(1080, testCase.barHeight, testCase.barMargin,
             testCase.screenPadding);
-        // 1022 - 24 padding - 32 header - 16 sectionGap.
+        // 1022 - 24 padding - 32 header - 25 header seam.
         compare(Geometry.maxContentHeight(maxFrame, testCase.panelPadding, testCase.headerHeight,
-            testCase.sectionGap), 950);
+            testCase.headerGap), 941);
     }
 
     function test_a_short_panel_is_its_own_height() {
         var maxContent = 950;
         compare(Geometry.frameHeight(200, maxContent, testCase.panelPadding,
-            testCase.headerHeight, testCase.sectionGap), 24 + 32 + 16 + 200);
+            testCase.headerHeight, testCase.headerGap), 24 + 32 + 25 + 200);
     }
 
     function test_a_tall_panel_stops_at_the_cap_and_scrolls() {
         var maxFrame = Geometry.maxFrameHeight(1080, testCase.barHeight, testCase.barMargin,
             testCase.screenPadding);
         var maxContent = Geometry.maxContentHeight(maxFrame, testCase.panelPadding,
-            testCase.headerHeight, testCase.sectionGap);
+            testCase.headerHeight, testCase.headerGap);
         // A calendar month taller than the screen: the frame lands on the cap
         // exactly, never past it, which is the whole claim.
         compare(Geometry.frameHeight(4000, maxContent, testCase.panelPadding,
-            testCase.headerHeight, testCase.sectionGap), maxFrame);
+            testCase.headerHeight, testCase.headerGap), maxFrame);
     }
 }

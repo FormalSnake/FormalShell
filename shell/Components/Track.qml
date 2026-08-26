@@ -79,8 +79,11 @@ Rectangle {
         radius: Theme.radiusSm
         color: Theme.color.primary
 
+        // Not Linear: a level is set in steps by a poll or a drag, never
+        // swept continuously, so every change is one on-screen edge
+        // travelling to a new place rather than a constant rate.
         Behavior on width {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
         }
     }
 

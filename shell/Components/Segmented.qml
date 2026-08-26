@@ -104,16 +104,34 @@ Item {
                     border.color: Theme.color.border
                 }
 
+                // An unhoverable segment was the one control in the shell
+                // that took the hand cursor and answered nothing. The wash
+                // and the ink lift are what shadcn's own tabs do to an
+                // inactive trigger; the chosen one already states itself.
+                Rectangle {
+                    anchors.fill: parent
+                    radius: root._segmentRadius
+                    color: segmentPointer.pressed ? Theme.pressFill : Theme.hoverFill
+                    opacity: (!segment._on && (segmentPointer.containsMouse || segmentPointer.pressed)) ? 1 : 0
+
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                    }
+                }
+
                 Text {
                     anchors.centerIn: parent
                     text: String(segment.modelData)
-                    color: segment._on ? Theme.color.foreground : Theme.color.mutedForeground
+                    color: (segment._on || segmentPointer.containsMouse)
+                        ? Theme.color.foreground
+                        : Theme.color.mutedForeground
                     font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
                     font.weight: Theme.weight.medium
                 }
 
                 MouseArea {
+                    id: segmentPointer
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor

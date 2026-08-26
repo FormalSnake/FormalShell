@@ -33,12 +33,40 @@ Item {
     property alias sourceSize: img.sourceSize
     readonly property alias status: img.status
 
+    // The picture's own edge (DESIGN.md §1's ladder, rung 5): a 1px `border`
+    // over a `muted` backing, with the image inset by that border. Imagery is
+    // the one thing inside a card that still draws a frame, since a cover or
+    // an icon bleeding straight into the surface behind it has no edge of its
+    // own. That is an outline on content rather than a box around a group, so
+    // it is not a nested card, and every site wanting one reaches here rather
+    // than building its own Rectangle.
+    property bool framed: false
+    property int frameRadius: Theme.radiusMd
+
+    clip: root.framed
+
     // The upper bound on colours the retro pass derives from the picture.
     readonly property int paletteSize: 6
 
+    // The frame is chrome and never dithers; what sits inside it is content
+    // and goes through the retro pass like every other picture.
+    Rectangle {
+        anchors.fill: parent
+        visible: root.framed
+        color: Theme.color.muted
+        radius: root.frameRadius
+        border.width: Theme.borderWidth
+        border.color: Theme.color.border
+    }
+
+    // The frame's border is all the inset the picture gets: a cover fills its
+    // frame rather than floating in it. Both layers stay direct children of
+    // the root so an embedder (and tst_picture.qml) still finds them where
+    // they have always been.
     Image {
         id: img
         anchors.fill: parent
+        anchors.margins: root.framed ? Theme.borderWidth : 0
         source: root.source
         fillMode: root.fillMode
         cache: root.cache
@@ -50,6 +78,7 @@ Item {
     Loader {
         id: ditherLoader
         anchors.fill: parent
+        anchors.margins: root.framed ? Theme.borderWidth : 0
         active: Theme.dither
         sourceComponent: DitherImage {
             anchors.fill: parent

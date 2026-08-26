@@ -59,9 +59,9 @@ TestCase {
         wait(50);
     }
 
-    // The painted layers, in declaration order: ring halo, body, hover fill,
-    // press overlay. test_button_paints_four_layers is what fails if that
-    // order changes under the tests below.
+    // The painted layers, in declaration order: ring halo, body, pointer
+    // wash. test_button_paints_three_layers is what fails if that order
+    // changes under the tests below.
     function layers(button) {
         var out = [];
         for (var i = 0; i < button.children.length; i++) {
@@ -91,9 +91,9 @@ TestCase {
         return button;
     }
 
-    function test_button_paints_four_layers() {
+    function test_button_paints_three_layers() {
         var button = make(buttonComponent, { text: "OK" });
-        compare(layers(button).length, 4);
+        compare(layers(button).length, 3);
     }
 
     function test_geometry_tokens() {
@@ -154,15 +154,48 @@ TestCase {
         verify(!layers(ghost)[0].visible);
     }
 
-    function test_hover_dims_a_fill_and_lifts_the_accent_layer_otherwise() {
+    // A variant carrying its own colour blends toward `background` and stays
+    // opaque; every other one takes the wash. The old treatment dropped the
+    // body's opacity, which on a panel drawn at `surfaceOpacity` showed the
+    // wallpaper through the button.
+    function test_hover_blends_a_colour_and_washes_everything_else() {
         var filled = make(buttonComponent, { text: "Connect", hovered: true });
-        tryCompare(layers(filled)[1], "opacity", 0.9);
+        var body = layers(filled)[1];
+        compare(body.opacity, 1);
+        tryCompare(body, "color", Theme.hoverFilled(Theme.color.primary));
+        verify(!Qt.colorEqual(body.color, Theme.color.primary));
+        compare(body.color.a, 1);
         compare(layers(filled)[2].opacity, 0);
 
         var ghost = make(buttonComponent, { variant: "ghost", text: "Clear", hovered: true });
-        verify(Qt.colorEqual(layers(ghost)[2].color, Theme.color.accent));
+        verify(Qt.colorEqual(layers(ghost)[2].color, Theme.hoverFill));
         tryCompare(layers(ghost)[2], "opacity", 1);
         compare(layers(ghost)[1].opacity, 1);
+    }
+
+    // The chosen option in a `ButtonGroup`: its fill is `background`, so it
+    // takes the wash rather than a blend, and keeps reading as chosen under
+    // the pointer.
+    function test_selected_takes_the_wash_over_its_own_fill() {
+        var chosen = make(buttonComponent, { variant: "selected", text: "Balanced", hovered: true });
+        verify(Qt.colorEqual(layers(chosen)[1].color, Theme.color.background));
+        verify(Qt.colorEqual(layers(chosen)[2].color, Theme.hoverFill));
+        tryCompare(layers(chosen)[2], "opacity", 1);
+    }
+
+    // Press is the same wash one step on, never `accent` painted over a
+    // primary fill.
+    function test_press_deepens_the_treatment_the_variant_already_takes() {
+        var ghost = make(buttonComponent, { variant: "ghost", text: "Clear" });
+        mousePress(ghost, ghost.width / 2, ghost.height / 2);
+        verify(Qt.colorEqual(layers(ghost)[2].color, Theme.pressFill));
+        mouseRelease(ghost, ghost.width / 2, ghost.height / 2);
+
+        var filled = make(buttonComponent, { text: "Connect" });
+        mousePress(filled, filled.width / 2, filled.height / 2);
+        tryCompare(layers(filled)[1], "color", Theme.pressFilled(Theme.color.primary));
+        compare(layers(filled)[2].opacity, 0);
+        mouseRelease(filled, filled.width / 2, filled.height / 2);
     }
 
     // Sans, because a button label is words (DESIGN.md §1 "Type").

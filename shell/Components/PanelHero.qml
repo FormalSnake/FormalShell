@@ -1,13 +1,20 @@
 import QtQuick
 import qs.Core
 
-// The shared panel-opening block (DESIGN.md §3 "Panel"): the inner card a
-// panel leads with, holding one icon or image, the subject's name, a caption
-// line under it, an optional oversized readout, an optional trailing control
-// and an optional progress track. Built on Cell, so it is already the
-// `radiusMd` bordered card the design asks for, concentric inside the
-// panel's own `radiusXl` frame, and it sizes off its own content like every
-// other row.
+// The shared panel-opening block (DESIGN.md §3 "Panel"): the block a panel
+// leads with, holding one icon or image, the subject's name, a caption line
+// under it, an optional oversized readout, an optional trailing control and
+// an optional progress track.
+//
+// Flat (owner, 2026-08-26, "no nested cards anywhere, just a panel, and max
+// one card"). It used to draw a `radiusMd` bordered card inside the panel's
+// own `radiusXl` frame, which is the one combination §1's ladder now forbids
+// outright. What ranks it above the sections under it is its type instead: a
+// `subtitle` title over a `bodySmall` caption, a `display` readout beside
+// them, and the panel header's own rule directly above. Still a Cell, so
+// every state that is not "resting" draws exactly as it does on any row: the
+// hover wash a `railInteractive` hero needs, the cursor ring, and the
+// foreground/dimForeground pair a `leading` or `trailing` Component reads.
 //
 // All properties are optional except `title`. `glyph` sits in a fixed-width
 // slot (`Theme.space.xxl * 2`) so a wider codepoint never shifts the title
@@ -27,6 +34,8 @@ import qs.Core
 // subject is itself an adjustable value rather than a metric.
 Cell {
     id: root
+
+    ghost: true
 
     property string glyph: ""
     property string title: ""

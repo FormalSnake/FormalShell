@@ -24,14 +24,14 @@ function maxFrameHeight(screenHeight, barHeight, barMargin, screenPadding) {
 }
 
 // What is left of that for the content column once the card's own padding,
-// its header row and the gap under the header have taken their share.
-// Content taller than this scrolls.
-function maxContentHeight(maxFrame, panelPadding, headerHeight, sectionGap) {
-    return Math.max(0, maxFrame - panelPadding * 2 - headerHeight - sectionGap);
+// its header row and the header's seam (the two gaps plus the rule itself)
+// have taken their share. Content taller than this scrolls.
+function maxContentHeight(maxFrame, panelPadding, headerHeight, headerGap) {
+    return Math.max(0, maxFrame - panelPadding * 2 - headerHeight - headerGap);
 }
 
 // The frame's own height: its chrome plus whatever the content asked for,
 // capped.
-function frameHeight(contentHeight, maxContent, panelPadding, headerHeight, sectionGap) {
-    return panelPadding * 2 + headerHeight + sectionGap + Math.min(contentHeight, maxContent);
+function frameHeight(contentHeight, maxContent, panelPadding, headerHeight, headerGap) {
+    return panelPadding * 2 + headerHeight + headerGap + Math.min(contentHeight, maxContent);
 }

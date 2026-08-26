@@ -242,10 +242,14 @@ Item {
                     : Theme.color.border
     }
 
+    // The pointer's own layer: a wash of the ink over whatever the cell
+    // resolved to, never an opaque `accent` chip. A bar cell is a ghost over
+    // a strip drawn at `surfaceOpacity`, so an opaque fill lands at a delta
+    // the wallpaper decides and a bright one cancels it (Theme.hoverFill).
     Rectangle {
         anchors.fill: parent
         radius: root.radius
-        color: Theme.color.accent
+        color: Theme.hoverFill
         opacity: root._hoverFillActive ? 1 : 0
 
         Behavior on opacity {

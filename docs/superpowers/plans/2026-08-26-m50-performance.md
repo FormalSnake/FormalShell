@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-26
 **Status:** Tasks 1 to 4 landed 2026-08-26 (fd29a33, d701b39, 11f5684,
-f3815de), g815 rebuilt onto them; the e1504g rebuild waits for the
-machine to come back online (Task 5).
+f3815de); both hosts rebuilt onto 7d481c3 the same day. Task 6 (the
+audio panel's node lists) followed from the e1504g re-measure.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook.
 
@@ -55,6 +55,37 @@ which `BackendBase` declares but this backend never inherits, so the
 journal logs "Cannot assign to non-existent property" at every outputs
 read and the display panel's failed state can never show (present in the
 previous build's journal too).
+
+## After the rebuild, e1504g (2026-08-26, fresh boot, no windows, no player)
+
+| what | 2 min up | 20 min up |
+| --- | --- | --- |
+| shell CPU | 83 ticks / 10 s | 182 to 469 ticks / 10 s |
+| RSS / swapped | 480 MB / 0 | 513 MB / 0 |
+| subprocesses in 20 s | dualsense sysfs x1 | dualsense sysfs x1 |
+| other CPU | `nix` 34%, wireplumber 12% | wireplumber 14%, librepods 4% |
+
+Not comparable to the baseline, and not the build: `strace` on the shell
+showed 1200 `stat("/etc/localtime")`/s and 240 writes/s to its own
+`log.qslog` (5 MB in 20 min) from Quickshell's log thread, and the log's
+repeated lines are `org.bluez ... RSSI` property changes (a Bluetooth scan
+is running: `librepods --headless` looking for AirPods) and "Pipewire
+event loop received new events" (`pw-mon` counted 125 node additions in
+3 s: Easy Effects' `Spectrum` and `Output Level Meter` nodes come and go
+continuously). Quickshell parses and logs every one of those in C++
+before any QML runs; on the QML side the one thing that re-ran per event
+was `AudioPanel.qml`'s two `Pipewire.nodes.values.filter` bindings, which
+re-filtered, re-mapped and re-bound every node through its
+`PwObjectTracker` with the panel closed. Task 6 gates them on `isOpen`.
+The rest of that cost goes away when the scan stops (AirPods connected,
+or librepods not running) and Easy Effects' analyzer is closed; a clean
+idle number for the new build on this machine needs those conditions.
+
+Both hosts' `~/.config/nix` checkouts carry an uncommitted `flake.lock`
+(formalshell at c3f6e2f) that makes `git pull` refuse, so the rebuilds
+went through `--override-input formalshell github:FormalSnake/FormalShell/7d481c3`.
+The next plain rebuild reverts to the checkout's lock until that file is
+committed or the pull goes through.
 
 ## Findings, ranked by measured or evident cost
 
@@ -192,6 +223,15 @@ through `dev/vm-lock.sh`.
 - Verify: `dev/vm-lock.sh just vm-test`, `dev/vm-lock.sh just vm-smoke
   --media --panel media` and Read the PNGs; `hyprctl layers` in the run's
   JSON shows no `formalshell:panel` layer while the panel is closed.
+
+### Task 6: the audio panel reads the Pipewire graph only while open
+
+- `shell/Surfaces/Panels/AudioPanel.qml:56,62`: `_deviceNodes` and
+  `_streams` are `root.isOpen ? Pipewire.nodes.values.filter(...) : []`.
+  `AudioService` keeps the default sink and source bound for the bar and
+  the OSD, so nothing outside the panel reads these.
+- Verify: `dev/vm-lock.sh just vm-test`, `dev/vm-lock.sh just vm-smoke
+  --panel audio` and Read the PNG.
 
 ### Task 5: deploy and re-measure (owner's machine, no subagent)
 

@@ -180,10 +180,15 @@ PanelWindow {
         ? Geometry.maxFrameHeight(root._screen.height, Theme.barHeight,
             Theme.space.barMargin, Theme.space.screenPadding)
         : 400
+    // Header, the rule under it, then the content column (DESIGN.md §3
+    // "Panel"): one `panelPadding` either side of the seam, so the header
+    // sits in the same gutter the card's own padding gives every other edge.
+    readonly property real _headerGap: Theme.space.panelPadding * 2 + Theme.borderWidth
+
     readonly property real _maxContentHeight: Geometry.maxContentHeight(root._maxFrameHeight,
-        Theme.space.panelPadding, header.height, Theme.space.sectionGap)
+        Theme.space.panelPadding, header.height, root._headerGap)
     readonly property real _frameHeight: Geometry.frameHeight(contentColumn.implicitHeight,
-        root._maxContentHeight, Theme.space.panelPadding, header.height, Theme.space.sectionGap)
+        root._maxContentHeight, Theme.space.panelPadding, header.height, root._headerGap)
 
     function open(x, screen) {
         if (PanelRegistry.current && PanelRegistry.current !== root)
@@ -413,6 +418,22 @@ PanelWindow {
                 }
             }
 
+            // The header's seam (DESIGN.md §1's ladder rung 4, §3 "Panel"):
+            // every panel draws it, so the card reads as a titled sheet
+            // rather than as a title floating over a list. Full-bleed, which
+            // the negative margins buy back out of the Card's own padding:
+            // a rule stopping short of the border would read as a division
+            // of the rows rather than of the card.
+            Separator {
+                id: headerRule
+                anchors.top: header.bottom
+                anchors.topMargin: Theme.space.panelPadding
+                anchors.left: parent.left
+                anchors.leftMargin: -frame.padding
+                anchors.right: parent.right
+                anchors.rightMargin: -frame.padding
+            }
+
             // The ring reservation (DESIGN.md §1 "Ring", M48 D2): a clipping
             // container grows its clip rect by `ringWidth` on every side and
             // insets its content by the same, so the halo a cursor row draws
@@ -422,8 +443,8 @@ PanelWindow {
             // the header, both of which are several times that.
             Flickable {
                 id: contentFlickable
-                anchors.top: header.bottom
-                anchors.topMargin: Theme.space.sectionGap - Theme.ringWidth
+                anchors.top: headerRule.bottom
+                anchors.topMargin: Theme.space.panelPadding - Theme.ringWidth
                 anchors.left: parent.left
                 anchors.leftMargin: -Theme.ringWidth
                 anchors.right: parent.right

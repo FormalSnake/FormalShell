@@ -142,8 +142,10 @@ Singleton {
     // `fast` (hover fills) / `standard` (surface enter/exit) / `emphasized`
     // (the bar's workspace pill, the one piece of chrome whose travel spans
     // the width of a row, on `emphasizedEasing`'s longer decel) / `slide` (the
-    // enter/exit translate distance) / `easing` (the one ease-out curve every
-    // transition uses) / `reveal` (the wallpaper crossfade duration,
+    // enter/exit translate distance) / `easing` (the ease-out curve a
+    // transition that ENTERS or EXITS uses) / `easingInOut` (the curve a
+    // transition that MOVES something already on screen uses) / `reveal`
+    // (the wallpaper crossfade duration,
     // §4's third carve-out) / `revealEasing` (its own curve, a full-screen
     // image swap reads better on InOutQuad than the control-chrome OutCubic).
     // motion.enabled=false in settings.json zeroes
@@ -167,7 +169,17 @@ Singleton {
             emphasized: m.emphasized,
             emphasizedEasing: Easing.OutQuint,
             slide: m.slide,
-            easing: Easing.OutCubic,
+            // OutQuint, not OutCubic: Qt's cubic easings are the weak
+            // built-ins, and a decel that shallow reads as drift rather
+            // than as a stop. OutQuint is cubic-bezier(0.23, 1, 0.32, 1),
+            // the curve UI motion actually wants for an entrance.
+            easing: Easing.OutQuint,
+            // InOutQuart, cubic-bezier(0.77, 0, 0.175, 1). Something
+            // already on screen that travels to a new place accelerates out
+            // of rest and decelerates into it; an ease-out on a move starts
+            // at full speed, which reads as a teleport that then slows down.
+            // Entering and exiting take `easing` above, moving takes this.
+            easingInOut: Easing.InOutQuart,
             reveal: m.reveal,
             revealEasing: Easing.InOutQuad,
             pulseDuration: 900,

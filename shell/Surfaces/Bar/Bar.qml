@@ -417,7 +417,7 @@ PanelWindow {
             // end state, so honoring that setting needs no branch here.
             Behavior on width {
                 enabled: entryLoader.modelData.collapsible
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
             }
             readonly property bool _shown: entryLoader.item
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)

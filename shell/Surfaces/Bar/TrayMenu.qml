@@ -284,7 +284,7 @@ Panel {
                 }
 
                 // The launcher's own row (M43 D6): square, borderless, the
-                // cursor and a hovered row both filled `accent`.
+                // cursor filled `accent` and a hovered row washed.
                 Item {
                     id: row
                     anchors.fill: parent
@@ -298,7 +298,7 @@ Panel {
 
                     Rectangle {
                         anchors.fill: parent
-                        color: Theme.color.accent
+                        color: Theme.hoverFill
                         opacity: (rowWrap.hovered && !rowWrap.cursorHere) ? 1 : 0
 
                         Behavior on opacity {

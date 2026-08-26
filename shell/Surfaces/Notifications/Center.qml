@@ -187,9 +187,14 @@ PanelWindow {
 
     readonly property real _screenPadding: Theme.space.screenPadding
 
-    // The card's own height, before the cap: the header, the gap under it,
-    // both row sections, and the Card's padding either side.
-    readonly property real _contentHeight: header.height + Theme.space.sectionGap
+    // Header, the rule under it, then the rows (DESIGN.md §3 "Panel", the
+    // same seam every panel header draws): one `panelPadding` either side of
+    // the rule.
+    readonly property real _headerGap: Theme.space.panelPadding * 2 + Theme.borderWidth
+
+    // The card's own height, before the cap: the header, its seam, both row
+    // sections, and the Card's padding either side.
+    readonly property real _contentHeight: header.height + root._headerGap
         + column.implicitHeight + frame.padding * 2
 
     // Measured off the output rather than off this window: the window is
@@ -337,13 +342,26 @@ PanelWindow {
                 }
             }
 
+            // The header's seam (DESIGN.md §1's ladder rung 4), full-bleed
+            // to the card's border, which the negative margins buy back out
+            // of the Card's own padding.
+            Separator {
+                id: headerRule
+                anchors.top: header.bottom
+                anchors.topMargin: Theme.space.panelPadding
+                anchors.left: parent.left
+                anchors.leftMargin: -frame.padding
+                anchors.right: parent.right
+                anchors.rightMargin: -frame.padding
+            }
+
             // Scrolls only once the card has hit the cap (root._frame.capped):
             // under it the Flickable is exactly as tall as its own column and
             // has nowhere to go.
             Flickable {
                 id: rowsFlickable
-                anchors.top: header.bottom
-                anchors.topMargin: Theme.space.sectionGap
+                anchors.top: headerRule.bottom
+                anchors.topMargin: Theme.space.panelPadding
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
@@ -411,6 +429,7 @@ PanelWindow {
                                     entry: pendingRow.modelData
                                     now: root._now
                                     unread: true
+                                    ruled: pendingRow.index > 0
                                     cursor: root.cursorActive && root.cursorSection === 0
                                         && root.cursorIndex === pendingRow.index
 
@@ -443,6 +462,7 @@ PanelWindow {
                                     entry: seenRow.modelData
                                     now: root._now
                                     unread: false
+                                    ruled: seenRow.index > 0
                                     cursor: root.cursorActive && root.cursorSection === 0
                                         && root.cursorIndex === root._pendingRows.length + seenRow.index
 
@@ -466,15 +486,21 @@ PanelWindow {
         onDismissed: root.close()
     }
 
-    // One history row: the shared NotificationCard, plus the two marks this
-    // surface owns rather than the card. Both are drawn here on purpose.
-    // Toasts.qml shows the same card with neither.
+    // One history row: the shared NotificationCard, plus the three marks this
+    // surface owns rather than the card. All three are drawn here on purpose.
+    // Toasts.qml shows the same card with none of them.
     //
     // The card goes flat here and nowhere else: the frame above already draws
     // the fill and the border, so a card per row would tile N of them inside
-    // one. Rows read on space alone rather than on a rule between them, since
-    // each keeps its own `panelPadding`, which puts 28px between the text of
-    // one row and the next against 4px between lines inside one.
+    // one.
+    //
+    // `ruled` draws the seam between rows (DESIGN.md §1's ladder, rung 4).
+    // These rows are the case that rung is for: each is a stack of its own
+    // (sender line, summary, body, sometimes an action row) whose internal
+    // gaps are as large as the gap to the next row, so space alone stopped
+    // reading as separation and a full centre ran together into one block of
+    // text. `rowGap` either side of the rule, which lands it midway between
+    // two cards once each has paid its own `panelPadding`.
     //
     // Reports out by signal rather than calling root's own verbs: an inline
     // component is its own type, so ids declared outside it are not in scope
@@ -486,6 +512,7 @@ PanelWindow {
         property double now: 0
         property bool unread: false
         property bool cursor: false
+        property bool ruled: false
 
         signal dismissRequested()
         signal activateRequested()
@@ -495,7 +522,20 @@ PanelWindow {
         // on the unread ones, so the two sections stay left-aligned.
         readonly property real _markWidth: Theme.space.md + Theme.space.iconGap
 
-        implicitHeight: card.implicitHeight
+        // What the seam costs the row that draws it: the rule itself and the
+        // gap under it. The gap above is the list's own `rowGap` spacing.
+        readonly property real _ruleHeight: row.ruled ? Theme.borderWidth + Theme.space.rowGap : 0
+
+        implicitHeight: row._ruleHeight + card.implicitHeight
+
+        // Full-bleed across the list, the dot's gutter included: the seam
+        // divides the rows, and that gutter is part of a row.
+        Separator {
+            visible: row.ruled
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+        }
 
         Rectangle {
             visible: row.unread
@@ -504,7 +544,7 @@ PanelWindow {
             radius: Theme.pillRadius(width)
             color: Theme.color.primary
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenter: card.verticalCenter
         }
 
         // The ring (DESIGN.md §1), drawn here rather than by the card: a flat
@@ -535,6 +575,7 @@ PanelWindow {
         NotificationCard {
             id: card
             x: row._markWidth
+            y: row._ruleHeight
             width: row.width - row._markWidth
             radius: Theme.radiusMd
             flat: true

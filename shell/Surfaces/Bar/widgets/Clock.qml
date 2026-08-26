@@ -34,7 +34,7 @@ Cell {
     // "yyyy-MM-dd hh:mm"), glide the swap instead of shoving every other
     // right-region cell instantly (DESIGN.md §4, M16 Task 2's contract).
     Behavior on implicitWidth {
-        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
+        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
     }
 
     Text {

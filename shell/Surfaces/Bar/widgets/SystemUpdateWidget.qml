@@ -47,7 +47,7 @@ Cell {
     // instead of shoving the bar's other widgets instantly (DESIGN.md §1
     // "Motion").
     Behavior on implicitWidth {
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
     Row {

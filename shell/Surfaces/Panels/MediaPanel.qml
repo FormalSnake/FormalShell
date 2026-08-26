@@ -3,18 +3,24 @@ import qs.Core
 import qs.Components
 import qs.Services
 
-// MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"): a `NOW
-// PLAYING` section label carrying the player's own identity, the cover in a
-// `radiusMd` frame beside the track's title, artist and album, the transport
-// as one `ButtonGroup`, the position and the player's own volume as
-// `Track` rows, and a chip per registered player once more than one is on
-// the bus.
+// MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"). Four
+// blocks, each a section of the panel's own content column and so
+// `sectionGap` apart: the cover beside the source, title, artist and album;
+// the position track with its two times under it; the transport; the
+// player's own volume. A chip per registered player follows once more than
+// one is on the bus.
 //
-// Flat, not nested (M49 D8): the panel frame, the art frame, the transport's
-// trough and the player chips are the only chrome. Each block sits straight
-// in the panel's content column a `rowGap` apart, and the ring the keyboard
-// cursor draws on a track comes from `Track.cursor` rather than from a Cell
-// wrapped around it.
+// The whole panel is one card and nothing inside it is another (owner,
+// 2026-08-26). The chrome left is the panel frame, the transport's trough,
+// the player chips and the cover's own 1px frame, which is an outline on a
+// picture rather than a box around a group. What ranks the now-playing block
+// is type: `caption` source, `title` track, `body` artist, `bodySmall`
+// album. The ring the keyboard cursor draws on a track comes from
+// `Track.cursor` rather than from a Cell wrapped around it.
+//
+// The times sit under the groove, where every player that draws this puts
+// them: the groove is what the eye tracks, and a number above it reads as a
+// label for the block rather than as a readout of the line beneath.
 //
 // Everything below the title comes off MPRIS itself and is gated on the
 // player's own capability flags, so a player that implements none of
@@ -231,229 +237,227 @@ Panel {
         text: "NO PLAYER"
     }
 
-    Column {
+    // The now-playing block: the cover beside the source, the title, the
+    // artist and the album. Four sizes of type doing the ranking, so the
+    // block leads the panel without a box around it (DESIGN.md §1's ladder,
+    // rung 5). The player's own name heads it as a `SectionLabel`, which
+    // takes the `NOW PLAYING` label's slot: the panel header already says
+    // Media, and naming the source is the thing that row can say instead.
+    Row {
+        id: infoRow
         width: parent.width
         visible: MediaService.available
-        spacing: Theme.space.rowGap
+        spacing: root._hasArt ? Theme.space.xxl : 0
 
-        Row {
-            spacing: Theme.space.iconGap
-
-            SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "NOW PLAYING" }
-
-            // The player's own name is content, not a section label, so it
-            // stays in sentence case beside one.
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: MediaService.identity !== ""
-                text: MediaService.identity
-                color: Theme.color.mutedForeground
-                font.family: Theme.fontFamilySans
-                font.pixelSize: Theme.fontSize.bodySmall
-                elide: Text.ElideRight
-            }
-        }
-
-        Row {
-            id: infoRow
-            width: parent.width
-            spacing: root._hasArt ? Theme.space.md : 0
+        Item {
+            id: coverSlot
+            visible: root._hasArt
+            width: root._hasArt ? root._artSlotSize : 0
+            height: root._artSlotSize
+            anchors.verticalCenter: parent.verticalCenter
 
             // The frame is chrome, the art inside it is content: under
             // `theme.dither` the cover goes through `Picture`'s retro pass
             // and keeps its own colours, the frame itself never dithers.
-            Card {
-                id: artFrame
-                visible: root._hasArt
-                width: root._hasArt ? root._artSlotSize : 0
-                height: root._artSlotSize
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.radiusMd
-                color: Theme.color.muted
-                // The frame's border is all the inset the art gets: a cover
-                // fills its card rather than floating in it.
-                padding: Theme.borderWidth
+            Picture {
+                anchors.fill: parent
+                visible: MediaService.artUrl !== ""
+                framed: true
+                frameRadius: Theme.radiusMd
+                source: MediaService.artUrl
+                sourceSize.width: root._artSlotSize
+                sourceSize.height: root._artSlotSize
+                fillMode: Image.PreserveAspectCrop
+                cache: false
+            }
+
+            // Apple Music animated cover (opt-in): layered over the static
+            // art above, which stays the fallback for every path it doesn't
+            // cover (disabled, no match, no animated art, download failure, a
+            // missing QtMultimedia module). Inset and clipped by the frame's
+            // own border, the way `Picture` insets the still it replaces.
+            Item {
+                anchors.fill: parent
+                anchors.margins: Theme.borderWidth
                 clip: true
 
-                Picture {
-                    anchors.fill: parent
-                    visible: MediaService.artUrl !== ""
-                    source: MediaService.artUrl
-                    sourceSize.width: root._artSlotSize
-                    sourceSize.height: root._artSlotSize
-                    fillMode: Image.PreserveAspectCrop
-                    cache: false
-                }
-
-                // Apple Music animated cover (opt-in): layered over the
-                // static art above, which stays the fallback for every path
-                // it doesn't cover (disabled, no match, no animated art,
-                // download failure, a missing QtMultimedia module).
                 Loader {
                     anchors.fill: parent
                     active: AnimatedCoverFrameSource.active
                     source: "AnimatedAlbumArt.qml"
                 }
             }
+        }
 
-            Column {
-                width: infoRow.width - artFrame.width - infoRow.spacing
+        Column {
+            width: infoRow.width - coverSlot.width - infoRow.spacing
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.space.xxs
+
+            SectionLabel {
+                width: parent.width
+                visible: MediaService.identity !== ""
+                text: MediaService.identity
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                text: MediaService.title !== "" ? MediaService.title : "Unknown title"
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.title
+                font.weight: Theme.weight.medium
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                visible: MediaService.artist !== ""
+                text: MediaService.artist
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.body
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                visible: MediaService.album !== ""
+                text: MediaService.album
+                color: Theme.color.mutedForeground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.bodySmall
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    // Position: the track first, the two times under it. Every player that
+    // draws this puts the numbers below the groove, because the groove is
+    // what the eye tracks and a number above it reads as a label for the
+    // block rather than as a readout of the line under it.
+    Column {
+        width: parent.width
+        visible: MediaService.available
+        spacing: Theme.space.xs
+
+        Track {
+            id: progressTrack
+            width: parent.width
+            value: MediaService.length > 0 ? MediaService.position / MediaService.length : 0
+            cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
+            interactive: true
+            onContainsPointerChanged: if (progressTrack.containsPointer) root._pointAt(1, root._trackIndex("progress"))
+
+            // Above the track's own hover tracker, which answers no button,
+            // so this one still gets every press and drag.
+            MouseArea {
+                anchors.fill: parent
+                enabled: MediaService.canSeek
+                cursorShape: Qt.PointingHandCursor
+                function _setFromX(x) {
+                    MediaService.seek(x / progressTrack.width);
+                }
+                onPressed: mouse => _setFromX(mouse.x)
+                onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+            }
+        }
+
+        Item {
+            width: parent.width
+            height: Math.max(elapsedText.implicitHeight, totalText.implicitHeight)
+
+            Text {
+                id: elapsedText
+                anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: Theme.space.xxs
+                text: root._formatTime(MediaService.position)
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.bodySmall
+            }
 
-                Text {
-                    width: parent.width
-                    text: MediaService.title !== "" ? MediaService.title : "Unknown title"
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.subtitle
-                    font.weight: Theme.weight.medium
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    width: parent.width
-                    visible: MediaService.artist !== ""
-                    text: MediaService.artist
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.bodySmall
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    width: parent.width
-                    visible: MediaService.album !== ""
-                    text: MediaService.album
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.bodySmall
-                    elide: Text.ElideRight
-                }
+            Text {
+                id: totalText
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                text: root._formatTime(MediaService.length)
+                color: Theme.color.mutedForeground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.bodySmall
             }
         }
+    }
 
-        // The transport is a non-exclusive `ButtonGroup` (M48 D1): every
-        // button is its own action rather than one of a set, and a supported
-        // toggle that is on (shuffle, loop) carries the `primary` fill
-        // through the option's own `active`. Its trough is the only chrome
-        // around it, centred under the now-playing block (M49 D8). Section
-        // 0's cursor already walks this row with Left/Right, so the group
-        // takes `cursorIndex` straight off the panel.
-        ButtonGroup {
-            anchors.horizontalCenter: parent.horizontalCenter
-            height: Theme.space.controlHeight
-            exclusive: false
-            options: root._transportOptions
-            cursorIndex: root.cursorIndex
-            cursor: root.cursorActive && root.cursorSection === 0
-            onPressed: index => root._pressTransport(root._transport[index])
-            onHovered: (index, isHovered) => { if (isHovered) root._pointAt(0, index); }
+    // The transport is a non-exclusive `ButtonGroup` (M48 D1): every button
+    // is its own action rather than one of a set, and a supported toggle that
+    // is on (shuffle, loop) carries the `primary` fill through the option's
+    // own `active`. Its trough is a control's chrome, not a box around a
+    // group, which is why it survives the no-nested-cards rule. Section 0's
+    // cursor already walks this row with Left/Right, so the group takes
+    // `cursorIndex` straight off the panel.
+    ButtonGroup {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: MediaService.available
+        height: Theme.space.controlHeight
+        exclusive: false
+        options: root._transportOptions
+        cursorIndex: root.cursorIndex
+        cursor: root.cursorActive && root.cursorSection === 0
+        onPressed: index => root._pressTransport(root._transport[index])
+        onHovered: (index, isHovered) => { if (isHovered) root._pointAt(0, index); }
+    }
+
+    // The player's OWN volume (MPRIS Volume), not the sink's. AudioPanel owns
+    // that one, and a browser at 30% here is still whatever the sink says
+    // system-wide. Drawn in the OSD's grammar (DESIGN.md §3 "OSD"): an
+    // `Icon`, a `Track` and a tabular percentage on one `controlHeight` row,
+    // rather than the labelled two-line block it used to take.
+    Item {
+        width: parent.width
+        visible: MediaService.available && MediaService.volumeSupported
+        height: Theme.space.controlHeight
+
+        Icon {
+            id: volumeIcon
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            name: MediaService.volume > 0 ? (MediaService.volume < 0.5 ? "volume-1" : "volume-2") : "volume-x"
+            size: Theme.fontSize.body
+            color: Theme.color.mutedForeground
         }
 
-        Column {
-            width: parent.width
-            spacing: Theme.space.xxs
-
-            Item {
-                width: parent.width
-                height: Math.max(elapsedText.implicitHeight, totalText.implicitHeight)
-
-                Text {
-                    id: elapsedText
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root._formatTime(MediaService.position)
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.bodySmall
-                }
-
-                Text {
-                    id: totalText
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root._formatTime(MediaService.length)
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.bodySmall
-                }
-            }
-
-            Track {
-                id: progressTrack
-                width: parent.width
-                value: MediaService.length > 0 ? MediaService.position / MediaService.length : 0
-                cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
-                interactive: true
-                onContainsPointerChanged: if (progressTrack.containsPointer) root._pointAt(1, root._trackIndex("progress"))
-
-                // Above the track's own hover tracker, which answers no
-                // button, so this one still gets every press and drag.
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: MediaService.canSeek
-                    cursorShape: Qt.PointingHandCursor
-                    function _setFromX(x) {
-                        MediaService.seek(x / progressTrack.width);
-                    }
-                    onPressed: mouse => _setFromX(mouse.x)
-                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                }
-            }
+        Text {
+            id: volumeReadout
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: Math.round(MediaService.volume * 100) + "%"
+            color: Theme.color.mutedForeground
+            font.family: Theme.fontFamilyMono
+            font.pixelSize: Theme.fontSize.bodySmall
         }
 
-        // The player's OWN volume (MPRIS Volume), not the sink's. AudioPanel
-        // owns that one, and a browser at 30% here is still whatever the sink
-        // says system-wide.
-        Column {
-            width: parent.width
-            visible: MediaService.volumeSupported
-            spacing: Theme.space.xxs
+        Track {
+            id: volumeTrack
+            anchors.left: volumeIcon.right
+            anchors.leftMargin: Theme.space.iconGap
+            anchors.right: volumeReadout.left
+            anchors.rightMargin: Theme.space.iconGap
+            anchors.verticalCenter: parent.verticalCenter
+            value: MediaService.volume
+            cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("volume")
+            interactive: true
+            onContainsPointerChanged: if (volumeTrack.containsPointer) root._pointAt(1, root._trackIndex("volume"))
 
-            Item {
-                width: parent.width
-                height: Math.max(volumeLabel.implicitHeight, volumeReadout.implicitHeight)
-
-                Text {
-                    id: volumeLabel
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Volume"
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.body
-                    font.weight: Theme.weight.medium
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                function _setFromX(x) {
+                    MediaService.setVolume(x / volumeTrack.width);
                 }
-
-                Text {
-                    id: volumeReadout
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Math.round(MediaService.volume * 100) + "%"
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.bodySmall
-                }
-            }
-
-            Track {
-                id: volumeTrack
-                width: parent.width
-                value: MediaService.volume
-                cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("volume")
-                interactive: true
-                onContainsPointerChanged: if (volumeTrack.containsPointer) root._pointAt(1, root._trackIndex("volume"))
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    function _setFromX(x) {
-                        MediaService.setVolume(x / volumeTrack.width);
-                    }
-                    onPressed: mouse => _setFromX(mouse.x)
-                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                }
+                onPressed: mouse => _setFromX(mouse.x)
+                onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
             }
         }
     }

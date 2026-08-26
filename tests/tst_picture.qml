@@ -5,9 +5,11 @@ import "../shell/Components"
 
 // Picture's contract (M49 D3, shell/Components/Picture.qml): a plain `Image`
 // with the dither layer loaded only while `theme.dither` is on, so a surface
-// reaches for this instead of branching on the knob itself. The stub Theme
-// carries the shadcn preset's own table, where `dither` is off, which is the
-// case asserted here: the Loader stays inactive, nothing constructs a
+// reaches for this instead of branching on the knob itself, plus the optional
+// 1px frame every cover and app-icon slot draws around itself (DESIGN.md §1's
+// separation ladder: an outline on imagery is not a nested card, and this is
+// the one component that draws it). The stub Theme carries the shadcn
+// preset's own table, where `dither` is off, which is the case asserted here: the Loader stays inactive, nothing constructs a
 // DitherImage, and the image renders exactly as a bare `Image` would. The on
 // path needs a real Theme reading a settings file, so it is proven in the
 // rig's `--retro` runs rather than here.
@@ -43,6 +45,16 @@ TestCase {
     function loaderOf(picture) {
         for (var i = 0; i < picture.children.length; i++) {
             if (picture.children[i].sourceComponent !== undefined)
+                return picture.children[i];
+        }
+        return null;
+    }
+
+    // The frame is the one child that is a Rectangle: it carries `border`,
+    // which neither the Image nor the Loader does.
+    function frameOf(picture) {
+        for (var i = 0; i < picture.children.length; i++) {
+            if (picture.children[i].border !== undefined)
                 return picture.children[i];
         }
         return null;
@@ -101,6 +113,35 @@ TestCase {
         compare(img.sourceSize.height, slot);
         compare(picture.sourceSize.width, slot);
         compare(picture.sourceSize.height, slot);
+    }
+
+    // The frame is off by default and costs the image nothing: no border, no
+    // inset, exactly the bare Image every unframed caller already had.
+    function test_unframed_is_the_default_and_insets_nothing() {
+        var picture = make({ source: testCase.whiteSource });
+        compare(picture.framed, false);
+        compare(picture.clip, false);
+        compare(frameOf(picture).visible, false);
+        compare(imageOf(picture).anchors.margins, 0);
+    }
+
+    // Framed, the border is the only inset the picture gets: a cover fills
+    // its frame rather than floating in it.
+    function test_framed_draws_one_border_and_insets_by_it() {
+        var picture = make({ source: testCase.whiteSource, framed: true });
+        var frame = frameOf(picture);
+        verify(frame.visible);
+        compare(frame.border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(frame.border.color, Theme.color.border));
+        compare(imageOf(picture).anchors.margins, Theme.borderWidth);
+        compare(picture.clip, true);
+    }
+
+    // NotificationCard's app-icon slot takes the frame a radius step down
+    // from the album-art slot's, so the caller owns the radius.
+    function test_frame_radius_is_the_callers() {
+        compare(frameOf(make({ framed: true })).radius, Theme.radiusMd);
+        compare(frameOf(make({ framed: true, frameRadius: Theme.radiusSm })).radius, Theme.radiusSm);
     }
 
     // NotificationCard hides its whole art frame on the status the frame

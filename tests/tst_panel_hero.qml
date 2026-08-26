@@ -3,10 +3,16 @@ import QtTest
 import qs.Core
 import "../shell/Components"
 
-// PanelHero's caption line (DESIGN.md §1 "Type", §5): `bodySmall`,
-// `mutedForeground`, sentence case, in the face `metaMono` picks. It used to
-// render through the uppercasing section label, so DisplayPanel's mode line
-// read back as `1920X1080@60`.
+// PanelHero's two contracts. The caption line (DESIGN.md §1 "Type", §5):
+// `bodySmall`, `mutedForeground`, sentence case, in the face `metaMono`
+// picks. It used to render through the uppercasing section label, so
+// DisplayPanel's mode line read back as `1920X1080@60`.
+//
+// And the flat one (owner, 2026-08-26): the hero draws no box at rest. It
+// used to be a bordered `radiusMd` card inside the panel's own `radiusXl`
+// frame, which is the one combination DESIGN.md §1's ladder forbids. Every
+// state that is not resting still draws, which is what `ghost` buys over
+// simply deleting the Cell underneath it.
 TestCase {
     id: testCase
     name: "PanelHero"
@@ -47,6 +53,35 @@ TestCase {
         var text = findText(hero, testCase.modeLine);
         verify(text);
         return text;
+    }
+
+    // The body layer is Cell's second Rectangle child (tst_cell_states
+    // pins that order); a ghost paints neither its fill nor its border.
+    function bodyOf(hero) {
+        var rects = [];
+        for (var i = 0; i < hero.children.length; i++) {
+            var child = hero.children[i];
+            if (child.radius !== undefined && child.border !== undefined)
+                rects.push(child);
+        }
+        return rects[1];
+    }
+
+    function test_the_hero_draws_no_box_at_rest() {
+        var hero = make({ title: "Built-in display", meta: testCase.modeLine });
+        compare(hero.ghost, true);
+        var body = bodyOf(hero);
+        compare(body.border.width, 0);
+        compare(body.color.a, 0);
+    }
+
+    // Ghost drops the resting box and nothing else: the cursor ring still has
+    // to find the hero, since every panel that gives it a rail addresses it
+    // as a row with the keyboard.
+    function test_the_cursor_still_rings_a_flat_hero() {
+        var hero = make({ title: "Built-in display", cursor: true });
+        compare(bodyOf(hero).border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(bodyOf(hero).border.color, Theme.color.ring));
     }
 
     function test_the_caption_is_never_uppercased() {

@@ -77,8 +77,11 @@ TestCase {
         return out[index];
     }
 
+    // A segment's own layers, in declaration order: the chosen-segment fill,
+    // the pointer wash, the label.
     function fillOf(seg) { return seg.children[0]; }
-    function labelOf(seg) { return seg.children[1]; }
+    function washOf(seg) { return seg.children[1]; }
+    function labelOf(seg) { return seg.children[2]; }
 
     function test_the_group_is_muted_at_radius_md() {
         var control = make({ options: ["DARK", "LIGHT"] });
@@ -173,6 +176,25 @@ TestCase {
 
         var resting = make({ options: ["DARK", "LIGHT"] });
         verify(!halo(resting).visible);
+    }
+
+    // The group used to take the hand cursor and answer nothing on an
+    // unchosen segment.
+    function test_hovering_an_unchosen_segment_washes_it_and_lifts_its_ink() {
+        var control = make({ options: ["DARK", "LIGHT"] });
+        var target = segment(control, 1);
+        compare(washOf(target).opacity, 0);
+        verify(Qt.colorEqual(labelOf(target).color, Theme.color.mutedForeground));
+
+        mouseMove(target, target.width / 2, target.height / 2);
+        tryCompare(washOf(target), "opacity", 1);
+        verify(Qt.colorEqual(washOf(target).color, Theme.hoverFill));
+        verify(Qt.colorEqual(labelOf(target).color, Theme.color.foreground));
+
+        // The chosen one states itself already, so the pointer adds nothing.
+        var chosen = segment(control, 0);
+        mouseMove(chosen, chosen.width / 2, chosen.height / 2);
+        tryCompare(washOf(chosen), "opacity", 0);
     }
 
     function test_no_options_is_inert_rather_than_broken() {

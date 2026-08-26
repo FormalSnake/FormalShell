@@ -117,10 +117,14 @@ TestCase {
         compare(Math.round(rects[1].color.b * 255), 0x15);
     }
 
-    function test_hover_fades_in_the_accent_layer() {
+    // The wash, not an opaque `accent` chip: the cell's rest fill already
+    // carries `surfaceOpacity`, so a fill on top of it lands at a delta the
+    // wallpaper behind the blur decides.
+    function test_hover_fades_in_the_ink_wash() {
         var cell = makeCell({ hovered: true });
         var rects = layers(cell);
-        verify(Qt.colorEqual(rects[2].color, Theme.color.accent));
+        verify(Qt.colorEqual(rects[2].color, Theme.hoverFill));
+        verify(rects[2].color.a < 1);
         // The layer fades on Theme.motion.fast, so it is still climbing
         // when settle() returns.
         tryCompare(rects[2], "opacity", 1);
@@ -217,7 +221,7 @@ TestCase {
 
     function test_ghost_still_fades_in_the_hover_layer() {
         var rects = layers(makeCell({ ghost: true, hovered: true }));
-        verify(Qt.colorEqual(rects[2].color, Theme.color.accent));
+        verify(Qt.colorEqual(rects[2].color, Theme.hoverFill));
         tryCompare(rects[2], "opacity", 1);
         compare(rects[1].color.a, 0);
     }

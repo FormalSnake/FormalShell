@@ -72,8 +72,12 @@ Item {
             root._openTooltip();
     }
 
-    readonly property bool _filled: root.variant === "default"
-        || root.variant === "destructive" || root.variant === "selected"
+    // A variant carrying a colour of its own. `selected` is deliberately not
+    // one: its fill is `background`, which the ink wash sits on exactly as it
+    // sits on a ghost, and washing it is what keeps a chosen option in a
+    // `ButtonGroup` reading as chosen while the pointer is on it.
+    readonly property bool _solid: root.variant === "default"
+        || root.variant === "destructive"
     readonly property color _fill: root.variant === "default"
         ? Theme.color.primary
         : root.variant === "destructive"
@@ -116,7 +120,6 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: root.radius
-        color: root._fill
         // `default` and `destructive` carry no border of their own, so the
         // cursor's border swap is the only thing that gives them one;
         // `outline` and `selected` are bordered at rest and the swap only
@@ -124,32 +127,38 @@ Item {
         border.width: (root.cursor || root.variant === "outline" || root.variant === "selected")
             ? Theme.borderWidth : 0
         border.color: root.cursor ? Theme.color.ring : Theme.color.border
-        // A fill cannot take the `accent` hover layer without losing its own
-        // colour, so it dims instead.
-        opacity: (root._filled && root.hovered) ? 0.9 : 1
+        // A variant carrying its own colour blends toward `background` and
+        // stays opaque (shadcn's `hover:bg-primary/90`). Dropping this
+        // rectangle's opacity instead, which is what `/90` means on an opaque
+        // page, makes a primary button on a translucent panel see-through and
+        // the wallpaper reads straight through its label.
+        color: !root._solid
+            ? root._fill
+            : pointer.pressed
+                ? Theme.pressFilled(root._fill)
+                : root.hovered
+                    ? Theme.hoverFilled(root._fill)
+                    : root._fill
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        }
+    }
+
+    // The wash every other variant takes, over whatever is behind it: an
+    // opaque `accent` chip on a panel drawn at `surfaceOpacity` lands at a
+    // delta the wallpaper decides (Theme.hoverFill). Press is the same wash
+    // one step on, and lands without a fade, since the pointer is already
+    // there.
+    Rectangle {
+        anchors.fill: parent
+        radius: root.radius
+        color: pointer.pressed ? Theme.pressFill : Theme.hoverFill
+        opacity: (!root._solid && (root.hovered || pointer.pressed)) ? 1 : 0
 
         Behavior on opacity {
             NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
         }
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        color: Theme.color.accent
-        opacity: (!root._filled && root.hovered) ? 1 : 0
-
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
-        }
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        visible: pointer.pressed
-        color: Theme.color.accent
-        opacity: 0.8
     }
 
     Row {

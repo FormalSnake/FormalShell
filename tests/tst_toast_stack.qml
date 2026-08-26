@@ -84,6 +84,31 @@ TestCase {
         verify(out.byKey["b"].collapsed.z > out.byKey["c"].collapsed.z);
     }
 
+    // Expanding must not restack. The two orders are different lists (the
+    // collapsed one floats a critical toast to the front, the expanded one
+    // is chronological), so deriving z from the expanded index made every
+    // card change stacking order on the frame the pointer arrived, while its
+    // x and y were still gliding into place. Expanded cards do not overlap,
+    // so the collapsed order is free to hold for both.
+    function test_expanding_never_restacks_the_pile() {
+        var out = layout({ collapsed: ["c", "a", "b"], expanded: ["a", "b", "c"] });
+        ["a", "b", "c"].forEach(function (key) {
+            compare(out.byKey[key].expanded.z, out.byKey[key].collapsed.z,
+                key + " changed stacking order on expand");
+        });
+        // The collapsed order is still the one that paints, so the card the
+        // stack put in front stays in front all the way through the fan-out.
+        verify(out.byKey["c"].expanded.z > out.byKey["a"].expanded.z);
+    }
+
+    // A key that only ever appears expanded has no collapsed z to inherit,
+    // and still has to get one rather than an undefined.
+    function test_an_expanded_only_card_still_gets_a_z() {
+        var out = layout({ collapsed: ["a"], expanded: ["a", "b"] });
+        verify(typeof out.byKey["b"].expanded.z === "number");
+        verify(isFinite(out.byKey["b"].expanded.z));
+    }
+
     // At most two levels peek; a fourth popup exists only in the count the
     // expanded stack reveals, so it takes the last level's geometry and
     // hides behind it.
@@ -135,7 +160,10 @@ TestCase {
         compare(out.expandedHeight, 90 + tokens.gap + 60);
     }
 
-    function test_the_first_expanded_card_is_in_front() {
+    // With no collapsed order to inherit, the expanded order decides. This
+    // is the fallback rather than the rule: where both orders exist the
+    // collapsed one wins, so that expanding never restacks the pile.
+    function test_the_expanded_order_decides_when_there_is_no_collapsed_one() {
         var out = layout({ expanded: ["a", "b"], heights: { a: 90, b: 60 } });
         verify(out.byKey["a"].expanded.z > out.byKey["b"].expanded.z);
     }

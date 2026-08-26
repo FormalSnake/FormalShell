@@ -387,8 +387,11 @@ PanelWindow {
         // the same duration, and the pile's top edge (bottom-anchored) or
         // bottom edge (top-anchored) is where a card that just left used to
         // be, so this has to move with them rather than snap.
+        // The stack frame growing and shrinking is part of the same morph as
+        // the cards inside it, so it rides the same curve rather than
+        // decelerating on a different one underneath them.
         Behavior on height {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
         }
 
         // Hover anywhere on the stack expands it (DESIGN.md §Notifications):
@@ -418,11 +421,22 @@ PanelWindow {
                 implicitHeight: card.height
                 height: implicitHeight
 
+                // The expand/collapse morph: x, y and width are one movement
+                // of something already on screen, so all three take
+                // `easingInOut` and the same duration, and the card's own
+                // content fade below joins them. `width` had no Behavior at
+                // all, which is half of the "it clips for a moment" the
+                // owner reported: a peek card is inset, an expanded card is
+                // full width, and that step landed on the frame the pointer
+                // arrived while x and y were still gliding.
                 Behavior on x {
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
                 }
                 Behavior on y {
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                }
+                Behavior on width {
+                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
                 }
 
                 // presence: 0 = off-stack, 1 = fully shown, one scalar
@@ -462,7 +476,16 @@ PanelWindow {
                     // M34) so this card's own implicit height never jumps
                     // the moment it becomes the front one, and `peekShell`
                     // below paints the narrower chrome in its place.
+                    // The other half of the clip: this flipped 0 to 1 with no
+                    // Behavior, so a peek card's body appeared at full
+                    // opacity while its frame was still travelling. On the
+                    // morph's own curve and duration, so the content arrives
+                    // exactly as the card finishes opening rather than
+                    // ahead of it.
                     opacity: cardFrame._geom.contentVisible ? 1 : 0
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    }
                     enabled: cardFrame._geom.contentVisible
 
                     // Gated on !root._expanded: `stackHover`'s HoverHandler
@@ -505,8 +528,18 @@ PanelWindow {
                 // which is what keeps the rank width out of that card's own
                 // text reflow (see `_cardWidth` above).
                 Card {
+                    id: peekShell
                     anchors.fill: parent
-                    visible: !cardFrame._geom.contentVisible
+                    // Crossfades against `card` above rather than switching:
+                    // the two draw the same chrome at the same place, so a
+                    // hard flip between them was a visible seam in the middle
+                    // of an otherwise continuous morph. `visible` still falls
+                    // away at zero so a fully faded shell costs nothing.
+                    opacity: cardFrame._geom.contentVisible ? 0 : 1
+                    visible: peekShell.opacity > 0
+                    Behavior on opacity {
+                        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    }
                     color: card.color
                     radius: card.radius
                     border.color: card.border.color

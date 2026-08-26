@@ -2443,26 +2443,35 @@ PanelWindow {
             when: appView.item !== null && appView.item.query !== undefined
         }
 
+        // The seam between the split route's two halves (DESIGN.md §1's
+        // ladder, rung 4). The pane used to be a `Card` inside the launcher's
+        // own card, which is the one combination that ladder now forbids
+        // (owner, 2026-08-26, "no nested cards anywhere, just a panel, and
+        // max one card"). A column rule says the same thing a second frame
+        // did, in one pixel: two halves of one surface that differ in kind.
+        Separator {
+            id: previewRule
+            visible: root._isSplitRoute
+            vertical: true
+            anchors.top: rowsView.top
+            anchors.bottom: rowsView.bottom
+            anchors.left: rowsView.right
+            anchors.leftMargin: Core.Theme.space.panelPadding
+        }
+
         // The split route's right half (M30, M43 D4): the cursor row's full
-        // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
-        // list. Positioned by anchoring off rowsView itself (whichever width
-        // it currently has) rather than an independent x/width pair, so the
-        // two views can never drift apart.
-        //
-        // The split is one card beside a list, never two cards (owner,
-        // 2026-08-26): the left half is flat `MenuRow`s and this half is the
-        // card, so the pane reads as the thing the list is pointing at. What
-        // that rules out is a second frame INSIDE it, which is what an image
-        // row used to get.
-        Card {
+        // content, flat, a `panelPadding` gutter either side of the rule.
+        // Positioned by anchoring off rowsView itself (whichever width it
+        // currently has) rather than an independent x/width pair, so the two
+        // views can never drift apart.
+        Item {
             id: previewPane
             visible: root._isSplitRoute
             anchors.top: rowsView.top
-            anchors.left: rowsView.right
-            anchors.leftMargin: Core.Theme.space.sm
+            anchors.left: previewRule.right
+            anchors.leftMargin: Core.Theme.space.panelPadding
             anchors.right: parent.right
             height: rowsView.height
-            radius: Core.Theme.radiusMd
 
             Row {
                 id: previewHeader
@@ -2504,10 +2513,9 @@ PanelWindow {
             // True-color (menu thumbnails are never dithered) full preview of
             // the cursor row's capture, decode capped at the slot's own size
             // for the picker grid's reason. Bare: no well, no frame, no
-            // outline. The pane around it is already a card, and a second
-            // border inside one is the nesting the owner called out. It fits
-            // rather than fills, so the card's own ground shows around it,
-            // which is what a letterboxed capture is supposed to sit on.
+            // outline. It fits rather than fills, so the launcher card's own
+            // ground shows around it, which is what a letterboxed capture is
+            // supposed to sit on.
             Image {
                 id: previewImage
                 anchors.top: previewHeader.bottom

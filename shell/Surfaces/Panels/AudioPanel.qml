@@ -53,15 +53,21 @@ Panel {
     readonly property real _inputVolume: root._source !== null && root._source.audio !== null
         ? AudioModel.clampDevice(root._source.audio.volume) : 0
 
-    readonly property var _deviceNodes: Pipewire.nodes.values.filter(function (n) {
+    // Both node lists read the Pipewire model only while the panel is open:
+    // a closed panel would otherwise re-filter, re-map and re-bind every
+    // node on each graph change, and a node-churning client (Easy Effects'
+    // meters come and go dozens of times a second) turns that into a
+    // standing cost. AudioService keeps the default sink and source bound
+    // on its own, so nothing the bar shows depends on these.
+    readonly property var _deviceNodes: root.isOpen ? Pipewire.nodes.values.filter(function (n) {
         return n.audio !== null && !n.isStream;
-    })
+    }) : []
     readonly property var _outputs: root._deviceNodes.filter(function (n) { return n.isSink; })
     readonly property var _inputs: root._deviceNodes.filter(function (n) { return !n.isSink; })
 
-    readonly property var _streams: Pipewire.nodes.values.filter(function (n) {
+    readonly property var _streams: root.isOpen ? Pipewire.nodes.values.filter(function (n) {
         return n.audio !== null && AudioModel.isPlaybackStream(n);
-    })
+    }) : []
 
     // Two or three candidates read better as one pick than as a list of
     // rows (M48 D1, omarchy's own shape): the section becomes a

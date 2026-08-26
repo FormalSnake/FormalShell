@@ -95,17 +95,39 @@ does this boundary have to go".
 4. **A rule.** `Separator`, a 1px `border` line, full-bleed across the
    surface or `inset` to the row text. For a seam space cannot carry: two
    halves of one surface that differ in kind (the monitor ledger above its
-   process table), a header or footer against the content it frames, or a
+   process table), a header or footer against the content it frames, a
    divider a data source itself declares (a D-Bus menu's own separator
-   entries). Never between every row of a list, which is rung 1's job, and
-   never directly under a `SectionLabel`, which is rung 3 doing the same
-   work twice.
-5. **A card.** `Card`, or `Cell` with its resting border. Reserved for a
-   surface that floats over the desktop with nothing behind it, and for the
-   one block inside a surface that outranks the rest (`PanelHero`, the
-   split route's preview pane). A card inside a card is the one combination
-   this ladder forbids outright: a block inside a card that needs marking
-   off takes rung 4 or lower.
+   entries), or a list whose rows are taller than one line. Never directly
+   under a `SectionLabel`, which is rung 3 doing the same work twice.
+
+   That last case is where rung 1 runs out. Rung 1 holds while every row is
+   one line tall and the gap between rows is the largest gap in sight. A row
+   carrying its own stack (the notification centre's sender line, summary,
+   body and actions) has internal gaps as big as the gap to the next row, so
+   space stops reading as separation and the list runs together into one
+   block of text. Those rows take a rule between them. The test is the row's
+   height, not the list's length: uniform `controlHeight` rows still abut at
+   `spacing: 0` and still take nothing.
+5. **A card.** `Card`, and it is the surface itself. There is exactly one
+   per surface, drawn at its outer edge: the panel's frame, the launcher's,
+   a toast's, the OSD pill, the notification centre's. **Nothing inside a
+   card is a card.** A block inside one that needs marking off takes rung 4
+   or lower, however much it outranks its neighbours (owner, 2026-08-26:
+   "no nested cards anywhere, just a panel, and max one card").
+
+   What a resting box actually marks decides whether it is one. A fill and a
+   border at rest say *the pointer or the keyboard acts on this*: a
+   `Button`, an `Input`, a `Switch`, a `ButtonGroup` trough, a
+   `Cell { chip: true }`, a lone clickable row that is not part of a uniform
+   list. That is chrome on a control, and it never counts against the one
+   card above. A block that only groups its children, or only reports a
+   value, earns no box at any depth.
+
+   An outline around imagery is not a card either. Album art, a
+   notification's app icon and the launcher's preview picture keep a 1px
+   frame, because a picture bleeding into the surface behind it has no edge
+   of its own; `Picture { framed: true }` draws exactly that frame and
+   nothing else.
 
 **Padding**: one rule, on every surface. A card insets its content by
 `panelPadding`. A row is `controlHeight` tall with `controlPaddingX` either
@@ -218,10 +240,13 @@ only reports a number, and an empty state that only says `NO DEVICES`, is a
 ghost or no `Cell` at all. What keeps its `radiusMd` fill and border is what
 a reader could otherwise mistake: a lone control that is not part of a list,
 and every row of a section that mixes clickable rows with static ones. Every
-state still draws on a ghost, so nothing is lost but the resting box. A hero (the connected AP, the active sink) is
-an inner `Card` with `radiusMd`, and it keeps it precisely because the
-blocks around it no longer have one: the border is what says this block
-outranks the rest. Footer: `outline` Button left, `display`
+state still draws on a ghost, so nothing is lost but the resting box. The header takes a full-bleed `Separator`
+under it, on every panel, so the card reads as a titled sheet rather than as
+a title floating over a list. A hero (`PanelHero`: the connected AP, the
+active sink, the playing track) is flat and leads the content column, its
+own type doing the ranking the border used to do: a `subtitle` title over a
+`bodySmall` caption, an optional `display` readout beside them, an optional
+`Track` under them. Footer: `outline` Button left, `display`
 number right. Width `Default`; `Wide` for media, monitor, calendar. Nothing
 in a panel scrolls except a row list longer than the screen.
 
@@ -241,8 +266,10 @@ compositor's own layer animation has no geometry change to fight; the cards
 move, and everything outside them is click-through.
 
 **Notification centre.** A floating `Card` off the right edge, content-tall
-and capped at the output; DND is a `Switch`; unread rows carry a 6px
-`primary` dot.
+and capped at the output; DND is a `Switch` in a ruled header; unread rows
+carry a 6px `primary` dot. Its rows are multi-line, so a `Separator` runs
+between them (§1's ladder, rung 4) and the two tiers stay `SectionLabel`
+sections `sectionGap` apart.
 
 **OSD.** `Card` pill bottom-centre: `Icon`, `Track`, tabular percentage.
 
@@ -274,6 +301,8 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
   `wallpaper.dither` or `lock.dither`, both off by default. The bar's own
   mini cover animates only behind `media.animatedBarCover`, off by
   default; the media panel's own cover animates unconditionally.
+- A card inside a card, and a resting fill-and-border around any block that
+  only groups its children or only reports a value.
 - Foreground/background inversion for selection.
 - A trailing colon on a label. `NETWORKS (1)`, not `NETWORK:`.
 - A full-bleed `primary` or `destructive` row. Colour goes on the border, the

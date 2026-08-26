@@ -72,7 +72,7 @@ Item {
         color: Theme.color.background
 
         Behavior on x {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
         }
     }
 

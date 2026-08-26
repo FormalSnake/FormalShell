@@ -52,16 +52,27 @@ function layout(params) {
         };
     }
 
+    // The expanded pass reuses the COLLAPSED z rather than deriving its own.
+    // The two orders are different lists (`_stackOrder` floats a critical
+    // toast to the front, `_entries` is chronological), so a z of its own
+    // meant every card restacked on the frame the pointer arrived, while its
+    // x and y were still gliding to the expanded position. That is the
+    // "cards behind jump to the front instantly" the owner reported on
+    // 2026-08-26. Expanded cards do not overlap, so z buys nothing there;
+    // holding the collapsed order also means the cards paint in stack order
+    // for the whole fan-out, which is what makes it read as one stack
+    // opening rather than a reshuffle.
     var y = 0;
     for (var i = 0; i < expanded.length; i++) {
         var key = expanded[i];
         if (key === null || key === undefined)
             continue;
-        slotFor(key).expanded = {
+        var slot = slotFor(key);
+        slot.expanded = {
             x: 0,
             width: frameWidth,
             y: y,
-            z: expanded.length - i,
+            z: slot.collapsed ? slot.collapsed.z : expanded.length - i,
             contentVisible: true
         };
         y += (heights[key] || 0) + gap;
