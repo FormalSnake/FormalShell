@@ -326,6 +326,7 @@ Panel {
                         anchors.left: parent.left
                         anchors.leftMargin: Theme.space.controlPaddingX + rowWrap.depth * Theme.space.xxl
                         anchors.verticalCenter: parent.verticalCenter
+                        asynchronous: true
                         visible: rowWrap.entry.icon !== ""
                         source: rowWrap.entry.icon || ""
                         width: Theme.fontSize.body

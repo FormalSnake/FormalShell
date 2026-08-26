@@ -33,6 +33,7 @@ Singleton {
     readonly property string icsDir: Core.Config.get("calendar.icsDir", "")
     readonly property bool edsEnabled: Core.Config.get("calendar.eds", true)
     readonly property bool available: root.icsDir !== "" || (root.edsEnabled && !root._edsUnavailable)
+    readonly property bool _configured: root.icsDir !== "" || root.edsEnabled
     property var events: []
 
     property var _icsEvents: []
@@ -51,6 +52,12 @@ Singleton {
     // have re-evaluated yet at that exact point in the change cascade,
     // icsDir itself is already the fresh value by definition.
     function refresh() {
+        if (!root._configured) {
+            root._icsEvents = [];
+            root._edsEvents = [];
+            root._merge();
+            return;
+        }
         if (root.icsDir === "") {
             root._icsEvents = [];
             root._merge();
@@ -99,7 +106,7 @@ Singleton {
 
     Timer {
         interval: 5 * 60 * 1000
-        running: true
+        running: root._configured
         repeat: true
         onTriggered: root.refresh()
     }

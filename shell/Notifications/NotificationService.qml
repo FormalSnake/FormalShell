@@ -209,7 +209,7 @@ Singleton {
     // user-initiated counterpart, which calls .dismiss() instead).
     Timer {
         interval: 1000
-        running: true
+        running: root._state.popups.length > 0
         repeat: true
         onTriggered: {
             // Pause-on-hover: push every hovered, non-sticky popup's

@@ -86,7 +86,7 @@ TestCase {
         compare(picture.fillMode, Image.PreserveAspectFit);
         compare(img.fillMode, Image.PreserveAspectFit);
         compare(img.cache, true);
-        compare(img.asynchronous, false);
+        compare(img.asynchronous, true);
         compare(img.smooth, true);
     }
 

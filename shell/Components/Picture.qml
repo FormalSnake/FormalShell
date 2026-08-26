@@ -28,7 +28,7 @@ Item {
     property url source: ""
     property int fillMode: Image.PreserveAspectFit
     property bool cache: true
-    property bool asynchronous: false
+    property bool asynchronous: true
     property bool smooth: true
     property alias sourceSize: img.sourceSize
     readonly property alias status: img.status
