@@ -1,9 +1,9 @@
 # M50: a smooth shell on the e1504g
 
 **Date:** 2026-08-26
-**Status:** Tasks 1 to 4 landed 2026-08-26 (fd29a33, d701b39, 11f5684,
-f3815de); both hosts rebuilt onto 7d481c3 the same day. Task 6 (the
-audio panel's node lists) followed from the e1504g re-measure.
+**Status:** implemented 2026-08-26 (fd29a33, d701b39, 11f5684, f3815de,
+ff15957, b5d6420); both hosts run b5d6420. Task 6 (the audio panel's
+node lists) followed from the e1504g re-measure.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook.
 
@@ -77,9 +77,14 @@ before any QML runs; on the QML side the one thing that re-ran per event
 was `AudioPanel.qml`'s two `Pipewire.nodes.values.filter` bindings, which
 re-filtered, re-mapped and re-bound every node through its
 `PwObjectTracker` with the panel closed. Task 6 gates them on `isOpen`.
-The rest of that cost goes away when the scan stops (AirPods connected,
-or librepods not running) and Easy Effects' analyzer is closed; a clean
-idle number for the new build on this machine needs those conditions.
+With Task 6 deployed (b5d6420) and the same churn still running (`pw-mon`
+130 events / 3 s, wireplumber at 14%), the shell holds at 74 to 83
+ticks / 10 s over three samples: main thread ~30, D-Bus thread ~27, log
+thread ~19. What is left is Quickshell's own C++ handling of every BlueZ
+RSSI signal and PipeWire node event plus its debug log writer; it goes
+away when the scan stops (AirPods connected, or librepods not running)
+and Easy Effects' analyzer is closed. A clean idle number for the new
+build on this machine needs those conditions.
 
 Both hosts' `~/.config/nix` checkouts carry an uncommitted `flake.lock`
 (formalshell at c3f6e2f) that makes `git pull` refuse, so the rebuilds
