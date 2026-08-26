@@ -449,14 +449,26 @@ PanelWindow {
                 // simply starts its 0->1 climb from nothing, at its
                 // already-correct target x/y.
                 property real presence: (cardFrame._slot && !cardFrame._slot.departing) ? 1 : 0
+                // `emphasized`, not `standard`: a toast travels its own width
+                // in from off screen, and DESIGN.md §4's own note about the
+                // workspace pill applies unchanged here, 130ms reads that
+                // distance as a jump. `easing` rather than the expand morph's
+                // `easingInOut` because this is an entrance, not a move.
                 Behavior on presence {
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+                    NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easing }
                 }
                 opacity: cardFrame.presence
-                // Enter/exit slide (DESIGN.md §4.2): toward/from the
-                // anchored side edge, same slideSign Task 1 already
-                // resolves for the enter direction.
-                transform: Translate { x: (1 - cardFrame.presence) * Theme.motion.slide * root._positionSpec.slideSign }
+                // Enter/exit slide: the card comes in from past the anchored
+                // side edge and leaves the same way, which is what makes the
+                // dismiss direction obvious. §4.2's 4px `slide` is the rule
+                // for CHROME appearing in place; a toast is a surface
+                // arriving from off screen, so it travels its own width plus
+                // the gap it will sit in.
+                transform: Translate {
+                    x: (1 - cardFrame.presence)
+                        * (cardFrame.width + Theme.space.screenPadding)
+                        * root._positionSpec.slideSign
+                }
 
                 onPresenceChanged: {
                     if (cardFrame.presence === 0 && cardFrame._slot && cardFrame._slot.departing)

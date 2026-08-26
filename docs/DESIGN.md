@@ -157,7 +157,11 @@ those same numbers. A surface never writes its own margin.
 for enter/exit, `emphasized` 250 on `emphasizedEasing` for the bar's
 workspace indicator, `reveal` 400 for the wallpaper crossfade, `slide` 4px.
 `motion.enabled=false` zeroes the durations. Enter is opacity plus a 4px
-slide toward the anchor; exit is opacity only. List cursors jump. The
+slide toward the anchor, and exit reverses it. A toast is the one carve-out:
+it is a surface arriving from off screen rather than chrome appearing in
+place, so it travels its own width plus `screenPadding` from the anchored
+edge on `emphasized`, and leaves the same way (amended 2026-08-26, owner: the
+4px nudge read as not animating at all). List cursors jump. The
 workspace pill is the one carve-out inside the chrome: it travels the width
 of the dot row, which `standard` reads as a jump, so it takes `emphasized`
 and its two edges take different durations, which is what makes the pill
@@ -266,7 +270,9 @@ with a bottom rule only; a shadcn Breadcrumb under it (ancestors in
 `mutedForeground`, the level in `foreground`, a `chevron-right` between,
 no fill and no frame); rows with the cursor row in
 `accent`; hint footer in `caption` `mutedForeground`. Modal over a 0.5 black
-scrim.
+scrim. The split route's preview pane is flat, divided from the row list by a
+vertical `Separator` with a `panelPadding` gutter either side: one card, and
+the seam does what a second frame used to.
 
 **Toasts.** The sonner stack as built. `Card` chrome; critical is a
 `destructive` border and icon, not a fill. The card's icon slot resolves the
