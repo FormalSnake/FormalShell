@@ -23,7 +23,7 @@ Scope {
 
     // Shape and the special-workspace exclusion both live in model.js; see its
     // header for why an overlay workspace is not a workspace here.
-    readonly property var workspaces: Model.mapWorkspaces(Hyprland.workspaces.values)
+    readonly property var _mappedWorkspaces: Model.mapWorkspaces(Hyprland.workspaces.values)
 
     // `at`/`size` are already logical coordinates, so they map straight onto
     // the BackendBase `rect` contract. A hidden window (an unfocused member of
@@ -40,7 +40,7 @@ Scope {
     // where it used to be. Good enough to HINT a rectangle in the picker;
     // never good enough to CROP from. Anything cropping must re-read
     // `hyprctl clients -j` at capture time.
-    readonly property var windows: Hyprland.toplevels.values.map(function (t) {
+    readonly property var _mappedWindows: Hyprland.toplevels.values.map(function (t) {
         var ipc = t.lastIpcObject || {};
         var at = ipc.at;
         var size = ipc.size;
@@ -74,6 +74,62 @@ Scope {
             rect: hasRect ? { x: at[0], y: at[1], width: size[0], height: size[1] } : null
         };
     })
+
+    // Hyprland sends several events per user action, browser title changes
+    // arrive on their own, and consumers re-derive everything they show from
+    // a fresh `windows` array, so the mapped arrays are published rather than
+    // bound straight through. The two
+    // bindings above stay bindings so QML keeps tracking every dependency the
+    // mapping reads (each model's `values`, and per toplevel `title`,
+    // `activated`, `urgent`, `workspace`, `lastIpcObject` and the wayland
+    // handle's `appId`); their handlers only schedule. A burst of events in
+    // one event-loop turn then publishes once, and a publication whose mapped
+    // shape equals the last one is dropped entirely. Kept apart so a window
+    // title change cannot republish `workspaces`.
+    property var workspaces: []
+    property var windows: []
+
+    property string _workspacesJson: ""
+    property string _windowsJson: ""
+    property bool _workspacesQueued: false
+    property bool _windowsQueued: false
+
+    on_MappedWorkspacesChanged: {
+        if (root._workspacesQueued)
+            return;
+        root._workspacesQueued = true;
+        Qt.callLater(root._publishWorkspaces);
+    }
+
+    on_MappedWindowsChanged: {
+        if (root._windowsQueued)
+            return;
+        root._windowsQueued = true;
+        Qt.callLater(root._publishWindows);
+    }
+
+    // Both read the binding at call time rather than a value captured when the
+    // publication was scheduled, so the last event of the turn is the one that
+    // reaches consumers.
+    function _publishWorkspaces() {
+        root._workspacesQueued = false;
+        var next = root._mappedWorkspaces;
+        var json = JSON.stringify(next);
+        if (json === root._workspacesJson)
+            return;
+        root._workspacesJson = json;
+        root.workspaces = next;
+    }
+
+    function _publishWindows() {
+        root._windowsQueued = false;
+        var next = root._mappedWindows;
+        var json = JSON.stringify(next);
+        if (json === root._windowsJson)
+            return;
+        root._windowsJson = json;
+        root.windows = next;
+    }
 
     // Not derived from Hyprland.monitors, unlike everything else here:
     // Quickshell populates that model from `j/monitors`, which omits disabled
@@ -180,8 +236,11 @@ Scope {
     // already true rather than risk tiling a window back.
     readonly property bool floatingPlacementAvailable: true
 
+    // The three lookups below read `_mappedWindows`, not the published list: a
+    // dispatch decided in the same turn as the event that changed the window
+    // would otherwise be made against a list one turn old.
     function floatWindow(id) {
-        const w = root.windows.find(win => win.id === id);
+        const w = root._mappedWindows.find(win => win.id === id);
         if (w && w.isFloating)
             return;
         const selector = root._windowSelector(id);
@@ -222,7 +281,7 @@ Scope {
 
     // Idempotent: a window already on the special workspace stays put.
     function _moveToSpecial(id) {
-        const win = root.windows.find(w => w.id === id);
+        const win = root._mappedWindows.find(w => w.id === id);
         if (win && Number(win.workspaceId) < 0)
             return;
         const selector = root._windowSelector(id);
@@ -250,7 +309,7 @@ Scope {
     // counts as parked: the console's toggle then asks for it to be brought
     // here, which is the recoverable answer.
     function isWindowParked(id) {
-        const win = root.windows.find(w => w.id === id);
+        const win = root._mappedWindows.find(w => w.id === id);
         if (!win)
             return true;
         if (Number(win.workspaceId) < 0)
@@ -368,7 +427,13 @@ Scope {
         }
     }
 
-    Component.onCompleted: root.refreshOutputs()
+    // Consumers read `windows` before any Hyprland event arrives, so the first
+    // publication is not left to one.
+    Component.onCompleted: {
+        root._publishWorkspaces();
+        root._publishWindows();
+        root.refreshOutputs();
+    }
 
     Connections {
         target: Hyprland
