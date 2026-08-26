@@ -134,10 +134,21 @@ itself.
 Three regions, `left`, `center` and `right`, each independently reorderable.
 You need no config at all to get the default arrangement:
 
+The launcher cell's mark is `bar.launcherIcon`. It defaults to the shadcn
+Command sign; `"distro"` draws your machine's own logo, read from
+`/etc/os-release` and resolved against your icon theme first (so an installed
+`nixos-icons` or a Papirus-style `distributor-logo-*` set wins), then against
+the bundled font-logos table, which covers ~65 distributions and ships with
+the shell so it works with no icon theme at all. An unrecognised Linux gets
+Tux rather than the shell's own mark. Any other bare word is an icon name
+from the active set, and an absolute path, a `~` path or a `file://` URL is
+an image you supply.
+
 ```jsonc
 // ~/.config/formalshell/settings.json
 {
   "bar": {
+    "launcherIcon": "distro",
     "layout": {
       "left": ["launcher", "workspaces", "activeWindow"],
       "center": ["clock", "nowPlaying"],

@@ -9,7 +9,9 @@
 //   "formalshell"   the shell's own mark, which is that same sign until a
 //                   real one exists. Named separately so the day a mark
 //                   lands there is one place to change.
-//   "distro"        whatever /etc/os-release names, resolved below
+//   "distro"        the machine's own distro logo, resolved below: the icon
+//                   theme if it has one, otherwise the real logo from the
+//                   font-logos table the wrapper ships
 //   "<name>"        any icon name the active set knows ("snowflake",
 //                   "terminal"), through Components/Icon.qml like every
 //                   other icon in the shell
@@ -19,8 +21,10 @@
 //                   icon ASSETS in the repo, which is about what the shell
 //                   ships, not about what a user points it at)
 //
-// A spec is `{ kind: "icon"|"image", value }`. The caller draws one or the
-// other and never has to parse anything itself.
+// A spec is `{ kind: "icon"|"image"|"glyph", value }`: a name for
+// Components/Icon.qml, a URL for an Image, or a literal codepoint to draw in
+// the distro logo font. The caller draws one of the three and never has to
+// parse anything itself.
 
 var DEFAULT_NAME = "command";
 
@@ -63,24 +67,17 @@ function distroIconName(osRelease) {
     return String(os.LOGO || os.ID || "").trim();
 }
 
-// The distro's own glyph in the icon SET, for a machine whose icon theme has
-// no distro icon installed (a NixOS box without nixos-icons is the common
-// case). Only the ones both shipped sets actually carry; anything else falls
-// through to the shell's own mark rather than to a missing-glyph box.
-var DISTRO_FALLBACK = {
-    "nixos": "snowflake",
-    "nix": "snowflake"
-};
-
-function distroFallbackName(osRelease) {
-    var id = String((osRelease || {}).ID || "").trim().toLowerCase();
-    return DISTRO_FALLBACK[id] || DEFAULT_NAME;
-}
-
 // `themeIcon` is the caller's icon-theme lookup for the distro case, "" when
 // the theme has no such icon. Passed in rather than called here so this
 // stays pure and the test can drive both branches.
-function resolve(configValue, osRelease, themeIcon) {
+//
+// The distro order is: the machine's own icon theme first, because a user who
+// installed nixos-icons or a Papirus-style distributor-logo set meant that
+// one to win; then the bundled font-logos glyph, which is a REAL logo and is
+// always present because the wrapper ships the font; then Tux for a Linux the
+// table has never heard of. The shell's own mark is not in that chain at all,
+// since a caller asking for "distro" asked for a distro.
+function resolve(configValue, osRelease, themeIcon, distroGlyph) {
     var value = String(configValue || "").trim();
     if (value === "" || value === DEFAULT_NAME || value === "formalshell")
         return { kind: "icon", value: DEFAULT_NAME };
@@ -93,5 +90,10 @@ function resolve(configValue, osRelease, themeIcon) {
     var resolved = (name !== "" && themeIcon) ? themeIcon(name) : "";
     if (resolved !== "" && resolved !== undefined && resolved !== null)
         return { kind: "image", value: String(resolved) };
-    return { kind: "icon", value: distroFallbackName(osRelease) };
+
+    var id = String((osRelease || {}).ID || "").trim();
+    var glyph = distroGlyph ? distroGlyph(id) : "";
+    if (glyph !== "" && glyph !== undefined && glyph !== null)
+        return { kind: "glyph", value: String(glyph) };
+    return { kind: "icon", value: DEFAULT_NAME };
 }

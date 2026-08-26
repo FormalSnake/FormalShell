@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Core
 import qs.Components
 import "../../../Bar/launchericon.js" as LauncherIcon
+import "../../../Theme/icons/distro.js" as Distro
 
 // The launcher cell (DESIGN.md §3 Bar, M39 Task 1): the shell's mark at the
 // head of the bar's left region, and the menu's only pointer-reachable
@@ -32,7 +33,8 @@ Cell {
     // Image a missing-texture box.
     readonly property var _spec: {
         var spec = LauncherIcon.resolve(root._configured, root._osRelease,
-            function (name) { return Quickshell.iconPath(name, true); });
+            function (name) { return Quickshell.iconPath(name, true); },
+            Distro.glyphOrTux);
         if (spec.kind !== "image")
             return spec;
         // `~` is the caller's to expand, launchericon.js stays pure and
@@ -62,6 +64,22 @@ Cell {
         visible: root._spec.kind === "icon"
         name: root._spec.kind === "icon" ? root._spec.value : "command"
         color: root.foreground
+    }
+
+    // The distro mark. Its own font rather than `Icon`, which follows
+    // `theme.icons`: a distro logo is a mark and has exactly one correct
+    // shape, so it must not become a Lucide lookalike under one preset and
+    // the real thing under another.
+    Text {
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root._spec.kind === "glyph"
+        text: root._spec.kind === "glyph" ? root._spec.value : ""
+        color: root.foreground
+        font.family: Distro.FAMILY
+        font.pixelSize: Theme.fontSize.body
+        width: Theme.fontSize.body
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
     }
 
     // A supplied image, sized to the glyph it stands in for so the bar's
