@@ -10,6 +10,12 @@ import qs.Services
 // `Track` rows, and a chip per registered player once more than one is on
 // the bus.
 //
+// Flat, not nested (M49 D8): the panel frame, the art frame, the transport's
+// trough and the player chips are the only chrome. Each block sits straight
+// in the panel's content column a `rowGap` apart, and the ring the keyboard
+// cursor draws on a track comes from `Track.cursor` rather than from a Cell
+// wrapped around it.
+//
 // Everything below the title comes off MPRIS itself and is gated on the
 // player's own capability flags, so a player that implements none of
 // shuffle, loop, volume or seek renders the same three transport buttons and
@@ -54,9 +60,9 @@ Panel {
         value: root.isOpen
     }
 
-    // The one named image-slot size (DESIGN.md §1's structural-size
-    // exceptions name the media panel's album-art slot by name).
-    readonly property real _artSlotSize: 96
+    // The album-art slot, three control heights square so it scales with
+    // everything else the panel draws.
+    readonly property real _artSlotSize: Theme.space.controlHeight * 3
 
     readonly property bool _hasArt: MediaService.artUrl !== ""
         || AppleMusicArtService.animatedArtUrl !== ""
@@ -247,100 +253,92 @@ Panel {
             }
         }
 
-        Cell {
-            id: infoCell
+        Row {
+            id: infoRow
             width: parent.width
+            spacing: root._hasArt ? Theme.space.md : 0
 
-            Row {
-                id: infoRow
-                width: parent.width
-                spacing: root._hasArt ? Theme.space.md : 0
+            // The frame is chrome, the art inside it is content: under
+            // `theme.dither` the cover goes through `Picture`'s retro pass
+            // and keeps its own colours, the frame itself never dithers.
+            Card {
+                id: artFrame
+                visible: root._hasArt
+                width: root._hasArt ? root._artSlotSize : 0
+                height: root._artSlotSize
+                anchors.verticalCenter: parent.verticalCenter
+                radius: Theme.radiusMd
+                color: Theme.color.muted
+                // The frame's border is all the inset the art gets: a cover
+                // fills its card rather than floating in it.
+                padding: Theme.borderWidth
+                clip: true
 
-                // A plain frame, never a dither: content imagery keeps its
-                // own colours, and nothing in the shell dithers unless
-                // `wallpaper.dither` or `lock.dither` says so.
-                Card {
-                    id: artFrame
-                    visible: root._hasArt
-                    width: root._hasArt ? root._artSlotSize : 0
-                    height: root._artSlotSize
-                    anchors.verticalCenter: parent.verticalCenter
-                    radius: Theme.radiusMd
-                    color: Theme.color.muted
-                    // The frame's border is all the inset the art gets: a
-                    // cover fills its card rather than floating in it.
-                    padding: Theme.borderWidth
-                    clip: true
-
-                    Image {
-                        anchors.fill: parent
-                        visible: MediaService.artUrl !== ""
-                        source: MediaService.artUrl
-                        sourceSize.width: root._artSlotSize
-                        sourceSize.height: root._artSlotSize
-                        fillMode: Image.PreserveAspectCrop
-                        cache: false
-                    }
-
-                    // Apple Music animated cover (opt-in): layered over the
-                    // static art above, which stays the fallback for every
-                    // path it doesn't cover (disabled, no match, no animated
-                    // art, download failure, a missing QtMultimedia module).
-                    Loader {
-                        anchors.fill: parent
-                        active: AnimatedCoverFrameSource.active
-                        source: "AnimatedAlbumArt.qml"
-                    }
+                Picture {
+                    anchors.fill: parent
+                    visible: MediaService.artUrl !== ""
+                    source: MediaService.artUrl
+                    sourceSize.width: root._artSlotSize
+                    sourceSize.height: root._artSlotSize
+                    fillMode: Image.PreserveAspectCrop
+                    cache: false
                 }
 
-                Column {
-                    width: infoRow.width - artFrame.width - infoRow.spacing
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Theme.space.xxs
+                // Apple Music animated cover (opt-in): layered over the
+                // static art above, which stays the fallback for every path
+                // it doesn't cover (disabled, no match, no animated art,
+                // download failure, a missing QtMultimedia module).
+                Loader {
+                    anchors.fill: parent
+                    active: AnimatedCoverFrameSource.active
+                    source: "AnimatedAlbumArt.qml"
+                }
+            }
 
-                    Text {
-                        width: parent.width
-                        text: MediaService.title !== "" ? MediaService.title : "Unknown title"
-                        color: infoCell.foreground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.subtitle
-                        font.weight: Theme.weight.medium
-                        elide: Text.ElideRight
-                    }
+            Column {
+                width: infoRow.width - artFrame.width - infoRow.spacing
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.space.xxs
 
-                    Text {
-                        width: parent.width
-                        visible: MediaService.artist !== ""
-                        text: MediaService.artist
-                        color: infoCell.dimForeground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.bodySmall
-                        elide: Text.ElideRight
-                    }
+                Text {
+                    width: parent.width
+                    text: MediaService.title !== "" ? MediaService.title : "Unknown title"
+                    color: Theme.color.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.subtitle
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
+                }
 
-                    Text {
-                        width: parent.width
-                        visible: MediaService.album !== ""
-                        text: MediaService.album
-                        color: infoCell.dimForeground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.bodySmall
-                        elide: Text.ElideRight
-                    }
+                Text {
+                    width: parent.width
+                    visible: MediaService.artist !== ""
+                    text: MediaService.artist
+                    color: Theme.color.mutedForeground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.bodySmall
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    visible: MediaService.album !== ""
+                    text: MediaService.album
+                    color: Theme.color.mutedForeground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.bodySmall
+                    elide: Text.ElideRight
                 }
             }
         }
-    }
 
-    // The transport is a non-exclusive `ButtonGroup` (M48 D1): every button
-    // is its own action rather than one of a set, and a supported toggle
-    // that is on (shuffle, loop) carries the `primary` fill through the
-    // option's own `active`. Section 0's cursor already walks this row with
-    // Left/Right, so the group takes `cursorIndex` straight off the panel.
-    Cell {
-        visible: MediaService.available
-        width: parent.width
-
+        // The transport is a non-exclusive `ButtonGroup` (M48 D1): every
+        // button is its own action rather than one of a set, and a supported
+        // toggle that is on (shuffle, loop) carries the `primary` fill
+        // through the option's own `active`. Its trough is the only chrome
+        // around it, centred under the now-playing block (M49 D8). Section
+        // 0's cursor already walks this row with Left/Right, so the group
+        // takes `cursorIndex` straight off the panel.
         ButtonGroup {
             anchors.horizontalCenter: parent.horizontalCenter
             height: Theme.space.controlHeight
@@ -351,16 +349,6 @@ Panel {
             onPressed: index => root._pressTransport(root._transport[index])
             onHovered: (index, isHovered) => { if (isHovered) root._pointAt(0, index); }
         }
-    }
-
-    Cell {
-        id: progressCell
-        visible: MediaService.available
-        width: parent.width
-        cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
-        interactive: true
-        acceptedButtons: Qt.NoButton
-        onContainsPointerChanged: if (progressCell.containsPointer) root._pointAt(1, root._trackIndex("progress"))
 
         Column {
             width: parent.width
@@ -375,7 +363,7 @@ Panel {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: root._formatTime(MediaService.position)
-                    color: progressCell.foreground
+                    color: Theme.color.foreground
                     font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.bodySmall
                 }
@@ -385,7 +373,7 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: root._formatTime(MediaService.length)
-                    color: progressCell.dimForeground
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.bodySmall
                 }
@@ -395,7 +383,12 @@ Panel {
                 id: progressTrack
                 width: parent.width
                 value: MediaService.length > 0 ? MediaService.position / MediaService.length : 0
+                cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
+                interactive: true
+                onContainsPointerChanged: if (progressTrack.containsPointer) root._pointAt(1, root._trackIndex("progress"))
 
+                // Above the track's own hover tracker, which answers no
+                // button, so this one still gets every press and drag.
                 MouseArea {
                     anchors.fill: parent
                     enabled: MediaService.canSeek
@@ -408,22 +401,13 @@ Panel {
                 }
             }
         }
-    }
 
-    // The player's OWN volume (MPRIS Volume), not the sink's. AudioPanel
-    // owns that one, and a browser at 30% here is still whatever the sink
-    // says system-wide.
-    Cell {
-        id: volumeCell
-        visible: MediaService.available && MediaService.volumeSupported
-        width: parent.width
-        cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("volume")
-        interactive: true
-        acceptedButtons: Qt.NoButton
-        onContainsPointerChanged: if (volumeCell.containsPointer) root._pointAt(1, root._trackIndex("volume"))
-
+        // The player's OWN volume (MPRIS Volume), not the sink's. AudioPanel
+        // owns that one, and a browser at 30% here is still whatever the sink
+        // says system-wide.
         Column {
             width: parent.width
+            visible: MediaService.volumeSupported
             spacing: Theme.space.xxs
 
             Item {
@@ -435,7 +419,7 @@ Panel {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Volume"
-                    color: volumeCell.foreground
+                    color: Theme.color.foreground
                     font.family: Theme.fontFamilySans
                     font.pixelSize: Theme.fontSize.body
                     font.weight: Theme.weight.medium
@@ -446,7 +430,7 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: Math.round(MediaService.volume * 100) + "%"
-                    color: volumeCell.dimForeground
+                    color: Theme.color.mutedForeground
                     font.family: Theme.fontFamilyMono
                     font.pixelSize: Theme.fontSize.bodySmall
                 }
@@ -456,6 +440,9 @@ Panel {
                 id: volumeTrack
                 width: parent.width
                 value: MediaService.volume
+                cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("volume")
+                interactive: true
+                onContainsPointerChanged: if (volumeTrack.containsPointer) root._pointAt(1, root._trackIndex("volume"))
 
                 MouseArea {
                     anchors.fill: parent

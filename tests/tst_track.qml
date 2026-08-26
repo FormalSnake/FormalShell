@@ -5,7 +5,8 @@ import "../shell/Components"
 
 // Track's contract (DESIGN.md §2): a `trackThickness` groove at `radiusSm`,
 // `primary` at 0.2 behind a `primary` fill, the fraction clamped to 0..1,
-// plus the optional `notch` mark AudioPanel's overdrive rails need.
+// the optional `notch` mark AudioPanel's overdrive rails need, and the ring
+// a panel addressing the track as a row of its own turns on.
 //
 // The groove's colour is asserted against a sentinel palette rather than
 // Palette.fallback(): `muted`, `accent` and `secondary` share one zinc step
@@ -63,16 +64,32 @@ TestCase {
         return track;
     }
 
-    // The groove's two children, in declaration order: the fill, then the
-    // optional notch (invisible unless `notch` is set).
+    // The groove's painted children, in declaration order: the ring halo,
+    // the fill, then the optional notch (invisible unless `notch` is set).
+    // Filtered on `radius` so the hover tracker (a MouseArea) and the
+    // dither remainder (a Loader, inactive under the stub's shadcn preset)
+    // stay out of the count.
+    function layers(track) {
+        var out = [];
+        for (var i = 0; i < track.children.length; i++) {
+            var child = track.children[i];
+            if (child.radius !== undefined)
+                out.push(child);
+        }
+        compare(out.length, 3);
+        return out;
+    }
+
+    function haloOf(track) {
+        return layers(track)[0];
+    }
+
     function fillOf(track) {
-        compare(track.children.length, 2);
-        return track.children[0];
+        return layers(track)[1];
     }
 
     function notchOf(track) {
-        compare(track.children.length, 2);
-        return track.children[1];
+        return layers(track)[2];
     }
 
     function test_no_notch_unless_one_is_asked_for() {
@@ -136,5 +153,33 @@ TestCase {
     function test_a_full_track_never_overflows_the_groove() {
         var track = make({ value: 4 });
         compare(fillOf(track).width, track.width);
+    }
+
+    function test_cursor_draws_the_ring() {
+        var track = make({ value: 0.5, cursor: true });
+        var halo = haloOf(track);
+        verify(halo.visible);
+        verify(Qt.colorEqual(halo.color, Theme.color.ring));
+        compare(halo.opacity, Theme.ringAlpha);
+        compare(halo.radius, Theme.radiusSm + Theme.ringWidth);
+        compare(halo.width, track.width + Theme.ringWidth * 2);
+        compare(track.border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(track.border.color, Theme.color.ring));
+    }
+
+    function test_no_cursor_draws_no_ring_and_no_border() {
+        var track = make({ value: 0.5 });
+        verify(!haloOf(track).visible);
+        compare(track.border.width, 0);
+    }
+
+    // The halo falls outside the groove's own bounds, so a track in a column
+    // sits at the same y and the same height with the ring on as without it.
+    function test_the_ring_leaves_the_groove_geometry_alone() {
+        var plain = make({ value: 0.5 });
+        var ringed = make({ value: 0.5, cursor: true });
+        compare(ringed.implicitHeight, plain.implicitHeight);
+        compare(ringed.height, plain.height);
+        compare(ringed.width, plain.width);
     }
 }
