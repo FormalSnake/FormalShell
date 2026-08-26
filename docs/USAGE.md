@@ -2366,6 +2366,15 @@ session. A click on the square fires straight away: those pixels stop
 reaching the window underneath either way, so a click there is deliberate.
 `enabled: false` maps no corner surfaces at all.
 
+A corner that has fired stays disarmed until the pointer has genuinely left
+it and 400ms have passed since the action ended. Unlocking with the cursor
+still parked in the corner therefore does not lock the session straight
+back: the pointer the compositor hands over when the lock plate unmaps is a
+hand-back, not an approach. Move out of the corner and back in and it fires
+again as usual. An external locker (`lock.command`) never reports its own
+unlock, so on that path the 400ms runs from the moment the corner fired and
+the leave is the whole guard.
+
 Three action names are built in: `none`, `screensaver` and `lock`. Beyond
 those a corner takes any launcher action string, resolved by exactly the
 same code the launcher's own rows go through:

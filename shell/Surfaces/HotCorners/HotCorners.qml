@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import qs.Core as Core
 import qs.Services
 import "../../HotCorners/corners.js" as Corners
+import "../../HotCorners/arm.js" as Arm
 
 // Pointer-driven corner triggers: throw the cursor into a screen corner and
 // the shell locks or shows the screensaver. One controller (this Item)
@@ -38,13 +39,57 @@ Item {
             console.warn("HotCorners: " + root.config.warnings[i]);
     }
 
+    // Raised when an action's own surface goes away, so the corner that
+    // fired it can start its re-arm cooldown from the end rather than from
+    // the fire. A signal on the controller rather than a read from each
+    // window, because the Variants delegates below are not enumerable from
+    // here.
+    signal actionEnded(string action)
+
+    // When each action last ended, by name. It lives here and not in the
+    // window that fired, because the windows do not outlive an output list
+    // or a config change: a screen waking or a settings.json save while the
+    // session is locked rebuilds every one of them, and a corner that
+    // adopted nothing would come up armed with the lock plate still on
+    // screen. `Arm.adopt` reads it at construction.
+    readonly property var endedAt: ({})
+
+    function _actionEnded(action) {
+        root.endedAt[action] = Date.now();
+        root.actionEnded(action);
+    }
+
+    // Unlock is the only edge WlSessionLock reports: setLocked() emits
+    // lockStateChanged() on its unlock path and nowhere else (Lock.qml's own
+    // lock() comment has the C++ reading), which is exactly the edge wanted
+    // here, so this handler needs no guard against a lock being mistaken for
+    // an unlock. An external locker never gets this far, `lockScreen` is the
+    // built-in surface or nothing.
+    Connections {
+        target: LockService.lockScreen
+        ignoreUnknownSignals: true
+        function onLockedChanged() {
+            if (LockService.isLocked() === false)
+                root._actionEnded("lock");
+        }
+    }
+
+    Connections {
+        target: root.screensaver
+        ignoreUnknownSignals: true
+        function onActiveChanged() {
+            if (root.screensaver && !root.screensaver.active)
+                root._actionEnded("screensaver");
+        }
+    }
+
     // Whether the action's own surface is already up. Two things read this:
     // the trigger itself (firing lock while locked is a no-op), and the
-    // re-arming rule below, which needs to tell "the pointer left the corner"
-    // from "our own action's surface took the pointer away from it".
+    // enter handler below, which will not start a dwell against a surface
+    // that is already up.
     // A launcher action has no surface of its own to be already up, so it is
-    // never active: it fires on every entry, and re-arms on the next leave
-    // like any other corner.
+    // never active: it fires on every entry, and re-arms on a leave plus the
+    // cooldown like any other corner.
     function actionActive(action) {
         // `isLocked` is null while an external locker owns the session
         // (LockService's header): unknown is not active, so a corner entry
@@ -59,6 +104,11 @@ Item {
     function trigger(action) {
         if (root.actionActive(action))
             return;
+        // An action that never reports back (a launcher string, an external
+        // locker) is over as far as this shell can tell the moment it is
+        // fired, so its cooldown starts here.
+        if (!Arm.reportsEnd(action, LockService.external))
+            root.endedAt[action] = Date.now();
         if (action === "lock")
             LockService.lock();
         else if (action === "screensaver" && root.screensaver)
@@ -99,36 +149,61 @@ Item {
                 implicitWidth: root.config.size
                 implicitHeight: root.config.size
 
-                // Armed/disarmed rather than firing on every entry. Firing
-                // maps the action's own surface above this one, which takes
-                // the pointer with it, so dismissing that surface hands the
-                // pointer straight back to a corner it never really left.
-                // Re-arming only on a leave taken while the action is NOT
-                // active is what stops that handoff from re-firing under a
-                // parked cursor: leave the corner for real and it re-arms.
-                property bool armed: true
+                // Armed/disarmed rather than firing on every entry, and the
+                // rules for it live in arm.js so they can be tested without a
+                // compositor. The short of it: firing maps the action's own
+                // surface above this one, which takes the pointer with it, so
+                // dismissing that surface hands the pointer straight back to
+                // a corner the cursor never really left. Re-arming wants both
+                // a genuine leave and a quiet period after the action ends,
+                // or the hand-back relocks the session the instant it is
+                // unlocked. Not `state`: QtQuick exports its own State type
+                // and the bare name reads back undefined.
+                property var arm: Arm.initial()
+
+                // Not a binding: this reads the controller once, at the
+                // moment the surface is built, and everything after that is
+                // driven by events.
+                Component.onCompleted: win.arm = Arm.adopt(Date.now(),
+                    root.actionActive(win.modelData.action),
+                    root.endedAt[win.modelData.action] || 0)
 
                 function fire() {
                     dwell.stop();
-                    win.armed = false;
+                    win.arm = Arm.onFire(win.arm, Date.now(),
+                        Arm.reportsEnd(win.modelData.action, LockService.external));
                     root.trigger(win.modelData.action);
                 }
 
+                Connections {
+                    target: root
+                    function onActionEnded(action) {
+                        if (action !== win.modelData.action)
+                            return;
+                        win.arm = Arm.onActionEnd(win.arm, Date.now(), hover.containsMouse);
+                    }
+                }
+
                 MouseArea {
+                    id: hover
                     anchors.fill: parent
                     hoverEnabled: true
                     onEntered: {
-                        if (win.armed && !root.actionActive(win.modelData.action))
+                        const now = Date.now();
+                        const armed = Arm.isArmed(win.arm, now);
+                        win.arm = Arm.onEnter(win.arm, now);
+                        if (armed && !root.actionActive(win.modelData.action))
                             dwell.restart();
                     }
                     onExited: {
                         dwell.stop();
-                        if (!root.actionActive(win.modelData.action))
-                            win.armed = true;
+                        win.arm = Arm.onExit(win.arm);
                     }
                     // This surface's input region eats the click whatever it
                     // does with it, so it fires outright rather than being
                     // lost, no dwell, a click on a 4px corner is deliberate.
+                    // A button press is input the cooldown has nothing to say
+                    // about: nothing hands a corner a click by accident.
                     onClicked: win.fire()
                 }
 
