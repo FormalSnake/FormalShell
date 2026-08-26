@@ -498,97 +498,100 @@ Panel {
         }
     }
 
-    Column {
-        width: parent.width
+    // The default source's own master row: one line of label, percent
+    // and mute, its track underneath, the same rhythm as a stream row.
+    // It opens the input the way the hero opens the output, so it sits a
+    // section away from the list below rather than inside it.
+    Cell {
+        id: inputMasterCell
         visible: root._inputs.length > 0
-        spacing: Theme.space.rowGap
+        width: parent.width
+        interactive: true
+        cursor: root.cursorActive && root._cursorKey === "input-slider"
+        onContainsPointerChanged: if (inputMasterCell.containsPointer) root._pointAt("input-slider")
 
-        // The default source's own master row: one line of label, percent
-        // and mute, its track underneath, the same rhythm as a stream row.
-        Cell {
-            id: inputMasterCell
+        Column {
             width: parent.width
-            interactive: true
-            cursor: root.cursorActive && root._cursorKey === "input-slider"
-            onContainsPointerChanged: if (inputMasterCell.containsPointer) root._pointAt("input-slider")
+            spacing: Theme.space.xs
 
-            Column {
+            Item {
                 width: parent.width
-                spacing: Theme.space.xs
+                height: Math.max(inputLabel.implicitHeight, inputValueRow.implicitHeight)
 
-                Item {
-                    width: parent.width
-                    height: Math.max(inputLabel.implicitHeight, inputValueRow.implicitHeight)
-
-                    Icon {
-                        id: inputIcon
-                        name: root._inputMuted ? "mic-off" : "mic"
-                        size: Theme.fontSize.body
-                        color: inputMasterCell.foreground
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    Text {
-                        id: inputLabel
-                        anchors.left: inputIcon.right
-                        anchors.leftMargin: Theme.space.iconGap
-                        anchors.right: inputValueRow.left
-                        anchors.rightMargin: Theme.space.iconGap
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "Input"
-                        color: inputMasterCell.foreground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.body
-                        font.weight: Theme.weight.medium
-                        elide: Text.ElideRight
-                    }
-
-                    Row {
-                        id: inputValueRow
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.space.iconGap
-
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: Math.round(root._inputVolume * 100) + "%"
-                            color: root._inputMuted ? Theme.color.mutedForeground : inputMasterCell.dimForeground
-                            font.family: Theme.fontFamilyMono
-                            font.pixelSize: Theme.fontSize.bodySmall
-                        }
-
-                        Switch {
-                            anchors.verticalCenter: parent.verticalCenter
-                            checked: !root._inputMuted
-                            onToggled: checked => { if (root._source && root._source.audio) root._source.audio.muted = !checked; }
-                        }
-                    }
+                Icon {
+                    id: inputIcon
+                    name: root._inputMuted ? "mic-off" : "mic"
+                    size: Theme.fontSize.body
+                    color: inputMasterCell.foreground
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
-                Track {
-                    id: inputTrack
-                    width: parent.width
-                    value: root._inputVolume
+                Text {
+                    id: inputLabel
+                    anchors.left: inputIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: inputValueRow.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Input"
+                    color: inputMasterCell.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                    font.weight: Theme.weight.medium
+                    elide: Text.ElideRight
+                }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        function _setFromX(x) {
-                            if (!root._source || !root._source.audio) return;
-                            root._source.audio.volume = AudioModel.clampDevice(x / inputTrack.width);
-                        }
-                        onPressed: mouse => _setFromX(mouse.x)
-                        onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                        onWheel: wheel => {
-                            if (!root._source || !root._source.audio) return;
-                            root._source.audio.volume = AudioModel.clampDevice(root._source.audio.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
-                            wheel.accepted = true;
-                        }
+                Row {
+                    id: inputValueRow
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.space.iconGap
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Math.round(root._inputVolume * 100) + "%"
+                        color: root._inputMuted ? Theme.color.mutedForeground : inputMasterCell.dimForeground
+                        font.family: Theme.fontFamilyMono
+                        font.pixelSize: Theme.fontSize.bodySmall
+                    }
+
+                    Switch {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: !root._inputMuted
+                        onToggled: checked => { if (root._source && root._source.audio) root._source.audio.muted = !checked; }
+                    }
+                }
+            }
+
+            Track {
+                id: inputTrack
+                width: parent.width
+                value: root._inputVolume
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    function _setFromX(x) {
+                        if (!root._source || !root._source.audio) return;
+                        root._source.audio.volume = AudioModel.clampDevice(x / inputTrack.width);
+                    }
+                    onPressed: mouse => _setFromX(mouse.x)
+                    onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
+                    onWheel: wheel => {
+                        if (!root._source || !root._source.audio) return;
+                        root._source.audio.volume = AudioModel.clampDevice(root._source.audio.volume + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
+                        wheel.accepted = true;
                     }
                 }
             }
         }
+    }
+
+    Column {
+        width: parent.width
+        visible: root._inputs.length > 0
+        spacing: Theme.space.rowGap
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX

@@ -347,6 +347,10 @@ Panel {
         }
     }
 
+    // The footer acts on the panel rather than sitting in the list above it,
+    // so the seam runs the full width of the surface.
+    Separator { width: parent.width }
+
     // Footer (spec "Panels"): the outline action on the left, the figure it
     // produces on the right.
     Item {

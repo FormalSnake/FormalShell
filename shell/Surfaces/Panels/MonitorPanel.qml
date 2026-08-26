@@ -212,6 +212,10 @@ Panel {
         }
     }
 
+    // The footer leaves the panel rather than reading another metric, so the
+    // seam runs the full width of the surface.
+    Separator { width: parent.width }
+
     Item {
         width: parent.width
         height: openFullButton.height

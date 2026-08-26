@@ -130,13 +130,20 @@ PanelWindow {
                 }
             }
 
-            // Unboxed: a state that says nothing is here should not be the
-            // most heavily chromed thing on the surface. Centred, so it takes
-            // no row inset either: there are no rows to line up with.
-            SectionLabel {
+            // The one empty state in the shell that keeps a card, and the
+            // ladder's own rung-5 clause is why (DESIGN.md §1): this window
+            // is transparent and full-screen, so the caption sits on the raw
+            // wallpaper with nothing behind it. Every other empty state in
+            // the shell is unboxed because it sits inside a surface that is
+            // already a card; this one has no surface at all.
+            Card {
                 visible: root.loadFailed
                 anchors.centerIn: parent
-                text: "PLUGIN ERROR"
+                radius: Theme.radiusMd
+
+                SectionLabel {
+                    text: "PLUGIN ERROR"
+                }
             }
         }
     }

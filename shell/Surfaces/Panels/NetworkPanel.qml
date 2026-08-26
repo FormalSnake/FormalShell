@@ -1296,78 +1296,90 @@ Panel {
         }
     }
 
-    Cell {
-        id: statsCell
+    // Named for what the figures measure, not for the speed test that fills
+    // them: the footer's own button already carries that name.
+    Column {
         width: parent.width
-        ghost: true
+        spacing: Theme.space.rowGap
 
-        Column {
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "THROUGHPUT"
+        }
+
+        Cell {
+            id: statsCell
             width: parent.width
-            spacing: Theme.space.xs
+            ghost: true
 
-            Row {
+            Column {
                 width: parent.width
-                spacing: Theme.space.sectionGap
+                spacing: Theme.space.xs
 
-                Column {
-                    width: (parent.width - parent.spacing) / 2
-                    spacing: Theme.space.xxs
+                Row {
+                    width: parent.width
+                    spacing: Theme.space.sectionGap
 
-                    SectionLabel { text: "DOWNLOAD" }
+                    Column {
+                        width: (parent.width - parent.spacing) / 2
+                        spacing: Theme.space.xxs
 
-                    Row {
-                        spacing: Theme.space.iconGap
+                        SectionLabel { text: "DOWNLOAD" }
 
-                        Icon {
-                            name: "download"
-                            size: Theme.fontSize.body
-                            color: statsCell.dimForeground
-                            height: downValue.implicitHeight
+                        Row {
+                            spacing: Theme.space.iconGap
+
+                            Icon {
+                                name: "download"
+                                size: Theme.fontSize.body
+                                color: statsCell.dimForeground
+                                height: downValue.implicitHeight
+                            }
+
+                            Text {
+                                id: downValue
+                                text: root._downText + " Mbps"
+                                color: statsCell.foreground
+                                font.family: Theme.fontFamilyMono
+                                font.pixelSize: Theme.fontSize.body
+                                font.weight: Theme.weight.medium
+                            }
                         }
+                    }
 
-                        Text {
-                            id: downValue
-                            text: root._downText + " Mbps"
-                            color: statsCell.foreground
-                            font.family: Theme.fontFamilyMono
-                            font.pixelSize: Theme.fontSize.body
-                            font.weight: Theme.weight.medium
+                    Column {
+                        width: (parent.width - parent.spacing) / 2
+                        spacing: Theme.space.xxs
+
+                        SectionLabel { text: "UPLOAD" }
+
+                        Row {
+                            spacing: Theme.space.iconGap
+
+                            Icon {
+                                name: "upload"
+                                size: Theme.fontSize.body
+                                color: statsCell.dimForeground
+                                height: upValue.implicitHeight
+                            }
+
+                            Text {
+                                id: upValue
+                                text: root._upText + " Mbps"
+                                color: statsCell.foreground
+                                font.family: Theme.fontFamilyMono
+                                font.pixelSize: Theme.fontSize.body
+                                font.weight: Theme.weight.medium
+                            }
                         }
                     }
                 }
 
-                Column {
-                    width: (parent.width - parent.spacing) / 2
-                    spacing: Theme.space.xxs
-
-                    SectionLabel { text: "UPLOAD" }
-
-                    Row {
-                        spacing: Theme.space.iconGap
-
-                        Icon {
-                            name: "upload"
-                            size: Theme.fontSize.body
-                            color: statsCell.dimForeground
-                            height: upValue.implicitHeight
-                        }
-
-                        Text {
-                            id: upValue
-                            text: root._upText + " Mbps"
-                            color: statsCell.foreground
-                            font.family: Theme.fontFamilyMono
-                            font.pixelSize: Theme.fontSize.body
-                            font.weight: Theme.weight.medium
-                        }
-                    }
+                SectionLabel {
+                    visible: root._speedStatusText !== ""
+                    text: root._speedStatusText
+                    color: root._stError !== "" ? Theme.color.destructive : statsCell.dimForeground
                 }
-            }
-
-            SectionLabel {
-                visible: root._speedStatusText !== ""
-                text: root._speedStatusText
-                color: root._stError !== "" ? Theme.color.destructive : statsCell.dimForeground
             }
         }
     }
@@ -1622,6 +1634,10 @@ Panel {
             }
         }
     }
+
+    // The footer acts on the panel rather than sitting in the list above it,
+    // so the seam runs the full width of the surface.
+    Separator { width: parent.width }
 
     Item {
         width: parent.width

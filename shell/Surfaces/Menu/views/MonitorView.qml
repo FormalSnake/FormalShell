@@ -1182,6 +1182,10 @@ Item {
 
         WheelScroll { flickable: statsPane }
 
+        // The two columns take `sectionGap` and nothing else. A rule between
+        // them would need a height neither one has: _splitIndex packs them
+        // per machine, so they end at different places and a seam drawn to
+        // the taller one runs past the shorter into blank card.
         Item {
             id: statsColumns
             width: root.width
@@ -1399,16 +1403,14 @@ Item {
         anchors.right: parent.right
         spacing: Core.Theme.space.rowGap
 
-        // The one seam in the card: the machine's stats above, the table
-        // below (btop's split). It doubles as the cut line when the ledger
-        // is taller than the room it got, where the last visible section is
-        // cropped partway through and a crop with no line under it reads as
-        // a broken frame rather than as "wheel up for the rest".
-        Rectangle {
-            width: parent.width
-            height: Core.Theme.borderWidth
-            color: Core.Theme.color.border
-        }
+        // The one seam in the card (DESIGN.md §1's ladder, rung 4, and its
+        // own named case): the machine's stats above, the table below,
+        // btop's split, two halves of one surface that differ in kind. It
+        // doubles as the cut line when the ledger is taller than the room it
+        // got, where the last visible section is cropped partway through and
+        // a crop with no line under it reads as a broken frame rather than
+        // as "wheel up for the rest".
+        Separator { width: parent.width }
 
         Item {
             id: header

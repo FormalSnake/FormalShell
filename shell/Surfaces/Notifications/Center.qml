@@ -372,6 +372,13 @@ PanelWindow {
                             root.toggleDnd();
                     }
 
+                    // `sectionGap` between the two sections, `rowGap` inside
+                    // one (DESIGN.md §1's ladder, rung 2 carrying rung 3): a
+                    // label and its rows have to sit closer to each other
+                    // than the label sits to whatever came before it, or the
+                    // name floats between two groups instead of heading one.
+                    // Each section is one item so its label cannot outlive
+                    // its rows.
                     Column {
                         id: column
                         width: parent.width
@@ -382,15 +389,15 @@ PanelWindow {
                             text: "NO NOTIFICATIONS"
                         }
 
-                        SectionLabel {
-                            visible: root._pendingRows.length > 0
-                            text: "PENDING"
-                            count: NotificationService.pending.length
-                        }
-
                         Column {
                             width: parent.width
+                            visible: root._pendingRows.length > 0
                             spacing: Theme.space.rowGap
+
+                            SectionLabel {
+                                text: "PENDING"
+                                count: NotificationService.pending.length
+                            }
 
                             Repeater {
                                 model: root._pendingRows
@@ -414,15 +421,15 @@ PanelWindow {
                             }
                         }
 
-                        SectionLabel {
-                            visible: root._seenRows.length > 0
-                            text: "SEEN"
-                            count: NotificationService.past.length
-                        }
-
                         Column {
                             width: parent.width
+                            visible: root._seenRows.length > 0
                             spacing: Theme.space.rowGap
+
+                            SectionLabel {
+                                text: "SEEN"
+                                count: NotificationService.past.length
+                            }
 
                             Repeater {
                                 model: root._seenRows

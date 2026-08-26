@@ -284,14 +284,9 @@ Panel {
             }
         }
 
-        // The menu separator (spec "Panels"): the close row acts on the
-        // window itself, not on the list above it.
-        Rectangle {
-            width: parent.width - Theme.space.sm * 2
-            x: Theme.space.sm
-            height: Theme.borderWidth
-            color: Theme.color.border
-        }
+        // The close row acts on the window itself, not on the list above it,
+        // so the seam runs the full width of the surface.
+        Separator { width: parent.width }
 
         Cell {
             id: closeCell

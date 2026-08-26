@@ -58,22 +58,33 @@ Panel {
     Component {
         id: sheet
 
+        // Every gap on the sheet is the ladder (DESIGN.md §1 Separation) and
+        // nothing else: `sectionGap` between one specimen group and the next,
+        // `rowGap` between a group's label and its specimens, and no rule
+        // anywhere. Under the retro preset a rule and a Cell's own border are
+        // the same 1px at radius 0, so on the one surface that is nothing but
+        // bordered specimens a rule would read as another specimen. Space is
+        // the only mark left that cannot be mistaken for one.
         Column {
             id: sheetColumn
             width: sheetLoader.width
+            spacing: Theme.space.sectionGap
 
             Row {
                 id: topRow
                 width: sheetColumn.width
+                spacing: Theme.space.sectionGap
 
                 // AuthPrompt sizes itself off the type-scale root and is by
                 // far the tallest and widest specimen here, so it takes the
-                // width it needs and the token columns share what is left.
-                readonly property real _flex: Math.max(0, (topRow.width - authColumn.width) / 3)
+                // width it needs and the token columns share what is left,
+                // minus the three gaps between the four columns.
+                readonly property real _flex: Math.max(0, (topRow.width - authColumn.width - topRow.spacing * 3) / 3)
 
                 Column {
                     id: authColumn
                     width: authCell.implicitWidth
+                    spacing: Theme.space.rowGap
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
@@ -99,47 +110,53 @@ Panel {
                 Column {
                     id: cellColumn
                     width: topRow._flex
+                    spacing: Theme.space.sectionGap
 
-                    SectionLabel {
-                        leftPadding: Theme.space.controlPaddingX
-                        text: "CELL"
-                    }
+                    Column {
+                        width: parent.width
+                        spacing: Theme.space.rowGap
 
-                    Repeater {
-                        // One row per state Cell.qml renders differently
-                        // (DESIGN.md §2), driven as data rather than as one
-                        // hand-written delegate each. The one block on the
-                        // sheet that keeps its resting border: rest is one
-                        // of the seven states it is here to show, and every
-                        // other specimen went flat around it.
-                        model: [
-                            { label: "Rest",        selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: false },
-                            { label: "Hovered",     selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: true  },
-                            { label: "Cursor",      selected: false, active: false, destructive: false, warning: false, cursor: true,  hovered: false },
-                            { label: "Selected",    selected: true,  active: false, destructive: false, warning: false, cursor: false, hovered: false },
-                            { label: "Active",      selected: false, active: true,  destructive: false, warning: false, cursor: false, hovered: false },
-                            { label: "Destructive", selected: false, active: false, destructive: true,  warning: false, cursor: false, hovered: false },
-                            { label: "Warning",     selected: false, active: false, destructive: false, warning: true,  cursor: false, hovered: false }
-                        ]
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "CELL"
+                        }
 
-                        delegate: Cell {
-                            id: stateCell
-                            required property var modelData
+                        Repeater {
+                            // One row per state Cell.qml renders differently
+                            // (DESIGN.md §2), driven as data rather than as one
+                            // hand-written delegate each. The one block on the
+                            // sheet that keeps its resting border: rest is one
+                            // of the seven states it is here to show, and every
+                            // other specimen went flat around it.
+                            model: [
+                                { label: "Rest",        selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: false },
+                                { label: "Hovered",     selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: true  },
+                                { label: "Cursor",      selected: false, active: false, destructive: false, warning: false, cursor: true,  hovered: false },
+                                { label: "Selected",    selected: true,  active: false, destructive: false, warning: false, cursor: false, hovered: false },
+                                { label: "Active",      selected: false, active: true,  destructive: false, warning: false, cursor: false, hovered: false },
+                                { label: "Destructive", selected: false, active: false, destructive: true,  warning: false, cursor: false, hovered: false },
+                                { label: "Warning",     selected: false, active: false, destructive: false, warning: true,  cursor: false, hovered: false }
+                            ]
 
-                            width: cellColumn.width
-                            selected: stateCell.modelData.selected
-                            active: stateCell.modelData.active
-                            destructive: stateCell.modelData.destructive
-                            warning: stateCell.modelData.warning
-                            cursor: stateCell.modelData.cursor
-                            hovered: stateCell.modelData.hovered
+                            delegate: Cell {
+                                id: stateCell
+                                required property var modelData
 
-                            Text {
-                                text: stateCell.modelData.label
-                                color: stateCell.foreground
-                                font.family: Theme.fontFamilySans
-                                font.pixelSize: Theme.fontSize.body
-                                font.weight: Theme.weight.medium
+                                width: cellColumn.width
+                                selected: stateCell.modelData.selected
+                                active: stateCell.modelData.active
+                                destructive: stateCell.modelData.destructive
+                                warning: stateCell.modelData.warning
+                                cursor: stateCell.modelData.cursor
+                                hovered: stateCell.modelData.hovered
+
+                                Text {
+                                    text: stateCell.modelData.label
+                                    color: stateCell.foreground
+                                    font.family: Theme.fontFamilySans
+                                    font.pixelSize: Theme.fontSize.body
+                                    font.weight: Theme.weight.medium
+                                }
                             }
                         }
                     }
@@ -149,7 +166,9 @@ Panel {
                     // LOCATION): a bare label in SectionLabel's own
                     // mutedForeground, no box and no Cell flag. A state that
                     // says nothing is here should not be the most heavily
-                    // chromed thing on the surface.
+                    // chromed thing on the surface. Its own specimen rather
+                    // than an eighth state, so it takes `sectionGap` off the
+                    // grid above instead of falling in line with it.
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
                         text: "DIM / UNAVAILABLE"
@@ -159,6 +178,7 @@ Panel {
                 Column {
                     id: typeColumn
                     width: topRow._flex
+                    spacing: Theme.space.rowGap
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
@@ -203,71 +223,127 @@ Panel {
                 Column {
                     id: tokenColumn
                     width: topRow._flex
+                    spacing: Theme.space.sectionGap
 
-                    SectionLabel {
-                        leftPadding: Theme.space.controlPaddingX
-                        text: "COLOR TOKENS"
+                    // The separation ladder's rung 4 (DESIGN.md §1), drawn
+                    // both ways round. A rule is the only primitive whose
+                    // whole appearance is one line of border ink, so the
+                    // specimen is the line itself and the `inset` variant
+                    // beside it: the difference between a seam that divides
+                    // a surface and one that divides the rows on it is the
+                    // only decision a caller makes.
+                    Column {
+                        width: parent.width
+                        spacing: Theme.space.rowGap
+
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "SEPARATOR"
+                        }
+
+                        Separator {
+                            width: parent.width
+                        }
+
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "INSET"
+                        }
+
+                        Separator {
+                            width: parent.width
+                            inset: Theme.space.controlPaddingX
+                        }
+
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "VERTICAL"
+                        }
+
+                        Separator {
+                            vertical: true
+                            height: Theme.space.controlHeight
+                        }
                     }
 
-                    Repeater {
-                        // palette.js's COLOR_KEYS, taken off the live
-                        // palette so a matugen run drifting one role away
-                        // from the rest is visible here as a swatch, not
-                        // just as a surface that looks slightly wrong.
-                        // `mode` is the theme's light/dark tag, not a role.
-                        model: Object.keys(Theme.color).filter(function (key) { return key !== "mode"; })
+                    Column {
+                        width: parent.width
+                        spacing: Theme.space.rowGap
 
-                        delegate: Cell {
-                            id: swatchCell
-                            required property string modelData
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "COLOR TOKENS"
+                        }
 
-                            width: tokenColumn.width
-                            ghost: true
+                        Repeater {
+                            // palette.js's COLOR_KEYS, taken off the live
+                            // palette so a matugen run drifting one role away
+                            // from the rest is visible here as a swatch, not
+                            // just as a surface that looks slightly wrong.
+                            // `mode` is the theme's light/dark tag, not a role.
+                            model: Object.keys(Theme.color).filter(function (key) { return key !== "mode"; })
 
-                            Row {
-                                spacing: Theme.space.md
+                            delegate: Cell {
+                                id: swatchCell
+                                required property string modelData
 
-                                // The one thing a Cell cannot be: a fill
-                                // picked by palette role rather than by
-                                // interactive state. Bordered in `rule` so
-                                // `background` still reads as a swatch
-                                // against the panel's own fill.
-                                // primitive-exempt: a colour swatch. The fill IS the token being
-                                // shown, so no primitive can own it.
-                                Rectangle {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: Theme.space.huge + Theme.space.xl
-                                    height: Theme.fontSize.caption + Theme.space.sm
-                                    radius: Theme.radius
-                                    color: Theme.color[swatchCell.modelData]
-                                    border.width: Theme.borderWidth
-                                    border.color: Theme.color.border
-                                }
+                                width: tokenColumn.width
+                                ghost: true
 
-                                SectionLabel {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: swatchCell.modelData + " " + Theme.color[swatchCell.modelData]
+                                Row {
+                                    spacing: Theme.space.md
+
+                                    // The one thing a Cell cannot be: a fill
+                                    // picked by palette role rather than by
+                                    // interactive state. Bordered in `rule` so
+                                    // `background` still reads as a swatch
+                                    // against the panel's own fill.
+                                    // primitive-exempt: a colour swatch. The fill IS the token being
+                                    // shown, so no primitive can own it.
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: Theme.space.huge + Theme.space.xl
+                                        height: Theme.fontSize.caption + Theme.space.sm
+                                        radius: Theme.radius
+                                        color: Theme.color[swatchCell.modelData]
+                                        border.width: Theme.borderWidth
+                                        border.color: Theme.color.border
+                                    }
+
+                                    SectionLabel {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: swatchCell.modelData + " " + Theme.color[swatchCell.modelData]
+                                    }
                                 }
                             }
                         }
                     }
 
-                    SectionLabel {
-                        leftPadding: Theme.space.controlPaddingX
-                        text: "METALABEL"
-                    }
+                    // A second group in this column, not a swatch that lost
+                    // its colour: the three name themselves, so the group
+                    // takes `sectionGap` off the swatches and no heading of
+                    // its own.
+                    Column {
+                        width: parent.width
+                        spacing: Theme.space.rowGap
 
-                    SectionLabel {
-                        leftPadding: Theme.space.controlPaddingX
-                        text: "METALABEL / CAPTION"
-                    }
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "METALABEL"
+                        }
 
-                    // The wider variant the lock/greeter date row uses.
-                    SectionLabel {
-                        leftPadding: Theme.space.controlPaddingX
-                        text: "METALABEL / SUBTITLE"
-                        font.pixelSize: Theme.fontSize.subtitle
-                        font.letterSpacing: Theme.letterSpacing.wide
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "METALABEL / CAPTION"
+                        }
+
+                        // The wider variant the lock/greeter date row uses.
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "METALABEL / SUBTITLE"
+                            font.pixelSize: Theme.fontSize.subtitle
+                            font.letterSpacing: Theme.letterSpacing.wide
+                        }
                     }
                 }
             }
@@ -275,12 +351,14 @@ Panel {
             Row {
                 id: bottomRow
                 width: sheetColumn.width
+                spacing: Theme.space.sectionGap
 
-                readonly property real _flex: bottomRow.width / 3
+                readonly property real _flex: (bottomRow.width - bottomRow.spacing * 2) / 3
 
                 Column {
                     id: spacingColumn
                     width: bottomRow._flex
+                    spacing: Theme.space.rowGap
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
@@ -337,6 +415,7 @@ Panel {
                 Column {
                     id: marqueeColumn
                     width: bottomRow._flex
+                    spacing: Theme.space.rowGap
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
@@ -387,6 +466,7 @@ Panel {
                 Column {
                     id: surfaceColumn
                     width: bottomRow._flex
+                    spacing: Theme.space.rowGap
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
