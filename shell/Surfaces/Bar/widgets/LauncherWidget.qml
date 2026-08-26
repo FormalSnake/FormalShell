@@ -49,12 +49,13 @@ Cell {
         return { kind: "image", value: path };
     }
 
-    // /etc/os-release is only read when the owner actually asked for the
-    // distro mark: every other value resolves without it, and a file this
-    // widget never needs should not be opened once per screen.
+    // /etc/os-release is only read when the distro mark is what will be
+    // drawn, which is the unset default and the explicit "distro"; every
+    // other value resolves without it, and a file this widget never needs
+    // should not be opened once per screen.
     FileView {
         id: osReleaseFile
-        path: root._configured === "distro" ? "/etc/os-release" : ""
+        path: (root._configured === "" || root._configured === "distro") ? "/etc/os-release" : ""
     }
 
     tooltipText: "LAUNCHER"

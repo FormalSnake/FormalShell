@@ -15,10 +15,25 @@ TestCase {
     function themeHit(name) { return "/usr/share/icons/hicolor/48x48/apps/" + name + ".png"; }
     function themeMiss(name) { return ""; }
 
-    function test_the_default_is_the_shells_own_mark() {
-        compare(LauncherIcon.resolve("", {}, themeMiss, Distro.glyphOrTux).value, "command");
-        compare(LauncherIcon.resolve("", {}, themeMiss, Distro.glyphOrTux).kind, "icon");
+    // Unset draws the machine's own logo. The command sign is still what
+    // naming it gets you, and still where a machine with no os-release ends
+    // up, but it is no longer what an untouched settings.json shows.
+    function test_the_default_is_the_machines_own_logo() {
+        var spec = LauncherIcon.resolve("", nixos, themeMiss, Distro.glyphOrTux);
+        compare(spec.kind, "glyph");
+        compare(spec.value, Distro.LOGOS["nixos"]);
+    }
+
+    function test_naming_the_command_sign_still_gets_it() {
         compare(LauncherIcon.resolve("command", {}, themeMiss, Distro.glyphOrTux).value, "command");
+        compare(LauncherIcon.resolve("command", nixos, themeHit, Distro.glyphOrTux).kind, "icon");
+    }
+
+    // A machine with no os-release at all still has to draw something.
+    function test_the_default_on_a_machine_with_no_os_release() {
+        var spec = LauncherIcon.resolve("", {}, themeMiss, function () { return ""; });
+        compare(spec.kind, "icon");
+        compare(spec.value, "command");
     }
 
     // Named separately from "command" so the day a real FormalShell mark

@@ -5,6 +5,7 @@
 // `bar.launcherIcon`, and a grammar rather than an enum, so a name the shell
 // has never heard of still resolves to something the owner asked for:
 //
+//   unset           the machine's own distro logo, same as "distro" below
 //   "command"       the shadcn Command palette sign, the shell's mark today
 //   "formalshell"   the shell's own mark, which is that same sign until a
 //                   real one exists. Named separately so the day a mark
@@ -79,7 +80,12 @@ function distroIconName(osRelease) {
 // since a caller asking for "distro" asked for a distro.
 function resolve(configValue, osRelease, themeIcon, distroGlyph) {
     var value = String(configValue || "").trim();
-    if (value === "" || value === DEFAULT_NAME || value === "formalshell")
+    // Unset means the machine's own logo (owner, 2026-08-26). The command
+    // sign is still reachable by naming it, and is still where the distro
+    // chain ends up on a machine with no /etc/os-release at all.
+    if (value === "")
+        value = "distro";
+    if (value === DEFAULT_NAME || value === "formalshell")
         return { kind: "icon", value: DEFAULT_NAME };
     if (isPath(value))
         return { kind: "image", value: value };
