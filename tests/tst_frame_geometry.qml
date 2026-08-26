@@ -16,21 +16,29 @@ TestCase {
         };
     }
 
-    function frame(position, thickness, radius) {
-        return Geometry.frameGeometry(1920, 1080, inset(position), thickness, radius);
+    function edge(position, thickness) {
+        var i = inset(position);
+        return {
+            top: i.top > 0 ? i.top : thickness,
+            bottom: i.bottom > 0 ? i.bottom : thickness,
+            left: i.left > 0 ? i.left : thickness,
+            right: i.right > 0 ? i.right : thickness
+        };
     }
 
-    // The band never covers the bar's own strip: the outer rectangle starts
-    // where the strip ends.
-    function test_the_outer_rectangle_is_the_output_less_the_bar() {
-        var g = frame("top", 10, 20);
-        compare(JSON.stringify(g.outer), JSON.stringify({ x: 0, y: 40, width: 1920, height: 1040 }));
-        compare(JSON.stringify(frame("left", 10, 20).outer), JSON.stringify({ x: 40, y: 0, width: 1880, height: 1080 }));
+    function frame(position, thickness, radius) {
+        return Geometry.frameGeometry(1920, 1080, edge(position, thickness), radius);
+    }
+
+    // The ring is the whole output: the strip is painted here, not by the
+    // bar, so the two never meet at a seam.
+    function test_the_outer_rectangle_is_the_whole_output() {
+        compare(JSON.stringify(frame("top", 10, 20).outer), JSON.stringify({ x: 0, y: 0, width: 1920, height: 1080 }));
     }
 
     // The cut-out is the band in from every edge but the bar's, where it
-    // is flush against the strip.
-    function test_the_cut_out_is_flush_against_the_bar() {
+    // is the bar's own thickness in.
+    function test_the_cut_out_clears_the_bar_and_the_band() {
         var g = frame("top", 10, 20);
         compare(JSON.stringify(g.inner), JSON.stringify({ x: 10, y: 40, width: 1900, height: 1030 }));
         var l = frame("left", 10, 20);
@@ -39,13 +47,13 @@ TestCase {
     }
 
     function test_a_radius_too_big_for_the_cut_out_is_capped() {
-        compare(Geometry.frameGeometry(100, 60, inset("top"), 10, 500).radius, 5);
+        compare(Geometry.frameGeometry(100, 60, edge("top", 10), 500).radius, 5);
         compare(frame("top", 10, -4).radius, 0);
     }
 
-    function test_no_thickness_leaves_only_the_cut_out_flush_with_the_edges() {
+    function test_no_band_leaves_only_the_bar_cut_in() {
         var g = frame("top", 0, 20);
-        compare(JSON.stringify(g.inner), JSON.stringify(g.outer));
+        compare(JSON.stringify(g.inner), JSON.stringify({ x: 0, y: 40, width: 1920, height: 1040 }));
     }
 
     // The hairline sits half a stroke inside the cut-out, so it lies in the

@@ -14,16 +14,19 @@ import "../../Frame/geometry.js" as Geometry
 // here is a Shape path with an even-odd fill, no shader and no C++.
 //
 // Two windows per edge role. The painter is one full-output layer surface
-// that reserves nothing (`ExclusionMode.Ignore`) and takes no input at all:
-// an empty `mask` builds an empty input region, the same click-through
-// Tooltip.qml relies on, so the band and the corners are pure paint over
-// whatever is under them. The three zones are 1px windows on the edges the
+// that paints the whole ring, the bar's strip included, on the bottom
+// layer: the bar keeps its cells, its input and its exclusive zone in its
+// own window above and simply stops painting its fill, so the strip and
+// the band are one surface under the compositor's blur. Two surfaces
+// meeting edge to edge each blur and anti-alias their own boundary, and
+// the join showed as a line down the strip (owner, 2026-08-26). It
+// reserves nothing (`ExclusionMode.Ignore`) and takes no input at all: an
+// empty `mask` builds an empty input region, the same click-through
+// Tooltip.qml relies on. The three zones are 1px windows on the edges the
 // bar is not on, each reserving the band's thickness, which is how a
 // tiling compositor keeps windows inside the cut-out (Caelestia's
 // Exclusions.qml does exactly this; a surface anchored on all four edges
-// has no single edge to reserve against). The bar keeps its own strip and
-// its own exclusive zone; it only stops drawing its hairline, since the
-// frame's stroke runs the whole cut-out including the bar's side.
+// has no single edge to reserve against).
 Scope {
     id: root
     required property var modelData
@@ -40,26 +43,29 @@ Scope {
         mask: Region {}
 
         WlrLayershell.namespace: "formalshell:frame"
-        WlrLayershell.layer: WlrLayer.Top
+        // Bottom, so the bar's own window is always above it whatever the
+        // two mapped in; nothing tiles over the band, since the zones
+        // below reserve it.
+        WlrLayershell.layer: WlrLayer.Bottom
         WlrLayershell.exclusionMode: ExclusionMode.Ignore
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
         readonly property var _g: Geometry.frameGeometry(painter.width, painter.height,
-            Theme.barInset, Theme.frameThickness, Theme.frameRadius)
+            Theme.edgeInset, Theme.frameRadius)
         readonly property var _line: Geometry.strokeRect(painter._g.inner, painter._g.radius, Theme.borderWidth)
 
         Shape {
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
 
-            // The band: the output less the bar strip, with the cut-out
-            // removed by the even-odd rule.
+            // The ring: the output with the cut-out removed by the even-odd
+            // rule (OddEvenFill, also the default).
             ShapePath {
                 id: band
                 readonly property var o: painter._g.outer
                 readonly property var i: painter._g.inner
                 readonly property real r: painter._g.radius
-                fillRule: ShapePath.OddEven
+                fillRule: ShapePath.OddEvenFill
                 fillColor: Theme.surface(Theme.color.card)
                 strokeWidth: -1
                 startX: band.o.x

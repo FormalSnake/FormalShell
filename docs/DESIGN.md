@@ -263,8 +263,9 @@ continues round the other three edges as a band `frame.thickness` wide, and
 a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut
 out of the whole for the desktop, so the bar reads as the thick side of one
 frame and the two corners beside it curve into the strip. The frame paints
-the band and the corners only, never the strip, and draws the single 1px
-`border` along the cut-out in place of the bar's hairline. Windows tile
+the whole ring, strip included, as one surface under the compositor's blur,
+and draws the single 1px `border` along the cut-out; the bar then draws only
+its cells. Windows tile
 inside it (the band is an exclusive zone on each of its edges), and every
 floating surface clears it the way it clears the bar.
 

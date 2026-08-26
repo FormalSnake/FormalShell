@@ -135,20 +135,22 @@ PanelWindow {
         value: bar._strip.thickness
     }
 
-    // Declared before the regions, so it stacks behind every cell.
+    // Declared before the regions, so it stacks behind every cell. With the
+    // screen frame on, the frame paints the strip as part of its ring
+    // (Surfaces/Frame/Frame.qml) and this window draws only its cells.
     Rectangle {
         anchors.fill: parent
+        visible: !Theme.frameEnabled
         color: Theme.surface(Theme.color.card)
 
         // The hairline that separates the strip from the desktop, and the
         // only edge the bar draws: the one facing inward. A `border` on the
         // fill above would ring all four sides, three of which are the
         // screen's own edges. With the screen frame on, the frame's own
-        // stroke runs this side too, round the corners into its band, so
-        // the strip draws none of its own.
+        // stroke runs this side too, round the corners into its band, and
+        // this whole fill is off.
         Rectangle {
             id: hairline
-            visible: !Theme.frameEnabled
             width: bar._vertical ? Theme.borderWidth : parent.width
             height: bar._vertical ? parent.height : Theme.borderWidth
             x: bar._position === "left" ? parent.width - hairline.width : 0

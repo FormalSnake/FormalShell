@@ -759,6 +759,10 @@ Item {
                         id: dismissArea
                         anchors.fill: parent
                         hoverEnabled: true
+                        // No pointer over a screensaver: the first move
+                        // ends it anyway, and a resting arrow on the
+                        // effect reads as a desktop that has not gone away.
+                        cursorShape: Qt.BlankCursor
                         focus: surface.visible
                         property bool _hasBaseline: false
                         property real _lastX: 0

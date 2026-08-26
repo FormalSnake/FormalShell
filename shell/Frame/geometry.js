@@ -4,30 +4,21 @@
 // band and its corners are checkable without a compositor, the same split
 // Bar/layout.js and Components/geometry.js use.
 //
-// The frame is the output less the bar strip (`outer`), with a rounded
-// rectangle cut out of it (`inner`): `thickness` in from every edge the
-// bar is not on, and flush against the bar on its edge, so the two corners
-// beside the bar curve into the strip and the strip reads as the frame's
-// thick side. What the frame paints is the ring between the two, never the
-// strip itself, which the bar already paints at the same alpha. `radius`
-// is capped so the cut-out is never asked for corners it cannot hold.
-function frameGeometry(width, height, barInset, thickness, radius) {
-    var t = thickness > 0 ? thickness : 0;
-    var outer = {
-        x: barInset.left,
-        y: barInset.top,
-        width: Math.max(0, width - barInset.left - barInset.right),
-        height: Math.max(0, height - barInset.top - barInset.bottom)
-    };
-    var left = barInset.left > 0 ? 0 : t;
-    var top = barInset.top > 0 ? 0 : t;
-    var right = barInset.right > 0 ? 0 : t;
-    var bottom = barInset.bottom > 0 ? 0 : t;
+// The frame is the whole output (`outer`) with a rounded rectangle cut out
+// of it (`inner`): `insets` in from every edge, which is the bar's own
+// thickness on its edge and the band's `thickness` on the other three
+// (Theme.edgeInset). The ring between the two is one fill, strip included:
+// the bar draws only its cells over it, so the strip and the band are one
+// blurred surface with no seam where one would hand over to the other.
+// `radius` is capped so the cut-out is never asked for corners it cannot
+// hold.
+function frameGeometry(width, height, insets, radius) {
+    var outer = { x: 0, y: 0, width: Math.max(0, width), height: Math.max(0, height) };
     var inner = {
-        x: outer.x + left,
-        y: outer.y + top,
-        width: Math.max(0, outer.width - left - right),
-        height: Math.max(0, outer.height - top - bottom)
+        x: insets.left,
+        y: insets.top,
+        width: Math.max(0, width - insets.left - insets.right),
+        height: Math.max(0, height - insets.top - insets.bottom)
     };
     var r = Math.max(0, Math.min(radius > 0 ? radius : 0, Math.min(inner.width, inner.height) / 2));
     return { outer: outer, inner: inner, radius: r };
