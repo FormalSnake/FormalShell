@@ -258,6 +258,16 @@ open draws a 2px `primary` line along its bottom edge. Workspace dots are
 layered over them on the focused slot; a switch moves the pill, a hovered
 dot grows a step, and an urgent dot is `destructive` and pulses once.
 
+**Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
+continues round the other three edges as a band `frame.thickness` wide, and
+a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut
+out of the whole for the desktop, so the bar reads as the thick side of one
+frame and the two corners beside it curve into the strip. The frame paints
+the band and the corners only, never the strip, and draws the single 1px
+`border` along the cut-out in place of the bar's hairline. Windows tile
+inside it (the band is an exclusive zone on each of its edges), and every
+floating surface clears it the way it clears the bar.
+
 **Which primitive.** An on/off state is a `Switch`, never a button whose
 label is its own state and never an icon that flips between an on and an off
 name. A choice among several, or a row of actions belonging to one thing, is

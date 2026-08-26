@@ -130,7 +130,7 @@ Singleton {
     // last case, and re-placing on every show is what keeps a rescaled output
     // from leaving the console at yesterday's size.
     function _reveal(id) {
-        root._target = Geometry.consoleGeometry(root._screen(), Core.Theme.barInset,
+        root._target = Geometry.consoleGeometry(root._screen(), Core.Theme.edgeInset,
             root.share, Core.Theme.space.xl);
         if (!root._target) {
             console.warn("ConsoleService: no output to place the console on");

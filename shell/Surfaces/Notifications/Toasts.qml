@@ -64,12 +64,12 @@ PanelWindow {
     property var center: null
     screen: modelData
 
-    // Bar.qml publishes its own occupied edge as Theme.barInset (the same
+    // Bar.qml publishes its own occupied edge as Theme.edgeInset (the same
     // lookup Panel.qml uses): its thickness on the edge it sits on, 0 on
     // the other three. The old hardcoded-32 mirror left toasts overlapping
     // the bar's bottom rows once the bar grew taller (same stale literal
     // Center.qml carried, fixed together in M13b Task 2).
-    readonly property var _barInset: Theme.barInset
+    readonly property var _edgeInset: Theme.edgeInset
 
     // Resolves settings.json's notifications.position (default
     // bottom-right, M34 Task 1) to the anchors/margins/growth/slide-axis
@@ -332,7 +332,7 @@ PanelWindow {
     // no size while the stack is empty and unmapped (Panel.qml reads its own
     // `_screen` for the same reason).
     readonly property real _maxStackHeight: Math.max(0,
-        (root.screen ? root.screen.height : 0) - root._barInset.top - root._barInset.bottom - root._screenPadding * 2)
+        (root.screen ? root.screen.height : 0) - root._edgeInset.top - root._edgeInset.bottom - root._screenPadding * 2)
 
     readonly property real _targetHeight: Math.min(root._maxStackHeight, Math.max(
         root._expanded ? root._layout.expandedHeight : root._layout.collapsedHeight,
@@ -382,10 +382,10 @@ PanelWindow {
         // Every edge clears the bar's own inset, so the pile sits
         // `screenPadding` off the bar on whichever edge it takes and off
         // the screen edge on the other three.
-        anchors.topMargin: root._barInset.top + root._screenPadding
-        anchors.bottomMargin: root._barInset.bottom + root._screenPadding
-        anchors.leftMargin: root._barInset.left + root._screenPadding
-        anchors.rightMargin: root._barInset.right + root._screenPadding
+        anchors.topMargin: root._edgeInset.top + root._screenPadding
+        anchors.bottomMargin: root._edgeInset.bottom + root._screenPadding
+        anchors.leftMargin: root._edgeInset.left + root._screenPadding
+        anchors.rightMargin: root._edgeInset.right + root._screenPadding
 
         // The delegates' own x/y Behaviors glide to their new places over
         // the same duration, and the pile's top edge (bottom-anchored) or

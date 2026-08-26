@@ -471,6 +471,14 @@ TestCase {
         compare(JSON.stringify(Layout.insets("nowhere", 40)), JSON.stringify({ top: 40, bottom: 0, left: 0, right: 0 }));
     }
 
+    // With the screen frame on, its band takes the other three edges; the
+    // bar's own edge is the bar's whatever the band is.
+    function test_insets_carry_the_frame_on_the_other_three_edges() {
+        compare(JSON.stringify(Layout.insets("left", 40, 10)), JSON.stringify({ top: 10, bottom: 10, left: 40, right: 10 }));
+        compare(JSON.stringify(Layout.insets("top", 40, 0)), JSON.stringify({ top: 40, bottom: 0, left: 0, right: 0 }));
+        compare(JSON.stringify(Layout.insets("top", 40, undefined)), JSON.stringify({ top: 40, bottom: 0, left: 0, right: 0 }));
+    }
+
     // Where a panel or a tooltip slides in from: the bar's edge.
     function test_the_edge_vector_points_at_the_bar() {
         compare(JSON.stringify(Layout.edgeVector("top")), JSON.stringify({ x: 0, y: -1 }));

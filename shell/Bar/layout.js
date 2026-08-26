@@ -101,17 +101,20 @@ function stripGeometry(space, pos) {
     };
 }
 
-// How much of each output edge the bar occupies: `thickness` on its own
-// edge, nothing on the other three. Every surface that has to clear the bar
+// How much of each output edge is spoken for: the bar's `thickness` on its
+// own edge, and the screen frame's (`frameThickness`, Frame.qml, 0 when
+// off) on the other three. Every surface that has to clear the edges
 // (panels, toasts, the centre, the console) reads this rather than a
-// height, since which edge to clear is the whole question.
-function insets(pos, thickness) {
+// height, since which edge to clear is the whole question. The bar covers
+// its own edge whatever the frame is, so the frame never adds to it.
+function insets(pos, thickness, frameThickness) {
     var resolved = position(pos);
+    var frame = frameThickness > 0 ? frameThickness : 0;
     return {
-        top: resolved === "top" ? thickness : 0,
-        bottom: resolved === "bottom" ? thickness : 0,
-        left: resolved === "left" ? thickness : 0,
-        right: resolved === "right" ? thickness : 0
+        top: resolved === "top" ? thickness : frame,
+        bottom: resolved === "bottom" ? thickness : frame,
+        left: resolved === "left" ? thickness : frame,
+        right: resolved === "right" ? thickness : frame
     };
 }
 

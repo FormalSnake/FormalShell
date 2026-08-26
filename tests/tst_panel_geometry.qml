@@ -82,6 +82,19 @@ TestCase {
         compare(frameY("left", 1000, 300), 1080 - 300 - 12);
     }
 
+    // With the screen frame on, its band is part of what the two ends give
+    // up: the frame clears it plus the padding, and an IPC open lands a
+    // padding in from the band rather than from the screen edge.
+    function test_a_screen_frame_band_pushes_the_frame_in_from_both_ends() {
+        var framed = { top: 40, bottom: 10, left: 10, right: 10 };
+        compare(Geometry.frameX("top", -1, 1920, 380, framed, testCase.barMargin, testCase.screenPadding), 1920 - 10 - 380 - 12);
+        compare(Geometry.frameX("top", 0, 1920, 380, framed, testCase.barMargin, testCase.screenPadding), 22);
+        var sideFramed = { top: 10, bottom: 10, left: 40, right: 10 };
+        compare(Geometry.frameY("left", 0, 1080, 300, sideFramed, testCase.barMargin, testCase.screenPadding), 22);
+        compare(Geometry.maxFrameHeight("left", 1080, sideFramed, testCase.barMargin, testCase.screenPadding), 1036);
+        compare(Geometry.maxFrameHeight("top", 1080, framed, testCase.barMargin, testCase.screenPadding), 1012);
+    }
+
     // --- Off the bar's inner edge --------------------------------------
 
     function test_a_top_bar_hangs_the_frame_a_margin_under_it() {

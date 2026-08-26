@@ -9,7 +9,7 @@
 // would cross the padding at the far edge, where it stops and the row list
 // scrolls instead. Before M48 it was the full height between the bar and
 // the bottom of the output whatever it held, which is what let a long
-// history run off the screen. `insets` is Theme.barInset: the bar's
+// history run off the screen. `insets` is Theme.edgeInset: the bar's
 // thickness on its own edge and 0 on the other three, so a bottom bar
 // pushes the card up and a right bar pushes it left.
 function centerFrame(params) {
