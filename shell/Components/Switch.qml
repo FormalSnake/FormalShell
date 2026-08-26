@@ -26,8 +26,10 @@ Item {
         root.toggled(!root.checked);
     }
 
+    // Sized like every other control so it centres in any row it shares
+    // with buttons; the track itself is the `huge` band in the middle.
     implicitWidth: Theme.space.controlHeight
-    implicitHeight: Theme.space.huge
+    implicitHeight: Theme.space.controlHeight
     // `enabled` is QQuickItem's own: it gates the pointer target, and this
     // is the same dimming Button applies, so a disabled control reads the
     // same wherever it sits.
@@ -38,7 +40,7 @@ Item {
     readonly property real _inset: Theme.borderWidth * 2
 
     Rectangle {
-        anchors.fill: parent
+        anchors.fill: track
         anchors.margins: -Theme.ringWidth
         visible: root.cursor
         radius: height / 2
@@ -48,7 +50,10 @@ Item {
 
     Rectangle {
         id: track
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        height: Theme.space.huge
         radius: height / 2
         color: root.checked ? Theme.color.primary : Theme.color.muted
         // A filled track has no border of its own, so the cursor's border
@@ -59,10 +64,10 @@ Item {
 
     Rectangle {
         id: knob
-        width: root.height - root._inset * 2
+        width: track.height - root._inset * 2
         height: width
         radius: height / 2
-        y: root._inset
+        y: track.y + root._inset
         x: root.checked ? root.width - width - root._inset : root._inset
         color: Theme.color.background
 

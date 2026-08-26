@@ -3,7 +3,8 @@ import QtTest
 import qs.Core
 import "../shell/Components"
 
-// Switch's contract (DESIGN.md §2, M44 D4): a `controlHeight` x `huge` track
+// Switch's contract (DESIGN.md §2, M44 D4): a `controlHeight` square control
+// holding a `controlHeight` x `huge` track
 // at full radius, `muted` off and `primary` on, a `background` knob that
 // slides between the two ends, the ring on `cursor`, and `toggled` carrying
 // the value the owner should write.
@@ -89,7 +90,8 @@ TestCase {
     function test_the_track_is_thirty_two_by_eighteen_in_tokens() {
         var control = make({});
         compare(control.implicitWidth, Theme.space.controlHeight);
-        compare(control.implicitHeight, Theme.space.huge);
+        compare(control.implicitHeight, Theme.space.controlHeight);
+        compare(trackOf(control).height, Theme.space.huge);
     }
 
     function test_the_track_radius_is_full() {
