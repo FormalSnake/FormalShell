@@ -53,7 +53,9 @@ Panel {
     // flag is enough), and `keepMapped` keeps this panel's window mapped for
     // grabToImage while the bar wants frames and the panel itself is closed
     // (Panel.qml's own click-through mask covers input during that state).
-    keepMapped: AnimatedCoverFrameSource.active
+    // Staying mapped is only for the bar's frames, so it is behind
+    // `media.animatedBarCover` too; off, closing this panel always unmaps it.
+    keepMapped: AnimatedCoverFrameSource.barEnabled && AnimatedCoverFrameSource.active
     Binding {
         target: AnimatedCoverFrameSource
         property: "panelWants"

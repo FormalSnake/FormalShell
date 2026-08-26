@@ -13,17 +13,15 @@ import qs.Services
 // mini cover paints from the exact same frames instead of a second decode
 // for a slot this small.
 //
-// Two independent "who wants frames" signals feed one gate, mirroring
-// VisualizerService's own precedent: `panelWants` is a single flag
-// (MediaPanel is a shell-wide singleton instance, shell.qml) bound straight
-// off its own isOpen; `_barWanters` is a refcount that NowPlaying.qml
-// instances drive through setBarWantsFrames() using the same
-// wasWanted/isWanted no-op guard VisualizerService.setBarVisible uses, so a
-// caller can call on every visibility change without tracking whether it
-// actually flipped.
+// `media.animatedBarCover` (off by default) is what lets `_barWanters`
+// reach the gate: off, the decode, the grab timer and MediaPanel's
+// `keepMapped` exist only while the panel itself is open, like any other
+// popout, since a 16px bar cover is not worth a video decode on a small
+// machine. On, the bar's mini cover animates for as long as music plays.
 Singleton {
     id: root
 
+    readonly property bool barEnabled: Config.get("media.animatedBarCover", false)
     property bool panelWants: false
     property int _barWanters: 0
 
@@ -37,7 +35,7 @@ Singleton {
     // for a decode instead of a child process): any leg going false kills
     // the decode outright, MediaPanel's Loader unloads its Video entirely
     //, never just a paused paint.
-    readonly property bool active: (root.panelWants || root._barWanters > 0)
+    readonly property bool active: (root.panelWants || (root.barEnabled && root._barWanters > 0))
         && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== "" && Theme.motionEnabled
 
     // Latest grabbed frame, published by AnimatedAlbumArt.qml's own Timer.

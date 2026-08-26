@@ -23,7 +23,9 @@ import qs.Services
 // than decoded twice for a slot this small. This cell registers as a frame
 // consumer via `_syncFrames()` below (windowVisible + shown gate,
 // VisualizerService.setBarVisible's own refcount idiom) so the shared decode
-// runs whenever either this bar or the panel wants it.
+// runs whenever either this bar or the panel wants it. Registering here is
+// necessary but not sufficient: `media.animatedBarCover` (off by default)
+// is what lets this cell's refcount reach the gate.
 Cell {
     id: root
 

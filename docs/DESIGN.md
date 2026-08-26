@@ -271,7 +271,9 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 - Words in mono or values in sans.
 - A shadow, a gradient, or a blur drawn by the shell (blur is the
   compositor's, behind a translucent card). Dither only behind
-  `wallpaper.dither` or `lock.dither`, both off by default.
+  `wallpaper.dither` or `lock.dither`, both off by default. The bar's own
+  mini cover animates only behind `media.animatedBarCover`, off by
+  default; the media panel's own cover animates unconditionally.
 - Foreground/background inversion for selection.
 - A trailing colon on a label. `NETWORKS (1)`, not `NETWORK:`.
 - A full-bleed `primary` or `destructive` row. Colour goes on the border, the

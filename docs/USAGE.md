@@ -2119,9 +2119,16 @@ no network) falls back to the static art rather than erroring, and the
 setting off means no network call happens at all. A hit downloads an MP4 to
 `~/.cache/formalshell/applemusic-art/`, a miss is cached too so a track
 without animated art is not re-fetched every play, and a 30-day prune runs
-at startup. The muted loop plays while the panel is open or the bar's mini
-cover is on screen, with one decode either way, and the bar's cover
-dither-paints the same frames the panel grabbed instead of decoding its own.
+at startup. The muted loop plays while the panel is open, and the bar's
+cover dither-paints the same frames the panel grabbed instead of decoding
+its own. The bar's mini cover animates only with
+`media.animatedBarCover: true` (default false); off, the decode stops when
+the panel closes instead of running for as long as music plays.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "media": { "animatedBarCover": true } }
+```
 
 ```sh
 fs media playPause
