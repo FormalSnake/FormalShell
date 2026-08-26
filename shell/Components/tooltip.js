@@ -5,14 +5,26 @@
 // without the Quickshell types Tooltip.qml pulls in, the same split
 // cursor.js and Console/geometry.js already use.
 //
-// Every coordinate here is in the anchor's own window space. The tooltip is
-// a full-screen layer surface, and every window that owns a tooltip-bearing
-// item (the bar strip, a panel, the launcher, the notification centre) is
-// anchored at its output's top-left corner, so the two spaces coincide.
-// Wayland hands clients no cross-window geometry to convert between them
-// with, which is why that has to hold rather than be computed.
+// Every coordinate here is in the output's space. The tooltip is a
+// full-screen layer surface, and every window that owns a tooltip-bearing
+// item (the bar strip, a panel, the launcher, the notification centre)
+// either spans its output or hugs one of its edges, so where it sits is
+// known from its anchors alone (`windowOrigin`). Wayland hands clients no
+// cross-window geometry to convert with, which is why that has to be
+// derived rather than asked for.
 
 var SIDES = ["below", "above", "right", "left"];
+
+// Where a layer window's top-left corner sits on its output: 0 on any axis
+// it is anchored to the start of or stretched across, and pushed to the far
+// edge on an axis it is anchored only to the end of (a bar on the right or
+// bottom edge). `anchors` is the window's own {top, bottom, left, right}.
+function windowOrigin(anchors, size, screen) {
+    return {
+        x: anchors.right && !anchors.left ? screen.width - size.width : 0,
+        y: anchors.bottom && !anchors.top ? screen.height - size.height : 0
+    };
+}
 
 // Which side of a bar cell its tooltip goes: away from the bar's own edge,
 // over the desktop. An item that is not on the bar (the default, an empty

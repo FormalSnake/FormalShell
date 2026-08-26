@@ -97,7 +97,11 @@ PanelWindow {
             if (!root.anchorItem)
                 return;
             var origin = root.anchorItem.mapToItem(null, 0, 0);
-            root._anchorRect = Qt.rect(origin.x, origin.y,
+            var window = root.anchorItem.QsWindow.window;
+            var offset = Placement.windowOrigin(window.anchors,
+                Qt.size(window.width, window.height),
+                Qt.size(root._screen.width, root._screen.height));
+            root._anchorRect = Qt.rect(origin.x + offset.x, origin.y + offset.y,
                 root.anchorItem.width, root.anchorItem.height);
             root.shown = true;
         }

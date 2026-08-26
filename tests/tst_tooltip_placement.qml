@@ -129,4 +129,30 @@ TestCase {
         var p = place({ x: 900, y: 6, width: 60, height: 28 }, card, "sideways");
         compare(p.side, "below");
     }
+
+    // --- Where the anchor's window sits on the output ----------------------
+
+    // A bar on the top or left edge, a panel, the launcher: all start at
+    // the output's corner.
+    function test_a_window_hugging_the_start_of_an_axis_sits_at_zero() {
+        var o = Placement.windowOrigin({ top: true, bottom: false, left: true, right: true }, { width: 1920, height: 40 }, screen);
+        compare(o.x, 0);
+        compare(o.y, 0);
+        var full = Placement.windowOrigin({ top: true, bottom: true, left: true, right: true }, { width: 1920, height: 1080 }, screen);
+        compare(full.x, 0);
+        compare(full.y, 0);
+    }
+
+    // A bar on the right or bottom edge hugs the far end of one axis.
+    function test_a_right_bar_is_offset_by_its_own_width() {
+        var o = Placement.windowOrigin({ top: true, bottom: true, left: false, right: true }, { width: 40, height: 1080 }, screen);
+        compare(o.x, 1880);
+        compare(o.y, 0);
+    }
+
+    function test_a_bottom_bar_is_offset_by_its_own_height() {
+        var o = Placement.windowOrigin({ top: false, bottom: true, left: true, right: true }, { width: 1920, height: 40 }, screen);
+        compare(o.x, 0);
+        compare(o.y, 1040);
+    }
 }

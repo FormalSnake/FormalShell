@@ -89,9 +89,17 @@ leg_bar_position_assert() {
     fail "no formalshell:bar layer surface in $bar_position_layers_path"
   fi
   read -r bx by bw bh <<< "$box"
+  # With --frame the bar's window is the whole output and paints the ring
+  # (Bar.qml); frame.sh asserts that box, and the edge is proven by the
+  # zones instead.
+  if leg_on frame; then
+    echo "bar window spans the output under --frame: x=$bx y=$by w=$bw h=$bh"
+    box="framed"
+  fi
   # The output's logical size, the space layer geometry is reported in.
   read -r mw mh <<< "$("$jq_bin" -r 'first | "\(.width / .scale | floor) \(.height / .scale | floor)"' "$bar_position_monitors_path")"
   echo "bar layer: x=$bx y=$by w=$bw h=$bh on ${mw}x${mh} ($edge)"
+  [ "$box" = "framed" ] && edge=framed
   case "$edge" in
     top)
       [ "$by" -eq 0 ] && [ "$bw" -eq "$mw" ] && [ "$bh" -lt "$bw" ] || fail "a top bar should span the top edge, got x=$bx y=$by w=$bw h=$bh"
@@ -110,7 +118,7 @@ leg_bar_position_assert() {
   # window: 60 is well past the 40 the default scale resolves and well
   # short of anything a wrongly sized surface would report.
   local thickness=$bh
-  case "$edge" in left|right) thickness=$bw ;; esac
+  case "$edge" in left|right) thickness=$bw ;; framed) thickness=0 ;; esac
   if [ "$thickness" -gt 60 ]; then
     fail "bar strip is $thickness thick, which is not a cell row plus its margin band"
   fi

@@ -5,6 +5,7 @@ import qs.Core
 import qs.Compositor
 import "cursor.js" as Cursor
 import "geometry.js" as Geometry
+import "tooltip.js" as Placement
 import "../Bar/layout.js" as BarLayout
 
 // The shared per-widget popout (DESIGN.md §3 "Panel", spec "Panels"): a
@@ -238,7 +239,15 @@ PanelWindow {
     // idiom Tooltip.qml resolves its own anchor through.
     function openFrom(item) {
         var window = item ? item.QsWindow.window : null;
-        root.open(item ? item.mapToItem(null, 0, 0) : undefined, window ? window.screen : null);
+        var anchor;
+        if (item && window) {
+            var origin = item.mapToItem(null, 0, 0);
+            var offset = Placement.windowOrigin(window.anchors,
+                Qt.size(window.width, window.height),
+                Qt.size(window.screen.width, window.screen.height));
+            anchor = Qt.point(origin.x + offset.x, origin.y + offset.y);
+        }
+        root.open(anchor, window ? window.screen : null);
     }
 
     function toggleFrom(item) {

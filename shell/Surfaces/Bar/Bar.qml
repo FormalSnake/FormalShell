@@ -11,6 +11,7 @@ import qs.Core
 import qs.Core as Core
 import qs.Components
 import qs.Plugins
+import qs.Surfaces.Frame
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
 
@@ -81,12 +82,33 @@ PanelWindow {
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
     screen: modelData
-    // The strip spans its own edge end to end and hugs that edge.
+    // The strip spans its own edge end to end and hugs that edge. With the
+    // screen frame on the window is the whole output instead: it paints
+    // the frame's ring, the strip included, and its cells over it, so the
+    // three are one surface under the compositor's blur (two blurred
+    // surfaces meeting edge to edge showed their join as a line down the
+    // strip) and one surface above windows (a window a scrolling layout
+    // pushes past the edge slides under the strip, and a ring painted on
+    // a lower layer let it show through). Input then stays on the strip
+    // alone (`mask` below) and the reservation moves to Frame.qml's zone
+    // for this edge, since a window anchored on all four edges has no one
+    // edge to reserve against.
+    readonly property bool _framed: Theme.frameEnabled
     anchors {
-        top: bar._position !== "bottom"
-        bottom: bar._position !== "top"
-        left: bar._position !== "right"
-        right: bar._position !== "left"
+        top: bar._framed || bar._position !== "bottom"
+        bottom: bar._framed || bar._position !== "top"
+        left: bar._framed || bar._position !== "right"
+        right: bar._framed || bar._position !== "left"
+    }
+    WlrLayershell.exclusionMode: bar._framed ? ExclusionMode.Ignore : ExclusionMode.Auto
+    mask: bar._framed ? stripMask : null
+
+    Region {
+        id: stripMask
+        x: stripArea.x
+        y: stripArea.y
+        width: stripArea.width
+        height: stripArea.height
     }
 
     // What a compositor layer rule addresses this strip by: the shipped
@@ -112,18 +134,18 @@ PanelWindow {
 
     // The strip's own length: what the regions share out, and what a
     // cell's width cap is a fraction of.
-    readonly property real _along: bar._vertical ? bar.contentItem.height : bar.contentItem.width
+    readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
 
     // One thickness for every cell in every region, so a widget with a
     // taller line of content can no longer drag the whole strip with it.
     readonly property real _cellThickness: bar._strip.cellThickness
-    implicitHeight: bar._vertical ? 0 : bar._strip.thickness
-    implicitWidth: bar._vertical ? bar._strip.thickness : 0
+    implicitHeight: bar._vertical || bar._framed ? 0 : bar._strip.thickness
+    implicitWidth: bar._vertical && !bar._framed ? bar._strip.thickness : 0
     // The window is the strip exactly, so the fill below covers it edge to
     // edge; this only decides what is behind that fill's own alpha.
     color: "transparent"
 
-    exclusiveZone: bar._strip.thickness
+    exclusiveZone: bar._framed ? 0 : bar._strip.thickness
 
     // Every surface that has to clear the bar (panels, toasts, the center,
     // the console) reads this, through Theme.edgeInset: Wayland gives
@@ -133,30 +155,6 @@ PanelWindow {
         target: Theme
         property: "barThickness"
         value: bar._strip.thickness
-    }
-
-    // Declared before the regions, so it stacks behind every cell. With the
-    // screen frame on, the frame paints the strip as part of its ring
-    // (Surfaces/Frame/Frame.qml) and this window draws only its cells.
-    Rectangle {
-        anchors.fill: parent
-        visible: !Theme.frameEnabled
-        color: Theme.surface(Theme.color.card)
-
-        // The hairline that separates the strip from the desktop, and the
-        // only edge the bar draws: the one facing inward. A `border` on the
-        // fill above would ring all four sides, three of which are the
-        // screen's own edges. With the screen frame on, the frame's own
-        // stroke runs this side too, round the corners into its band, and
-        // this whole fill is off.
-        Rectangle {
-            id: hairline
-            width: bar._vertical ? Theme.borderWidth : parent.width
-            height: bar._vertical ? parent.height : Theme.borderWidth
-            x: bar._position === "left" ? parent.width - hairline.width : 0
-            y: bar._position === "top" ? parent.height - hairline.height : 0
-            color: Theme.color.border
-        }
     }
 
     // Built-in widget registry: each Component wraps the widget with the
@@ -516,110 +514,153 @@ PanelWindow {
         }
     }
 
-    // The three regions, each a Rail (a Row that stands up with the bar).
-    // On a horizontal bar they sit `edgeInset` in from the left and right
-    // ends and `cellInset` down from the top; on a vertical one the same
-    // three run top to bottom, `edgeInset` in from the top and bottom ends
-    // and `cellInset` in from the strip's outer edge. `left` is the start
-    // of the strip and `right` its end whichever way it runs.
-    //
-    // Room along the strip is shared in a fixed order. The centre sits at
-    // the middle while it can, and slides toward the shorter end once the
-    // two end regions together with it outgrow the strip, the start region
-    // winning over the end one. What still does not fit clips at the
-    // centre's side of each end region, never at the strip's own end, so
-    // the cells against the screen edge (an end region's permanent cells,
-    // past its chevron) stay whatever an expanded group costs: a vertical
-    // bar has a third of a wide bar's length, and a right region long
-    // enough to be worth a chevron overflows it the moment it opens.
-    //
-    // Placed by x/y rather than anchors on purpose: the edge can change
-    // while the regions exist (settings.json lands after the first frame),
-    // and rebinding `anchors.top` to undefined and `anchors.bottom` to the
-    // parent in the same pass leaves a moment where both hold, the anchor
-    // system writes the height itself, and Qt 6 drops the QML binding on
-    // that write, which left the end region stuck at a negative height
-    // (VM, 2026-08-26).
+    // The frame's ring (Surfaces/Frame/FrameRing.qml), behind the strip
+    // and only while the window is the whole output.
+    FrameRing {
+        anchors.fill: parent
+        visible: bar._framed
+    }
+
+    // The strip: the whole window on its own, or the bar's edge of a
+    // window that is the whole output. Everything the bar draws and lays
+    // out lives in here, so nothing below has to know which of the two the
+    // window is.
     Item {
-        id: leftRegion
-        x: bar._vertical ? bar._strip.cellInset : bar._strip.edgeInset
-        y: bar._vertical ? bar._strip.edgeInset : bar._strip.cellInset
-        clip: true
-        // Capped to whatever space actually remains before centerRegion
-        // (custom command/qml modules have no fixed count), so overflow
-        // clips here instead of drawing over the clock.
-        width: bar._vertical
-            ? leftRail.implicitWidth
-            : Math.min(leftRail.implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
-        height: bar._vertical
-            ? Math.min(leftRail.implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
-            : leftRail.implicitHeight
+        id: stripArea
+        x: bar._framed && bar._position === "right" ? parent.width - bar._strip.thickness : 0
+        y: bar._framed && bar._position === "bottom" ? parent.height - bar._strip.thickness : 0
+        width: bar._framed && bar._vertical ? bar._strip.thickness : parent.width
+        height: bar._framed && !bar._vertical ? bar._strip.thickness : parent.height
+
+        // Declared before the regions, so it stacks behind every cell. With the
+        // screen frame on, the ring below already paints the strip as part of
+        // itself, so this fill is off and only the cells draw here.
+        Rectangle {
+            anchors.fill: parent
+            visible: !bar._framed
+            color: Theme.surface(Theme.color.card)
+
+            // The hairline that separates the strip from the desktop, and the
+            // only edge the bar draws: the one facing inward. A `border` on the
+            // fill above would ring all four sides, three of which are the
+            // screen's own edges. With the screen frame on, the frame's own
+            // stroke runs this side too, round the corners into its band, and
+            // this whole fill is off.
+            Rectangle {
+                id: hairline
+                width: bar._vertical ? Theme.borderWidth : parent.width
+                height: bar._vertical ? parent.height : Theme.borderWidth
+                x: bar._position === "left" ? parent.width - hairline.width : 0
+                y: bar._position === "top" ? parent.height - hairline.height : 0
+                color: Theme.color.border
+            }
+        }
+
+        // The three regions, each a Rail (a Row that stands up with the bar).
+        // On a horizontal bar they sit `edgeInset` in from the left and right
+        // ends and `cellInset` down from the top; on a vertical one the same
+        // three run top to bottom, `edgeInset` in from the top and bottom ends
+        // and `cellInset` in from the strip's outer edge. `left` is the start
+        // of the strip and `right` its end whichever way it runs.
+        //
+        // Room along the strip is shared in a fixed order. The centre sits at
+        // the middle while it can, and slides toward the shorter end once the
+        // two end regions together with it outgrow the strip, the start region
+        // winning over the end one. What still does not fit clips at the
+        // centre's side of each end region, never at the strip's own end, so
+        // the cells against the screen edge (an end region's permanent cells,
+        // past its chevron) stay whatever an expanded group costs: a vertical
+        // bar has a third of a wide bar's length, and a right region long
+        // enough to be worth a chevron overflows it the moment it opens.
+        //
+        // Placed by x/y rather than anchors on purpose: the edge can change
+        // while the regions exist (settings.json lands after the first frame),
+        // and rebinding `anchors.top` to undefined and `anchors.bottom` to the
+        // parent in the same pass leaves a moment where both hold, the anchor
+        // system writes the height itself, and Qt 6 drops the QML binding on
+        // that write, which left the end region stuck at a negative height
+        // (VM, 2026-08-26).
+        Item {
+            id: leftRegion
+            x: bar._vertical ? bar._strip.cellInset : bar._strip.edgeInset
+            y: bar._vertical ? bar._strip.edgeInset : bar._strip.cellInset
+            clip: true
+            // Capped to whatever space actually remains before centerRegion
+            // (custom command/qml modules have no fixed count), so overflow
+            // clips here instead of drawing over the clock.
+            width: bar._vertical
+                ? leftRail.implicitWidth
+                : Math.min(leftRail.implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
+            height: bar._vertical
+                ? Math.min(leftRail.implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
+                : leftRail.implicitHeight
+
+            Rail {
+                id: leftRail
+                vertical: bar._vertical
+                spacing: Theme.space.sm
+
+                Repeater {
+                    id: leftRepeater
+                    model: bar._layout.regions.left
+                    delegate: regionDelegate
+                }
+            }
+        }
 
         Rail {
-            id: leftRail
+            id: centerRegion
             vertical: bar._vertical
+            // The start region's natural extent plus a gap is the least the
+            // centre can be pushed to; the end region's is the most.
+            readonly property real _floor: bar._strip.edgeInset + Theme.space.sm
+                + (bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth)
+            readonly property real _ceiling: (bar._vertical ? parent.height : parent.width) - bar._strip.edgeInset
+                - Theme.space.sm - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
+                - (bar._vertical ? centerRegion.height : centerRegion.width)
+            readonly property real _middle: ((bar._vertical ? parent.height : parent.width)
+                - (bar._vertical ? centerRegion.height : centerRegion.width)) / 2
+            readonly property real _along: Math.max(centerRegion._floor, Math.min(centerRegion._middle, centerRegion._ceiling))
+            x: bar._vertical ? bar._strip.cellInset : centerRegion._along
+            y: bar._vertical ? centerRegion._along : bar._strip.cellInset
             spacing: Theme.space.sm
 
             Repeater {
-                id: leftRepeater
-                model: bar._layout.regions.left
+                id: centerRepeater
+                model: bar._layout.regions.center
                 delegate: regionDelegate
             }
         }
-    }
 
-    Rail {
-        id: centerRegion
-        vertical: bar._vertical
-        // The start region's natural extent plus a gap is the least the
-        // centre can be pushed to; the end region's is the most.
-        readonly property real _floor: bar._strip.edgeInset + Theme.space.sm
-            + (bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth)
-        readonly property real _ceiling: (bar._vertical ? parent.height : parent.width) - bar._strip.edgeInset
-            - Theme.space.sm - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
-            - (bar._vertical ? centerRegion.height : centerRegion.width)
-        readonly property real _middle: ((bar._vertical ? parent.height : parent.width)
-            - (bar._vertical ? centerRegion.height : centerRegion.width)) / 2
-        readonly property real _along: Math.max(centerRegion._floor, Math.min(centerRegion._middle, centerRegion._ceiling))
-        x: bar._vertical ? bar._strip.cellInset : centerRegion._along
-        y: bar._vertical ? centerRegion._along : bar._strip.cellInset
-        spacing: Theme.space.sm
+        Item {
+            id: rightRegion
+            x: bar._vertical ? bar._strip.cellInset : parent.width - bar._strip.edgeInset - rightRegion.width
+            y: bar._vertical ? parent.height - bar._strip.edgeInset - rightRegion.height : bar._strip.cellInset
+            clip: true
+            // Mirror of leftRegion's cap: never draws back past centerRegion's
+            // far edge, regardless of how many built-ins plus custom modules
+            // settings.json's bar.layout.right names.
+            width: bar._vertical
+                ? rightRail.implicitWidth
+                : Math.min(rightRail.implicitWidth, Math.max(0, parent.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
+            height: bar._vertical
+                ? Math.min(rightRail.implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
+                : rightRail.implicitHeight
 
-        Repeater {
-            id: centerRepeater
-            model: bar._layout.regions.center
-            delegate: regionDelegate
-        }
-    }
+            // Held against the region's own end, so what the clip removes is
+            // the start of the rail, on the centre's side.
+            Rail {
+                id: rightRail
+                vertical: bar._vertical
+                x: bar._vertical ? 0 : rightRegion.width - rightRail.width
+                y: bar._vertical ? rightRegion.height - rightRail.height : 0
+                spacing: Theme.space.sm
 
-    Item {
-        id: rightRegion
-        x: bar._vertical ? bar._strip.cellInset : parent.width - bar._strip.edgeInset - rightRegion.width
-        y: bar._vertical ? parent.height - bar._strip.edgeInset - rightRegion.height : bar._strip.cellInset
-        clip: true
-        // Mirror of leftRegion's cap: never draws back past centerRegion's
-        // far edge, regardless of how many built-ins plus custom modules
-        // settings.json's bar.layout.right names.
-        width: bar._vertical
-            ? rightRail.implicitWidth
-            : Math.min(rightRail.implicitWidth, Math.max(0, parent.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
-        height: bar._vertical
-            ? Math.min(rightRail.implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
-            : rightRail.implicitHeight
-
-        // Held against the region's own end, so what the clip removes is
-        // the start of the rail, on the centre's side.
-        Rail {
-            id: rightRail
-            vertical: bar._vertical
-            x: bar._vertical ? 0 : rightRegion.width - rightRail.width
-            y: bar._vertical ? rightRegion.height - rightRail.height : 0
-            spacing: Theme.space.sm
-
-            Repeater {
-                id: rightRepeater
-                model: bar._layout.regions.right
-                delegate: regionDelegate
+                Repeater {
+                    id: rightRepeater
+                    model: bar._layout.regions.right
+                    delegate: regionDelegate
+                }
             }
         }
     }

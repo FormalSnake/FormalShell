@@ -4,9 +4,9 @@
 # frame paints round the bar for the run's own frame, and rides whichever
 # bar edge the run has (`--bar-position left --frame` is the frame wrapping
 # a left bar). What the screenshot cannot say is asserted off `hyprctl -j
-# layers`: one formalshell:frame painter the size of the output, and a
-# formalshell:frame-zone on each edge the bar is not on, since those zones
-# are what keep windows inside the cut-out.
+# layers`: the bar's own window grown to the size of the output (it paints
+# the ring, Bar.qml), and a formalshell:frame-zone on every edge, since
+# those zones are what keep windows inside the cut-out.
 leg_frame_flag="--frame"
 leg_frame_order=190
 leg_frame_needs="jq"
@@ -38,18 +38,18 @@ leg_frame_assert() {
   if [ ! -s "$frame_layers_path" ] || [ ! -s "$frame_monitors_path" ]; then
     fail "no layer or monitor dump produced for the frame check"
   fi
-  box=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:frame")] | first | "\(.x) \(.y) \(.w) \(.h)"' "$frame_layers_path" 2>/dev/null)
+  box=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:bar")] | first | "\(.x) \(.y) \(.w) \(.h)"' "$frame_layers_path" 2>/dev/null)
   read -r mw mh <<< "$("$jq_bin" -r 'first | "\(.width / .scale | floor) \(.height / .scale | floor)"' "$frame_monitors_path")"
-  echo "frame painter: $box on ${mw}x${mh}"
+  echo "framed bar window: $box on ${mw}x${mh}"
   if [ "$box" != "0 0 $mw $mh" ]; then
-    fail "the frame painter should span the whole output, got: $box"
+    fail "with the frame on the bar's window should span the whole output, got: $box"
   fi
   zones=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:frame-zone")] | length' "$frame_layers_path")
   echo "frame zones: $zones"
-  # One edge belongs to the bar and reserves its own strip; the other three
-  # carry a zone each.
-  if [ "$zones" -ne 3 ]; then
-    fail "expected three frame exclusion zones (one per non-bar edge), got $zones"
+  # One per edge, the bar's included: its window reserves nothing itself
+  # while it is the whole output.
+  if [ "$zones" -ne 4 ]; then
+    fail "expected four frame exclusion zones (one per edge), got $zones"
   fi
   if leg_on bar_position; then
     edge=$(leg_arg bar_position)
