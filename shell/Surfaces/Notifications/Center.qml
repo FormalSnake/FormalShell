@@ -6,11 +6,16 @@ import qs.Compositor
 import qs.Components
 import qs.Notifications
 import "../../Notifications/model.js" as Model
+import "../../Notifications/geometry.js" as Geometry
 import "../../Components/cursor.js" as Cursor
 
 // The notification history centre (DESIGN.md §3, spec "Notification
-// centre", M44 D3): shadcn's sheet, right-anchored and full height below the
-// bar, `popupWidthWide`, drawn as a `Card` that keeps only its left border.
+// centre", M44 D3): shadcn's sheet, right-anchored under the bar,
+// `popupWidthWide`, drawn as a floating `Card` that is as tall as the
+// history it holds and no taller than the output leaves room for (M48 D3,
+// geometry.js). Before M48 it was full height and flush against three
+// screen edges, which put a long list off the bottom of the screen with
+// nothing to scroll.
 // Header: the title, a `Switch` for DND, a ghost `Clear all`. Two sections,
 // PENDING (unseen) then SEEN (seen, rolling 15min TTL), sharing
 // NotificationCard with Toasts.qml's popup stack. Only the dismiss wiring
@@ -180,12 +185,36 @@ PanelWindow {
 
     readonly property int cardWidth: Theme.space.popupWidthWide
 
-    // A Rectangle rounds all four corners, and this card sits flush against
-    // both the screen's right edge and its bottom. Running it one radius past
-    // each leaves the compositor to clip the three corners that would
-    // otherwise round into the desktop, and leaves the top-left one, the only
-    // corner actually inside the screen, rounded.
-    readonly property int _overhang: Theme.radiusXl
+    // The distance every floating surface keeps from the screen's own edges
+    // (M48 D3). `panelPadding` is that number (12) until Theme.space
+    // carries `screenPadding`, which replaces this line.
+    readonly property real _screenPadding: Theme.space.panelPadding
+
+    // The card's own height, before the cap: the header, the gap under it,
+    // both row sections, and the Card's padding either side.
+    readonly property real _contentHeight: header.height + Theme.space.sectionGap
+        + column.implicitHeight + frame.padding * 2
+
+    // Measured off the output rather than off this window: the window is
+    // unmapped while the centre is closed, and a card sized off a window
+    // with no size yet would pop to its real height a frame after opening.
+    // Panel.qml's own frame maths reads `_screen` for the same reason.
+    readonly property var _frame: Geometry.centerFrame({
+        screenWidth: root._screen ? root._screen.width : 0,
+        screenHeight: root._screen ? root._screen.height : 0,
+        barHeight: root._barHeight,
+        padding: root._screenPadding,
+        cardWidth: root.cardWidth,
+        contentHeight: root._contentHeight
+    })
+
+    // Read back over IPC (`notifications status`): the cap is the whole
+    // point of D3 and a screenshot cannot say whether a card that looks
+    // short is short because the history is short or because something
+    // clipped it.
+    readonly property real cardHeight: root._frame.height
+    readonly property real cardMaxHeight: root._frame.available
+    readonly property bool cardCapped: root._frame.capped
 
     screen: root._screen
     // Held visible through the exit fade (spec "Motion"): close() drops
@@ -242,32 +271,18 @@ PanelWindow {
         // in place.
         Card {
             id: frame
-            x: parent.width - root.cardWidth
-            y: root._barHeight
-            width: root.cardWidth + root._overhang
-            height: parent.height - root._barHeight + root._overhang
-            // D3 keeps exactly one border, the left one, drawn below so the
-            // other three never paint.
-            border.width: 0
+            x: root._frame.x
+            y: root._frame.y
+            width: root.cardWidth
+            height: root._frame.height
+            // Every edge is inside the output now, so the card keeps the
+            // border a Card draws on all four sides rather than the single
+            // left one it carried while it was flush against three of them.
             opacity: root.isOpen ? 1 : 0
             transform: Translate { x: (1 - frame.opacity) * Theme.motion.slide }
 
             Behavior on opacity {
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
-
-            // Negative margins escape the card's own content inset, the same
-            // technique Panel.qml's click swallower uses, so this sits on the
-            // frame's actual edge rather than inside its padding.
-            Rectangle {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.leftMargin: -frame.padding
-                anchors.topMargin: -frame.padding
-                anchors.bottomMargin: -frame.padding
-                width: Theme.borderWidth
-                color: Theme.color.border
             }
 
             // Swallows clicks anywhere inside the frame (its own padding
@@ -284,7 +299,6 @@ PanelWindow {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.rightMargin: root._overhang
                 height: Theme.space.controlHeight
 
                 Text {
@@ -326,15 +340,16 @@ PanelWindow {
                 }
             }
 
+            // Scrolls only once the card has hit the cap (root._frame.capped):
+            // under it the Flickable is exactly as tall as its own column and
+            // has nowhere to go.
             Flickable {
                 id: rowsFlickable
                 anchors.top: header.bottom
                 anchors.topMargin: Theme.space.sectionGap
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.rightMargin: root._overhang
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: root._overhang
                 clip: true
                 contentWidth: width
                 contentHeight: column.implicitHeight

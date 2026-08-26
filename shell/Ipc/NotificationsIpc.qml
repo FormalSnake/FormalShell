@@ -26,7 +26,14 @@ IpcHandler {
             dnd: NotificationService.dnd,
             pending: NotificationService.pending.length,
             popups: NotificationService.popups.length,
-            centerOpen: center ? center.isOpen : false
+            centerOpen: center ? center.isOpen : false,
+            // The centre's card is content-tall up to what the output
+            // leaves under the bar (M48 D3). Reported here because that is
+            // the one claim its screenshot cannot make: a short card and a
+            // clipped one look alike.
+            centerHeight: center ? Math.round(center.cardHeight) : 0,
+            centerMaxHeight: center ? Math.round(center.cardMaxHeight) : 0,
+            centerCapped: center ? center.cardCapped : false
         });
     }
 

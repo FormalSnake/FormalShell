@@ -98,8 +98,13 @@ PanelWindow {
     // Anchoring only the bottom edge (no left/right) is what centres the
     // surface horizontally under wlr-layer-shell's arrange rules, the same
     // technique swayosd uses for its own bottom-centre card.
+    // The distance every floating surface keeps from the screen's own edges
+    // (M48 D3). `panelPadding` is that number (12) until Theme.space carries
+    // `screenPadding`, which replaces this line.
+    readonly property real _screenPadding: Theme.space.panelPadding
+
     anchors.bottom: true
-    margins.bottom: Theme.space.panelPadding
+    margins.bottom: root._screenPadding
 
     implicitWidth: frame.implicitWidth
     implicitHeight: frame.implicitHeight

@@ -71,7 +71,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `capture_edit.sh` `--capture-edit`: the SAVED notification's EDIT action
   reaching a real editor with the capture's own path on argv.
 - `center.sh` `--center`: the notification centre listing the pending tier,
-  with the toast stack suppressed for as long as it is open.
+  with the toast stack suppressed for as long as it is open, content-tall on
+  a short history and capped and scrolling on thirty rows.
 - `chevron.sh` `--chevron`: a right-region chevron collapsing the cells
   before it and expanding back, the two frames asserted to differ.
 - `clipboard.sh` `--clipboard`: the ledger's capture order and in-process row
@@ -106,7 +107,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `nightlight.sh` `--nightlight`: the wlsunset-backed night light on and off,
   honest about a session that cannot gamma-control.
 - `notify.sh` `--notify`: the toast stack collapsed and expanded, critical
-  holding the front slot over a newer normal.
+  holding the front slot over a newer normal, the icon resolution order over
+  three cards, and the layer surface the same size either way.
 - `ocr.sh` `--ocr`: the `capture` target's text and colour verbs against a
   window carrying known text on a known background.
 - `osd.sh` `--osd`: the OSD pill on a manual call, on a real `wpctl` change,

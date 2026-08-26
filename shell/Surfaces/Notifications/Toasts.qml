@@ -42,14 +42,14 @@ import "../../Notifications/stack.js" as Stack
 //
 // Anchor corner is configurable (settings.json's `notifications.position`,
 // M34 Task 1, default bottom-right) via Model.positionSpec, see
-// `_positionSpec` below for how a single resolved object drives the
-// PanelWindow's own anchors/margins, the stack's growth order and the
+// `_positionSpec` below for how a single resolved object drives the pile's
+// own anchors inside the surface, the stack's growth order and the
 // enter/exit slide direction together.
 //
 // Suppressed entirely while the history center is open, whatever the
 // configured corner (M34: one rule, no corner-collision math, since
-// Center's own card is a fixed right-edge, full-height panel that overlaps
-// every right-anchored toast position anyway and costs nothing to also
+// Center's own card is a fixed right-edge one that overlaps every
+// right-anchored toast position anyway and costs nothing to also
 // suppress for the two left ones): a sticky critical popup (expiresAt = 0,
 // never times out, see model.js's expire()) would otherwise sit
 // permanently on top of the center's own card, both visually and for
@@ -126,21 +126,27 @@ PanelWindow {
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    anchors {
-        top: root._positionSpec.top
-        bottom: root._positionSpec.bottom
-        left: root._positionSpec.left
-        right: root._positionSpec.right
-    }
-    margins {
-        top: root._positionSpec.top ? root._barHeight + Theme.space.panelPadding : 0
-        bottom: root._positionSpec.bottom ? Theme.space.panelPadding : 0
-        left: root._positionSpec.left ? Theme.space.panelPadding : 0
-        right: root._positionSpec.right ? Theme.space.panelPadding : 0
-    }
+    // The distance every floating surface keeps from the screen's own edges
+    // (M48 D3). `panelPadding` is that number (12) until Theme.space
+    // carries `screenPadding`, which replaces this line.
+    readonly property real _screenPadding: Theme.space.panelPadding
 
-    implicitWidth: stack.width
-    implicitHeight: stack.height
+    // Anchored on all four sides, so the surface is exactly the output and
+    // its geometry never changes for as long as it is mapped (M48): the
+    // stack's own growth, the collapse/expand reflow and every card's exit
+    // used to resize the layer surface, and a compositor that animates
+    // layer geometry (Hyprland's `layers` animation) then ran its own
+    // motion against the shell's, which is what made the resize look
+    // broken. Only the cards inside move now; the window still maps and
+    // unmaps as a whole when the stack goes from zero to one and back.
+    //
+    // A full-output surface that only draws in one corner has to let clicks
+    // through everywhere else, which is what `mask` below is for: the input
+    // region is the stack's own bounds, and a region change is not a
+    // geometry change, so it costs the compositor nothing to follow.
+    anchors { top: true; bottom: true; left: true; right: true }
+
+    mask: Region { item: stack }
 
     // --- the depth-stack pool -------------------------------------------
 
@@ -181,9 +187,9 @@ PanelWindow {
     readonly property var _fallbackGeom: ({ x: 0, y: 0, width: root._frameWidth, z: 0, contentVisible: false })
 
     readonly property var _emptyEntry: ({
-        id: "", appName: "", appIcon: "", summary: "", body: "", urgency: 1,
-        actions: [], image: "", local: false, arrivedAt: 0, seenAt: null,
-        expiresAt: null, memberIds: []
+        id: "", appName: "", appIcon: "", desktopEntry: "", summary: "",
+        body: "", urgency: 1, actions: [], image: "", local: false,
+        arrivedAt: 0, seenAt: null, expiresAt: null, memberIds: []
     })
 
     function _slotIndexForKey(key) {
@@ -320,9 +326,19 @@ PanelWindow {
         return maxY;
     }
 
-    readonly property real _targetHeight: Math.max(
+    // What the output leaves between the bar and the two paddings (M48 D3),
+    // the same rule the notification centre's own card follows. Four groups
+    // of cards never reach it in practice (Model.MAX_POPUPS), so this is the
+    // floor under a pathological stack rather than a layout every stack
+    // meets. Measured off the output rather than off this window, which has
+    // no size while the stack is empty and unmapped (Panel.qml reads its own
+    // `_screen` for the same reason).
+    readonly property real _maxStackHeight: Math.max(0,
+        (root.screen ? root.screen.height : 0) - root._barHeight - root._screenPadding * 2)
+
+    readonly property real _targetHeight: Math.min(root._maxStackHeight, Math.max(
         root._expanded ? root._layout.expandedHeight : root._layout.collapsedHeight,
-        root._departingExtent())
+        root._departingExtent()))
 
     // --- hover / IPC expand ----------------------------------------------
 
@@ -357,14 +373,23 @@ PanelWindow {
         width: root._frameWidth
         height: root._targetHeight
 
-        // The layer surface itself is sized off this height (implicitHeight
-        // above), and the compositor's resize is a real round trip, with
-        // no Behavior here the window used to jump to its target size in
-        // one frame while the delegates' own x/y Behaviors were still
-        // gliding, so a card mid-glide would render clipped to whichever
-        // (old or new) buffer size won the race. Matching duration/easing
-        // to the delegate Behaviors below keeps the surface resize and the
-        // card layout in lockstep frame by frame.
+        // The configured corner, inside the window rather than as the
+        // window's own anchors: the surface is the whole output now (see
+        // `anchors` above), so this is what puts the pile in its corner and
+        // what the input region tracks.
+        anchors.top: root._positionSpec.top ? parent.top : undefined
+        anchors.bottom: root._positionSpec.bottom ? parent.bottom : undefined
+        anchors.left: root._positionSpec.left ? parent.left : undefined
+        anchors.right: root._positionSpec.right ? parent.right : undefined
+        anchors.topMargin: root._barHeight + root._screenPadding
+        anchors.bottomMargin: root._screenPadding
+        anchors.leftMargin: root._screenPadding
+        anchors.rightMargin: root._screenPadding
+
+        // The delegates' own x/y Behaviors glide to their new places over
+        // the same duration, and the pile's top edge (bottom-anchored) or
+        // bottom edge (top-anchored) is where a card that just left used to
+        // be, so this has to move with them rather than snap.
         Behavior on height {
             NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
         }

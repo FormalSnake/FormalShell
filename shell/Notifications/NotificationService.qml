@@ -149,6 +149,7 @@ Singleton {
                 root._state = Model.update(root._state, id, {
                     appName: notification.appName,
                     appIcon: notification.appIcon,
+                    desktopEntry: notification.desktopEntry || "",
                     summary: notification.summary,
                     body: notification.body,
                     urgency: notification.urgency,
@@ -159,6 +160,7 @@ Singleton {
             }
             notification.appNameChanged.connect(syncFromLive);
             notification.appIconChanged.connect(syncFromLive);
+            notification.desktopEntryChanged.connect(syncFromLive);
             notification.summaryChanged.connect(syncFromLive);
             notification.bodyChanged.connect(syncFromLive);
             notification.urgencyChanged.connect(syncFromLive);
@@ -186,6 +188,7 @@ Singleton {
                 id: id,
                 appName: notification.appName,
                 appIcon: notification.appIcon,
+                desktopEntry: notification.desktopEntry || "",
                 summary: notification.summary,
                 body: notification.body,
                 urgency: notification.urgency,

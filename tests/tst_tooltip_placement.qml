@@ -4,7 +4,8 @@ import "../shell/Components/tooltip.js" as Placement
 
 // M44 D6: Tooltip.qml's own geometry, in the anchor's window space (which
 // is the output's, see tooltip.js). `gap` is Theme.space.md and `edge` is
-// Theme.space.panelPadding at the default scale.
+// the screen padding every floating surface keeps (M48 D3), both at the
+// default scale.
 TestCase {
     name: "TooltipPlacement"
 

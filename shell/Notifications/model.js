@@ -31,6 +31,10 @@ function makeEntry(notif, now, expiresAt) {
         id: notif.id,
         appName: notif.appName,
         appIcon: notif.appIcon,
+        // The sender's `desktop-entry` hint, kept beside appIcon because
+        // icon.js falls back to that entry's own icon when neither the
+        // image nor the app icon resolves (M48 D4).
+        desktopEntry: notif.desktopEntry || "",
         summary: notif.summary,
         body: notif.body,
         urgency: notif.urgency,

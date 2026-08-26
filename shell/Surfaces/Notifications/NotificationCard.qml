@@ -3,6 +3,7 @@ import Quickshell
 import qs.Core
 import qs.Components
 import "../../Notifications/model.js" as Model
+import "../../Notifications/icon.js" as NotificationIcon
 
 // One notification as shadcn's toast card (DESIGN.md §3 "Toasts", M44 D2):
 // a `Card` holding a header row (the sender's icon, its name as a
@@ -41,6 +42,12 @@ Card {
 
     readonly property bool _critical: root.entry.urgency === 2
     readonly property real _iconSize: Theme.fontSize.body
+    // The slot is a step wider than the glyph in it: an app's own raster
+    // icon is a picture, not a glyph, and DESIGN.md §1's "size equals the
+    // neighbouring text" rule is about the latter. Fixed either way, so the
+    // header row's left edge does not shift between a card that resolved a
+    // picture and one that fell back to the bell.
+    readonly property real _iconSlot: Theme.fontSize.heading
 
     color: Theme.color.card
     border.color: root._critical ? Theme.color.destructive : Theme.color.border
@@ -63,25 +70,19 @@ Card {
         ? root._relTime + "  x" + root.entry.count
         : root._relTime
 
-    // The notification's own image wins when it resolved (the server already
-    // ran it through IconImageProvider, see notification.cpp's
-    // updateProperties, which leaves either a usable Image.source or "");
-    // otherwise the sender's appIcon, which the server does NOT pre-resolve,
-    // so it needs the same file:// / image:// / absolute-path / themed-name
-    // branching M14's ActiveWindow uses for desktop-entry icons.
-    function _appIconSource(icon) {
-        var value = String(icon || "");
-        if (value.length === 0)
-            return "";
-        if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0)
-            return value;
-        if (value.charAt(0) === "/")
-            return "file://" + value;
-        return Quickshell.iconPath(value, true);
-    }
-    readonly property string _iconSource: root.entry.image.length > 0
-        ? root.entry.image
-        : root._appIconSource(root.entry.appIcon)
+    // The image, the app icon, the sender's desktop entry, then nothing
+    // (M48 D4). The order and the path/url/themed-name branching live in
+    // icon.js; this is only the wiring of the two lookups it needs. Both are
+    // check-resolved, so a name no icon theme carries answers "" and the
+    // bell below takes over, rather than the icon provider's own
+    // missing-texture pixmap rendering as a healthy Image.
+    readonly property string _iconSource: NotificationIcon.resolve(root.entry, {
+        themed: function (name) { return Quickshell.iconPath(name, true); },
+        entry: function (desktopId, appName) {
+            return (desktopId.length > 0 ? DesktopEntries.byId(desktopId) : null)
+                ?? (appName.length > 0 ? DesktopEntries.heuristicLookup(appName) : null);
+        }
+    })
 
     // Declared ahead of `column` so every button inside it keeps its own
     // clicks: this only ever answers a press that landed on text, which
@@ -119,29 +120,43 @@ Card {
                 spacing: Theme.space.iconGap
 
                 Item {
-                    width: root._iconSize
-                    height: root._iconSize
+                    width: root._iconSlot
+                    height: root._iconSlot
                     anchors.verticalCenter: parent.verticalCenter
 
-                    Image {
-                        id: appImage
+                    // The picture's frame (M48 D4): a `radiusSm` bordered
+                    // box, MediaPanel's album-art slot one radius step down,
+                    // so an app's own icon reads as a thumbnail rather than
+                    // as a glyph that happens to be in colour.
+                    Rectangle {
+                        id: appImageFrame
                         anchors.fill: parent
                         // Hidden entirely (not a broken-image box) when
-                        // neither the notification's image nor the sender's
-                        // app icon resolves, and never in front of the
-                        // urgency icon, which outranks it.
+                        // nothing in the resolution order answers, and never
+                        // in front of the urgency icon, which outranks it.
                         visible: !root._critical && root._iconSource !== "" && appImage.status !== Image.Error
-                        source: root._critical ? "" : root._iconSource
-                        asynchronous: true
-                        smooth: true
-                        fillMode: Image.PreserveAspectFit
-                        sourceSize.width: root._iconSize
-                        sourceSize.height: root._iconSize
+                        radius: Theme.radiusSm
+                        color: Theme.color.muted
+                        border.width: Theme.borderWidth
+                        border.color: Theme.color.border
+                        clip: true
+
+                        Image {
+                            id: appImage
+                            anchors.fill: parent
+                            anchors.margins: Theme.borderWidth
+                            source: root._critical ? "" : root._iconSource
+                            asynchronous: true
+                            smooth: true
+                            fillMode: Image.PreserveAspectFit
+                            sourceSize.width: root._iconSlot
+                            sourceSize.height: root._iconSlot
+                        }
                     }
 
                     Icon {
                         anchors.centerIn: parent
-                        visible: !appImage.visible
+                        visible: !appImageFrame.visible
                         name: root._critical ? "triangle-alert" : "bell"
                         size: root._iconSize
                         color: root._critical ? Theme.color.destructive : Theme.color.mutedForeground

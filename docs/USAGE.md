@@ -1038,9 +1038,14 @@ the leading bare-URL line those browsers glue to the front of a body
 stripped too, which is what turns a GitHub web notification back into
 something readable.
 
-The 40×40 icon slot shows the notification's own image, then the sender's
-themed app icon, and is hidden when neither resolves. A card with no body
-gets tighter padding than one with.
+The icon slot resolves four things in order, first hit wins: the
+notification's own `image-data`/`image-path` hint, its `app_icon` (an
+absolute path or a themed icon name), the desktop entry named by its
+`desktop-entry` hint or matching the sender's name, and the card's own bell
+when none of those land. A picture sits in a small bordered frame; the bell
+is drawn in the icon font like every other glyph. A themed name no installed
+icon theme carries counts as a miss and the walk continues, so a session
+with no icon theme at all gets bells rather than broken images.
 
 ### Toast stack
 
@@ -1064,8 +1069,21 @@ regardless of arrival order), and up to two older popups peek a fixed sliver
 out from behind it, each a real card sized narrower by a whole step rather
 than scaled down. Hovering the stack, or `notifications expand on`, reflows
 it into a full column and pauses every visible countdown until you leave.
+The layer surface itself is the whole output and never changes size while
+toasts are up, so only the cards move: a compositor that animates layer
+geometry has nothing here to animate against the shell's own motion, and
+everything outside the cards clicks through to what is under it.
 The history center keeps its own right-anchored placement and full-size
 cards wherever the toasts are.
+
+### History center
+
+The center hangs off the right edge, one screen padding in, the same padding
+below the bar and above the bottom of the output. It is as tall as the
+history it holds: a couple of rows is a couple of rows tall, and a long one
+stops at the bottom padding and scrolls the row list inside instead of
+running off the screen. Clicking anywhere outside it, or on another output,
+closes it.
 
 ### Grouping
 
@@ -1097,7 +1115,8 @@ pointer, and the center's `CLEAR ALL` drops everything listed there
 
 ```sh
 fs notifications showHistory    # toggle the center
-fs notifications status         # {"dnd":…,"pending":…,"popups":…,"centerOpen":…}
+fs notifications status         # dnd, pending, popups, centerOpen, and the
+                                # center card's height/cap
 fs notifications toggleDnd      # returns "on" | "off"
 fs notifications dndState
 fs notifications markAllSeen    # drain pending into past

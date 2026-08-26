@@ -67,11 +67,17 @@ PanelWindow {
         ? root.anchorItem.QsWindow.window.screen
         : null
 
+    // The distance every floating surface keeps from the screen's own edges
+    // (M48 D3), which is what the card clamps to on both axes. `panelPadding`
+    // is that number (12) until Theme.space carries `screenPadding`, which
+    // replaces this line.
+    readonly property real _screenPadding: Theme.space.panelPadding
+
     readonly property var _place: root._screen
         ? Placement.placement(root._anchorRect,
             Qt.size(frame.width, frame.height),
             Qt.size(root._screen.width, root._screen.height),
-            Theme.space.md, Theme.space.panelPadding)
+            Theme.space.md, root._screenPadding)
         : ({ x: 0, y: 0, above: false })
 
     function show() {

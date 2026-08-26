@@ -125,10 +125,16 @@ with a bottom rule only; breadcrumb chips; rows with the cursor row in
 scrim.
 
 **Toasts.** The sonner stack as built. `Card` chrome; critical is a
-`destructive` border and icon, not a fill.
+`destructive` border and icon, not a fill. The card's icon slot resolves the
+notification's image, its app icon, the sender's desktop entry, then a
+`bell`; a picture takes a `radiusSm` frame. The surface under the stack is
+the whole output and holds that size for as long as it is mapped, so a
+compositor's own layer animation has no geometry change to fight; the cards
+move, and everything outside them is click-through.
 
-**Notification centre.** Full-height `Card` with a left border only; DND is
-a `Switch`; unread rows carry a 6px `primary` dot.
+**Notification centre.** A floating `Card` off the right edge, content-tall
+and capped at the output; DND is a `Switch`; unread rows carry a 6px
+`primary` dot.
 
 **OSD.** `Card` pill bottom-centre: `Icon`, `Track`, tabular percentage.
 
