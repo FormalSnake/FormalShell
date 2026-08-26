@@ -221,6 +221,13 @@ PanelWindow {
         onTriggered: userMenuFile.reload()
     }
 
+    // Home-manager retargets this file's symlink on every activation, which
+    // no watch can see (Core/ConfigReopen.qml carries the why). The overlay
+    // is published as a string, so an unchanged reload is already a no-op
+    // assignment; the guard in onLoaded below is what keeps the tick from
+    // re-running the condition pass on a file that did not change.
+    Core.ConfigReopen { file: userMenuFile }
+
     FileView {
         id: userMenuFile
         printErrors: false
@@ -230,7 +237,10 @@ PanelWindow {
         onLoaded: {
             root._userMenuRetries = 0;
             root._userMenuMissingLogged = false;
-            root._userMenuText = userMenuFile.text();
+            var text = userMenuFile.text();
+            if (text === root._userMenuText)
+                return;
+            root._userMenuText = text;
             root._evalConditions();
         }
         onLoadFailed: error => {
