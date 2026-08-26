@@ -139,6 +139,13 @@ Scope {
     // them, and it carries `disabled`/`mirrorOf` too, which the model doesn't
     // expose at all.
     property var outputs: []
+    // Declared here, not inherited: this backend is a Scope and BackendBase
+    // is a contract on paper, so every property on it has to be repeated.
+    // Without this one the assignments in outputsProc below hit no property
+    // at all and DisplayPanel read undefined off it, which is its LOADING
+    // state, so an empty list never reached NO OUTPUTS or CANNOT READ
+    // OUTPUTS (e1504g, 2026-08-26).
+    property string outputsState: "unknown"
 
     readonly property string focusedWindowId: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
     readonly property string focusedWorkspaceId: Hyprland.focusedWorkspace ? String(Hyprland.focusedWorkspace.id) : ""
