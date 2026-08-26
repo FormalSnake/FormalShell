@@ -461,8 +461,13 @@ PanelWindow {
 
     // One history row: the shared NotificationCard, plus the two marks this
     // surface owns rather than the card. Both are drawn here on purpose.
-    // Toasts.qml shows the same card with neither, and the card's own chrome
-    // is Task 1's to decide.
+    // Toasts.qml shows the same card with neither.
+    //
+    // The card goes flat here and nowhere else: the frame above already draws
+    // the fill and the border, so a card per row would tile N of them inside
+    // one. Rows read on space alone rather than on a rule between them, since
+    // each keeps its own `panelPadding`, which puts 28px between the text of
+    // one row and the next against 4px between lines inside one.
     //
     // Reports out by signal rather than calling root's own verbs: an inline
     // component is its own type, so ids declared outside it are not in scope
@@ -495,15 +500,29 @@ PanelWindow {
             anchors.verticalCenter: parent.verticalCenter
         }
 
-        // The ring, drawn as the halo alone: the card owns its own border, so
-        // this surface cannot swap it.
+        // The ring (DESIGN.md §1), drawn here rather than by the card: a flat
+        // card has no resting border for the cursor to swap, so this surface
+        // owns both halves. Both are stroked, not filled: Cell.qml can fill
+        // its halo because its own opaque body masks the inside of it, and a
+        // flat card has nothing to mask with.
         Rectangle {
             anchors.fill: card
             anchors.margins: -Theme.ringWidth
             visible: row.cursor
             radius: Theme.radiusMd + Theme.ringWidth
-            color: Theme.color.ring
+            color: "transparent"
+            border.width: Theme.ringWidth
+            border.color: Theme.color.ring
             opacity: Theme.ringAlpha
+        }
+
+        Rectangle {
+            anchors.fill: card
+            visible: row.cursor
+            radius: Theme.radiusMd
+            color: "transparent"
+            border.width: Theme.borderWidth
+            border.color: Theme.color.ring
         }
 
         NotificationCard {
@@ -511,6 +530,7 @@ PanelWindow {
             x: row._markWidth
             width: row.width - row._markWidth
             radius: Theme.radiusMd
+            flat: true
             entry: row.entry
             now: row.now
 

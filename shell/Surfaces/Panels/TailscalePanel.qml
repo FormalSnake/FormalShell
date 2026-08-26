@@ -229,25 +229,22 @@ Panel {
         }
     ]
 
-    Cell {
+    SectionLabel {
         visible: root.pollState === "unknown"
-        width: parent.width
-
-        SectionLabel { text: "LOADING" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "LOADING"
     }
 
-    Cell {
+    SectionLabel {
         visible: root.pollState === "missing" || root.pollState === "error"
-        width: parent.width
-
-        SectionLabel { text: "NO TAILSCALE" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO TAILSCALE"
     }
 
-    Cell {
+    SectionLabel {
         visible: root.pollState === "needsLogin"
-        width: parent.width
-
-        SectionLabel { text: "NEEDS LOGIN" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NEEDS LOGIN"
     }
 
     // The panel's own subject: this machine's tailnet name and the backend's
@@ -422,13 +419,16 @@ Panel {
         visible: root.pollState === "ok"
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "PEERS"; count: root._peers.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "PEERS"
+            count: root._peers.length
+        }
 
-        Cell {
+        SectionLabel {
             visible: root._peers.length === 0
-            width: parent.width
-
-            SectionLabel { text: "NONE" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "NONE"
         }
 
         Repeater {

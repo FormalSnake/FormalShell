@@ -450,11 +450,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: root._outputs.length === 0 && root._inputs.length === 0
-        width: parent.width
-
-        SectionLabel { text: "NO DEVICES" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO DEVICES"
     }
 
     Column {
@@ -463,6 +462,7 @@ Panel {
         spacing: Theme.space.rowGap
 
         SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
             text: "OUTPUT"
             count: root._outputPick ? root._outputs.length : root._outputRows.length
         }
@@ -582,6 +582,7 @@ Panel {
         }
 
         SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
             text: "INPUT"
             count: root._inputPick ? root._inputs.length : root._inputRows.length
         }
@@ -613,7 +614,11 @@ Panel {
         visible: root._streamRows.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "APPS"; count: root._streamRows.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "APPS"
+            count: root._streamRows.length
+        }
 
         Repeater {
             model: root._streamRows

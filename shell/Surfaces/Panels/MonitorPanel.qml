@@ -124,11 +124,12 @@ Panel {
             width: parent.width
             spacing: Theme.space.rowGap
 
-            SectionLabel { text: metricBlock.modelData.label }
+            SectionLabel { leftPadding: Theme.space.controlPaddingX; text: metricBlock.modelData.label }
 
             Cell {
                 id: metricCell
                 width: parent.width
+                ghost: true
                 cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === metricBlock.index
                 interactive: true
                 acceptedButtons: Qt.NoButton
@@ -179,11 +180,12 @@ Panel {
         width: parent.width
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "MAIN DISPLAY" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "MAIN DISPLAY" }
 
         Cell {
             id: mainOutputCell
             width: parent.width
+            ghost: true
             cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === root._metrics.length
             interactive: true
             acceptedButtons: Qt.NoButton

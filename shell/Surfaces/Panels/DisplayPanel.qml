@@ -442,17 +442,14 @@ Panel {
     // An empty list means two different things and only one of them licenses
     // NO OUTPUTS, see BackendBase's outputsState. A failed hyprctl query must
     // not tell a session with two lit monitors it has no displays.
-    Cell {
+    SectionLabel {
         visible: root._outputs.length === 0
-        width: parent.width
-
-        SectionLabel {
-            text: {
-                switch (root._backend.outputsState) {
-                case "failed": return "CANNOT READ OUTPUTS";
-                case "ok": return "NO OUTPUTS";
-                default: return "LOADING";
-                }
+        leftPadding: Theme.space.controlPaddingX
+        text: {
+            switch (root._backend.outputsState) {
+            case "failed": return "CANNOT READ OUTPUTS";
+            case "ok": return "NO OUTPUTS";
+            default: return "LOADING";
             }
         }
     }
@@ -462,7 +459,11 @@ Panel {
         visible: root._outputs.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "OUTPUTS"; count: root._outputs.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "OUTPUTS"
+            count: root._outputs.length
+        }
 
         Repeater {
             model: root._outputs
@@ -474,13 +475,16 @@ Panel {
         width: parent.width
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "BRIGHTNESS"; count: root._brightnessCount }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "BRIGHTNESS"
+            count: root._brightnessCount
+        }
 
-        Cell {
+        SectionLabel {
             visible: root._brightnessCount === 0
-            width: parent.width
-
-            SectionLabel { text: "NO BACKLIGHT" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "NO BACKLIGHT"
         }
 
         Repeater {
@@ -494,20 +498,18 @@ Panel {
         visible: root._outputs.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "MIRROR" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "MIRROR" }
 
-        Cell {
+        SectionLabel {
             visible: !root._backend.mirrorSupported
-            width: parent.width
-
-            SectionLabel { text: "MIRROR UNSUPPORTED" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "MIRROR UNSUPPORTED"
         }
 
-        Cell {
+        SectionLabel {
             visible: root._backend.mirrorSupported && !root._mirrorPlan.ok
-            width: parent.width
-
-            SectionLabel { text: "SINGLE DISPLAY" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "SINGLE DISPLAY"
         }
 
         Cell {

@@ -754,6 +754,11 @@ Scope {
 
                 readonly property var sel: root._current ? root._current.rect : null
 
+                // primitive-exempt: a selection marquee is a 2px rule around a
+                // rectangle the pointer is dragging, not a surface. No
+                // primitive draws one, and `Cell` would bring a fill and a
+                // radius that would cover and round the very region being
+                // measured.
                 Rectangle {
                     visible: selectionChrome.sel !== null
                     x: selectionChrome.sel ? surface.toLocalX(selectionChrome.sel.x) : 0
@@ -805,29 +810,32 @@ Scope {
 
             // Windows the compositor gave no box for. Renders only when such
             // windows exist, so it is normally absent.
-            Rectangle {
+            Card {
                 id: nameList
                 visible: !root._capturing && root._namedShown
-                color: Core.Theme.color.background
-                border.color: Core.Theme.color.border
-                border.width: Core.Theme.borderWidth
-                radius: Core.Theme.radiusXl
+                // Opaque, unlike the panels and the bar: `formalshell:capture`
+                // is not one of the three namespaces Hyprland blurs behind, and
+                // a translucent card over the frozen screenshot would be
+                // unreadable (spec "Depth").
+                color: Core.Theme.color.card
                 width: Core.Theme.space.popupWidthWide
-                height: listColumn.height + Core.Theme.space.panelPadding * 2
+                height: listColumn.height + nameList.padding * 2
                 x: Math.round((parent.width - width) / 2)
                 y: Math.round((parent.height - height) / 2)
 
                 Column {
                     id: listColumn
-                    x: Core.Theme.space.panelPadding
-                    y: Core.Theme.space.panelPadding
-                    width: parent.width - Core.Theme.space.panelPadding * 2
+                    width: parent.width
 
                     SectionLabel {
                         // The header carries the whole explanation rather than
                         // leaving the dimmed rows to imply it.
                         text: "CANNOT CAPTURE: NO COMPOSITOR GEOMETRY"
                         color: Core.Theme.color.mutedForeground
+                        // Lines up with the row text below rather than with the
+                        // card edge: the rows are ghosts, so they draw no border
+                        // for it to sit against (DESIGN.md §1 Padding).
+                        leftPadding: Core.Theme.space.controlPaddingX
                     }
 
                     Repeater {
@@ -838,6 +846,7 @@ Scope {
                             required property int index
                             required property var modelData
                             width: listColumn.width
+                            ghost: true
                             // Named-only windows are outside _selectable, so
                             // the cursor never lands on one of these rows.
                             selected: false
@@ -948,24 +957,25 @@ Scope {
             // discrete buttons is what the bar's own chrome is for. Declared
             // after the drag MouseArea so it sits on top of it and takes its
             // own clicks.
-            Rectangle {
+            Card {
                 id: toolbar
                 visible: !root._capturing
-                color: Core.Theme.color.background
-                border.color: Core.Theme.color.border
-                border.width: Core.Theme.borderWidth
-                radius: Core.Theme.radiusXl
-                width: toolbarRow.width + Core.Theme.space.panelPadding * 2
-                height: toolbarRow.height + Core.Theme.space.panelPadding * 2
+                // Opaque, for the same reason nameList above is.
+                color: Core.Theme.color.card
+                width: toolbarRow.width + toolbar.padding * 2
+                height: toolbarRow.height + toolbar.padding * 2
                 x: Math.round((parent.width - width) / 2)
                 y: parent.height - height - Core.Theme.space.xl
 
                 // Absorbs everything landing on the card: a click on its chrome
                 // must never reach the drag area underneath, and a pointer
                 // crossing it must never re-resolve the selection out from
-                // under the cell being aimed at.
+                // under the cell being aimed at. The negative margins take it
+                // back out past the card's own padding, which the default slot
+                // is already inset by.
                 MouseArea {
                     anchors.fill: parent
+                    anchors.margins: -toolbar.padding
                     hoverEnabled: true
                     acceptedButtons: Qt.AllButtons
                 }
@@ -976,6 +986,7 @@ Scope {
                     Cell {
                         id: toolCell
                         required property var modelData
+                        ghost: true
                         selected: root._toolIndex === toolCell.modelData.key - 1
 
                         Row {
@@ -1000,8 +1011,6 @@ Scope {
 
                 Row {
                     id: toolbarRow
-                    x: Core.Theme.space.panelPadding
-                    y: Core.Theme.space.panelPadding
                     spacing: Core.Theme.space.md
 
                     SectionLabel {
@@ -1039,6 +1048,7 @@ Scope {
                     Cell {
                         id: commitCell
                         anchors.verticalCenter: parent.verticalCenter
+                        ghost: true
                         active: true
 
                         Row {

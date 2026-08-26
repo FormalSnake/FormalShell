@@ -130,11 +130,13 @@ PanelWindow {
                 }
             }
 
-            Cell {
+            // Unboxed: a state that says nothing is here should not be the
+            // most heavily chromed thing on the surface. Centred, so it takes
+            // no row inset either: there are no rows to line up with.
+            SectionLabel {
                 visible: root.loadFailed
                 anchors.centerIn: parent
-
-                SectionLabel { text: "PLUGIN ERROR" }
+                text: "PLUGIN ERROR"
             }
         }
     }

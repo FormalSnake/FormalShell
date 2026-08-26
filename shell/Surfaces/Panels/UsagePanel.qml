@@ -624,20 +624,21 @@ Panel {
         visible: root.claudeEnabled
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: root.claudeTier !== "" ? "CLAUDE / " + root.claudeTier : "CLAUDE" }
-
-        Cell {
-            visible: root.claudeState !== "ok"
-            width: parent.width
-
-            SectionLabel { text: root.claudeHintText() }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: root.claudeTier !== "" ? "CLAUDE / " + root.claudeTier : "CLAUDE"
         }
 
-        Cell {
-            visible: root.claudeState === "ok" && root._claudeVisibleRows.length === 0
-            width: parent.width
+        SectionLabel {
+            visible: root.claudeState !== "ok"
+            leftPadding: Theme.space.controlPaddingX
+            text: root.claudeHintText()
+        }
 
-            SectionLabel { text: "NO DATA" }
+        SectionLabel {
+            visible: root.claudeState === "ok" && root._claudeVisibleRows.length === 0
+            leftPadding: Theme.space.controlPaddingX
+            text: "NO DATA"
         }
 
         Repeater {
@@ -653,20 +654,21 @@ Panel {
         visible: root.codexEnabled
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: root.codexTier !== "" ? "CODEX / " + root.codexTier : "CODEX" }
-
-        Cell {
-            visible: root.codexState !== "ok"
-            width: parent.width
-
-            SectionLabel { text: root.codexState === "unknown" ? "LOADING" : root.codexStatusText() }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: root.codexTier !== "" ? "CODEX / " + root.codexTier : "CODEX"
         }
 
-        Cell {
-            visible: root.codexState === "ok" && root._codexVisibleRows.length === 0
-            width: parent.width
+        SectionLabel {
+            visible: root.codexState !== "ok"
+            leftPadding: Theme.space.controlPaddingX
+            text: root.codexState === "unknown" ? "LOADING" : root.codexStatusText()
+        }
 
-            SectionLabel { text: "NO DATA" }
+        SectionLabel {
+            visible: root.codexState === "ok" && root._codexVisibleRows.length === 0
+            leftPadding: Theme.space.controlPaddingX
+            text: "NO DATA"
         }
 
         Repeater {

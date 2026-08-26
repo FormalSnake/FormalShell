@@ -26,11 +26,24 @@ import "../../../Power/model.js" as Power
 // replaces the row list's verbs with the ones that are true here.
 //
 // Two columns of sections, in the compact monitor panel's own vocabulary
-// (M43 D4): a `SectionLabel` over a column of `radiusMd` `Cell` rows, each
-// figure in the `display` mono face over a `Track`. The process table below
-// is the one thing that does not take a Cell, because it is a list inside
-// the launcher card and takes the palette's own row instead: square,
-// borderless, the cursor row filled `accent`.
+// (M43 D4): a `SectionLabel` over a column of ghost `Cell` blocks, each
+// figure in the `display` mono face over a `Track`. The blocks are ghosts
+// because the launcher card around them already carries the one border on
+// this surface and the heading already says where a group starts; fifteen
+// boxed blocks down one scrolling column state it a second time. Grouping
+// rides on `sectionGap` between sections against `rowGap` inside one, and
+// every state a block can take still draws, since `ghost` drops only the
+// resting border.
+//
+// A ghost block leaves its content inset by `controlPaddingX` with no
+// border to line up against, so every heading and every empty state takes
+// the same x (DESIGN.md §1 Padding: a header takes `controlPaddingX` where
+// the rows under it draw no border of their own). An empty state is that
+// bare label and nothing else, never a box around one word.
+//
+// The process table below is the one thing that does not take a Cell,
+// because it is a list inside the launcher card and takes the palette's own
+// row instead: square, borderless, the cursor row filled `accent`.
 //
 // Which sections land in which column is packed per machine rather than
 // nailed down (see _splitIndex): a headless VM with one GPU-less card and
@@ -177,17 +190,39 @@ Item {
         return value.toFixed(1) + "W";
     }
 
+    function _mhz(value) {
+        if (value === null || value === undefined || !isFinite(value))
+            return "--";
+        return Math.round(value) + "MHZ";
+    }
+
+    function _rpm(value) {
+        if (value === null || value === undefined || !isFinite(value))
+            return "--";
+        return Math.round(value) + "RPM";
+    }
+
+    // Whether a reading exists at all, as opposed to what it looks like.
+    // The formatters above turn a missing value into a dash for a row that
+    // is drawn anyway; this is what decides whether to draw it.
+    function _has(value) {
+        return value !== null && value !== undefined && isFinite(value);
+    }
+
     // "cpu7" -> "7". The aggregate line never reaches here (cpuDelta drops
     // it from `cores`), so there is no bare "cpu" case to fall back on.
     function _coreLabel(label) {
         return String(label).replace(/^cpu/, "");
     }
 
-    // hwmon rows in the order parseTemps emitted them, folded into one
+    // hwmon rows in the order the parser emitted them, folded into one
     // group per chip so a 12-sensor coretemp reads as one block instead of
     // twelve unrelated rows. hasOwnProperty because a chip name is kernel
     // data, not something this file gets to assume is not "constructor".
-    function _groupTemps(rows) {
+    // Shared by temps and fans: both carry the same chip/label/row shape,
+    // and a laptop reports them off different chips (coretemp beside
+    // acpi_fan and asus), so each groups independently of the other.
+    function _groupByChip(rows) {
         var groups = [];
         var byChip = {};
         for (var i = 0; i < rows.length; i++) {
@@ -201,7 +236,8 @@ Item {
         return groups;
     }
 
-    readonly property var _tempGroups: root._groupTemps(SystemMonitorService.temps.rows || [])
+    readonly property var _tempGroups: root._groupByChip(SystemMonitorService.temps.rows || [])
+    readonly property var _fanGroups: root._groupByChip(SystemMonitorService.fans.rows || [])
 
     // Interfaces carrying traffic first, everything else after in the order
     // the kernel listed them. Two buckets rather than a sort by rate: two
@@ -311,13 +347,36 @@ Item {
     // a bin-pack, so the ledger still reads top to bottom down the left
     // column and on down the right one, exactly as the old hardcoded split
     // did. It is one integer, and only a row count can change it.
-    readonly property var _sectionOrder: ["cpu", "memory", "system", "gpu", "temps", "network", "disk"]
+    readonly property var _sectionOrder: ["cpu", "memory", "system", "gpu", "temps", "fans", "network", "disk"]
 
     // Height in ledger lines. A cell's own padding is worth about a line, so
     // every cell pays for one; the units cancel in the comparison below, so
     // approximate is all this has to be.
     function _cellWeight(lines) {
         return lines + 1;
+    }
+
+    // Ledger lines the GPU metrics cell comes to: one per reading the card
+    // actually published, and a second for each of the three that draw a
+    // track under themselves. A card with nothing readable is the single
+    // NO METRICS line.
+    function _metricLines(metrics) {
+        var lines = 0;
+        if (root._has(metrics.busy))
+            lines += 2;
+        if (root._has(metrics.vramTotal))
+            lines += 2;
+        if (root._has(metrics.clockMhz))
+            lines += 2;
+        if (root._has(metrics.tempC))
+            lines += 1;
+        if (root._has(metrics.powerW))
+            lines += 1;
+        if (root._has(metrics.fanPercent))
+            lines += 1;
+        if (root._has(metrics.fanRpm))
+            lines += 1;
+        return Math.max(1, lines);
     }
 
     function _sectionWeight(id) {
@@ -341,7 +400,7 @@ Item {
             for (i = 0; i < cards.length; i++) {
                 total += root._cellWeight(3);
                 total += root._cellWeight(1 + Math.max(1, cards[i].outputs.length));
-                total += root._cellWeight(cards[i].metrics.available ? 7 : 1);
+                total += root._cellWeight(root._metricLines(cards[i].metrics));
             }
             return total;
         }
@@ -351,6 +410,14 @@ Item {
                 return total + root._cellWeight(1);
             for (i = 0; i < groups.length; i++)
                 total += root._cellWeight(1 + groups[i].rows.length);
+            return total;
+        }
+        if (id === "fans") {
+            var fanGroups = root._fanGroups;
+            if (fanGroups.length === 0)
+                return total + root._cellWeight(1);
+            for (i = 0; i < fanGroups.length; i++)
+                total += root._cellWeight(1 + fanGroups[i].rows.length);
             return total;
         }
         if (id === "network") {
@@ -402,6 +469,7 @@ Item {
         case "system": return systemSection;
         case "gpu": return gpuSection;
         case "temps": return tempsSection;
+        case "fans": return fansSection;
         case "network": return networkSection;
         case "disk": return diskSection;
         }
@@ -423,11 +491,13 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "CPU"
             }
 
             Cell {
                 width: parent.width
+                ghost: true
 
                 Column {
                     width: parent.width
@@ -452,6 +522,7 @@ Item {
             // cpuDelta has no previous sample and `cores` is empty.
             Cell {
                 width: parent.width
+                ghost: true
                 visible: SystemMonitorService.cpu.cores.length > 0
 
                 Grid {
@@ -507,11 +578,13 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "MEMORY"
             }
 
             Cell {
                 width: parent.width
+                ghost: true
 
                 Column {
                     width: parent.width
@@ -534,6 +607,7 @@ Item {
 
             Cell {
                 width: parent.width
+                ghost: true
 
                 Column {
                     width: parent.width
@@ -573,11 +647,13 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "SYSTEM"
             }
 
             Cell {
                 width: parent.width
+                ghost: true
 
                 Column {
                     width: parent.width
@@ -623,17 +699,17 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "GPU"
             }
 
             // No card in /sys/class/drm at all (the mac VM, a headless
             // server) is a normal state with a name, not a gap to fill
             // with a plausible-looking row.
-            Cell {
-                width: parent.width
+            SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 visible: GpuService.cards.length === 0
-
-                SectionLabel { text: "NO GPU" }
+                text: "NO GPU"
             }
 
             Repeater {
@@ -648,6 +724,7 @@ Item {
 
                     Cell {
                         width: parent.width
+                        ghost: true
 
                         Column {
                             width: parent.width
@@ -692,6 +769,7 @@ Item {
 
                     Cell {
                         width: parent.width
+                        ghost: true
 
                         Column {
                             width: parent.width
@@ -739,15 +817,21 @@ Item {
 
                     Cell {
                         width: parent.width
+                        ghost: true
 
                         Column {
                             width: parent.width
                             spacing: Core.Theme.space.xxs
 
-                            // i915/xe expose no unprivileged utilisation
-                            // counter, and nvidia-smi may not be
-                            // installed at all. Both say so here rather
-                            // than rendering an invented 0%.
+                            // Every row stands on its own reading rather
+                            // than on one flag for the whole card: an
+                            // i915 card publishes a clock and no busy
+                            // counter, an nvidia laptop GPU a busy counter
+                            // and no fan. Gating them together prints a
+                            // column of dashes for whichever half the
+                            // driver does not have. NO METRICS is left for
+                            // a card that published nothing readable at
+                            // all, never an invented 0%.
                             SectionLabel {
                                 visible: !cardBlock.modelData.metrics.available
                                 text: "NO METRICS"
@@ -755,53 +839,84 @@ Item {
 
                             StatLine {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.busy)
                                 label: "BUSY"
                                 value: root._pct(cardBlock.modelData.metrics.busy)
                             }
 
                             StatBar {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.busy)
                                 fraction: root._fill(cardBlock.modelData.metrics.busy)
                             }
 
                             StatLine {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.vramTotal)
                                 label: "VRAM"
                                 value: root._bytes(cardBlock.modelData.metrics.vramUsed) + " / " + root._bytes(cardBlock.modelData.metrics.vramTotal)
                             }
 
                             StatBar {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.vramTotal)
                                 fraction: root._fill(cardBlock.modelData.metrics.vramTotal > 0
                                     ? cardBlock.modelData.metrics.vramUsed / cardBlock.modelData.metrics.vramTotal
                                     : null)
                             }
 
+                            // The clock against the card's own ceiling: on
+                            // i915/xe it is the only load signal the driver
+                            // publishes to an unprivileged reader, and the
+                            // cards that report busy directly do not carry
+                            // it at all.
                             StatLine {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.clockMhz)
+                                label: "CLOCK"
+                                value: root._mhz(cardBlock.modelData.metrics.clockMhz) + " / " + root._mhz(cardBlock.modelData.metrics.clockMaxMhz)
+                            }
+
+                            StatBar {
+                                width: parent.width
+                                visible: root._has(cardBlock.modelData.metrics.clockMhz) && root._has(cardBlock.modelData.metrics.clockMaxMhz)
+                                fraction: root._fill(cardBlock.modelData.metrics.clockMaxMhz > 0
+                                    ? cardBlock.modelData.metrics.clockMhz / cardBlock.modelData.metrics.clockMaxMhz
+                                    : null)
+                            }
+
+                            StatLine {
+                                width: parent.width
+                                visible: root._has(cardBlock.modelData.metrics.tempC)
                                 label: "TEMP"
                                 value: root._degrees(cardBlock.modelData.metrics.tempC)
                             }
 
                             StatLine {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.powerW)
                                 label: "POWER"
                                 value: root._watts(cardBlock.modelData.metrics.powerW)
                             }
 
+                            // nvidia-smi reports a percent of maximum, the
+                            // hwmon tachometer every other driver exposes
+                            // reports RPM. Two rows rather than one, so
+                            // neither number is printed in the other's unit.
                             StatLine {
                                 width: parent.width
-                                visible: cardBlock.modelData.metrics.available
+                                visible: root._has(cardBlock.modelData.metrics.fanPercent)
                                 label: "FAN"
-                                value: root._pct(cardBlock.modelData.metrics.fanPercent === null
-                                    ? null
-                                    : cardBlock.modelData.metrics.fanPercent / 100)
+                                value: root._pct(root._has(cardBlock.modelData.metrics.fanPercent)
+                                    ? cardBlock.modelData.metrics.fanPercent / 100
+                                    : null)
+                            }
+
+                            StatLine {
+                                width: parent.width
+                                visible: root._has(cardBlock.modelData.metrics.fanRpm)
+                                label: "FAN"
+                                value: root._rpm(cardBlock.modelData.metrics.fanRpm)
                             }
                         }
                     }
@@ -818,14 +933,14 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "TEMPS"
             }
 
-            Cell {
-                width: parent.width
+            SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 visible: root._tempGroups.length === 0
-
-                SectionLabel { text: "NO SENSORS" }
+                text: "NO SENSORS"
             }
 
             Repeater {
@@ -836,6 +951,7 @@ Item {
                     required property var modelData
 
                     width: tempsColumn.width
+                    ghost: true
 
                     Column {
                         width: parent.width
@@ -873,6 +989,70 @@ Item {
     }
 
     Component {
+        id: fansSection
+
+        Column {
+            id: fansColumn
+            spacing: Core.Theme.space.rowGap
+
+            SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
+                text: "FANS"
+            }
+
+            // A machine with no tachometer at all (a fanless laptop, the
+            // rig's VM) says so once, the same shape TEMPS uses. A fan
+            // reading 0 is not this case: the firmware has spun it down,
+            // and that row renders its own 0RPM.
+            SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
+                visible: root._fanGroups.length === 0
+                text: "NO FANS"
+            }
+
+            Repeater {
+                model: root._fanGroups
+
+                delegate: Cell {
+                    id: fanGroup
+                    required property var modelData
+
+                    width: fansColumn.width
+                    ghost: true
+
+                    Column {
+                        width: parent.width
+                        spacing: Core.Theme.space.xxs
+
+                        Text {
+                            width: parent.width
+                            elide: Text.ElideRight
+                            text: fanGroup.modelData.chip
+                            color: Core.Theme.color.foreground
+                            font.family: Core.Theme.fontFamilyMono
+                            font.pixelSize: Core.Theme.fontSize.bodySmall
+                        }
+
+                        Repeater {
+                            model: fanGroup.modelData.rows
+
+                            delegate: StatLine {
+                                id: fanLine
+                                required property var modelData
+
+                                width: parent.width
+                                identifier: true
+                                label: fanLine.modelData.label
+                                value: root._rpm(fanLine.modelData.rpm)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
         id: networkSection
 
         Column {
@@ -880,6 +1060,7 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "NETWORK"
             }
 
@@ -888,13 +1069,10 @@ Item {
             // are not measurable yet is the other, since netDelta has
             // no previous sample to subtract on the first tick and a
             // rate nobody measured is not 0 B/S.
-            Cell {
-                width: parent.width
+            SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 visible: root._netRows.length === 0
-
-                SectionLabel {
-                    text: SystemMonitorService.net.available ? "NO TRAFFIC YET" : "NO INTERFACES"
-                }
+                text: SystemMonitorService.net.available ? "NO TRAFFIC YET" : "NO INTERFACES"
             }
 
             Repeater {
@@ -905,6 +1083,7 @@ Item {
                     required property var modelData
 
                     width: networkColumn.width
+                    ghost: true
 
                     Column {
                         width: parent.width
@@ -944,14 +1123,14 @@ Item {
             spacing: Core.Theme.space.rowGap
 
             SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: "DISK"
             }
 
-            Cell {
-                width: parent.width
+            SectionLabel {
+                leftPadding: Core.Theme.space.controlPaddingX
                 visible: SystemMonitorService.disk.rows.length === 0
-
-                SectionLabel { text: "NO MOUNTS" }
+                text: "NO MOUNTS"
             }
 
             Repeater {
@@ -962,6 +1141,7 @@ Item {
                     required property var modelData
 
                     width: diskColumn.width
+                    ghost: true
 
                     Column {
                         width: parent.width
@@ -1419,7 +1599,7 @@ Item {
 
             Rectangle {
                 anchors.fill: parent
-                color: Core.Theme.color.accent
+                color: Core.Theme.hoverFill
                 opacity: (procRow.hovered && !procRow.current) ? 1 : 0
 
                 Behavior on opacity {

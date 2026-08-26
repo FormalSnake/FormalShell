@@ -11,11 +11,18 @@ import qs.Core
 // Everything else a caller sets on a Text forwards through by alias, and the
 // implicit size tracks the label's, so this measures like the plain Text it
 // replaces (Cell's own content measurement included).
+//
+// `leftPadding` is the one a caller reaches for often (DESIGN.md §1
+// Padding): a header takes the same horizontal padding as the rows under it,
+// which is none against bordered rows and `controlPaddingX` against flat
+// ones, so a section whose rows stopped drawing a box has to inset its label
+// to stay lined up with the row text rather than with the card edge.
 Item {
     id: root
 
     property string text: ""
     property int count: -1
+    property alias leftPadding: label.leftPadding
     property alias color: label.color
     property alias elide: label.elide
     property alias horizontalAlignment: label.horizontalAlignment

@@ -187,11 +187,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: root._window === null
-        width: parent.width
-
-        SectionLabel { text: "NO WINDOW" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO WINDOW"
     }
 
     Component {
@@ -231,20 +230,22 @@ Panel {
         visible: root._window !== null
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "ACTIONS"; count: root._actions.length }
-
-        Cell {
-            visible: root._entry === null
-            width: parent.width
-
-            SectionLabel { text: "NO DESKTOP ENTRY" }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "ACTIONS"
+            count: root._actions.length
         }
 
-        Cell {
-            visible: root._entry !== null && root._actions.length === 0
-            width: parent.width
+        SectionLabel {
+            visible: root._entry === null
+            leftPadding: Theme.space.controlPaddingX
+            text: "NO DESKTOP ENTRY"
+        }
 
-            SectionLabel { text: "NO ACTIONS" }
+        SectionLabel {
+            visible: root._entry !== null && root._actions.length === 0
+            leftPadding: Theme.space.controlPaddingX
+            text: "NO ACTIONS"
         }
 
         Repeater {
@@ -258,7 +259,11 @@ Panel {
         visible: root._window !== null
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "WINDOWS"; count: root._appWindows.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "WINDOWS"
+            count: root._appWindows.length
+        }
 
         Repeater {
             model: root._window !== null ? root._appWindows : []

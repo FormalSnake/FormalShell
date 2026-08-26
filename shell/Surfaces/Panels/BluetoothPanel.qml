@@ -644,11 +644,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: !root._adapter
-        width: parent.width
-
-        SectionLabel { text: "NO ADAPTER" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO ADAPTER"
     }
 
     // The panel's own subject (M28 Task 5): the one connected device, or
@@ -679,11 +678,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: root._adapter !== null && !root._hasAnyRows
-        width: parent.width
-
-        SectionLabel { text: (!root._adapter || !root._adapter.enabled) ? "TURN ON TO SCAN" : "SCANNING…" }
+        leftPadding: Theme.space.controlPaddingX
+        text: (!root._adapter || !root._adapter.enabled) ? "TURN ON TO SCAN" : "SCANNING…"
     }
 
     Column {
@@ -691,7 +689,11 @@ Panel {
         visible: root._pairedSection.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "PAIRED"; count: root._pairedSection.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "PAIRED"
+            count: root._pairedSection.length
+        }
 
         Repeater {
             model: root._pairedSection
@@ -704,7 +706,11 @@ Panel {
         visible: root._availableSection.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "AVAILABLE"; count: root._availableSection.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "AVAILABLE"
+            count: root._availableSection.length
+        }
 
         Repeater {
             model: root._availableSection

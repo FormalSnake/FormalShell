@@ -75,10 +75,9 @@ Panel {
                     id: authColumn
                     width: authCell.implicitWidth
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "AUTHPROMPT / IDLE" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "AUTHPROMPT / IDLE"
                     }
 
                     // inputEnabled: false is the component's own way of
@@ -91,6 +90,7 @@ Panel {
                     // surface the lock screen and the greeter both render.
                     Cell {
                         id: authCell
+                        ghost: true
 
                         AuthPrompt { inputEnabled: false }
                     }
@@ -100,16 +100,18 @@ Panel {
                     id: cellColumn
                     width: topRow._flex
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "CELL" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "CELL"
                     }
 
                     Repeater {
                         // One row per state Cell.qml renders differently
                         // (DESIGN.md §2), driven as data rather than as one
-                        // hand-written delegate each.
+                        // hand-written delegate each. The one block on the
+                        // sheet that keeps its resting border: rest is one
+                        // of the seven states it is here to show, and every
+                        // other specimen went flat around it.
                         model: [
                             { label: "Rest",        selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: false },
                             { label: "Hovered",     selected: false, active: false, destructive: false, warning: false, cursor: false, hovered: true  },
@@ -144,13 +146,13 @@ Panel {
 
                     // The honest-unavailable state every surface in the
                     // shell falls back to (NO ADAPTER, NO DEVICES, NO
-                    // LOCATION): a plain cell whose label keeps
-                    // SectionLabel's own mutedForeground, not a Cell flag of
-                    // its own.
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "DIM / UNAVAILABLE" }
+                    // LOCATION): a bare label in SectionLabel's own
+                    // mutedForeground, no box and no Cell flag. A state that
+                    // says nothing is here should not be the most heavily
+                    // chromed thing on the surface.
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "DIM / UNAVAILABLE"
                     }
                 }
 
@@ -158,10 +160,9 @@ Panel {
                     id: typeColumn
                     width: topRow._flex
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "TYPE SCALE" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "TYPE SCALE"
                     }
 
                     Repeater {
@@ -178,6 +179,7 @@ Panel {
                             required property string modelData
 
                             width: typeColumn.width
+                            ghost: true
 
                             Row {
                                 spacing: Theme.space.md
@@ -202,10 +204,9 @@ Panel {
                     id: tokenColumn
                     width: topRow._flex
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "COLOR TOKENS" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "COLOR TOKENS"
                     }
 
                     Repeater {
@@ -221,6 +222,7 @@ Panel {
                             required property string modelData
 
                             width: tokenColumn.width
+                            ghost: true
 
                             Row {
                                 spacing: Theme.space.md
@@ -250,27 +252,22 @@ Panel {
                         }
                     }
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "METALABEL" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "METALABEL"
                     }
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "METALABEL / CAPTION" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "METALABEL / CAPTION"
                     }
 
-                    Cell {
-                        width: parent.width
-
-                        // The wider variant the lock/greeter date row uses.
-                        SectionLabel {
-                            text: "METALABEL / SUBTITLE"
-                            font.pixelSize: Theme.fontSize.subtitle
-                            font.letterSpacing: Theme.letterSpacing.wide
-                        }
+                    // The wider variant the lock/greeter date row uses.
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "METALABEL / SUBTITLE"
+                        font.pixelSize: Theme.fontSize.subtitle
+                        font.letterSpacing: Theme.letterSpacing.wide
                     }
                 }
             }
@@ -285,10 +282,9 @@ Panel {
                     id: spacingColumn
                     width: bottomRow._flex
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "SPACING SCALE" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "SPACING SCALE"
                     }
 
                     Grid {
@@ -310,6 +306,7 @@ Panel {
                                 required property string modelData
 
                                 width: spacingColumn.width / 3
+                                ghost: true
 
                                 Row {
                                     spacing: Theme.space.md
@@ -341,15 +338,15 @@ Panel {
                     id: marqueeColumn
                     width: bottomRow._flex
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "MARQUEETEXT" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "MARQUEETEXT"
                     }
 
                     Cell {
                         id: fitsCell
                         width: parent.width
+                        ghost: true
 
                         Column {
                             spacing: Theme.space.xxs
@@ -367,6 +364,7 @@ Panel {
                     Cell {
                         id: scrollsCell
                         width: parent.width
+                        ghost: true
 
                         Column {
                             spacing: Theme.space.xxs
@@ -390,26 +388,23 @@ Panel {
                     id: surfaceColumn
                     width: bottomRow._flex
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "SURFACES" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "SURFACES"
                     }
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "PANEL / THIS SURFACE" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "PANEL / THIS SURFACE"
                     }
 
-                    Cell {
-                        width: parent.width
-
-                        // Panel.qml holds one DismissTwins for this surface,
-                        // which maps one click catcher per output other than
-                        // the one it opened on, so a single-output session
-                        // honestly reports none rather than an invented one.
-                        SectionLabel { text: "DISMISSTWINS / " + Math.max(0, Quickshell.screens.length - 1) + " TWINS" }
+                    // Panel.qml holds one DismissTwins for this surface,
+                    // which maps one click catcher per output other than
+                    // the one it opened on, so a single-output session
+                    // honestly reports none rather than an invented one.
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "DISMISSTWINS / " + Math.max(0, Quickshell.screens.length - 1) + " TWINS"
                     }
 
                     // A real hover source, not just a `tooltipText` string:
@@ -432,10 +427,9 @@ Panel {
                         }
                     }
 
-                    Cell {
-                        width: parent.width
-
-                        SectionLabel { text: "TOOLTIP OPENS UNDER THE ROW ABOVE, OVER THIS PANEL" }
+                    SectionLabel {
+                        leftPadding: Theme.space.controlPaddingX
+                        text: "TOOLTIP OPENS UNDER THE ROW ABOVE, OVER THIS PANEL"
                     }
                 }
             }

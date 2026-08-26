@@ -88,11 +88,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: !root._present
-        width: parent.width
-
-        SectionLabel { text: "NO CONTROLLER" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO CONTROLLER"
     }
 
     PanelHero {
@@ -123,7 +122,7 @@ Panel {
         visible: root._present && (root._lightbar !== null || root._playerLeds !== null)
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "STATUS" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "STATUS" }
 
         Row {
             width: parent.width

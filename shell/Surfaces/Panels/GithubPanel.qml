@@ -172,25 +172,22 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: root.pollState === "unknown"
-        width: parent.width
-
-        SectionLabel { text: "LOADING" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "LOADING"
     }
 
-    Cell {
+    SectionLabel {
         visible: root.pollState === "missing" || root.pollState === "error"
-        width: parent.width
-
-        SectionLabel { text: "NO GH" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO GH"
     }
 
-    Cell {
+    SectionLabel {
         visible: root.pollState === "noauth"
-        width: parent.width
-
-        SectionLabel { text: "NO AUTH" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO AUTH"
     }
 
     // The panel's own subject: the signed-in account, and how many things
@@ -267,13 +264,16 @@ Panel {
         visible: root.pollState === "ok"
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "PULL REQUESTS"; count: root.prCount }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "PULL REQUESTS"
+            count: root.prCount
+        }
 
-        Cell {
+        SectionLabel {
             visible: root.prRows.length === 0
-            width: parent.width
-
-            SectionLabel { text: "NONE" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "NONE"
         }
 
         Repeater {
@@ -287,13 +287,16 @@ Panel {
         visible: root.pollState === "ok"
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "ISSUES"; count: root.issueCount }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "ISSUES"
+            count: root.issueCount
+        }
 
-        Cell {
+        SectionLabel {
             visible: root.issueRows.length === 0
-            width: parent.width
-
-            SectionLabel { text: "NONE" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "NONE"
         }
 
         Repeater {

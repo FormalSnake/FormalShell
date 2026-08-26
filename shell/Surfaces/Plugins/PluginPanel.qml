@@ -58,10 +58,11 @@ Panel {
         }
     }
 
-    Cell {
+    // Unboxed, and inset to where a row's text sits rather than to where a
+    // row's border would (DESIGN.md §1 Padding).
+    SectionLabel {
         visible: root.loadFailed
-        width: parent.width
-
-        SectionLabel { text: "PLUGIN ERROR" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "PLUGIN ERROR"
     }
 }

@@ -241,7 +241,8 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 - A full-bleed `primary` or `destructive` row. Colour goes on the border, the
   icon or the dot; fills are for buttons and the active toggle.
 - A hover fill that moves, or a cursor that slides between rows.
-- Uppercase anywhere but `SectionLabel` and the breadcrumb.
+- Uppercase anywhere but `SectionLabel`. The breadcrumb lost its carve-out
+  with its chips (2026-08-26): shadcn's breadcrumb is a path in natural case.
 
 ## 6. Verify
 

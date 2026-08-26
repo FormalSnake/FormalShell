@@ -74,4 +74,16 @@ TestCase {
         compare(label.implicitHeight, text.implicitHeight);
         verify(label.implicitWidth > 0);
     }
+
+    // A header takes the same horizontal padding as the rows under it
+    // (DESIGN.md §1 "Padding"), which is none against bordered rows and
+    // `controlPaddingX` against flat ones. The inset has to reach the item's
+    // own implicit width or a label in a Column would keep the box it had
+    // and only slide its glyphs out of it.
+    function test_left_padding_insets_the_glyphs_and_the_box_alike() {
+        var bare = make(labelComponent, { text: "NO DEVICES" });
+        var inset = make(labelComponent, { text: "NO DEVICES", leftPadding: Theme.space.controlPaddingX });
+        compare(Math.round(inset.implicitWidth - bare.implicitWidth), Theme.space.controlPaddingX);
+        compare(inset.implicitHeight, bare.implicitHeight);
+    }
 }

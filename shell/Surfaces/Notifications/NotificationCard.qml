@@ -20,6 +20,11 @@ import "../../Notifications/icon.js" as NotificationIcon
 // let the desktop through would be unreadable over a bright wallpaper
 // (spec "Depth").
 //
+// `flat` is the same trade Cell.ghost makes: a consumer that already draws a
+// card around this one drops the fill and the resting border, so N of these
+// inside one frame read as rows rather than as tiles. A toast has nothing
+// behind it and keeps both.
+//
 // Purely presentational: Toasts.qml and Center.qml own fetching the entry
 // from NotificationService and wiring the three signals below to its verbs.
 Card {
@@ -40,6 +45,9 @@ Card {
     signal bodyClicked
     signal actionInvoked(string key)
 
+    // Set by the notification centre, never by the toast stack.
+    property bool flat: false
+
     readonly property bool _critical: root.entry.urgency === 2
     readonly property real _iconSize: Theme.fontSize.body
     // The slot is a step wider than the glyph in it: an app's own raster
@@ -49,7 +57,11 @@ Card {
     // picture and one that fell back to the bell.
     readonly property real _iconSlot: Theme.fontSize.heading
 
-    color: Theme.color.card
+    color: root.flat ? "transparent" : Theme.color.card
+    // The only border a flat card draws is the one urgency asked for
+    // (Cell.qml's `_borderless`, same rule): critical is a `destructive`
+    // border and icon, so the border has to survive the flattening.
+    border.width: root.flat && !root._critical ? 0 : Theme.borderWidth
     border.color: root._critical ? Theme.color.destructive : Theme.color.border
 
     implicitWidth: Theme.space.popupWidthNarrow

@@ -22,19 +22,13 @@ from pathlib import Path
 # The subtrees held to the rule. Everything under shell/Components is the
 # primitives themselves, so it is never scanned.
 #
-# Three subtrees are not on the list yet, each for a stated reason rather
-# than because nobody looked:
-#   shell/Surfaces/Menu, shell/Surfaces/Notifications  their own M48 passes
-#     are landing alongside this one; adding markers to files being rewritten
-#     buys a merge conflict and nothing else.
-#   shell/Surfaces/Capture  RegionPicker's name list and toolbar are two
-#     card-shaped Rectangles that `Card` would draw, but the toolbar's
-#     click-absorbing MouseArea spans its chrome and would have to be
-#     re-anchored past the card's padding. That needs the `--capture` rig
-#     leg to re-verify, which is not this task's rig scope.
+# shell/Surfaces/Menu and shell/Surfaces/Notifications are not on the list
+# yet: their own M48 passes are landing alongside this one, and adding markers
+# to files being rewritten buys a merge conflict and nothing else.
 SCANNED = [
     "shell/Surfaces/Panels",
     "shell/Surfaces/Bar",
+    "shell/Surfaces/Capture",
     "shell/Surfaces/Gallery",
 ]
 

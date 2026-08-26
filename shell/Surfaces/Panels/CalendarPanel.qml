@@ -281,6 +281,7 @@ Panel {
         spacing: Core.Theme.space.rowGap
 
         SectionLabel {
+            leftPadding: Core.Theme.space.controlPaddingX
             text: root._monthName(root._viewMonth) + " " + root._viewYear
         }
 
@@ -467,6 +468,7 @@ Panel {
                 id: agendaLabel
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
+                leftPadding: Core.Theme.space.controlPaddingX
                 text: root._selectedIsToday
                     ? "TODAY"
                     : root._monthShort[root._selected.getMonth()] + " " + root._selected.getDate()
@@ -475,17 +477,17 @@ Panel {
 
             SectionLabel {
                 anchors.right: parent.right
+                anchors.rightMargin: Core.Theme.space.controlPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root._agendaNow || root._agendaNext !== null
                 text: root._agendaNow ? "NOW" : "NEXT " + Agenda.clockTime(root._agendaNext.start, root._twelveHour)
             }
         }
 
-        Cell {
-            width: parent.width
+        SectionLabel {
             visible: root._selectedEvents.length === 0
-
-            SectionLabel { text: "NO EVENTS" }
+            leftPadding: Core.Theme.space.controlPaddingX
+            text: "NO EVENTS"
         }
 
         Repeater {
@@ -495,6 +497,7 @@ Panel {
                 id: eventCell
                 required property var modelData
                 width: parent.width
+                ghost: true
 
                 readonly property string _status: Agenda.status(eventCell.modelData, root._today)
 
@@ -547,7 +550,7 @@ Panel {
         width: parent.width
         spacing: Core.Theme.space.rowGap
 
-        SectionLabel { text: "PROGRESS" }
+        SectionLabel { leftPadding: Core.Theme.space.controlPaddingX; text: "PROGRESS" }
 
         Cell {
             id: yearCell

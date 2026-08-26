@@ -1297,6 +1297,7 @@ Panel {
     Cell {
         id: statsCell
         width: parent.width
+        ghost: true
 
         Column {
             width: parent.width
@@ -1369,11 +1370,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: root._wiredEntries.length === 0 && root._wifiEntries.length === 0
-        width: parent.width
-
-        SectionLabel { text: "NO DEVICES" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO DEVICES"
     }
 
     Column {
@@ -1381,7 +1381,11 @@ Panel {
         visible: root._wiredEntries.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "WIRED"; count: root._wiredEntries.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "WIRED"
+            count: root._wiredEntries.length
+        }
 
         Repeater {
             model: root._wiredEntries
@@ -1394,13 +1398,16 @@ Panel {
         visible: root._hasWifiDevice
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "NETWORKS"; count: root._wifiSorted.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "NETWORKS"
+            count: root._wifiSorted.length
+        }
 
-        Cell {
+        SectionLabel {
             visible: root._wifiSorted.length === 0
-            width: parent.width
-
-            SectionLabel { text: Networking.wifiEnabled ? "SCANNING" : "RADIO OFF" }
+            leftPadding: Theme.space.controlPaddingX
+            text: Networking.wifiEnabled ? "SCANNING" : "RADIO OFF"
         }
 
         Repeater {
@@ -1454,18 +1461,16 @@ Panel {
             }
         }
 
-        Cell {
+        SectionLabel {
             visible: root._qrOpen && root._qrPhase !== "idle" && root._qrPhase !== "done"
-            width: parent.width
-
-            SectionLabel { text: "GENERATING" }
+            leftPadding: Theme.space.controlPaddingX
+            text: "GENERATING"
         }
 
-        Cell {
+        SectionLabel {
             visible: root._qrOpen && root._qrError !== ""
-            width: parent.width
-
-            SectionLabel { text: root._qrError }
+            leftPadding: Theme.space.controlPaddingX
+            text: root._qrError
         }
 
         Cell {

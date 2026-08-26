@@ -229,10 +229,17 @@ one is `destructive`. The chevron keeps its collapse behaviour.
 **Panels.** A `card`, `radiusXl`, 1px `border`, `panelPadding`, anchored
 `barMargin` under its cell (IPC opens fall back to the right region, as
 today). Header: icon, title (subtitle/semibold), right-aligned ghost icon
-buttons (refresh, close). Body: sections with a section label, rows as
-bordered `radiusMd` items `controlHeight` tall (icon, label, trailing meta
-or icons). A hero card (network's connected AP, audio's active sink) is a
-bordered inner card with a two-line body. Footer: outline button on the
+buttons (refresh, close). Body: sections with a section label, rows
+`controlHeight` tall (icon, label, trailing meta or icons). A row draws a
+bordered `radiusMd` box at rest only where it is a control: clickable, or
+cursor-bearing, or carrying a state. A block that only reports a reading and
+an empty state that only names its own absence draw no box (amended
+2026-08-26, owner: "there's a too big usage of cards everywhere"; the
+original text made every row bordered, which left a panel reading as a pile
+of tiles with no rank in it). A hero card (network's connected AP, audio's
+active sink) is a bordered inner card with a two-line body, and stays
+bordered under the amendment: it is the block that outranks the rest, and
+with the readings around it flat the border is what says so. Footer: outline button on the
 left, big number on the right. Panel width `Default`; media, monitor and
 calendar use `Wide`.
 

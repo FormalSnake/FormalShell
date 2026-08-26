@@ -225,11 +225,10 @@ Panel {
 
     // No flake directory configured at all means there is no subject to
     // promote, so the hero gives way to the model's own one-line answer.
-    Cell {
+    SectionLabel {
         visible: root.flakeDir === ""
-        width: parent.width
-
-        SectionLabel { text: root.summary }
+        leftPadding: Theme.space.controlPaddingX
+        text: root.summary
     }
 
     // The panel's own subject once a directory is named: which flake, what
@@ -322,13 +321,16 @@ Panel {
         visible: root.inputs.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "INPUTS"; count: root.inputs.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "INPUTS"
+            count: root.inputs.length
+        }
 
-        Cell {
+        SectionLabel {
             visible: root.pollState === "ok" && root.counts.unknown > 0
-            width: parent.width
-
-            SectionLabel { text: root.counts.unknown + " UNKNOWN" }
+            leftPadding: Theme.space.controlPaddingX
+            text: root.counts.unknown + " UNKNOWN"
         }
 
         Repeater {

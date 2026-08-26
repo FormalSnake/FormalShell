@@ -208,18 +208,16 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: root._noDaemon
-        width: parent.width
-
-        SectionLabel { text: "NO DAEMON" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO DAEMON"
     }
 
-    Cell {
+    SectionLabel {
         visible: root._noAirpods
-        width: parent.width
-
-        SectionLabel { text: "NO AIRPODS" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO AIRPODS"
     }
 
     PanelHero {
@@ -305,7 +303,7 @@ Panel {
         visible: root._batteryRows.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "BATTERY" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "BATTERY" }
 
         Repeater {
             model: root._batteryRows
@@ -318,7 +316,7 @@ Panel {
         visible: root._controlsVisible
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "LISTENING MODE" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "LISTENING MODE" }
 
         ButtonGroup {
             id: modeGroup
@@ -341,6 +339,7 @@ Panel {
             id: adaptiveCell
             visible: root._adaptiveVisible
             width: parent.width
+            ghost: true
             cursor: root.cursorActive && root._cursorKey === "adaptive"
             interactive: true
             acceptedButtons: Qt.NoButton
@@ -408,7 +407,7 @@ Panel {
         visible: root._togglesVisible
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "OPTIONS" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "OPTIONS" }
 
         Cell {
             id: caCell
@@ -520,7 +519,7 @@ Panel {
         visible: root._heroVisible
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "EAR DETECTION" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "EAR DETECTION" }
 
         ButtonGroup {
             id: earGroup

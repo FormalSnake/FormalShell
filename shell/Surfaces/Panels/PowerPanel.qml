@@ -8,8 +8,8 @@ import "../../Power/model.js" as Power
 
 // Power panel (DESIGN.md §3 "Panel", spec "Panels"): a hero for the battery
 // (state icon, "Battery", the state word, the percent as the display-sized
-// readout and the charge level as the rail), a stats ledger of four
-// label-and-mono-value cells, then the power profiles as one `ButtonGroup`,
+// readout and the charge level as the rail), a stats ledger of
+// label-and-mono-value rows, then the power profiles as one `ButtonGroup`,
 // the shape omarchy's own power panel uses (M48 D1). The panel's single
 // cursor stop is that group: Left and Right walk its buttons and Enter
 // applies the one under the ring. Bound directly
@@ -148,6 +148,7 @@ Panel {
             root.cursorIndex = 0;
             profileGroup.cursorIndex = root._activeProfileIndex;
             root.cursorSection = 0;
+            root._readChargeLimit();
         } else {
             // Drop the RAPL baseline on close (M20 Task 5c): no background
             // polling for a closed panel, and reopening starts a fresh pair
@@ -210,6 +211,39 @@ Panel {
         onTriggered: root._sampleRapl()
     }
 
+    // The percentage the firmware stops charging at, when the battery
+    // driver exposes one (ASUS and ThinkPad laptops do; most desktops and
+    // many others do not). UPower publishes no charge-threshold property of
+    // its own -- the pinned quickshell UPowerDevice carries type, energy,
+    // changeRate, percentage, state, health, iconName and nativePath, and
+    // nothing about a limit -- so this is the one power reading the panel
+    // takes from sysfs directly rather than off the bus.
+    //
+    // The path is built from nativePath ("BAT0") instead of globbing so the
+    // read is a plain `cat` to argv with no shell, the same idiom the RAPL
+    // sampler above uses. Read once per open: a limit changes only when
+    // something outside this shell writes it, never on its own.
+    property var chargeLimitPercent: null
+
+    readonly property string _batteryNativePath: root._hasBattery ? root._device.nativePath : ""
+
+    function _readChargeLimit() {
+        if (chargeLimitProc.running || root._batteryNativePath === "")
+            return;
+        chargeLimitProc.command = ["cat", "/sys/class/power_supply/" + root._batteryNativePath + "/charge_control_end_threshold"];
+        chargeLimitProc.running = true;
+    }
+
+    Process {
+        id: chargeLimitProc
+        stdout: StdioCollector {
+            id: chargeLimitCollector
+        }
+        onExited: exitCode => {
+            root.chargeLimitPercent = Power.parseChargeLimit(chargeLimitCollector.text);
+        }
+    }
+
     function _applyProfile(index) {
         if (index < 0 || index >= root._profiles.length)
             return;
@@ -247,9 +281,8 @@ Panel {
         }
     }
 
-    // Stats ledger (M26 Task 3): two half-width cells for the short
-    // readings, two full-width ones for the values that can run long (the
-    // rate row's optional CPU suffix). "Charge cycles" is not in this
+    // Stats ledger (M26 Task 3): plain label/value rows. Nothing here is a
+    // target, so nothing here draws a box. "Charge cycles" is not in this
     // ledger, verified against the pinned quickshell source
     // (services/upower/device.hpp / org.freedesktop.UPower.Device.xml):
     // UPowerDevice exposes no cycle-count property at all. Battery size
@@ -257,131 +290,152 @@ Panel {
     // healthPercentage (the DBus "Capacity" property, already "design
     // capacity as a percentage") covers design capacity. Every row here
     // reads a live UPowerDevice binding directly, never an async-populated
-    // cache, so the four rows stay mounted for the panel's whole lifetime
+    // cache, so the rows stay mounted for the panel's whole lifetime
     // (`visible: root._hasBattery`, same gate as the hero): an AC
     // plug/unplug only ever changes a row's value text, never its presence.
-    Grid {
-        id: batteryStatsGrid
+    Column {
         visible: root._hasBattery
         width: parent.width
-        columns: 2
-        columnSpacing: Theme.space.rowGap
+        spacing: Theme.space.rowGap
 
-        Cell {
-            id: capacityCell
-            width: (batteryStatsGrid.width - batteryStatsGrid.columnSpacing) / 2
-
-            Column {
-                width: parent.width
-                spacing: Theme.space.xxs
-
-                SectionLabel { text: "CAPACITY" }
-
-                Text {
-                    width: parent.width
-                    text: root._hasBattery ? Power.formatHealthPercent(root._device.healthPercentage, root._device.healthSupported) : ""
-                    color: capacityCell.foreground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.body
-                    elide: Text.ElideRight
-                }
-            }
-        }
-
-        Cell {
-            id: sizeCell
-            width: (batteryStatsGrid.width - batteryStatsGrid.columnSpacing) / 2
-
-            Column {
-                width: parent.width
-                spacing: Theme.space.xxs
-
-                SectionLabel { text: "SIZE" }
-
-                Text {
-                    width: parent.width
-                    text: root._hasBattery ? Power.formatWh(root._device.energyCapacity) : ""
-                    color: sizeCell.foreground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.body
-                    elide: Text.ElideRight
-                }
-            }
-        }
-    }
-
-    Cell {
-        id: timeStatCell
-        visible: root._hasBattery
-        width: parent.width
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "BATTERY" }
 
         Item {
             width: parent.width
-            height: Math.max(timeStatLabel.implicitHeight, timeStatValue.implicitHeight)
+            height: Theme.space.controlHeight
 
             SectionLabel {
-                id: timeStatLabel
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: Power.timeRowLabel(root._charging)
+                leftPadding: Theme.space.controlPaddingX
+                text: "CAPACITY"
             }
 
             Text {
-                id: timeStatValue
                 anchors.right: parent.right
+                anchors.rightMargin: Theme.space.controlPaddingX
                 anchors.verticalCenter: parent.verticalCenter
-                text: root._hasBattery ? Power.timeRowValue(root._charging, root._timeToFull, root._timeToEmpty) : ""
-                color: timeStatCell.foreground
+                text: root._hasBattery ? Power.formatHealthPercent(root._device.healthPercentage, root._device.healthSupported) : ""
+                color: Theme.color.foreground
                 font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.body
             }
         }
-    }
-
-    Cell {
-        id: rateStatCell
-        visible: root._hasBattery
-        width: parent.width
 
         Item {
             width: parent.width
-            height: Math.max(rateStatLabel.implicitHeight, rateStatValue.implicitHeight)
+            height: Theme.space.controlHeight
+
+            SectionLabel {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                leftPadding: Theme.space.controlPaddingX
+                text: "SIZE"
+            }
+
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.space.controlPaddingX
+                anchors.verticalCenter: parent.verticalCenter
+                text: root._hasBattery ? Power.formatWh(root._device.energyCapacity) : ""
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.body
+            }
+        }
+
+        Item {
+            width: parent.width
+            height: Theme.space.controlHeight
+
+            SectionLabel {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                leftPadding: Theme.space.controlPaddingX
+                text: Power.timeRowLabel(root._charging)
+            }
+
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.space.controlPaddingX
+                anchors.verticalCenter: parent.verticalCenter
+                text: root._hasBattery ? Power.timeRowValue(root._charging, root._timeToFull, root._timeToEmpty) : ""
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.body
+            }
+        }
+
+        Item {
+            width: parent.width
+            height: Theme.space.controlHeight
 
             SectionLabel {
                 id: rateStatLabel
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
+                leftPadding: Theme.space.controlPaddingX
                 text: Power.rateRowLabel(root._charging, root._thresholdActive)
             }
 
+            // The only value here that can run long (the optional CPU
+            // suffix), so it takes the room between the label and the right
+            // edge rather than its own width.
             Text {
-                id: rateStatValue
                 anchors.left: rateStatLabel.right
                 anchors.leftMargin: Theme.space.iconGap
                 anchors.right: parent.right
+                anchors.rightMargin: Theme.space.controlPaddingX
                 anchors.verticalCenter: parent.verticalCenter
                 horizontalAlignment: Text.AlignRight
                 text: root._hasBattery ? Power.rateRowValue(root._changeRate, root.cpuPackageW) : ""
-                color: rateStatCell.foreground
+                color: Theme.color.foreground
                 font.family: Theme.fontFamilyMono
                 font.pixelSize: Theme.fontSize.body
                 elide: Text.ElideRight
             }
         }
+
+        // What "HOLDING" is holding at. The rate row above says the battery
+        // is parked; without the figure the panel never says where, and the
+        // percentage in the hero reads like a battery that stopped charging
+        // on its own. Absent entirely on a battery whose driver exposes no
+        // limit, rather than a row reading "--".
+        Item {
+            visible: root.chargeLimitPercent !== null
+            width: parent.width
+            height: Theme.space.controlHeight
+
+            SectionLabel {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                leftPadding: Theme.space.controlPaddingX
+                text: "CHARGE LIMIT"
+            }
+
+            Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.space.controlPaddingX
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.chargeLimitPercent !== null ? root.chargeLimitPercent + "%" : ""
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.body
+            }
+        }
     }
 
-    Cell {
+    SectionLabel {
         visible: !root._hasBattery
-        width: parent.width
-
-        SectionLabel { text: "AC POWER" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "AC POWER"
     }
 
     Column {
         width: parent.width
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "PROFILE" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "PROFILE" }
 
         ButtonGroup {
             id: profileGroup

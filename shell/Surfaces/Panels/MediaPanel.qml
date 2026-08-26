@@ -223,11 +223,10 @@ Panel {
         root.cursorIndex = 0;
     }
 
-    Cell {
+    SectionLabel {
         visible: !MediaService.available
-        width: parent.width
-
-        SectionLabel { text: "NO PLAYER" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO PLAYER"
     }
 
     Column {
@@ -238,7 +237,7 @@ Panel {
         Row {
             spacing: Theme.space.iconGap
 
-            SectionLabel { text: "NOW PLAYING" }
+            SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "NOW PLAYING" }
 
             // The player's own name is content, not a section label, so it
             // stays in sentence case beside one.
@@ -465,7 +464,11 @@ Panel {
         visible: root._playerRows.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "PLAYERS"; count: root._playerRows.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "PLAYERS"
+            count: root._playerRows.length
+        }
 
         Flow {
             width: parent.width

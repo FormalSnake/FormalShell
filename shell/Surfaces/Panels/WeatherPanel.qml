@@ -151,16 +151,16 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: !LocationService.available
-        width: parent.width
-
-        SectionLabel { text: "NO LOCATION" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "NO LOCATION"
     }
 
     Cell {
         visible: LocationService.available && root._error !== ""
         width: parent.width
+        ghost: true
 
         Column {
             width: parent.width
@@ -179,11 +179,10 @@ Panel {
         }
     }
 
-    Cell {
+    SectionLabel {
         visible: LocationService.available && root._error === "" && root._result === null
-        width: parent.width
-
-        SectionLabel { text: "LOADING" }
+        leftPadding: Theme.space.controlPaddingX
+        text: "LOADING"
     }
 
     // The panel's own subject: what it is doing outside right now.
@@ -210,7 +209,11 @@ Panel {
         visible: root._forecast.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "FORECAST"; count: root._forecast.length }
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "FORECAST"
+            count: root._forecast.length
+        }
 
         Repeater {
             model: root._forecast
