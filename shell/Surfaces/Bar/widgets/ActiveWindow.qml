@@ -75,6 +75,8 @@ Cell {
         Picture {
             id: appIcon
             visible: root.iconSource !== ""
+            // Upright on a vertical bar (Icon.qml's turn-back, for an image).
+            rotation: -root.contentRotation
             source: root.iconSource
             width: primaryText.implicitHeight
             height: primaryText.implicitHeight

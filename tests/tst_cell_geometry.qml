@@ -425,4 +425,56 @@ TestCase {
         compare(cell.implicitHeight, cell.probeLabel.implicitHeight + 6 * 2);
         verify(cell.implicitHeight < 32);
     }
+    // A bar cell on a left bar (Cell.barEdge): the same content, turned
+    // along the strip, so the cell is as tall as its row was long.
+    Component {
+        id: turnedCellComponent
+
+        Cell {
+            id: turnedCell
+
+            readonly property Item probeLabel: turnedLabel
+            barEdge: "left"
+
+            Text {
+                id: turnedLabel
+                anchors.verticalCenter: parent.verticalCenter
+                text: "09:41"
+                color: turnedCell.foreground
+                font.family: "monospace"
+                font.pixelSize: 13
+            }
+        }
+    }
+
+    function test_a_turned_cell_swaps_its_axes() {
+        failOnWarning(/Binding loop/);
+        var cell = createTemporaryObject(turnedCellComponent, testCase);
+        verify(cell);
+        settle(cell);
+
+        compare(cell.contentRotation, -90);
+        // As tall as the label is long plus the row's end padding either
+        // side, and as wide as a row is tall.
+        compare(cell.implicitHeight, cell.probeLabel.implicitWidth + 12 * 2);
+        compare(cell.implicitWidth, 32);
+
+        // The label's own box, mapped into the cell, stands up: its long
+        // side runs down the cell, a padding in from the top, centred across.
+        var box = cell.probeLabel.mapToItem(cell, 0, 0, cell.probeLabel.width, cell.probeLabel.height);
+        fuzzyCompare(box.width, cell.probeLabel.height, 0.5);
+        fuzzyCompare(box.height, cell.probeLabel.width, 0.5);
+        fuzzyCompare(box.y, 12, 0.5);
+        fuzzyCompare(box.x, (32 - cell.probeLabel.height) / 2, 0.5);
+    }
+
+    // Every cell off the bar, and every cell on a horizontal one, keeps
+    // its row exactly as authored.
+    function test_a_cell_off_the_bar_does_not_turn() {
+        var cell = createTemporaryObject(barCellComponent, testCase);
+        verify(cell);
+        compare(cell.contentRotation, 0);
+        cell.barEdge = "bottom";
+        compare(cell.contentRotation, 0);
+    }
 }

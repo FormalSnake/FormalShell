@@ -7,7 +7,10 @@ import QtQuick
 // config surface. Per CLAUDE.md's hard rule the shell never writes this file;
 // State.qml (runtime-mutable, $XDG_STATE_HOME) is the writable counterpart.
 // v1 keys: menu.customPowerButtons: [{ label, icon, command, confirm? }],
-// bar.position (reserved), theme.fontDisplay (reserved), media.appleMusicArt
+// bar.position (string, default "top", one of "top" / "bottom" / "left" /
+// "right": which output edge the bar runs along; on a left or right bar the
+// three bar.layout regions run top to bottom and every cell turns its
+// content along the strip, icons excepted), theme.fontDisplay (reserved), media.appleMusicArt
 // (bool, default false, AppleMusicArtService's opt-in, M7 Task 2).
 // media.animatedBarCover (bool, default true, whether the bar's mini cover
 // animates too; off, the animated cover decode exists only while the media
@@ -193,8 +196,8 @@ import QtQuick
 // corner the popup toast stack anchors to, one of "top-right" /
 // "bottom-right" / "bottom-left" / "top-left". An unrecognised value falls
 // back to the default (shell/Notifications/model.js's positionSpec()).
-// Top positions clear the bar (barHeight + panelPadding); bottom positions sit
-// panelPadding off the bottom edge. The newest toast always sits nearest the
+// Every corner clears the bar on whichever edge it takes (Theme.barInset +
+// screenPadding) and sits screenPadding off the screen edge otherwise. The newest toast always sits nearest the
 // anchored corner and the enter/exit slide comes from the anchored side
 // edge, M34 Task 1.
 // console.command (array of strings, default ["ghostty",

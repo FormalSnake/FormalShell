@@ -114,6 +114,9 @@ Cell {
             id: coverSlot
             visible: MediaService.artUrl !== ""
             anchors.verticalCenter: parent.verticalCenter
+            // Upright on a vertical bar (Icon.qml's turn-back, for a
+            // picture); the animated overlay inside turns with it.
+            rotation: -root.contentRotation
             width: glyph.implicitHeight
             height: glyph.implicitHeight
             source: MediaService.artUrl

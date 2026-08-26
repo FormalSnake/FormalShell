@@ -8,6 +8,7 @@ import qs.Core
 import "../Theme/palette.js" as Palette
 import "../Theme/presets.js" as Presets
 import "../Theme/tokens.js" as Tokens
+import "../Bar/layout.js" as BarLayout
 
 Singleton {
     id: root
@@ -77,11 +78,24 @@ Singleton {
     // fontScale, since tracking is a font metric, not a layout gap.
     readonly property var letterSpacing: Tokens.letterSpacingTokens(fontScale)
 
-    // How much vertical space the bar occupies: its cell row plus the
-    // margin band around it, which is also its exclusive zone. Bar.qml
-    // binds this from its own window height; the value here only covers
-    // the window before the first Bar instance maps.
-    property real barHeight: space.barCellHeight + space.barMargin * 2
+    // Which output edge the bar sits on (`bar.position`, one of top,
+    // bottom, left, right; anything else is top). `barVertical` is the
+    // left/right pair, where the strip's regions run top to bottom and each
+    // cell turns its content along it.
+    readonly property string barPosition: BarLayout.position(Config.get("bar.position", BarLayout.DEFAULT_POSITION))
+    readonly property bool barVertical: BarLayout.isVertical(root.barPosition)
+
+    // How much of its edge the bar occupies: its cell row plus the margin
+    // band around it, which is also its exclusive zone. Bar.qml binds this
+    // from its own window extent; the value here only covers the window
+    // before the first Bar instance maps.
+    property real barThickness: space.barCellHeight + space.barMargin * 2
+
+    // That thickness on the bar's own edge and 0 on the other three, which
+    // is what every surface that has to clear the bar (panels, toasts, the
+    // centre, the console) reads: Wayland gives clients no cross-window
+    // geometry, so the strip publishes its own occupied edge.
+    readonly property var barInset: BarLayout.insets(root.barPosition, root.barThickness)
 
     // Two faces by context (spec "Type", DESIGN.md §1): sans carries words,
     // mono carries values. Both are fontconfig aliases, never a hardcoded

@@ -69,8 +69,16 @@ Cell {
     // delegates have no ids to reach each other by. -1 means no slot.
     property int _hoveredIndex: -1
 
+    // On a left bar the cell's content turns anticlockwise
+    // (Cell.contentRotation), which would put the first workspace at the
+    // bottom; the row is reversed there so the workspaces still read top
+    // to bottom, the same order the bar's own regions run in. A right bar
+    // turns the other way and needs no reversal.
+    readonly property bool _reversed: root.contentRotation < 0
+
     function _slotX(index) {
-        return index * (root._slotWidth + root._slotSpacing);
+        var slot = root._reversed ? root.visibleWorkspaces.length - 1 - index : index;
+        return slot * (root._slotWidth + root._slotSpacing);
     }
 
     interactive: true
@@ -92,6 +100,7 @@ Cell {
             id: dotRow
             anchors.verticalCenter: parent.verticalCenter
             spacing: root._slotSpacing
+            layoutDirection: root._reversed ? Qt.RightToLeft : Qt.LeftToRight
 
             Repeater {
                 model: root.visibleWorkspaces

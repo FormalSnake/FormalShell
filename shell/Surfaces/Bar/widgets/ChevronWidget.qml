@@ -63,14 +63,20 @@ Cell {
 
     // Which of the two chevrons below is the outward one, read off layout.js's
     // own rule rather than restated here: the same annotation the governed
-    // cells are gated on decides which way this points.
-    readonly property bool _pointsRight: Layout.governsBefore(root.region) ? !root.collapsed : root.collapsed
+    // cells are gated on decides which way this points. "After" is further
+    // along the strip: right on a horizontal bar, down on a vertical one,
+    // where the glyph stays upright (Icon.qml) and so has to be named for
+    // the screen direction rather than the row's.
+    readonly property bool _pointsAfter: Layout.governsBefore(root.region) ? !root.collapsed : root.collapsed
+    readonly property bool _vertical: root.barEdge === "left" || root.barEdge === "right"
 
     tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
 
     Icon {
         anchors.verticalCenter: parent.verticalCenter
-        name: root._pointsRight ? "chevron-right" : "chevron-left"
+        name: root._vertical
+            ? (root._pointsAfter ? "chevron-down" : "chevron-up")
+            : (root._pointsAfter ? "chevron-right" : "chevron-left")
         color: root.foreground
     }
 

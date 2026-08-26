@@ -38,9 +38,10 @@ PanelWindow {
     // see it, see NotificationService.centerOpen's own comment.
     onIsOpenChanged: NotificationService.centerOpen = root.isOpen
 
-    // Bar.qml publishes its content-derived height as Theme.barHeight (the
-    // same lookup Panel.qml uses).
-    readonly property int _barHeight: Theme.barHeight
+    // Bar.qml publishes its own occupied edge as Theme.barInset (the same
+    // lookup Panel.qml uses): its thickness on the edge it sits on, 0 on the
+    // other three.
+    readonly property var _barInset: Theme.barInset
 
     // Set when the bell cell opened this (openFrom below), for the same reason
     // Panel.qml carries one: the bar cell you clicked names its own output,
@@ -204,7 +205,7 @@ PanelWindow {
     readonly property var _frame: Geometry.centerFrame({
         screenWidth: root._screen ? root._screen.width : 0,
         screenHeight: root._screen ? root._screen.height : 0,
-        barHeight: root._barHeight,
+        insets: root._barInset,
         padding: root._screenPadding,
         cardWidth: root.cardWidth,
         contentHeight: root._contentHeight

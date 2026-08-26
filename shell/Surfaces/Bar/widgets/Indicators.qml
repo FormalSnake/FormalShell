@@ -40,7 +40,7 @@ import "../../../Capture/model.js" as Capture
 // established precedent), so `nightlight.startOn` in settings.json
 // actually takes effect even on a session where the indicator itself
 // never renders.
-Row {
+Rail {
     id: root
 
     readonly property bool _stayAwakeActive: IdleService.stayAwake
@@ -56,17 +56,22 @@ Row {
     // future reactivity.
     readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._stayAwakeActive || root._nightLightActive
 
-    // Bar.qml sets this on the widget it loads; this row is not a Cell
-    // itself, so it hands it to each cell it holds (DESIGN.md §3 Bar).
+    // Bar.qml sets these on the widget it loads; this rail is not a Cell
+    // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
     property bool ghost: false
+    property string barEdge: ""
 
+    // A column on a left or right bar (Tray.qml's rail does the same).
+    vertical: root.barEdge === "left" || root.barEdge === "right"
     spacing: Theme.space.sm
     visible: root.shown
 
     Cell {
         id: recordingCell
         ghost: root.ghost
-        height: root.height
+        barEdge: root.barEdge
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
         visible: root._recordingActive
         destructive: true
         tooltipText: "RECORDING " + Capture.elapsedLabel(RecordingService.elapsedMs)
@@ -90,7 +95,9 @@ Row {
     Cell {
         id: clipsshCell
         ghost: root.ghost
-        height: root.height
+        barEdge: root.barEdge
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
         visible: root._clipsshSending
         // The alias is the user's own word for a host, so it goes through
         // verbatim, same as the reminder message below.
@@ -107,7 +114,9 @@ Row {
     Cell {
         id: reminderCell
         ghost: root.ghost
-        height: root.height
+        barEdge: root.barEdge
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
         visible: root._reminderPending
         // The message is the user's own typed words, so it goes through
         // verbatim rather than Tooltip's uppercasing (Tray.qml sets the same
@@ -146,13 +155,16 @@ Row {
     Cell {
         id: stayAwakeCell
         ghost: root.ghost
-        // Same Row-only-manages-x gap Workspaces.qml/Tray.qml fix
-        // identically: `root` here IS the Row Bar.qml's regionDelegate
-        // stretches to the bar's shared content height, so binding to it
-        // (not `Theme.barHeight`, which routes back through the same
-        // implicitHeight chain Bar.qml measures this Row by) gives every
-        // glyph cell the same hover-fill extent as a directly-hosted widget.
-        height: root.height
+        barEdge: root.barEdge
+        // A positioner manages position, never size, so each glyph cell
+        // binds its extent across the strip to `root`, which IS the rail
+        // Bar.qml's regionDelegate stretches to the bar's shared cell
+        // thickness (not `Theme.barThickness`, which routes back through the
+        // same implicit-size chain Bar.qml measures this rail by), and gets
+        // the same hover-fill extent as a directly-hosted widget. Tray.qml
+        // does the same.
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
         visible: root._stayAwakeActive
         // This cell and the night-light one below say nothing but their
         // glyph, and both appear out of nowhere the moment their state turns
@@ -173,7 +185,9 @@ Row {
     Cell {
         id: nightLightCell
         ghost: root.ghost
-        height: root.height
+        barEdge: root.barEdge
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
         visible: root._nightLightActive
         tooltipText: "NIGHT LIGHT ON"
 

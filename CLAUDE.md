@@ -65,6 +65,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `bar_layout.sh` `--bar-layout`: user `bar.modules` and a reordered layout
   resolved from settings.json alone, every `CommandModule` failure path in
   the one frame.
+- `bar_position.sh` `--bar-position <edge>`: the strip on a bottom, left or
+  right edge, read off the compositor's own layer geometry, with a chevron
+  collapsing and expanding along it and a panel hanging off its inner edge.
 - `capture.sh` `--capture`: the shell's own region picker (smart pick, tab
   cycling, commit) measured against the compositor's output, the toolbar's
   record commit, and the cancel path.

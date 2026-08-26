@@ -65,20 +65,79 @@ var DEFAULT_LAYOUT = {
 
 var REGIONS = ["left", "center", "right"];
 
+// `bar.position`: which output edge the strip sits on. Anything but one of
+// these four reads as the default, so a typo in settings.json leaves the
+// bar where it always was rather than nowhere.
+var POSITIONS = ["top", "bottom", "left", "right"];
+var DEFAULT_POSITION = "top";
+
+function position(raw) {
+    return POSITIONS.indexOf(raw) >= 0 ? raw : DEFAULT_POSITION;
+}
+
+function isVertical(pos) {
+    return pos === "left" || pos === "right";
+}
+
 // The strip's own box (M47 D1), pure so it is checkable without a
 // compositor, the same reason shell/Console/geometry.js keeps the console's
 // placement out of QML. `space` is Theme.space, already scaled. The bar is
-// one continuous band across the output: the cell row with a `barMargin`
-// band above and below it, and that whole height is also its exclusive zone.
-// The horizontal inset is `md` rather than `barMargin`, so a cell sits
-// further from the screen edge than from the strip's own edges.
-function stripGeometry(space) {
+// one continuous band along one output edge: the cell row with a
+// `barMargin` band either side of it, and that whole thickness is also its
+// exclusive zone. `thickness` is the strip's extent across the bar (its
+// height on a top or bottom bar, its width on a left or right one), and
+// the same for `cellThickness` and `cellInset`. The inset from the two
+// output edges the strip runs between is `md` rather than `barMargin`, so
+// a cell sits further from the screen edge than from the strip's own edges.
+function stripGeometry(space, pos) {
+    var resolved = position(pos);
     return {
-        height: space.barCellHeight + space.barMargin * 2,
-        cellHeight: space.barCellHeight,
-        cellTop: space.barMargin,
+        position: resolved,
+        vertical: isVertical(resolved),
+        thickness: space.barCellHeight + space.barMargin * 2,
+        cellThickness: space.barCellHeight,
+        cellInset: space.barMargin,
         edgeInset: space.md
     };
+}
+
+// How much of each output edge the bar occupies: `thickness` on its own
+// edge, nothing on the other three. Every surface that has to clear the bar
+// (panels, toasts, the centre, the console) reads this rather than a
+// height, since which edge to clear is the whole question.
+function insets(pos, thickness) {
+    var resolved = position(pos);
+    return {
+        top: resolved === "top" ? thickness : 0,
+        bottom: resolved === "bottom" ? thickness : 0,
+        left: resolved === "left" ? thickness : 0,
+        right: resolved === "right" ? thickness : 0
+    };
+}
+
+// The unit vector from the output's centre toward the bar's edge: where a
+// surface that hangs off the bar slides in from.
+function edgeVector(pos) {
+    switch (position(pos)) {
+    case "bottom": return { x: 0, y: 1 };
+    case "left": return { x: -1, y: 0 };
+    case "right": return { x: 1, y: 0 };
+    }
+    return { x: 0, y: -1 };
+}
+
+// How a cell's content turns on a vertical bar, in degrees: the row of
+// icon and label is authored for a horizontal strip and rotates as one
+// piece, so a label runs along the bar. A left bar reads bottom to top and
+// a right bar top to bottom, the way a spine or a side tab does, so the
+// text's baseline faces the desktop on both. Icons turn back upright
+// inside that (Components/Icon.qml); a mark on its side is wrong on either.
+function contentRotation(pos) {
+    switch (position(pos)) {
+    case "left": return -90;
+    case "right": return 90;
+    }
+    return 0;
 }
 
 var CUSTOM_PREFIX = "custom:";

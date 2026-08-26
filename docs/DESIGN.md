@@ -216,12 +216,18 @@ thing.
 
 ## 3. Surface rules
 
-**Bar.** One continuous strip across the top of the output: `card` fill at
-`surfaceOpacity`, a 1px `border` along its bottom edge and no other edge,
-`barCellHeight + 2 * barMargin` tall, no side or top margin. Regions inset
-`md` from both screen edges; cells sit `barMargin` down from the top and are
-`barCellHeight` tall, `sm` apart, grouped where Omarchy groups (workspaces,
-indicators). Cells are ghost `Cell`s: no fill and no border at rest, since
+**Bar.** One continuous strip along one edge of the output (`bar.position`,
+top by default): `card` fill at `surfaceOpacity`, a 1px `border` along its
+inner edge and no other edge, `barCellHeight + 2 * barMargin` thick, no
+margin on the edge it sits on. Regions inset `md` from both ends of the
+strip; cells sit `barMargin` in from the outer edge and are `barCellHeight`
+thick, `sm` apart, grouped where Omarchy groups (workspaces, indicators).
+On a left or right bar the same three regions run top to bottom (`left` at
+the top) and each cell turns its content along the strip, reading bottom to
+top on the left and top to bottom on the right, with icons and pictures
+turned back upright; the open-panel mark and the tooltip go to the side
+facing the desktop, and a panel hangs `barMargin` off that side at the
+cell that opened it. Cells are ghost `Cell`s: no fill and no border at rest, since
 the strip already carries both. Hover, cursor, active, selected,
 destructive and warning draw as they do anywhere else. A cell whose panel is
 open draws a 2px `primary` line along its bottom edge. Workspace dots are
