@@ -21,21 +21,23 @@ function clampShare(share) {
 
 // `screen` is the output's LOGICAL box ({x, y, width, height}, Quickshell.
 // screens, the same space windows[].rect and the placement dispatchers use,
-// never the output mode's physical pixels). `barHeight` is the exclusive
-// zone the bar already took off the top; the console covers `share` of what
-// is left under it, full width less one margin either side.
-function consoleGeometry(screen, barHeight, share, margin) {
+// never the output mode's physical pixels). `insets` is Theme.barInset, the
+// exclusive zone the bar already took off its own edge; the console drops
+// from the top of what is left and covers `share` of its height, full width
+// less one margin either side.
+function consoleGeometry(screen, insets, share, margin) {
     if (!screen || !(screen.width > 0) || !(screen.height > 0))
         return null;
+    var bar = insets || { top: 0, bottom: 0, left: 0, right: 0 };
     var gap = Math.max(0, Math.round(margin || 0));
-    var top = Math.round(screen.y + Math.max(0, barHeight || 0) + gap);
-    var usable = screen.height - Math.max(0, barHeight || 0) - gap;
+    var top = Math.round(screen.y + Math.max(0, bar.top) + gap);
+    var usable = screen.height - Math.max(0, bar.top) - Math.max(0, bar.bottom) - gap;
     // A margin wider than the screen is a config mistake, not a reason to
     // hand the compositor a negative box.
-    var width = Math.max(1, Math.round(screen.width - gap * 2));
+    var width = Math.max(1, Math.round(screen.width - Math.max(0, bar.left) - Math.max(0, bar.right) - gap * 2));
     var height = Math.max(1, Math.round(usable * clampShare(share)) - gap);
     return {
-        x: Math.round(screen.x + gap),
+        x: Math.round(screen.x + Math.max(0, bar.left) + gap),
         y: top,
         width: width,
         height: height

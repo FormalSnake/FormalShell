@@ -68,6 +68,12 @@ QtObject {
 
     readonly property real surfaceOpacity: Tokens.clamp(0.85, 0, 1, 0.85)
 
+    // The bar's edge, as shipped: a top bar, its thickness off the top.
+    readonly property string barPosition: "top"
+    readonly property bool barVertical: false
+    readonly property real barThickness: space.barCellHeight + space.barMargin * 2
+    readonly property var barInset: ({ top: root.barThickness, bottom: 0, left: 0, right: 0 })
+
     // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
     // strings, which have no .r/.g/.b to read, and Qt.rgba on those three
     // undefined values silently paints black at the right alpha.

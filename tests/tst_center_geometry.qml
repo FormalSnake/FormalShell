@@ -6,22 +6,32 @@ import "../shell/Notifications/geometry.js" as Geometry
 // runs out of room. The tokens are spelled out rather than read off Theme so
 // a token change has to be a deliberate edit here too: `padding` is the
 // screen padding (12) and `cardWidth` is `popupWidthWide` (480) at the
-// default scale, against a 1920x1080 output under a 40px bar.
+// default scale, against a 1920x1080 output with a 40px bar.
 TestCase {
     name: "CenterGeometry"
 
     readonly property var tokens: ({
         screenWidth: 1920,
         screenHeight: 1080,
-        barHeight: 40,
         padding: 12,
         cardWidth: 480
     })
 
-    function frame(contentHeight) {
-        var merged = { contentHeight: contentHeight };
+    function insets(position) {
+        return {
+            top: position === "top" ? 40 : 0,
+            bottom: position === "bottom" ? 40 : 0,
+            left: position === "left" ? 40 : 0,
+            right: position === "right" ? 40 : 0
+        };
+    }
+
+    function frame(contentHeight, position, overrides) {
+        var merged = { contentHeight: contentHeight, insets: insets(position || "top") };
         for (var key in tokens)
             merged[key] = tokens[key];
+        for (var extra in (overrides || {}))
+            merged[extra] = overrides[extra];
         return Geometry.centerFrame(merged);
     }
 
@@ -66,21 +76,39 @@ TestCase {
     // An output narrower than the card keeps the card on screen from the
     // left padding rather than pushing it off the far side.
     function test_a_card_wider_than_the_output_clamps_to_the_left_padding() {
-        var f = Geometry.centerFrame({
-            screenWidth: 320, screenHeight: 1080, barHeight: 40,
-            padding: 12, cardWidth: 480, contentHeight: 300
-        });
-        compare(f.x, 12);
+        compare(frame(300, "top", { screenWidth: 320 }).x, 12);
     }
 
     // A short output has no room at all under its bar; the card collapses
     // rather than growing upward through it.
     function test_an_output_with_no_room_leaves_no_height() {
-        var f = Geometry.centerFrame({
-            screenWidth: 1920, screenHeight: 50, barHeight: 40,
-            padding: 12, cardWidth: 480, contentHeight: 300
-        });
+        var f = frame(300, "top", { screenHeight: 50 });
         compare(f.height, 0);
         compare(f.capped, true);
+    }
+
+    // --- The bar on another edge ---------------------------------------
+
+    // A bottom bar: the card hangs up from it, its bottom edge a padding
+    // off the bar, and the same room is left.
+    function test_a_bottom_bar_hangs_the_card_up_from_it() {
+        var f = frame(300, "bottom");
+        compare(f.y, 1080 - 40 - 12 - 300);
+        compare(f.available, 1016);
+    }
+
+    // A right bar: the card clears it sideways and takes the full height.
+    function test_a_right_bar_pushes_the_card_in_from_it() {
+        var f = frame(300, "right");
+        compare(f.x, 1920 - 40 - 480 - 12);
+        compare(f.y, 12);
+        compare(f.available, 1056);
+    }
+
+    // A left bar changes nothing on the right edge, and an output narrower
+    // than the card still clears the bar.
+    function test_a_left_bar_leaves_the_right_edge_alone() {
+        compare(frame(300, "left").x, 1920 - 480 - 12);
+        compare(frame(300, "left", { screenWidth: 320 }).x, 40 + 12);
     }
 }

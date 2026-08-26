@@ -202,8 +202,21 @@ TestCase {
         verify(mark.visible);
         verify(Qt.colorEqual(mark.color, Theme.color.primary));
         compare(mark.height, Theme.borderWidth * 2);
-        compare(mark.anchors.leftMargin, Theme.space.xs);
-        compare(mark.anchors.rightMargin, Theme.space.xs);
+        compare(mark.x, Theme.space.xs);
+        compare(mark.width, cell.width - Theme.space.xs * 2);
+        compare(mark.y, cell.height - mark.height - Theme.borderWidth);
+    }
+
+    // On a left bar the same mark stands along the cell's inner edge, the
+    // right one, and a ghost cell has no border to sit inside of.
+    function test_panel_open_on_a_left_bar_marks_the_inner_edge() {
+        var cell = makeCell({ panelOpen: true, barEdge: "left", ghost: true });
+        var mark = layers(cell)[3];
+        verify(mark.visible);
+        compare(mark.width, Theme.borderWidth * 2);
+        compare(mark.height, cell.height - Theme.space.xs * 2);
+        compare(mark.x, cell.width - mark.width);
+        compare(mark.y, Theme.space.xs);
     }
 
     // `ghost` (M47 D1): the bar strip behind the cell carries the fill and

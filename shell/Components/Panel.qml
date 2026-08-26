@@ -5,6 +5,7 @@ import qs.Core
 import qs.Compositor
 import "cursor.js" as Cursor
 import "geometry.js" as Geometry
+import "../Bar/layout.js" as BarLayout
 
 // The shared per-widget popout (DESIGN.md §3 "Panel", spec "Panels"): a
 // bordered card anchored under the bar cell that opened it, opening with a
@@ -52,13 +53,16 @@ PanelWindow {
     // than a panel and takes the `popover` fill at `radiusMd` instead.
     property color frameColor: Theme.surface(Theme.color.card)
     property int frameRadius: Theme.radiusXl
-    // Screen-relative x of the bar cell that opened this panel, mapped within
-    // that cell's OWN window (openFrom below). Wayland gives clients no
-    // cross-window global coordinates, so mapping the cell into this window's
-    // coordinate space instead would be meaningless. -1 means "no cell, opened
-    // via IPC", which falls back to the bar's right region, where every
-    // widget cell lives.
+    // Screen-relative origin of the bar cell that opened this panel, mapped
+    // within that cell's OWN window (openFrom below). Wayland gives clients
+    // no cross-window global coordinates, so mapping the cell into this
+    // window's coordinate space instead would be meaningless. -1 means "no
+    // cell, opened via IPC", which falls back to the end of the bar, the
+    // right region, where every widget cell lives. Which of the two the
+    // frame follows is the bar's own axis: x along a top or bottom bar, y
+    // along a left or right one.
     property real anchorX: -1
+    property real anchorY: -1
     // The output this popout belongs on, taken from the window of the cell
     // that opened it (openFrom below): the monitor you clicked is the monitor
     // the popout has to appear on, whatever the compositor calls focused at
@@ -161,23 +165,34 @@ PanelWindow {
     }
 
     // One padding rule (DESIGN.md §1, M48 D3): every floating surface sits
-    // `barMargin` under the bar and `screenPadding` in from the screen edge
-    // it hangs from. An IPC open has no cell to anchor to and falls back to
-    // the right edge, at the same `screenPadding`; a cell-anchored open is
-    // clamped so neither edge can push the frame past it.
+    // `barMargin` off the bar's inner edge and `screenPadding` in from the
+    // screen edges it runs between. An IPC open has no cell to anchor to
+    // and falls back to the end of the bar, at the same `screenPadding`; a
+    // cell-anchored open is clamped so neither end can push the frame past
+    // it. Which edge the bar is on (Theme.barPosition) decides which of
+    // x and y follows the cell and which hangs off the bar.
     readonly property real _frameX: root._screen
-        ? Geometry.frameX(root.anchorX, root._screen.width, root.panelWidth, Theme.space.screenPadding)
+        ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root.panelWidth,
+            Theme.barInset, Theme.space.barMargin, Theme.space.screenPadding)
         : 0
+    readonly property real _frameY: root._screen
+        ? Geometry.frameY(Theme.barPosition, root.anchorY, root._screen.height, root._frameHeight,
+            Theme.barInset, Theme.space.barMargin, Theme.space.screenPadding)
+        : 0
+
+    // Where the frame slides in from: the bar's edge.
+    readonly property var _edge: BarLayout.edgeVector(Theme.barPosition)
 
     readonly property real _contentWidth: root.panelWidth - Theme.space.panelPadding * 2
 
-    // The tallest the frame may be: the screen minus the bar, the
-    // `barMargin` the frame hangs off it by, and one `screenPadding` above
-    // the bottom edge. Content beyond that scrolls (contentFlickable below)
-    // rather than the panel running off the display, which the notification
-    // centre and a long calendar month both did.
+    // The tallest the frame may be: under a top or bottom bar, the screen
+    // minus the bar, the `barMargin` the frame hangs off it by, and one
+    // `screenPadding` at the far edge; beside a vertical bar, the screen
+    // minus both paddings. Content beyond that scrolls (contentFlickable
+    // below) rather than the panel running off the display, which the
+    // notification centre and a long calendar month both did.
     readonly property real _maxFrameHeight: root._screen
-        ? Geometry.maxFrameHeight(root._screen.height, Theme.barHeight,
+        ? Geometry.maxFrameHeight(Theme.barPosition, root._screen.height, Theme.barInset,
             Theme.space.barMargin, Theme.space.screenPadding)
         : 400
     // Header, the rule under it, then the content column (DESIGN.md §3
@@ -190,11 +205,14 @@ PanelWindow {
     readonly property real _frameHeight: Geometry.frameHeight(contentColumn.implicitHeight,
         root._maxContentHeight, Theme.space.panelPadding, header.height, root._headerGap)
 
-    function open(x, screen) {
+    // `anchor` is the opening cell's origin ({x, y}) in its own window, or
+    // undefined for an open with no cell.
+    function open(anchor, screen) {
         if (PanelRegistry.current && PanelRegistry.current !== root)
             PanelRegistry.current.close();
         PanelRegistry.current = root;
-        root.anchorX = x !== undefined ? x : -1;
+        root.anchorX = anchor ? anchor.x : -1;
+        root.anchorY = anchor ? anchor.y : -1;
         root.anchorScreen = screen !== undefined ? screen : null;
         root.isOpen = true;
         root._focusPrimed = false;
@@ -209,9 +227,9 @@ PanelWindow {
             PanelRegistry.current = null;
     }
 
-    function toggle(x, screen) {
+    function toggle(anchor, screen) {
         if (root.isOpen) root.close();
-        else root.open(x, screen);
+        else root.open(anchor, screen);
     }
 
     // The entry point every bar cell uses: both answers a popout needs, which
@@ -220,7 +238,7 @@ PanelWindow {
     // idiom Tooltip.qml resolves its own anchor through.
     function openFrom(item) {
         var window = item ? item.QsWindow.window : null;
-        root.open(item ? item.mapToItem(null, 0, 0).x : -1, window ? window.screen : null);
+        root.open(item ? item.mapToItem(null, 0, 0) : undefined, window ? window.screen : null);
     }
 
     function toggleFrom(item) {
@@ -321,7 +339,7 @@ PanelWindow {
         Card {
             id: frame
             x: root._frameX
-            y: Theme.barHeight + Theme.space.barMargin
+            y: root._frameY
             width: root.panelWidth
             height: root._frameHeight
             color: root.frameColor
@@ -333,20 +351,23 @@ PanelWindow {
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
             }
 
-            // Enter is the fade plus a slide down from the bar edge; exit is
+            // Enter is the fade plus a slide in from the bar's edge; exit is
             // opacity alone (DESIGN.md §1 "Motion"). Nothing writes this
             // during the exit, so the only visible run is the one on the way
             // in; the re-arm below happens behind a frame that has already
             // finished fading out.
-            property real slide: -Theme.motion.slide
+            property real slide: Theme.motion.slide
 
-            transform: Translate { y: frame.slide }
+            transform: Translate {
+                x: frame.slide * root._edge.x
+                y: frame.slide * root._edge.y
+            }
 
             Behavior on slide {
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
             }
 
-            onOpacityChanged: if (frame.opacity <= 0) frame.slide = -Theme.motion.slide
+            onOpacityChanged: if (frame.opacity <= 0) frame.slide = Theme.motion.slide
 
             Connections {
                 target: root

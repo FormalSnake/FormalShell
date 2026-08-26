@@ -11,22 +11,80 @@
 // anchored at its output's top-left corner, so the two spaces coincide.
 // Wayland hands clients no cross-window geometry to convert between them
 // with, which is why that has to hold rather than be computed.
-//
-// Below the anchor by default; above it when the card would not fit under
-// it (a row at the bottom of a full-height surface). `edge` is the margin
-// every floating surface keeps from the output's own edges, on both axes.
-function placement(anchor, size, screen, gap, edge) {
-    var below = anchor.y + anchor.height + gap;
-    var above = anchor.y - gap - size.height;
-    var flipped = (below + size.height + edge > screen.height) && (above >= edge);
 
-    // A card taller than the room on either side keeps its default side and
-    // clamps: an off-output tooltip is worse than one that crowds its cell.
+var SIDES = ["below", "above", "right", "left"];
+
+// Which side of a bar cell its tooltip goes: away from the bar's own edge,
+// over the desktop. An item that is not on the bar (the default, an empty
+// edge) takes "below".
+function sideForBarEdge(barEdge) {
+    switch (barEdge) {
+    case "bottom": return "above";
+    case "left": return "right";
+    case "right": return "left";
+    }
+    return "below";
+}
+
+function _opposite(side) {
+    switch (side) {
+    case "below": return "above";
+    case "above": return "below";
+    case "right": return "left";
+    }
+    return "right";
+}
+
+function _fits(anchor, size, screen, gap, edge, side) {
+    switch (side) {
+    case "below": return anchor.y + anchor.height + gap + size.height + edge <= screen.height;
+    case "above": return anchor.y - gap - size.height >= edge;
+    case "right": return anchor.x + anchor.width + gap + size.width + edge <= screen.width;
+    }
+    return anchor.x - gap - size.width >= edge;
+}
+
+// On `side` of the anchor by default ("below" when not given); on the
+// opposite side when the card would not fit there (a row at the bottom of a
+// full-height surface). `edge` is the margin every floating surface keeps
+// from the output's own edges, on both axes. `slideX`/`slideY` is the unit
+// direction the card enters from, toward its anchor.
+function placement(anchor, size, screen, gap, edge, side) {
+    var preferred = SIDES.indexOf(side) >= 0 ? side : "below";
+    var resolved = preferred;
+    // A card too big for either side keeps its default side and clamps: an
+    // off-output tooltip is worse than one that crowds its cell.
+    if (!_fits(anchor, size, screen, gap, edge, preferred)
+        && _fits(anchor, size, screen, gap, edge, _opposite(preferred)))
+        resolved = _opposite(preferred);
+
     var lowestY = Math.max(edge, screen.height - size.height - edge);
-    var y = Math.max(edge, Math.min(flipped ? above : below, lowestY));
-
     var rightmostX = Math.max(edge, screen.width - size.width - edge);
-    var x = Math.max(edge, Math.min(anchor.x + anchor.width / 2 - size.width / 2, rightmostX));
+    var x;
+    var y;
+    switch (resolved) {
+    case "below":
+        y = anchor.y + anchor.height + gap;
+        x = anchor.x + anchor.width / 2 - size.width / 2;
+        break;
+    case "above":
+        y = anchor.y - gap - size.height;
+        x = anchor.x + anchor.width / 2 - size.width / 2;
+        break;
+    case "right":
+        x = anchor.x + anchor.width + gap;
+        y = anchor.y + anchor.height / 2 - size.height / 2;
+        break;
+    default:
+        x = anchor.x - gap - size.width;
+        y = anchor.y + anchor.height / 2 - size.height / 2;
+    }
 
-    return { x: x, y: y, above: flipped };
+    return {
+        x: Math.max(edge, Math.min(x, rightmostX)),
+        y: Math.max(edge, Math.min(y, lowestY)),
+        side: resolved,
+        slideX: resolved === "right" ? -1 : resolved === "left" ? 1 : 0,
+        slideY: resolved === "below" ? -1 : resolved === "above" ? 1 : 0
+    };
 }

@@ -78,6 +78,22 @@ Item {
     // and the open-panel mark. Bar.qml sets this on every cell it hosts.
     property bool ghost: false
 
+    // The output edge the bar this cell sits on occupies (`bar.position`),
+    // or empty for a cell anywhere else. Bar.qml sets it on every cell it
+    // hosts, next to `ghost`. It decides which edge the open-panel mark
+    // lands on (the one facing the desktop), which side the tooltip opens
+    // to, and, on a left or right bar, that the content turns along the
+    // strip.
+    property string barEdge: ""
+
+    // How far the content row turns, in degrees (Bar/layout.js's
+    // contentRotation: -90 on a left bar, 90 on a right one, 0 elsewhere).
+    // The whole content box turns as one piece, so a widget authored as a
+    // Row of icon and label needs nothing of its own to stand up; an Icon
+    // finds this through its parent chain and turns back upright.
+    readonly property int contentRotation: root.barEdge === "left" ? -90 : root.barEdge === "right" ? 90 : 0
+    readonly property bool _rotated: root.contentRotation !== 0
+
     // The only border a ghost draws is one a state asked for.
     readonly property bool _borderless: root.ghost && !root.cursor
         && !root.destructive && !root.warning
@@ -130,23 +146,34 @@ Item {
     // row around it reads as a second row.
     property bool chip: false
 
-    implicitWidth: root._measure(false) + Theme.space.controlPaddingX * 2
+    // The content's own two extents, in its own (unturned) space: how long
+    // the row is, and how tall.
+    readonly property real _alongExtent: root._measure(false) + Theme.space.controlPaddingX * 2
     // A row is `controlHeight` tall (DESIGN.md §1 Padding). Content that
     // needs more (a two-line row, a clipboard thumbnail) still grows past
     // it; the padding alone never decides the height of a one-line row,
     // which is what left every list in the shell a few pixels short of the
     // controls beside it.
-    implicitHeight: Math.max(root.chip ? 0 : Theme.space.controlHeight,
+    readonly property real _acrossExtent: Math.max(root.chip ? 0 : Theme.space.controlHeight,
         root._measure(true) + Theme.space.controlPaddingY * 2)
 
-    // Content is vertically centred (DESIGN.md §1 Padding), so the vertical
+    // A turned cell is as tall as its content is long, and as wide as it is
+    // tall.
+    implicitWidth: root._rotated ? root._acrossExtent : root._alongExtent
+    implicitHeight: root._rotated ? root._alongExtent : root._acrossExtent
+
+    // The cell's own extent across the content row: its height, or on a
+    // turned cell its width.
+    readonly property real _across: root._rotated ? root.width : root.height
+
+    // Content is centred across the row (DESIGN.md §1 Padding), so the
     // inset grows past `controlPaddingY` whenever the cell is taller than
     // its content: a row floored at `controlHeight`, and a cell given an
-    // explicit height (a calendar day, a bar cell). Equal top and bottom
-    // margins on a fill anchor is what does the centring; the children
+    // explicit height (a calendar day, a bar cell). Equal insets either
+    // side of the content box are what do the centring; the children
     // themselves need no anchor of their own.
     readonly property real _insetY: Math.max(Theme.space.controlPaddingY,
-        (root.height - root._measure(true)) / 2)
+        (root._across - root._measure(true)) / 2)
 
     // How big the content wants to be. This used to be `content`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
@@ -183,6 +210,7 @@ Item {
             return;
         tooltipLoader.active = true;
         tooltipLoader.item.anchorItem = root;
+        tooltipLoader.item.barEdge = root.barEdge;
         tooltipLoader.item.verbatim = root.tooltipVerbatim;
         tooltipLoader.item.text = root.tooltipText;
         tooltipLoader.item.show();
@@ -257,18 +285,27 @@ Item {
         }
     }
 
-    // The open-panel mark (DESIGN.md §3 Bar). The side inset keeps the
-    // line's ends clear of the cell's own rounded corners, which cut in at
-    // this height.
+    // The open-panel mark (DESIGN.md §3 Bar), along the edge facing the
+    // desktop: the bottom of a cell on a top bar, the top on a bottom bar,
+    // the inner side on a vertical one. The end inset keeps the line's ends
+    // clear of the cell's own rounded corners, which cut in at this height.
     Rectangle {
+        id: panelMark
         visible: root.panelOpen
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: Theme.space.xs
-        anchors.rightMargin: Theme.space.xs
-        anchors.bottomMargin: root._borderless ? 0 : Theme.borderWidth
-        height: Theme.borderWidth * 2
+        readonly property bool _sideways: root.barEdge === "left" || root.barEdge === "right"
+        readonly property real _edgeMargin: root._borderless ? 0 : Theme.borderWidth
+        width: panelMark._sideways ? Theme.borderWidth * 2 : root.width - Theme.space.xs * 2
+        height: panelMark._sideways ? root.height - Theme.space.xs * 2 : Theme.borderWidth * 2
+        x: root.barEdge === "right"
+            ? panelMark._edgeMargin
+            : root.barEdge === "left"
+                ? root.width - panelMark.width - panelMark._edgeMargin
+                : Theme.space.xs
+        y: root.barEdge === "bottom"
+            ? panelMark._edgeMargin
+            : panelMark._sideways
+                ? Theme.space.xs
+                : root.height - panelMark.height - panelMark._edgeMargin
         radius: Theme.radiusSm
         color: Theme.color.primary
     }
@@ -302,13 +339,19 @@ Item {
         anchors.fill: parent
     }
 
+    // The content box: the cell less `controlPaddingX` at both ends of the
+    // row and `_insetY` either side of it, in the row's own space. On a
+    // turned cell that box is as long as the cell is tall, and it rotates
+    // about its centre (Item's own default origin), so a box of width W
+    // and height H centred in the cell covers the cell's H by W. Placed by
+    // x/y rather than fill anchors, since an anchored item cannot turn.
     Item {
         id: content
-        anchors.fill: parent
-        anchors.leftMargin: Theme.space.controlPaddingX
-        anchors.topMargin: root._insetY
-        anchors.rightMargin: Theme.space.controlPaddingX
-        anchors.bottomMargin: root._insetY
+        width: (root._rotated ? root.height : root.width) - Theme.space.controlPaddingX * 2
+        height: root._across - root._insetY * 2
+        x: (root.width - content.width) / 2
+        y: (root.height - content.height) / 2
+        rotation: root.contentRotation
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size

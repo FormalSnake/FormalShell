@@ -19,8 +19,8 @@ LazyLoader {
         return root.item;
     }
 
-    function open(x, screen) {
-        root.load().open(x, screen);
+    function open(anchor, screen) {
+        root.load().open(anchor, screen);
     }
 
     function close() {
@@ -28,8 +28,8 @@ LazyLoader {
             root.item.close();
     }
 
-    function toggle(x, screen) {
-        root.load().toggle(x, screen);
+    function toggle(anchor, screen) {
+        root.load().toggle(anchor, screen);
     }
 
     function toggleFrom(item) {

@@ -412,26 +412,79 @@ TestCase {
     // all, so the geometry it draws lives in layout.js and is checked here
     // against the shipped spacing scale.
     function test_strip_is_the_cell_row_plus_a_margin_band() {
-        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 });
-        compare(g.height, 40);
-        compare(g.cellHeight, 28);
-        compare(g.cellTop, 6);
+        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 }, "top");
+        compare(g.thickness, 40);
+        compare(g.cellThickness, 28);
+        compare(g.cellInset, 6);
+        compare(g.position, "top");
+        compare(g.vertical, false);
     }
 
-    // The screen edges are further away than the strip's own top and bottom:
-    // a cell sits `md` in from the edge, not `barMargin`.
+    // The same box on every edge; only which way it runs changes.
+    function test_strip_stands_up_on_a_side_edge() {
+        var space = { barCellHeight: 28, barMargin: 6, md: 12 };
+        var left = Layout.stripGeometry(space, "left");
+        compare(left.vertical, true);
+        compare(left.thickness, 40);
+        compare(left.position, "left");
+        compare(Layout.stripGeometry(space, "right").vertical, true);
+        compare(Layout.stripGeometry(space, "bottom").vertical, false);
+    }
+
+    // The screen edges are further away than the strip's own sides: a cell
+    // sits `md` in from the edge, not `barMargin`.
     function test_strip_insets_the_regions_by_md_not_by_the_margin_band() {
-        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 });
+        var g = Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 }, "top");
         compare(g.edgeInset, 12);
-        verify(g.edgeInset > g.cellTop);
+        verify(g.edgeInset > g.cellInset);
     }
 
     // Every term is a token, so a scaled Theme.space scales the whole strip.
     function test_strip_follows_the_spacing_scale() {
-        var g = Layout.stripGeometry({ barCellHeight: 42, barMargin: 9, md: 18 });
-        compare(g.height, 60);
-        compare(g.cellHeight, 42);
-        compare(g.cellTop, 9);
+        var g = Layout.stripGeometry({ barCellHeight: 42, barMargin: 9, md: 18 }, "top");
+        compare(g.thickness, 60);
+        compare(g.cellThickness, 42);
+        compare(g.cellInset, 9);
         compare(g.edgeInset, 18);
+    }
+
+    // bar.position: a typo, an absent key or a stale value all leave the
+    // bar where it always was.
+    function test_an_unknown_position_is_the_top() {
+        compare(Layout.position(undefined), "top");
+        compare(Layout.position("middle"), "top");
+        compare(Layout.position("bottom"), "bottom");
+        compare(Layout.position("left"), "left");
+        compare(Layout.position("right"), "right");
+        compare(Layout.stripGeometry({ barCellHeight: 28, barMargin: 6, md: 12 }, "sideways").position, "top");
+        compare(Layout.isVertical("left"), true);
+        compare(Layout.isVertical("top"), false);
+    }
+
+    // What every surface that clears the bar reads: its thickness on its own
+    // edge and nothing on the other three.
+    function test_insets_put_the_thickness_on_the_bars_own_edge() {
+        compare(JSON.stringify(Layout.insets("top", 40)), JSON.stringify({ top: 40, bottom: 0, left: 0, right: 0 }));
+        compare(JSON.stringify(Layout.insets("bottom", 40)), JSON.stringify({ top: 0, bottom: 40, left: 0, right: 0 }));
+        compare(JSON.stringify(Layout.insets("left", 40)), JSON.stringify({ top: 0, bottom: 0, left: 40, right: 0 }));
+        compare(JSON.stringify(Layout.insets("right", 40)), JSON.stringify({ top: 0, bottom: 0, left: 0, right: 40 }));
+        compare(JSON.stringify(Layout.insets("nowhere", 40)), JSON.stringify({ top: 40, bottom: 0, left: 0, right: 0 }));
+    }
+
+    // Where a panel or a tooltip slides in from: the bar's edge.
+    function test_the_edge_vector_points_at_the_bar() {
+        compare(JSON.stringify(Layout.edgeVector("top")), JSON.stringify({ x: 0, y: -1 }));
+        compare(JSON.stringify(Layout.edgeVector("bottom")), JSON.stringify({ x: 0, y: 1 }));
+        compare(JSON.stringify(Layout.edgeVector("left")), JSON.stringify({ x: -1, y: 0 }));
+        compare(JSON.stringify(Layout.edgeVector("right")), JSON.stringify({ x: 1, y: 0 }));
+    }
+
+    // A cell's content turns only on a side edge: bottom to top on the
+    // left, top to bottom on the right, upright on either horizontal bar.
+    function test_content_turns_only_on_a_side_edge() {
+        compare(Layout.contentRotation("left"), -90);
+        compare(Layout.contentRotation("right"), 90);
+        compare(Layout.contentRotation("top"), 0);
+        compare(Layout.contentRotation("bottom"), 0);
     }
 }

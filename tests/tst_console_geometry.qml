@@ -6,42 +6,60 @@ TestCase {
     name: "ConsoleGeometry"
 
     readonly property var screen: ({ x: 0, y: 0, width: 1920, height: 1080 })
+    readonly property var topBar: ({ top: 40, bottom: 0, left: 0, right: 0 })
+    readonly property var noBar: ({ top: 0, bottom: 0, left: 0, right: 0 })
 
     function test_half_of_the_area_under_the_bar() {
-        var g = Geometry.consoleGeometry(screen, 40, 0.5, 10);
+        var g = Geometry.consoleGeometry(screen, topBar, 0.5, 10);
         compare(g.x, 10);
         compare(g.y, 50);
         compare(g.width, 1900);
-        // Bottom edge lands on half the usable height: 40 + 10 + 510 = 560,
-        // which is 40 + (1080 - 40 - 10) / 2 rounded.
         compare(g.height, 505);
     }
 
     function test_second_output_keeps_its_own_origin() {
-        var g = Geometry.consoleGeometry({ x: 1920, y: -200, width: 1280, height: 720 }, 40, 0.5, 10);
+        var g = Geometry.consoleGeometry({ x: 1920, y: -200, width: 1280, height: 720 }, topBar, 0.5, 10);
         compare(g.x, 1930);
         compare(g.y, -150);
         compare(g.width, 1260);
     }
 
+    // A bottom bar takes its band off the bottom: the console drops from
+    // the top edge and covers half of what is left above the bar.
+    function test_a_bottom_bar_shortens_the_area_from_below() {
+        var g = Geometry.consoleGeometry(screen, { top: 0, bottom: 40, left: 0, right: 0 }, 0.5, 10);
+        compare(g.y, 10);
+        compare(g.height, 505);
+    }
+
+    // A left bar takes its band off the left: the console starts past it
+    // and is that much narrower, at full height under no top bar.
+    function test_a_left_bar_narrows_the_console_from_the_left() {
+        var g = Geometry.consoleGeometry(screen, { top: 0, bottom: 0, left: 40, right: 0 }, 0.5, 10);
+        compare(g.x, 50);
+        compare(g.y, 10);
+        compare(g.width, 1860);
+        compare(g.height, 525);
+    }
+
     function test_share_is_clamped_at_both_ends() {
-        compare(Geometry.consoleGeometry(screen, 0, 3, 0).height, 1080);
-        compare(Geometry.consoleGeometry(screen, 0, 0.01, 0).height, 216);
+        compare(Geometry.consoleGeometry(screen, noBar, 3, 0).height, 1080);
+        compare(Geometry.consoleGeometry(screen, noBar, 0.01, 0).height, 216);
     }
 
     function test_unreadable_share_falls_back_to_half() {
-        compare(Geometry.consoleGeometry(screen, 0, "nonsense", 0).height,
-                Geometry.consoleGeometry(screen, 0, 0.5, 0).height);
+        compare(Geometry.consoleGeometry(screen, noBar, "nonsense", 0).height,
+                Geometry.consoleGeometry(screen, noBar, 0.5, 0).height);
     }
 
     function test_margin_wider_than_the_screen_never_goes_negative() {
-        var g = Geometry.consoleGeometry(screen, 40, 0.5, 4000);
+        var g = Geometry.consoleGeometry(screen, topBar, 0.5, 4000);
         verify(g.width >= 1);
         verify(g.height >= 1);
     }
 
     function test_no_screen_is_no_geometry() {
-        compare(Geometry.consoleGeometry(null, 40, 0.5, 10), null);
-        compare(Geometry.consoleGeometry({ x: 0, y: 0, width: 0, height: 0 }, 40, 0.5, 10), null);
+        compare(Geometry.consoleGeometry(null, topBar, 0.5, 10), null);
+        compare(Geometry.consoleGeometry({ x: 0, y: 0, width: 0, height: 0 }, topBar, 0.5, 10), null);
     }
 }

@@ -16,6 +16,7 @@ Panel Panel.qml
 PanelSlot PanelSlot.qml
 PanelHero PanelHero.qml
 Picture Picture.qml
+Rail Rail.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
 Separator Separator.qml

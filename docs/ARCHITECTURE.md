@@ -788,7 +788,8 @@ click on the bar cell                          qs ipc call panel open/toggle <na
       no cross-window global coordinates)           the compositor's focused output)
   v                                               v
 Panel.qml: isOpen = true, forceActiveFocus() on its full-screen backdrop MouseArea
-  -> frame positions at (anchorX, barHeight), sized to its content's implicitHeight
+  -> frame positions at the cell along the bar, barMargin off the bar's inner edge
+     (Theme.barPosition decides which axis is which), sized to its content's implicitHeight
      (capped at 60% of screen height, Flickable scrolls beyond that)
   -> click outside the frame, or Escape, closes it (backdrop's onClicked / Keys.onEscapePressed)
 ```

@@ -45,7 +45,7 @@ import qs.Components
 // generalizes the protection the 4-item limit gave rather than dropping it.
 // Two chevrons on one bar (this file's own and the bar's) is what made
 // the affordance ambiguous in the first place.
-Row {
+Rail {
     id: root
 
     // The shared TrayMenu instance (shell.qml, wired through Bar.qml same
@@ -61,10 +61,15 @@ Row {
     // own ObjectModel docs; see the Repeater below for why that matters).
     readonly property bool shown: SystemTray.items.values.length > 0
 
-    // Bar.qml sets this on the widget it loads; this row is not a Cell
-    // itself, so it hands it to each cell it holds (DESIGN.md §3 Bar).
+    // Bar.qml sets these on the widget it loads; this rail is not a Cell
+    // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
     property bool ghost: false
+    property string barEdge: ""
 
+    // The rail follows the bar: a column on a left or right bar, where
+    // Bar.qml's region delegate sizes it across the strip by width rather
+    // than height.
+    vertical: root.barEdge === "left" || root.barEdge === "right"
     spacing: Theme.space.sm
     visible: root.shown
 
@@ -92,20 +97,18 @@ Row {
             required property var modelData
 
             ghost: root.ghost
+            barEdge: root.barEdge
 
-            // Bar.qml's region delegate stretches this Row to the bar's
-            // shared cell height; the Row top-aligns children, so without
-            // this the shorter icon cells sit visibly high (Row permits
-            // vertical anchors on children, it only manages x).
-            anchors.verticalCenter: parent.verticalCenter
-            // Same Row (`root` here IS the Row Bar.qml stretches) only
-            // manages x, never size, so the cell's own icon-only content
-            // would otherwise measure shorter than the bar's shared height
-            //, see Workspaces.qml's identical fix for why this binds to
-            // `root.height` (the externally forced value) and not
-            // `Theme.barHeight` (which routes back through the same
-            // implicitHeight chain Bar.qml measures this Row by).
-            height: root.height
+            // Bar.qml's region delegate stretches this rail to the bar's
+            // shared cell thickness, and a positioner manages position,
+            // never size, so the cell's own icon-only content would
+            // otherwise measure shorter than that. It binds to the rail's
+            // own forced extent (`root` here IS the rail Bar.qml
+            // stretches), not `Theme.barThickness`, which routes back
+            // through the same implicit-size chain Bar.qml measures this
+            // rail by; Workspaces.qml's fix is the same.
+            width: root.vertical ? root.width : implicitWidth
+            height: root.vertical ? implicitHeight : root.height
             // The item's own words, in the SNI's own order of preference:
             // ToolTip.title is what the spec means for hover text, Title is
             // the display name, and Id is the last thing that is always set.
@@ -132,6 +135,9 @@ Row {
             IconImage {
                 id: icon
                 anchors.verticalCenter: parent.verticalCenter
+                // Upright on a vertical bar, the same turn-back Icon.qml
+                // makes for a glyph; a vendor's mark on its side is wrong.
+                rotation: -itemCell.contentRotation
                 asynchronous: true
                 smooth: false
                 width: Theme.fontSize.body

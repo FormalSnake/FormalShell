@@ -42,6 +42,10 @@ PanelWindow {
     // still hands it over.
     property bool verbatim: false
 
+    // The bar edge the anchor's cell sits on (Cell.barEdge), empty off the
+    // bar: the card opens away from that edge, over the desktop.
+    property string barEdge: ""
+
     // A tray item's title is arbitrary text from another process, so the row
     // caps and elides rather than growing a card wider than the bar. Scales
     // with the type-scale root (DESIGN.md §1) like every other measured
@@ -73,8 +77,9 @@ PanelWindow {
         ? Placement.placement(root._anchorRect,
             Qt.size(frame.width, frame.height),
             Qt.size(root._screen.width, root._screen.height),
-            Theme.space.md, root._screenPadding)
-        : ({ x: 0, y: 0, above: false })
+            Theme.space.md, root._screenPadding,
+            Placement.sideForBarEdge(root.barEdge))
+        : ({ x: 0, y: 0, side: "below", slideX: 0, slideY: -1 })
 
     function show() {
         delayTimer.restart();
@@ -137,7 +142,8 @@ PanelWindow {
         // separate Theme.motionEnabled gate, same as Panel.qml/Osd.qml.
         opacity: root._visible ? 1 : 0
         transform: Translate {
-            y: (1 - frame.opacity) * Theme.motion.slide * (root._place.above ? 1 : -1)
+            x: (1 - frame.opacity) * Theme.motion.slide * root._place.slideX
+            y: (1 - frame.opacity) * Theme.motion.slide * root._place.slideY
         }
 
         Behavior on opacity {

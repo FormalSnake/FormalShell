@@ -9,6 +9,7 @@ import qs.Core
 // binding ever re-evaluating. Theme/Config carry no such collision and stay
 // unqualified.
 import qs.Core as Core
+import qs.Components
 import qs.Plugins
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
@@ -42,13 +43,18 @@ import "../../Bar/layout.js" as Layout
 // governsBefore), so the reveal grows into empty bar and the chevron itself
 // keeps its x.
 // The strip is one continuous surface (DESIGN.md §3 Bar, M47 D1): a
-// full-width `card` fill at `theme.surfaceOpacity` with a 1px `border`
-// along its bottom edge, and nothing else. The cells inside are ghosts,
+// full-length `card` fill at `theme.surfaceOpacity` with a 1px `border`
+// along its inner edge, and nothing else. The cells inside are ghosts,
 // so this is the only fill and the only border the bar draws; the owner
 // ran the floating-pill version on both boxes and asked for the shadcn
-// navbar instead (2026-08-25). Its height is the cell row plus a
-// `barMargin` band above and below, and that whole height is the exclusive
+// navbar instead (2026-08-25). Its thickness is the cell row plus a
+// `barMargin` band either side, and that whole thickness is the exclusive
 // zone, so a tiled window stops under the border rather than behind it.
+// Which output edge it runs along is `bar.position` (Theme.barPosition):
+// top by default, or bottom, left, right. On a left or right bar the same
+// three regions run top to bottom (`left` at the top, `right` at the
+// bottom), every region is a column, and each cell turns its content along
+// the strip (Cell.barEdge); nothing about the layout keys changes.
 PanelWindow {
     id: bar
     required property var modelData
@@ -75,7 +81,13 @@ PanelWindow {
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
     screen: modelData
-    anchors { top: true; left: true; right: true }
+    // The strip spans its own edge end to end and hugs that edge.
+    anchors {
+        top: bar._position !== "bottom"
+        bottom: bar._position !== "top"
+        left: bar._position !== "right"
+        right: bar._position !== "left"
+    }
 
     // What a compositor layer rule addresses this strip by: the shipped
     // Hyprland example (docs/examples/hyprland/formalshell.conf) blurs
@@ -94,25 +106,33 @@ PanelWindow {
     // other Config.get() consumer in the shell.
     readonly property var _layout: bar._resolveLayout()
 
-    readonly property var _strip: Layout.stripGeometry(Theme.space)
+    readonly property string _position: Theme.barPosition
+    readonly property bool _vertical: Theme.barVertical
+    readonly property var _strip: Layout.stripGeometry(Theme.space, bar._position)
 
-    // One height for every cell in every region, so a widget with a taller
-    // line of content can no longer drag the whole strip with it.
-    readonly property real _cellHeight: bar._strip.cellHeight
-    implicitHeight: bar._strip.height
+    // The strip's own length: what the regions share out, and what a
+    // cell's width cap is a fraction of.
+    readonly property real _along: bar._vertical ? bar.contentItem.height : bar.contentItem.width
+
+    // One thickness for every cell in every region, so a widget with a
+    // taller line of content can no longer drag the whole strip with it.
+    readonly property real _cellThickness: bar._strip.cellThickness
+    implicitHeight: bar._vertical ? 0 : bar._strip.thickness
+    implicitWidth: bar._vertical ? bar._strip.thickness : 0
     // The window is the strip exactly, so the fill below covers it edge to
     // edge; this only decides what is behind that fill's own alpha.
     color: "transparent"
 
-    exclusiveZone: bar.implicitHeight
+    exclusiveZone: bar._strip.thickness
 
     // Every surface that has to clear the bar (panels, toasts, the center,
-    // the console) reads this: Wayland gives clients no cross-window
-    // geometry, so the strip publishes its own occupied height.
+    // the console) reads this, through Theme.barInset: Wayland gives
+    // clients no cross-window geometry, so the strip publishes its own
+    // occupied edge.
     Binding {
         target: Theme
-        property: "barHeight"
-        value: bar.implicitHeight
+        property: "barThickness"
+        value: bar._strip.thickness
     }
 
     // Declared before the regions, so it stacks behind every cell.
@@ -121,13 +141,15 @@ PanelWindow {
         color: Theme.surface(Theme.color.card)
 
         // The hairline that separates the strip from the desktop, and the
-        // only edge the bar draws. A `border` on the fill above would ring
-        // all four sides, three of which are the screen's own edges.
+        // only edge the bar draws: the one facing inward. A `border` on the
+        // fill above would ring all four sides, three of which are the
+        // screen's own edges.
         Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: Theme.borderWidth
+            id: hairline
+            width: bar._vertical ? Theme.borderWidth : parent.width
+            height: bar._vertical ? parent.height : Theme.borderWidth
+            x: bar._position === "left" ? parent.width - hairline.width : 0
+            y: bar._position === "top" ? parent.height - hairline.height : 0
             color: Theme.color.border
         }
     }
@@ -156,7 +178,7 @@ PanelWindow {
             // flat 40% handed this one cell over a thousand pixels of a
             // wide display before the title's marquee engaged at all, so
             // "the title is too long" was the cap, not the marquee.
-            maxWidth: Math.min(bar.width * 0.25, Theme.space.popupWidthWide)
+            maxWidth: Math.min(bar._along * 0.25, Theme.space.popupWidthWide)
             // Gates the title marquee off while the bar's own PanelWindow
             // isn't on screen, same rationale as NowPlaying's own
             // windowVisible below.
@@ -354,7 +376,12 @@ PanelWindow {
         Loader {
             id: entryLoader
             required property var modelData
-            height: bar._cellHeight
+            // Every entry is the bar's own cell thickness across the strip,
+            // and its own length along it (`_along` below), whichever axis
+            // each of those is on this bar.
+            width: bar._vertical ? bar._cellThickness : entryLoader._along
+            height: bar._vertical ? entryLoader._along : bar._cellThickness
+            readonly property real _implicitAlong: bar._vertical ? entryLoader.implicitHeight : entryLoader.implicitWidth
             // A hidden widget (Battery with no laptop battery, NowPlaying
             // with no player, Tray with no items, Indicators with nothing
             // active) sets `visible: false` on itself expecting Row to drop
@@ -406,16 +433,19 @@ PanelWindow {
             // width it is given, so the cell wipes from its outer edge rather
             // than redrawing its content at every step.
             clip: true
-            width: entryLoader.modelData.collapsible
-                ? (entryLoader._collapsedAway ? 0 : entryLoader.implicitWidth)
-                : entryLoader.implicitWidth
+            // The entry's length along the strip: its width on a horizontal
+            // bar, its height on a vertical one, so the collapse animates
+            // the same term on either.
+            property real _along: entryLoader.modelData.collapsible
+                ? (entryLoader._collapsedAway ? 0 : entryLoader._implicitAlong)
+                : entryLoader._implicitAlong
             // Governed entries only. Every other cell keeps the instant width
             // tracking it has always had, so a title rename or a battery tick
             // never gains motion it didn't ask for. Theme.motion.standard is
             // already 0 when motion is disabled (Theme/tokens.js's
             // motionTokens) and a zero-duration animation lands on the same
             // end state, so honoring that setting needs no branch here.
-            Behavior on width {
+            Behavior on _along {
                 enabled: entryLoader.modelData.collapsible
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
             }
@@ -448,15 +478,22 @@ PanelWindow {
             // appeared beside a pending reminder (g815, 2026-08-19).
             // tests/tst_bar_entry_reveal.qml pins both halves of that.
             visible: entryLoader._shown
-                && (!entryLoader.modelData.collapsible || entryLoader.width > 0)
+                && (!entryLoader.modelData.collapsible || entryLoader._along > 0)
             onLoaded: {
                 // The one seam that makes every cell in the bar a ghost
-                // (DESIGN.md §3 Bar): each widget's root is either a `Cell`,
-                // which carries the property itself, or one of the two group
-                // rows (Tray, Indicators), which forward it to the cells they
-                // hold. Set here rather than in the 25 registry Components
-                // above, so a new widget joins the strip by being listed.
+                // (DESIGN.md §3 Bar) and tells it which edge it sits on:
+                // each widget's root is either a `Cell`, which carries both
+                // properties itself, or one of the two group rails (Tray,
+                // Indicators), which forward them to the cells they hold.
+                // Set here rather than in the 25 registry Components above,
+                // so a new widget joins the strip by being listed.
                 entryLoader.item.ghost = true;
+                // A binding, not a value: settings.json lands after the
+                // first cells exist, and whether this Repeater resets
+                // before or after Theme.barPosition moves is not ordered,
+                // so a cell created against the default edge has to follow
+                // the bar to its real one.
+                entryLoader.item.barEdge = Qt.binding(function () { return bar._position; });
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
                 else if (entryLoader.modelData.kind === "plugin")
@@ -469,20 +506,38 @@ PanelWindow {
         }
     }
 
-    Row {
+    // The three regions, each a Rail (a Row that stands up with the bar).
+    // On a horizontal bar they sit `edgeInset` in from the left and right
+    // ends and `cellInset` down from the top; on a vertical one the same
+    // three run top to bottom, `edgeInset` in from the top and bottom ends
+    // and `cellInset` in from the strip's outer edge. `left` is the start
+    // of the strip and `right` its end whichever way it runs.
+    //
+    // Placed by x/y rather than anchors on purpose: the edge can change
+    // while the regions exist (settings.json lands after the first frame),
+    // and rebinding `anchors.top` to undefined and `anchors.bottom` to the
+    // parent in the same pass leaves a moment where both hold, the anchor
+    // system writes the height itself, and Qt 6 drops the QML binding on
+    // that write, which left the end region stuck at a negative height
+    // (VM, 2026-08-26).
+    Rail {
         id: leftRegion
-        anchors.left: parent.left
-        anchors.leftMargin: bar._strip.edgeInset
-        anchors.top: parent.top
-        anchors.topMargin: bar._strip.cellTop
+        vertical: bar._vertical
+        x: bar._vertical ? bar._strip.cellInset : bar._strip.edgeInset
+        y: bar._vertical ? bar._strip.edgeInset : bar._strip.cellInset
         spacing: Theme.space.sm
         clip: true
         // A settings-driven left region can outgrow the gap before the
         // center region (custom command/qml modules have no fixed count),
-        // so it is capped to whatever space actually remains left of
-        // centerRegion.x and overflow clips here instead of drawing over
+        // so it is capped to whatever space actually remains before
+        // centerRegion and overflow clips here instead of drawing over
         // the clock.
-        width: Math.min(implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
+        width: bar._vertical
+            ? implicitWidth
+            : Math.min(implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
+        height: bar._vertical
+            ? Math.min(implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
+            : implicitHeight
 
         Repeater {
             id: leftRepeater
@@ -491,11 +546,11 @@ PanelWindow {
         }
     }
 
-    Row {
+    Rail {
         id: centerRegion
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.topMargin: bar._strip.cellTop
+        vertical: bar._vertical
+        x: bar._vertical ? bar._strip.cellInset : (parent.width - centerRegion.width) / 2
+        y: bar._vertical ? (parent.height - centerRegion.height) / 2 : bar._strip.cellInset
         spacing: Theme.space.sm
 
         Repeater {
@@ -505,18 +560,22 @@ PanelWindow {
         }
     }
 
-    Row {
+    Rail {
         id: rightRegion
-        anchors.right: parent.right
-        anchors.rightMargin: bar._strip.edgeInset
-        anchors.top: parent.top
-        anchors.topMargin: bar._strip.cellTop
+        vertical: bar._vertical
+        x: bar._vertical ? bar._strip.cellInset : parent.width - bar._strip.edgeInset - rightRegion.width
+        y: bar._vertical ? parent.height - bar._strip.edgeInset - rightRegion.height : bar._strip.cellInset
         spacing: Theme.space.sm
         clip: true
-        // Mirror of leftRegion's cap: never draws left past centerRegion's
-        // right edge, regardless of how many built-ins plus custom modules
+        // Mirror of leftRegion's cap: never draws back past centerRegion's
+        // far edge, regardless of how many built-ins plus custom modules
         // settings.json's bar.layout.right names.
-        width: Math.min(implicitWidth, Math.max(0, bar.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
+        width: bar._vertical
+            ? implicitWidth
+            : Math.min(implicitWidth, Math.max(0, parent.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
+        height: bar._vertical
+            ? Math.min(implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
+            : implicitHeight
 
         Repeater {
             id: rightRepeater
