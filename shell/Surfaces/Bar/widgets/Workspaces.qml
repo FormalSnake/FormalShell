@@ -19,6 +19,12 @@ import "../../../Bar/workspaces.js" as WorkspacesModel
 // itself, which is what makes the travel legible rather than a jump. Both
 // are zeroed by `motion.enabled=false` like every other transition, and at
 // zero the pill simply appears at the new slot.
+//
+// Hover grows whichever shape is answering the pointer: the pill on the
+// focused slot, a plain dot everywhere else. The dot under the pill never
+// grows on its own, so the row only ever has to fit one grown shape at a
+// time, and the row is `Theme.space.lg` tall (the grown size) rather than
+// `_dotSize` so that shape never clips against it.
 Cell {
     id: root
 
@@ -55,6 +61,14 @@ Cell {
     readonly property real _slotSpacing: Theme.space.xs
     readonly property real _dotSize: Theme.space.md
 
+    // The row's own height, sized to whichever shape is grown by hover
+    // (the dot's own grown size), not to the resting dot.
+    readonly property real _rowHeight: Theme.space.lg
+
+    // Which slot the pointer is over, kept on the root since the Repeater's
+    // delegates have no ids to reach each other by. -1 means no slot.
+    property int _hoveredIndex: -1
+
     function _slotX(index) {
         return index * (root._slotWidth + root._slotSpacing);
     }
@@ -72,7 +86,7 @@ Cell {
         id: strip
         anchors.verticalCenter: parent.verticalCenter
         width: dotRow.width
-        height: root._dotSize
+        height: root._rowHeight
 
         Row {
             id: dotRow
@@ -84,11 +98,12 @@ Cell {
 
                 Item {
                     id: slot
+                    required property int index
                     required property var modelData
                     readonly property var ws: modelData
 
                     width: root._slotWidth
-                    height: root._dotSize
+                    height: root._rowHeight
 
                     readonly property bool urgent: slot.ws.isUrgent
                     onUrgentChanged: if (slot.urgent) urgentPulse.restart()
@@ -98,11 +113,13 @@ Cell {
                     Rectangle {
                         id: dot
                         anchors.centerIn: parent
-                        // A hovered dot grows a step, the pointer's own
-                        // answer that this is a target.
-                        width: pointer.containsMouse ? Theme.space.lg : root._dotSize
+                        // The pointer's own answer that this is a target,
+                        // a step the dot grows on hover. The focused slot's
+                        // dot sits still: the pill over it is what answers
+                        // the hover there instead.
+                        width: (pointer.containsMouse && !slot.ws.isFocused) ? Theme.space.lg : root._dotSize
                         height: dot.width
-                        radius: dot.height / 2
+                        radius: Theme.pillRadius(dot.height)
                         color: slot.ws.isUrgent
                             ? Theme.color.destructive
                             : (slot.ws.isFocused ? Theme.color.primary : Theme.color.mutedForeground)
@@ -141,6 +158,12 @@ Cell {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: CompositorService.focusWorkspace(slot.ws.id)
+                        onContainsMouseChanged: {
+                            if (pointer.containsMouse)
+                                root._hoveredIndex = slot.index;
+                            else if (root._hoveredIndex === slot.index)
+                                root._hoveredIndex = -1;
+                        }
                     }
                 }
             }
@@ -155,18 +178,33 @@ Cell {
         Rectangle {
             id: pill
             visible: root._focusedIndex >= 0
-            height: root._dotSize
             anchors.verticalCenter: parent.verticalCenter
-            radius: pill.height / 2
+            radius: Theme.pillRadius(pill.height)
             color: Theme.color.primary
+
+            // The pointer's own answer that this is a target, same as a
+            // plain dot's, since the focused slot's dot never grows: this
+            // is the shape that has to carry the hover state instead.
+            readonly property bool hovered: root._focusedIndex >= 0
+                && root._hoveredIndex === root._focusedIndex
+
+            // Held apart from `lead`/`trail` below so hovering never
+            // disturbs the pace those two set for the travel animation.
+            property real growth: pill.hovered ? (Theme.space.lg - root._dotSize) : 0
+
+            Behavior on growth {
+                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            }
+
+            height: root._dotSize + pill.growth
 
             readonly property real target: root._slotX(Math.max(0, root._focusedIndex))
 
             property real lead: pill.target
             property real trail: pill.target
 
-            x: Math.min(pill.lead, pill.trail)
-            width: Math.abs(pill.lead - pill.trail) + root._slotWidth
+            x: Math.min(pill.lead, pill.trail) - pill.growth / 2
+            width: Math.abs(pill.lead - pill.trail) + root._slotWidth + pill.growth
 
             Behavior on lead {
                 NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.emphasizedEasing }
