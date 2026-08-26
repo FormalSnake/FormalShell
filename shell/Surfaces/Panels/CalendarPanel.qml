@@ -399,6 +399,8 @@ Panel {
                             // Reserved space always present, so a day
                             // without events doesn't sit shorter than its
                             // row neighbours.
+                            // primitive-exempt: an event dot under a day number. A dot is an
+                            // indicator, not a surface; no primitive draws one.
                             Rectangle {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 width: Core.Theme.space.xs

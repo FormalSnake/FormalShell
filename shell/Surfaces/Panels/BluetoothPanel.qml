@@ -6,7 +6,7 @@ import qs.Components
 import "../../Bluetooth/model.js" as BluetoothModel
 
 // Bluetooth panel (DESIGN.md §3 "Panel", spec "Panels"): the header carries
-// the adapter's power toggle and a rescan button, the hero names the one
+// the adapter's power `Switch` and a rescan button, the hero names the one
 // connected device (or the adapter itself), and the rows split into
 // `PAIRED (n)` (connected first, each carrying a check) and `AVAILABLE (n)`.
 // Tab moves between those two lists, Enter connects or disconnects the row
@@ -213,14 +213,18 @@ Panel {
         }
     }
 
+    // The adapter's power is an on/off state, so it is a `Switch`
+    // (DESIGN.md §2); rescan is one action, so it stays an `IconButton`
+    // beside it.
     titleActions: [
-        IconButton {
-            name: (root._adapter && root._adapter.enabled) ? "bluetooth" : "bluetooth-off"
+        Switch {
+            checked: root._adapter !== null && root._adapter.enabled
             enabled: root._adapter !== null
-            onClicked: if (root._adapter) root._adapter.enabled = !root._adapter.enabled
+            onToggled: checked => { if (root._adapter) root._adapter.enabled = checked; }
         },
         IconButton {
             name: "refresh-cw"
+            tooltipText: "Rescan"
             enabled: root._adapter !== null && root._adapter.enabled
             onClicked: root._rescan()
         }

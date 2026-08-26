@@ -213,14 +213,18 @@ Panel {
         root.cursorIndex = index;
     }
 
+    // Being connected is an on/off state, so it is a `Switch` (DESIGN.md
+    // §2); the poll is one action and stays an `IconButton` beside it, the
+    // header shape the bluetooth and network panels take.
     titleActions: [
-        IconButton {
-            name: "power"
+        Switch {
+            checked: root.pollState === "ok" && root.status !== null && root.status.running
             enabled: root.pollState === "ok" && root._actionKind === ""
-            onClicked: root._toggle()
+            onToggled: root._toggle()
         },
         IconButton {
             name: "refresh-cw"
+            tooltipText: "Refresh"
             onClicked: root._poll()
         }
     ]
@@ -342,6 +346,8 @@ Panel {
 
                 // The reachability mark (DESIGN.md §3's own dot idiom):
                 // `primary` for a peer that is up, muted for one that is not.
+                // primitive-exempt: a peer reachability dot that pulses while the
+                // connection is coming up. An indicator, not a surface.
                 Rectangle {
                     id: onlineDot
                     anchors.left: parent.left

@@ -28,7 +28,13 @@ follow. Nested corners are outer minus padding, floored at `Sm`.
 **Border**: 1px `border`. `input` on text fields. No other width exists.
 
 **Ring**: focus is `border` swapped to `ring` plus a 3px outer halo of `ring`
-at 0.5 alpha. Same drawing on every surface.
+at 0.5 alpha (`Theme.ringWidth`). Same drawing on every surface. The halo
+falls outside the item's own bounds, so a clipping container reserves room
+for it: it grows its clip rect by `ringWidth` on every side and insets its
+content by the same, which leaves every row at the x, width and top it had
+without a ring. The rule lives in the container (`Panel`'s content
+flickable, the launcher's and the centre's lists), never in the surface, and
+a row never insets itself.
 
 **Translucency and blur**: the bar strip, panels and the launcher card paint
 `Theme.surface(Theme.color.card)`, the card colour at
@@ -50,8 +56,11 @@ fontconfig aliases, Geist Sans and Geist Mono by intent. Sizes `caption` 11,
 `md` 6, `lg` 8, `xl` 10, `xxl` 12, `huge` 18; the semantic keys are
 `controlHeight` 32, `barCellHeight` 28, `barMargin` 6, `controlPaddingX` 12,
 `controlPaddingY` 6, `rowGap` 4, `iconGap` 8, `panelPadding` 12,
-`sectionGap` 16, `trackThickness` 6; `popupWidthNarrow` 320, `Default` 380,
-`Wide` 480, `Menu` 560, `MenuSplit` 840, `MenuApp` 900.
+`sectionGap` 16, `trackThickness` 6; `screenPadding` 12,
+`popupWidthNarrow` 320, `Default` 380,
+`Wide` 480, `Menu` 560, `MenuSplit` 840, `MenuApp` 900. `panelPadding` is
+the gap inside a card, `screenPadding` the gap outside a floating surface;
+they share a value and describe different things.
 
 **Padding**: one rule, on every surface. A card insets its content by
 `panelPadding`. A row is `controlHeight` tall with `controlPaddingX` either
@@ -65,15 +74,22 @@ header row is `controlHeight` tall and takes the same horizontal padding as
 the rows under it: none of its own where those rows draw their own border
 (a panel), `controlPaddingX` where they do not, which is why the launcher's
 input row and footer line up with its row labels rather than with the card
-edge. A floating surface sits `panelPadding` off the screen edge it hangs
-from and `barMargin` off the bar or the item it is anchored to. Toasts, the
-OSD pill, the notification centre and the tooltip take those same numbers.
-A surface never writes its own margin.
+edge. A floating surface sits `screenPadding` off the screen edge it hangs
+from and `barMargin` off the bar or the item it is anchored to, and is no
+taller than the screen minus the bar and those two paddings: past that its
+content scrolls (`WheelScroll`) rather than the surface running off the
+display. Toasts, the OSD pill, the notification centre and the tooltip take
+those same numbers. A surface never writes its own margin.
 
 **Motion** (`Theme.motion.*`): `fast` 100 for hover fills, `standard` 130
-for enter/exit, `reveal` 400 for the wallpaper crossfade, `slide` 4px.
+for enter/exit, `emphasized` 250 on `emphasizedEasing` for the bar's
+workspace indicator, `reveal` 400 for the wallpaper crossfade, `slide` 4px.
 `motion.enabled=false` zeroes the durations. Enter is opacity plus a 4px
-slide toward the anchor; exit is opacity only. List cursors jump.
+slide toward the anchor; exit is opacity only. List cursors jump. The
+workspace pill is the one carve-out inside the chrome: it travels the width
+of the dot row, which `standard` reads as a jump, so it takes `emphasized`
+and its two edges take different durations, which is what makes the pill
+stretch across the gap and close up behind itself.
 
 **Icons**: `Icon { name: "wifi" }`, resolved through the set `theme.icons`
 selects (`lucide` default, `nerd`) in `shell/Theme/icons.js`. Size equals
@@ -94,6 +110,7 @@ thing.
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
 | `Input` | `input` border, `radiusMd`, `controlHeight`, placeholder `mutedForeground` | focus (ring), error (`destructive` border, caption below) |
 | `Switch` | 32x18 track, `muted` off, `primary` on, `background` knob | cursor (ring) |
+| `ButtonGroup` | a `muted` trough at `radiusMd` holding one ghost `Button` per option, `xs` inside: a choice among several (power profiles, the audio device pick) when `exclusive`, a set of actions (the media transport) when not | selected (`background` with a 1px `border`), active option (`primary` fill), cursor (ring on one button) |
 | `Segmented` | `muted` group, `radiusMd`, active segment `background` with a 1px `border` | cursor (ring) |
 | `Track` | a `trackThickness` progress or slider: `muted` track, `primary` fill, `radiusSm` | none |
 | `Tooltip` | `popover`, `radiusSm`, `caption`, 6px off the anchor | none |
@@ -111,7 +128,19 @@ indicators). Cells are ghost `Cell`s: no fill and no border at rest, since
 the strip already carries both. Hover, cursor, active, selected,
 destructive and warning draw as they do anywhere else. A cell whose panel is
 open draws a 2px `primary` line along its bottom edge. Workspace dots are
-`mutedForeground`, the active one a `primary` pill.
+`mutedForeground` in fixed slots that never reflow, with one `primary` pill
+layered over them on the focused slot; a switch moves the pill, a hovered
+dot grows a step, and an urgent dot is `destructive` and pulses once.
+
+**Which primitive.** An on/off state is a `Switch`, never a button whose
+label is its own state and never an icon that flips between an on and an off
+name. A choice among several, or a row of actions belonging to one thing, is
+a `ButtonGroup`. A level is a `Track`. Text entry is an `Input`. A badge
+inside a row is `Cell { chip: true }`. A heading is a `SectionLabel`. A
+surface that draws its own bordered or rounded `Rectangle` is drawing chrome
+a primitive owns; `dev/check-primitives.py` fails the build unless that
+Rectangle carries a `// primitive-exempt:` comment saying what no primitive
+covers (an indicator dot, a colour swatch, a QR module).
 
 **Panel.** Header, then sections. A section is a `SectionLabel` and a column
 of `Cell` rows `rowGap` apart. A hero (the connected AP, the active sink) is

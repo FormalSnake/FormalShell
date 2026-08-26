@@ -7,7 +7,8 @@ import "../../Display/outputs.js" as Outputs
 
 // Display panel (DESIGN.md §3 "Panel", spec "Panels", M17): a hero for the
 // focused output, then `OUTPUTS (n)` as one row per connected output
-// carrying the three things the owner asked for (on/off, scale, mirror),
+// carrying the three things the owner asked for (on/off as a `Switch`,
+// scale, mirror),
 // `BRIGHTNESS (n)` per backlight device, and the mirror control below them.
 // Feature shape read off omarchy's monitor panel and reimplemented in this
 // shell's own language.
@@ -242,14 +243,17 @@ Panel {
                         font.pixelSize: Theme.fontSize.bodySmall
                     }
 
-                    Button {
+                    // An output being on is an on/off state, so it is a
+                    // `Switch` (DESIGN.md §2). Enter on the row flips the
+                    // same thing (`onCursorActivated`), which is what keeps
+                    // the keyboard and the pointer saying one thing.
+                    Switch {
                         id: enableButton
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        variant: outCell.modelData.enabled ? "default" : "outline"
-                        text: outCell.modelData.enabled ? "On" : "Off"
+                        checked: outCell.modelData.enabled
                         enabled: outCell._canToggle
-                        onClicked: root._toggleOutput(outCell.modelData.name)
+                        onToggled: root._toggleOutput(outCell.modelData.name)
                     }
                 }
 
@@ -549,13 +553,12 @@ Panel {
                     font.pixelSize: Theme.fontSize.body
                 }
 
-                Button {
+                Switch {
                     id: mirrorButton
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    variant: root._mirrorOn ? "default" : "outline"
-                    text: root._mirrorOn ? "On" : "Off"
-                    onClicked: root._setMirror(!root._mirrorOn)
+                    checked: root._mirrorOn
+                    onToggled: checked => root._setMirror(checked)
                 }
             }
         }

@@ -4,7 +4,8 @@ import qs.Core
 import "../shell/Components"
 
 // Track's contract (DESIGN.md §2): a `trackThickness` groove at `radiusSm`,
-// `primary` at 0.2 behind a `primary` fill, the fraction clamped to 0..1.
+// `primary` at 0.2 behind a `primary` fill, the fraction clamped to 0..1,
+// plus the optional `notch` mark AudioPanel's overdrive rails need.
 //
 // The groove's colour is asserted against a sentinel palette rather than
 // Palette.fallback(): `muted`, `accent` and `secondary` share one zinc step
@@ -62,10 +63,34 @@ TestCase {
         return track;
     }
 
-    // The fill is the groove's only child.
+    // The groove's two children, in declaration order: the fill, then the
+    // optional notch (invisible unless `notch` is set).
     function fillOf(track) {
-        compare(track.children.length, 1);
+        compare(track.children.length, 2);
         return track.children[0];
+    }
+
+    function notchOf(track) {
+        compare(track.children.length, 2);
+        return track.children[1];
+    }
+
+    function test_no_notch_unless_one_is_asked_for() {
+        verify(!notchOf(make({ value: 0.5 })).visible);
+    }
+
+    // AudioPanel's 0..1.5 stream rails put the 1.0 boundary at 2/3, so
+    // crossing into overdrive reads as a deliberate line.
+    function test_a_notch_is_a_border_wide_cut_centred_on_its_fraction() {
+        var track = make({ value: 0.5, notch: 1 / 1.5 });
+        var notch = notchOf(track);
+        verify(notch.visible);
+        compare(notch.width, Theme.borderWidth);
+        compare(notch.height, track.height);
+        compare(notch.x, track.width * (1 / 1.5) - Theme.borderWidth / 2);
+        // Cut through fill and groove alike, so it takes the surface colour
+        // rather than either of them.
+        verify(Qt.colorEqual(notch.color, Theme.color.background));
     }
 
     function test_groove_is_primary_at_a_fifth() {

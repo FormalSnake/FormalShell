@@ -158,6 +158,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   crossfade to a second one, and both sides of the opt-in dither key.
 - `wifi.sh` `--wifi`: the network panel against two real hostapd radios:
   scan, wrong password, connect, forget, and the enterprise round trip.
+- `workspaces.sh` `--workspaces`: the bar's workspace indicator as one pill
+  that travels, read off the bar region alone before, 80ms into, and after a
+  workspace switch.
 
 ## macOS verification loop (mac e2e rig)
 

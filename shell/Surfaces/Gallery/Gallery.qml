@@ -230,6 +230,8 @@ Panel {
                                 // interactive state. Bordered in `rule` so
                                 // `background` still reads as a swatch
                                 // against the panel's own fill.
+                                // primitive-exempt: a colour swatch. The fill IS the token being
+                                // shown, so no primitive can own it.
                                 Rectangle {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: Theme.space.huge + Theme.space.xl
@@ -320,6 +322,8 @@ Panel {
                                     // Drawn at the token's own value, so the
                                     // scale is a picture rather than a list
                                     // of numbers.
+                                    // primitive-exempt: a spacing step drawn at its own value, so the
+                                    // scale reads as a picture. The bar IS the number.
                                     Rectangle {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: Theme.space[stepCell.modelData]

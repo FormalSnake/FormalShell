@@ -105,6 +105,8 @@ Cell {
             Repeater {
                 model: VisualizerService.levels.length
 
+                // primitive-exempt: one spectrum bar's groove, vertical where `Track`
+                // is horizontal.
                 Rectangle {
                     id: track
                     width: root._trackWidth
@@ -115,6 +117,8 @@ Cell {
                     readonly property real _level: VisualizerService.levels[index] || 0
                     readonly property string _band: Model.levelColorBand(track._level)
 
+                    // primitive-exempt: the bar's fill. `Track` fills left to right; a
+                    // spectrum bar fills bottom to top.
                     Rectangle {
                         anchors.bottom: parent.bottom
                         width: parent.width

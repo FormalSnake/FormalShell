@@ -75,12 +75,15 @@ Singleton {
     }
 
     // --- DESIGN.md §4 motion tokens -----------------------------------------
-    // `fast` (hover fills) / `standard` (surface enter/exit) / `slide` (the
+    // `fast` (hover fills) / `standard` (surface enter/exit) / `emphasized`
+    // (the bar's workspace pill, the one piece of chrome whose travel spans
+    // the width of a row, on `emphasizedEasing`'s longer decel) / `slide` (the
     // enter/exit translate distance) / `easing` (the one ease-out curve every
     // transition uses) / `reveal` (the wallpaper crossfade duration,
     // §4's third carve-out) / `revealEasing` (its own curve, a full-screen
     // image swap reads better on InOutQuad than the control-chrome OutCubic).
-    // motion.enabled=false in settings.json zeroes `fast`/`standard`/`reveal`
+    // motion.enabled=false in settings.json zeroes
+    // `fast`/`standard`/`emphasized`/`reveal`
     // (Tokens.motionTokens), the shell's reduced-motion switch, since no
     // Wayland analog of prefers-reduced-motion exists. The "breathing"
     // opacity pulse (PowerPanel's charging state) and the screensaver's
@@ -97,6 +100,8 @@ Singleton {
         return {
             fast: m.fast,
             standard: m.standard,
+            emphasized: m.emphasized,
+            emphasizedEasing: Easing.OutQuint,
             slide: m.slide,
             easing: Easing.OutCubic,
             reveal: m.reveal,

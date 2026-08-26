@@ -42,6 +42,15 @@
         QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests
         touch $out
       '';
+      # Primitive adoption (M48): a surface may not draw chrome a
+      # shell/Components primitive already draws. dev/check-primitives.py
+      # carries the rule, the scanned trees and the exemption marker.
+      primitivesCheck = pkgs: pkgs.runCommand "formalshell-primitives" {
+        nativeBuildInputs = [ pkgs.python3 ];
+      } ''
+        python3 ${./.}/dev/check-primitives.py 2>&1 | tee $out.log
+        touch $out
+      '';
     in
     {
       packages = nixpkgs.lib.recursiveUpdate
@@ -87,9 +96,10 @@
       };
 
       checks = nixpkgs.lib.recursiveUpdate
-        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; }))
+        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; }))
         (forAllSystems (system: pkgs: {
         qml-tests = qmlTests pkgs;
+        primitives = primitivesCheck pkgs;
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];

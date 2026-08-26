@@ -28,6 +28,10 @@ Item {
 
     implicitWidth: Theme.space.controlHeight
     implicitHeight: Theme.space.huge
+    // `enabled` is QQuickItem's own: it gates the pointer target, and this
+    // is the same dimming Button applies, so a disabled control reads the
+    // same wherever it sits.
+    opacity: root.enabled ? 1 : 0.5
 
     // The gap between the knob and the track, which is also how far the knob
     // sits from either end.

@@ -1488,10 +1488,10 @@ carry no action ignores Enter.
 
 | Panel | Enter | `x` | Left/Right | Tab |
 | --- | --- | --- | --- | --- |
-| `audio` | Make the device default, or mute a stream | none | Volume by 5% on the row under the cursor | none |
+| `audio` | Make the device default, press the device pick, or mute a stream | none | Volume by 5% on the row under the cursor, or walk the device pick | none |
 | `bluetooth` | Connect or disconnect the device | Forget, on a paired row | Move the cursor | `PAIRED` / `AVAILABLE` |
 | `network` | Connect or disconnect, or run the speed test | none | Move the cursor | Networks / speed test |
-| `power` | Apply the profile | none | Move the cursor | none |
+| `power` | Apply the profile under the ring | none | Walk the profile group | none |
 | `calendar` | Select the day | none | Move across the week (`[` and `]` step the month) | none |
 | `weather` | none | none | Move the cursor | none |
 | `display` | Enable or disable the output, or toggle mirroring | none | Output scale one notch, or brightness by 5% | none |
@@ -1507,6 +1507,13 @@ carry no action ignores Enter.
 
 `audio` also takes `m` to mute the row under the cursor. `PLAYERS` only
 exists in `media` while a second MPRIS player is on the bus.
+
+Where a row holds a `ButtonGroup` (the power profiles, the audio device pick
+with two or three devices, the media transport) the group is one cursor stop:
+Left and Right walk its buttons and Enter presses the one under the ring,
+rather than each button being a row of its own. Where a row holds a `Switch`
+(an output's enable, the mirror), Enter on the row flips the same switch the
+pointer does.
 
 ### Panel IPC
 

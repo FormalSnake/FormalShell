@@ -13,6 +13,13 @@ Rectangle {
     // 0..1. Anything outside that clamps rather than overflowing the groove.
     property real value: 0
 
+    // A single mark cut through groove and fill alike, at this fraction of
+    // the width. Negative (the default) draws none. AudioPanel's stream
+    // rails are the one user: their 0..1.5 range needs the 1.0 boundary
+    // visible so crossing into overdrive reads as deliberate rather than as
+    // a track that ran out of room.
+    property real notch: -1
+
     readonly property real _fraction: Math.max(0, Math.min(1, root.value))
 
     implicitHeight: Theme.space.trackThickness
@@ -28,5 +35,13 @@ Rectangle {
         Behavior on width {
             NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
         }
+    }
+
+    Rectangle {
+        visible: root.notch >= 0
+        x: root.width * root.notch - width / 2
+        width: Theme.borderWidth
+        height: parent.height
+        color: Theme.color.background
     }
 }

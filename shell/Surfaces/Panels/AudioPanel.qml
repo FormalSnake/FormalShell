@@ -5,21 +5,27 @@ import qs.Components
 import "../../Audio/model.js" as AudioModel
 
 // Audio panel (DESIGN.md §3 "Panel", spec "Panels"): a hero card for the
-// default sink (its name, mute state, volume percent and an interactive
-// rail), `OUTPUT (n)` listing the other candidate sinks, an INPUT master
-// row over the default source's own track with `INPUT (n)` under it, and
-// `APPS (n)` for the live playback streams.
+// default sink (its name, mute state, volume percent, an interactive rail
+// and an audible/muted `Switch`), `OUTPUT (n)` listing the other candidate
+// sinks, an INPUT master row over the default source's own track with
+// `INPUT (n)` under it, and `APPS (n)` for the live playback streams. Every
+// mute on this panel is a `Switch` whose checked state is "audible": the row
+// beside it already names what is being muted.
 //
 // The active sink is deliberately absent from the OUTPUT list: the hero
 // already names it, and a row repeating that name would say it twice. The
-// input list does carry its own default, marked `selected`.
+// input list does carry its own default, marked `selected`. Two or three
+// candidates render as a `ButtonGroup` pick instead of a list (M48 D1), and
+// that form does carry the active device, since it is the control saying
+// which one is chosen.
 //
 // Keyboard (spec "Keyboard model"): one flat cursor walks every row, the
 // two master sliders included; Left/Right steps whatever slider it sits on
-// by 5%, `m` mutes it, Enter switches the default on a device row and
-// mutes on a slider row. Wheel over any track steps 5% too. The cursor is
-// keyed by row identity rather than by index, since a device appearing or
-// a stream ending renumbers the list under it.
+// by 5% and walks the buttons of a device pick, `m` mutes it, Enter switches
+// the default on a device row or pick and mutes on a slider row. Wheel over
+// any track steps 5% too. The cursor is keyed by row identity rather than by
+// index, since a device appearing or a stream ending renumbers the list
+// under it.
 //
 // Master sliders clamp 0..1 (AudioModel.clampDevice); stream tracks allow
 // 0..1.5 overdrive (AudioModel.clampStream) with a notch at the 1.0 mark
@@ -57,14 +63,52 @@ Panel {
         return n.audio !== null && AudioModel.isPlaybackStream(n);
     })
 
-    readonly property var _outputRows: root._outputs.filter(function (n) {
+    // Two or three candidates read better as one pick than as a list of
+    // rows (M48 D1, omarchy's own shape): the section becomes a
+    // `ButtonGroup` and the list is empty. Four or more stay a list, where a
+    // trough would leave each label a sliver.
+    function _isGroupCount(n) {
+        return n >= 2 && n <= 3;
+    }
+
+    readonly property bool _outputPick: root._isGroupCount(root._outputs.length)
+    readonly property bool _inputPick: root._isGroupCount(root._inputs.length)
+
+    // The pick carries every output, the active one included: it is the
+    // control that says which sink is chosen, so the chosen one has to be in
+    // it. The list form leaves the active sink out, since the hero above
+    // already names it.
+    readonly property var _outputRows: (root._outputPick ? [] : root._outputs.filter(function (n) {
         return root._sink === null || n.id !== root._sink.id;
-    }).map(function (n) {
+    })).map(function (n) {
         return { node: n, cursorKey: "output-device:" + n.id, isOutput: true };
     })
-    readonly property var _inputRows: root._inputs.map(function (n) {
+    readonly property var _inputRows: (root._inputPick ? [] : root._inputs).map(function (n) {
         return { node: n, cursorKey: "input-device:" + n.id, isOutput: false };
     })
+
+    function _deviceLabel(node) {
+        return node.description || node.name;
+    }
+
+    readonly property var _outputOptions: root._outputs.map(function (n) {
+        return { icon: "volume-2", label: root._deviceLabel(n), value: n.id };
+    })
+    readonly property var _inputOptions: root._inputs.map(function (n) {
+        return { icon: "mic", label: root._deviceLabel(n), value: n.id };
+    })
+
+    function _indexOfNode(nodes, node) {
+        if (!node)
+            return 0;
+        for (var i = 0; i < nodes.length; i++)
+            if (nodes[i].id === node.id)
+                return i;
+        return 0;
+    }
+
+    readonly property int _outputSelected: root._indexOfNode(root._outputs, root._sink)
+    readonly property int _inputSelected: root._indexOfNode(root._inputs, root._source)
     readonly property var _streamRows: root._streams.map(function (n) {
         return { node: n, cursorKey: "stream:" + n.id };
     })
@@ -80,11 +124,15 @@ Panel {
         var out = [];
         if (root._sink && root._sink.audio)
             out.push({ key: "output-slider", section: "output", role: "slider" });
+        if (root._outputPick)
+            out.push({ key: "output-pick", section: "output", role: "pick" });
         for (var i = 0; i < root._outputRows.length; i++)
             out.push({ key: root._outputRows[i].cursorKey, section: "output", role: "device", node: root._outputRows[i].node });
         if (root._inputs.length > 0) {
             if (root._source && root._source.audio)
                 out.push({ key: "input-slider", section: "input", role: "slider" });
+            if (root._inputPick)
+                out.push({ key: "input-pick", section: "input", role: "pick" });
             for (var j = 0; j < root._inputRows.length; j++)
                 out.push({ key: root._inputRows[j].cursorKey, section: "input", role: "device", node: root._inputRows[j].node });
         }
@@ -166,17 +214,36 @@ Panel {
             root.cursorIndex = index;
     }
 
+    // A `pick` entry is one cursor stop holding the whole device group, so
+    // Enter presses the button under its own ring and Left/Right walk that
+    // group instead of stepping a volume.
+    function _groupFor(entry) {
+        if (!entry || entry.role !== "pick")
+            return null;
+        return entry.section === "output" ? outputPickGroup : inputPickGroup;
+    }
+
     onCursorActivated: index => {
         var entry = root._entryAt(index);
         if (!entry)
             return;
-        if (entry.role === "device")
+        var group = root._groupFor(entry);
+        if (group)
+            group.activate();
+        else if (entry.role === "device")
             root._makeDefault({ node: entry.node, isOutput: entry.section === "output" });
         else
             root._mute(entry);
     }
 
-    onCursorStepped: (index, direction) => root._adjustVolume(root._entryAt(index), direction * 0.05)
+    onCursorStepped: (index, direction) => {
+        var entry = root._entryAt(index);
+        var group = root._groupFor(entry);
+        if (group)
+            group.step(direction);
+        else
+            root._adjustVolume(entry, direction * 0.05);
+    }
 
     onCursorTextKey: text => {
         if (text === "m" || text === "M")
@@ -313,10 +380,14 @@ Panel {
                             font.pixelSize: Theme.fontSize.bodySmall
                         }
 
-                        IconButton {
+                        // Sound on or off is a state, so it is a `Switch`
+                        // (DESIGN.md §2). Checked is "audible": the row's
+                        // own label says which stream, and the percentage
+                        // beside it says how loud.
+                        Switch {
                             anchors.verticalCenter: parent.verticalCenter
-                            name: streamCell._muted ? "volume-x" : "volume-2"
-                            onClicked: if (streamCell._audio) streamCell._audio.muted = !streamCell._audio.muted
+                            checked: !streamCell._muted
+                            onToggled: checked => { if (streamCell._audio) streamCell._audio.muted = !checked; }
                         }
                     }
                 }
@@ -325,16 +396,8 @@ Panel {
                     id: streamTrack
                     width: parent.width
                     value: streamCell._volume / 1.5
-
-                    // The 1.0 boundary, at 2/3 of the 0..1.5 track: a cut
-                    // through fill and groove alike, so crossing into
-                    // overdrive reads as a deliberate line.
-                    Rectangle {
-                        x: parent.width * (1 / 1.5) - width / 2
-                        width: Theme.borderWidth
-                        height: parent.height
-                        color: Theme.color.background
-                    }
+                    // The 1.0 boundary, at 2/3 of the 0..1.5 track.
+                    notch: 1 / 1.5
 
                     MouseArea {
                         anchors.fill: parent
@@ -380,9 +443,9 @@ Panel {
         }
 
         trailing: Component {
-            IconButton {
-                name: root._outputMuted ? "volume-x" : "volume-2"
-                onClicked: if (root._sink && root._sink.audio) root._sink.audio.muted = !root._sink.audio.muted
+            Switch {
+                checked: !root._outputMuted
+                onToggled: checked => { if (root._sink && root._sink.audio) root._sink.audio.muted = !checked; }
             }
         }
     }
@@ -396,10 +459,29 @@ Panel {
 
     Column {
         width: parent.width
-        visible: root._outputRows.length > 0
+        visible: root._outputPick || root._outputRows.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { text: "OUTPUT"; count: root._outputRows.length }
+        SectionLabel {
+            text: "OUTPUT"
+            count: root._outputPick ? root._outputs.length : root._outputRows.length
+        }
+
+        ButtonGroup {
+            id: outputPickGroup
+            visible: root._outputPick
+            width: parent.width
+            options: root._outputOptions
+            index: root._outputSelected
+            cursor: root.cursorActive && root._cursorKey === "output-pick"
+            onChanged: index => root._makeDefault({ node: root._outputs[index], isOutput: true })
+            onHovered: (index, isHovered) => {
+                if (!isHovered)
+                    return;
+                root._pointAt("output-pick");
+                outputPickGroup.cursorIndex = index;
+            }
+        }
 
         Repeater {
             model: root._outputRows
@@ -467,10 +549,10 @@ Panel {
                             font.pixelSize: Theme.fontSize.bodySmall
                         }
 
-                        IconButton {
+                        Switch {
                             anchors.verticalCenter: parent.verticalCenter
-                            name: root._inputMuted ? "mic-off" : "mic"
-                            onClicked: if (root._source && root._source.audio) root._source.audio.muted = !root._source.audio.muted
+                            checked: !root._inputMuted
+                            onToggled: checked => { if (root._source && root._source.audio) root._source.audio.muted = !checked; }
                         }
                     }
                 }
@@ -499,7 +581,26 @@ Panel {
             }
         }
 
-        SectionLabel { text: "INPUT"; count: root._inputRows.length }
+        SectionLabel {
+            text: "INPUT"
+            count: root._inputPick ? root._inputs.length : root._inputRows.length
+        }
+
+        ButtonGroup {
+            id: inputPickGroup
+            visible: root._inputPick
+            width: parent.width
+            options: root._inputOptions
+            index: root._inputSelected
+            cursor: root.cursorActive && root._cursorKey === "input-pick"
+            onChanged: index => root._makeDefault({ node: root._inputs[index], isOutput: false })
+            onHovered: (index, isHovered) => {
+                if (!isHovered)
+                    return;
+                root._pointAt("input-pick");
+                inputPickGroup.cursorIndex = index;
+            }
+        }
 
         Repeater {
             model: root._inputRows

@@ -62,6 +62,7 @@ TestCase {
         compare(s.iconGap, 8);
         compare(s.panelPadding, 12);
         compare(s.sectionGap, 16);
+        compare(s.screenPadding, 12);
         compare(s.popupWidthNarrow, 320);
         compare(s.popupWidthDefault, 380);
         compare(s.popupWidthWide, 480);
@@ -173,6 +174,19 @@ TestCase {
         compare(m.fast, 0);
         compare(m.standard, 0);
         compare(m.slide, Tokens.motionTokens(true).slide);
+    }
+
+    // M48: the workspace pill's travel spans a whole row of dots, which
+    // `standard` reads as a jump, so it takes a step of its own outside the
+    // 90-140ms control band while still being ordinary chrome.
+    function test_motion_tokens_emphasized_is_the_indicator_step() {
+        var m = Tokens.motionTokens(true);
+        compare(m.emphasized, 250);
+        verify(m.emphasized > m.standard);
+    }
+
+    function test_motion_tokens_disabled_zeroes_emphasized_too() {
+        compare(Tokens.motionTokens(false).emphasized, 0);
     }
 
     function test_motion_tokens_reveal_is_the_400ms_carve_out() {

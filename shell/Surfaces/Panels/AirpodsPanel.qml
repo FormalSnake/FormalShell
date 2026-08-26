@@ -439,13 +439,16 @@ Panel {
                     }
                 }
 
-                Button {
+                // An on/off state is a `Switch` (DESIGN.md §2), never a
+                // button whose label is the state. Enter on the row calls
+                // the same `_toggleCa`, so keyboard and pointer say one
+                // thing.
+                Switch {
                     id: caButton
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    variant: root._status.conversationalAwareness ? "default" : "outline"
-                    text: root._status.conversationalAwareness ? "On" : "Off"
-                    onClicked: root._toggleCa()
+                    checked: root._status.conversationalAwareness
+                    onToggled: root._toggleCa()
                 }
             }
         }
@@ -491,13 +494,12 @@ Panel {
                     }
                 }
 
-                Button {
+                Switch {
                     id: oneBudButton
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    variant: root._status.oneBudAnc ? "default" : "outline"
-                    text: root._status.oneBudAnc ? "On" : "Off"
-                    onClicked: root._toggleOneBud()
+                    checked: root._status.oneBudAnc
+                    onToggled: root._toggleOneBud()
                 }
             }
         }

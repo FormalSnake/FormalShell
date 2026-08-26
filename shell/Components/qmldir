@@ -1,5 +1,6 @@
 AuthPrompt AuthPrompt.qml
 Button Button.qml
+ButtonGroup ButtonGroup.qml
 Card Card.qml
 Cell Cell.qml
 DismissTwins DismissTwins.qml

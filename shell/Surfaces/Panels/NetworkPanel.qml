@@ -9,7 +9,7 @@ import "../../Network/wifiqr.js" as WifiQr
 
 // Network panel (DESIGN.md §3 "Panel", spec "Panels"): the first surface
 // built on the shadcn primitives. Panel draws the header (wifi icon, title,
-// the radio power and rescan `IconButton`s, close); the content is a hero
+// the radio power `Switch` and a rescan button, close); the content is a hero
 // card for the connected AP, a stats card carrying the last measured rates,
 // a WIRED section, a `NETWORKS (n)` section of bordered rows, the share and
 // password rows, and a footer pairing an outline Speed test button with the
@@ -982,13 +982,17 @@ Panel {
     panelTitle: "Wi-Fi"
     panelWidth: Theme.space.popupWidthDefault
 
+    // The radio is an on/off state, so it is a `Switch` (DESIGN.md §2);
+    // rescan is one action and stays an `IconButton` beside it, the same
+    // header shape the bluetooth panel takes.
     titleActions: [
-        IconButton {
-            name: Networking.wifiEnabled ? "wifi" : "wifi-off"
-            onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
+        Switch {
+            checked: Networking.wifiEnabled
+            onToggled: checked => Networking.wifiEnabled = checked
         },
         IconButton {
             name: "refresh-cw"
+            tooltipText: "Rescan"
             enabled: root._hasWifiDevice
             onClicked: root._refreshScan()
         }

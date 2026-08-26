@@ -6,7 +6,7 @@ import qs.Services
 // MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"): a `NOW
 // PLAYING` section label carrying the player's own identity, the cover in a
 // `radiusMd` frame beside the track's title, artist and album, the transport
-// as a row of `IconButton`s, the position and the player's own volume as
+// as one `ButtonGroup`, the position and the player's own volume as
 // `Track` rows, and a chip per registered player once more than one is on
 // the bus.
 //
@@ -103,6 +103,17 @@ Panel {
     // the whole section is absent with a single player.
     readonly property var _playerRows: MediaService.players.length > 1 ? MediaService.players : []
 
+    // The transport as `ButtonGroup` options, in the order `_transport`
+    // built: icon only, no label, so the row stays a strip of controls.
+    readonly property var _transportOptions: root._transport.map(function (id) {
+        return {
+            icon: root._transportIcon(id),
+            value: id,
+            enabled: root._transportEnabled(id),
+            active: root._transportActive(id)
+        };
+    })
+
     function _trackIndex(id) {
         return root._tracks.indexOf(id);
     }
@@ -121,12 +132,12 @@ Panel {
 
     // The on-state of a toggle is the button's own `primary` fill (DESIGN.md
     // §5: fills are for buttons and the active toggle).
-    function _transportVariant(id) {
-        if (id === "shuffle" && MediaService.shuffle)
-            return "default";
-        if (id === "loop" && MediaService.loopState !== "none")
-            return "default";
-        return "ghost";
+    function _transportActive(id) {
+        if (id === "shuffle")
+            return MediaService.shuffle;
+        if (id === "loop")
+            return MediaService.loopState !== "none";
+        return false;
     }
 
     function _transportEnabled(id) {
@@ -248,7 +259,7 @@ Panel {
                 // A plain frame, never a dither: content imagery keeps its
                 // own colours, and nothing in the shell dithers unless
                 // `wallpaper.dither` or `lock.dither` says so.
-                Rectangle {
+                Card {
                     id: artFrame
                     visible: root._hasArt
                     width: root._hasArt ? root._artSlotSize : 0
@@ -256,13 +267,13 @@ Panel {
                     anchors.verticalCenter: parent.verticalCenter
                     radius: Theme.radiusMd
                     color: Theme.color.muted
-                    border.width: Theme.borderWidth
-                    border.color: Theme.color.border
+                    // The frame's border is all the inset the art gets: a
+                    // cover fills its card rather than floating in it.
+                    padding: Theme.borderWidth
                     clip: true
 
                     Image {
                         anchors.fill: parent
-                        anchors.margins: Theme.borderWidth
                         visible: MediaService.artUrl !== ""
                         source: MediaService.artUrl
                         sourceSize.width: root._artSlotSize
@@ -277,7 +288,6 @@ Panel {
                     // art, download failure, a missing QtMultimedia module).
                     Loader {
                         anchors.fill: parent
-                        anchors.margins: Theme.borderWidth
                         active: AnimatedCoverFrameSource.active
                         source: "AnimatedAlbumArt.qml"
                     }
@@ -322,29 +332,24 @@ Panel {
         }
     }
 
+    // The transport is a non-exclusive `ButtonGroup` (M48 D1): every button
+    // is its own action rather than one of a set, and a supported toggle
+    // that is on (shuffle, loop) carries the `primary` fill through the
+    // option's own `active`. Section 0's cursor already walks this row with
+    // Left/Right, so the group takes `cursorIndex` straight off the panel.
     Cell {
         visible: MediaService.available
         width: parent.width
 
-        Row {
+        ButtonGroup {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: Theme.space.xs
-
-            Repeater {
-                model: root._transport
-
-                delegate: IconButton {
-                    required property int index
-                    required property string modelData
-
-                    name: root._transportIcon(modelData)
-                    variant: root._transportVariant(modelData)
-                    enabled: root._transportEnabled(modelData)
-                    cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === index
-                    onHoveredChanged: if (hovered) root._pointAt(0, index)
-                    onClicked: root._pressTransport(modelData)
-                }
-            }
+            height: Theme.space.controlHeight
+            exclusive: false
+            options: root._transportOptions
+            cursorIndex: root.cursorIndex
+            cursor: root.cursorActive && root.cursorSection === 0
+            onPressed: index => root._pressTransport(root._transport[index])
+            onHovered: (index, isHovered) => { if (isHovered) root._pointAt(0, index); }
         }
     }
 
@@ -487,6 +492,9 @@ Panel {
                     required property int index
                     required property var modelData
 
+                    // A badge sitting in a row rather than being one, so it
+                    // hugs its own label (DESIGN.md §2).
+                    chip: true
                     radius: Theme.radiusSm
                     selected: playerChip.modelData.id === MediaService.activeId
                     cursor: root.cursorActive && root.cursorSection === 2 && root.cursorIndex === playerChip.index

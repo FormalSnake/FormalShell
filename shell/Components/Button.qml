@@ -4,7 +4,8 @@ import qs.Core
 // shadcn's button (DESIGN.md §2). `variant` picks the resting treatment:
 // `default` fills with `primary`, `destructive` fills with `destructive`,
 // `outline` is transparent behind a 1px `border`, `ghost` is transparent
-// with no border at all.
+// with no border at all, `selected` fills with `background` behind a 1px
+// `border` (the segmented look `ButtonGroup` paints on the chosen option).
 //
 // `enabled` is QQuickItem's own: it gates the pointer target as well as
 // dimming the button, so a disabled one neither hovers nor clicks.
@@ -17,6 +18,23 @@ Item {
     property string icon: ""
     property bool cursor: false
     property bool hovered: pointer.containsMouse
+
+    // The concentric rule (spec "Radius"): a button nested inside a bordered
+    // trough takes the outer radius minus the padding between them.
+    // `radiusMd` is the free-standing case.
+    property int radius: Theme.radiusMd
+
+    // A ceiling for the label, for a button whose width its owner decides
+    // (`ButtonGroup` divides its trough evenly). -1 leaves the label at its
+    // natural width, which is what keeps a free-standing button's implicit
+    // width from depending on the width that implicit width asks for.
+    property real labelBudget: -1
+
+    // The gutter either side of the content. A button inside a trough takes
+    // less than a free-standing one: the trough's own padding already sits
+    // outside it, and at `controlPaddingX` a three-option group on a
+    // `Default`-width panel elides "Performance" by two characters.
+    property real paddingX: Theme.space.controlPaddingX
 
     // Hover tooltip, the same contract Cell.qml carries: one short line
     // naming what this control does, after Tooltip.qml's own delay, dropped
@@ -54,21 +72,35 @@ Item {
             root._openTooltip();
     }
 
-    readonly property bool _filled: root.variant === "default" || root.variant === "destructive"
+    readonly property bool _filled: root.variant === "default"
+        || root.variant === "destructive" || root.variant === "selected"
     readonly property color _fill: root.variant === "default"
         ? Theme.color.primary
         : root.variant === "destructive"
             ? Theme.color.destructive
-            : "transparent"
+            : root.variant === "selected"
+                ? Theme.color.background
+                : "transparent"
     readonly property color _ink: root.variant === "default"
         ? Theme.color.primaryForeground
         : root.variant === "destructive"
             ? Theme.color.destructiveForeground
             : Theme.color.foreground
 
-    implicitWidth: row.implicitWidth + Theme.space.controlPaddingX * 2
+    implicitWidth: row.implicitWidth + root.paddingX * 2
     implicitHeight: Theme.space.controlHeight
     opacity: root.enabled ? 1 : 0.5
+
+    // What is left of the budget once the icon and the gap beside it have
+    // taken their share.
+    readonly property real _labelWidth: {
+        if (root.labelBudget < 0)
+            return label.implicitWidth;
+        var taken = root.paddingX * 2;
+        if (root.icon !== "")
+            taken += Theme.fontSize.body + (root.text !== "" ? Theme.space.iconGap : 0);
+        return Math.max(0, Math.min(label.implicitWidth, root.labelBudget - taken));
+    }
 
     // The focus ring's outer halo, drawn behind the body exactly as Cell
     // draws it.
@@ -76,18 +108,21 @@ Item {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
         visible: root.cursor
-        radius: Theme.radiusMd + Theme.ringWidth
+        radius: root.radius + Theme.ringWidth
         color: Theme.color.ring
         opacity: Theme.ringAlpha
     }
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusMd
+        radius: root.radius
         color: root._fill
-        // A filled variant has no border of its own, so the cursor's border
-        // swap is the only thing that gives it one.
-        border.width: (root.cursor || root.variant === "outline") ? Theme.borderWidth : 0
+        // `default` and `destructive` carry no border of their own, so the
+        // cursor's border swap is the only thing that gives them one;
+        // `outline` and `selected` are bordered at rest and the swap only
+        // recolours what is already there.
+        border.width: (root.cursor || root.variant === "outline" || root.variant === "selected")
+            ? Theme.borderWidth : 0
         border.color: root.cursor ? Theme.color.ring : Theme.color.border
         // A fill cannot take the `accent` hover layer without losing its own
         // colour, so it dims instead.
@@ -100,7 +135,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusMd
+        radius: root.radius
         color: Theme.color.accent
         opacity: (!root._filled && root.hovered) ? 1 : 0
 
@@ -111,7 +146,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Theme.radiusMd
+        radius: root.radius
         visible: pointer.pressed
         color: Theme.color.accent
         opacity: 0.8
@@ -137,6 +172,8 @@ Item {
             font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.body
             font.weight: Theme.weight.medium
+            width: root._labelWidth
+            elide: root.labelBudget >= 0 ? Text.ElideRight : Text.ElideNone
         }
     }
 

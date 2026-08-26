@@ -45,6 +45,15 @@ var SPACING_BASE = {
 // one padding rule (DESIGN.md §1) leaves every floating surface sitting
 // `panelPadding` off the edge it hangs from, so a fourth number had nothing
 // left to describe.
+// `screenPadding` (M48 D3) is the one distance every floating surface keeps
+// from a screen edge it hangs from: panels sit `barMargin` under the bar and
+// `screenPadding` in from the side, the notification centre takes it on
+// three edges, toasts and the OSD take it from theirs, and every surface's
+// height is capped at the screen minus the bar and these paddings so its
+// content scrolls instead of running off the display. Separate from
+// `panelPadding`, which is a card's own inset: one describes the gap outside
+// a surface, the other the gap inside it, and they only happen to share a
+// value today.
 // `trackThickness` is the one flat-fill-track idiom (OSD,
 // volume/brightness/life-progress sliders), a single token so every track
 // site renders the same thickness instead of each surface picking its own
@@ -61,7 +70,7 @@ var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
     controlHeight: 32, barCellHeight: 28, barMargin: 6,
     popupRowHeight: 28, rowGap: 4, iconGap: 8,
-    panelPadding: 12, sectionGap: 16,
+    panelPadding: 12, sectionGap: 16, screenPadding: 12,
     trackThickness: 6,
     popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900
@@ -143,12 +152,18 @@ function radiusTokens(base) {
 // fast/standard/reveal; the caller (NowPlaying.qml) gates the whole
 // animation on `Theme.motionEnabled` directly and falls back to today's
 // elide instead of scrolling at 0px/s.
-var MOTION_BASE = { fast: 100, standard: 130, slide: 4, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
+// `emphasized` (250) is the one duration longer than the 90-140ms control
+// band that still paces chrome rather than a full screen: the bar's
+// workspace indicator, where a single pill slides and stretches between dot
+// slots and needs the travel to be readable as one movement. `standard`
+// makes the same slide read as a jump.
+var MOTION_BASE = { fast: 100, standard: 130, emphasized: 250, slide: 4, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
 
 function motionTokens(enabled) {
     return {
         fast: enabled ? MOTION_BASE.fast : 0,
         standard: enabled ? MOTION_BASE.standard : 0,
+        emphasized: enabled ? MOTION_BASE.emphasized : 0,
         slide: MOTION_BASE.slide,
         reveal: enabled ? MOTION_BASE.reveal : 0,
         marqueePxPerSec: MOTION_BASE.marqueePxPerSec,

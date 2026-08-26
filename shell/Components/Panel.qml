@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import qs.Core
 import qs.Compositor
 import "cursor.js" as Cursor
+import "geometry.js" as Geometry
 
 // The shared per-widget popout (DESIGN.md §3 "Panel", spec "Panels"): a
 // bordered card anchored under the bar cell that opened it, opening with a
@@ -159,26 +160,30 @@ PanelWindow {
         return screens.length > 0 ? screens[0] : null;
     }
 
-    readonly property real _frameX: {
-        if (!root._screen) return 0;
-        var x = root.anchorX >= 0 ? root.anchorX : (root._screen.width - root.panelWidth - Theme.space.barMargin);
-        return Math.max(0, Math.min(x, root._screen.width - root.panelWidth));
-    }
+    // One padding rule (DESIGN.md §1, M48 D3): every floating surface sits
+    // `barMargin` under the bar and `screenPadding` in from the screen edge
+    // it hangs from. An IPC open has no cell to anchor to and falls back to
+    // the right edge, at the same `screenPadding`; a cell-anchored open is
+    // clamped so neither edge can push the frame past it.
+    readonly property real _frameX: root._screen
+        ? Geometry.frameX(root.anchorX, root._screen.width, root.panelWidth, Theme.space.screenPadding)
+        : 0
 
     readonly property real _contentWidth: root.panelWidth - Theme.space.panelPadding * 2
 
-    // Caps content to the room actually left on screen, from the frame's own
-    // top (`Theme.barHeight + barMargin` below) down to a mirrored
-    // `barMargin` above the screen's bottom edge, minus the frame's own
-    // chrome, rather than a flat fraction of screen height, which clipped a
-    // panel well within genuinely empty space below it on a short/wide
-    // monitor. Content only ever scrolls once it truly can't fit.
-    readonly property real _maxContentHeight: root._screen
-        ? Math.max(0, root._screen.height - Theme.barHeight - Theme.space.barMargin * 2
-            - Theme.space.panelPadding * 2 - header.height - Theme.space.sectionGap)
+    // The tallest the frame may be: the screen minus the bar, the
+    // `barMargin` the frame hangs off it by, and one `screenPadding` above
+    // the bottom edge. Content beyond that scrolls (contentFlickable below)
+    // rather than the panel running off the display, which the notification
+    // centre and a long calendar month both did.
+    readonly property real _maxFrameHeight: root._screen
+        ? Geometry.maxFrameHeight(root._screen.height, Theme.barHeight,
+            Theme.space.barMargin, Theme.space.screenPadding)
         : 400
-    readonly property real _frameHeight: Theme.space.panelPadding * 2 + header.height
-        + Theme.space.sectionGap + Math.min(contentColumn.implicitHeight, root._maxContentHeight)
+    readonly property real _maxContentHeight: Geometry.maxContentHeight(root._maxFrameHeight,
+        Theme.space.panelPadding, header.height, Theme.space.sectionGap)
+    readonly property real _frameHeight: Geometry.frameHeight(contentColumn.implicitHeight,
+        root._maxContentHeight, Theme.space.panelPadding, header.height, Theme.space.sectionGap)
 
     function open(x, screen) {
         if (PanelRegistry.current && PanelRegistry.current !== root)
@@ -408,16 +413,26 @@ PanelWindow {
                 }
             }
 
+            // The ring reservation (DESIGN.md §1 "Ring", M48 D2): a clipping
+            // container grows its clip rect by `ringWidth` on every side and
+            // insets its content by the same, so the halo a cursor row draws
+            // outside its own border has somewhere to land and every row
+            // keeps the x, width and top it had without one. The overhang
+            // eats `ringWidth` of the card's own padding and of the gap under
+            // the header, both of which are several times that.
             Flickable {
                 id: contentFlickable
                 anchors.top: header.bottom
-                anchors.topMargin: Theme.space.sectionGap
+                anchors.topMargin: Theme.space.sectionGap - Theme.ringWidth
                 anchors.left: parent.left
+                anchors.leftMargin: -Theme.ringWidth
                 anchors.right: parent.right
+                anchors.rightMargin: -Theme.ringWidth
                 anchors.bottom: parent.bottom
+                anchors.bottomMargin: -Theme.ringWidth
                 clip: true
                 contentWidth: width
-                contentHeight: contentColumn.implicitHeight
+                contentHeight: contentColumn.implicitHeight + Theme.ringWidth * 2
 
                 WheelScroll { flickable: contentFlickable }
 
@@ -427,7 +442,9 @@ PanelWindow {
                 KeyCatcher {
                     id: keyCatcher
                     focus: false
-                    width: contentFlickable.width
+                    x: Theme.ringWidth
+                    y: Theme.ringWidth
+                    width: contentFlickable.width - Theme.ringWidth * 2
                     height: contentColumn.implicitHeight
                     blocked: Cursor.catcherBlocked(root.isOpen, root.inlineEditorFocused)
 

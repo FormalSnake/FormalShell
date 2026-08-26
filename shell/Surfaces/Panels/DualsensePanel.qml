@@ -33,6 +33,7 @@ Panel {
     // where that has to be said before the rows are read.
     titleActions: [
         Cell {
+            chip: true
             radius: Theme.radiusSm
 
             SectionLabel { text: "READ ONLY" }
@@ -133,6 +134,8 @@ Panel {
                 width: parent.width
                 height: Math.max(lightbarSwatch.height, lightbarValue.implicitHeight)
 
+                // primitive-exempt: the lightbar's own colour, drawn as a swatch. The
+                // fill IS the value here, so no primitive can own it.
                 Rectangle {
                     id: lightbarSwatch
                     anchors.left: parent.left
@@ -192,6 +195,8 @@ Panel {
                     Repeater {
                         model: 5
 
+                        // primitive-exempt: one of five player-LED pips, a hardware readout
+                        // drawn at the size the LEDs are. An indicator, not a surface.
                         Rectangle {
                             required property int index
                             width: Theme.space.md

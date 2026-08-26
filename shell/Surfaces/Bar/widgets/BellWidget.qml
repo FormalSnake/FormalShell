@@ -48,6 +48,8 @@ Cell {
             name: root._dnd ? "bell-off" : "bell"
             color: root.foreground
 
+            // primitive-exempt: the unread dot riding the bell glyph, an indicator
+            // with no chrome of its own.
             Rectangle {
                 visible: root._pending > 0
                 anchors.right: parent.right

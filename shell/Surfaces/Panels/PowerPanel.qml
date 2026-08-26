@@ -9,8 +9,10 @@ import "../../Power/model.js" as Power
 // Power panel (DESIGN.md §3 "Panel", spec "Panels"): a hero for the battery
 // (state icon, "Battery", the state word, the percent as the display-sized
 // readout and the charge level as the rail), a stats ledger of four
-// label-and-mono-value cells, then the power-profile rows with the active
-// one `selected`. Enter applies the profile under the cursor. Bound directly
+// label-and-mono-value cells, then the power profiles as one `ButtonGroup`,
+// the shape omarchy's own power panel uses (M48 D1). The panel's single
+// cursor stop is that group: Left and Right walk its buttons and Enter
+// applies the one under the ring. Bound directly
 // to Quickshell.Services.UPower, same as AudioPanel binds Pipewire directly.
 // The test VM's QEMU aarch64 "virt" machine has no battery at all:
 // UPower.displayDevice.isLaptopBattery is then false and the panel renders
@@ -120,15 +122,31 @@ Panel {
     // panel needs to gate by hand.
     readonly property var _profiles: [PowerProfile.PowerSaver, PowerProfile.Balanced, PowerProfile.Performance]
 
-    cursorCount: root._profiles.length
+    // One icon per profile, in the same fixed order: the effort each one
+    // spends, low to high.
+    readonly property var _profileIcons: ["leaf", "gauge", "zap"]
 
-    onCursorActivated: index => root._applyProfile(index)
+    readonly property var _profileOptions: root._profiles.map(function (profile, i) {
+        return { icon: root._profileIcons[i], label: PowerProfile.toString(profile), value: profile };
+    })
+
+    readonly property int _activeProfileIndex: Math.max(0, root._profiles.indexOf(PowerProfiles.profile))
+
+    // The group is the panel's one cursor stop, so Left/Right walk inside it
+    // rather than the list (`cursorStepsHorizontally`) and Enter presses
+    // whichever button the ring sits on.
+    cursorCount: 1
+    cursorStepsHorizontally: true
+
+    onCursorActivated: profileGroup.activate()
+    onCursorStepped: (index, direction) => profileGroup.step(direction)
 
     onIsOpenChanged: {
         if (root.isOpen) {
             // The cursor starts on the active profile, so the reveal-only
             // first keypress shows it where the eye already is.
-            root.cursorIndex = Math.max(0, root._profiles.indexOf(PowerProfiles.profile));
+            root.cursorIndex = 0;
+            profileGroup.cursorIndex = root._activeProfileIndex;
             root.cursorSection = 0;
         } else {
             // Drop the RAPL baseline on close (M20 Task 5c): no background
@@ -195,7 +213,7 @@ Panel {
     function _applyProfile(index) {
         if (index < 0 || index >= root._profiles.length)
             return;
-        root.cursorIndex = index;
+        profileGroup.cursorIndex = index;
         PowerProfiles.profile = root._profiles[index];
     }
 
@@ -359,65 +377,25 @@ Panel {
         SectionLabel { text: "AC POWER" }
     }
 
-    Component {
-        id: profileRow
-
-        Cell {
-            id: profileCell
-            required property int index
-            required property var modelData
-            width: parent.width
-            interactive: true
-            selected: profileCell.modelData === PowerProfiles.profile
-            cursor: root.cursorActive && profileCell.index === root.cursorIndex
-
-            onContainsPointerChanged: if (profileCell.containsPointer) {
-                root.cursorActive = true;
-                root.cursorIndex = profileCell.index;
-            }
-
-            onClicked: root._applyProfile(profileCell.index)
-
-            Item {
-                width: parent.width
-                height: profileLabel.implicitHeight
-
-                Text {
-                    id: profileLabel
-                    anchors.left: parent.left
-                    anchors.right: profileCheck.left
-                    anchors.rightMargin: Theme.space.iconGap
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: PowerProfile.toString(profileCell.modelData)
-                    color: profileCell.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.body
-                    font.weight: Theme.weight.medium
-                    elide: Text.ElideRight
-                }
-
-                Icon {
-                    id: profileCheck
-                    name: "check"
-                    size: Theme.fontSize.body
-                    visible: profileCell.selected
-                    color: profileCell.foreground
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-        }
-    }
-
     Column {
         width: parent.width
         spacing: Theme.space.rowGap
 
         SectionLabel { text: "PROFILE" }
 
-        Repeater {
-            model: root._profiles
-            delegate: profileRow
+        ButtonGroup {
+            id: profileGroup
+            width: parent.width
+            options: root._profileOptions
+            index: root._activeProfileIndex
+            cursor: root.cursorActive
+            onChanged: index => root._applyProfile(index)
+            onHovered: (index, isHovered) => {
+                if (!isHovered)
+                    return;
+                root.cursorActive = true;
+                profileGroup.cursorIndex = index;
+            }
         }
     }
 }
