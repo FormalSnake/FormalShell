@@ -169,6 +169,35 @@ TestCase {
         compare(Power.raplWatts(64900000, 100000, 65000000, 500), 0.4);
     }
 
+    // parseChargeLimit
+
+    // e1504g's own reading: an ASUS laptop parked at 80 by the firmware.
+    function test_parseChargeLimit_reads_the_threshold_percentage() {
+        compare(Power.parseChargeLimit("80\n"), 80);
+    }
+
+    function test_parseChargeLimit_tolerates_no_trailing_newline() {
+        compare(Power.parseChargeLimit("60"), 60);
+    }
+
+    // A battery whose driver exposes no such file: `cat` fails and writes
+    // nothing to stdout.
+    function test_parseChargeLimit_is_null_when_the_file_is_absent() {
+        compare(Power.parseChargeLimit(""), null);
+        compare(Power.parseChargeLimit(undefined), null);
+    }
+
+    // 100 is the firmware saying "charge to full", not a limit.
+    function test_parseChargeLimit_treats_a_full_charge_target_as_no_limit() {
+        compare(Power.parseChargeLimit("100\n"), null);
+    }
+
+    function test_parseChargeLimit_rejects_an_out_of_range_or_unparseable_value() {
+        compare(Power.parseChargeLimit("0\n"), null);
+        compare(Power.parseChargeLimit("-5\n"), null);
+        compare(Power.parseChargeLimit("nope\n"), null);
+    }
+
     // parseRaplUj
 
     function test_parseRaplUj_normal_two_lines() {

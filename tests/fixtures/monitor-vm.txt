@@ -20,6 +20,7 @@ SwapFree:              0 kB
  wlan2:       0       0    0    0    0     0          0         0     2472      27    0    0    0     0       0          0
 hwsim0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
 @temp
+@fan
 @disk
 /dev/vda       /               41956900864  16550432768
 certs          /etc/ssl/certs 994662580224 787570237440

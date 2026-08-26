@@ -37,6 +37,7 @@ Singleton {
     property var load: ({ available: false })
     property var uptime: ({ available: false })
     property var temps: ({ available: false, rows: [] })
+    property var fans: ({ available: false, rows: [] })
     property var net: ({ available: false, rows: [] })
     property var disk: ({ available: false, rows: [] })
 
@@ -111,6 +112,9 @@ Singleton {
 
         var tempRows = Sysinfo.parseTemps(sections.temp);
         root.temps = { available: tempRows.length > 0, rows: tempRows };
+
+        var fanRows = Sysinfo.parseFans(sections.fan);
+        root.fans = { available: fanRows.length > 0, rows: fanRows };
 
         var diskRows = Sysinfo.parseDisk(sections.disk);
         root.disk = { available: diskRows.length > 0, rows: diskRows };

@@ -2,8 +2,10 @@ import QtQuick
 import QtTest
 import "../shell/Monitor/gpu.js" as Gpu
 
-// Fixtures are bytes captured from real hardware on 2026-08-19 (owner's g815
-// and e1504g laptops), except gpu-amd.txt: no AMD hardware is reachable from
+// Fixtures are bytes captured from real hardware (owner's g815 and e1504g
+// laptops, 2026-08-19; gpu-intel-metrics.txt from e1504g on 2026-08-26,
+// after the collector started reading gt_act_freq_mhz/gt_max_freq_mhz),
+// except gpu-amd.txt: no AMD hardware is reachable from
 // this rig, so it is hand-written to the documented amdgpu sysfs contract
 // (gpu_busy_percent, mem_info_vram_used/total, hwmon temp1_input/
 // power1_average) rather than a real capture. It exercises the parser only.
@@ -19,6 +21,7 @@ TestCase {
     property string singleBlob: ""
     property string noneBlob: ""
     property string amdBlob: ""
+    property string intelBlob: ""
 
     function _readFile(relPath) {
         var done = false;
@@ -55,6 +58,7 @@ TestCase {
         singleBlob = _readFile("fixtures/gpu-single.txt");
         noneBlob = _readFile("fixtures/gpu-none.txt");
         amdBlob = _readFile("fixtures/gpu-amd.txt");
+        intelBlob = _readFile("fixtures/gpu-intel-metrics.txt");
     }
 
     // ---- parseCards / isDiscrete -------------------------------------
@@ -151,9 +155,10 @@ TestCase {
         compare(nvidiaCard.metrics.vramTotal, 8151 * 1024 * 1024);
     }
 
-    // i915/xe cards report {available:false} and nothing else: no
-    // unprivileged utilisation counter exists, so no field is invented.
-    function test_merge_i915_card_reports_unavailable_with_no_invented_fields() {
+    // An i915 card the collector read no metric row for stays unavailable:
+    // no unprivileged utilisation counter exists, so nothing is invented.
+    // The hybrid fixture predates the gt_*_freq_mhz rows and carries none.
+    function test_merge_i915_card_with_no_metric_rows_reports_unavailable() {
         var cards = Gpu.parseCards(_section(hybridBlob, "drm"));
         var nvidia = Gpu.parseNvidia(_section(hybridBlob, "nvidia"));
         var metrics = Gpu.parseMetrics(_section(hybridBlob, "drm"));
@@ -162,7 +167,54 @@ TestCase {
         var intelCard = merged[1];
         compare(intelCard.card, "card1");
         compare(intelCard.metrics.available, false);
-        compare(Object.keys(intelCard.metrics).length, 1);
+        compare(intelCard.metrics.busy, null);
+        compare(intelCard.metrics.tempC, null);
+        compare(intelCard.metrics.clockMhz, null);
+    }
+
+    // Every record carries the same keys whatever the driver built it, so a
+    // surface can read a field without branching on the driver first.
+    function test_every_metrics_record_carries_the_same_keys() {
+        var intel = Gpu.mergeGpu(Gpu.parseCards(_section(intelBlob, "drm")),
+            Gpu.parseMetrics(_section(intelBlob, "drm")), [])[0];
+        var amd = Gpu.mergeGpu(Gpu.parseCards(_section(amdBlob, "drm")),
+            Gpu.parseMetrics(_section(amdBlob, "drm")), [])[0];
+        compare(Object.keys(intel.metrics).sort().join(","),
+            Object.keys(amd.metrics).sort().join(","));
+    }
+
+    // The clock an i915 card publishes is a real reading and reaches the
+    // record; busy stays null because that driver exposes no such counter.
+    function test_merge_i915_card_publishes_its_clock_when_the_collector_read_one() {
+        var cards = Gpu.parseCards(_section(intelBlob, "drm"));
+        var metrics = Gpu.parseMetrics(_section(intelBlob, "drm"));
+        var merged = Gpu.mergeGpu(cards, metrics, []);
+
+        compare(merged.length, 1);
+        compare(merged[0].driver, "i915");
+        compare(merged[0].metrics.available, true);
+        compare(merged[0].metrics.busy, null);
+        compare(merged[0].metrics.clockMhz, 300);
+        compare(merged[0].metrics.clockMaxMhz, 1250);
+        compare(merged[0].metrics.vramTotal, null);
+    }
+
+    // The card hwmon block collect.js walks for every card is not amdgpu's
+    // alone: an Intel card that registers one reports its temperature,
+    // power and tachometer through the same rows.
+    function test_merge_non_amd_card_reads_its_card_hwmon_rows() {
+        var drm = "card|card0|xe|0x8086|0x56a0|1|0000:03:00.0|\n"
+            + "metric|card0|temp1_input|47000\n"
+            + "metric|card0|power1_average|23000000\n"
+            + "metric|card0|fan1_input|1800";
+        var merged = Gpu.mergeGpu(Gpu.parseCards(drm), Gpu.parseMetrics(drm), []);
+
+        compare(merged[0].metrics.available, true);
+        compare(merged[0].metrics.tempC, 47);
+        compare(merged[0].metrics.powerW, 23);
+        compare(merged[0].metrics.fanRpm, 1800);
+        compare(merged[0].metrics.fanPercent, null);
+        compare(merged[0].metrics.busy, null);
     }
 
     function test_amd_fixture_yields_real_busy_fraction_and_vram_bytes() {
@@ -179,6 +231,10 @@ TestCase {
         compare(merged[0].metrics.vramTotal, 17179869184);
         compare(merged[0].metrics.tempC, 58);
         compare(merged[0].metrics.powerW, 145);
+        // fan1_input off the amdgpu hwmon ABI is RPM, never a percent: the
+        // amd fixture carries no fan row, so both fan keys stay null.
+        compare(merged[0].metrics.fanRpm, null);
+        compare(merged[0].metrics.fanPercent, null);
     }
 
     // ---- outputCard -------------------------------------------------------

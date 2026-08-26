@@ -52,6 +52,7 @@ Scope {
                 load: SystemMonitorService.load,
                 uptime: SystemMonitorService.uptime,
                 temps: SystemMonitorService.temps,
+                fans: SystemMonitorService.fans,
                 net: SystemMonitorService.net,
                 disk: SystemMonitorService.disk
             });

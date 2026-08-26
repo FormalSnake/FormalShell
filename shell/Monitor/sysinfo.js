@@ -266,6 +266,42 @@ function parseTemps(text) {
     return rows;
 }
 
+// ---- hwmon fans -------------------------------------------------------
+
+// One row per `chip|file|label|rpm` collector line, the same four-field
+// shape parseTemps reads. `label` falls back to the chip name when the
+// kernel exposes no *_label file for that tachometer (acpi_fan's single
+// unnamed one; the asus chip labels its own cpu_fan/gpu_fan).
+//
+// A reading of 0 is a row, not a dropped one: a fan the firmware has
+// spun down is a fact about the machine, and hiding it would make a
+// stopped fan and an absent one look the same.
+function parseFans(text) {
+    var rows = [];
+    var lines = _lines(text);
+    for (var i = 0; i < lines.length; i++) {
+        var fields = lines[i].split("|");
+        if (fields.length < 4)
+            continue;
+        var chip = fields[0];
+        // Number("") is 0, so an empty reading has to be rejected before
+        // the isFinite check or an unreadable tachometer would render as a
+        // stopped one.
+        if (fields[3].trim() === "")
+            continue;
+        var rpm = Number(fields[3]);
+        if (!isFinite(rpm))
+            continue;
+        rows.push({
+            chip: chip,
+            id: fields[1],
+            label: fields[2] !== "" ? fields[2] : chip,
+            rpm: rpm
+        });
+    }
+    return rows;
+}
+
 // ---- disk usage -------------------------------------------------------
 
 // `df --output=source,target,size,used`'s rows, already in bytes (collect.js

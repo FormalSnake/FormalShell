@@ -1405,7 +1405,12 @@ fails it to `TRUST FAILED`, and a missing `bluetoothctl` fails it to
 0% on a desktop) with a keyboard-navigable profile picker under
 power-profiles-daemon, a breathing pulse while genuinely charging, and dim
 rows for time to full, time to empty and charge rate wherever UPower
-actually reports them.
+actually reports them. A `CHARGE LIMIT` row appears on a laptop whose
+battery driver exposes `charge_control_end_threshold` (ASUS and ThinkPad
+machines do), naming the percentage the firmware parks at so `HOLDING`
+says where; UPower carries no such property, so this is the one power
+reading the panel takes from sysfs rather than off the bus, and the row is
+absent entirely on a battery that has no limit.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -1726,11 +1731,18 @@ row that hands off to the full view.
 **The full view** is `menu summon monitor`, or the `MONITOR` row at the
 launcher's root. Two columns: CPU (aggregate plus one bar per core),
 MEM, SWAP (`NO SWAP` where none is configured), LOAD and UPTIME on the left;
-TEMPS, NET (per interface, `lo` excluded), DISK, then GPU on the right. Each
+TEMPS, FANS, NET (per interface, `lo` excluded), DISK, then GPU on the right.
+TEMPS and FANS both group by hwmon chip and label each sensor with whatever
+the kernel called it (`Package id 0`, `cpu_fan`), falling back to the chip
+name where there is no label; a fan reading `0RPM` has been spun down, which
+is not the same as the `NO FANS` a machine with no tachometer shows. Each
 GPU block carries name, driver, PCI address, its connectors and which are
-connected, so a hybrid machine shows which card is driving the main display,
-and either live metrics or `NO METRICS`. A machine with no cards renders one
-`NO GPU` row rather than an empty section.
+connected, so a hybrid machine shows which card is driving the main display.
+Metric rows appear one per reading the card actually publishes: BUSY, VRAM,
+TEMP, POWER and FAN where the driver counts them, CLOCK against the card's
+own ceiling on i915/xe, which expose no busy counter at all. A card that
+publishes nothing readable is `NO METRICS`, and a machine with no cards
+renders one `NO GPU` row rather than an empty section.
 
 ### Process table
 

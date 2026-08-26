@@ -201,6 +201,25 @@ function formatHealthPercent(pct, supported) {
     return supported ? Math.round(pct) + "%" : "--";
 }
 
+// `charge_control_end_threshold`'s only line: the percentage the firmware
+// stops charging at. Linux exposes it per battery under
+// /sys/class/power_supply/<name>/, and UPower carries the <name> as
+// nativePath, so the caller builds the path rather than globbing for it.
+//
+// null for anything that isn't a whole percentage in 1..100: a battery with
+// no limit support has no such file and `cat` writes nothing to stdout, and
+// 100 is the firmware's own way of saying "charge to full", which is not a
+// limit worth a row of its own.
+function parseChargeLimit(text) {
+    var line = String(text || "").split("\n")[0];
+    if (line === undefined || line.trim() === "")
+        return null;
+    var value = parseInt(line.trim(), 10);
+    if (!isFinite(value) || value < 1 || value >= 100)
+        return null;
+    return value;
+}
+
 function timeRowLabel(charging) {
     return charging ? "TIME FULL" : "TIME LEFT";
 }

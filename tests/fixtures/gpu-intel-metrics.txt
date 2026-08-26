@@ -1,0 +1,8 @@
+@drm
+card|card1|i915|0x8086|0x46d0|1|0000:00:02.0|Onboard - Video
+metric|card1|gt_act_freq_mhz|300
+metric|card1|gt_max_freq_mhz|1250
+conn|card1|eDP-1|connected
+conn|card1|HDMI-A-1|disconnected
+@nvidia
+@gfx

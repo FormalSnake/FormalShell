@@ -35,7 +35,7 @@ TestCase {
     // ---- splitSections ----
 
     function test_split_sections_finds_every_marker_on_g815() {
-        var names = ["stat", "mem", "load", "uptime", "net", "temp", "disk", "drm", "nvidia", "gfx", "end"];
+        var names = ["stat", "mem", "load", "uptime", "net", "temp", "fan", "disk", "drm", "nvidia", "gfx", "end"];
         for (var i = 0; i < names.length; i++)
             verify(g815[names[i]] !== undefined, names[i] + " missing");
     }
@@ -49,6 +49,7 @@ TestCase {
 
     function test_split_sections_leaves_every_gpu_and_temp_section_empty_on_the_vm() {
         compare(vm.temp, "");
+        compare(vm.fan, "");
         compare(vm.drm, "");
         compare(vm.nvidia, "");
         compare(vm.gfx, "");
@@ -241,6 +242,46 @@ TestCase {
 
     function test_parse_temps_on_the_vms_hwmonless_fixture_is_empty() {
         compare(Sysinfo.parseTemps(vm.temp).length, 0);
+    }
+
+    // ---- parseFans ----
+
+    function test_parse_fans_reads_rpm_and_keeps_the_chip_name() {
+        var rows = Sysinfo.parseFans(g815.fan);
+        compare(rows.length, 4);
+        var cpuFan = rows.filter(function (r) { return r.chip === "asus" && r.id === "fan1_input"; })[0];
+        verify(cpuFan);
+        compare(cpuFan.label, "cpu_fan");
+        compare(cpuFan.rpm, 2500);
+    }
+
+    // acpi_fan exposes a tachometer with no fan1_label beside it, the same
+    // shape parseTemps handles for iwlwifi and the acpitz zones.
+    function test_parse_fans_falls_back_to_the_chip_name_when_the_label_is_empty() {
+        var rows = Sysinfo.parseFans(g815.fan);
+        var acpi = rows.filter(function (r) { return r.chip === "acpi_fan"; })[0];
+        verify(acpi);
+        compare(acpi.label, "acpi_fan");
+        compare(acpi.rpm, 2580);
+    }
+
+    // A spun-down fan reports 0 and stays a row: dropping it would make a
+    // stopped fan indistinguishable from a machine with no tachometer.
+    function test_parse_fans_keeps_a_stopped_fan_as_a_zero_row() {
+        var rows = Sysinfo.parseFans("asus|fan1_input|cpu_fan|3400\nasus|fan2_input|gpu_fan|0");
+        compare(rows.length, 2);
+        compare(rows[1].label, "gpu_fan");
+        compare(rows[1].rpm, 0);
+    }
+
+    function test_parse_fans_drops_a_row_whose_reading_is_not_a_number() {
+        var rows = Sysinfo.parseFans("asus|fan1_input|cpu_fan|2500\nasus|fan2_input|gpu_fan|\nshort|row");
+        compare(rows.length, 1);
+        compare(rows[0].rpm, 2500);
+    }
+
+    function test_parse_fans_on_the_vms_hwmonless_fixture_is_empty() {
+        compare(Sysinfo.parseFans(vm.fan).length, 0);
     }
 
     // ---- parseDisk ----

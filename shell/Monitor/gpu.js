@@ -137,42 +137,87 @@ function _cloneCard(card) {
     };
 }
 
+// Every metrics record carries the same keys whatever the driver, so a
+// consumer reads a field without first working out which branch built the
+// record; a reading this card has no source for is null. `available` means
+// "at least one of these is a real measurement", not a per-driver constant:
+// it is what a surface gates its whole metrics block on, and a card with
+// only a clock reading has something to show.
+//
+// fanPercent and fanRpm are separate keys because they are separate units.
+// nvidia-smi reports a percent of maximum; the hwmon fan1_input every other
+// driver exposes is RPM off the tachometer. Folding them together would
+// mislabel one of the two.
+var METRIC_KEYS = ["busy", "tempC", "vramUsed", "vramTotal", "powerW", "fanPercent", "fanRpm", "clockMhz", "clockMaxMhz"];
+
+function _metrics(fields) {
+    var record = { available: false };
+    for (var i = 0; i < METRIC_KEYS.length; i++) {
+        var key = METRIC_KEYS[i];
+        var value = fields[key];
+        record[key] = (value === undefined || value === null || !isFinite(value)) ? null : value;
+        if (record[key] !== null)
+            record.available = true;
+    }
+    return record;
+}
+
+// One `metric|` row's value, divided into the unit the record publishes.
+// An absent key is null rather than 0: the collector only emits a row for a
+// file it could actually read.
+function _scaled(values, key, divisor) {
+    if (!values || values[key] === undefined)
+        return null;
+    return values[key] / divisor;
+}
+
 function _nvidiaMetrics(row) {
-    return {
-        available: true,
+    return _metrics({
         busy: row.utilization,
         tempC: row.temperature,
         vramUsed: row.memUsed === null ? null : row.memUsed * 1024 * 1024,
         vramTotal: row.memTotal === null ? null : row.memTotal * 1024 * 1024,
         powerW: row.power,
         fanPercent: row.fan
-    };
+    });
 }
 
 function _amdMetrics(values) {
-    if (!values)
-        return { available: false };
-    return {
-        available: true,
-        busy: values.gpu_busy_percent === undefined ? null : values.gpu_busy_percent / 100,
-        tempC: values.temp1_input === undefined ? null : values.temp1_input / 1000,
-        vramUsed: values.mem_info_vram_used === undefined ? null : values.mem_info_vram_used,
-        vramTotal: values.mem_info_vram_total === undefined ? null : values.mem_info_vram_total,
-        powerW: values.power1_average === undefined ? null : values.power1_average / 1000000,
-        // fan1_input, when the collector gathers it, is RPM off the amdgpu
-        // hwmon ABI, not a percent: there is no percent-scale fan reading
-        // in this row, so this stays null instead of mislabeling an RPM.
-        fanPercent: null
-    };
+    return _metrics({
+        busy: _scaled(values, "gpu_busy_percent", 100),
+        tempC: _scaled(values, "temp1_input", 1000),
+        vramUsed: _scaled(values, "mem_info_vram_used", 1),
+        vramTotal: _scaled(values, "mem_info_vram_total", 1),
+        powerW: _scaled(values, "power1_average", 1000000),
+        fanRpm: _scaled(values, "fan1_input", 1)
+    });
+}
+
+// Every driver that is neither nvidia nor amdgpu, i915 and xe among them.
+// Those publish no busy counter at all, so `busy` stays null; the clock
+// against its own ceiling is the load signal such a card does have, and the
+// hwmon block collect.js walks for every card supplies temp/power/fan
+// wherever the driver registers one. A card the collector found no readable
+// row for comes back available:false.
+function _genericMetrics(values) {
+    return _metrics({
+        tempC: _scaled(values, "temp1_input", 1000),
+        powerW: _scaled(values, "power1_average", 1000000),
+        fanRpm: _scaled(values, "fan1_input", 1),
+        clockMhz: _scaled(values, "gt_act_freq_mhz", 1),
+        clockMaxMhz: _scaled(values, "gt_max_freq_mhz", 1)
+    });
 }
 
 // Attaches a `metrics` object to each card. NVIDIA rows are matched to
 // `nvidia`-driver cards in enumeration order (both lists are already the
 // collector's own emission order). amdgpu reads gpu_busy_percent (0..100,
 // divided) and mem_info_vram_* (bytes already) off `metrics`. Every other
-// driver (i915, xe, ...) gets `{available:false}` and nothing else: no
-// unprivileged utilisation counter exists for those, and inventing one would
-// violate the honest-unavailable-state rule.
+// driver falls to _genericMetrics, which publishes whatever sysfs rows the
+// collector managed to read and leaves `busy` null: no unprivileged
+// utilisation counter exists for those, and inventing one would violate the
+// honest-unavailable-state rule. The temperature and clock such a card does
+// publish are real readings and belong in the record.
 function mergeGpu(cards, metrics, nvidiaRows) {
     var rows = Array.isArray(nvidiaRows) ? nvidiaRows : [];
     var byCard = metrics || {};
@@ -187,7 +232,7 @@ function mergeGpu(cards, metrics, nvidiaRows) {
         } else if (card.driver === "amdgpu") {
             record.metrics = _amdMetrics(byCard[card.card]);
         } else {
-            record.metrics = { available: false };
+            record.metrics = _genericMetrics(byCard[card.card]);
         }
         return record;
     });

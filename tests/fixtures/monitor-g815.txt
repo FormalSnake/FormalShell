@@ -24,6 +24,11 @@ coretemp|temp2_input|Core 0|56000
 iwlwifi_1_6|temp1_input||56000
 acpitz_0|temp1_input||27800
 nvme|temp1_input|Composite|45850
+@fan
+acpi_fan|fan1_input||2580
+asus|fan1_input|cpu_fan|2500
+asus|fan2_input|gpu_fan|2800
+asus|fan3_input|mid_fan|3500
 @disk
 /dev/nvme0n1p5 /                           269427478528 164616077312
 /dev/nvme0n1p1 /boot                          467664896    204550144
