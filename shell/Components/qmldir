@@ -3,6 +3,7 @@ Button Button.qml
 ButtonGroup ButtonGroup.qml
 Card Card.qml
 Cell Cell.qml
+Cover Cover.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
@@ -12,6 +13,7 @@ Input Input.qml
 KeyCatcher KeyCatcher.qml
 MarqueeText MarqueeText.qml
 Panel Panel.qml
+PanelSlot PanelSlot.qml
 PanelHero PanelHero.qml
 Picture Picture.qml
 PointerMoveGate PointerMoveGate.qml

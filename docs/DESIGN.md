@@ -123,11 +123,14 @@ does this boundary have to go".
    card above. A block that only groups its children, or only reports a
    value, earns no box at any depth.
 
-   An outline around imagery is not a card either. Album art, a
-   notification's app icon and the launcher's preview picture keep a 1px
-   frame, because a picture bleeding into the surface behind it has no edge
-   of its own; `Picture { framed: true }` draws exactly that frame and
-   nothing else.
+   An outline around imagery is not a card either. Album art and a
+   notification's app icon keep a 1px frame, because a picture bleeding into
+   the surface behind it has no edge of its own. `Cover` draws exactly that
+   frame and nothing else, and rounds the picture to the same corner:
+   `Theme.coverRadius(extent)`, a quarter of the slot's shorter side capped
+   at `radiusSm`, so the bar's 17px art is a rounded square rather than a
+   lozenge (owner, 2026-08-26) and a 96px panel cover lands on the ladder.
+   Everything that wants no edge stays a plain `Picture`.
 
 **Padding**: one rule, on every surface. A card insets its content by
 `panelPadding`. A row is `controlHeight` tall with `controlPaddingX` either
@@ -159,6 +162,12 @@ workspace pill is the one carve-out inside the chrome: it travels the width
 of the dot row, which `standard` reads as a jump, so it takes `emphasized`
 and its two edges take different durations, which is what makes the pill
 stretch across the gap and close up behind itself.
+
+**Imagery**: content pictures go through `Picture`, which is a bare `Image`
+plus the retro pass `theme.dither` turns on. A picture that needs an edge of
+its own is a `Cover`. Neither is ever a raw `Image` in a surface file, and
+neither is chrome: an app icon and an album cover keep their own colours on a
+filled row, unlike every other ink on it.
 
 **Icons**: `Icon { name: "wifi" }`, resolved through the set `theme.icons`
 selects (`lucide` default, `nerd`) in `shell/Theme/icons.js`. Size equals
@@ -192,7 +201,9 @@ thing.
 | `Cell` | a bordered `radiusMd` item: bar cell, list row, chip | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`hoverFill`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
 | `Button` | shadcn button, `variant`: `default` (`primary` fill), `outline` (`border`, transparent), `ghost` (no border), `selected` (`background` fill behind a border), `destructive` | hover and pressed (a fill blends toward `background`, everything else takes the wash), cursor, disabled (opacity 0.5) |
 | `IconButton` | a `ghost` Button that is `controlHeight` square, one `Icon` | as Button |
-| `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding` | none |
+| `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding`; the surface's own frame, never nested | none |
+| `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
+| `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
 | `Input` | `input` border, `radiusMd`, `controlHeight`, placeholder `mutedForeground` | focus (ring), error (`destructive` border, caption below) |
 | `Switch` | 32x18 track, `muted` off, `primary` on, `background` knob | cursor (ring) |

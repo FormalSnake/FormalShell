@@ -11,18 +11,20 @@ import Quickshell.Io
 IpcHandler {
     target: "calendar"
 
-    // Set from shell.qml, the single CalendarPanel instance.
+    // Set from shell.qml: the CalendarPanel's PanelSlot, built on first use.
     property var panel: null
 
     function select(date: string): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: calendar panel not ready";
-        return panel.selectIsoDate(date) ? "ok" : "error: not a valid YYYY-MM-DD date: " + date;
+        return p.selectIsoDate(date) ? "ok" : "error: not a valid YYYY-MM-DD date: " + date;
     }
 
     function status(): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: calendar panel not ready";
-        return JSON.stringify(panel.selectionStatus());
+        return JSON.stringify(p.selectionStatus());
     }
 }

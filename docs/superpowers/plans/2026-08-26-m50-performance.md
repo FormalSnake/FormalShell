@@ -158,6 +158,10 @@ committed or the pull goes through.
   60 s past-prune stays as is.
 - D7 `CalendarEventsService` does nothing until `calendar.icsDir` or
   `calendar.eds` is configured; the 5 min timer runs on the same condition.
+- D9 A panel nothing reads while closed is built on its first open through
+  `Components/PanelSlot.qml`, which forwards exactly the surface consumers
+  use. Consumers keep their `panel` handle and never learn whether the
+  panel exists yet.
 - D8 The peer session in this checkout (wallpaper picker performance) owns
   `Surfaces/Menu/Menu.qml`, `Menu/*.js` and `Services/ThumbnailService.qml`
   for this pass. This plan touches none of them.
@@ -246,6 +250,27 @@ Push, `nix flake update formalshell` in `~/.config/nix`, rebuild e1504g,
 then the same reads as the baseline table (per-thread ticks over 10 s with
 media paused and playing, RSS, execve trace over 20 s). Numbers go into
 this file under the baseline.
+
+### Task 7: ten panels are built on first open (finding 7, D9)
+
+- New `shell/Components/PanelSlot.qml`: a `LazyLoader` exposing `isOpen`
+  (false while unbuilt), `load()`, `open`, `close`, `toggle`, `toggleFrom`,
+  the whole surface any consumer uses (surveyed 2026-08-26: bar cells read
+  `isOpen` and call `toggleFrom`; PanelIpc calls `open`/`close`/`toggle`
+  and reads `isOpen`; NetworkIpc and CalendarIpc call panel verbs).
+- `shell/shell.qml`: AppMenu, Audio, Calendar, Network, Bluetooth, Airpods,
+  Dualsense, Power, Display and Monitor sit in a `PanelSlot`. Weather,
+  Usage, Tailscale, SystemUpdate and Github stay eager (their cells read
+  their data), and so does Media (its Video decode feeds the bar's animated
+  cover).
+- `shell/Ipc/NetworkIpc.qml`, `shell/Ipc/CalendarIpc.qml`: each verb takes
+  `panel.load()` first, so an IPC call before the first open builds the
+  panel rather than failing.
+- Verify: `dev/vm-lock.sh just vm-test`; `dev/vm-lock.sh just vm-smoke
+  --wifi --panel-keys` (NetworkIpc verbs and the audio panel over real
+  keystrokes); `dev/vm-lock.sh just vm-smoke --panel calendar --panel-at 2
+  --tooltip` (PanelIpc open, toggleAt, the tooltip over a header button).
+  Read every PNG.
 
 ## Deferred: lazy panels (finding 7)
 

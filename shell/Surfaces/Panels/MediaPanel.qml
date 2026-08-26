@@ -249,43 +249,26 @@ Panel {
         visible: MediaService.available
         spacing: root._hasArt ? Theme.space.xxl : 0
 
-        Item {
+        Cover {
             id: coverSlot
             visible: root._hasArt
             width: root._hasArt ? root._artSlotSize : 0
             height: root._artSlotSize
             anchors.verticalCenter: parent.verticalCenter
-
-            // The frame is chrome, the art inside it is content: under
-            // `theme.dither` the cover goes through `Picture`'s retro pass
-            // and keeps its own colours, the frame itself never dithers.
-            Picture {
-                anchors.fill: parent
-                visible: MediaService.artUrl !== ""
-                framed: true
-                frameRadius: Theme.radiusMd
-                source: MediaService.artUrl
-                sourceSize.width: root._artSlotSize
-                sourceSize.height: root._artSlotSize
-                fillMode: Image.PreserveAspectCrop
-                cache: false
-            }
+            source: MediaService.artUrl
+            sourceSize.width: root._artSlotSize
+            sourceSize.height: root._artSlotSize
+            cache: false
 
             // Apple Music animated cover (opt-in): layered over the static
-            // art above, which stays the fallback for every path it doesn't
-            // cover (disabled, no match, no animated art, download failure, a
-            // missing QtMultimedia module). Inset and clipped by the frame's
-            // own border, the way `Picture` insets the still it replaces.
-            Item {
+            // art, which stays the fallback for every path it doesn't cover
+            // (disabled, no match, no animated art, download failure, a
+            // missing QtMultimedia module). Inside the cover's own clip, so
+            // it rounds with everything else.
+            overlay: Loader {
                 anchors.fill: parent
-                anchors.margins: Theme.borderWidth
-                clip: true
-
-                Loader {
-                    anchors.fill: parent
-                    active: AnimatedCoverFrameSource.active
-                    source: "AnimatedAlbumArt.qml"
-                }
+                active: AnimatedCoverFrameSource.active
+                source: "AnimatedAlbumArt.qml"
             }
         }
 

@@ -135,6 +135,21 @@ function radiusTokens(base) {
     };
 }
 
+// The corner a picture takes at its own size (owner, 2026-08-26: "make sure
+// that the album art is slightly rounded ... don't make it a circle with how
+// small it is"). The radius ladder above is sized for controls, so `sm` on
+// the bar's 17px cover is a third of the way to a circle and reads as a
+// lozenge. A quarter of the shorter side instead, capped at `sm` so a large
+// cover keeps a step off the ladder and floored at 2 so it never rounds away
+// to nothing. `sm` is already 0 at a zero base, so retro squares covers the
+// way it squares everything else without a second check on the preset.
+function coverRadius(sm, extent) {
+    if (!(sm > 0))
+        return 0;
+    var e = (typeof extent === "number" && isFinite(extent)) ? extent : 0;
+    return Math.max(2, Math.min(sm, Math.round(e / 4)));
+}
+
 // --- Interaction states -------------------------------------------------
 
 // What hover and press paint on a surface the compositor blurs behind.

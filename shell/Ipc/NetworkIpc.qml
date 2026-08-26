@@ -25,7 +25,7 @@ import "../Network/model.js" as NetworkModel
 IpcHandler {
     target: "network"
 
-    // Set from shell.qml, the single NetworkPanel instance.
+    // Set from shell.qml: the NetworkPanel's PanelSlot, built on first use.
     property var panel: null
 
     function _wifiNetworks() {
@@ -81,52 +81,55 @@ IpcHandler {
     // _openPasswordPrompt could strand it). Guarding here, before any panel
     // state is touched, is what keeps this an honest error instead of that
     // silent no-op.
-    function _busyError() {
-        return "error: network action already in progress (" + panel._actionKind + " " + panel._actionSsid + ")";
+    function _busyError(p) {
+        return "error: network action already in progress (" + p._actionKind + " " + p._actionSsid + ")";
     }
 
     function connect(ssid: string, psk: string): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: network panel not ready";
-        if (panel._actionKind !== "")
-            return _busyError();
+        if (p._actionKind !== "")
+            return _busyError(p);
         var network = _findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
         if (psk === "") {
-            panel._activateWifiRow(network);
+            p._activateWifiRow(network);
             return "ok";
         }
-        panel._openPasswordPrompt(ssid);
-        panel._passwordText = psk;
-        panel._submitPassword(network);
+        p._openPasswordPrompt(ssid);
+        p._passwordText = psk;
+        p._submitPassword(network);
         return "ok";
     }
 
     function connectEap(ssid: string, identity: string, password: string): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: network panel not ready";
-        if (panel._actionKind !== "")
-            return _busyError();
+        if (p._actionKind !== "")
+            return _busyError(p);
         var network = _findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
-        panel._openPasswordPrompt(ssid);
-        panel._identityText = identity;
-        panel._passwordText = password;
-        panel._submitPassword(network);
+        p._openPasswordPrompt(ssid);
+        p._identityText = identity;
+        p._passwordText = password;
+        p._submitPassword(network);
         return "ok";
     }
 
     function forget(ssid: string): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: network panel not ready";
-        if (panel._actionKind !== "")
-            return _busyError();
+        if (p._actionKind !== "")
+            return _busyError(p);
         var network = _findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
-        panel._forgetNetwork(network);
+        p._forgetNetwork(network);
         return "ok";
     }
 
@@ -140,25 +143,27 @@ IpcHandler {
     // methods" rationale as connect/connectEap/forget above, so a headless
     // run renders exactly what clicking RUN would.
     function speedtest(): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: network panel not ready";
-        if (panel._stRunning)
+        if (p._stRunning)
             return "error: speed test already running";
-        panel._startSpeedTest();
+        p._startSpeedTest();
         return "ok";
     }
 
     function speedstatus(): string {
-        if (!panel)
+        var p = panel ? panel.load() : null;
+        if (!p)
             return "error: network panel not ready";
-        var downMbps = panel._stPhase === "down" ? panel._stDownWindow.liveMbps : panel._stDownResult;
-        var upMbps = panel._stPhase === "up" ? panel._stUpWindow.liveMbps : panel._stUpResult;
+        var downMbps = p._stPhase === "down" ? p._stDownWindow.liveMbps : p._stDownResult;
+        var upMbps = p._stPhase === "up" ? p._stUpWindow.liveMbps : p._stUpResult;
         return JSON.stringify({
-            running: panel._stRunning,
-            phase: panel._stPhase,
+            running: p._stRunning,
+            phase: p._stPhase,
             downMbps: downMbps,
             upMbps: upMbps,
-            error: panel._stError
+            error: p._stError
         });
     }
 }

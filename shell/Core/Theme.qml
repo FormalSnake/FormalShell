@@ -49,6 +49,14 @@ Singleton {
         return root.radius > 0 ? extent / 2 : 0;
     }
 
+    // The corner a picture takes at its own size (`Tokens.coverRadius`): the
+    // radius ladder is sized for controls, and `radiusSm` on the bar's 17px
+    // album art reads as a lozenge rather than a rounded square. `Cover` is
+    // the only caller.
+    function coverRadius(extent) {
+        return Tokens.coverRadius(root.radiusSm, extent);
+    }
+
     // shadcn font-weight tokens (spec "Type").
     readonly property var weight: Tokens.WEIGHTS
 

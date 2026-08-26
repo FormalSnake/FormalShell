@@ -103,29 +103,27 @@ Cell {
         // Mini cover, the glyph's own slot size (`glyph.implicitHeight`
         // still resolves while the glyph itself is hidden). Content imagery,
         // so it keeps the cover's own colours at rest and on hover alike,
-        // unlike every other ink on this cell. The static Image below is the
-        // permanent fallback for every path the animated overlay above it
-        // doesn't cover (disabled, no match, no frame yet, motion off), the
-        // same layering MediaPanel's art frame uses.
-        Item {
+        // unlike every other ink on this cell. The still underneath is the
+        // permanent fallback for every path the animated overlay doesn't
+        // cover (disabled, no match, no frame yet, motion off), the same
+        // layering the media panel's own cover uses.
+        //
+        // `Cover` rounds it to a quarter of this slot, which at 17px is a
+        // corner rather than a lozenge (owner, 2026-08-26).
+        Cover {
             id: coverSlot
             visible: MediaService.artUrl !== ""
             anchors.verticalCenter: parent.verticalCenter
             width: glyph.implicitHeight
             height: glyph.implicitHeight
-
-            Picture {
-                anchors.fill: parent
-                source: MediaService.artUrl
-                sourceSize.width: coverSlot.width
-                sourceSize.height: coverSlot.height
-                fillMode: Image.PreserveAspectCrop
-                cache: false
-            }
+            source: MediaService.artUrl
+            sourceSize.width: coverSlot.width
+            sourceSize.height: coverSlot.height
+            cache: false
 
             // M35: shares AnimatedCoverFrameSource's frames with the panel's
             // own AnimatedAlbumArt.qml rather than decoding a second Video.
-            Picture {
+            overlay: Picture {
                 anchors.fill: parent
                 visible: AnimatedCoverFrameSource.active && AnimatedCoverFrameSource.frameUrl !== ""
                 source: AnimatedCoverFrameSource.frameUrl

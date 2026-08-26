@@ -110,6 +110,40 @@ TestCase {
         compare(Tokens.radiusTokens("square").xl, 0);
     }
 
+    // A cover's corner is a quarter of its own shorter side, capped at `sm`:
+    // the ladder is sized for controls, and `sm` on the bar's 17px album art
+    // reads as a lozenge rather than a rounded square.
+    function test_cover_radius_is_a_quarter_of_the_slot() {
+        var sm = Tokens.radiusTokens(10).sm;
+        compare(sm, 6);
+        compare(Tokens.coverRadius(sm, 17), 4);
+        compare(Tokens.coverRadius(sm, 12), 3);
+    }
+
+    // Big enough and it lands back on the ladder rather than growing past it.
+    function test_cover_radius_caps_at_the_small_step() {
+        var sm = Tokens.radiusTokens(10).sm;
+        compare(Tokens.coverRadius(sm, 96), sm);
+        compare(Tokens.coverRadius(sm, 400), sm);
+    }
+
+    // Never rounds away to nothing on a slot small enough to floor it, and
+    // never anywhere near a circle: a circle on a 17px slot is 8.5.
+    function test_cover_radius_floors_at_two_and_never_reaches_a_circle() {
+        var sm = Tokens.radiusTokens(10).sm;
+        compare(Tokens.coverRadius(sm, 4), 2);
+        compare(Tokens.coverRadius(sm, 0), 2);
+        verify(Tokens.coverRadius(sm, 17) < 17 / 2);
+        verify(Tokens.coverRadius(sm, 96) < 96 / 2);
+    }
+
+    // The retro preset squares every corner, and `sm` is already 0 there, so
+    // covers square with everything else rather than needing their own check.
+    function test_cover_radius_is_square_at_a_zero_base() {
+        compare(Tokens.coverRadius(Tokens.radiusTokens(0).sm, 17), 0);
+        compare(Tokens.coverRadius(0, 96), 0);
+    }
+
     function test_radius_tokens_floor_at_two_on_a_positive_base() {
         var r = Tokens.radiusTokens(1);
         compare(r.sm, 2);

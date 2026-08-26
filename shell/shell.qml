@@ -23,6 +23,7 @@ import qs.Surfaces.Capture
 import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
 import qs.Surfaces.Gallery
+import qs.Components
 import qs.Ipc
 import qs.Plugins
 import qs.Reminders
@@ -132,23 +133,27 @@ ShellRoot {
     PolkitDialog { id: polkitDialog }
 
     // Same reasoning again: one instance per panel kind, opened on the
-    // focused screen at summon time.
-    AppMenuPanel { id: appMenuPanelInstance }
-    AudioPanel { id: audioPanelInstance }
-    CalendarPanel { id: calendarPanelInstance; menu: menuInstance }
-    NetworkPanel { id: networkPanelInstance }
-    BluetoothPanel { id: bluetoothPanelInstance }
-    AirpodsPanel { id: airpodsPanelInstance }
-    DualsensePanel { id: dualsensePanelInstance }
-    PowerPanel { id: powerPanelInstance }
+    // focused screen at summon time. A panel nothing reads while it is
+    // closed sits in a PanelSlot and is only built on its first open; the
+    // six whose closed state still feeds the bar (a cell's own numbers, or
+    // the media panel's Video behind the bar's animated cover) are built
+    // here directly.
+    PanelSlot { id: appMenuPanelInstance; AppMenuPanel {} }
+    PanelSlot { id: audioPanelInstance; AudioPanel {} }
+    PanelSlot { id: calendarPanelInstance; CalendarPanel { menu: menuInstance } }
+    PanelSlot { id: networkPanelInstance; NetworkPanel {} }
+    PanelSlot { id: bluetoothPanelInstance; BluetoothPanel {} }
+    PanelSlot { id: airpodsPanelInstance; AirpodsPanel {} }
+    PanelSlot { id: dualsensePanelInstance; DualsensePanel {} }
+    PanelSlot { id: powerPanelInstance; PowerPanel {} }
     WeatherPanel { id: weatherPanelInstance }
     MediaPanel { id: mediaPanelInstance }
     GithubPanel { id: githubPanelInstance }
     UsagePanel { id: usagePanelInstance }
     TailscalePanel { id: tailscalePanelInstance }
     SystemUpdatePanel { id: systemUpdatePanelInstance }
-    DisplayPanel { id: displayPanelInstance }
-    MonitorPanel { id: monitorPanelInstance; menu: menuInstance }
+    PanelSlot { id: displayPanelInstance; DisplayPanel {} }
+    PanelSlot { id: monitorPanelInstance; MonitorPanel { menu: menuInstance } }
     RegionPicker { id: regionPickerInstance }
 
     // Same "one controller, opened on the focused screen at trigger time"

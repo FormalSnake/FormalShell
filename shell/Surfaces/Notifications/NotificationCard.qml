@@ -137,23 +137,21 @@ Card {
                     anchors.verticalCenter: parent.verticalCenter
 
                     // The picture's own frame (M48 D4, DESIGN.md §1's
-                    // ladder): `radiusSm`, MediaPanel's album-art slot one
-                    // radius step down, so an app's own icon reads as a
-                    // thumbnail rather than as a glyph that happens to be in
-                    // colour. An outline on imagery, not a box around a
-                    // group, so it survives the one-card rule.
-                    Picture {
+                    // ladder): a `Cover`, the same component the bar and the
+                    // media panel draw album art in, so an app's own icon
+                    // reads as a thumbnail rather than as a glyph that
+                    // happens to be in colour. An outline on imagery, not a
+                    // box around a group, so it survives the one-card rule.
+                    Cover {
                         id: appImage
                         anchors.fill: parent
                         // Hidden entirely (not a broken-image box) when
                         // nothing in the resolution order answers, and never
                         // in front of the urgency icon, which outranks it.
                         visible: !root._critical && root._iconSource !== "" && appImage.status !== Image.Error
-                        framed: true
-                        frameRadius: Theme.radiusSm
                         source: root._critical ? "" : root._iconSource
-                        asynchronous: true
-                        smooth: true
+                        // An app icon is a whole glyph, not a crop: it
+                        // letterboxes in its slot rather than filling it.
                         fillMode: Image.PreserveAspectFit
                         sourceSize.width: root._iconSlot
                         sourceSize.height: root._iconSlot
