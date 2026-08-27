@@ -151,6 +151,12 @@ function clipboardProvider(items, mode, paste) {
             title: "",
             desc: isImage ? _capturedAtLabel(entry.capturedAt) : "",
             thumbSource: isImage ? entry.path : "",
+            // Shift+Enter's target (M50): the image file this row stands for,
+            // "" on text rows and on share rows, whose Shift+Enter has
+            // nothing of its own to do. Menu.qml puts the file on the
+            // clipboard and hands it to clipssh, or drills into the alias
+            // route when no single alias resolves.
+            clipsshPath: isImage && !share ? entry.path : "",
             // Full untruncated text for the split-pane preview (M30),
             // "" for images, same emptiness `desc` already uses to mean
             // "no text preview here". `time` rides every row (not just

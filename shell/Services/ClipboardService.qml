@@ -63,6 +63,12 @@ Singleton {
         if (result.state.items !== root.items)
             adapter.items = result.state.items;
         root._deletePaths(result.removedPaths);
+        // `clipssh.autoSendImages`, off by default. Here rather than in
+        // ClipsshService listening to `items`: an image re-copied from
+        // history moves an existing entry to the front instead of appending
+        // one, so a list watcher would miss exactly the copies that matter.
+        // The service owns the gate; this is only the moment.
+        ClipsshService.autoSendImage(path);
     }
 
     function copy(id) {

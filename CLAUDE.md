@@ -82,6 +82,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   activation, with the image entry's preview in the frame.
 - `clipssh.sh` `--clipssh`: the clipssh route's send, its bar indicator and
   its copied/failed toasts, against a shimmed binary.
+- `clipssh_image.sh` `--clipssh-image`: the two sends that resolve a host out
+  of `clipssh.alias` rather than off a row, `clipssh.autoSendImages` and
+  Shift+Enter on a history image row, each checked against the sha256 of
+  what the clipboard actually held when the shimmed binary read it.
 - `config_reload.sh` `--config-reload`: a settings.json whose symlink is
   retargeted (what home-manager does on every activation, the one write a
   file watch cannot see) still reaching a running shell, read off the bar's
@@ -346,8 +350,11 @@ behavior on hosts where a real owner exists.
   through `Components/Icon.qml` with the set picked by `theme.icons`
   (`lucide` default, `nerd`; no raw glyphs in surface files, no SVG icon
   assets). Nothing in the shell blurs or shadows
-  anything: a modal surface sits over a plain 0.5 black scrim, every other
-  surface sits over the desktop with its border doing the work. Never
+  anything: a modal surface sits over a plain 0.5 black scrim (the
+  compositor blurring the desktop behind that scrim, since the polkit
+  layer takes the same blur layerrule its card's translucency implies),
+  every other surface sits over the desktop with its border doing the
+  work. Never
   reintroduce a `ScreencopyView`-based capture anywhere (see
   `LockSurface.qml`'s header comment: it crashes the whole shell outright,
   a fail-open on a security-critical surface).

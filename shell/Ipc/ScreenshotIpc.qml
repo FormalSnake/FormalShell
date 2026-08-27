@@ -60,6 +60,12 @@ Scope {
     // "copy" is clipboard only; "save" is disk only and skips the editor.
     // Upstream's `slurp|copy|save` third argument, renamed: "slurp" named the
     // picker it used, and this picker is not slurp.
+    //
+    // Per-capture, never latched: every entry point sets it, because it used
+    // to be set by `pick` alone and `full`/`region` then ran under whatever
+    // the last pick had asked for. One `pick smart save` was enough to make
+    // every later Print keybind quietly skip the clipboard for the rest of
+    // the session.
     property string _processing: "default"
 
     function _dir() {
@@ -74,12 +80,13 @@ Scope {
             + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
     }
 
-    function _start(useRegion) {
+    function _start(useRegion, processing) {
         if (root._busy)
             return "error: capture already in flight";
         const dir = root._dir();
         const path = dir + "/screenshot-" + root._timestamp() + ".png";
         root._busy = true;
+        root._processing = processing || "default";
         root._pendingPath = path;
         root._lastCancelled = false;
         if (useRegion) {
@@ -255,12 +262,15 @@ Scope {
     IpcHandler {
         target: "screenshot"
 
-        function full(): string {
-            return root._start(false);
+        // `processing` is default|copy|save, the same third argument `pick`
+        // takes and with the same default: a capture lands on the clipboard
+        // as well as on disk unless it is asked not to.
+        function full(processing: string): string {
+            return root._start(false, processing || "default");
         }
 
-        function region(): string {
-            return root._start(true);
+        function region(processing: string): string {
+            return root._start(true, processing || "default");
         }
 
         function cancel(): string {

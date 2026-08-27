@@ -51,12 +51,18 @@ without a ring. The rule lives in the container (`Panel`'s content
 flickable, the launcher's and the centre's lists), never in the surface, and
 a row never insets itself.
 
-**Translucency and blur**: the bar strip, panels and the launcher card paint
-`Theme.surface(Theme.color.card)`, the card colour at
-`theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
-(`layerrule = blur` + `ignorealpha` on `formalshell:bar`, `formalshell:panel`,
-`formalshell:menu`, in the example config); the shell itself never blurs.
-Toasts, OSD, lock and the modal scrim stay opaque.
+**Translucency and blur**: the bar strip, panels, the launcher card and the
+polkit consent card paint `Theme.surface(Theme.color.card)`, the card colour
+at `theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
+(`layerrule = blur` + `ignore_alpha` on `formalshell:bar`, `formalshell:panel`,
+`formalshell:menu`, `formalshell:polkit`, and the rest, in the example
+config); the shell itself never blurs. A translucent card with nothing
+blurred behind it reads as a rendering fault rather than as depth, so the
+two travel together: a surface is either on that list or opaque. Toasts, OSD
+and lock are the opaque ones. The polkit layer covers the whole output and
+its scrim is well above `ignore_alpha`, so the desktop blurs behind the
+scrim too, which is the modal's depth cue; the scrim itself is still plain
+black at 0.5.
 
 **Type** (`Theme.fontFamilySans`, `Theme.fontFamilyMono`,
 `Theme.fontSize.*`, `Theme.weight.*`): sans for words (titles, labels,
@@ -168,7 +174,9 @@ and footer line up with its row labels rather than with the card edge. A
 `SectionLabel` follows the same rule against the rows it heads, so a section
 of flat rows takes `controlPaddingX` and a section of bordered rows takes
 none. A floating surface sits `screenPadding` off the screen edge it hangs
-from and `barMargin` off the bar or the item it is anchored to, and is no
+from and `barMargin` off the bar or the item it is anchored to, centred on
+that item along the bar's own axis and clamped to the padding at either end,
+and is no
 taller than the screen minus the bar and those two paddings: past that its
 content scrolls (`WheelScroll`) rather than the surface running off the
 display. Toasts, the OSD pill, the notification centre and the tooltip take

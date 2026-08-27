@@ -49,6 +49,16 @@ IpcHandler {
         return menu.activate(index) ? "ok" : "error: menu not open";
     }
 
+    // Shift+Enter on the row at `index`, the accelerator's own path: an app
+    // row launched on the discrete card, a clipboard image row sent over
+    // ssh. Same division activate() draws above, and the only way either is
+    // provable headlessly.
+    function activateAlternate(index: int): string {
+        if (!menu)
+            return "error: menu not ready";
+        return menu.activateAlternate(index) ? "ok" : "error: menu not open";
+    }
+
     // The rig's stand-in for typing into the search field, and the only way
     // to verify a route whose search field IS its content filter (the
     // process app view). Same division activate() draws above: real

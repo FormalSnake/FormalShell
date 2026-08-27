@@ -33,7 +33,8 @@ var KEY_TAB = "TAB";
 // resolves to either.
 var KEY_SHIFT_ENTER = "SHIFT \u23CE";
 
-// `ctx`: { mode, node, atRoot, grid, pickerSelect, variantSwitch, confirming }.
+// `ctx`: { mode, node, atRoot, grid, pickerSelect, variantSwitch, confirming,
+// discreteGpu, clipsshImage }.
 function primaryAction(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
@@ -74,10 +75,15 @@ function primaryAction(ctx) {
 //
 // `discreteGpu` is true when GpuService has a default discrete card, which
 // is the only condition under which Shift+Enter on an app row does anything
-// different from Enter (Menu.qml's _activateRowOnDiscreteGpu). It is a
-// per-row hint rather than an always-applies one, so it appears only with
-// the cursor on an app: the offload used to be advertised as a route
-// listing every app a second time, and this is what replaced it.
+// different from Enter (Menu.qml's _activateRowAlternate). It is a per-row
+// hint rather than an always-applies one, so it appears only with the cursor
+// on an app: the offload used to be advertised as a route listing every app
+// a second time, and this is what replaced it.
+//
+// `clipsshImage` is the other row kind Shift+Enter answers to: a clipboard
+// image, sent over ssh instead of copied. Ungated on aliases existing, since
+// with none saved the key drills into the route whose empty state spells out
+// the add command, which is a better answer than a hint that isn't there.
 function hints(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
@@ -88,6 +94,8 @@ function hints(ctx) {
         out.push({ key: KEY_TAB, label: c.variantSwitch === "light" ? "Show Light" : "Show Dark" });
     if (c.discreteGpu && c.node && c.node.kind === "app" && !c.confirming)
         out.push({ key: KEY_SHIFT_ENTER, label: "Open On GPU" });
+    if (c.clipsshImage && !c.confirming)
+        out.push({ key: KEY_SHIFT_ENTER, label: "Send Over SSH" });
     if (c.mode === "select")
         return out.concat([{ key: KEY_ESC, label: "Cancel" }]);
     return out.concat([{ key: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);

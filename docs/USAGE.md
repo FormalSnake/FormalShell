@@ -1927,6 +1927,38 @@ nothing and warns, rather than sending some other keystroke.
 Both keys also govern the launcher's emoji rows, which copy and paste the
 same way.
 
+### Sending an image over ssh
+
+`clipssh` reads whatever image is on the clipboard, pipes it over ssh, and
+puts the remote path back on the clipboard. Shift+Enter on an image row in
+history is the shortcut for it: the file goes on the clipboard and straight
+to a host, without you first copying it and then finding the `Clipssh`
+route. The action bar names it `Send Over SSH` whenever the cursor is on an
+image.
+
+Which host depends on `clipssh.alias`:
+
+```jsonc
+{
+  "clipssh": {
+    "alias": "box",            // "" takes the only alias saved; "ask" always prompts
+    "autoSendImages": false    // every copied image goes over ssh on its own
+  }
+}
+```
+
+Unset with exactly one alias in `~/.clipssh/aliases` sends there. Unset with
+none or several, or the literal `"ask"`, means Shift+Enter copies the image
+and opens the alias route so you pick the host with Enter; an empty store
+shows the `clipssh alias add <name> <user@host>` line rather than a shrug.
+
+`autoSendImages` turns the shortcut into the default: every image landing in
+history, a screenshot included, goes over ssh by itself, and the clipboard
+holds a URL a moment later instead of a picture. It is off by default
+because it turns every copied image into network traffic. It cannot prompt,
+so it needs `clipssh.alias` to resolve to a name; with none it says so once
+per session and sends nothing.
+
 The row copies in-process; it does not shell out to `qs ipc`. The verb
 below is the same operation for scripts and keybinds.
 
@@ -2640,6 +2672,16 @@ prefers it.
 However the rectangle is chosen, the capture lands as
 `<screenshot.directory>/screenshot-<timestamp>.png` and on the clipboard as
 `image/png`, and a `SCREENSHOT SAVED` notification carries the path.
+
+All three take the same optional `default|copy|save` argument for that:
+`default` is disk and clipboard both, `copy` is the clipboard alone and
+writes no file, `save` skips the clipboard. Every route defaults to
+`default`, per capture, so nothing a previous capture asked for carries into
+the next one.
+
+With `clipssh.autoSendImages` on (see [Clipboard](#clipboard)) the clipboard
+copy is what triggers the upload, so a screenshot ends up as a URL ready to
+paste.
 
 ```jsonc
 // ~/.config/formalshell/settings.json

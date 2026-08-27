@@ -259,24 +259,6 @@ PanelWindow {
         }
     }
 
-    // ~/.clipssh/aliases, clipssh's own `name=user@host` store, optional
-    // like menu.jsonc but with none of its retry machinery: open() reloads
-    // it every summon, so an alias added mid-session (even before the file
-    // first existed) shows on the next open without a watch ever having
-    // attached. Absence just means zero aliases, clipsshRows' own NO
-    // ALIASES note row, never a warning.
-    property string _clipsshAliasesText: ""
-
-    FileView {
-        id: clipsshAliasFile
-        printErrors: false
-        path: Quickshell.env("HOME") + "/.clipssh/aliases"
-        watchChanges: true
-        onFileChanged: reload()
-        onLoaded: root._clipsshAliasesText = clipsshAliasFile.text()
-        onLoadFailed: root._clipsshAliasesText = ""
-    }
-
     // Compositor keybinds for the menu's keybinds route: `hyprctl binds`,
     // already expanded across submaps and sourced files, so nothing here
     // reads a config file or walks a lookup chain. The plain table, not `-j`:
@@ -664,14 +646,18 @@ PanelWindow {
         },
         clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, "copy", Core.Config.get("clipboard.paste", true)); },
         shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, "share"); },
-        clipssh: function () { return Providers.clipsshRows(Providers.clipsshAliases(root._clipsshAliasesText)); },
+        // ~/.clipssh/aliases lives on ClipsshService, which reads it for the
+        // Shift+Enter accelerator and the auto-send too; open() below still
+        // reloads it every summon, so an alias added mid-session (even before
+        // the file first existed) shows on the next open.
+        clipssh: function () { return Providers.clipsshRows(ClipsshService.aliases); },
         // M38 Task 3 (launcher reachability sweep): both self-targeted the
         // same way apps/clipboard above are.
         panels: function () { return Providers.panelsProvider(Quickshell.shellDir); },
         tray: function () { return Providers.trayProvider(SystemTray.items.values, Quickshell.shellDir); },
         // M38 Task 8: card info rows, always present. Launching an app on
         // the discrete card is Shift+Enter on the app row itself
-        // (_activateRowOnDiscreteGpu below), not a route mirroring the
+        // (_activateRowAlternate below), not a route mirroring the
         // whole app list a second time.
         gpu: function () { return Providers.gpuProvider(GpuService.cards); }
     })
@@ -856,7 +842,10 @@ PanelWindow {
         // Gates the Shift+Enter hint: on a one-card machine the accelerator
         // falls through to a plain Enter, so advertising it would name a
         // key that does nothing of its own.
-        discreteGpu: GpuService.defaultDiscrete() !== null
+        discreteGpu: GpuService.defaultDiscrete() !== null,
+        // The clipboard route's image rows, whose Shift+Enter sends the file
+        // over ssh instead of copying it (_activateRowAlternate).
+        clipsshImage: !!(root._cursorNode && root._cursorNode.clipsshPath)
     })
 
     // The path from the root to the current level, one label per part
@@ -1114,7 +1103,7 @@ PanelWindow {
         // "@state:" `checked` conditions are deliberately NOT cleared here:
         // they are never cached, resolving from _stateSnapshot on every
         // evaluation.
-        clipsshAliasFile.reload();
+        ClipsshService.reloadAliases();
         root._refreshKeybinds();
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
@@ -1329,6 +1318,17 @@ PanelWindow {
             return appView.item.viewActivate(index) === true;
         }
         root._activateRow(index);
+        return true;
+    }
+
+    // The same stand-in for Shift+Enter, the accelerator's own path
+    // (_activateRowAlternate). An app view has no alternate of its own, so
+    // it answers false rather than pressing its primary a second time under
+    // another name.
+    function activateAlternate(index) {
+        if (!root.isOpen || root._isAppView)
+            return false;
+        root._activateRowAlternate(index);
         return true;
     }
 
@@ -1600,16 +1600,40 @@ PanelWindow {
         }
     }
 
-    // Shift+Enter accelerator (M38 Task 8): the cursor row's app launched on
-    // the default discrete card instead of normally, anywhere in the
-    // launcher an app row appears. Falls through to plain _activateRow when
-    // there is no discrete card or the cursor isn't on an app row: never a
-    // no-op that silently does nothing.
-    function _activateRowOnDiscreteGpu(index) {
+    // The Shift+Enter accelerator, and every row kind that answers to it.
+    // Falls through to plain _activateRow for the rest: never a no-op that
+    // silently does nothing.
+    //
+    // An app row (M38 Task 8) launches on the default discrete card instead
+    // of normally, anywhere in the launcher an app row appears.
+    //
+    // A clipboard image row (M50) goes over ssh instead of onto the
+    // clipboard. clipssh reads the clipboard and nothing else, so the file
+    // has to be on it either way; the difference is who names the host.
+    // With one resolved (`clipssh.alias`, or the only alias saved)
+    // ClipsshService does both in one child and the launcher closes behind
+    // it. With none resolved the file is copied here and the launcher drills
+    // into the alias route, whose Enter is already this exact send: that is
+    // the "ask every time" case, and it is also what a store with no aliases
+    // at all gets, since the route's own empty row carries the add command.
+    function _activateRowAlternate(index) {
         if (root._isAppView) return;
-        var card = GpuService.defaultDiscrete();
         var rows = root._displayRows;
         var node = (index >= 0 && index < rows.length) ? rows[index] : null;
+        if (node && node.clipsshPath) {
+            var alias = ClipsshService.resolveAlias();
+            if (alias !== "") {
+                ClipsshService.sendImage(alias, node.clipsshPath);
+                root.close();
+            } else {
+                // The row's own copy action rather than a slice of its id:
+                // one place decides what a clipboard row copies.
+                root._runAction(node.action);
+                root._enterLevel("clipssh");
+            }
+            return;
+        }
+        var card = GpuService.defaultDiscrete();
         if (!card || !node || node.kind !== "app") {
             root._activateRow(index);
             return;
@@ -1999,7 +2023,7 @@ PanelWindow {
                         if (root._mode === "input")
                             root._submitInput();
                         else if ((event.modifiers & Qt.ShiftModifier) !== 0)
-                            root._activateRowOnDiscreteGpu(root._cursorIndex);
+                            root._activateRowAlternate(root._cursorIndex);
                         else
                             root._activateRow(root._cursorIndex);
                         event.accepted = true;

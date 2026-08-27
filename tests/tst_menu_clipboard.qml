@@ -30,6 +30,22 @@ TestCase {
         compare(nodes[0].verb, "Paste");
     }
 
+    // Shift+Enter's target (M50), on image rows in copy mode alone: a text
+    // row has no file to send, and a share row's Shift+Enter has nothing of
+    // its own to do.
+    function test_clipssh_path_rides_copy_mode_image_rows_only() {
+        var entries = [
+            { id: "img", kind: "image", path: "/state/clipboard-images/abc.png", capturedAt: 0 },
+            { id: "txt", kind: "text", text: "hello", capturedAt: 0 }
+        ];
+        var copyRows = Providers.clipboardProvider(entries, "copy");
+        compare(copyRows[0].clipsshPath, "/state/clipboard-images/abc.png");
+        compare(copyRows[1].clipsshPath, "");
+        var shareRows = Providers.clipboardProvider(entries, "share");
+        compare(shareRows[0].clipsshPath, "");
+        compare(shareRows[1].clipsshPath, "");
+    }
+
     function test_legacy_text_entry_without_kind_still_maps_as_text() {
         // Entries persisted before history.js learned `kind` have none —
         // the provider must not mistake that for an image row.

@@ -222,6 +222,17 @@ import QtQuick
 // synthesizes, in wtype's own modifier vocabulary, e.g. "ctrl+shift+v" for
 // a terminal-first session). A chord naming a modifier wtype does not know
 // pastes nothing and warns, rather than sending some other keystroke.
+// clipssh.alias (string, default ""): the alias ~/.clipssh/aliases holds
+// that the two callers with no row to read one off use, Shift+Enter on a
+// clipboard image row and the auto-send below. Unset takes the only alias
+// saved when there is exactly one; unset with none or several (and the
+// literal "ask", which is how a one-alias store still gets a prompt) means
+// undecided, and the launcher then drills into the alias route to ask
+// while the auto-send says why it cannot.
+// clipssh.autoSendImages (bool, default false): every image landing in
+// clipboard history, a screenshot included, goes straight over ssh to
+// clipssh.alias, which puts the remote path back on the clipboard. Off by
+// default because it turns every copied image into network traffic.
 // theme.preset (string, default "shadcn", one of "shadcn" | "retro"): a
 // table of chrome defaults, not a mode (M49 D1). It sets theme.radius,
 // theme.icons, theme.fonts, theme.surfaceOpacity, theme.blur and

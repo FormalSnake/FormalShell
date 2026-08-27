@@ -1,11 +1,15 @@
 import QtQuick
 import QtTest
 import "../shell/Menu/providers.js" as Providers
+import "../shell/Menu/actions.js" as Actions
 
 // The clipssh route's pure half: ~/.clipssh/aliases parsing (clipssh's own
-// `name=user@host` format) and row building. The FileView/reload wiring in
-// Menu.qml follows the same optional-file pattern menu.jsonc already
-// exercises.
+// `name=user@host` format), row building, and the Shift+Enter hint the
+// clipboard route's image rows carry. The FileView now lives on
+// ClipsshService (the accelerator and the auto-send both resolve an alias
+// with no row under a cursor to read one off), and alias resolution itself
+// reads Config, so it stays out of this file's reach the same way the rest
+// of the QML wiring does.
 TestCase {
     name: "MenuClipssh"
 
@@ -100,6 +104,27 @@ TestCase {
 
     function test_outcome_failure_with_nothing_to_go_on() {
         compare(Providers.clipsshOutcome(3, "", "").error, "clipssh exited with code 3");
+    }
+
+    // The accelerator's hint (M50). Ungated on aliases existing: with none
+    // saved Shift+Enter drills into the route whose empty row above spells
+    // out the add command, which beats a hint that isn't there.
+    function test_hint_on_a_clipboard_image_row() {
+        var labels = Actions.hints({ mode: "menu", clipsshImage: true }).map(function (h) { return h.label; });
+        verify(labels.indexOf("Send Over SSH") >= 0);
+    }
+
+    function test_no_hint_off_an_image_row() {
+        var labels = Actions.hints({ mode: "menu", clipsshImage: false }).map(function (h) { return h.label; });
+        compare(labels.indexOf("Send Over SSH"), -1);
+    }
+
+    // A row mid-confirmation has already claimed Enter for the confirm, so
+    // the alternate is not on offer there either.
+    function test_no_hint_while_confirming() {
+        var labels = Actions.hints({ mode: "menu", clipsshImage: true, confirming: true })
+            .map(function (h) { return h.label; });
+        compare(labels.indexOf("Send Over SSH"), -1);
     }
 
     function test_rows_empty_is_note() {
