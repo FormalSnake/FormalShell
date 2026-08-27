@@ -79,7 +79,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `chevron.sh` `--chevron`: a right-region chevron collapsing the cells
   before it and expanding back, the two frames asserted to differ.
 - `clipboard.sh` `--clipboard`: the ledger's capture order and in-process row
-  activation, with the image entry's preview in the frame.
+  activation, with the image entry's preview and a copied-markup row's own
+  angle brackets in the frame.
 - `clipssh.sh` `--clipssh`: the clipssh route's send, its bar indicator and
   its copied/failed toasts, against a shimmed binary.
 - `clipssh_image.sh` `--clipssh-image`: the two sends that resolve a host out

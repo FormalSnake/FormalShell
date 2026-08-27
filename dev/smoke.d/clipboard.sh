@@ -23,6 +23,13 @@
 # The image fixture is copied last so the cursor lands on it when the route
 # is resummoned, which is what puts the split pane's framed image preview in
 # this run's own screenshot.
+#
+# A capture of copied markup rides in just before it. Row labels and the
+# split pane both take provider data verbatim, and a Text left on AutoText
+# parses anything the rich-text heuristic accepts, so the row would show
+# bold "clipboard smoke markup" with its tags eaten and its font no longer
+# the row's. The ledger dump asserts the markup survived capture; the frame
+# is where the row is read back with its angle brackets intact.
 leg_clipboard_flag="--clipboard"
 leg_clipboard_order=130
 leg_clipboard_needs="wl-copy wl-paste convert"
@@ -94,6 +101,8 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$clip_activate_path" 2>&1
 sleep 2
 "$wl_paste_bin" --no-newline > "$clip_activate_paste_path" 2>&1
+sleep 1
+"$wl_copy_bin" '<b>clipboard smoke markup</b>'
 sleep 1
 "$wl_copy_bin" --type image/png < "$clip_image_fixture_path"
 sleep 2
@@ -172,6 +181,10 @@ leg_clipboard_assert() {
   # The image entry is what the split pane's preview frame is read against.
   if ! grep -qF '"kind":"image"' "$clip_list3_path"; then
     fail "the image fixture never reached the ledger: $(cat "$clip_list3_path")"
+  fi
+  cat "$clip_list3_path"; echo
+  if ! grep -qF '<b>clipboard smoke markup</b>' "$clip_list3_path"; then
+    fail "the markup capture never reached the ledger: $(cat "$clip_list3_path")"
   fi
   if [ ! -f "$clip_route_png" ]; then
     fail "no clipboard-route screenshot produced"

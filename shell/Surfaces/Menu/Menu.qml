@@ -2535,6 +2535,10 @@ PanelWindow {
                 visible: root._previewIsText
                 clip: true
                 text: root._cursorNode ? (root._cursorNode.fullText || "") : ""
+                // A clipboard capture reaches this pane raw, so the preview
+                // has to show the bytes that will be pasted rather than let
+                // AutoText parse copied markup as a rich-text document.
+                textFormat: Text.PlainText
                 wrapMode: Text.WrapAnywhere
                 color: Core.Theme.color.foreground
                 font.family: Core.Theme.fontFamilyMono

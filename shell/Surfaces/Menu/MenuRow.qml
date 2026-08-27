@@ -292,6 +292,12 @@ Item {
                 width: Math.min(label.implicitWidth, root._labelMaxWidth)
                 elide: Text.ElideRight
                 text: root.confirming ? ("Confirm " + root.node.label + "?") : root.node.label
+                // Row labels carry provider data verbatim, and a clipboard
+                // capture of copied markup trips AutoText's rich-text
+                // heuristic: the tags would be parsed away, entities decoded,
+                // and the document's own font/size would override the row's
+                // and resize it.
+                textFormat: Text.PlainText
                 // `dim: true` marks a non-activatable honest-empty row (the nix
                 // provider's NO NIX): it reads muted at rest and promotes to the
                 // cursor row's own ink on a filled row, where a bare
