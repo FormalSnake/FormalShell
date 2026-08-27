@@ -47,16 +47,27 @@ TestCase {
         compare(frameX("top", -1, 380), 1920 - 380 - 12);
     }
 
-    function test_a_cell_anchored_open_keeps_the_cell_x() {
-        compare(frameX("top", 600, 380), 600);
+    function test_a_cell_anchored_open_is_centred_on_the_cell() {
+        compare(frameX("top", 600, 380), 600 - 190);
     }
 
     function test_an_anchor_near_the_right_edge_is_pulled_back_to_the_padding() {
         compare(frameX("top", 1800, 380), 1920 - 380 - 12);
     }
 
+    // A centred frame reaches the padding before its cell does: a cell 200px
+    // off the right edge already wants half its width past it.
+    function test_a_cell_within_half_a_frame_of_the_edge_is_pulled_back() {
+        compare(frameX("top", 1720, 380), 1920 - 380 - 12);
+    }
+
     function test_an_anchor_at_the_left_edge_is_pushed_in_to_the_padding() {
         compare(frameX("top", 0, 380), 12);
+    }
+
+    // Mid-screen there is room on both sides, so the centring is exact.
+    function test_a_centred_frame_shares_the_cell_centre() {
+        compare(frameX("top", 960, 380) + 380 / 2, 960);
     }
 
     function test_a_frame_wider_than_the_screen_gives_up_the_right_clamp() {
@@ -65,13 +76,13 @@ TestCase {
     }
 
     // A bottom bar places along x the same way; only the hang changes.
-    function test_a_bottom_bar_keeps_the_cell_x_too() {
-        compare(frameX("bottom", 600, 380), 600);
+    function test_a_bottom_bar_centres_on_the_cell_too() {
+        compare(frameX("bottom", 600, 380), 600 - 190);
     }
 
     // On a vertical bar the cell's y is what the frame follows.
-    function test_a_left_bar_keeps_the_cell_y() {
-        compare(frameY("left", 400, 300), 400);
+    function test_a_left_bar_centres_on_the_cell_y() {
+        compare(frameY("left", 400, 300), 400 - 150);
     }
 
     function test_a_left_bar_ipc_open_sits_one_padding_from_the_bottom_edge() {

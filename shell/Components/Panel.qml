@@ -54,7 +54,7 @@ PanelWindow {
     // than a panel and takes the `popover` fill at `radiusMd` instead.
     property color frameColor: Theme.surface(Theme.color.card)
     property int frameRadius: Theme.radiusXl
-    // Screen-relative origin of the bar cell that opened this panel, mapped
+    // Screen-relative centre of the bar cell that opened this panel, mapped
     // within that cell's OWN window (openFrom below). Wayland gives clients
     // no cross-window global coordinates, so mapping the cell into this
     // window's coordinate space instead would be meaningless. -1 means "no
@@ -167,10 +167,10 @@ PanelWindow {
 
     // One padding rule (DESIGN.md §1, M48 D3): every floating surface sits
     // `barMargin` off the bar's inner edge and `screenPadding` in from the
-    // screen edges it runs between. An IPC open has no cell to anchor to
-    // and falls back to the end of the bar, at the same `screenPadding`; a
-    // cell-anchored open is clamped so neither end can push the frame past
-    // it. Which edge the bar is on (Theme.barPosition) decides which of
+    // screen edges it runs between. A cell-anchored open is centred on the
+    // cell, clamped so neither end can push the frame past that padding; an
+    // IPC open has no cell to anchor to and falls back to the end of the
+    // bar. Which edge the bar is on (Theme.barPosition) decides which of
     // x and y follows the cell and which hangs off the bar.
     readonly property real _frameX: root._screen
         ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root.panelWidth,
@@ -206,7 +206,7 @@ PanelWindow {
     readonly property real _frameHeight: Geometry.frameHeight(contentColumn.implicitHeight,
         root._maxContentHeight, Theme.space.panelPadding, header.height, root._headerGap)
 
-    // `anchor` is the opening cell's origin ({x, y}) in its own window, or
+    // `anchor` is the opening cell's centre ({x, y}) in its own window, or
     // undefined for an open with no cell.
     function open(anchor, screen) {
         if (PanelRegistry.current && PanelRegistry.current !== root)
@@ -245,7 +245,8 @@ PanelWindow {
             var offset = Placement.windowOrigin(window.anchors,
                 Qt.size(window.width, window.height),
                 Qt.size(window.screen.width, window.screen.height));
-            anchor = Qt.point(origin.x + offset.x, origin.y + offset.y);
+            anchor = Qt.point(origin.x + offset.x + item.width / 2,
+                origin.y + offset.y + item.height / 2);
         }
         root.open(anchor, window ? window.screen : null);
     }

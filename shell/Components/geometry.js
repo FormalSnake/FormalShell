@@ -7,26 +7,27 @@
 // and tokens.js already use.
 //
 // A panel hangs off the bar, `barMargin` from the bar's inner edge, and
-// sits along the bar at the cell that opened it. `barPosition` says which
-// edge that is; `insets` is Theme.edgeInset, the bar's thickness on its own
+// sits along the bar centred on the cell that opened it. `barPosition` says
+// which edge that is; `insets` is Theme.edgeInset, the bar's thickness on its own
 // edge and 0 elsewhere.
 
 function _vertical(barPosition) {
     return barPosition === "left" || barPosition === "right";
 }
 
-// Where the frame starts along the bar. `anchor` is the along-axis
-// coordinate of the bar cell that opened the panel, or a negative number
-// for an IPC open with no cell, which falls back to the end of the bar
-// (the right region, where every widget cell lives). Either way the frame
-// is held one `screenPadding` in from whatever the two ends already give
-// up (`insetStart`/`insetEnd`, the screen frame's band when there is one);
-// a panel longer than the room between gives up the far clamp rather than
-// being pushed off the near edge.
+// Where the frame starts along the bar. `anchor` is the along-axis centre
+// of the bar cell that opened the panel, or a negative number for an IPC
+// open with no cell, which falls back to the end of the bar (the right
+// region, where every widget cell lives). A cell-anchored frame is centred
+// on its cell, the same placement Tooltip.qml gives its own card. Either
+// way the frame is held one `screenPadding` in from whatever the two ends
+// already give up (`insetStart`/`insetEnd`, the screen frame's band when
+// there is one); a panel longer than the room between gives up the far
+// clamp rather than being pushed off the near edge.
 function frameAlong(anchor, screenExtent, frameExtent, insetStart, insetEnd, screenPadding) {
     var near = insetStart + screenPadding;
     var far = screenExtent - insetEnd - frameExtent - screenPadding;
-    var at = anchor >= 0 ? anchor : far;
+    var at = anchor >= 0 ? anchor - frameExtent / 2 : far;
     return Math.max(near, Math.min(at, Math.max(near, far)));
 }
 
