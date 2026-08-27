@@ -33,7 +33,8 @@ import "../../Compositor/appmatch.js" as AppMatch
 //
 // The list is cmdk's (M48 D6): inset `xs` inside the card, rows at
 // `radiusSm`, a `SectionLabel` heading wherever the group changes
-// (Menu/model.js's sectionsFor, a node's own `section` key at the root),
+// (Menu/model.js's sectionsFor: a node's own `section` key at the root,
+// the root route each result came from while searching),
 // a right-aligned chord or count per row (Menu/hints.js), and one
 // `No results found.` line where a level or a query has nothing.
 //
@@ -564,6 +565,7 @@ PanelWindow {
         && root.currentNodeId !== "nix" && Providers.nixTriggerQuery(searchInput.text) === null
         && root.currentNodeId !== "keybinds" && Keybinds.triggerQuery(searchInput.text) === null
         && root.currentNodeId !== "calc"
+        && root.currentNodeId !== "calc"
 
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop),
@@ -798,7 +800,8 @@ PanelWindow {
         level: root.currentNodeId,
         levelLabel: (root.currentNodeId !== null && root._nodes[root.currentNodeId])
             ? root._nodes[root.currentNodeId].label
-            : ""
+            : "",
+        nodes: root._nodes
     })
 
     // The distinct headings, in order, for `menu status`: what a heading
@@ -1376,15 +1379,17 @@ PanelWindow {
         }
         root._evalConditions();
         // iconSource rides along so the smoke rig can assert an app row's
-        // themed icon resolved (or honestly didn't) without a screenshot.
+        // themed icon resolved (or honestly didn't) without a screenshot,
+        // and `section` so it can assert the rows came out one block per
+        // heading, which `menu status`'s deduplicated list cannot say.
         var rows = Search.rank(root._nodes, q, root._condResults, root.currentNodeId).map(function (n) {
-            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "", checked: Toggles.checkedFor(n, root._stateSnapshot, root._checkedResults) };
+            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "", checked: Toggles.checkedFor(n, root._stateSnapshot, root._checkedResults), section: Model.searchSectionOf(root._nodes, n) };
         });
         // Same CALC prepend as _displayRows' ranked branch, so the smoke
         // rig's `debug query "2+2*3"` proves the row without keyboard input.
         var calcRow = Calc.resultNode(q);
         if (calcRow)
-            rows.unshift({ id: calcRow.id, label: calcRow.label, kind: calcRow.kind });
+            rows.unshift({ id: calcRow.id, label: calcRow.label, kind: calcRow.kind, section: Model.searchSectionOf(root._nodes, calcRow) });
         return rows;
     }
 

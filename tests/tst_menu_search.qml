@@ -114,6 +114,42 @@ TestCase {
         compare(ids, ["tray"]);
     }
 
+    // The score picks the cut and which group leads; the group picks
+    // where a row lands. Bonfire (600) comes out above Firefox (750)
+    // because System's best hit outscored Apps' best hit, and the exact
+    // clipboard match still heads the whole list.
+    function test_rank_deals_the_cut_out_by_root_route() {
+        var def = {
+            "apps": { provider: "apps" },
+            "apps.firefox": { label: "Firefox", kind: "app" },
+            "apps.campfire": { label: "Campfire", kind: "app" },
+            "system": {},
+            "system.firewall": { label: "Firewall" },
+            "system.bonfire": { label: "Bonfire" },
+            "clipboard": { provider: "clipboard" },
+            "clipboard.1": { label: "fire" }
+        };
+        var tree = M.buildTree(def, {});
+        var ranked = S.rank(tree.nodes, "fire", {});
+        var ids = ranked.map(function (n) { return n.id; });
+        compare(ids, ["clipboard.1", "system.firewall", "system.bonfire", "apps.firefox", "apps.campfire"]);
+    }
+
+    // Grouping happens after the cap, so it can only reorder the forty
+    // best rows, never let a weaker row in on the strength of its group.
+    function test_rank_groups_after_the_cap() {
+        var def = { "top": {} };
+        for (var i = 0; i < 40; i++) {
+            def["top.item" + i] = { label: "Item " + i };
+        }
+        def["other"] = {};
+        def["other.item"] = { label: "Item last" };
+        var tree = M.buildTree(def, {});
+        var ranked = S.rank(tree.nodes, "item", {});
+        compare(ranked.length, 40);
+        verify(ranked.every(function (n) { return n.parentId === "top"; }));
+    }
+
     function test_rank_caps_at_forty() {
         var def = {};
         for (var i = 0; i < 45; i++) {

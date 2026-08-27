@@ -1,9 +1,18 @@
 .pragma library
+.import "model.js" as Model
 
 // Omarchy-style tiered fuzzy scorer for the menu search field. Tiers sit
 // 200 points apart (1000/800/600/400/200) so the root bonus (+100) and the
 // app demotion (-50) can only reorder rows within a tier, neither can ever
 // promote a weaker tier over a stronger one.
+//
+// The score picks WHICH rows make the cut and which group leads; the group
+// picks where a row lands. A raw score order interleaves an app, a
+// clipboard entry and a power action row by row, with nothing but the icon
+// to say which is which, so the capped list is dealt out by root route
+// (Model.searchSectionOf) in the order each route's best hit earned, and
+// the launcher draws one heading per block. The top row is still the best
+// hit overall, since its group is the first dealt.
 
 var TIER_EXACT = 1000;
 var TIER_STARTS_WITH = 800;
@@ -74,8 +83,9 @@ function _ancestry(id) {
 
 // Depth-first walk of `nodes` from its roots, scoring every when-visible
 // node against `query` (a node whose `when` isn't satisfied is skipped
-// along with its whole subtree). Returns matches sorted by score, ties
-// broken by shallower depth then declaration order, capped at 40.
+// along with its whole subtree). Returns the 40 best matches (score, ties
+// broken by shallower depth then declaration order) grouped by root route,
+// groups in the order of their best hit, score order inside each.
 //
 // `withinId` is the level the search is being run from (Menu.qml's
 // currentNodeId, null at root). It only matters for a `routeOnly` node: its
@@ -115,5 +125,15 @@ function rank(nodes, query, condResults, withinId) {
         return a.declIndex - b.declIndex;
     });
 
-    return results.slice(0, MAX_RESULTS).map(function (r) { return r.node; });
+    var groups = {};
+    var order = [];
+    results.slice(0, MAX_RESULTS).forEach(function (r) {
+        var key = Model.searchSectionOf(nodes, r.node);
+        if (groups[key] === undefined) {
+            groups[key] = [];
+            order.push(key);
+        }
+        groups[key].push(r.node);
+    });
+    return order.reduce(function (out, key) { return out.concat(groups[key]); }, []);
 }

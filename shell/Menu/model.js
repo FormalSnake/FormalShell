@@ -182,11 +182,12 @@ var ROOT_SECTION = "Commands";
 // rows it was handed simply gets its heading twice, which is the honest
 // picture of a list ordered by something other than its sections.
 //
-// `ctx` is { mode, grid, searching, level, levelLabel }: the two dmenu modes
-// name themselves, a grid has nowhere to draw a full-width band between two
-// cells of a row so it has no headings at all, a query that ranks the whole
-// tree names its results (a row's own declared section would otherwise cut a
-// ranked list into a heading per row), and everything else is either the
+// `ctx` is { mode, grid, searching, level, levelLabel, nodes }: the two
+// dmenu modes name themselves, a grid has nowhere to draw a full-width band
+// between two cells of a row so it has no headings at all, a query that
+// ranks the whole tree names each row after the root route it came from
+// (searchSectionOf, the same key search.js's rank groups by, so the
+// headings come out one block each), and everything else is either the
 // row's declared `section` key, the frecency head of a provider that marks
 // one (`recent`), or the level.
 // Index-aligned with the rows it was given, EXCEPT for a grid, which gets an
@@ -227,11 +228,31 @@ function _sectionOf(row, ctx) {
     if (ctx.mode === "select") return "Options";
     if (ctx.mode === "input") return "";
     if (ctx.grid === true) return "";
-    if (ctx.searching === true) return "Results";
+    if (ctx.searching === true) return searchSectionOf(ctx.nodes, row);
     if (row && row.recent === true) return "Recent";
     if (row && row.section) return row.section;
     if (ctx.level === null || ctx.level === undefined) return ROOT_SECTION;
     return ctx.levelLabel || "";
+}
+
+// The heading a whole-tree search result sits under: the label of the root
+// route it descends from (an app under Apps, a clipboard entry under
+// Clipboard, a power action under System), or the root's own heading for a
+// route row itself. A ranked list mixes every kind the tree holds, and the
+// route is what says what a row IS when the icon alone does not; a row's own
+// declared `section` is a browsing group (the root's Suggestions) and would
+// cut the list into a heading per row, so it is not consulted here. Walked
+// by `parentId` rather than the dotted id, since an app's own id can carry
+// dots of its own.
+function searchSectionOf(nodes, row) {
+    nodes = nodes || {};
+    var node = row;
+    while (node && node.parentId !== null && node.parentId !== undefined) {
+        var parent = nodes[node.parentId];
+        if (!parent) break;
+        node = parent;
+    }
+    return node === row ? ROOT_SECTION : node.label;
 }
 
 // The distinct headings of a `sectionsFor` result, in the order they first

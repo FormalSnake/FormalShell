@@ -125,7 +125,7 @@ function resultNode(query) {
     var text = format(value);
     return {
         id: "calc.result",
-        parentId: null,
+        parentId: "calc",
         label: "= " + text,
         icon: "",
         title: "",

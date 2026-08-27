@@ -74,14 +74,33 @@ TestCase {
 
     // A ranked list is not a level's children: a row's own declared section
     // would cut the results into a heading per row, in score order.
-    function test_a_query_names_its_results() {
-        var rows = [
-            { id: "emoji", section: "Suggestions" },
-            { id: "apps.a", recent: true },
-            { id: "tray" }
-        ];
-        var sections = Model.sectionsFor(rows, { mode: "menu", searching: true, level: null });
-        compare(sections, ["Results", "Results", "Results"]);
+    // A ranked list mixes every kind the tree holds, so each result is
+    // named after the root route it came from, and a route row itself sits
+    // under the root's own heading: its browsing group (Suggestions) is not
+    // what a search is grouped by. The app's dotted id is the one
+    // providers.js's appsProvider builds from a desktop entry id, parented
+    // by `parentId` rather than by splitting the id.
+    function test_a_query_names_each_row_after_its_root_route() {
+        var tree = Model.buildTree({
+            "apps": { provider: "apps", section: "Suggestions" },
+            "emoji": { label: "Emoji", section: "Suggestions" },
+            "system": {},
+            "system.power": {},
+            "system.power.reboot": { label: "Reboot" }
+        }, {});
+        var app = { id: "apps.org.gnome.Nautilus", parentId: "apps", label: "Files", kind: "app" };
+        tree.nodes[app.id] = app;
+        var rows = [tree.nodes["emoji"], tree.nodes["system.power.reboot"], app];
+        var sections = Model.sectionsFor(rows, { mode: "menu", searching: true, level: null, nodes: tree.nodes });
+        compare(sections, ["Commands", "System", "Apps"]);
+    }
+
+    // The CALC answer row hangs off the calc route, so a root query that
+    // parses leads with a CALCULATOR block ahead of the ranked ones.
+    function test_the_calc_answer_is_its_own_search_group() {
+        var tree = Model.buildTree({ "calc": { label: "Calculator", provider: "calc" } }, {});
+        var row = { id: "calc.result", parentId: "calc", label: "= 8" };
+        compare(Model.searchSectionOf(tree.nodes, row), "Calculator");
     }
 
     // The breadcrumb chip above the list already says "Clipboard", so a
