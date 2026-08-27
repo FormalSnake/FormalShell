@@ -48,6 +48,8 @@ Card {
     // Set by the notification centre, never by the toast stack.
     property bool flat: false
 
+    readonly property var _buttonActions: Model.buttonActions(root.entry)
+
     readonly property bool _critical: root.entry.urgency === 2
     readonly property real _iconSize: Theme.fontSize.body
     // The slot is a step wider than the glyph in it: an app's own raster
@@ -215,9 +217,9 @@ Card {
         }
 
         // The gap above the action row is the row's own, so a notification
-        // carrying no actions pays neither the gap nor the height.
+        // carrying no drawable actions pays neither the gap nor the height.
         Item {
-            visible: root.entry.actions.length > 0
+            visible: root._buttonActions.length > 0
             width: parent.width
             height: actionRow.implicitHeight + Theme.space.rowGap
 
@@ -227,7 +229,7 @@ Card {
                 spacing: Theme.space.sm
 
                 Repeater {
-                    model: root.entry.actions
+                    model: root._buttonActions
 
                     delegate: Button {
                         id: actionButton

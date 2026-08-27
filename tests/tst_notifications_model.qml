@@ -608,6 +608,40 @@ TestCase {
         compare(M.relTime(1000, 5000), "now");
     }
 
+    function test_button_actions_drops_the_default_activation_hint() {
+        // Ghostty's shape: a `default` action with no label at all, which
+        // used to reach the card as an empty pill.
+        var acts = M.buttonActions({ actions: [{ key: "default", label: "" }] });
+        compare(acts.length, 0);
+    }
+
+    function test_button_actions_drops_default_even_when_it_carries_a_label() {
+        var acts = M.buttonActions({ actions: [{ key: "default", label: "Open" }] });
+        compare(acts.length, 0);
+    }
+
+    function test_button_actions_drops_a_labelless_ordinary_action() {
+        var acts = M.buttonActions({ actions: [{ key: "reply", label: "  " }] });
+        compare(acts.length, 0);
+    }
+
+    function test_button_actions_keeps_labelled_actions_in_order() {
+        var acts = M.buttonActions({
+            actions: [
+                { key: "default", label: "" },
+                { key: "reply", label: "Reply" },
+                { key: "mute", label: "Mute" }
+            ]
+        });
+        compare(acts.length, 2);
+        compare(acts[0].key, "reply");
+        compare(acts[1].key, "mute");
+    }
+
+    function test_button_actions_tolerates_a_missing_actions_list() {
+        compare(M.buttonActions({}).length, 0);
+    }
+
     function test_position_spec_top_right() {
         var spec = M.positionSpec("top-right");
         compare(spec.name, "top-right");

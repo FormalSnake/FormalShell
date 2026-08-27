@@ -369,6 +369,19 @@ function relTime(nowMs, arrivedAtMs) {
     return Math.floor(diff / day) + "d ago";
 }
 
+// The actions a card draws as buttons. `default` is the freedesktop
+// activation hint, not a button: the spec lets a sender give it no label at
+// all, and every surface here already invokes it on a body click
+// (Toasts.qml, Center.qml, invokeLast below). Ghostty sends exactly that
+// pair, which is where the empty pill came from. A labelless ordinary
+// action is dropped for the same reason: an unlabelled button says nothing
+// and cannot be told apart from its neighbour.
+function buttonActions(entry) {
+    return (entry.actions || []).filter(function (a) {
+        return a.key !== "default" && String(a.label || "").trim().length > 0;
+    });
+}
+
 function setDnd(state, on) {
     if (state.dnd === on) return state;
     return Object.assign({}, state, { dnd: on });
