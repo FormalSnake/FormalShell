@@ -181,8 +181,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `tray.sh` `--tray`: six real StatusNotifierItem producers, the whole strip,
   the D-Bus Activate round trip, and the shell-owned menu.
 - `tray_overflow.sh` `--tray-overflow`: the tray squeezed by a bar region
-  wide enough to leave it a few cells, the split it settles on read off
-  `tray status`, and the second bar those items open in.
+  wide enough to leave it no room, the whole strip's worth of icons moving to
+  the second bar rather than some of them, read off `tray status`.
 - `visualizer.sh` `--visualizer`: the `cava` child owned and killed with
   playback, proven by pgrep rather than by the frame.
 - `wallpaper.sh` `--wallpaper`: the matugen recolour on a set wallpaper, the

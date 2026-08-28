@@ -1,16 +1,13 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --tray-overflow squeezes the tray until it has to give ground, and reads
-# back where the items went. The strip is pinned to one region holding a
-# qml module of a fixed width and the tray behind it, so the room the tray
-# is left with is arithmetic rather than a guess: a 1692px module on a
-# 1920px output leaves the rail a couple of hundred pixels, which is a few
-# cells and the toggle. What has to be true is the split itself: some items
-# still on the strip, the rest reachable in the second bar, and the two
-# adding up to every item registered. The exact cut is left loose on
-# purpose, since it is a pixel measurement of real font metrics and pinning
-# it would fail on a rebuild that moved a cell by 2px, while
-# tests/tst_tray_overflow.qml pins the arithmetic itself.
+# back where the items went. The strip is pinned to one region holding a qml
+# module of a fixed width and the tray behind it, so the room the tray is
+# left with is arithmetic rather than a guess: a 1692px module on a 1920px
+# output leaves the rail under 200px, and six icons want a little over 240.
+# What has to be true is that the tray moved WHOLE: nothing of it left on
+# the strip but the toggle, and every registered item reachable in the second
+# bar. tests/tst_tray_overflow.qml pins the arithmetic that decides it.
 #
 # The second bar is opened over `panel toggle trayoverflow` (it is a popout
 # in PanelIpc's registry like any other), which is also the only way in
@@ -104,18 +101,15 @@ leg_tray_overflow_assert() {
   total=$("$jq_bin" -r '.items | length' "$tray_overflow_status_path")
   inline=$("$jq_bin" -r '.overflow.inline' "$tray_overflow_status_path")
   hidden=$("$jq_bin" -r '.overflow.hidden | length' "$tray_overflow_status_path")
-  echo "tray split: $inline of $total inline, $hidden in the second bar"
+  echo "tray: $inline of $total left on the strip, $hidden in the second bar"
   if [ "$total" -lt 6 ]; then
     fail "tray status did not report the 6 fixture items (got $total), stub registration likely failed"
   fi
-  if [ "$hidden" -lt 1 ]; then
-    fail "the tray kept all $total items on a strip with no room for them"
+  if [ "$inline" -ne 0 ]; then
+    fail "the tray kept $inline items on a strip with no room for them; it moves whole or not at all"
   fi
-  if [ "$inline" -lt 1 ]; then
-    fail "the tray gave up every item; the pad module left it no room at all, so this measures nothing"
-  fi
-  if [ "$((inline + hidden))" -ne "$total" ]; then
-    fail "the split loses items: $inline inline + $hidden hidden is not $total"
+  if [ "$hidden" -ne "$total" ]; then
+    fail "the second bar holds $hidden of $total items; it holds the whole tray or the strip keeps it"
   fi
   if [ ! -f "$tray_overflow_strip_path" ]; then
     fail "no squeezed-strip screenshot produced"

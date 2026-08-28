@@ -21,29 +21,30 @@ TestCase {
         compare(r.hidden, 0);
     }
 
-    // 4 cells and 3 gaps is 160 exactly, and the toggle is only charged for
-    // once something is behind it, so the last item that fits still fits.
-    function test_an_exact_fit_hides_nothing() {
+    // 4 cells and 3 gaps is 160 exactly. The toggle is never charged for
+    // here: it only exists once the tray has already moved, and then it is
+    // the only thing on the rail.
+    function test_an_exact_fit_stays_on_the_strip() {
         var r = fit(4, 160);
         compare(r.inline, 4);
         compare(r.hidden, 0);
     }
 
-    function test_one_pixel_short_spills_into_the_second_bar() {
+    // All or nothing: one pixel short moves the whole tray, not one icon.
+    function test_one_pixel_short_moves_the_whole_tray() {
         var r = fit(4, 159);
-        // The toggle takes a cell and a gap, leaving room for two.
-        compare(r.inline, 2);
-        compare(r.hidden, 2);
+        compare(r.inline, 0);
+        compare(r.hidden, 4);
     }
 
-    function test_a_strip_with_no_room_at_all_keeps_only_the_toggle() {
+    function test_a_strip_with_no_room_at_all_moves_the_whole_tray() {
         var r = fit(6, 20);
         compare(r.inline, 0);
         compare(r.hidden, 6);
     }
 
     // Bar.qml's slack goes negative once the regions are already clipping.
-    function test_a_negative_budget_keeps_only_the_toggle() {
+    function test_a_negative_budget_moves_the_whole_tray() {
         var r = fit(6, -120);
         compare(r.inline, 0);
         compare(r.hidden, 6);
@@ -61,10 +62,16 @@ TestCase {
         compare(r.hidden, 0);
     }
 
-    function test_max_visible_hides_items_that_would_have_fit() {
+    function test_max_visible_hands_over_a_tray_that_would_have_fit() {
         var r = fit(6, 4000, 3);
+        compare(r.inline, 0);
+        compare(r.hidden, 6);
+    }
+
+    function test_max_visible_at_the_item_count_keeps_the_tray() {
+        var r = fit(3, 4000, 3);
         compare(r.inline, 3);
-        compare(r.hidden, 3);
+        compare(r.hidden, 0);
     }
 
     function test_max_visible_above_the_item_count_does_nothing() {
@@ -73,24 +80,16 @@ TestCase {
         compare(r.hidden, 0);
     }
 
-    // The ceiling is a ceiling, never a floor: a strip too short for it
-    // still gives up cells.
-    function test_room_wins_over_max_visible_when_it_is_tighter() {
-        var r = fit(6, 100, 3);
-        compare(r.inline, 1);
-        compare(r.hidden, 5);
-    }
-
-    // A capped tray pays for the toggle before it measures, since the cap
-    // has already made the toggle certain.
-    function test_a_capped_tray_charges_for_the_toggle() {
-        // 3 cells, 2 gaps and the toggle with its own gap is 160.
-        compare(fit(6, 160, 3).inline, 3);
-        compare(fit(6, 159, 3).inline, 2);
+    // The ceiling holds even where no measurement would: a Tray outside a
+    // bar has an unbounded budget and still answers to it.
+    function test_max_visible_holds_against_an_unmeasured_budget() {
+        var r = fit(6, Number.POSITIVE_INFINITY, 3);
+        compare(r.inline, 0);
+        compare(r.hidden, 6);
     }
 
     // A cell of no width is a rail that has not been measured yet, not a
-    // reason to hide the whole tray.
+    // reason to hide the tray.
     function test_an_unmeasured_cell_shows_everything() {
         var r = Tray.fit(5, 100, 0, gap, 0);
         compare(r.inline, 5);

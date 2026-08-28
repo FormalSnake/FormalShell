@@ -28,15 +28,19 @@ import "../../../Bar/tray.js" as TrayFit
 // Hidden entirely (the rail's implicit extent is naturally 0 with nothing
 // visible in it) when nothing has registered, never an empty box.
 //
-// The strip is not allowed to run out from under the rest of the bar: what
-// does not fit spills into a second bar hanging off this rail's own toggle
-// (TrayOverflow.qml), the way Ice and Bartender give the macOS menu bar a
-// second row rather than letting the tray eat the clock. `slackAlong` is
-// what the bar has left over (Bar.qml's own `_slack`), so the budget here is
-// this rail's current extent plus that: a term the count below cannot move,
-// since anything the rail gives up the slack takes back. `tray.maxVisible`
-// caps the inline count regardless of room, which is the always-hidden
-// section those two macOS apps are really about.
+// The strip is not allowed to run out from under the rest of the bar: a tray
+// that does not fit moves WHOLE into a second bar hanging off this rail's own
+// toggle (TrayOverflow.qml), the way Ice and Bartender give the macOS menu
+// bar a second row rather than letting the tray eat the clock. All or
+// nothing (owner, 2026-08-28): the strip shows every icon or it shows the
+// toggle alone, never some of each, so one tray never reads across two
+// surfaces and the cut never moves under the user when something else on the
+// bar resizes. `slackAlong` is what the bar has left over (Bar.qml's own
+// `_slack`), so the budget here is this rail's current extent plus that: a
+// term the answer below cannot move, since anything the rail gives up the
+// slack takes back. `tray.maxVisible` hands the tray over regardless of
+// room, which is the always-hidden section those two macOS apps are really
+// about.
 //
 // Spec deviation, owner's call (M24, the same class as the `panel` IPC
 // addendum): spec §Surfaces-1 says "SNI tray (grouped drawer)", and this
@@ -84,20 +88,19 @@ Rail {
 
     // --- The fit ---------------------------------------------------------
     //
-    // `_inlineCount` is written by hand rather than bound, which is the
-    // whole reason this converges: the budget it is computed from reads the
-    // rail's own extent, which reads the count, and a binding round that
-    // circle is a loop QML would abort. Assigning it instead makes the pass
-    // one-way, and it settles in a single step because the budget itself
-    // cannot move when the count does (extent + slack is invariant: whatever
-    // the rail gives up, the bar's leftover room gains).
+    // `_fits` is written by hand rather than bound, which is the whole reason
+    // this converges: the budget it is computed from reads the rail's own
+    // extent, which reads this flag, and a binding round that circle is a
+    // loop QML would abort. Assigning it instead makes the pass one-way, and
+    // it settles in a single step because the budget itself cannot move when
+    // the flag does (extent + slack is invariant: whatever the rail gives up,
+    // the bar's leftover room gains).
     //
-    // It starts high so a fresh tray paints every item and only ever gives
-    // ground once something has actually been measured. The other order
-    // (start at 0, grow) flashes a bar with nothing in it but a "+N" toggle
-    // on every shell start.
-    property int _inlineCount: 999
-    readonly property int _inline: Math.max(0, Math.min(root._inlineCount, root._total))
+    // It starts true so a fresh tray paints its icons and only ever hands
+    // them over once something has actually been measured. The other order
+    // flashes a bar with nothing in it but a toggle on every shell start.
+    property bool _fits: true
+    readonly property int _inline: root._fits ? root._total : 0
     readonly property int _hidden: root._total - root._inline
 
     // One cell's extent along the strip, measured off the toggle rather
@@ -113,26 +116,30 @@ Rail {
         var own = root.vertical ? root.implicitHeight : root.implicitWidth;
         var fit = TrayFit.fit(root._total, own + root.slackAlong, root._unit, root.spacing,
             root.overflow ? root._maxVisible : 0);
-        root._inlineCount = root.overflow ? fit.inline : root._total;
+        root._fits = root.overflow ? fit.inline === root._total : true;
         // Kept current whether or not the second bar is up: it is where the
-        // split is published (TrayIpc's `status`), and a bar left open while
+        // answer is published (TrayIpc's `status`), and a bar left open while
         // the fit moves under it has to follow. Every output's Tray writes
         // the one shared surface, so on a multi-output rig this is whichever
         // bar refitted last until a click sets it to the bar that opened it
         // (openOverflow below).
         if (root.overflow)
-            root.overflow.firstIndex = root._inlineCount;
+            root.overflow.inlineCount = root._inline;
     }
 
-    // Coalesces the several property changes one relayout produces into one
-    // pass, and rides out the chevron's own collapse animation (Bar.qml's
-    // `Behavior on _along`) without re-fitting on every frame of it.
+    // Coalesces the several property changes one relayout produces into a
+    // single pass on the next event loop turn. Deliberately not a longer
+    // settle: anything the user can see between the icons painting and the
+    // answer landing is the tray visibly changing its mind, which is exactly
+    // what a 200ms debounce here looked like (owner, 2026-08-28: "i see all
+    // icons ... after a few ms i see the three dots").
     Timer {
         id: refitTimer
-        interval: Theme.motion.standard
+        interval: 0
         onTriggered: root._refit()
     }
 
+    Component.onCompleted: refitTimer.restart()
     onSlackAlongChanged: refitTimer.restart()
     on_TotalChanged: refitTimer.restart()
     on_UnitChanged: refitTimer.restart()
@@ -142,7 +149,7 @@ Rail {
     function openOverflow() {
         if (!root.overflow)
             return;
-        root.overflow.firstIndex = root._inline;
+        root.overflow.inlineCount = root._inline;
         root.overflow.menu = root.menu;
         root.overflow.toggleFrom(overflowCell);
     }
@@ -157,9 +164,9 @@ Rail {
     // frame ever painted, every pinned cell rendered blank. The live model
     // gives Repeater real add/remove diffing instead, so a delegate
     // survives an upstream re-notify that didn't actually add or remove
-    // anything. It is also why an overflowing item is hidden in place rather
+    // anything. It is also why an overflowing tray is hidden in place rather
     // than sliced out of the model: the second bar renders the same live
-    // model from the other end (TrayOverflow.qml).
+    // model (TrayOverflow.qml).
     Repeater {
         model: SystemTray.items
 
@@ -187,10 +194,10 @@ Rail {
         }
     }
 
-    // The second bar's own handle, last on the rail so the items keep the
-    // order they registered in and the toggle sits where the strip runs out.
-    // Always instantiated, since `_unit` measures itself off it, and drawn
-    // only once something is behind it.
+    // The second bar's own handle, last on the rail so it sits where the
+    // strip runs out. Always instantiated, since `_unit` measures itself off
+    // it, and drawn only once the tray has moved behind it, which is also the
+    // only time anything else on this rail is drawn at all.
     Cell {
         id: overflowCell
         ghost: root.ghost
@@ -198,7 +205,7 @@ Rail {
         visible: root._hidden > 0
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height
-        tooltipText: "TRAY / " + root._hidden + " MORE"
+        tooltipText: "TRAY / " + root._hidden + " ITEMS"
         panelOpen: root.overflow ? root.overflow.isOpen : false
 
         Icon {

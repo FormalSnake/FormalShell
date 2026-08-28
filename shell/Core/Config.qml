@@ -11,9 +11,9 @@ import QtQuick
 // "right": which output edge the bar runs along; on a left or right bar the
 // three bar.layout regions run top to bottom and every cell turns its
 // content along the strip, icons excepted), tray.maxVisible (number,
-// default 0: how many SNI items the strip may show inline before the rest
-// go to the tray's second bar, Surfaces/Bar/TrayOverflow.qml; 0 is no
-// ceiling of its own and the fit is room alone), frame.thickness (number,
+// default 0: more SNI items than this and the whole tray moves to its second
+// bar, Surfaces/Bar/TrayOverflow.qml, whatever the room; 0 is no ceiling of
+// its own and room alone decides), frame.thickness (number,
 // default 0: the screen frame's band on the three edges the bar is not
 // on, Surfaces/Frame/Frame.qml; 0 draws no frame) and frame.radius (number,
 // default 20, or 0 when theme.radius is 0: the corner of the rounded
