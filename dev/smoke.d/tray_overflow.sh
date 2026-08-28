@@ -37,6 +37,8 @@ tray_overflow_strip_path="$shot_dir/tray-overflow-strip.png"
 tray_overflow_bar_path="$shot_dir/tray-overflow-bar.png"
 tray_overflow_collapsed_path="$shot_dir/tray-overflow-collapsed.png"
 tray_overflow_expanded_path="$shot_dir/tray-overflow-expanded.png"
+tray_overflow_menu_reply_path="$shot_dir/tray-overflow-menu-reply.txt"
+tray_overflow_menu_path="$shot_dir/tray-overflow-menu.json"
 
 leg_tray_overflow_fixture() {
   # The chevron governs what precedes it in a right region, so the tray is the
@@ -46,9 +48,9 @@ leg_tray_overflow_fixture() {
 }
 
 leg_tray_overflow_timing() {
-  # The drive's last step lands ~20s in; the run's own frame is taken past
+  # The drive's last step lands ~24s in; the run's own frame is taken past
   # it, with the second bar closed and the chevron expanded again.
-  leg_timing 24 55
+  leg_timing 28 60
 }
 
 leg_tray_overflow_drive() {
@@ -59,7 +61,7 @@ leg_tray_overflow_drive() {
 #!/usr/bin/env bash
 sleep 1
 "$python3_bin" "$stub" --id overflow-fixture-1 --title "Overflow Fixture 1" --color c0392b & echo \$! >> "$tray_overflow_pids_path"
-"$python3_bin" "$stub" --id overflow-fixture-2 --title "Overflow Fixture 2" --color 27ae60 & echo \$! >> "$tray_overflow_pids_path"
+"$python3_bin" "$stub" --id overflow-fixture-2 --title "Overflow Fixture 2" --color 27ae60 --menu & echo \$! >> "$tray_overflow_pids_path"
 "$python3_bin" "$stub" --id overflow-fixture-3 --title "Overflow Fixture 3" --color 2980b9 & echo \$! >> "$tray_overflow_pids_path"
 "$python3_bin" "$stub" --id overflow-fixture-4 --title "Overflow Fixture 4" --color f1c40f & echo \$! >> "$tray_overflow_pids_path"
 "$python3_bin" "$stub" --id overflow-fixture-5 --title "Overflow Fixture 5" --color 8e44ad & echo \$! >> "$tray_overflow_pids_path"
@@ -73,6 +75,10 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call tray status > "$tray_overflow_open_path" 2>&1
 "$hyprctl_bin" -j layers > "$tray_overflow_layers_path" 2>&1
 "$grim_bin" "$tray_overflow_bar_path" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call tray menu overflow-fixture-2 > "$tray_overflow_menu_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_overflow_menu_path" 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
 sleep 1
@@ -138,6 +144,16 @@ leg_tray_overflow_assert() {
     fail "no second-bar screenshot produced"
   fi
   echo "SMOKE_TRAY_OVERFLOW_BAR $tray_overflow_bar_path"
+  # An item's own menu belongs to the bar its cell is in, so opening one
+  # leaves that bar where it was. It used to take the bar down with it, which
+  # is the gesture cancelling itself (owner, 2026-08-28: "right clicking a
+  # tray item closes the bar").
+  if ! grep -q '^ok$' "$tray_overflow_menu_reply_path" 2>/dev/null; then
+    fail "tray menu was refused inside the second bar, got: $(cat "$tray_overflow_menu_reply_path" 2>/dev/null)"
+  fi
+  if [ "$("$jq_bin" -r '.overflow.open' "$tray_overflow_menu_path")" != "true" ]; then
+    fail "opening a tray item's menu closed the second bar out from under it, got: $(cat "$tray_overflow_menu_path")"
+  fi
   # The regression the model cannot see: the toggle has to draw again after a
   # collapse, and it is the only cell on its side of the chevron, so these two
   # frames differ by it alone.

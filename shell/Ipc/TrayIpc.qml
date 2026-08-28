@@ -75,7 +75,11 @@ IpcHandler {
             if (items[i].id === id) {
                 if (!items[i].hasMenu)
                     return "error: tray item '" + id + "' has no menu";
-                trayMenu.openItem(null, items[i]);
+                // While the second bar is up, that is where this item's cell
+                // is, so the menu opens over it rather than in place of it,
+                // exactly as a right click there does (Panel.qml's `owner`).
+                trayMenu.openItem(null, items[i],
+                    (trayOverflow && trayOverflow.isOpen) ? trayOverflow : null);
                 return "ok";
             }
         }

@@ -66,12 +66,22 @@ Panel {
         if (!item)
             return;
         if (item.onlyMenu && item.hasMenu) {
+            // The menu opens over this bar rather than in place of it, so
+            // there is nothing to close: dismissing the menu leaves the tray
+            // where it was.
             if (root.menu)
-                root.menu.openItem(null, item);
-        } else {
-            item.activate();
+                root.menu.openItem(null, item, root);
+            return;
         }
+        item.activate();
         root.close();
+    }
+
+    // A menu opened from here belongs to this bar: it goes when the bar goes,
+    // rather than being left anchored to a cell that is no longer on screen.
+    onIsOpenChanged: {
+        if (!root.isOpen && root.menu && root.menu.isOpen && root.menu.owner === root)
+            root.menu.close();
     }
 
     Rail {
@@ -94,6 +104,7 @@ Panel {
 
                 item: itemCell.modelData
                 menu: root.menu
+                menuOwner: root
                 ghost: true
                 barEdge: Theme.barPosition
                 cursor: root.cursorActive && itemCell.index === root.cursorIndex

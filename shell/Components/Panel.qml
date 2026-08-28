@@ -48,6 +48,16 @@ PanelWindow {
     // The header row, its seam and both their gaps come out of the frame's
     // own height with it, so the card closes on the content.
     property bool showHeader: true
+    // The panel this one opens on top of, for the one case where two popouts
+    // are genuinely one gesture: a tray item's own menu, opened from the
+    // tray's second bar (Surfaces/Bar/TrayOverflow.qml). The registry's
+    // "exactly one popout" rule holds everywhere else, and holds here too
+    // from the outside: opening anything else still closes both, and the
+    // owner closing takes its child with it. What it must not do is treat the
+    // surface the click came from as the thing being replaced, which read as
+    // the bar shutting the moment you right-clicked an icon in it (owner,
+    // 2026-08-28).
+    property var owner: null
     // A Lucide name (shell/Theme/icons.js) drawn before the title. Empty
     // leaves the header text-only.
     property string panelIcon: ""
@@ -218,7 +228,7 @@ PanelWindow {
     // `anchor` is the opening cell's centre ({x, y}) in its own window, or
     // undefined for an open with no cell.
     function open(anchor, screen) {
-        if (PanelRegistry.current && PanelRegistry.current !== root)
+        if (PanelRegistry.current && PanelRegistry.current !== root && PanelRegistry.current !== root.owner)
             PanelRegistry.current.close();
         PanelRegistry.current = root;
         root.anchorX = anchor ? anchor.x : -1;
@@ -233,8 +243,10 @@ PanelWindow {
     function close() {
         root.isOpen = false;
         root.cursorActive = false;
+        // The slot goes back to whoever this opened on top of, so the next
+        // open closes that one rather than leaving it behind.
         if (PanelRegistry.current === root)
-            PanelRegistry.current = null;
+            PanelRegistry.current = (root.owner && root.owner.isOpen) ? root.owner : null;
     }
 
     function toggle(anchor, screen) {

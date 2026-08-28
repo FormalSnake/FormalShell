@@ -19,9 +19,16 @@ Cell {
     // opened this session), the call below just no-ops rather than crash.
     property var menu: null
 
-    // Emitted after any click that reached the item, for a surface that is
-    // only up to put one item in reach and has no reason to stay open past
-    // it (the overflow bar).
+    // The surface this cell's menu opens on top of, or null to let the menu
+    // replace whatever is open (the strip's own cells, which are not in a
+    // popout to begin with).
+    property var menuOwner: null
+
+    // Emitted after a click that ACTED on the item, for a surface that is
+    // only up to put one item in reach and has no reason to stay open past it
+    // (the overflow bar). Opening the item's menu is not one of those: the
+    // menu belongs to the cell that opened it, and taking that cell's surface
+    // away underneath it is the gesture cancelling itself.
     signal acted
 
     // The item's own words, in the SNI's own order of preference:
@@ -60,22 +67,23 @@ Cell {
     acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
     onClicked: mouse => {
         if (mouse.button === Qt.LeftButton) {
-            if (root.item.onlyMenu && root.item.hasMenu)
+            if (root.item.onlyMenu && root.item.hasMenu) {
                 root._openMenu();
-            else
-                root.item.activate();
+                return;
+            }
+            root.item.activate();
         } else if (mouse.button === Qt.MiddleButton) {
             root.item.secondaryActivate();
         } else if (mouse.button === Qt.RightButton) {
-            if (!root.item.hasMenu)
-                return;
-            root._openMenu();
+            if (root.item.hasMenu)
+                root._openMenu();
+            return;
         }
         root.acted();
     }
 
     function _openMenu() {
         if (root.menu)
-            root.menu.openItem(root, root.item);
+            root.menu.openItem(root, root.item, root.menuOwner);
     }
 }
