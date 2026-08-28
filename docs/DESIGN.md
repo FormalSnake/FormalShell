@@ -275,16 +275,17 @@ open draws a 2px `primary` line along its bottom edge. Workspace dots are
 layered over them on the focused slot; a switch moves the pill, a hovered
 dot grows a step, and an urgent dot is `destructive` and pulses once.
 
-The tray is the one region cell with no fixed number of items, so it is the
-one that gives ground when the strip runs out of edge, and it gives all of it:
-the whole tray moves behind a dots toggle in its own slot, which opens it in a
-second bar hanging off that cell. Never some icons here and the rest there, so
-one tray never reads across two surfaces and the cut never moves under the
-user when something else on the bar resizes. More items than `tray.maxVisible`
-hands the tray over whatever the room. That second bar is a card of the same
-ghost cells at `panelPadding`, one item deep, sitting where any panel would;
-it is the tray's own overflow, not the bar's, which stays the chevron's
-whole-region collapse.
+The tray's place on the bar is a dots toggle, and the icons themselves live
+in a second bar hanging off it. The strip can carry them instead
+(`tray.maxVisible`: -1 for as many as fit, N for up to N), but never some here
+and the rest there: the tray moves whole, so it never reads across two
+surfaces and the cut never moves under the user when something else on the bar
+resizes. Room has the last word over any ceiling, since the tray is the one
+region cell with no fixed number of items and so the one that gives ground
+when the strip runs out of edge. That second bar is a card of the same ghost
+cells at `panelPadding`, one item deep, sitting where any panel would; it is
+the tray's own overflow, not the bar's, which stays the chevron's whole-region
+collapse.
 
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
 continues round the other three edges as a band `frame.thickness` wide, and

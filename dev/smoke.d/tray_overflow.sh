@@ -1,51 +1,26 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --tray-overflow squeezes the tray until it has to give ground, and reads
-# back where the items went. The strip is pinned to one region holding a qml
-# module of a fixed width and the tray behind it, so the room the tray is
-# left with is arithmetic rather than a guess: a 1692px module on a 1920px
-# output leaves the rail under 200px, and six icons want a little over 240.
-# What has to be true is that the tray moved WHOLE: nothing of it left on
-# the strip but the toggle, and every registered item reachable in the second
-# bar. tests/tst_tray_overflow.qml pins the arithmetic that decides it.
-#
-# The second bar is opened over `panel toggle trayoverflow` (it is a popout
-# in PanelIpc's registry like any other), which is also the only way in
-# without a synthetic pointer to click the toggle with.
-#
-# It owns bar.layout, so it does not combine with --bar-layout or
-# --bar-position, and it registers stubs of its own, so --tray's own count
-# assert does not survive the pair either.
+# --tray-overflow reads back where the tray lives with nothing configured at
+# all, which since 2026-08-28 is the second bar: the strip carries the dots
+# toggle and no icons, whatever room it has (Bar/tray.js's `maxVisible` 0
+# default). What has to be true is that the tray moved WHOLE, nothing of it
+# left on the strip but the toggle and every registered item reachable in the
+# second bar, and that the bar itself opens as a real popout.
+# `tray.maxVisible: -1` is the other half of that key, the strip carrying
+# what fits; --tray pins it and reads the six-cell strip back.
+# tests/tst_tray_overflow.qml pins the arithmetic behind both.
 leg_tray_overflow_flag="--tray-overflow"
 leg_tray_overflow_order=172
 # need_python3 is tray.sh's (sourced first, alphabetically), the same shared
 # `need_<bin>` resolution every leg uses.
 leg_tray_overflow_needs="python3 jq"
 
-tray_overflow_pad_path="$shot_dir/tray-overflow-pad.qml"
 tray_overflow_pids_path="$shot_dir/tray-overflow-pids.txt"
 tray_overflow_status_path="$shot_dir/tray-overflow-status.json"
 tray_overflow_open_path="$shot_dir/tray-overflow-open.json"
 tray_overflow_layers_path="$shot_dir/tray-overflow-layers.json"
 tray_overflow_strip_path="$shot_dir/tray-overflow-strip.png"
 tray_overflow_bar_path="$shot_dir/tray-overflow-bar.png"
-
-leg_tray_overflow_fixture() {
-  # A cell of a stated width and nothing else: the point is the room it
-  # takes, so a Text whose width is a font metric would put the whole
-  # measurement at the mercy of the fixture's own string.
-  cat > "$tray_overflow_pad_path" <<'EOF'
-import QtQuick
-
-Item {
-    implicitWidth: 1692
-    implicitHeight: 13
-}
-EOF
-  # Both other regions empty, so the strip's whole length is this one
-  # region's to run out of.
-  settings_fragment ', "bar": {"layout": {"left": [], "center": [], "right": ["custom:traypad", "tray"]}, "modules": [{"id": "traypad", "type": "qml", "source": "'"$tray_overflow_pad_path"'"}]}'
-}
 
 leg_tray_overflow_timing() {
   # The drive's last step lands ~14s in; the run's own frame is taken past

@@ -35,12 +35,17 @@ import "../../../Bar/tray.js" as TrayFit
 // nothing (owner, 2026-08-28): the strip shows every icon or it shows the
 // toggle alone, never some of each, so one tray never reads across two
 // surfaces and the cut never moves under the user when something else on the
-// bar resizes. `slackAlong` is what the bar has left over (Bar.qml's own
-// `_slack`), so the budget here is this rail's current extent plus that: a
-// term the answer below cannot move, since anything the rail gives up the
-// slack takes back. `tray.maxVisible` hands the tray over regardless of
-// room, which is the always-hidden section those two macOS apps are really
-// about.
+// bar resizes.
+//
+// By default it is the toggle, on any bar, with room or without it (owner,
+// 2026-08-28): the dots are where the tray lives, not a state a crowded bar
+// falls into. `tray.maxVisible` is the whole of the configuration
+// (Bar/tray.js): -1 puts as many icons on the strip as fit, N puts up to N
+// there, and room still has the last word over both. That room question
+// alone reads `slackAlong`, what the bar has left over (Bar.qml's own
+// `_slack`), so the budget is this rail's current extent plus that: a term
+// the answer below cannot move, since anything the rail gives up the slack
+// takes back.
 //
 // Spec deviation, owner's call (M24, the same class as the `panel` IPC
 // addendum): spec §Surfaces-1 says "SNI tray (grouped drawer)", and this
@@ -128,19 +133,25 @@ Rail {
     // adds nothing to the circle above.
     readonly property real _unit: root.vertical ? overflowCell.implicitHeight : overflowCell.implicitWidth
 
-    readonly property int _maxVisible: Config.get("tray.maxVisible", 0)
+    // The most icons the strip may carry (`tray.maxVisible`, Bar/tray.js):
+    // 0, the default, is none and the tray lives in the second bar. With no
+    // second bar wired in there is nowhere to put it, so the ceiling comes
+    // off and the strip carries whatever it has.
+    readonly property int _ceiling: root.overflow ? Config.get("tray.maxVisible", 0) : -1
 
     function _refit() {
-        // No bar has measured its strip yet (Bar.qml hands over an infinite
-        // slack until it has one). A slack worked out against a zero-length
-        // strip is not a tight budget, it is no answer, and answering it
-        // would put the toggle over a tray with room to spare.
-        if (!isFinite(root.slackAlong))
+        // Only the room question needs a measured strip, and Bar.qml hands
+        // over an infinite slack until it has one. A slack worked out against
+        // a zero-length strip is not a tight budget, it is no answer, and
+        // answering it would put the toggle over a tray with room to spare.
+        // A ceiling has already decided without it, so a tray that always
+        // lives in the second bar never waits for a frame to say so.
+        if (TrayFit.needsRoom(root._total, root._ceiling) && !isFinite(root.slackAlong))
             return;
         var own = root.vertical ? root.implicitHeight : root.implicitWidth;
         var fit = TrayFit.fit(root._total, own + root.slackAlong, root._unit, root.spacing,
-            root.overflow ? root._maxVisible : 0);
-        root._fits = root.overflow ? fit.inline === root._total : true;
+            root._ceiling);
+        root._fits = fit.inline === root._total;
         root._decidedTotal = root._total;
         root._decided = true;
         // Kept current whether or not the second bar is up: it is where the
@@ -175,7 +186,7 @@ Rail {
     onSlackAlongChanged: refitTimer.restart()
     on_TotalChanged: refitTimer.restart()
     on_UnitChanged: refitTimer.restart()
-    on_MaxVisibleChanged: refitTimer.restart()
+    on_CeilingChanged: refitTimer.restart()
     onVerticalChanged: refitTimer.restart()
 
     function openOverflow() {

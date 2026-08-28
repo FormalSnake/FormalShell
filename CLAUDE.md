@@ -178,11 +178,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   snapshot without the surface moving under them.
 - `tooltip.sh` `--tooltip`: rides `--panel <name>`; the tooltip surface
   absent before the pointer parks on a header button and present after.
-- `tray.sh` `--tray`: six real StatusNotifierItem producers, the whole strip,
-  the D-Bus Activate round trip, and the shell-owned menu.
-- `tray_overflow.sh` `--tray-overflow`: the tray squeezed by a bar region
-  wide enough to leave it no room, the whole strip's worth of icons moving to
-  the second bar rather than some of them, read off `tray status`.
+- `tray.sh` `--tray`: six real StatusNotifierItem producers on a strip pinned
+  to carry them (`tray.maxVisible: -1`), the D-Bus Activate round trip, and
+  the shell-owned menu.
+- `tray_overflow.sh` `--tray-overflow`: the shipped default, the whole tray
+  in its second bar behind the strip's dots toggle with no settings at all,
+  read off `tray status`.
 - `visualizer.sh` `--visualizer`: the `cava` child owned and killed with
   playback, proven by pgrep rather than by the frame.
 - `wallpaper.sh` `--wallpaper`: the matugen recolour on a set wallpaper, the

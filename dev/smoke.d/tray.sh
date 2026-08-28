@@ -2,9 +2,11 @@
 # shellcheck disable=SC2034,SC2154,SC2016  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --tray launches six real StatusNotifierItem producers (dev/sni-stub.py,
 # which registers on the session bus for real, never faked inside the shell)
-# and reads the whole strip back. Six items with no visible limit is the
-# claim: every one is its own cell, and bounding a long strip is the bar
-# chevron's job. `tray status` has to report all six and no drawer, bucket or
+# and reads the whole strip back. It pins `tray.maxVisible: -1`, the strip
+# carrying whatever fits, since the shipped default is the second bar
+# (--tray-overflow reads that one back). Six items with no visible limit is
+# the claim: every one is its own cell, room alone decides, and bounding a
+# long strip is the bar chevron's job. `tray status` has to report all six and no drawer, bucket or
 # expand key at all; `tray activate` has to reach that one item over D-Bus
 # (the stub's own --activate-file is the evidence, not the IPC reply); the
 # shell-owned menu has to open, walk two rows and fire the third; and the
@@ -42,6 +44,10 @@ tray_menu_path="$shot_dir/tray-menu.png"
 tray_menuactivate_reply_path="$shot_dir/tray-menuactivate-reply.txt"
 tray_query_root_path="$shot_dir/tray-query-root.json"
 tray_query_route_path="$shot_dir/tray-query-route.json"
+
+leg_tray_fixture() {
+  settings_fragment ', "tray": {"maxVisible": -1}'
+}
 
 leg_tray_timing() {
   # tray-drive.sh's own last step lands around its internal sleep sum (~19s)
