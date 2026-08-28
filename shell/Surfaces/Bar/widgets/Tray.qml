@@ -78,12 +78,19 @@ Rail {
     // as a model (a fresh JS array snapshot on every read, per Quickshell's
     // own ObjectModel docs; see the Repeater below for why that matters).
     //
-    // `shown` follows the standing answer rather than the raw count, so a
-    // tray with items but no answer yet takes no room and paints nothing.
-    // The rail then measures 0 and the bar's leftover room is what a bar
-    // with no tray has, which is exactly the budget the first answer needs.
+    // `shown` is the raw count and nothing else. It must never fall to false
+    // (or to a rail that measures 0) while items exist: Bar.qml's region
+    // delegate gates a collapsible entry on `_along > 0`, which reads this
+    // rail's own implicit extent, and an entry that measures 0 while hidden
+    // never produces the width that would reveal it again. That deadlock is
+    // this file's, historically (Bar.qml's own comment names it, and
+    // tests/tst_bar_entry_reveal.qml pins it), and gating this on the fit
+    // walked straight back into it: a tray behind the bar chevron came back
+    // from an expand with nothing in its slot at all (owner, 2026-08-28).
+    // Whatever the answer is or is not yet, this rail always has a cell in
+    // it.
     readonly property int _total: SystemTray.items.values.length
-    readonly property bool shown: root._decided && (root._inline > 0 || root._hidden > 0)
+    readonly property bool shown: root._total > 0
 
     // Bar.qml sets these on the widget it loads; this rail is not a Cell
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
@@ -109,22 +116,25 @@ Rail {
     // gives up, the bar's leftover room gains).
     //
     // The cost of assigning is that the answer lands after its inputs, so
-    // nothing may be drawn from the inputs directly. `_decidedTotal` is the
-    // item count the standing answer was worked out for, and it, not
-    // `_total`, decides what is on the rail: a seventh icon that arrives and
-    // pushes the tray over the edge is never drawn and then taken away, it
-    // simply never appears on the strip. Same for the answer itself, which is
-    // why there is no default worth painting before the first one: "fits"
-    // draws every icon and then removes them, "doesn't" puts a toggle over a
-    // tray that had room all along, and either is the tray visibly changing
-    // its mind on load (owner, 2026-08-28: "why are you doing it on load").
-    // Undrawn for a frame is not a state anyone can see; wrong for a frame is.
+    // nothing is drawn from the inputs directly. `_decidedTotal` is the item
+    // count the standing answer was worked out for, and it, not `_total`,
+    // decides what is on the rail: an icon that arrives and pushes the tray
+    // over the edge is never drawn and then taken away, it simply never
+    // appears on the strip.
+    //
+    // Before the first answer the rail is the toggle, which is both where the
+    // tray lives by default and the one starting state that is never wrong to
+    // look at: it is one cell wide whatever the item count, so nothing
+    // rearranges when the answer lands, and it keeps the rail measurable,
+    // which `shown` above explains is not optional. Only `-1` and a ceiling
+    // ever move off it, and only once (owner, 2026-08-28: "why are you doing
+    // it on load").
     property bool _decided: false
-    property bool _fits: true
+    property bool _fits: false
     property int _decidedTotal: 0
 
-    readonly property int _inline: root._fits ? Math.min(root._decidedTotal, root._total) : 0
-    readonly property int _hidden: root._fits ? 0 : root._total
+    readonly property int _inline: (root._decided && root._fits) ? Math.min(root._decidedTotal, root._total) : 0
+    readonly property int _hidden: root._total - root._inline
 
     // One cell's extent along the strip, measured off the toggle rather
     // than restated as arithmetic here: it is the same square slot every

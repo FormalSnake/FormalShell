@@ -9,6 +9,20 @@
 # `tray.maxVisible: -1` is the other half of that key, the strip carrying
 # what fits; --tray pins it and reads the six-cell strip back.
 # tests/tst_tray_overflow.qml pins the arithmetic behind both.
+#
+# It also puts the tray behind a bar chevron, alone on its governed side, and
+# rides it down and back up. Collapsed and expanded then differ by exactly one
+# cell, this one, so two byte-identical frames mean the toggle did not come
+# back: Bar.qml reveals a governed entry only while it measures more than 0,
+# and a tray drawing nothing until it has decided something measures 0 and
+# stays hidden forever. That shipped (owner, 2026-08-28: "I just opened the
+# chevron and its not there"), with `tray status` reporting the collapse
+# correctly the whole time, which is why the claim here is a picture and not
+# a reply.
+#
+# It owns bar.layout, so it does not combine with --bar-layout, --bar-position
+# or --chevron, and it registers stubs of its own, so --tray's own count
+# assert does not survive that pair either.
 leg_tray_overflow_flag="--tray-overflow"
 leg_tray_overflow_order=172
 # need_python3 is tray.sh's (sourced first, alphabetically), the same shared
@@ -21,11 +35,20 @@ tray_overflow_open_path="$shot_dir/tray-overflow-open.json"
 tray_overflow_layers_path="$shot_dir/tray-overflow-layers.json"
 tray_overflow_strip_path="$shot_dir/tray-overflow-strip.png"
 tray_overflow_bar_path="$shot_dir/tray-overflow-bar.png"
+tray_overflow_collapsed_path="$shot_dir/tray-overflow-collapsed.png"
+tray_overflow_expanded_path="$shot_dir/tray-overflow-expanded.png"
+
+leg_tray_overflow_fixture() {
+  # The chevron governs what precedes it in a right region, so the tray is the
+  # whole of its governed side and `clock`, outboard of it, is what keeps the
+  # two frames from differing by anything else.
+  settings_fragment ', "bar": {"layout": {"left": [], "center": [], "right": ["tray", "chevron", "clock"]}}'
+}
 
 leg_tray_overflow_timing() {
-  # The drive's last step lands ~14s in; the run's own frame is taken past
-  # it, with the second bar closed again and the squeezed strip in view.
-  leg_timing 18 45
+  # The drive's last step lands ~20s in; the run's own frame is taken past
+  # it, with the second bar closed and the chevron expanded again.
+  leg_timing 24 55
 }
 
 leg_tray_overflow_drive() {
@@ -52,6 +75,13 @@ sleep 2
 "$grim_bin" "$tray_overflow_bar_path" > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call bar chevron collapse > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$tray_overflow_collapsed_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call bar chevron expand > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$tray_overflow_expanded_path" > /dev/null 2>&1
 EOF
 
   # The stubs sit in GLib.MainLoop().run() forever, same as --tray's.
@@ -108,4 +138,15 @@ leg_tray_overflow_assert() {
     fail "no second-bar screenshot produced"
   fi
   echo "SMOKE_TRAY_OVERFLOW_BAR $tray_overflow_bar_path"
+  # The regression the model cannot see: the toggle has to draw again after a
+  # collapse, and it is the only cell on its side of the chevron, so these two
+  # frames differ by it alone.
+  if [ ! -f "$tray_overflow_collapsed_path" ] || [ ! -f "$tray_overflow_expanded_path" ]; then
+    fail "no chevron round-trip screenshots produced"
+  fi
+  echo "SMOKE_TRAY_OVERFLOW_COLLAPSED $tray_overflow_collapsed_path"
+  echo "SMOKE_TRAY_OVERFLOW_EXPANDED $tray_overflow_expanded_path"
+  if cmp -s "$tray_overflow_collapsed_path" "$tray_overflow_expanded_path"; then
+    fail "the tray's toggle did not come back from a chevron collapse: the two frames are byte-identical"
+  fi
 }
