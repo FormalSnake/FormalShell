@@ -39,6 +39,7 @@ tray_overflow_collapsed_path="$shot_dir/tray-overflow-collapsed.png"
 tray_overflow_expanded_path="$shot_dir/tray-overflow-expanded.png"
 tray_overflow_menu_reply_path="$shot_dir/tray-overflow-menu-reply.txt"
 tray_overflow_menu_path="$shot_dir/tray-overflow-menu.json"
+tray_overflow_menu_shot_path="$shot_dir/tray-overflow-menu.png"
 
 leg_tray_overflow_fixture() {
   # The chevron governs what precedes it in a right region, so the tray is the
@@ -79,6 +80,7 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call tray menu overflow-fixture-2 > "$tray_overflow_menu_reply_path" 2>&1
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call tray status > "$tray_overflow_menu_path" 2>&1
+"$grim_bin" "$tray_overflow_menu_shot_path" > /dev/null 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
 sleep 1
@@ -154,6 +156,14 @@ leg_tray_overflow_assert() {
   if [ "$("$jq_bin" -r '.overflow.open' "$tray_overflow_menu_path")" != "true" ]; then
     fail "opening a tray item's menu closed the second bar out from under it, got: $(cat "$tray_overflow_menu_path")"
   fi
+  # Where the two sit is the frame's to say: both hang off the same bar edge
+  # by the same rule, so a menu that did not stand clear of its owner drew
+  # straight over it (owner, 2026-08-28). No layer box can show that, they are
+  # both full-output surfaces.
+  if [ ! -f "$tray_overflow_menu_shot_path" ]; then
+    fail "no menu-over-the-second-bar screenshot produced"
+  fi
+  echo "SMOKE_TRAY_OVERFLOW_MENU $tray_overflow_menu_shot_path"
   # The regression the model cannot see: the toggle has to draw again after a
   # collapse, and it is the only cell on its side of the chevron, so these two
   # frames differ by it alone.

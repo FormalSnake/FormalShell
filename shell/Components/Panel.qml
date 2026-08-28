@@ -188,13 +188,24 @@ PanelWindow {
     // IPC open has no cell to anchor to and falls back to the end of the
     // bar. Which edge the bar is on (Theme.barPosition) decides which of
     // x and y follows the cell and which hangs off the bar.
+    // A panel with an owner hangs off the OWNER, not off the bar: both are
+    // pinned to the same edge by the same rule above, so a child would
+    // otherwise draw straight on top of the surface it belongs to (owner,
+    // 2026-08-28, a tray item's menu over the tray's second bar). One
+    // `barMargin` clear of it, on the axis that hangs off the bar, which is
+    // the one axis both of them are pinned on: beside it on a vertical bar,
+    // under it on a horizontal one.
+    readonly property real _ownerShift: (root.owner && root.owner.isOpen)
+        ? (Theme.space.barMargin + (Theme.barVertical ? root.owner.panelWidth : root.owner._frameHeight))
+        : 0
+
     readonly property real _frameX: root._screen
         ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root.panelWidth,
-            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding)
+            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding) - root._edge.x * root._ownerShift
         : 0
     readonly property real _frameY: root._screen
         ? Geometry.frameY(Theme.barPosition, root.anchorY, root._screen.height, root._frameHeight,
-            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding)
+            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding) - root._edge.y * root._ownerShift
         : 0
 
     // Where the frame slides in from: the bar's edge.
@@ -208,9 +219,13 @@ PanelWindow {
     // minus both paddings. Content beyond that scrolls (contentFlickable
     // below) rather than the panel running off the display, which the
     // notification centre and a long calendar month both did.
+    // On a horizontal bar the shift above eats into the room below, so the
+    // cap comes down with it and a long menu scrolls rather than running off
+    // the screen. On a vertical bar the shift is sideways and the height is
+    // untouched.
     readonly property real _maxFrameHeight: root._screen
         ? Geometry.maxFrameHeight(Theme.barPosition, root._screen.height, Theme.edgeInset,
-            Theme.space.barMargin, Theme.space.screenPadding)
+            Theme.space.barMargin, Theme.space.screenPadding) - (Theme.barVertical ? 0 : root._ownerShift)
         : 400
     // Header, the rule under it, then the content column (DESIGN.md §3
     // "Panel"): one `panelPadding` either side of the seam, so the header
