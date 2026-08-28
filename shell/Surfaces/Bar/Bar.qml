@@ -286,7 +286,13 @@ PanelWindow {
             // cell with an unbounded item count, so it is the one that gives
             // ground when the bar runs out of edge; what it drops opens in
             // the second bar instead (TrayOverflow.qml).
-            slackAlong: bar._slack
+            //
+            // Infinity until the strip has a length of its own: every term
+            // of `_slack` is measured off a window that does not exist for
+            // the first frames, and a budget worked out against a zero-length
+            // strip is not a tight one, it is no answer. The tray waits for a
+            // real number rather than painting a guess.
+            slackAlong: bar._along > 0 ? bar._slack : Number.POSITIVE_INFINITY
         }
     }
     Component {

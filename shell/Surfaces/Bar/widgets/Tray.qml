@@ -61,8 +61,9 @@ Rail {
     property var overflow: null
 
     // Room the strip has left over along its own axis, handed in by Bar.qml.
-    // Infinity is "nobody measured", which shows everything: a Tray outside
-    // a bar (the gallery) is not a fit problem.
+    // Infinity is "nobody has measured a strip yet", which is not a budget
+    // and is not answered: the rail waits rather than guessing, and paints
+    // nothing until it has a real number (`_refit` below).
     property real slackAlong: Number.POSITIVE_INFINITY
 
     // Read by Bar.qml's regionDelegate instead of `visible` directly, see
@@ -71,8 +72,13 @@ Rail {
     // future reactivity. `.values` is read here for the count alone, never
     // as a model (a fresh JS array snapshot on every read, per Quickshell's
     // own ObjectModel docs; see the Repeater below for why that matters).
+    //
+    // `shown` follows the standing answer rather than the raw count, so a
+    // tray with items but no answer yet takes no room and paints nothing.
+    // The rail then measures 0 and the bar's leftover room is what a bar
+    // with no tray has, which is exactly the budget the first answer needs.
     readonly property int _total: SystemTray.items.values.length
-    readonly property bool shown: root._total > 0
+    readonly property bool shown: root._decided && (root._inline > 0 || root._hidden > 0)
 
     // Bar.qml sets these on the widget it loads; this rail is not a Cell
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
@@ -88,20 +94,32 @@ Rail {
 
     // --- The fit ---------------------------------------------------------
     //
-    // `_fits` is written by hand rather than bound, which is the whole reason
-    // this converges: the budget it is computed from reads the rail's own
-    // extent, which reads this flag, and a binding round that circle is a
-    // loop QML would abort. Assigning it instead makes the pass one-way, and
-    // it settles in a single step because the budget itself cannot move when
-    // the flag does (extent + slack is invariant: whatever the rail gives up,
-    // the bar's leftover room gains).
+    // The rail draws the last ANSWER, never the current inputs. Three
+    // properties carry it, all three written by `_refit()` rather than bound,
+    // which is the whole reason this converges: the budget the answer comes
+    // from reads the rail's own extent, which reads the answer, and a binding
+    // round that circle is a loop QML would abort. Assigning makes the pass
+    // one-way, and it settles in a single step because the budget cannot move
+    // when the answer does (extent + slack is invariant: whatever the rail
+    // gives up, the bar's leftover room gains).
     //
-    // It starts true so a fresh tray paints its icons and only ever hands
-    // them over once something has actually been measured. The other order
-    // flashes a bar with nothing in it but a toggle on every shell start.
+    // The cost of assigning is that the answer lands after its inputs, so
+    // nothing may be drawn from the inputs directly. `_decidedTotal` is the
+    // item count the standing answer was worked out for, and it, not
+    // `_total`, decides what is on the rail: a seventh icon that arrives and
+    // pushes the tray over the edge is never drawn and then taken away, it
+    // simply never appears on the strip. Same for the answer itself, which is
+    // why there is no default worth painting before the first one: "fits"
+    // draws every icon and then removes them, "doesn't" puts a toggle over a
+    // tray that had room all along, and either is the tray visibly changing
+    // its mind on load (owner, 2026-08-28: "why are you doing it on load").
+    // Undrawn for a frame is not a state anyone can see; wrong for a frame is.
+    property bool _decided: false
     property bool _fits: true
-    readonly property int _inline: root._fits ? root._total : 0
-    readonly property int _hidden: root._total - root._inline
+    property int _decidedTotal: 0
+
+    readonly property int _inline: root._fits ? Math.min(root._decidedTotal, root._total) : 0
+    readonly property int _hidden: root._fits ? 0 : root._total
 
     // One cell's extent along the strip, measured off the toggle rather
     // than restated as arithmetic here: it is the same square slot every
@@ -113,10 +131,18 @@ Rail {
     readonly property int _maxVisible: Config.get("tray.maxVisible", 0)
 
     function _refit() {
+        // No bar has measured its strip yet (Bar.qml hands over an infinite
+        // slack until it has one). A slack worked out against a zero-length
+        // strip is not a tight budget, it is no answer, and answering it
+        // would put the toggle over a tray with room to spare.
+        if (!isFinite(root.slackAlong))
+            return;
         var own = root.vertical ? root.implicitHeight : root.implicitWidth;
         var fit = TrayFit.fit(root._total, own + root.slackAlong, root._unit, root.spacing,
             root.overflow ? root._maxVisible : 0);
         root._fits = root.overflow ? fit.inline === root._total : true;
+        root._decidedTotal = root._total;
+        root._decided = true;
         // Kept current whether or not the second bar is up: it is where the
         // answer is published (TrayIpc's `status`), and a bar left open while
         // the fit moves under it has to follow. Every output's Tray writes
@@ -127,15 +153,21 @@ Rail {
             root.overflow.inlineCount = root._inline;
     }
 
-    // Coalesces the several property changes one relayout produces into a
-    // single pass on the next event loop turn. Deliberately not a longer
-    // settle: anything the user can see between the icons painting and the
-    // answer landing is the tray visibly changing its mind, which is exactly
-    // what a 200ms debounce here looked like (owner, 2026-08-28: "i see all
-    // icons ... after a few ms i see the three dots").
+    // Long enough to outlast the one animation that moves this rail's inputs
+    // without changing where they end up: the bar chevron's collapse and
+    // reveal (Bar.qml's `Behavior on _along`), during which every cell on the
+    // governed side is between two widths and the bar's leftover room is
+    // whatever the frame happened to catch. Each restart pushes the pass past
+    // the last of those, so the answer is worked out once, against the layout
+    // the bar settled on, rather than against the room a half-open group has
+    // not taken back yet. That was the tray showing every icon through an
+    // expand and swapping to the toggle after it (owner, 2026-08-28: "i see
+    // all icons, the expand stops, after a few ms i see the three dots").
+    // Nothing is drawn from a stale answer meanwhile, since the rail draws
+    // `_decidedTotal` and not `_total`.
     Timer {
         id: refitTimer
-        interval: 0
+        interval: Theme.motion.standard + 32
         onTriggered: root._refit()
     }
 
