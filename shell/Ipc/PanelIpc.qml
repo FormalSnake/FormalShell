@@ -13,7 +13,7 @@ import "../Bar/panels.js" as Panels
 // panel name -> its Panel instance, wired from shell.qml as each panel is
 // added: appmenu, audio, calendar, network, bluetooth, airpods, dualsense,
 // power, weather, media, github, usage, tailscale, systemupdate, display,
-// monitor.
+// monitor, trayoverflow.
 IpcHandler {
     id: root
     target: "panel"

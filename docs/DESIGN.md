@@ -275,6 +275,15 @@ open draws a 2px `primary` line along its bottom edge. Workspace dots are
 layered over them on the focused slot; a switch moves the pill, a hovered
 dot grows a step, and an urgent dot is `destructive` and pulses once.
 
+The tray is the one region cell with no fixed number of items, so it is the
+one that gives ground when the strip runs out of edge: it shows what fits and
+puts the rest behind a dots toggle at its own end, which opens them in a
+second bar hanging off that cell (`tray.maxVisible` caps the inline count
+regardless of room). That bar is a card of the same ghost cells at
+`panelPadding`, one item deep, sitting where any panel would; it is the
+tray's own overflow, not the bar's, which stays the chevron's whole-region
+collapse.
+
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
 continues round the other three edges as a band `frame.thickness` wide, and
 a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut

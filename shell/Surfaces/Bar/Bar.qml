@@ -79,6 +79,7 @@ PanelWindow {
     property var displayPanel: null
     property var monitorPanel: null
     property var trayMenu: null
+    property var trayOverflow: null
     // The single Center instance (shell.qml's notificationsCenter), the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
@@ -147,6 +148,21 @@ PanelWindow {
     // The strip's own length: what the regions share out, and what a
     // cell's width cap is a fraction of.
     readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
+
+    // What the strip has left over once all three regions have taken their
+    // natural extent, the two end insets and the gap either side of the
+    // centre are paid for. Negative means the layout is already clipping
+    // (the two end regions' own width caps below).
+    //
+    // The one cell that sizes itself to this reads it as a term to add to
+    // its OWN extent (widgets/Tray.qml), never as a width: the sum here
+    // includes that cell, so the two cancel and the budget it works out
+    // cannot move when it resizes. Anything that instead took this as room
+    // to grow into would be reading a number its own growth shrinks.
+    readonly property real _slack: bar._along - bar._strip.edgeInset * 2 - Theme.space.sm * 2
+        - (bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth)
+        - (bar._vertical ? centerRegion.implicitHeight : centerRegion.implicitWidth)
+        - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
 
     // One thickness for every cell in every region, so a widget with a
     // taller line of content can no longer drag the whole strip with it.
@@ -265,6 +281,12 @@ PanelWindow {
         id: trayComponent
         Tray {
             menu: bar.trayMenu
+            overflow: bar.trayOverflow
+            // What the strip can still afford. The tray is the one region
+            // cell with an unbounded item count, so it is the one that gives
+            // ground when the bar runs out of edge; what it drops opens in
+            // the second bar instead (TrayOverflow.qml).
+            slackAlong: bar._slack
         }
     }
     Component {

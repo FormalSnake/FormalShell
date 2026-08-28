@@ -85,6 +85,7 @@ ShellRoot {
                 displayPanel: displayPanelInstance
                 monitorPanel: monitorPanelInstance
                 trayMenu: trayMenuInstance
+                trayOverflow: trayOverflowInstance
                 center: notificationsCenter
             }
         }
@@ -188,6 +189,11 @@ ShellRoot {
     // every bar output's Tray widget, its content swapped per item via
     // openItem() rather than one instance per screen.
     TrayMenu { id: trayMenuInstance }
+    // The tray's second bar (Ice/Bartender's overflow row), one instance for
+    // the same reason: the bar that opened it decides which output it lands
+    // on. Registered in PanelIpc below like any other popout, so a
+    // compositor keybind and the smoke rig can both summon it.
+    TrayOverflow { id: trayOverflowInstance }
 
     // Plugin-declared surfaces (shell/Plugins/manifest.js): created from the
     // scanned manifests rather than named here, because nobody knows their
@@ -236,14 +242,14 @@ ShellRoot {
     MenuIpc { menu: menuInstance }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
-    // The static sixteen merged with every plugin surface that has
+    // The static seventeen merged with every plugin surface that has
     // registered itself. Plugin keys carry manifest.js's "plugin:" prefix, so
     // a plugin can never shadow a builtin name and PanelIpc needs no
     // reserved-id list. PluginService.surfaces is replaced wholesale on every
     // register/unregister, so this binding re-fires.
     PanelIpc {
         registry: {
-            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance };
+            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance, trayoverflow: trayOverflowInstance };
             var surfaces = PluginService.surfaces;
             for (var key in surfaces)
                 reg[key] = surfaces[key];
@@ -258,7 +264,7 @@ ShellRoot {
     BluetoothIpc {}
     AirpodsIpc {}
     MediaIpc {}
-    TrayIpc { trayMenu: trayMenuInstance }
+    TrayIpc { trayMenu: trayMenuInstance; trayOverflow: trayOverflowInstance }
     BarIpc {}
     LockIpc {}
     ScreensaverIpc { screensaver: screensaver }

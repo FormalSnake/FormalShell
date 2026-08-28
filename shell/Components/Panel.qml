@@ -42,6 +42,12 @@ PanelWindow {
     // open.
     property bool cursorActive: false
     property string panelTitle: ""
+    // Off for a popout that is a strip rather than a sheet: the tray's
+    // overflow bar (Surfaces/Bar/TrayOverflow.qml) is a second bar, and a
+    // title row over a line of tray icons would be chrome introducing them.
+    // The header row, its seam and both their gaps come out of the frame's
+    // own height with it, so the card closes on the content.
+    property bool showHeader: true
     // A Lucide name (shell/Theme/icons.js) drawn before the title. Empty
     // leaves the header text-only.
     property string panelIcon: ""
@@ -199,12 +205,15 @@ PanelWindow {
     // Header, the rule under it, then the content column (DESIGN.md §3
     // "Panel"): one `panelPadding` either side of the seam, so the header
     // sits in the same gutter the card's own padding gives every other edge.
-    readonly property real _headerGap: Theme.space.panelPadding * 2 + Theme.borderWidth
+    // Both terms are 0 on a headerless panel, which is the whole of what
+    // `showHeader` costs: the content then starts at the card's own padding.
+    readonly property real _headerHeight: root.showHeader ? Theme.space.controlHeight : 0
+    readonly property real _headerGap: root.showHeader ? Theme.space.panelPadding * 2 + Theme.borderWidth : 0
 
     readonly property real _maxContentHeight: Geometry.maxContentHeight(root._maxFrameHeight,
-        Theme.space.panelPadding, header.height, root._headerGap)
+        Theme.space.panelPadding, root._headerHeight, root._headerGap)
     readonly property real _frameHeight: Geometry.frameHeight(contentColumn.implicitHeight,
-        root._maxContentHeight, Theme.space.panelPadding, header.height, root._headerGap)
+        root._maxContentHeight, Theme.space.panelPadding, root._headerHeight, root._headerGap)
 
     // `anchor` is the opening cell's centre ({x, y}) in its own window, or
     // undefined for an open with no cell.
@@ -415,10 +424,11 @@ PanelWindow {
             // happens to be tallest.
             Item {
                 id: header
+                visible: root.showHeader
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                height: Theme.space.controlHeight
+                height: root._headerHeight
 
                 Icon {
                     id: headerIcon
@@ -469,6 +479,7 @@ PanelWindow {
             // of the rows rather than of the card.
             Separator {
                 id: headerRule
+                visible: root.showHeader
                 anchors.top: header.bottom
                 anchors.topMargin: Theme.space.panelPadding
                 anchors.left: parent.left
@@ -486,8 +497,12 @@ PanelWindow {
             // the header, both of which are several times that.
             Flickable {
                 id: contentFlickable
-                anchors.top: headerRule.bottom
-                anchors.topMargin: Theme.space.panelPadding - Theme.ringWidth
+                // Held off the card's own inner top by the header and its
+                // seam rather than anchored under the rule itself, so a
+                // headerless panel (both terms 0) starts where the card's
+                // padding leaves off instead of under an invisible rule.
+                anchors.top: parent.top
+                anchors.topMargin: root._headerHeight + root._headerGap - Theme.ringWidth
                 anchors.left: parent.left
                 anchors.leftMargin: -Theme.ringWidth
                 anchors.right: parent.right

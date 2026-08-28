@@ -29,7 +29,14 @@ IpcHandler {
     target: "tray"
 
     property var trayMenu: null
+    property var trayOverflow: null
 
+    // `overflow` is the split the strip settled on: how many items the bar
+    // had room for and the ids of the ones that went to the second bar
+    // (Surfaces/Bar/TrayOverflow.qml), which is the only place that split is
+    // observable without measuring a screenshot. Opening and closing that
+    // bar is `panel open|close|toggle trayoverflow` like any other popout,
+    // so there is no verb for it here.
     function status(): string {
         var items = SystemTray.items.values.map(function (item) {
             return {
@@ -38,7 +45,15 @@ IpcHandler {
                 hasMenu: item.hasMenu
             };
         });
-        return JSON.stringify({ items: items });
+        var inline = trayOverflow ? Math.max(0, Math.min(trayOverflow.firstIndex, items.length)) : items.length;
+        return JSON.stringify({
+            items: items,
+            overflow: {
+                open: trayOverflow ? trayOverflow.isOpen : false,
+                inline: inline,
+                hidden: items.slice(inline).map(function (item) { return item.id; })
+            }
+        });
     }
 
     function activate(id: string): string {
