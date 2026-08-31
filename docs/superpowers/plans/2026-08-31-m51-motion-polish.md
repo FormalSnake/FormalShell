@@ -31,8 +31,14 @@ Both legs pass alone; Task 6 verified them individually.
 Also not this plan's: the `--menu` leg's JS heap reads ~51 MB against
 M50's 18 to 25 MB band. Attributed 2026-08-31: plain main 58561d6 with no
 M51 changes reads jsheap_kb 51784 on the same leg (M51 reads 52108, a
-0.3 MB delta), so the growth arrived with the emoji route's data (emoji
-table plus CLDR keywords in JS), not with the motion work.
+0.3 MB delta), so the growth arrived with the emoji commit, not the
+motion work. The peer session's runs agree (52612 and 54404 at 58561d6;
+24720 at d04867b across three legs) and rule out the dataset itself:
+roughly 0.5 MB of new data and keyword memo under a ~27 MB delta, with
+both sides building rows for all 3944 entries, so something in the
+route's allocation behaviour is amplifying it and a lazy load would move
+the cost rather than remove it. Measure which term dominates before
+fixing; the peer has flagged it to the owner.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook; Task 1 amends its
 §1 Motion paragraph and this plan records why.
