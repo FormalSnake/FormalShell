@@ -1095,7 +1095,26 @@ result. A parse failure is silent: no row, no error row.
 
 **Emoji.** `menu summon emoji`, or `:e <query>` from anywhere, fuzzy
 searches a vendored Unicode dataset (Emoji 17.0, regenerate with
-`dev/gen-emoji.sh`, never edit by hand). It draws as a grid of eight
+`dev/gen-emoji.sh`, never edit by hand). Each entry carries CLDR's English
+search keywords alongside its Unicode name, the same annotations macOS and
+iOS type their pickers against, so `sob` finds 😭 (`loudly crying face`),
+`lol` finds 😂 and `+1` finds 👍. Names rank above keywords: exact name,
+name prefix, name word start, whole keyword, name substring, keyword word
+start.
+
+Inside a rank, the emoji you copy most lead, weighted by how recently
+(`menu.emoji.sortByUsage`, default true), so an empty `:e` opens on your own
+most-used rather than on Unicode's file order. The ledger lives in
+`state.json` as `emojiUses` and is recorded whether or not the key is on;
+set it to false to browse in file order:
+
+```jsonc
+{
+  "menu": { "emoji": { "sortByUsage": false } }
+}
+```
+
+It draws as a grid of eight
 columns, not a row list: the glyph fills the cell, the arrows move in two
 dimensions, hover fills the cell and the cursor rings it, and the name of
 whatever the cursor is on reads under the grid. Enter copies the char and, after

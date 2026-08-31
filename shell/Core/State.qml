@@ -17,6 +17,7 @@ Singleton {
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
     property alias clockFormat: adapter.clockFormat
     property alias appLaunches: adapter.appLaunches
+    property alias emojiUses: adapter.emojiUses
     property alias reminders: adapter.reminders
     property alias barCollapsed: adapter.barCollapsed
     property alias batteryShowPercent: adapter.batteryShowPercent
@@ -64,6 +65,18 @@ Singleton {
     // signal fire), so no scoring logic leaks into Core.
     function setAppLaunches(entries) {
         adapter.appLaunches = entries;
+        stateFile.writeAdapter();
+    }
+
+    // The emoji route's own ledger, same [{ id, count, lastMs }] shape and
+    // the same frecency.js scoring, keyed on the row id ("emoji.😭"). Kept
+    // separate from appLaunches rather than sharing one table: they are
+    // ranked independently, and a shared table would let a heavily used
+    // emoji cap an app out of MAX_ENTRIES. Written on every emoji copy even
+    // when menu.emoji.sortByUsage is off, so turning the key on ranks by
+    // what the user has actually been copying rather than starting blank.
+    function setEmojiUses(entries) {
+        adapter.emojiUses = entries;
         stateFile.writeAdapter();
     }
 
@@ -129,6 +142,7 @@ Singleton {
             property int calendarLifeExpectancy: 0
             property string clockFormat: ""
             property var appLaunches: []
+            property var emojiUses: []
             property var reminders: []
             // Collapsed is the default for every region, matching Hidden Bar
             // and Bartender: adding `chevron` to bar.layout has to visibly do

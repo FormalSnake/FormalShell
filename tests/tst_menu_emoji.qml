@@ -33,6 +33,22 @@ TestCase {
         verify(typeof e.group === "string" && e.group.length > 0);
     }
 
+    // `kw` is optional per entry (CLDR has nothing extra for some, and the
+    // generator drops keywords the name already carries), but most of the
+    // set has one, and every one it writes is lowercase and pipe separated:
+    // the search matches against it raw, with no lowercasing of its own.
+    function test_keywords_are_vendored_lowercase() {
+        var withKw = 0;
+        for (var i = 0; i < list.length; i++) {
+            var kw = list[i].kw;
+            if (kw === undefined) continue;
+            withKw++;
+            compare(kw, kw.toLowerCase());
+            verify(kw.indexOf("||") < 0);
+        }
+        verify(withKw > 2000, withKw + " entries carry keywords");
+    }
+
     function test_known_mapping() {
         var rows = Providers.emojiRows(list, "thumbs up");
         verify(rows.length > 0);
@@ -100,16 +116,95 @@ TestCase {
 
     // A one-letter query matches most of the dataset. Every match has to
     // survive to the grid: the cell the owner is looking for is exactly as
-    // likely to be the 400th as the 4th.
+    // likely to be the 400th as the 4th. Asserted as containment rather
+    // than a count, since keyword hits legitimately add rows no name
+    // carries.
     function test_a_broad_query_is_not_truncated() {
         var broad = Providers.emojiRows(list, "a");
-        var expected = 0;
-        for (var i = 0; i < list.length; i++) {
-            if (list[i].name.toLowerCase().indexOf("a") >= 0)
-                expected++;
+        var seen = {};
+        for (var i = 0; i < broad.length; i++)
+            seen[broad[i].icon] = true;
+        var missing = 0, expected = 0;
+        for (var j = 0; j < list.length; j++) {
+            if (list[j].name.toLowerCase().indexOf("a") < 0) continue;
+            expected++;
+            if (!seen[list[j].ch]) missing++;
         }
-        compare(broad.length, expected);
+        compare(missing, 0);
+        verify(broad.length >= expected);
         verify(broad.length > 40);
+    }
+
+    // CLDR's keywords, the thing that makes the route searchable the way
+    // macOS's picker is: Unicode's name for 😭 is "loudly crying face", and
+    // nothing in it says "sob".
+    function test_keywords_find_what_the_name_does_not() {
+        compare(Providers.emojiRows(list, "sob")[0].icon, "😭");
+        compare(Providers.emojiRows(list, "lmao")[0].icon, "🤣");
+        compare(Providers.emojiRows(list, "+1")[0].icon, "👍");
+    }
+
+    // The keyword tiers sit below every name tier: a row whose visible name
+    // matches always leads one that only matched on data the user can't see.
+    function test_a_name_match_still_beats_a_keyword_match() {
+        var fixture = [
+            { ch: "1", name: "unrelated face", group: "g", kw: "cat" },
+            { ch: "2", name: "cat", group: "g" },
+            { ch: "3", name: "wildcat", group: "g" },
+            { ch: "4", name: "black cat", group: "g" },
+            { ch: "5", name: "another face", group: "g", kw: "catnip" }
+        ];
+        var order = Providers.emojiRows(fixture, "cat").map(function (r) { return r.icon; });
+        // name exact, name word start, whole keyword, name substring,
+        // keyword word start.
+        compare(order, ["2", "4", "1", "3", "5"]);
+    }
+
+    // Most-copied first inside a tier, never across one (providers.js's own
+    // contract, and the same one appsProvider's frecency has).
+    function test_usage_reorders_within_a_tier_only() {
+        var fixture = [
+            { ch: "1", name: "cat", group: "g" },
+            { ch: "2", name: "cat face", group: "g" },
+            { ch: "3", name: "cool cat", group: "g" },
+            { ch: "4", name: "cat with a hat", group: "g" }
+        ];
+        var now = Date.now();
+        var uses = [
+            { id: "emoji.4", count: 9, lastMs: now },
+            { id: "emoji.1", count: 1, lastMs: now }
+        ];
+        var order = Providers.emojiRows(fixture, "cat", true, uses, now).map(function (r) { return r.icon; });
+        // "cat with a hat" leads the prefix tier over "cat face" on nine
+        // copies, and still does not overtake the exact-name row above it.
+        compare(order, ["1", "4", "2", "3"]);
+    }
+
+    // The browse grid is the surface the ranking is actually for: an empty
+    // query opens on what the user reaches for, not on Unicode file order.
+    function test_usage_leads_the_browse_grid() {
+        var now = Date.now();
+        var uses = [{ id: "emoji.😭", count: 4, lastMs: now }];
+        compare(Providers.emojiRows(list, "", true, uses, now)[0].icon, "😭");
+        // No ledger, no reordering: a fresh profile browses file order.
+        compare(Providers.emojiRows(list, "", true, [], now)[0].label, "GRINNING FACE");
+    }
+
+    // A stale ledger entry decays rather than ruling forever: the same
+    // half-life the app rows use (frecency.js).
+    function test_a_stale_favourite_loses_to_a_recent_one() {
+        var fixture = [
+            { ch: "1", name: "cat one", group: "g" },
+            { ch: "2", name: "cat two", group: "g" }
+        ];
+        var now = Date.now();
+        var year = 365 * 24 * 60 * 60 * 1000;
+        var uses = [
+            { id: "emoji.1", count: 20, lastMs: now - year },
+            { id: "emoji.2", count: 2, lastMs: now }
+        ];
+        var order = Providers.emojiRows(fixture, "cat", true, uses, now).map(function (r) { return r.icon; });
+        compare(order, ["2", "1"]);
     }
 
     // The memo on `name` must never reach a row: rows are built from the
@@ -119,5 +214,7 @@ TestCase {
         var rows = Providers.emojiRows(list, "face");
         verify(rows.length > 0);
         verify(rows[0]._lcName === undefined);
+        verify(rows[0]._kwIndex === undefined);
+        verify(rows[0]._usageId === undefined);
     }
 }

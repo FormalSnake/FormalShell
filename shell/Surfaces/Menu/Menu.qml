@@ -122,6 +122,15 @@ PanelWindow {
         }
     }
 
+    // The copy ledger the emoji route ranks by (state.json's `emojiUses`),
+    // or an empty list when menu.emoji.sortByUsage is off, which is what
+    // makes providers.js leave Unicode's own order alone. The key gates the
+    // ranking only: the ledger keeps recording either way, so switching it
+    // on later ranks by real history instead of starting blank.
+    readonly property var _emojiUses: Core.Config.get("menu.emoji.sortByUsage", true)
+        ? Core.State.emojiUses
+        : []
+
     // Nix package runner state (M12 Task 7; M13b Task 4 added the honest
     // end states). `nix search` is seconds-slow and network-bound, so
     // unlike calc/emoji the rows can't be computed in the _displayRows
@@ -764,9 +773,9 @@ PanelWindow {
         var emojiQuery = Providers.emojiTriggerQuery(q);
         var emojiPaste = Core.Config.get("clipboard.paste", true);
         if (root.currentNodeId === "emoji")
-            return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q, emojiPaste);
+            return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q, emojiPaste, root._emojiUses, Date.now());
         if (emojiQuery !== null)
-            return Providers.emojiRows(root._emojiList, emojiQuery, emojiPaste);
+            return Providers.emojiRows(root._emojiList, emojiQuery, emojiPaste, root._emojiUses, Date.now());
         // The nix route/":nix" trigger works the same way, except the rows
         // come from the debounced-Process cache (see the state block above)
         // rather than a pure function over local data.
@@ -1390,7 +1399,7 @@ PanelWindow {
         // without keyboard input; icon carries the emoji char itself.
         var emojiQuery = Providers.emojiTriggerQuery(q);
         if (emojiQuery !== null) {
-            return Providers.emojiRows(root._emojiList, emojiQuery).map(function (n) {
+            return Providers.emojiRows(root._emojiList, emojiQuery, true, root._emojiUses, Date.now()).map(function (n) {
                 return { id: n.id, label: n.label, icon: n.icon, kind: n.kind };
             });
         }
@@ -1583,6 +1592,13 @@ PanelWindow {
                 return;
             }
             root._runAction(node.action);
+            // An emoji copy is a use of that emoji, recorded on the same
+            // Enter that copies it (providers.js's emojiUsageId owns the id
+            // both sides spell). Nothing else in the tree carries that
+            // prefix, and the record lands after the action so the reorder
+            // it triggers cannot move the row out from under this call.
+            if (String(node.id).indexOf("emoji.") === 0)
+                Core.State.setEmojiUses(Frecency.record(Core.State.emojiUses, node.id, Date.now()));
             // Launch acknowledgment (nix rows): the spawned terminal can be
             // seconds from mapping, so rows carrying notifySummary get a
             // shell-local toast the moment Enter lands.

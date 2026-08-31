@@ -231,6 +231,13 @@ import QtQuick
 // synthesizes, in wtype's own modifier vocabulary, e.g. "ctrl+shift+v" for
 // a terminal-first session). A chord naming a modifier wtype does not know
 // pastes nothing and warns, rather than sending some other keystroke.
+// menu.emoji.sortByUsage (bool, default true): the emoji route orders by
+// how often each emoji has been copied, weighted by how recently
+// (shell/Menu/frecency.js, the same scoring the app rows use), so browsing
+// ":e" opens on what the user actually reaches for. It reorders WITHIN a
+// match tier only, never across one: a better name match still leads.
+// False browses in Unicode's own file order. The ledger
+// (state.json's `emojiUses`) records either way.
 // clipssh.alias (string, default ""): the alias ~/.clipssh/aliases holds
 // that the two callers with no row to read one off use, Shift+Enter on a
 // clipboard image row and the auto-send below. Unset takes the only alias

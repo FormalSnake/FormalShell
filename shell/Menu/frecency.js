@@ -103,15 +103,22 @@ function _cap(list, nowMs, maxEntries) {
 // isn't specified stable, hence the explicit original-position tiebreak.
 // An empty/absent store leaves the input order completely untouched, so a
 // fresh profile browses apps in exactly the order it did before.
-function order(items, store, nowMs) {
+//
+// `idOf` reads the ledger key off an item that doesn't carry one as `id`:
+// the emoji route ranks dataset entries ({ch, name, group}) before it has
+// built a row for any of them, and building one just to read its id would
+// undo the memoisation that keeps that route cheap (providers.js's own
+// header). Omitted, items are keyed on `item.id` as before.
+function order(items, store, nowMs, idOf) {
     var index = _index(store);
     var decorated = [];
     for (var i = 0; i < (items || []).length; i++) {
         var item = items[i];
+        var id = item ? (idOf ? idOf(item) : item.id) : "";
         decorated.push({
             item: item,
             position: i,
-            score: item ? _scoreOf(index[String(item.id || "")], nowMs) : 0
+            score: item ? _scoreOf(index[String(id || "")], nowMs) : 0
         });
     }
     decorated.sort(function (a, b) {

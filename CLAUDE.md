@@ -95,6 +95,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and coming back with the same window id.
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
   run's JSON sidecar and read by other legs for what the shell resolved.
+- `emoji.sh` `--emoji`: the launcher's emoji route by search and by order:
+  `:e sob` reaching 😭 through CLDR's keywords (its Unicode name has no
+  "sob" in it), and one copy through the row's own Enter path putting that
+  emoji at the head of its own rank and no higher, with no settings key
+  written.
 - `flexoki.sh` `--flexoki`: a wallpaper under a `flexoki/` directory, and
   the rewrite reaching a user template, its `post_hook`, and the shell's own
   GTK and Qt palettes: Flexoki green and yellow, which no Material scheme
