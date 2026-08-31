@@ -27,6 +27,12 @@ wallpaper primary 91d5ad. Got: custom type: ff266a49 0deg`, byte-identical
 at 2c7ae8c (before the palette crossfade) and at 176b353 (after), so the
 border carries a stale palette under combined load regardless of M51.
 Both legs pass alone; Task 6 verified them individually.
+
+Also not this plan's: the `--menu` leg's JS heap reads ~51 MB against
+M50's 18 to 25 MB band. Attributed 2026-08-31: plain main 58561d6 with no
+M51 changes reads jsheap_kb 51784 on the same leg (M51 reads 52108, a
+0.3 MB delta), so the growth arrived with the emoji route's data (emoji
+table plus CLDR keywords in JS), not with the motion work.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook; Task 1 amends its
 §1 Motion paragraph and this plan records why.
