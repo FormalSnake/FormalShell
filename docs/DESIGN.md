@@ -182,13 +182,23 @@ content scrolls (`WheelScroll`) rather than the surface running off the
 display. Toasts, the OSD pill, the notification centre and the tooltip take
 those same numbers. A surface never writes its own margin.
 
-**Motion** (`Theme.motion.*`): `fast` 100 for hover fills, `standard` 130
-for enter/exit, `emphasized` 250 on `emphasizedEasing` for the bar's
-workspace indicator, `reveal` 400 for the wallpaper crossfade, `slide` 4px.
-`motion.enabled=false` zeroes the durations. Enter is opacity plus a 4px
-slide toward the anchor, and exit reverses it. A toast is the one carve-out:
-it is a surface arriving from off screen rather than chrome appearing in
-place, so it travels its own width plus `screenPadding` from the anchored
+**Motion** (`Theme.motion.*`): `fast` 100 for hover fills and control
+state, `standard` 130 for in-place moves, `surface` 180 for a surface's
+enter with `surfaceExit` 120 for its exit, `emphasized` 250 on
+`emphasizedEasing` for the bar's workspace indicator, the toasts and size
+morphs, `reveal` 400 for the wallpaper and palette crossfades, `slide` 8px,
+`zoom` 0.97. `motion.enabled=false` zeroes the durations and the slide and
+sets the zoom to 1. A surface enters as opacity 0 to 1, scale `zoom` to 1
+from its anchored edge and a `slide` travel toward rest, on `surface` with
+the OutQuint enter easing, and leaves the same way on `surfaceExit`; a
+modal surface (the launcher, polkit, the plugin overlay) zooms from centre
+with no slide, its scrim fading on the same clock. A surface that changes
+size while open animates the change on `emphasized`, and a closing surface
+freezes its size first. A palette change (mode toggle, matugen recolour,
+preset swap) crossfades every `Theme.color.*` over `reveal`. A toast is
+the one carve-out: it is a surface arriving from off screen rather than
+chrome appearing in place, so it travels its own width plus
+`screenPadding` from the anchored
 edge on `emphasized`, and leaves the same way (amended 2026-08-26, owner: the
 4px nudge read as not animating at all). List cursors jump. The
 workspace pill is the one carve-out inside the chrome: it travels the width

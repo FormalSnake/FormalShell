@@ -196,38 +196,44 @@ function stateAlpha(mode) {
 // --- §4 motion tokens ---------------------------------------------------
 
 // The owner's brief verbatim: "fast and subtle, it should just look
-// better". `fast` paces hover fills, `standard` paces surface enter/exit,
-// both inside DESIGN.md §4's 90-140ms band. `slide` is the enter/exit
-// translate distance (§4's 4-8px). `reveal` paces the two full-screen
-// fades: the wallpaper crossfade (§4's third named carve-out, beside the
-// pulse and the screensaver) and the screensaver's own enter/exit
-// (§4 rule 6, owner's call 2026-08-12), deliberately outside the
-// 90-140ms band since a full-screen swap reads better slower than a
-// control hover. `enabled: false`
-// (the motion.enabled settings key) short-circuits `fast`/`standard`/
-// `reveal` to 0 while leaving `slide` intact: a zero-duration animation
-// still lands on the same end state, so disabling motion never moves a
-// single pixel of chrome.
+// better". `fast` paces hover fills and control state, `standard` paces
+// in-place moves, both inside DESIGN.md §4's 90-140ms band. `surface`/
+// `surfaceExit` pace a surface's own enter and exit (M51 D2: asymmetric,
+// exit shorter than enter). `slide` is the travel distance that goes with
+// them (§4's 4-8px, M51 widened 4 to 8: the owner already ruled 4px read
+// as not animating at all when the toasts were amended) and `zoom` is the
+// scale a surface enters from and exits to (M51 D2, shadcn's own ~0.97).
+// `reveal` paces the two full-screen fades: the wallpaper crossfade (§4's
+// third named carve-out, beside the pulse and the screensaver) and the
+// screensaver's own enter/exit (§4 rule 6, owner's call 2026-08-12),
+// deliberately outside the 90-140ms band since a full-screen swap reads
+// better slower than a control hover. `enabled: false` (the motion.enabled
+// settings key) short-circuits every duration above to 0 and `slide` to 0
+// too (M51 D7): a zero-duration animation with no travel still lands on
+// the same end state, so disabling motion never moves a single pixel of
+// chrome. `zoom` goes to 1 instead, its own neutral (no scale change).
 //
 // `marqueePxPerSec`/`marqueeHoldMs` pace the now-playing bar cell's
 // overflow scroll (owner-requested, M16 Task 11), a constant scroll rate,
-// not a duration, so `enabled` doesn't zero them the way it zeroes
-// fast/standard/reveal; the caller (NowPlaying.qml) gates the whole
-// animation on `Theme.motionEnabled` directly and falls back to today's
-// elide instead of scrolling at 0px/s.
+// not a duration, so `enabled` doesn't zero them the way it zeroes the
+// durations above; the caller (NowPlaying.qml) gates the whole animation
+// on `Theme.motionEnabled` directly and falls back to today's elide
+// instead of scrolling at 0px/s.
 // `emphasized` (250) is the one duration longer than the 90-140ms control
 // band that still paces chrome rather than a full screen: the bar's
-// workspace indicator, where a single pill slides and stretches between dot
-// slots and needs the travel to be readable as one movement. `standard`
-// makes the same slide read as a jump.
-var MOTION_BASE = { fast: 100, standard: 130, emphasized: 250, slide: 4, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
+// workspace indicator, a surface's size morph and the toasts, each needing
+// enough travel or resize to read as one movement rather than a jump.
+var MOTION_BASE = { fast: 100, standard: 130, surface: 180, surfaceExit: 120, emphasized: 250, slide: 8, zoom: 0.97, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
 
 function motionTokens(enabled) {
     return {
         fast: enabled ? MOTION_BASE.fast : 0,
         standard: enabled ? MOTION_BASE.standard : 0,
+        surface: enabled ? MOTION_BASE.surface : 0,
+        surfaceExit: enabled ? MOTION_BASE.surfaceExit : 0,
         emphasized: enabled ? MOTION_BASE.emphasized : 0,
-        slide: MOTION_BASE.slide,
+        slide: enabled ? MOTION_BASE.slide : 0,
+        zoom: enabled ? MOTION_BASE.zoom : 1,
         reveal: enabled ? MOTION_BASE.reveal : 0,
         marqueePxPerSec: MOTION_BASE.marqueePxPerSec,
         marqueeHoldMs: MOTION_BASE.marqueeHoldMs

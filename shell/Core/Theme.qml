@@ -173,19 +173,22 @@ Singleton {
     }
 
     // --- DESIGN.md §4 motion tokens -----------------------------------------
-    // `fast` (hover fills) / `standard` (surface enter/exit) / `emphasized`
-    // (the bar's workspace pill, the one piece of chrome whose travel spans
-    // the width of a row, on `emphasizedEasing`'s longer decel) / `slide` (the
-    // enter/exit translate distance) / `easing` (the ease-out curve a
-    // transition that ENTERS or EXITS uses) / `easingInOut` (the curve a
-    // transition that MOVES something already on screen uses) / `reveal`
-    // (the wallpaper crossfade duration,
+    // `fast` (hover fills and control state) / `standard` (in-place moves) /
+    // `surface`/`surfaceExit` (a surface's own enter and exit, M51 D2:
+    // asymmetric, exit shorter) / `emphasized` (the bar's workspace pill, a
+    // surface's size morph and the toasts, on `emphasizedEasing`'s longer
+    // decel) / `slide` (the enter/exit translate distance) / `zoom` (the
+    // scale a surface enters from and exits to, M51 D2, shadcn's own ~0.97) /
+    // `easing` (the ease-out curve a transition that ENTERS or EXITS uses) /
+    // `easingInOut` (the curve a transition that MOVES something already on
+    // screen uses) / `reveal` (the wallpaper crossfade duration,
     // §4's third carve-out) / `revealEasing` (its own curve, a full-screen
     // image swap reads better on InOutQuad than the control-chrome OutCubic).
-    // motion.enabled=false in settings.json zeroes
-    // `fast`/`standard`/`emphasized`/`reveal`
-    // (Tokens.motionTokens), the shell's reduced-motion switch, since no
-    // Wayland analog of prefers-reduced-motion exists. The "breathing"
+    // motion.enabled=false in settings.json zeroes every duration above
+    // (`fast`/`standard`/`surface`/`surfaceExit`/`emphasized`/`reveal`) and
+    // `slide` too (M51 D7), and neutralises `zoom` to 1 (Tokens.motionTokens),
+    // the shell's reduced-motion switch, since no Wayland analog of
+    // prefers-reduced-motion exists. The "breathing"
     // opacity pulse (PowerPanel's charging state) and the screensaver's
     // frame effect remain §4's other two continuous-motion carve-outs and
     // keep their own pacing, unaffected by motion.enabled. `marqueePxPerSec`/
@@ -200,9 +203,12 @@ Singleton {
         return {
             fast: m.fast,
             standard: m.standard,
+            surface: m.surface,
+            surfaceExit: m.surfaceExit,
             emphasized: m.emphasized,
             emphasizedEasing: Easing.OutQuint,
             slide: m.slide,
+            zoom: m.zoom,
             // OutQuint, not OutCubic: Qt's cubic easings are the weak
             // built-ins, and a decel that shallow reads as drift rather
             // than as a stop. OutQuint is cubic-bezier(0.23, 1, 0.32, 1),
