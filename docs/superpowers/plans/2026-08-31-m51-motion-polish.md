@@ -1,7 +1,16 @@
 # M51: caelestia-grade motion in FormalShell's own grammar
 
 **Date:** 2026-08-31
-**Status:** in progress
+**Status:** in progress; Tasks 1 to 4 landed (dd59286, a765de6, 2e8b322,
+d45509c on `m51-motion-polish`).
+
+Not this plan's: a combined smoke session that pairs `--menu` with other
+legs (`--menu --center --polkit`, `--menu --toggles`, `--toggles --center`)
+can fail a menu assert (`a root query for 'e' grouped into 0 heading(s)`,
+sections empty). Verified 2026-08-31 on main 58561d6 with no M51 changes,
+from a detached baseline worktree; every leg passes alone, and Tasks 3 and
+4 re-verified their legs individually. Menu-sharing combinations run their
+legs individually until the rig race is fixed.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook; Task 1 amends its
 §1 Motion paragraph and this plan records why.
