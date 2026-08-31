@@ -74,7 +74,7 @@ TestCase {
         compare(rows[0].label, "hello 2.12.1");
         compare(rows[0].desc, "A program that produces a familiar, friendly greeting");
         compare(rows[0].kind, "action");
-        compare(rows[0].action, "ghostty -e sh -c 'nix run nixpkgs#hello; read'");
+        compare(rows[0].action, "@ipc:nix.run:hello");
         // Launch acknowledgment fields (M13b Task 4): Menu.qml's activation
         // fires notify(notifySummary, notifyBody) alongside the spawn.
         compare(rows[0].notifySummary, "NIX RUN");
@@ -96,6 +96,7 @@ TestCase {
     function test_note_rows() {
         var cases = [
             [Providers.nixUnavailableRow(), "nix.unavailable", "NO NIX"],
+            [Providers.nixIndexingRow(), "nix.indexing", "INDEXING NIXPKGS"],
             [Providers.nixSearchingRow(), "nix.searching", "SEARCHING"],
             [Providers.nixNoResultsRow(), "nix.noresults", "NO RESULTS"],
             [Providers.nixFailedRow(), "nix.failed", "SEARCH FAILED"]

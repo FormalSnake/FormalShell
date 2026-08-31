@@ -45,6 +45,15 @@ Singleton {
         && CompositorService.windowParkingAvailable
         && CompositorService.floatingPlacementAvailable
 
+    function _windowIdFor(appId) {
+        const wins = CompositorService.windows || [];
+        for (var i = 0; i < wins.length; i++) {
+            if (wins[i].appId === appId)
+                return wins[i].id;
+        }
+        return "";
+    }
+
     readonly property var consoleWindow: {
         const wins = CompositorService.windows || [];
         for (var i = 0; i < wins.length; i++) {
@@ -88,8 +97,49 @@ Singleton {
             return;
         }
         root.spawning = true;
+        root._awaitAppId = root.appId;
         root._attempts = 0;
         CompositorService.spawn(argv);
+        mapTimer.restart();
+    }
+
+    // A one-off drop-down: the console's own terminal, geometry and parking,
+    // running `command` instead of a login shell. The launcher's nix runner
+    // is the caller, and the alternative was a bare spawn of an emulator
+    // named in a provider file, which is both a hardcoded ghostty and a
+    // tiled window where this shell has a drop-down.
+    //
+    // The window announces its own app id (the console's with a suffix) so
+    // the standing console keeps its identity and its toggle: two windows
+    // answering to one id would leave `consoleWindow` picking whichever the
+    // compositor listed first. Console/geometry.js's oneOffArgv builds it,
+    // including the case where it cannot.
+    function runOnce(command) {
+        if (!root.available) {
+            console.warn("ConsoleService: no compositor that can park and place a window");
+            NotificationService.notify("CONSOLE UNAVAILABLE", "this compositor cannot place a floating window");
+            return;
+        }
+        if (root.spawning)
+            return;
+        const argv = root.command;
+        if (!Array.isArray(argv) || argv.length === 0) {
+            console.warn("ConsoleService: console.command is not set");
+            NotificationService.notify("CONSOLE UNAVAILABLE", "console.command is not set");
+            return;
+        }
+        const appId = root.appId + ".run";
+        const spawnArgv = Geometry.oneOffArgv(argv, root.appId, appId, command);
+        if (!spawnArgv) {
+            console.warn("ConsoleService: console.command never names", root.appId);
+            NotificationService.notify("CONSOLE UNAVAILABLE",
+                "console.command has to name " + root.appId);
+            return;
+        }
+        root.spawning = true;
+        root._awaitAppId = appId;
+        root._attempts = 0;
+        CompositorService.spawn(spawnArgv);
         mapTimer.restart();
     }
 
@@ -118,6 +168,8 @@ Singleton {
             : null;
     }
 
+    // Which app id mapTimer is waiting for: the console's own, or a one-off's.
+    property string _awaitAppId: ""
     property string _pendingId: ""
     property var _target: null
     property int _attempts: 0
@@ -164,18 +216,19 @@ Singleton {
             // answer on the next tick, hence 100ms rather than 50.
             CompositorService.refreshWindows();
             root._attempts++;
-            if (root.windowId !== "") {
+            const mapped = root._windowIdFor(root._awaitAppId);
+            if (mapped !== "") {
                 mapTimer.stop();
                 root.spawning = false;
-                root._reveal(root.windowId);
+                root._reveal(mapped);
                 return;
             }
             if (root._attempts >= 50) {
                 mapTimer.stop();
                 root.spawning = false;
-                console.warn("ConsoleService: no window with app id", root.appId, "opened in time");
+                console.warn("ConsoleService: no window with app id", root._awaitAppId, "opened in time");
                 NotificationService.notify("CONSOLE UNAVAILABLE",
-                    "no window announcing " + root.appId + " opened");
+                    "no window announcing " + root._awaitAppId + " opened");
             }
         }
     }

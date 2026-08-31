@@ -502,15 +502,15 @@ function nixSearchOutcome(exitCode, text) {
     return { state: "results", results: results };
 }
 
-// Search-result rows are plain "action" nodes: Enter spawns the package in
-// a throwaway terminal through the existing activation path and closes.
-// `read` holds the window open after the program exits so its output is
-// actually readable. The attr is interpolated into a single-quoted sh
-// string, so anything outside the safe attr charset is skipped outright
-// rather than escaped, nixpkgs attrs are [A-Za-z0-9._+-] in practice.
-// `notifySummary`/`notifyBody` mark the row for Menu.qml's activation
-// toast: the spawned terminal can be seconds from mapping, so Enter fires
-// a shell-local NIX RUN notification the moment it lands.
+// Search-result rows are plain "action" nodes, dispatched in-process
+// (`@ipc:nix.run:<attr>`): Enter runs the package in the quake console's own
+// terminal and placement (ConsoleService.runOnce) rather than whatever
+// emulator this file used to name, and closes. The attr still reaches a
+// `sh -c` string there, so anything outside the safe attr charset is skipped
+// outright rather than escaped; nixpkgs attrs are [A-Za-z0-9._+-] in
+// practice. `notifySummary`/`notifyBody` mark the row for Menu.qml's
+// activation toast: the spawned terminal can be seconds from mapping, so
+// Enter fires a shell-local NIX RUN notification the moment it lands.
 function nixRows(results) {
     var out = [];
     (results || []).forEach(function (r) {
@@ -525,7 +525,7 @@ function nixRows(results) {
             desc: r.description !== "" ? previewLabel(r.description) : "",
             aliases: [],
             kind: "action",
-            action: "ghostty -e sh -c 'nix run nixpkgs#" + r.attr + "; read'",
+            action: "@ipc:nix.run:" + r.attr,
             notifySummary: "NIX RUN",
             notifyBody: r.attr,
             childIds: []
@@ -536,8 +536,8 @@ function nixRows(results) {
 
 // The honest single dim rows for everything that isn't a result list (kind
 // "note": not activatable, MenuRow renders the label via mutedForeground):
-// no `nix` on PATH, a search still in flight, a clean zero-hit answer, and
-// a failed run.
+// no `nix` on PATH, the one-off eval-cache warm the route entry pays for,
+// a search still in flight, a clean zero-hit answer, and a failed run.
 function _nixNoteRow(id, label) {
     return {
         id: id,
@@ -553,6 +553,7 @@ function _nixNoteRow(id, label) {
 }
 
 function nixUnavailableRow() { return _nixNoteRow("nix.unavailable", "NO NIX"); }
+function nixIndexingRow() { return _nixNoteRow("nix.indexing", "INDEXING NIXPKGS"); }
 function nixSearchingRow() { return _nixNoteRow("nix.searching", "SEARCHING"); }
 function nixNoResultsRow() { return _nixNoteRow("nix.noresults", "NO RESULTS"); }
 function nixFailedRow() { return _nixNoteRow("nix.failed", "SEARCH FAILED"); }

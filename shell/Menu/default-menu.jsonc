@@ -61,7 +61,11 @@
     // "nix" registers no provider fn either: a summonable route
     // (`menu summon nix`) whose level Menu.qml fills from the debounced
     // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
-    // from anywhere. No nix on PATH renders a single dim NO NIX row.
+    // from anywhere. Entering the route pays the nixpkgs eval cache off
+    // once behind a dim INDEXING NIXPKGS row, which is what keeps the
+    // first real query off a twenty-second cold search. No nix on PATH
+    // renders a single dim NO NIX row. Enter runs the package in the
+    // quake console's own terminal (ConsoleService.runOnce).
     "nix": { "label": "Nix Run", "provider": "nix", "prompt": "Search nixpkgs" },
     // "keybinds" registers no provider fn either: a summonable route
     // (`menu summon keybinds`) whose level Menu.qml fills from the parsed

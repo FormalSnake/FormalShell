@@ -62,4 +62,29 @@ TestCase {
         compare(Geometry.consoleGeometry(null, topBar, 0.5, 10), null);
         compare(Geometry.consoleGeometry({ x: 0, y: 0, width: 0, height: 0 }, topBar, 0.5, 10), null);
     }
+
+    // The one-off drop-down's argv (ConsoleService.runOnce). The console's
+    // own command, its app id swapped so the standing console keeps its
+    // identity, and the command appended the one way every emulator the
+    // config note names accepts.
+    function test_oneOffArgv_swaps_the_app_id_and_appends_the_command() {
+        var argv = Geometry.oneOffArgv(["ghostty", "--class=dev.formalshell.console"],
+            "dev.formalshell.console", "dev.formalshell.console.run", "nix run nixpkgs#hello; read");
+        compare(argv.join("\u0001"), ["ghostty", "--class=dev.formalshell.console.run",
+            "-e", "sh", "-c", "nix run nixpkgs#hello; read"].join("\u0001"));
+    }
+
+    function test_oneOffArgv_handles_the_id_in_its_own_argument() {
+        var argv = Geometry.oneOffArgv(["foot", "--app-id", "con"], "con", "con.run", "true");
+        compare(argv.join(" "), "foot --app-id con.run -e sh -c true");
+    }
+
+    // An argv that never names the app id would spawn a second window
+    // answering to the console's own id, which is worse than not running.
+    function test_oneOffArgv_refuses_an_argv_that_never_names_the_app_id() {
+        compare(Geometry.oneOffArgv(["ghostty"], "con", "con.run", "true"), null);
+        compare(Geometry.oneOffArgv([], "con", "con.run", "true"), null);
+        compare(Geometry.oneOffArgv(null, "con", "con.run", "true"), null);
+        compare(Geometry.oneOffArgv(["ghostty", "--class=con"], "con", "con", "true"), null);
+    }
 }

@@ -217,7 +217,11 @@ import QtQuick
 // --class`, `ghostty --class`), which is why this is argv and not a command
 // name. console.appId (string, default "dev.formalshell.console"): the app
 // id ConsoleService matches the mapped window against, change it in both
-// places or the console never finds its own window and says so.
+// places or the console never finds its own window and says so. The
+// launcher's nix runner reuses this argv for a one-off drop-down, with the
+// app id suffixed and `-e <command>` appended, so an emulator spelling its
+// command flag some other way runs nothing there while the console itself
+// still works.
 // console.share (number, default 0.5, clamped 0.2..1): how much of the
 // height under the bar the console covers, M37 Task 2.
 // clipboard.paste (bool, default true: Enter on a clipboard-history row or

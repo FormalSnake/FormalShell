@@ -140,6 +140,8 @@ PanelWindow {
     property string _nixOutcome: "results"  // how _nixQuery ended: results|empty|failed
     property string _nixWantQuery: ""   // latest requested query
     property bool _nixAvailable: true
+    property bool _nixWarmed: false     // the eval cache has been paid for
+    property bool _nixWarming: false
 
     function _requestNixSearch(q) {
         q = String(q || "").trim();
@@ -148,10 +150,34 @@ PanelWindow {
         nixDebounce.restart();
     }
 
+    // Entering a nix surface pays the eval cache off before the reader has
+    // typed anything. `nix search` walks the whole nixpkgs attrset the first
+    // time it sees a revision (~20s on a real host, measured on nixpkgs
+    // 2026-08-31) and answers in about a second afterwards, so the cost lands
+    // on the route opening, where a dim INDEXING NIXPKGS row states it,
+    // rather than on the first query, where it read as a search that never
+    // returned. The query is a token nothing matches: what costs the time is
+    // the evaluation, not the term. Doubles as the availability probe, so
+    // NO NIX now shows on entry instead of after a first query.
+    function _requestNixWarm() {
+        if (!root._nixAvailable || root._nixWarmed || root._nixWarming) return;
+        if (nixSearchProc.running) return;
+        root._nixWarming = true;
+        nixSearchProc._warming = true;
+        nixSearchProc._query = "";
+        nixSearchProc.command = root._nixSearchCommand("__formalshell_warm__");
+        nixSearchProc.running = true;
+    }
+
+    function _nixSearchCommand(q) {
+        return ["sh", "-c", 'command -v nix >/dev/null 2>&1 || exit 127; exec nix search nixpkgs "$1" --json', "sh", q];
+    }
+
     function _startNixSearch() {
         if (nixSearchProc.running || root._nixWantQuery === "" || !root._nixAvailable) return;
+        nixSearchProc._warming = false;
         nixSearchProc._query = root._nixWantQuery;
-        nixSearchProc.command = ["sh", "-c", 'command -v nix >/dev/null 2>&1 || exit 127; exec nix search nixpkgs "$1" --json', "sh", root._nixWantQuery];
+        nixSearchProc.command = root._nixSearchCommand(root._nixWantQuery);
         nixSearchProc.running = true;
     }
 
@@ -164,7 +190,7 @@ PanelWindow {
     function _nixRowsFor(q) {
         if (!root._nixAvailable) return [Providers.nixUnavailableRow()];
         q = String(q || "").trim();
-        if (q === "") return [];
+        if (q === "") return root._nixWarming ? [Providers.nixIndexingRow()] : [];
         if (q !== root._nixQuery) return [Providers.nixSearchingRow()];
         if (root._nixOutcome === "failed") return [Providers.nixFailedRow()];
         if (root._nixOutcome === "empty") return [Providers.nixNoResultsRow()];
@@ -181,6 +207,7 @@ PanelWindow {
         id: nixSearchProc
 
         property string _query: ""
+        property bool _warming: false
 
         stdout: StdioCollector {
             id: nixSearchCollector
@@ -189,7 +216,17 @@ PanelWindow {
             var outcome = Providers.nixSearchOutcome(exitCode, nixSearchCollector.text);
             if (outcome.state === "unavailable") {
                 root._nixAvailable = false;
+                root._nixWarming = false;
                 console.warn("Menu: nix not found on PATH, nix runner disabled");
+                return;
+            }
+            // A warm run answers nothing: it exists to have evaluated. Any
+            // query typed while it ran is still pending, so start it here.
+            if (nixSearchProc._warming) {
+                nixSearchProc._warming = false;
+                root._nixWarming = false;
+                root._nixWarmed = true;
+                root._startNixSearch();
                 return;
             }
             if (_query !== root._nixWantQuery) {
@@ -1363,6 +1400,7 @@ PanelWindow {
         // NO RESULTS, SEARCH FAILED) on the second pass.
         var nixQuery = Providers.nixTriggerQuery(q);
         if (nixQuery !== null) {
+            root._requestNixWarm();
             root._requestNixSearch(nixQuery);
             return root._nixRowsFor(nixQuery).map(function (n) {
                 return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
@@ -1671,6 +1709,15 @@ PanelWindow {
             ClipboardService.copy(name.slice("clipboard.copy:".length));
             return;
         }
+        // `nix run` goes to the console's own terminal and placement rather
+        // than a bare spawn: the package is a program the reader wants to
+        // watch, and a drop-down over the current workspace is where this
+        // shell already puts one. `read` holds the window after it exits so
+        // its last output is still readable.
+        if (name.indexOf("nix.run:") === 0) {
+            ConsoleService.runOnce("nix run nixpkgs#" + name.slice("nix.run:".length) + "; read");
+            return;
+        }
         switch (name) {
         // In-process for the same reason the clipboard rows are: a spawned
         // `qs ipc call` only ever resolves on the smoke rig, where the whole
@@ -1946,8 +1993,10 @@ PanelWindow {
                         var nixQuery = Providers.nixTriggerQuery(searchInput.text);
                         if (nixQuery === null && root.currentNodeId === "nix")
                             nixQuery = searchInput.text;
-                        if (nixQuery !== null)
+                        if (nixQuery !== null) {
+                            root._requestNixWarm();
                             root._requestNixSearch(nixQuery);
+                        }
                     }
                 }
 

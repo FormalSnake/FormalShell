@@ -43,3 +43,28 @@ function consoleGeometry(screen, insets, share, margin) {
         height: height
     };
 }
+
+// The argv for a one-off drop-down (ConsoleService.runOnce): the console's
+// own command with its app id swapped for `runAppId` and `-e <script>`
+// appended. Every emulator spells the class flag differently (Config's
+// console.command note), so the id is substituted inside the argv the user
+// already wrote rather than appended as a flag this file would have to
+// guess. null when that argv never names `appId`: the one-off would then
+// answer to the console's own id and the console's toggle could pick it up
+// instead of the console, which is worse than not running it.
+function oneOffArgv(command, appId, runAppId, script) {
+    if (!Array.isArray(command) || command.length === 0) return null;
+    if (!appId || !runAppId || appId === runAppId) return null;
+    var named = false;
+    var out = [];
+    for (var i = 0; i < command.length; i++) {
+        var arg = String(command[i]);
+        if (arg.indexOf(appId) >= 0) {
+            named = true;
+            arg = arg.split(appId).join(runAppId);
+        }
+        out.push(arg);
+    }
+    if (!named) return null;
+    return out.concat(["-e", "sh", "-c", String(script)]);
+}
