@@ -3,6 +3,7 @@ import QtTest
 import "../shell/Menu/icons.js" as MenuIcons
 import "../shell/Menu/model.js" as Model
 import "../shell/Theme/icons.js" as Icons
+import "../shell/Theme/icons/distro.js" as Distro
 
 // M43 D2: shell/Menu/icons.js maps the shipped route ids onto icon names so
 // MenuRow can draw them through `Icon`. Two drift guards read shipped files
@@ -41,9 +42,9 @@ TestCase {
         }
     }
 
-    // The point of the map: every route the shell ships names its icon here.
-    // A route added without one still renders, just bare, so only this test
-    // catches the omission.
+    // The point of the map: every route the shell ships names its icon here,
+    // or its logo in the map beside it. A route added without either still
+    // renders, just bare, so only this test catches the omission.
     function test_every_shipped_route_is_mapped() {
         var tree = Model.buildTree(Model.parseJsonc(_read("../shell/Menu/default-menu.jsonc")), {});
         var ids = Object.keys(tree.nodes);
@@ -53,7 +54,8 @@ TestCase {
             var node = tree.nodes[ids[i]];
             if (!node.id || node.id === "")
                 continue;
-            verify(MenuIcons.iconFor(node) !== "", node.id + " has no mapped icon name");
+            verify(MenuIcons.iconFor(node) !== "" || MenuIcons.logoFor(node) !== "",
+                node.id + " has no mapped icon name or logo");
             mapped++;
         }
         verify(mapped > 0);
@@ -73,5 +75,32 @@ TestCase {
         compare(MenuIcons.iconFor({ id: "clipboard" }), "clipboard");
         compare(MenuIcons.iconFor({ id: "toggles.dnd" }), "bell-off");
         compare(MenuIcons.iconFor({ id: "panels.network" }), "wifi");
+    }
+
+    // A logo is a mark, not an icon: the nix route must not resolve through
+    // the icon sets at all, or `lucide` draws its weather snowflake again.
+    function test_the_nix_route_is_a_logo_not_an_icon() {
+        compare(MenuIcons.iconFor({ id: "nix" }), "");
+        compare(MenuIcons.logoFor({ id: "nix" }), "nixos");
+        verify(Distro.LOGOS["nixos"] !== undefined);
+        verify(Distro.LOGOS["nixos"] !== Icons.glyph("lucide", "snowflake"));
+    }
+
+    function test_every_other_row_has_no_logo() {
+        compare(MenuIcons.logoFor({ id: "clipboard" }), "");
+        compare(MenuIcons.logoFor({ id: "my.own.route" }), "");
+        compare(MenuIcons.logoFor({}), "");
+        compare(MenuIcons.logoFor(null), "");
+    }
+
+    // Every logo a route names has to exist in the table that carries the
+    // codepoints, or the row draws tofu.
+    function test_every_mapped_logo_resolves() {
+        var ids = Object.keys(MenuIcons.ROUTE_LOGOS);
+        verify(ids.length > 0);
+        for (var i = 0; i < ids.length; i++) {
+            var key = MenuIcons.ROUTE_LOGOS[ids[i]];
+            verify((Distro.LOGOS[key] || "") !== "", ids[i] + " -> " + key + " is not in distro.js");
+        }
     }
 }

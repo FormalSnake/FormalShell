@@ -17,7 +17,6 @@ var ROUTE_ICONS = {
     "clipboard": "clipboard",
     "calc": "calculator",
     "emoji": "smile",
-    "nix": "snowflake",
     "keybinds": "keyboard",
     "wallpaper": "image",
     "monitor": "cpu",
@@ -99,10 +98,27 @@ var ROUTE_ICONS = {
     "panels.monitor": "gauge"
 };
 
+// Routes whose mark is a real logo rather than an icon, keyed by the
+// os-release id Theme/icons/distro.js's own table uses. A logo never
+// follows `theme.icons` (that file's header has why): under `lucide` the
+// nix route resolved "snowflake" to Lucide's weather snowflake, which is
+// how the launcher ended up wearing a fake NixOS logo. The codepoint stays
+// in distro.js, the caller resolves it there.
+var ROUTE_LOGOS = {
+    "nix": "nixos"
+};
+
 // "" means "this row has no named icon": the caller draws the node's own
 // glyph instead.
 function iconFor(node) {
     if (!node || !node.id)
         return "";
     return ROUTE_ICONS[node.id] || "";
+}
+
+// "" means "this row's mark is not a logo", which is every row but one.
+function logoFor(node) {
+    if (!node || !node.id)
+        return "";
+    return ROUTE_LOGOS[node.id] || "";
 }

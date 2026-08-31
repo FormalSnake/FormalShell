@@ -3,6 +3,7 @@ import qs.Core
 import qs.Components
 import qs.Services
 import "../../Menu/icons.js" as MenuIcons
+import "../../Theme/icons/distro.js" as Distro
 import "../../Menu/hints.js" as MenuHints
 
 // One row of the command palette, shadcn's `CommandItem` (M48 D6): a
@@ -63,6 +64,14 @@ Item {
     // The route's Lucide name, or "" for a row whose icon is its own data
     // (a user menu.jsonc route, an emoji, a provider row with a bare glyph).
     readonly property string _iconName: MenuIcons.iconFor(root.node)
+    // A route whose mark is a real distro logo (Menu/icons.js's ROUTE_LOGOS)
+    // draws it from the font that carries it rather than through `Icon`,
+    // which resolves names in whichever set `theme.icons` selects and has no
+    // logo to give.
+    readonly property string _logoGlyph: {
+        const key = MenuIcons.logoFor(root.node);
+        return key !== "" ? (Distro.LOGOS[key] || "") : "";
+    }
     readonly property real _iconSize: Theme.fontSize.body
 
     // The summon chord or the row count (Menu/hints.js), never both and
@@ -104,7 +113,7 @@ Item {
     // label's actual rendered width leaves behind.
     readonly property real _leadWidth: (root._isImage ? root._thumbHeight * 3 + Theme.space.iconGap : 0)
         + ((root.node.iconSource || "") !== "" ? root._bodyHeight + Theme.space.iconGap : 0)
-        + (root._iconName !== ""
+        + (root._iconName !== "" || root._logoGlyph !== ""
             ? root._iconSize + Theme.space.iconGap
             : (root.node.icon !== "" ? dataGlyph.implicitWidth + Theme.space.iconGap : 0))
     readonly property real _hintWidth: root._hint !== "" ? hintValue.implicitWidth + Theme.space.iconGap : 0
@@ -269,12 +278,23 @@ Item {
                 color: root.foreground
             }
 
+            Text {
+                y: (contentRow.height - height) / 2
+                visible: root._logoGlyph !== ""
+                width: root._iconSize
+                horizontalAlignment: Text.AlignHCenter
+                text: root._logoGlyph
+                color: root.foreground
+                font.family: Distro.FAMILY
+                font.pixelSize: root._iconSize
+            }
+
             // The fallback for a row whose icon is its own data: the glyph
             // itself, in the mono font that carries it.
             Text {
                 id: dataGlyph
                 y: (contentRow.height - height) / 2
-                visible: root._iconName === "" && root.node.icon !== ""
+                visible: root._iconName === "" && root._logoGlyph === "" && root.node.icon !== ""
                 text: root.node.icon
                 color: root.foreground
                 font.family: Theme.fontFamilyMono
