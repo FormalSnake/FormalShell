@@ -1202,8 +1202,13 @@ PanelWindow {
 
     function close() {
         root._abandonPendingSelect();
-        root._leavePickerRoute();
+        // isOpen drops before _leavePickerRoute clears the picker's own
+        // listing (M51 D5): the card's own height/width freeze below reads
+        // isOpen at the instant it flips, and a route that empties its
+        // content on the way out must not do so while that freeze still
+        // thinks the surface is open.
         root.isOpen = false;
+        root._leavePickerRoute();
         root._confirmPendingId = "";
         // The next summon maps the card wherever it centers, possibly under a
         // pointer that never moved: a sample left over from this session would
@@ -1937,6 +1942,27 @@ PanelWindow {
         edge: "center"
     }
 
+    // The card's actual width and height (DESIGN.md §1 Motion, M51 D5):
+    // _cardWidth/_cardHeight above are the route's own target, tracked live
+    // only while the surface sits open at rest. A route that changes width
+    // (the split pane, an app view) or height mid-session morphs into it
+    // instead of jumping; close() simply stops re-syncing these, so whatever
+    // open() snaps them to next is the new route's real content size, never
+    // a morph from the frame the menu closed on. Declared after `presence`
+    // so its own settled flip, which shares the isOpenChanged signal these
+    // ternaries depend on, has already landed by the time they re-evaluate.
+    property real _morphWidth: root.isOpen ? root._cardWidth : _morphWidth
+    property real _morphHeight: root.isOpen ? root._cardHeight : _morphHeight
+
+    Behavior on _morphWidth {
+        enabled: presence.settled && root.isOpen
+        NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
+    }
+    Behavior on _morphHeight {
+        enabled: presence.settled && root.isOpen
+        NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
+    }
+
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
@@ -1984,10 +2010,16 @@ PanelWindow {
     // edges.
     Card {
         id: card
-        x: Math.round((root._outputWidth - root._cardWidth) / 2)
+        x: Math.round((root._outputWidth - root._morphWidth) / 2)
         y: root._clampTop(root._preferredTop)
-        width: root._cardWidth
-        height: root._cardHeight
+        width: root._morphWidth
+        height: root._morphHeight
+        // Content sizes to its own target the instant a route changes (the
+        // rows list, the action bar, the split pane), while this card's own
+        // width/height above trail behind on the morph Behaviors: without a
+        // clip the wider/taller instant would paint past whatever edge is
+        // still catching up (M51 D5).
+        clip: true
         opacity: presence.opacity
         scale: presence.scale
         transformOrigin: presence.transformOrigin

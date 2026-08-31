@@ -32,10 +32,19 @@ QtObject {
     property real _progress: root.open ? 1 : 0
     Behavior on _progress {
         NumberAnimation {
+            id: _progressAnimation
             duration: root.open ? Theme.motion.surface : Theme.motion.surfaceExit
             easing.type: Theme.motion.easing
         }
     }
+
+    // True once the animation above has actually reached its target, false
+    // for as long as it's still carrying `_progress` there. `running` flips
+    // the instant `open` changes (Behavior.start() is synchronous), unlike
+    // `_progress`'s own value, which only starts moving on the next frame,
+    // so a consumer gating a size Behavior on this (DESIGN.md §1 Motion,
+    // M51 D5) never mistakes the first tick of a fresh transition for rest.
+    readonly property bool settled: !_progressAnimation.running
 
     // Unit vector toward the anchored edge, the same convention
     // `shell/Bar/layout.js`'s edgeVector uses for the bar itself.

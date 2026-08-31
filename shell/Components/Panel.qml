@@ -320,6 +320,21 @@ PanelWindow {
         edge: Theme.barPosition
     }
 
+    // The frame's actual height (DESIGN.md §1 Motion, M51 D5): `_frameHeight`
+    // above is the content's own target, tracked live only while the panel
+    // sits open at rest, so a size change never fights the enter/exit fade.
+    // close() simply stops re-syncing this, so whatever open() finds next is
+    // the real content height, never a morph from the frame the panel closed
+    // on. Declared after `presence` so its own settled flip, which shares
+    // the isOpenChanged signal this ternary depends on, has already landed
+    // by the time this re-evaluates.
+    property real _morphHeight: root.isOpen ? root._frameHeight : _morphHeight
+
+    Behavior on _morphHeight {
+        enabled: presence.settled && root.isOpen
+        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+    }
+
     WlrLayershell.namespace: "formalshell:panel"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
@@ -396,7 +411,7 @@ PanelWindow {
             x: root._frameX
             y: root._frameY
             width: root.panelWidth
-            height: root._frameHeight
+            height: root._morphHeight
             color: root.frameColor
             radius: root.frameRadius
 

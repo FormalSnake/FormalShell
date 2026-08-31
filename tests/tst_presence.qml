@@ -60,6 +60,17 @@ TestCase {
         compare(presence.slideY, 0);
     }
 
+    function test_settled_drops_during_the_exit_and_returns_after() {
+        var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top", open: true });
+        compare(presence.settled, true);
+        presence.open = false;
+        // The exit Behavior has just started: settled must not read true
+        // again until it actually finishes, or a size morph gated on it
+        // would race the fade with a stale value.
+        compare(presence.settled, false);
+        tryCompare(presence, "settled", true, 1000);
+    }
+
     function test_motion_disabled_is_instant() {
         Theme.motionEnabled = false;
         var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top" });

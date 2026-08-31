@@ -237,6 +237,21 @@ PanelWindow {
         edge: "right"
     }
 
+    // The card's actual height (DESIGN.md §1 Motion, M51 D5): `_frame.height`
+    // above is the history's own target, tracked live only while the centre
+    // sits open at rest. close() (which seens every pending row, moving it
+    // into a different section) simply stops re-syncing this, so the next
+    // open snaps straight to that history's real height rather than morphing
+    // from the frame the centre closed on. Declared after `presence` so its
+    // own settled flip, sharing the isOpenChanged signal this ternary
+    // depends on, has already landed by the time this re-evaluates.
+    property real _morphHeight: root.isOpen ? root._frame.height : _morphHeight
+
+    Behavior on _morphHeight {
+        enabled: presence.settled && root.isOpen
+        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+    }
+
     WlrLayershell.namespace: "formalshell:notifications-center"
     WlrLayershell.layer: WlrLayer.Top
     // Keyboard focus follows isOpen, never `visible`. OnDemand alone never
@@ -287,7 +302,7 @@ PanelWindow {
             x: root._frame.x
             y: root._frame.y
             width: root.cardWidth
-            height: root._frame.height
+            height: root._morphHeight
             // Every edge is inside the output now, so the card keeps the
             // border a Card draws on all four sides rather than the single
             // left one it carried while it was flush against three of them.
