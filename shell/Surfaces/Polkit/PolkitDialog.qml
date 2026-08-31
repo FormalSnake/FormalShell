@@ -142,12 +142,20 @@ PanelWindow {
     }
 
     screen: root._screen
-    // Held visible through the exit fade (DESIGN.md §4), same idiom as
-    // every other floating surface here, `_active` dropping (auth
+    // Held visible through the exit fade (DESIGN.md §1 Motion), same idiom
+    // as every other floating surface here, `_active` dropping (auth
     // succeeded, or the daemon/user cancelled) is this surface's only
     // "close" path; there is no summon/dismiss API of its own to call.
-    visible: root._active || card.opacity > 0
+    visible: presence.shown
     color: "transparent"
+
+    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
+    // M51 D3): a modal surface, zooming from centre with no slide.
+    Presence {
+        id: presence
+        open: root._active
+        edge: "center"
+    }
 
     // Top, matching Menu.qml's own layer, not Overlay: reproduced
     // directly, an Overlay-layer surface with `keyboardFocus: Exclusive`
@@ -181,16 +189,14 @@ PanelWindow {
         Keys.onEscapePressed: root._cancel()
 
         // The modal scrim (spec "Depth"): plain black at half opacity, the
-        // same one the launcher and the lock screen draw, fading with the
-        // card so a request arrives as one motion.
+        // same one the launcher and the lock screen draw. Bound straight to
+        // presence's own progress, never a Behavior of its own (M51 D3): a
+        // scrim animating on a separate clock from the card it frames could
+        // drift out of step with it.
         Rectangle {
             anchors.fill: parent
             color: "black"
-            opacity: root._active ? 0.5 : 0
-
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
+            opacity: presence.opacity * 0.5
         }
 
         MouseArea {
@@ -202,14 +208,11 @@ PanelWindow {
             id: card
             anchors.centerIn: parent
 
-            // Enter/exit fade (DESIGN.md §4): opacity only, no slide. A
-            // screen-centred card has no edge to slide in from, the same
-            // reasoning the screensaver's own entrance carve-out documents.
-            opacity: root._active ? 1 : 0
-
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
+            // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a
+            // modal surface, so fade and zoom from centre only, no slide.
+            opacity: presence.opacity
+            scale: presence.scale
+            transformOrigin: presence.transformOrigin
 
             MouseArea {
                 anchors.fill: parent

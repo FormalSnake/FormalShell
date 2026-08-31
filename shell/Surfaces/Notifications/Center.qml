@@ -220,11 +220,22 @@ PanelWindow {
     readonly property bool cardCapped: root._frame.capped
 
     screen: root._screen
-    // Held visible through the exit fade (spec "Motion"): close() drops
-    // isOpen, the card's opacity Behavior runs to 0, then the window unmaps.
-    // The window itself is transparent so the fade covers the whole card.
-    visible: root.isOpen || frame.opacity > 0
+    // Held visible through the exit fade (DESIGN.md §1 Motion): close()
+    // drops isOpen, presence's own Behavior runs its progress to 0, and
+    // only then does the window unmap. The window itself is transparent so
+    // the fade covers the whole card.
+    visible: presence.shown
     color: "transparent"
+
+    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
+    // M51 D3): always the right edge, since the card's own x formula
+    // (geometry.js's centerFrame) hangs it off the right regardless of
+    // which edge the bar occupies.
+    Presence {
+        id: presence
+        open: root.isOpen
+        edge: "right"
+    }
 
     WlrLayershell.namespace: "formalshell:notifications-center"
     WlrLayershell.layer: WlrLayer.Top
@@ -269,9 +280,8 @@ PanelWindow {
         Keys.onPressed: event => keyCatcher.handle(event)
         onClicked: root.close()
 
-        // Enter/exit (spec "Motion"): the whole card fades and slides in from
-        // the right edge, one animated scalar so a reopen mid-exit reverses
-        // in place.
+        // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): fade,
+        // zoom and a slide in from the right edge.
         Card {
             id: frame
             x: root._frame.x
@@ -281,11 +291,13 @@ PanelWindow {
             // Every edge is inside the output now, so the card keeps the
             // border a Card draws on all four sides rather than the single
             // left one it carried while it was flush against three of them.
-            opacity: root.isOpen ? 1 : 0
-            transform: Translate { x: (1 - frame.opacity) * Theme.motion.slide }
+            opacity: presence.opacity
+            scale: presence.scale
+            transformOrigin: presence.transformOrigin
 
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+            transform: Translate {
+                x: presence.slideX
+                y: presence.slideY
             }
 
             // Swallows clicks anywhere inside the frame (its own padding

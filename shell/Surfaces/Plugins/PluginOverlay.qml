@@ -66,12 +66,21 @@ PanelWindow {
     Component.onDestruction: PluginService.unregisterSurface(Manifest.surfaceKey(root.plugin))
 
     screen: root._screen
-    // Held visible through the exit fade (DESIGN.md §4), same as every other
-    // summoned surface: close() drops isOpen, the card fades, then the window
-    // unmaps. Keyboard focus releases on isOpen itself so nothing types into
+    // Held visible through the exit fade (DESIGN.md §1 Motion), same as
+    // every other summoned surface: close() drops isOpen, presence's own
+    // Behavior runs its progress to 0, and only then does the window
+    // unmap. Keyboard focus releases on isOpen itself so nothing types into
     // a fading-out overlay.
-    visible: root.isOpen || card.opacity > 0
+    visible: presence.shown
     color: "transparent"
+
+    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
+    // M51 D3): a modal surface, zooming from centre with no slide.
+    Presence {
+        id: presence
+        open: root.isOpen
+        edge: "center"
+    }
 
     WlrLayershell.namespace: "formalshell:plugin-overlay"
     WlrLayershell.layer: WlrLayer.Top
@@ -96,14 +105,11 @@ PanelWindow {
             id: card
             anchors.fill: parent
 
-            // Enter/exit (DESIGN.md §4): fade plus a short slide, one
-            // animated scalar so a resummon mid-exit reverses in place.
-            opacity: root.isOpen ? 1 : 0
-            transform: Translate { y: (card.opacity - 1) * Theme.motion.slide }
-
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
+            // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a
+            // modal surface, so fade and zoom from centre only, no slide.
+            opacity: presence.opacity
+            scale: presence.scale
+            transformOrigin: presence.transformOrigin
 
             // Declared before the content so the plugin's own interactive
             // items sit on top of it: clicks the plugin handles never reach

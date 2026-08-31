@@ -1450,7 +1450,13 @@ PanelWindow {
         return null;
     }
 
-    function _enterLevel(id) {
+    // `direction` is 1 for a level entered going deeper or landing from a
+    // summon, -1 for `_pop()`'s own back navigation (M51 D3): the only two
+    // shapes the incoming content can arrive from. Defaults to 1, so every
+    // other caller (open()'s landing level, a submenu/link/provider row)
+    // reads as forward without repeating it.
+    function _enterLevel(id, direction) {
+        var changingLevel = id !== root.currentNodeId;
         var leavingPicker = root.currentNodeId === root._pickerRouteId && id !== root._pickerRouteId;
         root.currentNodeId = id;
         root._cursorIndex = 0;
@@ -1463,6 +1469,11 @@ PanelWindow {
         if (id === root._pickerRouteId)
             root._enterPickerRoute();
         root._evalConditions();
+        // Query filtering never reaches this function, so a keystroke's
+        // re-rank can't retrigger the entrance: only an actual level change
+        // does, and only once per change.
+        if (changingLevel)
+            root._playLevelEnter(direction || 1);
     }
 
     function _pop() {
@@ -1470,7 +1481,44 @@ PanelWindow {
             root.close();
             return;
         }
-        root._enterLevel(root._nodes[root.currentNodeId].parentId);
+        root._enterLevel(root._nodes[root.currentNodeId].parentId, -1);
+    }
+
+    // The level/route entrance (DESIGN.md §1 Motion, M51 D3): a directional
+    // arrival for whichever view stands in for the row list, separate from
+    // the card's own modal fade above. Two standalone animations rather
+    // than a Behavior: both endpoints are constant (opacity always settles
+    // at 1, offset always at 0) no matter which way the level moved, so a
+    // Behavior would see no value change to react to on a repeat call in
+    // the same direction. restart() replays from its own `from` every
+    // time, which is also what keeps a fast run of navigation from
+    // queuing: the previous play is simply abandoned.
+    property real _levelEnterOpacity: 1
+    property real _levelEnterX: 0
+
+    function _playLevelEnter(direction) {
+        levelEnterX.from = direction * Core.Theme.motion.slide;
+        levelEnterOpacity.restart();
+        levelEnterX.restart();
+    }
+
+    NumberAnimation {
+        id: levelEnterOpacity
+        target: root
+        property: "_levelEnterOpacity"
+        from: 0
+        to: 1
+        duration: Core.Theme.motion.standard
+        easing.type: Core.Theme.motion.easing
+    }
+
+    NumberAnimation {
+        id: levelEnterX
+        target: root
+        property: "_levelEnterX"
+        to: 0
+        duration: Core.Theme.motion.standard
+        easing.type: Core.Theme.motion.easing
     }
 
     // Hover owns the cursor only while the pointer is the thing that moved.
@@ -1857,14 +1905,15 @@ PanelWindow {
     }
 
     screen: root._screen
-    // Held visible through the exit fade (DESIGN.md §4): close() drops
-    // isOpen, card's opacity Behavior runs to 0, then the window unmaps.
-    // Keyboard exclusivity releases on isOpen itself, so nothing types into
-    // a fading-out menu, and the paste settle timer still keys
-    // off the real visible flip below, exactly as before, just one exit
-    // fade later. The window is transparent so the fade covers the whole
-    // card; card paints its own background.
-    visible: root.isOpen || card.opacity > 0
+    // Held visible through the exit fade (DESIGN.md §1 Motion): close()
+    // drops isOpen, presence's own Behavior runs its progress to 0, and
+    // only then does the window unmap. Keyboard exclusivity releases on
+    // isOpen itself, so nothing types into a fading-out menu, and the
+    // paste settle timer still keys off the real visible flip below,
+    // exactly as before, just one exit fade later. The window is
+    // transparent so the fade covers the whole card; card paints its own
+    // background.
+    visible: presence.shown
     color: "transparent"
 
     // The window spans the whole output (M39 Task 2) so it can carry the
@@ -1879,6 +1928,14 @@ PanelWindow {
         : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
     readonly property real _cardHeight: root._chrome + root._headerHeight
         + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + actionBar.height
+
+    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
+    // M51 D3): a modal surface, zooming from centre with no slide.
+    Presence {
+        id: presence
+        open: root.isOpen
+        edge: "center"
+    }
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -1901,11 +1958,10 @@ PanelWindow {
     Rectangle {
         anchors.fill: parent
         color: "black"
-        opacity: root.isOpen ? 0.5 : 0
-
-        Behavior on opacity {
-            NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
-        }
+        // Bound straight to presence's own progress, never a Behavior of
+        // its own (M51 D3): a scrim animating on a separate clock from the
+        // card it frames could drift out of step with it.
+        opacity: presence.opacity * 0.5
     }
 
 
@@ -1920,24 +1976,21 @@ PanelWindow {
         onPressed: root.close()
     }
 
-    // Enter/exit (DESIGN.md §1 Motion): the whole card fades and slides
-    // down into place, one animated scalar so a resummon mid-exit reverses
-    // where it stands. `Card` paints the translucent `card` fill Hyprland's
-    // blur reads through, the 1px border and the `radiusXl` corners, and
-    // insets its own slot by `panelPadding`, so every child below anchors
-    // straight to that slot's edges.
+    // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a modal
+    // surface, so fade and zoom from centre only, no slide. `Card` paints
+    // the translucent `card` fill Hyprland's blur reads through, the 1px
+    // border and the `radiusXl` corners, and insets its own slot by
+    // `panelPadding`, so every child below anchors straight to that slot's
+    // edges.
     Card {
         id: card
         x: Math.round((root._outputWidth - root._cardWidth) / 2)
         y: root._clampTop(root._preferredTop)
         width: root._cardWidth
         height: root._cardHeight
-        opacity: root.isOpen ? 1 : 0
-        transform: Translate { y: (card.opacity - 1) * Core.Theme.motion.slide }
-
-        Behavior on opacity {
-            NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easing }
-        }
+        opacity: presence.opacity
+        scale: presence.scale
+        transformOrigin: presence.transformOrigin
 
         // Swallows presses that land on the card's own padding gutters
         // rather than on a row, so a click inside the frame never falls
@@ -2250,6 +2303,10 @@ PanelWindow {
             width: root._listWidth
             height: root._rowsAreaHeight
             visible: !root._isGrid && !root._isAppView
+            // The level entrance (M51 D3): plays only when `_enterLevel`
+            // actually changes the level, never on a query re-rank.
+            opacity: root._levelEnterOpacity
+            transform: Translate { x: root._levelEnterX }
             clip: true
             // Emptied, not merely hidden, on the grids' and an app view's
             // routes: an unread model keeps its delegates alive, and
@@ -2326,6 +2383,9 @@ PanelWindow {
             width: root._contentWidth
             height: root._rowsAreaHeight
             visible: root._isPickerRoute
+            // Same level entrance as rowsView above.
+            opacity: root._levelEnterOpacity
+            transform: Translate { x: root._levelEnterX }
             clip: true
             model: root._isPickerRoute ? root._displayRows : []
             cellWidth: root._contentWidth / root.pickerColumns
@@ -2446,6 +2506,9 @@ PanelWindow {
             width: root._contentWidth
             height: root._rowsAreaHeight
             visible: root._isEmojiGrid
+            // Same level entrance as rowsView above.
+            opacity: root._levelEnterOpacity
+            transform: Translate { x: root._levelEnterX }
             clip: true
             model: root._isEmojiGrid ? root._displayRows : []
             cellWidth: root._contentWidth / root.emojiColumns
@@ -2533,6 +2596,9 @@ PanelWindow {
             width: root._contentWidth
             height: root._rowsAreaHeight
             visible: root._isAppView
+            // Same level entrance as rowsView above.
+            opacity: root._levelEnterOpacity
+            transform: Translate { x: root._levelEnterX }
             source: (root._isAppView && root.visible) ? Qt.resolvedUrl(root._appViewSource) : ""
         }
 
