@@ -585,7 +585,16 @@ nixpkgs.lib.nixosSystem {
         nix.settings = {
           experimental-features = [ "nix-command" "flakes" ];
           trusted-users = [ "test" ];
+          # qemu-vm.nix shares the host's /etc/ssl/certs into the VM over 9p,
+          # and on a mac host that directory holds nothing but symlinks into
+          # /etc/static, which resolve to nothing inside: the mount lands
+          # empty and every substituter query dies on "error adding trust
+          # anchors". Point nix at the store's own bundle instead of the
+          # mount the module put there.
+          ssl-cert-file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         };
+
+        environment.variables.SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 
         system.stateVersion = "24.05";
       })
