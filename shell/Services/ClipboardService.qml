@@ -51,8 +51,31 @@ Singleton {
         return Date.now() + "-" + root._idSeq;
     }
 
+    // Burst coalescing, the floor an event-driven watcher does not get for
+    // free. Maccy and Raycast sample the pasteboard on a timer, so an app
+    // that rewrites the clipboard once per keystroke can still only leave
+    // one row per tick; `wl-paste --watch` forks per change instead, and one
+    // such app turned this whole 300-entry ledger over in two seconds (76
+    // rows, one per distinct character it wrote). A text capture waits
+    // `_settleMs` and a newer one inside that window replaces it, so only
+    // the value the clipboard settles on is recorded. Images capture
+    // immediately: their path already costs a sha256 over the bytes.
+    readonly property int _settleMs: 300
+
+    property string _pendingText
+    property bool _hasPendingText: false
+
     function _capture(text) {
-        var result = History.add({ items: root.items }, { id: root._nextId(), text: text }, Date.now());
+        root._pendingText = text;
+        root._hasPendingText = true;
+        settleTimer.restart();
+    }
+
+    function _commitText() {
+        if (!root._hasPendingText)
+            return;
+        root._hasPendingText = false;
+        var result = History.add({ items: root.items }, { id: root._nextId(), text: root._pendingText }, Date.now());
         if (result.state.items !== root.items)
             adapter.items = result.state.items;
         root._deletePaths(result.removedPaths);
@@ -89,6 +112,10 @@ Singleton {
     }
 
     function clear() {
+        // A capture still inside its settle window belongs to the history
+        // being cleared, not to the one after it.
+        settleTimer.stop();
+        root._hasPendingText = false;
         var result = History.clear({ items: root.items });
         if (result.state.items !== root.items)
             adapter.items = result.state.items;
@@ -146,6 +173,12 @@ Singleton {
         // the wlroots data-control protocol, back off instead of hot-
         // looping a binary that may simply be missing.
         onExited: exitCode => restartTimer.restart()
+    }
+
+    Timer {
+        id: settleTimer
+        interval: root._settleMs
+        onTriggered: root._commitText()
     }
 
     Timer {

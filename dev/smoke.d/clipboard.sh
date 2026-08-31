@@ -24,6 +24,13 @@
 # is resummoned, which is what puts the split pane's framed image preview in
 # this run's own screenshot.
 #
+# The burst rides in after the round trip: twenty one-character copies
+# 20ms apart, the shape an app that rewrites the clipboard on every
+# keystroke produces. Capture settles before it records
+# (ClipboardService's own `_settleMs`), so the ledger has to gain exactly
+# one row, holding the value the burst ended on. A second row means a
+# spammer can turn the whole 300-entry ledger over again.
+#
 # A capture of copied markup rides in just before it. Row labels and the
 # split pane both take provider data verbatim, and a Text left on AutoText
 # parses anything the rich-text heuristic accepts, so the row would show
@@ -45,6 +52,7 @@ clip_image_fixture_path="$shot_dir/clip-image.png"
 clip_route_png="$shot_dir/clipboard-route.png"
 clip_thumb_cache_path="$shot_dir/clipboard-thumb-cache.txt"
 clip_warmup_path="$shot_dir/clipboard-warmup.json"
+clip_burst_path="$shot_dir/clipboard-burst.json"
 
 leg_clipboard_fixture() {
   # The ledger's image entry: a small solid PNG copied last, so the route's
@@ -91,6 +99,12 @@ copy_id=\$(grep -o '"id":"[^"]*"' "$clip_list2_path" | sed -n '2p' | cut -d'"' -
 sleep 1
 "$wl_paste_bin" --no-newline > "$clip_paste_path" 2>&1
 sleep 1
+for c in a b c d e f g h i j k l m n o p q r s t; do
+  "$wl_copy_bin" "burst-\$c"
+  sleep 0.02
+done
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_burst_path" 2>&1
 "$wl_copy_bin" "clipboard smoke sentinel"
 sleep 1
 $picker_wait
@@ -177,6 +191,20 @@ leg_clipboard_assert() {
   cat "$clip_activate_paste_path"; echo
   if ! grep -q 'clipboard smoke one' "$clip_activate_paste_path"; then
     fail "activating the clipboard row left the clipboard at $(cat "$clip_activate_paste_path"), not the row's own entry"
+  fi
+  # Twenty copies 20ms apart, one row. The value has to be the one the
+  # burst ended on, so a settle that fires on the first capture instead of
+  # the last is a failure too.
+  if [ ! -s "$clip_burst_path" ]; then
+    fail "no clipboard list produced after the burst"
+  fi
+  cat "$clip_burst_path"; echo
+  burst_rows=$(grep -o 'burst-[a-t]' "$clip_burst_path" | wc -l | tr -d ' ')
+  if [ "$burst_rows" != "1" ]; then
+    fail "a 20-copy burst left $burst_rows ledger rows, want 1"
+  fi
+  if ! grep -qF 'burst-t' "$clip_burst_path"; then
+    fail "the burst row is not the value the clipboard settled on: $(cat "$clip_burst_path")"
   fi
   # The image entry is what the split pane's preview frame is read against.
   if ! grep -qF '"kind":"image"' "$clip_list3_path"; then
