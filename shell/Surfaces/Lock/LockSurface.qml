@@ -71,6 +71,19 @@ WlSessionLockSurface {
 
     readonly property bool _dither: Core.Theme.lockDither
 
+    // The content column's entrance (M51 Task 7): opacity 0 to 1 plus an
+    // upward rise, played once when this surface is created. A Behavior
+    // never fires on a property's own initial value, only on a later
+    // change, so the trigger is an explicit NumberAnimation restarted from
+    // Component.onCompleted below, the same one-shot idiom Menu.qml's level
+    // entrance uses. Enter only: unlock releases the session lock and this
+    // whole surface is destroyed, nothing left to animate against, and
+    // neither property gates focus, PAM or key handling, both default to
+    // their settled values so the column reads and accepts input from the
+    // first frame regardless of where the animation is.
+    property real _contentOpacity: 1
+    property real _contentRise: 0
+
     // Matches every other top-layer surface's own opaque-frame precaution
     // (Panel.qml/Center.qml): WlSessionLockSurface.color's own doc warns
     // transparent backgrounds behave weirdly on some compositors, so this
@@ -80,6 +93,31 @@ WlSessionLockSurface {
     onVisibleChanged: {
         if (surfaceRoot.visible)
             Qt.callLater(function () { authPrompt.forceInputFocus(); });
+    }
+
+    Component.onCompleted: {
+        contentEnterOpacity.restart();
+        contentEnterRise.restart();
+    }
+
+    NumberAnimation {
+        id: contentEnterOpacity
+        target: surfaceRoot
+        property: "_contentOpacity"
+        from: 0
+        to: 1
+        duration: Theme.motion.surface
+        easing.type: Theme.motion.easing
+    }
+
+    NumberAnimation {
+        id: contentEnterRise
+        target: surfaceRoot
+        property: "_contentRise"
+        from: Theme.motion.slide
+        to: 0
+        duration: Theme.motion.surface
+        easing.type: Theme.motion.easing
     }
 
     Rectangle {
@@ -145,6 +183,8 @@ WlSessionLockSurface {
         id: authPrompt
         anchors.centerIn: parent
         visible: !surfaceRoot.blanked
+        opacity: surfaceRoot._contentOpacity
+        transform: Translate { y: surfaceRoot._contentRise }
         now: surfaceRoot._now
         errorText: surfaceRoot.authError
         checking: surfaceRoot.authenticating
