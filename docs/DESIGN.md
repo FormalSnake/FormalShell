@@ -255,6 +255,7 @@ thing.
 | `Track` | a `trackThickness` progress or slider: `muted` track, `primary` fill, `radiusSm` | cursor (ring), for a surface that addresses the track as a row |
 | `Tooltip` | `popover`, `radiusSm`, `caption`, 6px off the anchor | none |
 | `KeyCatcher` | key dispatcher for keyboard-driven surfaces (Escape, Tab, arrows and hjkl, Enter, Space, x, printable) | `blocked` while an inline editor has focus |
+| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge `slide` to, gating the window's `visible` on `shown` | open, exiting, settled |
 | `Panel` | the popout window: `Card` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, cursor bookkeeping | open, closed |
 
 ## 3. Surface rules

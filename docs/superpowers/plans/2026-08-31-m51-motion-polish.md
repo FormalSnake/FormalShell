@@ -1,8 +1,11 @@
 # M51: caelestia-grade motion in FormalShell's own grammar
 
 **Date:** 2026-08-31
-**Status:** in progress; Tasks 1 to 4 landed (dd59286, a765de6, 2e8b322,
-d45509c on `m51-motion-polish`).
+**Status:** implemented 2026-08-31. Tasks 1 to 7 landed on
+`m51-motion-polish`, oldest first: dd59286 (motion tokens v2), a765de6
+(Presence, Panel/Tooltip/OSD), 2e8b322 (Menu/Center/Polkit/PluginOverlay),
+d45509c (size morphs), 2c7ae8c (centre rows, chevron, Input/Switch), 176b353
+(palette crossfade), cefe85d (lock entrance).
 
 Not this plan's: a combined smoke session that pairs `--menu` with other
 legs (`--menu --center --polkit`, `--menu --toggles`, `--toggles --center`)
