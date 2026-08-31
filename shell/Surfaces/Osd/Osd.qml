@@ -85,15 +85,21 @@ PanelWindow {
 
     screen: root._screen
     // Held visible through the exit fade (DESIGN.md §1 "Motion"): the timer
-    // clears `kind`, the frame's opacity Behavior runs to 0, then the window
-    // unmaps. No input concerns: this surface never takes any.
-    visible: root.kind !== "" || frame.opacity > 0
+    // clears `kind`, presence's own Behavior runs its progress to 0, then
+    // the window unmaps. No input concerns: this surface never takes any.
+    visible: presence.shown
     color: "transparent"
 
     WlrLayershell.namespace: "formalshell:osd"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    Presence {
+        id: presence
+        open: root.kind !== ""
+        edge: "bottom"
+    }
 
     readonly property real _screenPadding: Theme.space.screenPadding
 
@@ -123,16 +129,15 @@ PanelWindow {
         // three surfaces Hyprland blurs behind (spec "Depth").
         color: Theme.color.card
 
-        // Enter/exit (DESIGN.md §1 "Motion"): fade plus a rise from the
-        // bottom edge, one animated scalar so a retrigger mid-exit reverses
-        // in place. Kind-to-kind swaps while already showing (volume ->
-        // brightness) stay instant: opacity never leaves 1.
-        opacity: root.kind !== "" ? 1 : 0
-        transform: Translate { y: (1 - frame.opacity) * Theme.motion.slide }
-
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-        }
+        // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51 D2/D4):
+        // fade, zoom and a rise from the bottom edge, one shared clock so a
+        // retrigger mid-exit reverses in place. Kind-to-kind swaps while
+        // already showing (volume -> brightness) stay instant: `open` never
+        // leaves true.
+        opacity: presence.opacity
+        scale: presence.scale
+        transformOrigin: presence.transformOrigin
+        transform: Translate { y: presence.slideY }
 
         Item {
             id: row

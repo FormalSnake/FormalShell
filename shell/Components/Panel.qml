@@ -294,12 +294,12 @@ PanelWindow {
 
     screen: root._screen
     // Held visible through the exit fade (DESIGN.md §1 "Motion"): close()
-    // drops isOpen, the frame's opacity Behavior runs to 0, and only then
-    // does the window unmap. Keyboard focus and the backdrop release on
-    // isOpen itself, so input never lands on a fading-out panel.
+    // drops isOpen, presence's own Behavior runs its progress to 0, and
+    // only then does the window unmap. Keyboard focus and the backdrop
+    // release on isOpen itself, so input never lands on a fading-out panel.
     // `keepMapped` extends this past the fade for MediaPanel's grabToImage
     // need (M35).
-    visible: root.isOpen || frame.opacity > 0 || root.keepMapped
+    visible: presence.shown || root.keepMapped
     color: "transparent"
     // keepMapped alone (closed, fully faded, still mapped) is the one state
     // that must take no input at all: an empty Region resolves to an empty
@@ -307,9 +307,18 @@ PanelWindow {
     // click-through rather than a disabled MouseArea (Tooltip.qml's own
     // precedent), so a "closed" panel kept mapped for its Video decode never
     // eats a click meant for whatever is really on screen there.
-    mask: (!root.isOpen && frame.opacity <= 0 && root.keepMapped) ? _clickThroughMask : null
+    mask: (!presence.shown && root.keepMapped) ? _clickThroughMask : null
 
     Region { id: _clickThroughMask }
+
+    // The frame's own enter/exit recipe (Presence.qml, DESIGN.md §1
+    // "Motion"): the bar's own edge, since that is what every panel hangs
+    // off.
+    Presence {
+        id: presence
+        open: root.isOpen
+        edge: Theme.barPosition
+    }
 
     WlrLayershell.namespace: "formalshell:panel"
     WlrLayershell.layer: WlrLayer.Top
@@ -391,36 +400,15 @@ PanelWindow {
             color: root.frameColor
             radius: root.frameRadius
 
-            opacity: root.isOpen ? 1 : 0
-
-            Behavior on opacity {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
-
-            // Enter is the fade plus a slide in from the bar's edge; exit is
-            // opacity alone (DESIGN.md §1 "Motion"). Nothing writes this
-            // during the exit, so the only visible run is the one on the way
-            // in; the re-arm below happens behind a frame that has already
-            // finished fading out.
-            property real slide: Theme.motion.slide
+            // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51
+            // D2/D4): fade, zoom and a slide in from the bar's edge.
+            opacity: presence.opacity
+            scale: presence.scale
+            transformOrigin: presence.transformOrigin
 
             transform: Translate {
-                x: frame.slide * root._edge.x
-                y: frame.slide * root._edge.y
-            }
-
-            Behavior on slide {
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-            }
-
-            onOpacityChanged: if (frame.opacity <= 0) frame.slide = Theme.motion.slide
-
-            Connections {
-                target: root
-                function onIsOpenChanged() {
-                    if (root.isOpen)
-                        frame.slide = 0;
-                }
+                x: presence.slideX
+                y: presence.slideY
             }
 
             // Swallows clicks anywhere inside the frame (the card's own

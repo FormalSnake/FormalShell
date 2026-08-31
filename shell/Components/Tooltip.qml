@@ -7,8 +7,9 @@ import "tooltip.js" as Placement
 // The hover tooltip (DESIGN.md §2): a `popover` card at `radiusSm` with a
 // 1px `border`, `Theme.space.md` off the item that owns it, carrying one
 // caption line that names what that item is and what it currently reads. It
-// enters with the same fade-plus-slide the panels and the OSD use rather
-// than a transition of its own.
+// enters through the same Presence recipe the panels and the OSD use,
+// zoomed from the side facing its anchor rather than a transition of its
+// own.
 //
 // Its own layer surface rather than an item inside the anchor's window: the
 // bar's PanelWindow is exactly one cell tall and carries an exclusive zone,
@@ -81,6 +82,19 @@ PanelWindow {
             Placement.sideForBarEdge(root.barEdge))
         : ({ x: 0, y: 0, side: "below", slideX: 0, slideY: -1 })
 
+    // The card's own edge facing the anchor item, Presence's zoom origin:
+    // a card below its anchor grows from its top, one above grows from its
+    // bottom, and so on around the other two sides.
+    readonly property string _presenceEdge: {
+        switch (root._place.side) {
+        case "below": return "top";
+        case "above": return "bottom";
+        case "right": return "left";
+        case "left": return "right";
+        }
+        return "center";
+    }
+
     function show() {
         delayTimer.restart();
     }
@@ -109,9 +123,9 @@ PanelWindow {
 
     screen: root._screen
     // Held mapped through the exit fade (DESIGN.md §1 "Motion"), same as
-    // Panel.qml: the frame's opacity Behavior has to finish before the
-    // surface unmaps.
-    visible: root._visible || frame.opacity > 0
+    // Panel.qml: presence's own Behavior has to settle before the surface
+    // unmaps.
+    visible: presence.shown
     color: "transparent"
 
     WlrLayershell.namespace: "formalshell:tooltip"
@@ -122,6 +136,12 @@ PanelWindow {
     anchors { top: true; left: true; right: true; bottom: true }
 
     mask: Region {}
+
+    Presence {
+        id: presence
+        open: root._visible
+        edge: root._presenceEdge
+    }
 
     Rectangle {
         id: frame
@@ -136,23 +156,12 @@ PanelWindow {
         border.width: Theme.borderWidth
         border.color: Theme.color.border
 
-        // Enter/exit (DESIGN.md §1 "Motion"): fade plus a slide toward the
-        // anchor, so a card under its cell rises into place and a flipped
-        // one drops into place. One animated scalar, so re-hovering mid-exit
-        // reverses from wherever the fade is. motion.enabled=false zeroes
-        // Theme.motion.standard (Theme/tokens.js's motionTokens), which
-        // collapses both the fade and, since the translate is driven off
-        // the same opacity, the slide to an instant swap, so this needs no
-        // separate Theme.motionEnabled gate, same as Panel.qml/Osd.qml.
-        opacity: root._visible ? 1 : 0
-        transform: Translate {
-            x: (1 - frame.opacity) * Theme.motion.slide * root._place.slideX
-            y: (1 - frame.opacity) * Theme.motion.slide * root._place.slideY
-        }
-
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-        }
+        // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51 D2/D4):
+        // fade plus a zoom from the side facing the anchor item, no slide
+        // travel, the card is small enough that the zoom alone carries it.
+        opacity: presence.opacity
+        scale: presence.scale
+        transformOrigin: presence.transformOrigin
 
         Text {
             id: label

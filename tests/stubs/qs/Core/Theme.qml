@@ -97,15 +97,21 @@ QtObject {
         return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledPress));
     }
 
-    readonly property bool motionEnabled: true
+    // Not readonly: tst_presence.qml overrides this per-test to prove the
+    // motion.enabled=false reduced-motion switch, the same way tst_track.qml
+    // and tst_switch.qml reassign `color` above.
+    property bool motionEnabled: true
 
     readonly property var motion: {
-        var m = Tokens.motionTokens(true);
+        var m = Tokens.motionTokens(root.motionEnabled);
         return {
             fast: m.fast,
             standard: m.standard,
+            surface: m.surface,
+            surfaceExit: m.surfaceExit,
             slide: m.slide,
-            easing: Easing.OutCubic,
+            zoom: m.zoom,
+            easing: Easing.OutQuint,
             reveal: m.reveal,
             revealEasing: Easing.InOutQuad,
             marqueePxPerSec: m.marqueePxPerSec,

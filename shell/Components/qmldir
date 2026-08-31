@@ -18,6 +18,7 @@ Panel Panel.qml
 PanelSlot PanelSlot.qml
 PanelHero PanelHero.qml
 Picture Picture.qml
+Presence Presence.qml
 Rail Rail.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
