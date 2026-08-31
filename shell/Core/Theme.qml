@@ -13,7 +13,93 @@ import "../Bar/layout.js" as BarLayout
 Singleton {
     id: root
 
-    property var color: Palette.fallback()
+    // Palette.fallback()'s dark defaults, `color`'s own placeholder below
+    // before the first real palette lands (`_applyPalette`, near the
+    // FileView at the bottom of this file). Computed once and shared across
+    // every property there instead of 26 separate calls.
+    readonly property var _bootFallback: Palette.fallback()
+
+    // True once `_applyPalette` has run for real at least once. Every
+    // Behavior on `color` below is gated on it, so the very first palette
+    // (the common no-wallpaper case, straight off `_bootFallback`; a real
+    // matugen palette on a session that starts with a wallpaper already
+    // set) replaces the placeholder outright instead of crossfading from it
+    // (M51 D6/D9's boot rule). Background.qml's `_suppressTopFade` guards
+    // the wallpaper crossfade the same way, for the same reason.
+    property bool _paletteReady: false
+
+    // theme.json's shadcn color roles (M51 D6): every key crossfades to a
+    // new palette over `motion.reveal` on a mode toggle, a matugen
+    // recolour, a preset swap or the Flexoki pin, in step with the
+    // wallpaper. A `Behavior` only ever attaches to a property, never to
+    // whatever value happens to be sitting in a `var`, which is why this is
+    // a nested object with one `property color` per key rather than the
+    // plain map `color` held before M51: `_applyPalette` below writes one
+    // key at a time so each Behavior sees the change, since replacing this
+    // object outright would replace the Behaviors along with it. `color`
+    // itself stays a plain, non-readonly `var`: several unit tests
+    // (tests/tst_button.qml and its siblings) still swap the whole thing for
+    // a sentinel map mid-test, and a plain object serves every consumer here
+    // exactly as this one does, since nothing outside this file cares
+    // whether `.background` resolves off a QtObject or a map. `mode` alone
+    // carries no Behavior: `_stateAlpha` below reads it as a lookup key, not
+    // a colour, so it has nothing to crossfade.
+    property var color: QtObject {
+        property string mode: root._bootFallback.mode
+        property color background: root._bootFallback.background
+        property color foreground: root._bootFallback.foreground
+        property color card: root._bootFallback.card
+        property color cardForeground: root._bootFallback.cardForeground
+        property color popover: root._bootFallback.popover
+        property color popoverForeground: root._bootFallback.popoverForeground
+        property color primary: root._bootFallback.primary
+        property color primaryForeground: root._bootFallback.primaryForeground
+        property color secondary: root._bootFallback.secondary
+        property color secondaryForeground: root._bootFallback.secondaryForeground
+        property color muted: root._bootFallback.muted
+        property color mutedForeground: root._bootFallback.mutedForeground
+        property color accent: root._bootFallback.accent
+        property color accentForeground: root._bootFallback.accentForeground
+        property color destructive: root._bootFallback.destructive
+        property color destructiveForeground: root._bootFallback.destructiveForeground
+        property color warning: root._bootFallback.warning
+        property color warningForeground: root._bootFallback.warningForeground
+        property color border: root._bootFallback.border
+        property color input: root._bootFallback.input
+        property color ring: root._bootFallback.ring
+        property color chart1: root._bootFallback.chart1
+        property color chart2: root._bootFallback.chart2
+        property color chart3: root._bootFallback.chart3
+        property color chart4: root._bootFallback.chart4
+        property color chart5: root._bootFallback.chart5
+
+        Behavior on background { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on foreground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on card { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on cardForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on popover { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on popoverForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on primary { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on primaryForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on secondary { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on secondaryForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on muted { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on mutedForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on accent { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on accentForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on destructive { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on destructiveForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on warning { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on warningForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on border { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on input { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on ring { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart1 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart2 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart3 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart4 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart5 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+    }
 
     // theme.preset (M49 D1): one table of defaults behind the chrome knobs
     // below, resolved once here. An explicit settings key always wins over
@@ -142,9 +228,8 @@ Singleton {
     readonly property bool wallpaperDither: root._preset.wallpaperDither
     readonly property bool lockDither: root._preset.lockDither
 
-    // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
-    // strings, which have no .r/.g/.b to read, and Qt.rgba on those three
-    // undefined values silently paints black at the right alpha.
+    // Qt.alpha rather than Qt.rgba(c.r, c.g, c.b, alpha): no channel
+    // extraction needed to add an alpha on top of a color already in hand.
     function surface(c) {
         return Qt.alpha(c, root.surfaceOpacity);
     }
@@ -260,7 +345,7 @@ Singleton {
         onFileChanged: reload()
         onLoaded: root._applyThemeJson()
         onLoadFailed: error => {
-            root.color = Palette.fallback();
+            root._applyPalette(Palette.fallback());
             if (error === FileViewError.FileNotFound)
                 rewatchTimer.restart();
         }
@@ -276,6 +361,17 @@ Singleton {
         // Per-key fallback, not whole-file: a theme.json written before a
         // token existed (or mid-write with one bad value) keeps every other
         // live matugen color and only substitutes zinc for that key.
-        root.color = Palette.mergeWithFallback(parsed);
+        root._applyPalette(Palette.mergeWithFallback(parsed));
+    }
+
+    // Writes one palette onto `color` a key at a time, the tail every
+    // palette-change path (theme.json present, absent, or mid-write) funnels
+    // through, so each property's own Behavior sees the change and
+    // crossfades to it rather than the object underneath the Behaviors
+    // getting replaced outright.
+    function _applyPalette(palette) {
+        root.color.mode = palette.mode;
+        Palette.COLOR_KEYS.forEach(key => root.color[key] = palette[key]);
+        root._paletteReady = true;
     }
 }

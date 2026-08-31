@@ -48,10 +48,8 @@ TestCase {
         wait(50);
     }
 
-    // Theme.color's members are plain hex strings (a `var` map, not typed
-    // `color` properties), so `.r`/`.g`/`.b` are only meaningful once
-    // funneled through an actual `color`-typed property — exactly what
-    // DitherFill's own `inkColor` does before handing it to the Canvas.
+    // DitherFill's own `inkColor` is already a typed `color` property, so
+    // this probe reads the same value it hands to the Canvas.
     property color _inkProbe: Theme.color.mutedForeground
 
     function _pixel(canvas, x, y) {

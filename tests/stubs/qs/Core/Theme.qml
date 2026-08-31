@@ -14,12 +14,49 @@ import "../../../../shell/Theme/tokens.js" as Tokens
 QtObject {
     id: root
 
+    // Mirrors the real Theme.qml's structural shape (M51 D6): one
+    // `property color` per key on a nested QtObject rather than a plain map,
+    // so `.background` etc. resolve to the same typed `color` value a
+    // component under test would get against the real singleton. No
+    // Behaviors here, unlike the real one: nothing in this stub ever
+    // retargets these values on a running palette pipeline, only a whole-
+    // object swap between tests (below), so there is nothing to crossfade.
+    readonly property var _bootFallback: Palette.fallback()
+
     // Not readonly: tst_cell_hover_inversion.qml overrides this per-test with
     // a palette whose roles are pairwise distinct, since a fallback set can
     // coincidentally share a hex across two different roles, which makes a
     // hex-equality assertion against it unable to tell a correct role from
     // a swapped one.
-    property var color: Palette.fallback()
+    property var color: QtObject {
+        property string mode: root._bootFallback.mode
+        property color background: root._bootFallback.background
+        property color foreground: root._bootFallback.foreground
+        property color card: root._bootFallback.card
+        property color cardForeground: root._bootFallback.cardForeground
+        property color popover: root._bootFallback.popover
+        property color popoverForeground: root._bootFallback.popoverForeground
+        property color primary: root._bootFallback.primary
+        property color primaryForeground: root._bootFallback.primaryForeground
+        property color secondary: root._bootFallback.secondary
+        property color secondaryForeground: root._bootFallback.secondaryForeground
+        property color muted: root._bootFallback.muted
+        property color mutedForeground: root._bootFallback.mutedForeground
+        property color accent: root._bootFallback.accent
+        property color accentForeground: root._bootFallback.accentForeground
+        property color destructive: root._bootFallback.destructive
+        property color destructiveForeground: root._bootFallback.destructiveForeground
+        property color warning: root._bootFallback.warning
+        property color warningForeground: root._bootFallback.warningForeground
+        property color border: root._bootFallback.border
+        property color input: root._bootFallback.input
+        property color ring: root._bootFallback.ring
+        property color chart1: root._bootFallback.chart1
+        property color chart2: root._bootFallback.chart2
+        property color chart3: root._bootFallback.chart3
+        property color chart4: root._bootFallback.chart4
+        property color chart5: root._bootFallback.chart5
+    }
 
     // The shadcn preset's own table, written out: this stub cannot import
     // Config, and shell/Theme/presets.js resolves against it. A component
@@ -78,9 +115,8 @@ QtObject {
     readonly property real frameRadius: 20
     readonly property var edgeInset: root.barInset
 
-    // Qt.alpha rather than Qt.rgba: `color` arrives from theme.json as hex
-    // strings, which have no .r/.g/.b to read, and Qt.rgba on those three
-    // undefined values silently paints black at the right alpha.
+    // Qt.alpha rather than Qt.rgba(c.r, c.g, c.b, alpha): no channel
+    // extraction needed to add an alpha on top of a color already in hand.
     function surface(c) {
         return Qt.alpha(c, root.surfaceOpacity);
     }
