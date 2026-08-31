@@ -26,9 +26,19 @@ function _noRemoval(state) {
 // Drops empty/whitespace-only captures, the shape a CLIPBOARD_STATE=nil/
 // clear watch event produces (stdin attached to /dev/null), and returns the
 // text unchanged otherwise; sanitize never trims real content.
+//
+// NUL bytes are stripped before the empty check. Quickshell's SplitParser
+// skips the byte directly after a delimiter match (src/io/datastream.cpp,
+// the `readi += mlen` inside a loop that also increments), so two adjacent
+// NULs in the watcher's stream leak one into the front of the next entry:
+// an empty capture followed by a real one recorded `\0/tmp/shot.png`
+// alongside the clean `/tmp/shot.png`. Stripping rather than rejecting is
+// what collapses that pair back into one row, and a NUL could never
+// survive `copy()`'s wl-copy argv anyway.
 function sanitize(text) {
     if (typeof text !== "string") return null;
-    return text.trim().length === 0 ? null : text;
+    var stripped = text.replace(/\0/g, "");
+    return stripped.trim().length === 0 ? null : stripped;
 }
 
 // Legacy entries (persisted before images existed) carry no `kind` field,

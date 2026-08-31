@@ -30,6 +30,25 @@ TestCase {
         compare(H.sanitize("  hello  "), "  hello  ");
     }
 
+    function test_sanitize_strips_nul_bytes() {
+        compare(H.sanitize("\u0000/tmp/shot.png"), "/tmp/shot.png");
+    }
+
+    function test_sanitize_drops_a_nul_only_capture() {
+        compare(H.sanitize("\u0000"), null);
+    }
+
+    function test_add_nul_prefixed_capture_dedupes_with_the_clean_one() {
+        // The SplitParser delimiter the capture side lost (see sanitize's
+        // comment): both halves have to land as the one row.
+        var s = H.initialState();
+        s = H.add(s, entry("a", "\u0000/tmp/shot.png"), 1000).state;
+        s = H.add(s, entry("b", "/tmp/shot.png"), 1001).state;
+        compare(s.items.length, 1);
+        compare(s.items[0].id, "a");
+        compare(s.items[0].text, "/tmp/shot.png");
+    }
+
     function test_add_appends_new_entry_to_front() {
         var s = H.initialState();
         s = H.add(s, entry("a", "hello"), 1000).state;
