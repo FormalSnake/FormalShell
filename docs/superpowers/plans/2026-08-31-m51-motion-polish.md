@@ -8,9 +8,15 @@ Not this plan's: a combined smoke session that pairs `--menu` with other
 legs (`--menu --center --polkit`, `--menu --toggles`, `--toggles --center`)
 can fail a menu assert (`a root query for 'e' grouped into 0 heading(s)`,
 sections empty). Verified 2026-08-31 on main 58561d6 with no M51 changes,
-from a detached baseline worktree; every leg passes alone, and Tasks 3 and
-4 re-verified their legs individually. Menu-sharing combinations run their
-legs individually until the rig race is fixed.
+from a detached baseline worktree, and reproduced at d04867b by the peer
+session, so it predates the emoji commit. The peer's paired statuses
+narrow it: at t0+2 root reports 18 rows in two sections, and after `menu
+filter e` the same level (level null both times) reports 0 rows, so the
+tree was built and the ranked root search returned nothing under combined
+load; `--menu` and `--polkit` both run t0=3. The assert itself only
+exists since 025f7cb (2026-08-27). Every leg passes alone, and Tasks 3
+and 4 re-verified their legs individually. Menu-sharing combinations run
+their legs individually until the rig race is fixed.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook; Task 1 amends its
 §1 Motion paragraph and this plan records why.
