@@ -61,6 +61,12 @@ stdenvNoCC.mkDerivation {
     # long-lived child it owned running, and PR_SET_PDEATHSIG is what closes
     # that. Unlike the optional CLIs above this one has no fallback state,
     # which is why it is wired here rather than guarded with `command -v`.
+    # QSG_RENDER_LOOP: Qt 6.11 falls back to the basic render loop on the
+    # nvidia/Wayland stack (QSG_INFO on the g815, 2026-08-31), and that loop
+    # advances animations off a ~60Hz timer no matter what the panel runs
+    # at. threaded paces each window off its own vsync (the 240Hz panel
+    # logs "Animation Driver: using vsync: 4.17 ms"). set-default keeps the
+    # smoke rig and any debugging session free to override it.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux ]} \
@@ -70,7 +76,8 @@ stdenvNoCC.mkDerivation {
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \
-      --prefix QT_PLUGIN_PATH : ${qt6.qtmultimedia}/lib/qt-6/plugins
+      --prefix QT_PLUGIN_PATH : ${qt6.qtmultimedia}/lib/qt-6/plugins \
+      --set-default QSG_RENDER_LOOP threaded
 
     # lock-before-sleep contract (spec §8): whatever a systemd unit calls
     # before suspend must keep an exit-0-always behaviour so a lock failure
