@@ -17,6 +17,13 @@ load; `--menu` and `--polkit` both run t0=3. The assert itself only
 exists since 025f7cb (2026-08-27). Every leg passes alone, and Tasks 3
 and 4 re-verified their legs individually. Menu-sharing combinations run
 their legs individually until the rig race is fixed.
+
+A second combined-session race, same standing: `--theme-toggle
+--wallpaper` fails `general:col.active_border does not carry the
+wallpaper primary 91d5ad. Got: custom type: ff266a49 0deg`, byte-identical
+at 2c7ae8c (before the palette crossfade) and at 176b353 (after), so the
+border carries a stale palette under combined load regardless of M51.
+Both legs pass alone; Task 6 verified them individually.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook; Task 1 amends its
 §1 Motion paragraph and this plan records why.
