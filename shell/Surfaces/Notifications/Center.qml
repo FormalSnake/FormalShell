@@ -36,7 +36,11 @@ PanelWindow {
 
     // Mirrored onto the service so surfaces with no handle on this instance can
     // see it, see NotificationService.centerOpen's own comment.
-    onIsOpenChanged: NotificationService.centerOpen = root.isOpen
+    onIsOpenChanged: {
+        NotificationService.centerOpen = root.isOpen;
+        if (root.isOpen)
+            root._resetRowSlots();
+    }
 
     // Bar.qml publishes its own occupied edge as Theme.edgeInset (the same
     // lookup Panel.qml uses): its thickness on the edge it sits on, 0 on the
@@ -74,6 +78,154 @@ PanelWindow {
     // One flat cursor over both sections, pending first, so Up/Down walk the
     // card the way the eye reads it.
     readonly property var _rows: root._pendingRows.concat(root._seenRows)
+
+    // --- Row presence (DESIGN.md sec.1 Motion, M51 Task 5) -----------------
+    //
+    // Mirrors Toasts.qml's own pool of stable slots (its header comment has
+    // the full reasoning): a Repeater bound straight to `_pendingRows`/
+    // `_seenRows` resets every delegate on any change at all, which is why
+    // the Repeaters below bind to a slot COUNT instead and each delegate
+    // reads its own slot back out of these arrays by pool index. Visual
+    // order comes from `entry.arrivedAt`, the same field `Model.groupEntries`
+    // already orders a section by, so a departing row (frozen on its last
+    // entry) keeps the position it had rather than jumping to either end
+    // while it collapses.
+    property var _pendingSlots: []
+    property var _seenSlots: []
+
+    // A few pre-made empty slots kept past the current high-water mark: a
+    // genuinely new row landing on a slot that already existed a frame
+    // earlier gets the ordinary false->true `alive` change its own enter
+    // Behavior fires on, rather than a slot's first-ever value, which a
+    // Behavior never animates (NotificationRow's `_presence` below).
+    readonly property int _slotHeadroom: 3
+
+    function _withHeadroom(slots) {
+        var next = slots.slice();
+        var free = 0;
+        for (var i = next.length - 1; i >= 0 && next[i] === null; i--)
+            free++;
+        while (free < root._slotHeadroom) {
+            next.push(null);
+            free++;
+        }
+        return next;
+    }
+
+    // Fresh 1:1 mapping, nothing departing: the centre's own Presence
+    // entrance already covers the card materializing, so the rows already
+    // on it must not also fade in on top of it. `animated` below is the
+    // actual guard (it stays false until that entrance settles); this reset
+    // just gives the pool a clean slate to settle into.
+    function _resetRowSlots() {
+        root._pendingSlots = root._withHeadroom(root._pendingRows.map(function (g) {
+            return { key: Model.groupKey(g), entry: g, departing: false };
+        }));
+        root._seenSlots = root._withHeadroom(root._seenRows.map(function (g) {
+            return { key: Model.groupKey(g), entry: g, departing: false };
+        }));
+    }
+
+    // Reconciles a section's slots against its current rows: a still-live
+    // key refreshes in place, a vanished one starts departing (frozen on its
+    // last entry so its size holds while it collapses), and a genuinely new
+    // key claims the first empty slot or grows the pool.
+    function _syncSlots(slots, rows) {
+        var liveByKey = {};
+        rows.forEach(function (g) { liveByKey[Model.groupKey(g)] = g; });
+        var next = slots.slice();
+        var occupied = {};
+        for (var i = 0; i < next.length; i++) {
+            var s = next[i];
+            if (!s)
+                continue;
+            var g = liveByKey[s.key];
+            if (g)
+                next[i] = { key: s.key, entry: g, departing: false };
+            else if (!s.departing)
+                next[i] = { key: s.key, entry: s.entry, departing: true };
+            occupied[s.key] = true;
+        }
+        rows.forEach(function (g) {
+            var key = Model.groupKey(g);
+            if (occupied[key])
+                return;
+            for (var j = 0; j < next.length; j++) {
+                if (!next[j]) {
+                    next[j] = { key: key, entry: g, departing: false };
+                    occupied[key] = true;
+                    return;
+                }
+            }
+            next.push({ key: key, entry: g, departing: false });
+        });
+        return root._withHeadroom(next);
+    }
+
+    on_PendingRowsChanged: {
+        if (root.isOpen)
+            root._pendingSlots = root._syncSlots(root._pendingSlots, root._pendingRows);
+    }
+    on_SeenRowsChanged: {
+        if (root.isOpen)
+            root._seenSlots = root._syncSlots(root._seenSlots, root._seenRows);
+    }
+
+    function _clearPendingSlot(index) {
+        var slots = root._pendingSlots.slice();
+        slots[index] = null;
+        root._pendingSlots = slots;
+    }
+    function _clearSeenSlot(index) {
+        var slots = root._seenSlots.slice();
+        slots[index] = null;
+        root._seenSlots = slots;
+    }
+
+    // Per-slot target y, keyed by pool index, and whether that slot draws
+    // the rule above it, both read off the arrival order rather than off
+    // pool index: `ruled` is still "not first in the section", it just
+    // reads that position back out by key instead of straight off the
+    // live array.
+    function _rowLayout(slots, repeater, descending) {
+        var order = [];
+        for (var i = 0; i < slots.length; i++) {
+            if (slots[i])
+                order.push(i);
+        }
+        order.sort(function (a, b) {
+            var da = slots[a].entry.arrivedAt, db = slots[b].entry.arrivedAt;
+            return descending ? db - da : da - db;
+        });
+        var y = {}, ruled = {}, cursor = 0;
+        order.forEach(function (index, pos) {
+            y[index] = cursor;
+            ruled[index] = pos > 0;
+            var item = repeater.itemAt(index);
+            cursor += (item ? item.height : 0) + Theme.space.rowGap;
+        });
+        return { y: y, ruled: ruled, height: order.length > 0 ? cursor - Theme.space.rowGap : 0 };
+    }
+
+    readonly property var _pendingLayout: root._rowLayout(root._pendingSlots, pendingRepeater, false)
+    // Newest first, matching `_pastNewestFirst`.
+    readonly property var _seenLayout: root._rowLayout(root._seenSlots, seenRepeater, true)
+
+    // Which single row (either section) the keyboard cursor sits on, read
+    // back by key rather than by `cursorIndex` directly: a row's pool index
+    // has nothing to do with its position in `_rows`.
+    readonly property var _cursorEntry: (root.cursorActive && root.cursorSection === 0
+        && root.cursorIndex >= 0 && root.cursorIndex < root._rows.length)
+        ? root._rows[root.cursorIndex] : null
+    readonly property string _cursorKey: root._cursorEntry ? Model.groupKey(root._cursorEntry) : ""
+
+    // A freed or not-yet-claimed slot's row draws this rather than null,
+    // the same stand-in Toasts.qml's empty pool slots use.
+    readonly property var _emptyEntry: ({
+        id: "", appName: "", appIcon: "", desktopEntry: "", summary: "",
+        body: "", urgency: 1, actions: [], image: "", local: false,
+        arrivedAt: 0, seenAt: null, expiresAt: null, memberIds: []
+    })
 
     // --- Keyboard (spec "Keyboard model") --------------------------------
     //
@@ -431,13 +583,19 @@ PanelWindow {
                         spacing: Theme.space.sectionGap
 
                         SectionLabel {
+                            // Held back while a row is still collapsing out of
+                            // either section: it would otherwise sit beside a
+                            // fading last row instead of after it.
                             visible: root._rows.length === 0
+                                && !root._pendingSlots.some(s => s && s.departing)
+                                && !root._seenSlots.some(s => s && s.departing)
                             text: "NO NOTIFICATIONS"
                         }
 
                         Column {
                             width: parent.width
                             visible: root._pendingRows.length > 0
+                                || root._pendingSlots.some(s => s && s.departing)
                             spacing: Theme.space.rowGap
 
                             SectionLabel {
@@ -445,25 +603,48 @@ PanelWindow {
                                 count: NotificationService.pending.length
                             }
 
-                            Repeater {
-                                model: root._pendingRows
+                            Item {
+                                width: parent.width
+                                height: root._pendingLayout.height
 
-                                delegate: NotificationRow {
-                                    id: pendingRow
-                                    required property var modelData
-                                    required property int index
+                                Repeater {
+                                    id: pendingRepeater
+                                    model: root._pendingSlots.length
 
-                                    width: parent.width
-                                    entry: pendingRow.modelData
-                                    now: root._now
-                                    unread: true
-                                    ruled: pendingRow.index > 0
-                                    cursor: root.cursorActive && root.cursorSection === 0
-                                        && root.cursorIndex === pendingRow.index
+                                    delegate: NotificationRow {
+                                        id: pendingRow
+                                        required property int index
+                                        readonly property var _slot: root._pendingSlots[pendingRow.index]
+                                        // Gates every Behavior below: the
+                                        // centre's own enter (Presence.qml)
+                                        // covers the initial population, so a
+                                        // row must not also animate until
+                                        // that settles, and stops animating
+                                        // again once the centre starts
+                                        // closing.
+                                        readonly property bool _animated: presence.settled && root.isOpen
 
-                                    onDismissRequested: NotificationService.dismissGroup(pendingRow.modelData.memberIds)
-                                    onActivateRequested: root.activateRow(pendingRow.modelData)
-                                    onActionRequested: key => NotificationService.invokeAction(pendingRow.modelData.id, key)
+                                        width: parent.width
+                                        y: root._pendingLayout.y[pendingRow.index] || 0
+                                        Behavior on y {
+                                            enabled: pendingRow._animated
+                                            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                                        }
+
+                                        entry: pendingRow._slot ? pendingRow._slot.entry : root._emptyEntry
+                                        now: root._now
+                                        unread: true
+                                        ruled: root._pendingLayout.ruled[pendingRow.index] === true
+                                        alive: pendingRow._slot ? !pendingRow._slot.departing : false
+                                        animated: pendingRow._animated
+                                        cursor: root.cursorActive && root.cursorSection === 0
+                                            && pendingRow._slot && pendingRow._slot.key === root._cursorKey
+
+                                        onDismissRequested: NotificationService.dismissGroup(pendingRow._slot.entry.memberIds)
+                                        onActivateRequested: root.activateRow(pendingRow._slot.entry)
+                                        onActionRequested: key => NotificationService.invokeAction(pendingRow._slot.entry.id, key)
+                                        onExited: root._clearPendingSlot(pendingRow.index)
+                                    }
                                 }
                             }
                         }
@@ -471,6 +652,7 @@ PanelWindow {
                         Column {
                             width: parent.width
                             visible: root._seenRows.length > 0
+                                || root._seenSlots.some(s => s && s.departing)
                             spacing: Theme.space.rowGap
 
                             SectionLabel {
@@ -478,25 +660,41 @@ PanelWindow {
                                 count: NotificationService.past.length
                             }
 
-                            Repeater {
-                                model: root._seenRows
+                            Item {
+                                width: parent.width
+                                height: root._seenLayout.height
 
-                                delegate: NotificationRow {
-                                    id: seenRow
-                                    required property var modelData
-                                    required property int index
+                                Repeater {
+                                    id: seenRepeater
+                                    model: root._seenSlots.length
 
-                                    width: parent.width
-                                    entry: seenRow.modelData
-                                    now: root._now
-                                    unread: false
-                                    ruled: seenRow.index > 0
-                                    cursor: root.cursorActive && root.cursorSection === 0
-                                        && root.cursorIndex === root._pendingRows.length + seenRow.index
+                                    delegate: NotificationRow {
+                                        id: seenRow
+                                        required property int index
+                                        readonly property var _slot: root._seenSlots[seenRow.index]
+                                        readonly property bool _animated: presence.settled && root.isOpen
 
-                                    onDismissRequested: NotificationService.dismissGroup(seenRow.modelData.memberIds)
-                                    onActivateRequested: root.activateRow(seenRow.modelData)
-                                    onActionRequested: key => NotificationService.invokeAction(seenRow.modelData.id, key)
+                                        width: parent.width
+                                        y: root._seenLayout.y[seenRow.index] || 0
+                                        Behavior on y {
+                                            enabled: seenRow._animated
+                                            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                                        }
+
+                                        entry: seenRow._slot ? seenRow._slot.entry : root._emptyEntry
+                                        now: root._now
+                                        unread: false
+                                        ruled: root._seenLayout.ruled[seenRow.index] === true
+                                        alive: seenRow._slot ? !seenRow._slot.departing : false
+                                        animated: seenRow._animated
+                                        cursor: root.cursorActive && root.cursorSection === 0
+                                            && seenRow._slot && seenRow._slot.key === root._cursorKey
+
+                                        onDismissRequested: NotificationService.dismissGroup(seenRow._slot.entry.memberIds)
+                                        onActivateRequested: root.activateRow(seenRow._slot.entry)
+                                        onActionRequested: key => NotificationService.invokeAction(seenRow._slot.entry.id, key)
+                                        onExited: root._clearSeenSlot(seenRow.index)
+                                    }
                                 }
                             }
                         }
@@ -541,10 +739,23 @@ PanelWindow {
         property bool unread: false
         property bool cursor: false
         property bool ruled: false
+        // M51 Task 5: false starts this row collapsing (height and opacity
+        // together, mirroring Toasts.qml's own presence scalar) instead of
+        // vanishing outright, so an arrival or a departure reflows its
+        // neighbours rather than popping.
+        property bool alive: true
+        // Gates the collapse Behavior below. False during the centre's own
+        // initial population (its Presence entrance already covers that)
+        // and again while it closes; true only for a change that happens
+        // with the card already sitting open and settled.
+        property bool animated: false
 
         signal dismissRequested()
         signal activateRequested()
         signal actionRequested(string key)
+        // Fired once a departed row's own collapse has fully settled, so the
+        // caller can free its pool slot for reuse.
+        signal exited()
 
         // The dot's own width plus a gutter. Reserved on every row, painted
         // on the unread ones, so the two sections stay left-aligned.
@@ -555,6 +766,23 @@ PanelWindow {
         readonly property real _ruleHeight: row.ruled ? Theme.borderWidth + Theme.space.rowGap : 0
 
         implicitHeight: row._ruleHeight + card.implicitHeight
+
+        // 0 once departed, 1 while alive; height and opacity both ride it so
+        // a row collapses and fades as one movement rather than two. Not
+        // `readonly`: a Behavior needs to be able to write it, the same way
+        // Toasts.qml's own `presence` scalar is left writable despite also
+        // being nothing but a binding.
+        property real _presence: row.alive ? 1 : 0
+        Behavior on _presence {
+            enabled: row.animated
+            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        }
+        height: row._presence * row.implicitHeight
+        opacity: row._presence
+        onOpacityChanged: {
+            if (row.opacity === 0 && !row.alive)
+                row.exited();
+        }
 
         // Full-bleed across the list, the dot's gutter included: the seam
         // divides the rows, and that gutter is part of a row.

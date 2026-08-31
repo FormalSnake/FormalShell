@@ -145,6 +145,15 @@ TestCase {
         compare(fillOf(track).width, track.width * 0.25);
     }
 
+    // A held key or a drag updates `value` continuously; the fill's own
+    // Behavior has to retarget on every one of those rather than restart,
+    // which is what keeps a sweep smooth instead of stepped.
+    function test_the_fill_animates_when_value_changes() {
+        var track = make({ value: 0.25 });
+        track.value = 0.75;
+        tryCompare(fillOf(track), "width", track.width * 0.75, 1000);
+    }
+
     function test_value_clamps_at_both_ends() {
         compare(make({ value: 1.7 })._fraction, 1);
         compare(make({ value: -3 })._fraction, 0);

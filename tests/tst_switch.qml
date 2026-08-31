@@ -104,6 +104,15 @@ TestCase {
         verify(Qt.colorEqual(trackOf(make({ checked: true })).color, Theme.color.primary));
     }
 
+    // The knob slides on a Behavior already; the track colour crossfades
+    // beside it (M51 Task 5), so a toggle never has one half of the switch
+    // move and the other half pop.
+    function test_the_track_crossfades_when_checked_changes() {
+        var control = make({ checked: false });
+        control.checked = true;
+        tryCompare(trackOf(control), "color", Theme.color.primary, 1000);
+    }
+
     function test_the_knob_is_a_background_circle() {
         var knob = knobOf(make({}));
         verify(Qt.colorEqual(knob.color, Theme.color.background));

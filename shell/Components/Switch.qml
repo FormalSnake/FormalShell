@@ -60,6 +60,10 @@ Item {
         // swap is the only thing that gives it one.
         border.width: root.cursor ? Theme.borderWidth : 0
         border.color: Theme.color.ring
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+        }
     }
 
     Rectangle {

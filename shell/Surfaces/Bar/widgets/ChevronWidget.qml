@@ -71,12 +71,34 @@ Cell {
 
     tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
 
+    // The two directions this axis ever points, so the flip below only ever
+    // crossfades between them rather than between all four glyph names.
+    readonly property string _beforeName: root.vertical ? "chevron-up" : "chevron-left"
+    readonly property string _afterName: root.vertical ? "chevron-down" : "chevron-right"
+
+    // The flip (M51 Task 5): a crossfade rather than a rotation, since a
+    // rotated glyph would read mirrored for half the turn. Both icons sit
+    // stacked on the same spot (neither sets a horizontal anchor, matching
+    // the single icon this replaces), so it reads as one glyph turning
+    // rather than two glyphs trading places.
     Icon {
         anchors.verticalCenter: parent.verticalCenter
-        name: root.vertical
-            ? (root._pointsAfter ? "chevron-down" : "chevron-up")
-            : (root._pointsAfter ? "chevron-right" : "chevron-left")
+        name: root._beforeName
         color: root.foreground
+        opacity: root._pointsAfter ? 0 : 1
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+        }
+    }
+
+    Icon {
+        anchors.verticalCenter: parent.verticalCenter
+        name: root._afterName
+        color: root.foreground
+        opacity: root._pointsAfter ? 1 : 0
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+        }
     }
 
     interactive: true

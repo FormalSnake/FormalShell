@@ -109,11 +109,16 @@ QtObject {
             standard: m.standard,
             surface: m.surface,
             surfaceExit: m.surfaceExit,
+            emphasized: m.emphasized,
+            emphasizedEasing: Easing.OutQuint,
             slide: m.slide,
             zoom: m.zoom,
             easing: Easing.OutQuint,
+            easingInOut: Easing.InOutQuart,
             reveal: m.reveal,
             revealEasing: Easing.InOutQuad,
+            pulseDuration: 900,
+            pulseEasing: Easing.InOutQuad,
             marqueePxPerSec: m.marqueePxPerSec,
             marqueeHoldMs: m.marqueeHoldMs
         };

@@ -33,13 +33,21 @@ Item {
     implicitWidth: input.implicitWidth + Theme.space.controlPaddingX * 2
     implicitHeight: frame.height + (root._showsError ? Theme.space.xs + errorLabel.implicitHeight : 0)
 
+    // The halo fades in and out with focus (M51 Task 5) rather than popping:
+    // `visible` still drops it at 0 so it costs nothing at rest, and the
+    // opacity Behavior is what gives the fade somewhere to happen before
+    // that.
     Rectangle {
+        id: ring
         anchors.fill: frame
         anchors.margins: -Theme.ringWidth
-        visible: input.activeFocus
+        visible: ring.opacity > 0
         radius: Theme.radiusMd + Theme.ringWidth
         color: Theme.color.ring
-        opacity: Theme.ringAlpha
+        opacity: input.activeFocus ? Theme.ringAlpha : 0
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+        }
     }
 
     Rectangle {
@@ -51,11 +59,18 @@ Item {
         radius: Theme.radiusMd
         color: "transparent"
         border.width: Theme.borderWidth
+        // Focus, blur and error all crossfade the border colour on the same
+        // `fast` Behavior: `fast` is short enough (100ms) that a validation
+        // error still reads as landing instantly, so error gets no special
+        // case that would make it look like a different kind of change.
         border.color: root.error
             ? Theme.color.destructive
             : input.activeFocus
                 ? Theme.color.ring
                 : Theme.color.input
+        Behavior on border.color {
+            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+        }
 
         Text {
             anchors.fill: input
