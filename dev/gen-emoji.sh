@@ -3,8 +3,9 @@
 # fully-qualified entries only, in file order (Unicode group order, base
 # emoji before their skin-tone variants). The output is vendored: run this
 # once when bumping the Unicode version; the shell never generates at
-# runtime. Menu.qml parses the file with Model.parseJsonc, which strips the
-# provenance header comments this script writes.
+# runtime. Menu.qml parses the file with Model.parseHeaderedJson, which
+# skips the provenance header comments this script writes and hands the
+# rest to the native JSON.parse.
 #
 # Each entry also carries CLDR's English search keywords ("kw", pipe
 # separated), which is the same annotation data macOS, iOS and Android type

@@ -127,3 +127,30 @@ function order(items, store, nowMs, idOf) {
     });
     return decorated.map(function (d) { return d.item; });
 }
+
+// The same reorder as `order`, but decorating and sorting only the items
+// the ledger actually scores above zero, everything else keeps its
+// original relative order untouched instead of being sorted alongside them
+// at a tied score of 0. Equivalent to `order` for any input (a decorate+sort
+// over the whole list ties every zero-scorer at 0 and breaks the tie by
+// position, which is exactly what "leave it in place" means), but a route
+// with thousands of never-used entries behind one recorded id (the emoji
+// grid) pays for a sort over the handful that moved, not the whole list.
+function pullRecorded(items, store, nowMs, idOf) {
+    var index = _index(store);
+    var recorded = [];
+    var rest = [];
+    for (var i = 0; i < (items || []).length; i++) {
+        var item = items[i];
+        var id = item ? (idOf ? idOf(item) : item.id) : "";
+        var s = _scoreOf(index[String(id || "")], nowMs);
+        if (s > 0) recorded.push({ item: item, score: s, position: i });
+        else rest.push(item);
+    }
+    if (recorded.length === 0) return items;
+    recorded.sort(function (a, b) {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.position - b.position;
+    });
+    return recorded.map(function (d) { return d.item; }).concat(rest);
+}

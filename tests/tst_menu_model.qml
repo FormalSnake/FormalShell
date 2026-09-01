@@ -182,6 +182,26 @@ TestCase {
         verify(threw);
     }
 
+    function test_parse_headered_json_skips_a_leading_comment_block() {
+        var text = [
+            "// generated, do not edit",
+            "// second header line",
+            '[{"a": 1}, {"a": 2}]'
+        ].join("\n");
+        var arr = M.parseHeaderedJson(text);
+        compare(arr.length, 2);
+        compare(arr[0].a, 1);
+        compare(arr[1].a, 2);
+    }
+
+    // No leading comment block, and a comment inside the body instead: the
+    // fast path's native JSON.parse can't handle that, so it has to fall
+    // back to parseJsonc rather than throwing.
+    function test_parse_headered_json_falls_back_for_a_comment_inside_the_body() {
+        var obj = M.parseHeaderedJson('{ // inline\n  "a": 1 }');
+        compare(obj.a, 1);
+    }
+
     // gatedNoteRow (M17 review finding, M-polish batch item F): the
     // route-summon when-gate guard's honest placeholder row.
     function test_gated_note_row_is_a_non_activatable_dim_note_under_the_node() {

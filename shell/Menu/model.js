@@ -57,6 +57,31 @@ function parseJsonc(text) {
     return JSON.parse(out);
 }
 
+// Fast path for a JSONC file whose only comment is a leading block of `//`
+// lines (dev/gen-emoji.sh's own provenance header on emoji.json): skips
+// past those lines and hands the rest straight to the native JSON.parse,
+// instead of paying parseJsonc's character-by-character comment strip over
+// the whole file for a header five lines long. Falls back to parseJsonc,
+// on the ORIGINAL text, for anything the fast path doesn't produce valid
+// JSON from, comments elsewhere in the body included, so a file that
+// actually needs the slow parser still parses rather than throwing.
+function parseHeaderedJson(text) {
+    var s = String(text || "");
+    var i = 0;
+    while (true) {
+        var next = s.indexOf("\n", i);
+        var line = next < 0 ? s.slice(i) : s.slice(i, next);
+        if (!/^\s*\/\//.test(line)) break;
+        if (next < 0) { i = s.length; break; }
+        i = next + 1;
+    }
+    try {
+        return JSON.parse(s.slice(i));
+    } catch (e) {
+        return parseJsonc(s);
+    }
+}
+
 function splitId(id) {
     var dot = id.lastIndexOf(".");
     return dot < 0

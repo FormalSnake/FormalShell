@@ -145,6 +145,37 @@ TestCase {
         compare(ordered[2].id, "c");
     }
 
+    // pullRecorded: the emoji route's per-keystroke reorder. Same contract
+    // as order() (recorded ids lead by score, everything else keeps its
+    // relative position), reached by decorating only the recorded subset.
+    function test_pull_recorded_moves_only_ledger_entries_to_the_front() {
+        var items = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+        var store = [{ id: "c", count: 6, lastMs: testCase.now }];
+        var ordered = Frecency.pullRecorded(items, store, testCase.now).map(function (i) { return i.id; });
+        compare(ordered, ["c", "a", "b", "d"]);
+    }
+
+    function test_pull_recorded_leaves_input_order_alone_with_no_ledger() {
+        var items = [{ id: "a" }, { id: "b" }, { id: "c" }];
+        var ordered = Frecency.pullRecorded(items, [], testCase.now).map(function (i) { return i.id; });
+        compare(ordered, ["a", "b", "c"]);
+    }
+
+    // Multiple recorded ids still sort by score among themselves, and a
+    // stale one that has decayed to zero stays with the untouched rest
+    // rather than jumping the queue on presence in the store alone.
+    function test_pull_recorded_sorts_multiple_hits_and_drops_decayed_ones() {
+        var items = [{ id: "a" }, { id: "b" }, { id: "c" }];
+        var year = 365 * 24 * 60 * 60 * 1000;
+        var store = [
+            { id: "a", count: 1, lastMs: testCase.now },
+            { id: "c", count: 9, lastMs: testCase.now },
+            { id: "b", count: 50, lastMs: testCase.now - 50 * year }
+        ];
+        var ordered = Frecency.pullRecorded(items, store, testCase.now).map(function (i) { return i.id; });
+        compare(ordered, ["c", "a", "b"]);
+    }
+
     // appsProvider integration
 
     function test_apps_provider_orders_rows_by_launch_frecency() {

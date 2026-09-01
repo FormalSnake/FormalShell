@@ -99,23 +99,41 @@ PanelWindow {
     }
 
     // Vendored emoji dataset (M12 Task 6), ships inside the package like
-    // default-menu.jsonc, parsed with Model.parseJsonc because
-    // dev/gen-emoji.sh writes a provenance header comment JSON.parse would
-    // reject. Load failure degrades to an empty list (the emoji route and
-    // ":e" trigger simply return no rows), one console.warn.
+    // default-menu.jsonc, parsed with Model.parseHeaderedJson (native
+    // JSON.parse past the provenance header dev/gen-emoji.sh writes, with
+    // parseJsonc as its own fallback). Load failure degrades to an empty
+    // list (the emoji route and ":e" trigger simply return no rows), one
+    // console.warn.
+    //
+    // path starts empty, the same pathless-until-needed FileView pattern
+    // LauncherWidget.qml's osReleaseFile uses: a session that never types
+    // ":e" or opens the emoji route never pays for reading or parsing the
+    // 458KB file. _ensureEmojiLoaded() sets the real path on first genuine
+    // need. blockLoading forces that one transition (path only ever moves
+    // from "" to the real path once) to finish synchronously rather than
+    // leaving the first grid, or `debug query ':e …'`, racing an async
+    // read: the file is small and the fast path above is cheap, and every
+    // access after the first is already-loaded property reads.
     property string _emojiText: ""
 
     FileView {
         id: emojiFile
-        path: Quickshell.shellPath("Menu/emoji.json")
+        path: ""
+        blockLoading: true
         onLoaded: root._emojiText = emojiFile.text()
         onLoadFailed: error => console.warn("Menu: failed to load emoji.json:", error)
+    }
+
+    function _ensureEmojiLoaded() {
+        if (emojiFile.path === "")
+            emojiFile.path = Quickshell.shellPath("Menu/emoji.json");
+        root._emojiText = emojiFile.text();
     }
 
     readonly property var _emojiList: {
         if (!root._emojiText) return [];
         try {
-            return Model.parseJsonc(root._emojiText);
+            return Model.parseHeaderedJson(root._emojiText);
         } catch (e) {
             console.warn("Menu: failed to parse emoji.json:", e.message);
             return [];
@@ -808,6 +826,8 @@ PanelWindow {
         // emoji in the tree would drown every root search.
         var emojiQuery = Providers.emojiTriggerQuery(q);
         var emojiPaste = Core.Config.get("clipboard.paste", true);
+        if (root.currentNodeId === "emoji" || emojiQuery !== null)
+            root._ensureEmojiLoaded();
         if (root.currentNodeId === "emoji")
             return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q, emojiPaste, root._emojiUses, Date.now());
         if (emojiQuery !== null)
@@ -1440,6 +1460,7 @@ PanelWindow {
         // without keyboard input; icon carries the emoji char itself.
         var emojiQuery = Providers.emojiTriggerQuery(q);
         if (emojiQuery !== null) {
+            root._ensureEmojiLoaded();
             return Providers.emojiRows(root._emojiList, emojiQuery, true, root._emojiUses, Date.now()).map(function (n) {
                 return { id: n.id, label: n.label, icon: n.icon, kind: n.kind };
             });

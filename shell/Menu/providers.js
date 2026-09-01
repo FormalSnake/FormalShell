@@ -413,9 +413,14 @@ function emojiSearch(list, query, uses, nowMs) {
 // Most-used first inside one tier, file order for everything the ledger has
 // never seen. An absent or empty ledger costs nothing and changes nothing:
 // a fresh profile browses the grid in Unicode's own order, as it did before.
+// pullRecorded rather than order: a broad query's tier can hold thousands
+// of entries, and only the ones the ledger actually scores ever move, so
+// this decorates and sorts that handful instead of comparator-sorting the
+// whole tier on every keystroke (the same reasoning emojiSearch's own
+// bucket scan above already applies to the tier split itself).
 function _emojiRank(entries, uses, nowMs) {
     if (!uses || uses.length === 0) return entries;
-    return Frecency.order(entries, uses, nowMs || Date.now(), _emojiUsageId);
+    return Frecency.pullRecorded(entries, uses, nowMs || Date.now(), _emojiUsageId);
 }
 
 // The lowercased name, memoised onto the entry. Every keystroke rescans all

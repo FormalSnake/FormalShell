@@ -41,21 +41,48 @@ function wordBoundaryMatch(text, needle) {
     return false;
 }
 
-function score(node, query, depth, declIndex) {
-    var q = normalize(query);
-    if (!q) return 0;
+// The node's own identifier for the alias tier, with any parent's id-prefix
+// stripped: a jsonc node's parentId IS its dotted prefix (model.js's
+// splitId), but a provider-built node's parentId is just the provider
+// route's own id ("apps"), while the id itself can carry dots of its own
+// (an app's "apps.org.mozilla.firefox"). Splitting the full id on its last
+// dot would cut a provider id in the wrong place and still leave the
+// route's own prefix in front of a jsonc id; stripping node.parentId
+// instead works for both. A node with no parentId at all falls back to the
+// whole id rather than guessing.
+function _ownId(node) {
+    var id = String(node.id || "");
+    var parentId = node.parentId;
+    return (parentId && id.indexOf(parentId + ".") === 0) ? id.slice(parentId.length + 1) : id;
+}
 
-    var label = normalize(node.label);
+// Memoised the way providers.js's _emojiName memoises the emoji dataset's
+// lowercase name: node.id and node.parentId never change once the tree is
+// built, so the slug only needs computing once per node no matter how many
+// keystrokes query it.
+function _slugId(node) {
+    if (node._slugId === undefined) node._slugId = slug(_ownId(node));
+    return node._slugId;
+}
+
+// `qNorm`/`qSlug` are the query, normalized/slugged once by rank() rather
+// than per node: a query is invariant across the whole tree walk, and the
+// old per-node recompute was pure waste on a tree with hundreds of nodes.
+function score(node, qNorm, qSlug, depth) {
+    if (!qNorm) return 0;
+
+    if (node._lcLabel === undefined) node._lcLabel = normalize(node.label);
+    var label = node._lcLabel;
     var tier;
-    if (label === q) {
+    if (label === qNorm) {
         tier = TIER_EXACT;
-    } else if (label.indexOf(q) === 0) {
+    } else if (label.indexOf(qNorm) === 0) {
         tier = TIER_STARTS_WITH;
-    } else if (label.indexOf(q) >= 0) {
+    } else if (label.indexOf(qNorm) >= 0) {
         tier = TIER_CONTAINS;
-    } else if ((node.aliases || []).some(function (a) { return normalize(a).indexOf(q) >= 0; }) || slug(node.id).indexOf(slug(q)) >= 0) {
+    } else if ((node.aliases || []).some(function (a) { return normalize(a).indexOf(qNorm) >= 0; }) || _slugId(node).indexOf(qSlug) >= 0) {
         tier = TIER_ALIAS;
-    } else if (wordBoundaryMatch(node.title, q)) {
+    } else if (wordBoundaryMatch(node.title, qNorm)) {
         tier = TIER_TITLE;
     } else {
         return 0;
@@ -101,6 +128,10 @@ function rank(nodes, query, condResults, withinId) {
     var declIndex = 0;
     var results = [];
     var open = _ancestry(withinId);
+    // Hoisted out of score(): normalize()/slug() cost nothing repeated once
+    // per query, but score() used to pay for both on every node it visited.
+    var qNorm = normalize(query);
+    var qSlug = slug(qNorm);
 
     function visit(id, depth) {
         var node = nodes[id];
@@ -108,7 +139,7 @@ function rank(nodes, query, condResults, withinId) {
         if (node.when !== undefined && condResults[node.id] !== true) return;
 
         var idx = declIndex++;
-        var s = score(node, query, depth, idx);
+        var s = score(node, qNorm, qSlug, depth);
         if (s > 0) results.push({ node: node, score: s, depth: depth, declIndex: idx });
 
         if (node.routeOnly === true && open[id] !== true) return;
