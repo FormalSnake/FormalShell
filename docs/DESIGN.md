@@ -206,6 +206,18 @@ of the dot row, which `standard` reads as a jump, so it takes `emphasized`
 and its two edges take different durations, which is what makes the pill
 stretch across the gap and close up behind itself.
 
+**Startup** (M52): nothing paints before the shell knows what it looks
+like. The boot surfaces (bar, background, frame) hold their windows
+unmapped until `Config.loaded`, `Theme.paletteReady` and
+`PluginService.loaded` have all flipped, each of which flips on its failure
+branch too, with a 400ms backstop so a wedged read can never keep the
+screen bare; then each maps once at final geometry, one exclusive-zone
+publish, one tiling shift. The bar's content enters on `Presence` from its
+own edge, and only after that reveal settles do the cells' size Behaviors
+arm, so a service answering late is laid out rather than animated in. The
+first real wallpaper hard-cuts (`reveal` is for changes, not boot), and a
+theme republish that changes nothing writes no file and reloads nothing.
+
 **Imagery**: content pictures go through `Picture`, which is a bare `Image`
 plus the retro pass `theme.dither` turns on. A picture that needs an edge of
 its own is a `Cover`. Neither is ever a raw `Image` in a surface file, and

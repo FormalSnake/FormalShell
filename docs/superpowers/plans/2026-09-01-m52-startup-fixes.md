@@ -1,9 +1,16 @@
 # M52: startup reveal, model-identity churn, and the audit's fixes
 
 **Date:** 2026-09-01
-**Status:** in progress on `m52-startup-polish` (worktree, branched from
-0d3ae65 while the chevron-overflow work is in flight on the main checkout;
-whoever lands second rebases).
+**Status:** implemented 2026-09-01 on `m52-startup-polish`, rebased onto
+f54f0ae (the always-open chevron and the screensaver rework landed
+mid-milestone; the fit-block resolution commit became moot in the second
+rebase and was dropped). Tasks 1 to 5, oldest first: e202dac (identity
+guards), 2353d93 (startup reveal), 5d24419 (theme pipeline), 8306cb6
+(correctness batch), b7c6de0 (launcher batch). The `--menu` leg's JS heap
+read 13456 kB after the launcher batch, against the ~51784 kB the M51 plan
+recorded on main, which settles that plan's open measurement question: the
+term that dominated was `parseJsonc`'s per-character loop over the emoji
+dataset at boot, plus the per-keystroke frecency decorate-sort.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` is the rulebook.
 
