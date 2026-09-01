@@ -104,16 +104,16 @@ import QtQuick
 // two separate keys.
 // "chevron" (M24) is a bar.layout entry name like any other builtin, absent
 // from the default arrangement. Its POSITION is the whole configuration:
-// everything on its governed side of its own region collapses behind it, and
-// moving it is the only control there is: no per-widget key says whether a
-// widget hides. The governed side runs inward from the region's anchored
-// edge (M25), so a right-region chevron collapses what precedes it and a
-// left or center one collapses what follows. One chevron per region; a
-// second, or one with nothing at all on its governed side, is dropped with a
-// warning (shell/Bar/layout.js). Whether a
-// region is currently collapsed is runtime state, not settings: it lives in
-// state.json's `barCollapsed`, defaults collapsed, and is written by the
-// cell's own click or by `bar chevron toggle|expand|collapse [region]`.
+// everything on its governed side of its own region is drawn in the second
+// bar that cell opens rather than on the strip, and moving it is the only
+// control there is: no per-widget key says whether a widget is on the strip.
+// The governed side runs inward from the region's anchored edge (M25), so a
+// right-region chevron takes what precedes it and a left or center one takes
+// what follows. One chevron per region; a second, or one with nothing at all
+// on its governed side, is dropped with a warning (shell/Bar/layout.js).
+// Nothing about it is runtime state: the group is off the strip for the whole
+// session, and the cell's own click (or `bar chevron toggle|expand|collapse
+// [region]`) opens and closes the bar it lives in (M52).
 // github.intervalMs (number, default 300000, GithubWidget's `gh api`
 // poll cadence in ms; the widget itself is opt-in via bar.layout,
 // M12 Task 8).

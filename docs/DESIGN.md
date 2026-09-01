@@ -295,12 +295,12 @@ resizes. Room has the last word over any ceiling, since the tray is the one
 region cell with no fixed number of items and so the one that gives ground
 when the strip runs out of edge. That second bar is a card of the same ghost
 cells at `panelPadding`, one item deep, sitting where any panel would; it is
-the tray's own overflow, and the chevron has one of its own: a whole-region
-group with no room left on the strip opens in the same kind of second bar
-rather than clipping against the centre, and the chevron cell toggles that
-surface instead of the collapse. Room decides which of the two, never a
-setting, and the collapse state is left where the user set it, so the group
-returns to the strip the moment the room does.
+the tray's own overflow, and the chevron has one of its own: everything on a
+chevron's governed side lives in the same kind of second bar, always, and the
+chevron cell opens and closes it. Not a state a crowded bar falls into, the
+same call the tray's dots take: the group is somewhere else rather than
+sometimes here and sometimes there, so nothing on the strip moves when a
+track starts playing.
 
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
 continues round the other three edges as a band `frame.thickness` wide, and

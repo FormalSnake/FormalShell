@@ -55,20 +55,26 @@ Panel {
     property var _rows: []
     property int _cursor: -1
 
-    // `owner` is the popout the cell lives in, if it lives in one: the tray's
-    // second bar passes itself, so this menu opens over that bar instead of
-    // replacing it (Panel.qml's `owner`). A cell on the bar strip passes
-    // nothing and this menu takes the slot outright, as every popout does.
+    // `owner` is the popout the cell lives in, and only the cell-less path
+    // needs it: with a cell, Panel.openFrom reads that answer off the cell's
+    // own window. Either way a menu opened from the tray's second bar opens
+    // over that bar instead of replacing it (Panel.qml's `owner`), and one
+    // opened from the strip takes the slot outright as every popout does.
     function openItem(cell, item, owner) {
         root._title = item.tooltipTitle || item.title || item.id;
         root._collapseAll();
         root._cursor = -1;
         root.menuHandle = item.menu;
-        root.owner = owner !== undefined ? owner : null;
-        if (cell)
+        if (cell) {
+            // openFrom reads the owner off the cell's own window, which is
+            // the same answer with none of the callers having to pass it.
             root.openFrom(cell);
-        else
+        } else {
+            // Keyboard activation in the tray's second bar: no cell to read,
+            // so the caller names the surface this opens on top of.
+            root.owner = owner !== undefined ? owner : null;
             root.open();
+        }
     }
 
     onIsOpenChanged: {

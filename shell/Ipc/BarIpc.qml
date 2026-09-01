@@ -6,7 +6,7 @@ import "../Bar/layout.js" as Layout
 // `qs ipc call bar chevron <toggle|expand|collapse|status>` and
 // `qs ipc call bar chevronAt <toggle|expand|collapse> <region>`: a spec
 // addendum in the same class as `panel` (CLAUDE.md's own note on that
-// target). The bar chevron (M24, ChevronWidget.qml) collapses everything
+// target). The bar chevron (M24, ChevronWidget.qml) holds everything
 // placed on its governed side of its own region (M25: inward from that
 // region's anchored edge), and its only real input is a click on
 // that cell, which this rig cannot synthesize: no synthetic pointer exists
@@ -21,11 +21,11 @@ import "../Bar/layout.js" as Layout
 // when exactly one exists and refuses to guess when more than one does;
 // `chevronAt` names it outright.
 //
-// M52: a group with no room left on the strip lives in the second bar
-// (Surfaces/Bar/BarOverflow.qml) instead, and the same three verbs then open
-// and close that surface rather than writing a collapse state the bar cannot
-// act on. `status` reports which of the two a region is in (`offStrip`), the
-// only headless read of a fit that is otherwise measured per output.
+// M52: the governed group lives in the second bar
+// (Surfaces/Bar/BarOverflow.qml) and nowhere else, so these three verbs open
+// and close that surface. There is no collapse state behind them any more:
+// `expand` is `panel open` for one group, `collapse` closes it, and `status`
+// reports whether it is up.
 //
 // The layout is resolved here rather than read off a Bar instance: Bar.qml
 // is instantiated once per screen and this handler answers for the whole
@@ -38,21 +38,13 @@ IpcHandler {
     target: "bar"
 
     // shell.qml's single BarOverflow instance: the chevron's second bar, and
-    // the only place the fit each bar measured is observable from here
-    // (Surfaces/Bar/BarOverflow.qml's `offStrip`). Null in a run with no bar
-    // on screen, where every region is trivially on the strip.
+    // so the whole of what these verbs act on. Null in a run with no bar on
+    // screen, where there is no group to summon.
     property var barOverflow: null
 
     readonly property var _regions: Layout.resolve(Config.get("bar", null), PluginService.barPlugins).regions
 
-    // Whether that region's group has left the strip for the second bar,
-    // which decides what the three verbs below do: with no room, expanding is
-    // opening that bar, not writing a state nothing can act on.
-    function _offStrip(region) {
-        return !!(root.barOverflow && root.barOverflow.offStrip[region]);
-    }
-
-    function _overflowOpen(region) {
+    function _open(region) {
         return !!(root.barOverflow && root.barOverflow.isOpen && root.barOverflow.region === region);
     }
 
@@ -66,11 +58,6 @@ IpcHandler {
         return out;
     }
 
-    function _collapsed(region) {
-        var stored = State.barCollapsed;
-        return !stored || stored[region] !== false;
-    }
-
     // Every action lands here so the three verbs answer identically whether
     // the region was inferred or named.
     function _act(action, region) {
@@ -80,25 +67,17 @@ IpcHandler {
             return "error: no chevron in bar.layout." + region;
         if (["toggle", "expand", "collapse"].indexOf(action) < 0)
             return "error: unknown chevron action '" + action + "' (toggle|expand|collapse)";
-        // Off the strip these verbs address the second bar instead, so one
-        // control keeps one summon path however crowded the bar is. The
-        // stored state is deliberately not written here: it is where the user
-        // left the group for when the room comes back.
-        if (root._offStrip(region)) {
-            if (action === "toggle")
-                root.barOverflow.toggleRegion(region);
-            else if (action === "expand")
-                root.barOverflow.openRegion(region);
-            else if (root._overflowOpen(region))
-                root.barOverflow.close();
-            return "ok";
-        }
+        if (!root.barOverflow)
+            return "error: no bar overflow surface";
+        // The three verbs address the group's one home, the second bar
+        // (Surfaces/Bar/BarOverflow.qml). There is no collapse state left to
+        // write: a governed entry is never on the strip.
         if (action === "toggle")
-            State.setBarCollapsed(region, !root._collapsed(region));
+            root.barOverflow.toggleRegion(region);
         else if (action === "expand")
-            State.setBarCollapsed(region, false);
-        else
-            State.setBarCollapsed(region, true);
+            root.barOverflow.openRegion(region);
+        else if (root._open(region))
+            root.barOverflow.close();
         return "ok";
     }
 
@@ -117,30 +96,21 @@ IpcHandler {
         return root._act(action, region);
     }
 
-    // `collapses` is what the chevron governs and does not move; `hidden` is
-    // what is actually hidden right now, so it empties on expand. Both are
-    // reported for every region, chevron or not, because a caller asserting
-    // on one region should not have to know which shape the others took.
-    // `collapsed` for a region with no chevron is honest stored state that
-    // nothing currently reads.
+    // `collapses` is what the chevron governs and never moves: those entries
+    // are off the strip for the whole session, so it doubles as "what is
+    // hidden right now" and there is no second list to report. `open` is
+    // whether that group's second bar is up. Both are reported for every
+    // region, chevron or not, because a caller asserting on one region should
+    // not have to know which shape the others took.
     function _status() {
         var out = {};
         for (var i = 0; i < Layout.REGIONS.length; i++) {
             var region = Layout.REGIONS[i];
             var entries = root._regions[region];
-            var collapses = Layout.collapsedNames(entries);
-            var collapsed = root._collapsed(region);
-            var offStrip = root._offStrip(region);
             out[region] = {
                 chevron: Layout.hasChevron(entries),
-                collapsed: collapsed,
-                collapses: collapses,
-                // Off the strip nothing of the group is on the bar, whatever
-                // the stored state says, so `hidden` reports what is really
-                // not there rather than what was last asked for.
-                hidden: (collapsed || offStrip) ? collapses : [],
-                offStrip: offStrip,
-                overflowOpen: root._overflowOpen(region)
+                collapses: Layout.collapsedNames(entries),
+                open: root._open(region)
             };
         }
         return JSON.stringify({ regions: out, chevronRegions: root._chevronRegions() });

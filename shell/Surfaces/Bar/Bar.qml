@@ -2,19 +2,11 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import qs.Core
-// Aliased alongside the unqualified import above, the idiom CalendarPanel.qml
-// documents: QtQuick exports its own type named State (the property-binding
-// one), so a bare `State.barCollapsed` in the collapse gate below reads back
-// undefined at runtime and every governed cell stays hidden forever, with no
-// binding ever re-evaluating. Theme/Config carry no such collision and stay
-// unqualified.
-import qs.Core as Core
 import qs.Components
 import qs.Plugins
 import qs.Surfaces.Frame
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
-import "../../Bar/chevron.js" as ChevronFit
 
 // The bar (DESIGN.md §3 Bar, spec §1, M6 Tasks 1+3, M8b Task 3 retrofit,
 // M10 Task 3 settings-driven retrofit): three regions, left, center,
@@ -36,14 +28,14 @@ import "../../Bar/chevron.js" as ChevronFit
 // is visible without a settings.json edit. An unknown widget name or a
 // dangling module/plugin reference is dropped with a console warning, never
 // a crash.
-// One of those names, "chevron" (M24, ChevronWidget.qml), is a collapse
-// boundary rather than a readout: every entry on its governed side of the
-// same region hides behind it, which layout.js hands over as a per-entry
-// `collapsible` flag and the region delegate below gates on. Its position in
-// bar.layout is the whole of its configuration. Which side it governs is the
-// side away from the region's own anchored edge (M25, layout.js's
-// governsBefore), so the reveal grows into empty bar and the chevron itself
-// keeps its x.
+// One of those names, "chevron" (M24, ChevronWidget.qml), is a boundary
+// rather than a readout: every entry on its governed side of the same region
+// is drawn in that chevron's second bar (BarOverflow.qml) instead of on the
+// strip, which layout.js hands over as a per-entry `collapsible` flag and the
+// region delegate below gates on. Its position in bar.layout is the whole of
+// its configuration. Which side it governs is the side away from the region's
+// own anchored edge (M25, layout.js's governsBefore), so the chevron itself
+// keeps its x whatever it is holding.
 // The strip is one continuous surface (DESIGN.md §3 Bar, M47 D1): a
 // full-length `card` fill at `theme.surfaceOpacity` with a 1px `border`
 // along its inner edge, and nothing else. The cells inside are ghosts,
@@ -167,73 +159,6 @@ PanelWindow {
         - (bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth)
         - (bar._vertical ? centerRegion.implicitHeight : centerRegion.implicitWidth)
         - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
-
-    // --- The chevron's fit (M52) -----------------------------------------
-    //
-    // Per region: does the group behind that region's chevron still have room
-    // on the strip? False moves it into the second bar (BarOverflow.qml), the
-    // same all-or-nothing answer the tray gives when it runs out of edge, and
-    // for the same reason: the alternative is the group clipping against the
-    // centre, which is where a playing track leaves an expanded right region
-    // (owner, 2026-09-01).
-    //
-    // Written by `_refit()` rather than bound, the same one-way pass
-    // widgets/Tray.qml documents at length: the answer's own input is the
-    // strip's leftover room, which the answer moves, and a binding round that
-    // circle is a loop QML aborts. It settles in one step because capacity,
-    // not slack, is the invariant term (Bar/chevron.js's own note).
-    property var _regionFits: ({ left: true, center: true, right: true })
-
-    // What an expanded group would cost this region, measured off the
-    // Loaders' own implicit extents rather than their current widths: a
-    // collapsed entry is held at 0 along the strip, but the widget inside it
-    // still measures itself. A widget hiding itself (`shown`) costs nothing,
-    // since revealing the group would not reveal it.
-    function _groupAlong(repeater) {
-        var alongs = [];
-        for (var i = 0; i < repeater.count; i++) {
-            var entry = repeater.itemAt(i);
-            if (!entry || !entry.modelData || !entry.modelData.collapsible || !entry._shown)
-                continue;
-            alongs.push(entry._implicitAlong);
-        }
-        return ChevronFit.groupAlong(alongs, Theme.space.sm);
-    }
-
-    function _refit() {
-        var repeaters = { left: leftRepeater, center: centerRepeater, right: rightRepeater };
-        var next = {};
-        for (var region in repeaters) {
-            var need = bar._groupAlong(repeaters[region]);
-            // Whether that cost is already part of the strip's current
-            // extent, which is the term `fitsInline` cancels out.
-            var stored = Core.State.barCollapsed;
-            var expandedNow = (stored && stored[region] === false) && bar._regionFits[region] !== false;
-            next[region] = ChevronFit.fitsInline(need, bar._slack, expandedNow);
-        }
-        bar._regionFits = next;
-    }
-
-    // Long enough to outlast the reveal's own animation (the region delegate's
-    // `Behavior on _along`), during which every governed cell is between two
-    // widths and the leftover room is whatever the frame happened to catch.
-    // widgets/Tray.qml's own refit timer carries the full story; this is the
-    // same trap on the same inputs.
-    Timer {
-        id: fitTimer
-        interval: Theme.motion.standard + 32
-        onTriggered: bar._refit()
-    }
-
-    Component.onCompleted: fitTimer.restart()
-    on_SlackChanged: fitTimer.restart()
-    on_LayoutChanged: fitTimer.restart()
-    on_VerticalChanged: fitTimer.restart()
-
-    Connections {
-        target: Core.State
-        function onBarCollapsedChanged() { fitTimer.restart(); }
-    }
 
     // One thickness for every cell in every region, so a widget with a
     // taller line of content can no longer drag the whole strip with it.
@@ -426,17 +351,12 @@ PanelWindow {
     Component {
         id: chevronComponent
         ChevronWidget {
-            id: chevronCell
             overflow: bar.barOverflow
             // The delegate its second bar builds the group from, which is the
             // same one this strip uses: a Component carries its creation
             // context, so an entry instantiated over there still resolves the
             // panels and screen wired up here.
             entryDelegate: regionDelegate
-            // `region` lands after creation (the region delegate's onLoaded),
-            // so this reads as "fits" until it does, which is the state the
-            // group is already in.
-            fits: chevronCell.region === "" || bar._regionFits[chevronCell.region] !== false
         }
     }
     Component {
@@ -508,8 +428,8 @@ PanelWindow {
             // Every entry is the bar's own cell thickness across the strip,
             // and its own length along it (`_along` below), whichever axis
             // each of those is on this bar.
-            width: bar._vertical ? bar._cellThickness : entryLoader._along
-            height: bar._vertical ? entryLoader._along : bar._cellThickness
+            width: bar._vertical ? bar._cellThickness : entryLoader._implicitAlong
+            height: bar._vertical ? entryLoader._implicitAlong : bar._cellThickness
             readonly property real _implicitAlong: bar._vertical ? entryLoader.implicitHeight : entryLoader.implicitWidth
             // A hidden widget (Battery with no laptop battery, NowPlaying
             // with no player, Tray with no items, Indicators with nothing
@@ -539,52 +459,21 @@ PanelWindow {
                 }
                 return entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent;
             }
-            // M24's collapse gate, driving the Loader's OWN width below
-            // rather than a second thing routed through `shown`: `shown` is
-            // the widget's statement about itself (a Battery with no battery),
-            // and writing into it from here would put two authors on one
-            // property. `collapsible` is layout.js's per-entry annotation
-            // (true for every entry on the governed side of a chevron in the
-            // same region), so a layout with no chevron leaves this term
-            // false everywhere and the width below stays exactly what the
-            // Loader would have sized itself to anyway.
-            readonly property bool _collapsedAway: {
-                if (!entryLoader.modelData.collapsible)
-                    return false;
-                // No room is a stronger answer than the stored state (M52):
-                // the group is in the second bar, so it is not on the strip
-                // whatever the user last chose, and the two never draw it
-                // twice. The state is left untouched, so the group comes back
-                // where it was the moment the room does.
-                if (bar._regionFits[entryLoader.modelData.region] === false)
-                    return true;
-                var stored = Core.State.barCollapsed;
-                return !stored || stored[entryLoader.modelData.region] !== false;
-            }
-
-            // M25: the governed group glides open and shut instead of
-            // appearing in one frame. A collapsed entry animates to width 0,
-            // and `clip` holds the cell's own content inside whatever width
-            // the animation has reached. The Loader resizes its item to the
-            // width it is given, so the cell wipes from its outer edge rather
-            // than redrawing its content at every step.
-            clip: true
-            // The entry's length along the strip: its width on a horizontal
-            // bar, its height on a vertical one, so the collapse animates
-            // the same term on either.
-            property real _along: entryLoader.modelData.collapsible
-                ? (entryLoader._collapsedAway ? 0 : entryLoader._implicitAlong)
-                : entryLoader._implicitAlong
-            // Governed entries only. Every other cell keeps the instant width
-            // tracking it has always had, so a title rename or a battery tick
-            // never gains motion it didn't ask for. Theme.motion.standard is
-            // already 0 when motion is disabled (Theme/tokens.js's
-            // motionTokens) and a zero-duration animation lands on the same
-            // end state, so honoring that setting needs no branch here.
-            Behavior on _along {
-                enabled: entryLoader.modelData.collapsible
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
-            }
+            // M52: a governed entry is not on the strip at all. Everything
+            // on a chevron's governed side is drawn in that chevron's second
+            // bar (BarOverflow.qml), the way the tray lives behind its own
+            // dots, so `collapsible` is not a state here any more, it is a
+            // statement about where the entry is drawn. `shown` stays the
+            // widget's own statement about itself (a Battery with no
+            // battery), never written from here, which would put two authors
+            // on one property.
+            //
+            // Nothing animates and nothing is clipped: there is no reveal on
+            // the strip to animate, and an invisible child costs a Grid
+            // neither a slot nor its spacing. M24's collapse gate and M25's
+            // width Behavior went with the inline group (owner, 2026-09-01:
+            // "I want the chevron to always open the second bar just like the
+            // three dots").
             readonly property bool _shown: entryLoader.item
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
                 : false
@@ -613,8 +502,7 @@ PanelWindow {
             // stay-awake toggle were invisible on their own but both
             // appeared beside a pending reminder (g815, 2026-08-19).
             // tests/tst_bar_entry_reveal.qml pins both halves of that.
-            visible: entryLoader._shown
-                && (!entryLoader.modelData.collapsible || entryLoader._along > 0)
+            visible: entryLoader._shown && !entryLoader.modelData.collapsible
             onLoaded: {
                 // The one seam that makes every cell in the bar a ghost
                 // (DESIGN.md §3 Bar) and tells it which edge it sits on:

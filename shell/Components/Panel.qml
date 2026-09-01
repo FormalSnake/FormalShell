@@ -48,15 +48,23 @@ PanelWindow {
     // The header row, its seam and both their gaps come out of the frame's
     // own height with it, so the card closes on the content.
     property bool showHeader: true
-    // The panel this one opens on top of, for the one case where two popouts
-    // are genuinely one gesture: a tray item's own menu, opened from the
-    // tray's second bar (Surfaces/Bar/TrayOverflow.qml). The registry's
-    // "exactly one popout" rule holds everywhere else, and holds here too
-    // from the outside: opening anything else still closes both, and the
-    // owner closing takes its child with it. What it must not do is treat the
-    // surface the click came from as the thing being replaced, which read as
-    // the bar shutting the moment you right-clicked an icon in it (owner,
-    // 2026-08-28).
+    // The panel this one opens on top of, for the case where two popouts are
+    // genuinely one gesture: a cell that lives in another popout rather than
+    // on the bar strip, opening its own. That is a tray item's menu from the
+    // tray's second bar (Surfaces/Bar/TrayOverflow.qml), and every widget in
+    // the chevron's (Surfaces/Bar/BarOverflow.qml). The registry's "exactly
+    // one popout" rule holds everywhere else, and holds here too from the
+    // outside: opening anything else still closes both, and the owner closing
+    // takes its child with it. What it must not do is treat the surface the
+    // click came from as the thing being replaced, which read as the bar
+    // shutting the moment you right-clicked an icon in it (owner,
+    // 2026-08-28) and as the whole group vanishing the moment you clicked
+    // one of its cells (owner, 2026-09-01).
+    //
+    // Resolved by openFrom() off the anchor cell's own window, so a widget
+    // needs to know nothing about where it was instantiated; set directly
+    // only on the one path that has no cell to read (TrayMenu's keyboard
+    // activation).
     property var owner: null
     // A Lucide name (shell/Theme/icons.js) drawn before the title. Empty
     // leaves the header text-only.
@@ -275,6 +283,11 @@ PanelWindow {
     // idiom Tooltip.qml resolves its own anchor through.
     function openFrom(item) {
         var window = item ? item.QsWindow.window : null;
+        // A cell inside another popout opens on top of it, never in place of
+        // it: `owner` above carries the rest. The bar strip's own window is a
+        // PanelWindow with no `isOpen` of its own, so a bar cell resolves to
+        // no owner and this stays the ordinary case.
+        root.owner = (window && window !== root && window.isOpen !== undefined) ? window : null;
         var anchor;
         if (item && window) {
             var origin = item.mapToItem(null, 0, 0);

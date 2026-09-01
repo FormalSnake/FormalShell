@@ -8,11 +8,12 @@ import qs.Components
 // edge (TrayOverflow.qml), one altitude up: there it is one widget's items,
 // here it is whatever `bar.layout` put on the governed side of a chevron.
 //
-// The room question is Bar.qml's (`_regionFits`, Bar/chevron.js): with room
-// the group still opens in place, exactly as M24/M25 shipped it, and this
-// surface is never summoned. Without room the strip would clip it against the
-// centre instead, which is how the owner met it (2026-09-01: a playing track
-// widens the centre, and the expanded group disappears behind it).
+// Always, not only when the strip is crowded (owner, 2026-09-01: "I want the
+// chevron to always open the second bar just like the three dots"), which is
+// the same call they made for the tray: this is where the group lives, not a
+// state a busy bar falls into. The group used to open in place instead, and a
+// playing track widening the centre left it clipped against it with the bar
+// having no answer.
 //
 // A strip, so it takes Panel.qml's frame and none of its sheet: no header, no
 // title, and a width that is exactly the rail plus the card's own padding.
@@ -49,13 +50,6 @@ Panel {
     // exists there).
     property var sources: ({})
 
-    // region -> bool: is that region's group off the strip right now? Written
-    // by the same chevrons and read back by BarIpc's `chevron status`, which
-    // is where the fit becomes observable without measuring a screenshot.
-    // Every output's bar writes the one shared map, so on a multi-output rig
-    // this is whichever bar answered last.
-    property var offStrip: ({})
-
     readonly property var _source: root.sources[root.region] || null
     readonly property var _entries: root._source ? root._source.entries : []
     readonly property Component _delegate: root._source ? root._source.delegate : null
@@ -70,20 +64,6 @@ Panel {
             next[key] = root.sources[key];
         next[regionName] = { entries: entries, delegate: delegate, cell: cell };
         root.sources = next;
-    }
-
-    function noteOffStrip(regionName, off) {
-        if (!!root.offStrip[regionName] === !!off)
-            return;
-        var next = {};
-        for (var key in root.offStrip)
-            next[key] = root.offStrip[key];
-        next[regionName] = !!off;
-        root.offStrip = next;
-        // A group that has just regained its room belongs back on the strip,
-        // not in a card left hanging under it.
-        if (!off && root.isOpen && root.region === regionName)
-            root.close();
     }
 
     function openRegion(regionName) {

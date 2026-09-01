@@ -19,7 +19,6 @@ Singleton {
     property alias appLaunches: adapter.appLaunches
     property alias emojiUses: adapter.emojiUses
     property alias reminders: adapter.reminders
-    property alias barCollapsed: adapter.barCollapsed
     property alias batteryShowPercent: adapter.batteryShowPercent
 
     function setWallpaper(path) {
@@ -107,16 +106,6 @@ Singleton {
         stateFile.writeAdapter();
     }
 
-    function setBarCollapsed(region, collapsed) {
-        var next = {};
-        var current = adapter.barCollapsed;
-        for (var key in current)
-            next[key] = current[key];
-        next[region] = collapsed;
-        adapter.barCollapsed = next;
-        stateFile.writeAdapter();
-    }
-
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -147,7 +136,6 @@ Singleton {
             // Collapsed is the default for every region, matching Hidden Bar
             // and Bartender: adding `chevron` to bar.layout has to visibly do
             // something on first run, or the widget reads as inert.
-            property var barCollapsed: ({ left: true, center: true, right: true })
             property var batteryShowPercent: null
         }
     }

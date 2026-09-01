@@ -49,8 +49,9 @@ TestCase {
     }
 
     // Bar.qml's delegate, both gates side by side. `collapsible` is false
-    // here, which is every entry in a region with no chevron and every
-    // entry outboard of one.
+    // here, which is every entry in a region with no chevron and every entry
+    // outboard of one: a governed entry is drawn in the chevron's second bar
+    // instead and is never on the strip to reveal (M52).
     Component {
         id: delegateComponent
 
@@ -61,8 +62,7 @@ TestCase {
                 ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
                 : false
             readonly property bool oldGate: entryLoader.width > 0 && entryLoader._shown
-            readonly property bool newGate: entryLoader._shown
-                && (!entryLoader.collapsible || entryLoader.width > 0)
+            readonly property bool newGate: entryLoader._shown && !entryLoader.collapsible
 
             sourceComponent: widgetComponent
             clip: true

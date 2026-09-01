@@ -76,12 +76,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `center.sh` `--center`: the notification centre listing the pending tier,
   with the toast stack suppressed for as long as it is open, content-tall on
   a short history and capped and scrolling on thirty rows.
-- `chevron.sh` `--chevron`: a right-region chevron collapsing the cells
-  before it and expanding back, the two frames asserted to differ.
-- `chevron_overflow.sh` `--chevron-overflow`: the same right region on a bar
-  with a 1600px centre, where the group has no room to open in place: it is
-  off the strip whatever the stored state says, and `bar chevron expand`
-  opens the second bar under the chevron instead.
+- `chevron.sh` `--chevron`: a right-region chevron holding the five cells
+  before it off the strip entirely, and `bar chevron expand` opening them in
+  the second bar under it, the two frames asserted to differ.
 - `clipboard.sh` `--clipboard`: the ledger's capture order and in-process row
   activation, with the image entry's preview and a copied-markup row's own
   angle brackets in the frame.

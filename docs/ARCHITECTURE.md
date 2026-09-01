@@ -102,7 +102,11 @@ shell/
                                   opaque fill, Theme.space.barMargin below the bar) anchored under its
                                   opening bar cell, on that cell's own output (anchorX/anchorScreen, both
                                   unset for an IPC open: bar's right region on the focused output),
-                                  WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside
+                                  WlrLayershell top layer, keyboard OnDemand, closes on Escape/click-outside.
+                                  openFrom() reads the anchor cell's own window: a cell living in another
+                                  popout (the tray's or the chevron's second bar) makes that popout this
+                                  one's `owner`, so it opens ON TOP of it (one barMargin clear, PanelRegistry
+                                  slot handed back on close) rather than replacing it
     AuthPrompt.qml                the lock/greeter shared centre plate: one bordered card
                                   holding clock + date + a dividing rule + a single 3px-outlined
                                   password/username field (shrink-to-fit dot masking, CHECKING state,
@@ -241,7 +245,7 @@ shell/
     Bar/
       Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
       TrayMenu.qml               shell-owned tray context menu: one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle: replaces the old native QsMenuAnchor popup
-      BarOverflow.qml            the chevron's second bar: one shared instance (shell.qml), composes Panel.qml headerless, renders Bar.qml's own region delegate over the governed group when the strip has no room for it
+      BarOverflow.qml            the chevron's second bar: one shared instance (shell.qml), composes Panel.qml headerless, renders Bar.qml's own region delegate over the governed group, which lives here rather than on the strip
       widgets/
         LauncherWidget.qml      leads the default left region: the "[F]" mark, toggles shell.qml's single Menu instance: the launcher's only pointer-reachable summon path
         Workspaces.qml          Repeater over CompositorService.workspaces
@@ -263,7 +267,7 @@ shell/
         DualsenseWidget.qml          opt-in: gamepad glyph + battery %, warning/urgent thresholds, hidden with no controller (exposes `shown`)
         CommandModule.qml           bar.modules "command" entry: polled Waybar-JSON cell, honest MODULE ERROR on failure
         QmlModule.qml                bar.modules "qml" entry: Loader-hosted user file, load-time isolation only
-        ChevronWidget.qml            opt-in: the collapse boundary. Its bar.layout position is its whole config; click toggles State.barCollapsed[region]
+        ChevronWidget.qml            opt-in: the overflow boundary. Its bar.layout position is its whole config; click toggles the second bar its governed group is drawn in (BarOverflow.qml)
         PluginBarModule.qml          kind:"bar" plugin host: Loader-hosted entry file, forwards its `shown`
     Background/
       Background.qml            per-screen PanelWindow on WlrLayer.Background; shows State.wallpaper,
@@ -936,40 +940,47 @@ input method" idiom `picker`'s `choose`/`variant` already draw: an
 IPC-opened popout gets no bar cell and so no real Wayland keyboard focus
 in the smoke rig.
 
-**Chevron** (`ChevronWidget.qml`, `shell/Ipc/BarIpc.qml`, `Bar/layout.js`):
-macOS Hidden Bar / Bartender as a bar widget. `chevron` is an ordinary
-`bar.layout` name and its position is its entire configuration: `layout.js`
-annotates every entry on its governed side of the same region
-`collapsible: true`, and `Bar.qml`'s region delegate ANDs that with
-`State.barCollapsed[region]` to drive the `Loader`'s own width, which is
-what the delegate's `visible` then reads. That last part is not a
-style choice: reading a `Loader`-hosted item's built-in `visible` from
-outside permanently detaches the item's own binding (see `Bar.qml`'s
-delegate comment), which is why widgets expose `shown` and why the gate
-lives on the `Loader` rather than being written into either property.
-The governed side is the one away from the region's anchored edge
-(`layout.js`'s `governsBefore`): a right-region chevron collapses what
-precedes it, so the reveal grows into empty bar and the chevron itself never
-moves. The group's width animates over `Theme.motion.standard`, and the
-delegate's `visible` is gated on that animated width rather than on the
-collapse flag, so a cell only leaves the `Row`'s spacing accounting once it
-has actually reached zero. Collapsed is the default, per region, in
-`state.json`.
+**Chevron** (`ChevronWidget.qml`, `BarOverflow.qml`, `shell/Ipc/BarIpc.qml`,
+`Bar/layout.js`): macOS Hidden Bar / Bartender as a bar widget. `chevron` is
+an ordinary `bar.layout` name and its position is its entire configuration:
+`layout.js` annotates every entry on its governed side of the same region
+`collapsible: true`, and `Bar.qml`'s region delegate keeps every annotated
+entry off the strip. The governed side is the one away from the region's
+anchored edge (`layout.js`'s `governsBefore`): a right-region chevron takes
+what precedes it, so the chevron itself never moves.
 
-A group with no room left on the strip opens in a second bar instead
-(`BarOverflow.qml`, one shared instance like `TrayOverflow.qml`): the same
-answer the tray gives a strip that has run out of edge, one altitude up.
-`Bar.qml` measures the room per region (`Bar/chevron.js`, refit on a timer
-past the reveal's own animation, capacity rather than slack as the invariant
-term so the answer cannot oscillate) and the delegate treats "no room" as
-stronger than the stored state, so the group is never drawn twice. That
+That group is drawn in a second bar the cell opens (`BarOverflow.qml`, one
+shared instance like `TrayOverflow.qml`), always, not only when the strip is
+crowded: the same call the tray's dots take, so the group is somewhere else
+rather than sometimes here and sometimes there (owner, 2026-09-01). M24/M25's
+inline collapse, its `state.json` key and the width animation behind it are
+gone with it; a group that opened in place was clipped against the centre the
+moment a playing track widened it, which the bar had no answer for. The
 surface renders `Bar.qml`'s OWN region delegate over copies of the governed
 entries with the annotation cleared (`layout.js`'s `overflowEntries`), since a
 `Component` carries its creation context and every cell there still resolves
-the panel and screen wiring only `Bar.qml` has. `bar chevron`'s three verbs
-address that bar rather than the collapse state while a region is off the
-strip, and `chevron status` reports `offStrip`/`overflowOpen` per region,
-which is the only headless read of a fit measured per output.
+the panel and screen wiring only `Bar.qml` has, and the copies are what stop
+that delegate treating them as off-strip again. Its cells exist only while the
+window is mapped (`model` gated on `visible`), so a second live copy of a
+polling widget is not left running behind a closed card. `bar
+chevron toggle|expand|collapse` open and close that bar, and `chevron status`
+reports `collapses` (the group, in layout order) and `open` per region. A cell
+in that card opening its own panel keeps the card up and puts the panel one
+`barMargin` past it, which is Panel's `owner` resolved from the cell's own
+window rather than anything the widgets know about (owner, 2026-09-01:
+clicking a cell used to take the whole group away with it). The cell's glyph
+points at the card while it is shut and back at the bar while it is open, off
+`Theme.barPosition` alone: the group is never on the strip, so there is no
+direction along it to point.
+
+The delegate's `visible` reads `shown` and the annotation, never a
+MEASUREMENT of the entry it is hiding: that closes a cycle, and a widget that
+starts empty and gains content later (Indicators, Tray) then never recovers a
+width (g815, 2026-08-19). Reading a `Loader`-hosted item's built-in `visible`
+from outside also permanently detaches the item's own binding (see `Bar.qml`'s
+delegate comment), which is why widgets expose `shown` and why the gate lives
+on the `Loader` rather than being written into either property.
+`tests/tst_bar_entry_reveal.qml` pins both halves.
 
 **Indicators** (`Indicators.qml`): four glyph cells, each shown only while
 its own condition holds, the whole row hidden when none does. Loudest
@@ -1254,7 +1265,7 @@ Surfaces/Screensaver/Screensaver.qml  (one controller Item)
     |  Canvas, repainted off whichever frame source is live:
     |    ttfx (Screensaver/ttfx.js, one process per output, argv built by
     |      command(), its ANSI stream read back by parseFrame() at
-    |      screensaver.frameRate, default 60) whenever `command -v ttfx`
+    |      screensaver.frameRate, default 120) whenever `command -v ttfx`
     |      succeeds: 37 effects, each painting in its own upstream gradient
     |    Screensaver/effect.js#frameState(name, frame, banner) otherwise:
     |      five effects (decrypt/rain/expand/slide/scatter) in
