@@ -86,6 +86,7 @@ ShellRoot {
                 monitorPanel: monitorPanelInstance
                 trayMenu: trayMenuInstance
                 trayOverflow: trayOverflowInstance
+                barOverflow: barOverflowInstance
                 center: notificationsCenter
             }
         }
@@ -194,6 +195,13 @@ ShellRoot {
     // on. Registered in PanelIpc below like any other popout, so a
     // compositor keybind and the smoke rig can both summon it.
     TrayOverflow { id: trayOverflowInstance }
+    // The bar chevron's own second bar (M52), one instance for the same
+    // reason: the bar whose chevron attached last decides which output it
+    // lands on and which cell it hangs off. Deliberately absent from PanelIpc's
+    // registry below: it has nothing of its own to show, only whatever group a
+    // chevron handed it, so `bar chevron` is its summon path rather than
+    // `panel open`.
+    BarOverflow { id: barOverflowInstance }
 
     // Plugin-declared surfaces (shell/Plugins/manifest.js): created from the
     // scanned manifests rather than named here, because nobody knows their
@@ -265,7 +273,7 @@ ShellRoot {
     AirpodsIpc {}
     MediaIpc {}
     TrayIpc { trayMenu: trayMenuInstance; trayOverflow: trayOverflowInstance }
-    BarIpc {}
+    BarIpc { barOverflow: barOverflowInstance }
     LockIpc {}
     ScreensaverIpc { screensaver: screensaver }
     // The image/wallpaper picker is the menu's "wallpaper" route (M23), not

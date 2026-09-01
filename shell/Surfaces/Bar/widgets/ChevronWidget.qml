@@ -42,6 +42,13 @@ import "../../../Bar/layout.js" as Layout
 // moves on the next click: in a right region collapsed points left and
 // expanded points right, and the other two regions read the same pair the
 // other way round.
+// M52: a group with no room left on the strip opens in a second bar instead
+// (../BarOverflow.qml), which is the tray's own answer to a bar that has run
+// out of edge. Which of the two happens is measured and never configured:
+// Bar.qml works the room out (Bar/chevron.js) and hands `fits` over. The
+// owner met the missing half of this with a track playing, where the centre
+// widens and an expanded right group is clipped against it.
+//
 Cell {
     id: root
 
@@ -50,7 +57,29 @@ Cell {
     property string region: ""
     property var regionEntries: []
 
+    // The one shared BarOverflow instance (shell.qml, through Bar.qml), and
+    // the region delegate its cells are built from. Null means no second bar
+    // was wired in, and the group then opens in place whether it fits or not,
+    // which is exactly M24's own behaviour.
+    property var overflow: null
+    property Component entryDelegate: null
+
+    // Whether the group has room on the strip, measured by Bar.qml
+    // (Bar/chevron.js) and handed over. False moves the whole group into the
+    // second bar: this cell then toggles that surface instead of the stored
+    // state, and Bar.qml's own delegate keeps the cells off the strip
+    // regardless of what the state says, so the two never draw the group
+    // twice. The state itself is left alone, so a group that regains its room
+    // (the track stops, the centre narrows) comes back open if that is where
+    // the user left it.
+    property bool fits: true
+
     readonly property var hiddenNames: Layout.collapsedNames(root.regionEntries)
+    readonly property var hiddenEntries: Layout.overflowEntries(root.regionEntries)
+
+    readonly property bool offStrip: !root.fits && root.overflow !== null
+    readonly property bool _overflowOpen: root.overflow !== null && root.overflow.isOpen
+        && root.overflow.region === root.region
 
     // Collapsed is the default, matching Hidden Bar and Bartender: adding
     // `chevron` to bar.layout has to visibly do something on first run.
@@ -67,9 +96,18 @@ Cell {
     // along the strip: right on a horizontal bar, down on a vertical one,
     // where the glyph stays upright (Icon.qml) and so has to be named for
     // the screen direction rather than the row's.
-    readonly property bool _pointsAfter: Layout.governsBefore(root.region) ? !root.collapsed : root.collapsed
+    // What "open" means on this cell: the group on the strip, or the second
+    // bar up. Either way the glyph points where the group moves on the next
+    // click.
+    readonly property bool _expanded: root.offStrip ? root._overflowOpen : !root.collapsed
+    readonly property bool _pointsAfter: Layout.governsBefore(root.region) ? root._expanded : !root._expanded
 
-    tooltipText: (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
+    // Off the strip the group is not hidden or shown, it is somewhere else,
+    // and the tooltip says so in the tray's own words.
+    tooltipText: root.offStrip
+        ? "BAR / " + root.hiddenNames.length + " ITEMS"
+        : (root.collapsed ? "BAR / SHOW " : "BAR / HIDE ") + root.hiddenNames.length
+    panelOpen: root._overflowOpen
 
     // The two directions this axis ever points, so the flip below only ever
     // crossfades between them rather than between all four glyph names.
@@ -102,5 +140,31 @@ Cell {
     }
 
     interactive: true
-    onClicked: Core.State.setBarCollapsed(root.region, !root.collapsed)
+    onClicked: {
+        if (root.offStrip) {
+            root.overflow.toggleRegion(root.region);
+            return;
+        }
+        Core.State.setBarCollapsed(root.region, !root.collapsed);
+    }
+
+    // Published to the shared surface rather than held here: the second bar
+    // has to be summonable without a click on this cell (BarIpc's `bar
+    // chevron` verbs are the smoke rig's only pointer), and it needs this
+    // cell as its anchor either way. Re-run on every input the group's
+    // contents or its room depend on, so a settings.json edit or a widening
+    // centre reaches a bar that is already open.
+    function _publish() {
+        if (!root.overflow || root.region === "")
+            return;
+        root.overflow.attach(root.region, root.hiddenEntries, root.entryDelegate, root);
+        root.overflow.noteOffStrip(root.region, root.offStrip);
+    }
+
+    Component.onCompleted: root._publish()
+    onRegionChanged: root._publish()
+    onHiddenEntriesChanged: root._publish()
+    onEntryDelegateChanged: root._publish()
+    onOverflowChanged: root._publish()
+    onOffStripChanged: root._publish()
 }

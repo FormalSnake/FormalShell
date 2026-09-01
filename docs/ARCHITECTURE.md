@@ -241,6 +241,7 @@ shell/
     Bar/
       Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
       TrayMenu.qml               shell-owned tray context menu: one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle: replaces the old native QsMenuAnchor popup
+      BarOverflow.qml            the chevron's second bar: one shared instance (shell.qml), composes Panel.qml headerless, renders Bar.qml's own region delegate over the governed group when the strip has no room for it
       widgets/
         LauncherWidget.qml      leads the default left region: the "[F]" mark, toggles shell.qml's single Menu instance: the launcher's only pointer-reachable summon path
         Workspaces.qml          Repeater over CompositorService.workspaces
@@ -954,6 +955,21 @@ delegate's `visible` is gated on that animated width rather than on the
 collapse flag, so a cell only leaves the `Row`'s spacing accounting once it
 has actually reached zero. Collapsed is the default, per region, in
 `state.json`.
+
+A group with no room left on the strip opens in a second bar instead
+(`BarOverflow.qml`, one shared instance like `TrayOverflow.qml`): the same
+answer the tray gives a strip that has run out of edge, one altitude up.
+`Bar.qml` measures the room per region (`Bar/chevron.js`, refit on a timer
+past the reveal's own animation, capacity rather than slack as the invariant
+term so the answer cannot oscillate) and the delegate treats "no room" as
+stronger than the stored state, so the group is never drawn twice. That
+surface renders `Bar.qml`'s OWN region delegate over copies of the governed
+entries with the annotation cleared (`layout.js`'s `overflowEntries`), since a
+`Component` carries its creation context and every cell there still resolves
+the panel and screen wiring only `Bar.qml` has. `bar chevron`'s three verbs
+address that bar rather than the collapse state while a region is off the
+strip, and `chevron status` reports `offStrip`/`overflowOpen` per region,
+which is the only headless read of a fit measured per output.
 
 **Indicators** (`Indicators.qml`): four glyph cells, each shown only while
 its own condition holds, the whole row hidden when none does. Loudest

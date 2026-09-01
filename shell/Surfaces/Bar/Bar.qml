@@ -14,6 +14,7 @@ import qs.Plugins
 import qs.Surfaces.Frame
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
+import "../../Bar/chevron.js" as ChevronFit
 
 // The bar (DESIGN.md §3 Bar, spec §1, M6 Tasks 1+3, M8b Task 3 retrofit,
 // M10 Task 3 settings-driven retrofit): three regions, left, center,
@@ -80,6 +81,9 @@ PanelWindow {
     property var monitorPanel: null
     property var trayMenu: null
     property var trayOverflow: null
+    // The chevron's second bar (Surfaces/Bar/BarOverflow.qml), shared by
+    // every output like the tray's.
+    property var barOverflow: null
     // The single Center instance (shell.qml's notificationsCenter), the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
@@ -163,6 +167,73 @@ PanelWindow {
         - (bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth)
         - (bar._vertical ? centerRegion.implicitHeight : centerRegion.implicitWidth)
         - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
+
+    // --- The chevron's fit (M52) -----------------------------------------
+    //
+    // Per region: does the group behind that region's chevron still have room
+    // on the strip? False moves it into the second bar (BarOverflow.qml), the
+    // same all-or-nothing answer the tray gives when it runs out of edge, and
+    // for the same reason: the alternative is the group clipping against the
+    // centre, which is where a playing track leaves an expanded right region
+    // (owner, 2026-09-01).
+    //
+    // Written by `_refit()` rather than bound, the same one-way pass
+    // widgets/Tray.qml documents at length: the answer's own input is the
+    // strip's leftover room, which the answer moves, and a binding round that
+    // circle is a loop QML aborts. It settles in one step because capacity,
+    // not slack, is the invariant term (Bar/chevron.js's own note).
+    property var _regionFits: ({ left: true, center: true, right: true })
+
+    // What an expanded group would cost this region, measured off the
+    // Loaders' own implicit extents rather than their current widths: a
+    // collapsed entry is held at 0 along the strip, but the widget inside it
+    // still measures itself. A widget hiding itself (`shown`) costs nothing,
+    // since revealing the group would not reveal it.
+    function _groupAlong(repeater) {
+        var alongs = [];
+        for (var i = 0; i < repeater.count; i++) {
+            var entry = repeater.itemAt(i);
+            if (!entry || !entry.modelData || !entry.modelData.collapsible || !entry._shown)
+                continue;
+            alongs.push(entry._implicitAlong);
+        }
+        return ChevronFit.groupAlong(alongs, Theme.space.sm);
+    }
+
+    function _refit() {
+        var repeaters = { left: leftRepeater, center: centerRepeater, right: rightRepeater };
+        var next = {};
+        for (var region in repeaters) {
+            var need = bar._groupAlong(repeaters[region]);
+            // Whether that cost is already part of the strip's current
+            // extent, which is the term `fitsInline` cancels out.
+            var stored = Core.State.barCollapsed;
+            var expandedNow = (stored && stored[region] === false) && bar._regionFits[region] !== false;
+            next[region] = ChevronFit.fitsInline(need, bar._slack, expandedNow);
+        }
+        bar._regionFits = next;
+    }
+
+    // Long enough to outlast the reveal's own animation (the region delegate's
+    // `Behavior on _along`), during which every governed cell is between two
+    // widths and the leftover room is whatever the frame happened to catch.
+    // widgets/Tray.qml's own refit timer carries the full story; this is the
+    // same trap on the same inputs.
+    Timer {
+        id: fitTimer
+        interval: Theme.motion.standard + 32
+        onTriggered: bar._refit()
+    }
+
+    Component.onCompleted: fitTimer.restart()
+    on_SlackChanged: fitTimer.restart()
+    on_LayoutChanged: fitTimer.restart()
+    on_VerticalChanged: fitTimer.restart()
+
+    Connections {
+        target: Core.State
+        function onBarCollapsedChanged() { fitTimer.restart(); }
+    }
 
     // One thickness for every cell in every region, so a widget with a
     // taller line of content can no longer drag the whole strip with it.
@@ -355,6 +426,17 @@ PanelWindow {
     Component {
         id: chevronComponent
         ChevronWidget {
+            id: chevronCell
+            overflow: bar.barOverflow
+            // The delegate its second bar builds the group from, which is the
+            // same one this strip uses: a Component carries its creation
+            // context, so an entry instantiated over there still resolves the
+            // panels and screen wired up here.
+            entryDelegate: regionDelegate
+            // `region` lands after creation (the region delegate's onLoaded),
+            // so this reads as "fits" until it does, which is the state the
+            // group is already in.
+            fits: chevronCell.region === "" || bar._regionFits[chevronCell.region] !== false
         }
     }
     Component {
@@ -469,6 +551,13 @@ PanelWindow {
             readonly property bool _collapsedAway: {
                 if (!entryLoader.modelData.collapsible)
                     return false;
+                // No room is a stronger answer than the stored state (M52):
+                // the group is in the second bar, so it is not on the strip
+                // whatever the user last chose, and the two never draw it
+                // twice. The state is left untouched, so the group comes back
+                // where it was the moment the room does.
+                if (bar._regionFits[entryLoader.modelData.region] === false)
+                    return true;
                 var stored = Core.State.barCollapsed;
                 return !stored || stored[entryLoader.modelData.region] !== false;
             }

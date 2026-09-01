@@ -306,6 +306,27 @@ function collapsedNames(entries) {
     return out;
 }
 
+// The same governed entries, as copies that no longer answer to the chevron
+// (M52). The second bar renders the group through Bar.qml's OWN region
+// delegate, so that its cells keep the panel, screen and menu wiring only
+// Bar.qml has; that delegate collapses anything annotated `collapsible` to
+// nothing, which inside the overflow is exactly the group it is there to
+// show. Clearing the annotation on a copy leaves the strip's own entries
+// untouched, and needs no second author on the delegate's collapse gate.
+function overflowEntries(entries) {
+    var out = [];
+    for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].collapsible)
+            continue;
+        var copy = {};
+        for (var key in entries[i])
+            copy[key] = entries[i][key];
+        copy.collapsible = false;
+        out.push(copy);
+    }
+    return out;
+}
+
 function hasChevron(entries) {
     for (var i = 0; i < entries.length; i++) {
         if (_isChevron(entries[i]))

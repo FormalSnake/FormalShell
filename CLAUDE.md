@@ -78,6 +78,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   a short history and capped and scrolling on thirty rows.
 - `chevron.sh` `--chevron`: a right-region chevron collapsing the cells
   before it and expanding back, the two frames asserted to differ.
+- `chevron_overflow.sh` `--chevron-overflow`: the same right region on a bar
+  with a 1600px centre, where the group has no room to open in place: it is
+  off the strip whatever the stored state says, and `bar chevron expand`
+  opens the second bar under the chevron instead.
 - `clipboard.sh` `--clipboard`: the ledger's capture order and in-process row
   activation, with the image entry's preview and a copied-markup row's own
   angle brackets in the frame.

@@ -21,6 +21,12 @@ import "../Bar/layout.js" as Layout
 // when exactly one exists and refuses to guess when more than one does;
 // `chevronAt` names it outright.
 //
+// M52: a group with no room left on the strip lives in the second bar
+// (Surfaces/Bar/BarOverflow.qml) instead, and the same three verbs then open
+// and close that surface rather than writing a collapse state the bar cannot
+// act on. `status` reports which of the two a region is in (`offStrip`), the
+// only headless read of a fit that is otherwise measured per output.
+//
 // The layout is resolved here rather than read off a Bar instance: Bar.qml
 // is instantiated once per screen and this handler answers for the whole
 // shell, while Layout.resolve is pure and re-runs on any Config change like
@@ -31,7 +37,24 @@ IpcHandler {
     id: root
     target: "bar"
 
+    // shell.qml's single BarOverflow instance: the chevron's second bar, and
+    // the only place the fit each bar measured is observable from here
+    // (Surfaces/Bar/BarOverflow.qml's `offStrip`). Null in a run with no bar
+    // on screen, where every region is trivially on the strip.
+    property var barOverflow: null
+
     readonly property var _regions: Layout.resolve(Config.get("bar", null), PluginService.barPlugins).regions
+
+    // Whether that region's group has left the strip for the second bar,
+    // which decides what the three verbs below do: with no room, expanding is
+    // opening that bar, not writing a state nothing can act on.
+    function _offStrip(region) {
+        return !!(root.barOverflow && root.barOverflow.offStrip[region]);
+    }
+
+    function _overflowOpen(region) {
+        return !!(root.barOverflow && root.barOverflow.isOpen && root.barOverflow.region === region);
+    }
 
     function _chevronRegions() {
         var out = [];
@@ -55,14 +78,27 @@ IpcHandler {
             return "error: unknown region '" + region + "' (left|center|right)";
         if (!Layout.hasChevron(root._regions[region]))
             return "error: no chevron in bar.layout." + region;
+        if (["toggle", "expand", "collapse"].indexOf(action) < 0)
+            return "error: unknown chevron action '" + action + "' (toggle|expand|collapse)";
+        // Off the strip these verbs address the second bar instead, so one
+        // control keeps one summon path however crowded the bar is. The
+        // stored state is deliberately not written here: it is where the user
+        // left the group for when the room comes back.
+        if (root._offStrip(region)) {
+            if (action === "toggle")
+                root.barOverflow.toggleRegion(region);
+            else if (action === "expand")
+                root.barOverflow.openRegion(region);
+            else if (root._overflowOpen(region))
+                root.barOverflow.close();
+            return "ok";
+        }
         if (action === "toggle")
             State.setBarCollapsed(region, !root._collapsed(region));
         else if (action === "expand")
             State.setBarCollapsed(region, false);
-        else if (action === "collapse")
-            State.setBarCollapsed(region, true);
         else
-            return "error: unknown chevron action '" + action + "' (toggle|expand|collapse)";
+            State.setBarCollapsed(region, true);
         return "ok";
     }
 
@@ -94,11 +130,17 @@ IpcHandler {
             var entries = root._regions[region];
             var collapses = Layout.collapsedNames(entries);
             var collapsed = root._collapsed(region);
+            var offStrip = root._offStrip(region);
             out[region] = {
                 chevron: Layout.hasChevron(entries),
                 collapsed: collapsed,
                 collapses: collapses,
-                hidden: collapsed ? collapses : []
+                // Off the strip nothing of the group is on the bar, whatever
+                // the stored state says, so `hidden` reports what is really
+                // not there rather than what was last asked for.
+                hidden: (collapsed || offStrip) ? collapses : [],
+                offStrip: offStrip,
+                overflowOpen: root._overflowOpen(region)
             };
         }
         return JSON.stringify({ regions: out, chevronRegions: root._chevronRegions() });
