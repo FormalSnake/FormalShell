@@ -115,7 +115,7 @@ TestCase {
     // primary and ring, b800 borders. Every role validates so the static
     // write path can hand it to theme.json unchanged.
     function test_flexoki_dark() {
-        var f = P.flexoki("dark");
+        var f = P.pinnedPalette("flexoki").shadcn("dark");
         verify(P.validate(f).ok);
         compare(f.mode, "dark");
         compare(f.background, "#100f0f");
@@ -128,11 +128,11 @@ TestCase {
         compare(f.warning, "#da702c");
         // The source a pinned matugen run is seeded with is the dark primary
         // itself, so the user's templates and the shell agree on the hue.
-        compare("#" + P.FLEXOKI_SOURCE.toLowerCase(), f.primary);
+        compare("#" + P.pinnedPalette("flexoki").source.toLowerCase(), f.primary);
     }
 
     function test_flexoki_light() {
-        var f = P.flexoki("light");
+        var f = P.pinnedPalette("flexoki").shadcn("light");
         verify(P.validate(f).ok);
         compare(f.mode, "light");
         compare(f.background, "#fffcf0");
@@ -146,16 +146,19 @@ TestCase {
     }
 
     function test_flexoki_no_arg_is_dark() {
-        compare(JSON.stringify(P.flexoki()), JSON.stringify(P.flexoki("dark")));
+        var pin = P.pinnedPalette("flexoki");
+        compare(JSON.stringify(pin.shadcn()), JSON.stringify(pin.shadcn("dark")));
     }
 
-    function test_pins_flexoki_is_a_case_insensitive_path_substring() {
-        verify(P.pinsFlexoki("/w/dark/Moraine_Lake-flexoki.webp"));
-        verify(P.pinsFlexoki("/w/dark/FLEXOKI-dark-orb.png"));
-        verify(P.pinsFlexoki("/w/flexoki/anything.png"));
-        verify(!P.pinsFlexoki("/w/dark/wallhaven-yq2zwl.png"));
-        verify(!P.pinsFlexoki(""));
-        verify(!P.pinsFlexoki(null));
+    function test_pinned_palette_is_a_case_insensitive_path_substring() {
+        compare(P.pinnedPalette("/w/dark/Moraine_Lake-flexoki.webp").name, "flexoki");
+        compare(P.pinnedPalette("/w/dark/FLEXOKI-dark-orb.png").name, "flexoki");
+        compare(P.pinnedPalette("/w/flexoki/anything.png").name, "flexoki");
+        compare(P.pinnedPalette("/w/dark/ZenBones-pond.png").name, "zenbones");
+        compare(P.pinnedPalette("/w/zenbones/anything.png").name, "zenbones");
+        compare(P.pinnedPalette("/w/dark/wallhaven-yq2zwl.png"), null);
+        compare(P.pinnedPalette(""), null);
+        compare(P.pinnedPalette(null), null);
     }
 
     function test_merge_with_fallback_fills_missing_keys() {

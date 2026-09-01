@@ -1,6 +1,7 @@
 .pragma library
 
 .import "flexoki.js" as Flexoki
+.import "zenbones.js" as Zenbones
 
 // theme.json's shadcn color roles (spec "Visual system > Color",
 // 2026-08-25 redesign), plus the hex format matugen renders them in, and
@@ -66,24 +67,35 @@ function fallback(mode) {
     };
 }
 
-// A wallpaper whose path carries "flexoki" (any case, the substring test
-// the DMS-era flexoki-pin reconciler used) is pinned to Flexoki
-// (stephango.com/flexoki) instead of themed off its pixels. The palette
-// itself lives in flexoki.js, which also carries the Material-role and
-// base16 views a pinned matugen run rewrites its templates through, so the
-// shell, theme.json and every app template read one table.
-function pinsFlexoki(wallpaperPath) {
-    return typeof wallpaperPath === "string" && /flexoki/i.test(wallpaperPath);
-}
+// A wallpaper whose path carries one of these names (any case, the
+// substring test the DMS-era flexoki-pin reconciler used) is pinned to that
+// palette instead of themed off its pixels. Each entry's module carries the
+// three views a pinned matugen run rewrites its templates through
+// (shadcn/materialRoles/base16) plus the source colour the run hands
+// `matugen color hex` in place of the image, so the shell, theme.json and
+// every app template read one table.
+var PINNED = [
+    { name: "flexoki", pattern: /flexoki/i, module: Flexoki },
+    { name: "zenbones", pattern: /zenbones/i, module: Zenbones }
+].map(function (entry) {
+    return {
+        name: entry.name,
+        pattern: entry.pattern,
+        shadcn: entry.module.shadcn,
+        materialRoles: entry.module.materialRoles,
+        base16: entry.module.base16,
+        source: entry.module.SOURCE.replace("#", "").toUpperCase()
+    };
+});
 
-// What a pinned run hands `matugen color hex` in place of the image.
-// matugen's own scheme no longer reaches any template on that run (every
-// {{colors.*}} is rewritten to a Flexoki tone first), so this only seeds the
-// keywords no rewrite covers.
-var FLEXOKI_SOURCE = Flexoki.SOURCE.replace("#", "").toUpperCase();
-
-function flexoki(mode) {
-    return Flexoki.shadcn(mode);
+function pinnedPalette(wallpaperPath) {
+    if (typeof wallpaperPath !== "string")
+        return null;
+    for (var i = 0; i < PINNED.length; i++) {
+        if (PINNED[i].pattern.test(wallpaperPath))
+            return PINNED[i];
+    }
+    return null;
 }
 
 // Per-key backward-tolerant merge: a theme.json written before a key existed

@@ -7,6 +7,8 @@ import "../shell/Theme/palette.js" as Palette
 TestCase {
     name: "Flexoki"
 
+    readonly property var _pin: Palette.pinnedPalette("flexoki")
+
     // matugen 4.1.0's own role list, read off `matugen -j hex --dry-run
     // color hex <x>` against a bare config. A role missing from
     // materialRoles() is a template expression a pinned run would leave on
@@ -83,8 +85,11 @@ TestCase {
             compare(shadcn.mutedForeground, roles.on_surface_variant);
             compare(shadcn.border, roles.outline_variant);
         });
-        compare(Palette.flexoki("dark").primary, Flexoki.shadcn("dark").primary);
-        compare(Palette.FLEXOKI_SOURCE, "4385BE");
+        var pin = Palette.pinnedPalette("/walls/Flexoki-dune.png");
+        compare(pin.name, "flexoki");
+        compare(pin.shadcn("dark").primary, Flexoki.shadcn("dark").primary);
+        compare(pin.source, "4385BE");
+        compare(Palette.pinnedPalette("/walls/dune.png"), null);
     }
 
     // Ghostty's bundled Flexoki Dark/Light, slot for slot. A terminal template
@@ -115,11 +120,11 @@ TestCase {
     }
 
     function test_substitute_formats() {
-        var out = M.substituteFlexoki("a={{colors.surface.default.hex}}\n"
+        var out = M.substitutePinned("a={{colors.surface.default.hex}}\n"
             + "b={{ colors.primary.default.hex_stripped }}\n"
             + "c={{colors.error.default.rgb}}\n"
             + "d={{colors.surface.default.rgba}}\n"
-            + "e={{base16.base0B.default.hex}}\n", "dark");
+            + "e={{base16.base0B.default.hex}}\n", "dark", _pin);
         compare(out.substituted, 5);
         compare(out.skipped.length, 0);
         verify(out.text.indexOf("a=#100f0f") >= 0);
@@ -133,7 +138,7 @@ TestCase {
 
     function test_substitute_leaves_matugens_own_keywords() {
         var src = "m={{mode}} i={{image}} u={{colors.made_up.default.hex}}\n";
-        var out = M.substituteFlexoki(src, "dark");
+        var out = M.substitutePinned(src, "dark", _pin);
         compare(out.text, src);
         compare(out.substituted, 0);
         compare(out.skipped.length, 1);
@@ -143,16 +148,16 @@ TestCase {
     // .hex goes through to_color and anything else keeps matugen's value
     // rather than rendering in the wrong syntax.
     function test_substitute_filters() {
-        var out = M.substituteFlexoki("a={{ colors.primary.default.hex | set_lightness: -20.0 }}\n"
-            + "b={{ colors.primary.default.rgb | set_lightness: -20.0 }}\n", "dark");
+        var out = M.substitutePinned("a={{ colors.primary.default.hex | set_lightness: -20.0 }}\n"
+            + "b={{ colors.primary.default.rgb | set_lightness: -20.0 }}\n", "dark", _pin);
         verify(out.text.indexOf('a={{ "#4385be" | to_color | set_lightness: -20.0 }}') >= 0);
         verify(out.text.indexOf("b={{ colors.primary.default.rgb | set_lightness: -20.0 }}") >= 0);
         compare(out.skipped.length, 1);
     }
 
     function test_scheme_selects_the_table() {
-        var out = M.substituteFlexoki("d={{colors.primary.dark.hex}} l={{colors.primary.light.hex}} "
-            + "x={{colors.primary.default.hex}}", "light");
+        var out = M.substitutePinned("d={{colors.primary.dark.hex}} l={{colors.primary.light.hex}} "
+            + "x={{colors.primary.default.hex}}", "light", _pin);
         verify(out.text.indexOf("d=#4385be") >= 0);
         verify(out.text.indexOf("l=#205ea6") >= 0);
         verify(out.text.indexOf("x=#205ea6") >= 0);

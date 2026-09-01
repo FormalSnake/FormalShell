@@ -1,7 +1,5 @@
 .pragma library
 
-.import "flexoki.js" as Flexoki
-
 // Builds a matugen `-c` TOML config from the spec-mandated merge order:
 // user [config] verbatim, then the shell's own template blocks, then the
 // user's [templates.*] section verbatim, then any drop-in fragments.
@@ -215,17 +213,18 @@ function formatColor(hex, format) {
 
 var _EXPR_RE = /\{\{\s*(colors|base16)\.([A-Za-z0-9_]+)\.(default|light|dark)\.([A-Za-z_]+)\s*(\|[^{}]*?)?\}\}/g;
 
-// Replaces every color expression this table can answer. An expression it
-// cannot (a custom_colors entry the user declared, a format matugen grew
-// since) is left verbatim for matugen to render from its own scheme, and
-// named in `skipped` so the caller can say so once rather than silently
-// shipping one blue value in an otherwise Flexoki file.
-function substituteFlexoki(text, mode) {
+// Replaces every color expression the pinned palette (a palette.js PINNED
+// entry) can answer. An expression it cannot (a custom_colors entry the
+// user declared, a format matugen grew since) is left verbatim for matugen
+// to render from its own scheme, and named in `skipped` so the caller can
+// say so once rather than silently shipping one blue value in an otherwise
+// pinned file.
+function substitutePinned(text, mode, pin) {
     if (!text)
         return { text: text, substituted: 0, skipped: [] };
     var tables = {
-        colors: { light: Flexoki.materialRoles("light"), dark: Flexoki.materialRoles("dark") },
-        base16: { light: Flexoki.base16("light"), dark: Flexoki.base16("dark") }
+        colors: { light: pin.materialRoles("light"), dark: pin.materialRoles("dark") },
+        base16: { light: pin.base16("light"), dark: pin.base16("dark") }
     };
     var fallbackScheme = mode === "light" ? "light" : "dark";
     var count = 0;
@@ -235,7 +234,7 @@ function substituteFlexoki(text, mode) {
         var key = name;
         if (!(key in table) && group === "base16") {
             // matugen dumps base0a, the matugen-themes templates write
-            // base0A; Flexoki's own base16 tables use the upper form.
+            // base0A; the pinned base16 tables use the upper form.
             for (var candidate in table) {
                 if (candidate.toLowerCase() === name.toLowerCase()) {
                     key = candidate;

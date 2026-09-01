@@ -166,7 +166,7 @@ leg_flexoki_assert() {
   # Nothing above can distinguish a rewrite from a lucky matugen run without
   # this: the merged config the run read points at the staged copies.
   [ -s "$flexoki_merged_path" ] || fail "no merged matugen config at $flexoki_merged_path"
-  grep -q "input_path = '.*/flexoki-templates/[0-9]*\.tmpl'" "$flexoki_merged_path" \
+  grep -q "input_path = '.*/pinned-templates/[0-9]*\.tmpl'" "$flexoki_merged_path" \
     || fail "the merged config never got repointed at the rewritten templates"
   echo "SMOKE_FLEXOKI_CONFIG $flexoki_merged_path"
   echo "SMOKE_FLEXOKI $flexoki_shot_path"

@@ -18,9 +18,10 @@ colour, radius, size or duration.
 `mutedForeground`, `accent`, `accentForeground`, `destructive`,
 `destructiveForeground`, `warning`, `warningForeground`, `border`, `input`,
 `ring`, `chart1`..`chart5`. matugen fills them from the wallpaper; the
-fallback is shadcn's zinc palette, and a wallpaper with `flexoki` in its
-path pins Flexoki instead, for the shell and for every app template alike
-(`shell/Theme/flexoki.js` is the one table all three views come off). The
+fallback is shadcn's zinc palette, and a wallpaper with a pinned palette's
+name in its path (`flexoki`, `zenbones`) pins that palette instead, for the
+shell and for every app template alike (`shell/Theme/flexoki.js` and
+`shell/Theme/zenbones.js` each carry all three views of one table). The
 wallpaper colour is `primary`.
 `accent` fills a selected row and a list's own cursor, never the wallpaper
 colour.

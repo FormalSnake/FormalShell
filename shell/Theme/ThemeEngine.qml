@@ -32,16 +32,18 @@ import "palette.js" as Palette
 // before that the fallback was static dark and toggling without a wallpaper
 // visibly did nothing).
 //
-// A wallpaper whose path carries "flexoki" still runs matugen, but nothing
-// on that run reads matugen's scheme: every template is rewritten first
-// (matugen.js's substituteFlexoki, against flexoki.js's Material-role and
+// A wallpaper whose path carries a pinned palette's name (palette.js's
+// PINNED table: flexoki, zenbones) still runs matugen, but nothing on that
+// run reads matugen's scheme: every template is rewritten first
+// (matugen.js's substitutePinned, against the palette's Material-role and
 // base16 views) and matugen renders the rewritten copies out of
-// <state-dir>/flexoki-templates, so the GTK/Qt palettes and every template
-// the user declared land on real Flexoki tones rather than a Material scheme
-// grown from one blue seed. The run itself is `color hex` on Flexoki blue
-// rather than `image`, which only seeds the keywords no rewrite covers; the
-// shell's own outputs of it are discarded and theme.json plus both Hyprland
-// palettes take palette.flexoki(State.mode) through the static write.
+// <state-dir>/pinned-templates, so the GTK/Qt palettes and every template
+// the user declared land on the palette's real tones rather than a Material
+// scheme grown from one seed. The run itself is `color hex` on the
+// palette's source colour rather than `image`, which only seeds the
+// keywords no rewrite covers; the shell's own outputs of it are discarded
+// and theme.json plus both Hyprland palettes take the palette's shadcn view
+// through the static write.
 // theme.json's own FileView drives the "run once if
 // absent" startup behavior declaratively; State.mode defaults to dark, so
 // the seeded first-boot theme.json stays the dark variant.
@@ -112,19 +114,21 @@ Singleton {
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
     readonly property string _templateBoundary: "#--formalshell-template-boundary--"
     readonly property string _chromeBoundary: "#--formalshell-chrome-boundary--"
-    // Where a Flexoki-pinned run stages the rewritten copy of every template
-    // it is about to hand matugen. Regenerated per run, never read back.
-    readonly property string _flexokiDir: root.stateDir + "/flexoki-templates"
+    // Where a pinned run stages the rewritten copy of every template it is
+    // about to hand matugen. Regenerated per run, never read back.
+    readonly property string _pinnedDir: root.stateDir + "/pinned-templates"
 
     property bool running: false
     property bool pending: false
     // Captured when the run's matugen command is built, not re-read at exit:
     // a wallpaper flip mid-run must not send this run's outputs down the
     // other publish path (the pending rerun covers the new wallpaper).
-    property bool _pinnedRun: false
+    // The palette.js PINNED entry this run is pinned to, null on an
+    // ordinary wallpaper run.
+    property var _pinnedRun: null
     // The pinned run's merged config between the template read and the write,
     // the input paths it was read from (positional, matching the config's own
-    // order), and the expressions no Flexoki value answered.
+    // order), and the expressions no pinned value answered.
     property string _pinnedConfig: ""
     property var _pinnedInputs: []
     property var _pinnedSkipped: []
@@ -367,7 +371,7 @@ Singleton {
         proc.running = true;
     }
 
-    // The static write the no-wallpaper zinc path and a Flexoki pin both end
+    // The static write the no-wallpaper zinc path and a pinned run both end
     // on: theme.json straight from the palette object, then both Hyprland
     // colours files, then one reload. Goes through _publishFile rather than
     // _writeFile: Core/Theme.qml watches theme.json directly, and _writeFile
@@ -426,7 +430,7 @@ Singleton {
                     userConfigText: userConfigText,
                     dropInTexts: dropInsText ? [dropInsText] : []
                 });
-                root._pinnedRun = Palette.pinsFlexoki(Core.State.wallpaper);
+                root._pinnedRun = Palette.pinnedPalette(Core.State.wallpaper);
                 if (root._pinnedRun) {
                     root._rewriteTemplates(cfg);
                     return;
@@ -437,12 +441,13 @@ Singleton {
     }
 
     // Reads every template the merged config points at, rewrites each one's
-    // colour expressions to Flexoki tones, and stages the copies for matugen
+    // colour expressions to the pinned palette's tones, and stages the
+    // copies for matugen
     // to render. post_hook strings are rendered by matugen's own engine too,
     // so the config text goes through the same rewrite. A config declaring no
     // template at all (nothing to rewrite) goes straight on.
     function _rewriteTemplates(cfg) {
-        var rewritten = Matugen.substituteFlexoki(cfg, Core.State.mode);
+        var rewritten = Matugen.substitutePinned(cfg, Core.State.mode, root._pinnedRun);
         root._pinnedConfig = rewritten.text;
         root._pinnedSkipped = rewritten.skipped;
         root._pinnedInputs = Matugen.templateInputs(root._pinnedConfig).map(function (path) {
@@ -471,7 +476,7 @@ Singleton {
         });
         proc.command = ["sh", "-c",
             'mkdir -p "$1" || exit 1; rm -f "$1"/*.tmpl; shift; while [ "$#" -ge 2 ]; do printf \'%s\' "$2" > "$1" || exit 1; shift 2; done',
-            "sh", root._flexokiDir].concat(pairs);
+            "sh", root._pinnedDir].concat(pairs);
         proc.running = true;
     }
 
@@ -487,7 +492,7 @@ Singleton {
             }
             if (root._pinnedRun) {
                 matugenProc._sawExit = false;
-                matugenProc.command = ["matugen", "color", "hex", Palette.FLEXOKI_SOURCE,
+                matugenProc.command = ["matugen", "color", "hex", root._pinnedRun.source,
                     "-m", Core.State.mode, "-c", root._mergedConfigPath];
                 matugenProc.running = true;
                 return;
@@ -524,16 +529,16 @@ Singleton {
                     var body = sections[i + 1];
                     if (!body)
                         continue;
-                    var out = Matugen.substituteFlexoki(body, Core.State.mode);
+                    var out = Matugen.substitutePinned(body, Core.State.mode, root._pinnedRun);
                     out.skipped.forEach(function (expr) {
                         if (skipped.indexOf(expr) === -1)
                             skipped.push(expr);
                     });
-                    staged[i] = root._flexokiDir + "/" + i + ".tmpl";
+                    staged[i] = root._pinnedDir + "/" + i + ".tmpl";
                     pairs.push(staged[i], out.text);
                 }
                 if (skipped.length > 0)
-                    console.warn("ThemeEngine: Flexoki pin left", skipped.length,
+                    console.warn("ThemeEngine:", root._pinnedRun.name, "pin left", skipped.length,
                         "expression(s) on matugen's own scheme:", skipped.join(", "));
                 var cfg = Matugen.rewriteTemplateInputs(root._pinnedConfig, function (path, index) {
                     return staged[index] !== undefined ? staged[index] : null;
@@ -544,7 +549,7 @@ Singleton {
                 }
                 root._writeTemplateCopies(pairs, function (exitCode) {
                     if (exitCode !== 0) {
-                        console.warn("ThemeEngine: failed to stage rewritten Flexoki templates, code", exitCode);
+                        console.warn("ThemeEngine: failed to stage rewritten pinned templates, code", exitCode);
                         root._finish();
                         return;
                     }
@@ -601,15 +606,16 @@ Singleton {
                 return;
             }
             if (root._pinnedRun) {
-                // The rewritten templates rendered these three in Flexoki
-                // too, but theme.json and both Hyprland palettes stay the
-                // static write's: palette.flexoki() is the shell's own
-                // authority for them (the greeter reads the same table with
-                // no matugen in reach), and its chart ramp walks accents no
-                // Material role carries.
+                // The rewritten templates rendered these three in the
+                // pinned palette too, but theme.json and both Hyprland
+                // palettes stay the static write's: the palette's shadcn
+                // view is the shell's own authority for them (the greeter
+                // reads the same table with no matugen in reach), and its
+                // chart ramp walks accents no Material role carries.
+                var pin = root._pinnedRun;
                 var discard = writeFileProcComponent.createObject(root, {
                     _onDone: function () {
-                        root._publishStatic(Palette.flexoki(Core.State.mode));
+                        root._publishStatic(pin.shadcn(Core.State.mode));
                     }
                 });
                 discard.command = ["rm", "-f", root.stateDir + "/theme.json.tmp",
