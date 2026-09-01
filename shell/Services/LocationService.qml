@@ -30,8 +30,12 @@ Singleton {
     PositionSource {
         id: positionSource
         // No point running geoclue at all once a manual override is set,
-        // it would only ever be overridden right back.
-        active: !root._hasOverride
+        // it would only ever be overridden right back. Gated on
+        // Config.loaded too: settings.json hasn't resolved yet means
+        // _hasOverride reads false regardless of what the file actually
+        // says, which would D-Bus-activate geoclue2 at boot for anyone
+        // who does set an override.
+        active: Core.Config.loaded && !root._hasOverride
         updateInterval: 60000
     }
 }

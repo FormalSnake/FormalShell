@@ -18,7 +18,10 @@ import qs.Core as Core
 Singleton {
     id: root
 
-    readonly property bool enabled: Core.Config.get("polkit.enabled", true) === true
+    // Config.loaded gated: polkit.enabled's fallback is true, so reading
+    // this before settings.json resolves would register the agent and then
+    // immediately tear it down again the instant a real `false` lands.
+    readonly property bool enabled: Core.Config.loaded && Core.Config.get("polkit.enabled", true) === true
     readonly property bool isRegistered: agentLoader.item ? agentLoader.item.isRegistered : false
     readonly property bool isActive: agentLoader.item ? agentLoader.item.isActive : false
     readonly property var flow: agentLoader.item ? agentLoader.item.flow : null

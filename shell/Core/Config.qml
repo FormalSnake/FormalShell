@@ -287,8 +287,17 @@ Singleton {
     // Same bounded-retry rationale as Theme.qml's theme.json watch: at first
     // launch settings.json (and its parent dir) may not exist yet, and a bare
     // watchChanges: true never attaches to a path whose parent dir is also
-    // missing, retry until the dir shows up (e.g. ThemeEngine creates it)
-    // and the real QFileSystemWatcher takes over from here.
+    // missing, retry until the dir shows up and the real QFileSystemWatcher
+    // takes over from here. Unlike theme.json, which ThemeEngine writes
+    // within its own first startup run either way, nothing ever writes
+    // settings.json (CLAUDE.md: the shell only reads it), so a session with
+    // no settings.json at all is a permanent, common state, not a startup
+    // race. Capped rather than restarted unconditionally: past a handful of
+    // attempts the file just isn't there, and ConfigReopen's 5s tick already
+    // covers one that shows up later (a home-manager activation reaching a
+    // session already running).
+    property int _rewatchAttempts: 0
+    readonly property int _maxRewatchAttempts: 5
     Timer {
         id: rewatchTimer
         interval: 300
@@ -311,8 +320,10 @@ Singleton {
         onLoadFailed: error => {
             root._publish("");
             root.loaded = true;
-            if (error === FileViewError.FileNotFound)
+            if (error === FileViewError.FileNotFound && root._rewatchAttempts < root._maxRewatchAttempts) {
+                root._rewatchAttempts++;
                 rewatchTimer.restart();
+            }
         }
     }
 
@@ -352,6 +363,7 @@ Singleton {
     }
 
     function _applySettings() {
+        root._rewatchAttempts = 0;
         root._publish(settingsFile.text());
         root.loaded = true;
     }

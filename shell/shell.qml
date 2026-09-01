@@ -195,9 +195,11 @@ ShellRoot {
     // Same reasoning again: one instance per panel kind, opened on the
     // focused screen at summon time. A panel nothing reads while it is
     // closed sits in a PanelSlot and is only built on its first open; the
-    // six whose closed state still feeds the bar (a cell's own numbers, or
-    // the media panel's Video behind the bar's animated cover) are built
-    // here directly.
+    // seven whose closed state still feeds something live (a cell's own
+    // numbers, the media panel's Video behind the bar's animated cover, or
+    // PowerPanel's low-battery watcher, which has to run from boot rather
+    // than from whenever the battery cell is first clicked) are built here
+    // directly.
     PanelSlot { id: appMenuPanelInstance; AppMenuPanel {} }
     PanelSlot { id: audioPanelInstance; AudioPanel {} }
     PanelSlot { id: calendarPanelInstance; CalendarPanel { menu: menuInstance } }
@@ -205,7 +207,7 @@ ShellRoot {
     PanelSlot { id: bluetoothPanelInstance; BluetoothPanel {} }
     PanelSlot { id: airpodsPanelInstance; AirpodsPanel {} }
     PanelSlot { id: dualsensePanelInstance; DualsensePanel {} }
-    PanelSlot { id: powerPanelInstance; PowerPanel {} }
+    PowerPanel { id: powerPanelInstance }
     WeatherPanel { id: weatherPanelInstance }
     MediaPanel { id: mediaPanelInstance }
     GithubPanel { id: githubPanelInstance }

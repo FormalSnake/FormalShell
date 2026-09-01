@@ -624,6 +624,11 @@ PanelWindow {
                                         // closing.
                                         readonly property bool _animated: presence.settled && root.isOpen
 
+                                        // Headroom slots (Toasts.qml:420 guards the same
+                                        // shape) carry no entry and sit at y 0 under row 0;
+                                        // without this an opacity-0 card there still
+                                        // hit-tests and swallows row 0's clicks.
+                                        visible: pendingRow._slot !== null
                                         width: parent.width
                                         y: root._pendingLayout.y[pendingRow.index] || 0
                                         Behavior on y {
@@ -674,6 +679,8 @@ PanelWindow {
                                         readonly property var _slot: root._seenSlots[seenRow.index]
                                         readonly property bool _animated: presence.settled && root.isOpen
 
+                                        // Same guard as the pending section above.
+                                        visible: seenRow._slot !== null
                                         width: parent.width
                                         y: root._seenLayout.y[seenRow.index] || 0
                                         Behavior on y {

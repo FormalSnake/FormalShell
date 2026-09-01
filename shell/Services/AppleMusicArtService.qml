@@ -21,7 +21,10 @@ import "../Media/applemusic.js" as AppleMusic
 Singleton {
     id: root
 
-    readonly property bool enabled: Core.Config.get("media.appleMusicArt", false)
+    // Config.loaded gated so a fresh boot can't read the `false` fallback
+    // as a real disable and skip the enable path below once settings.json
+    // actually resolves it true.
+    readonly property bool enabled: Core.Config.loaded && Core.Config.get("media.appleMusicArt", false)
 
     // file:// URL of the current track's downloaded animated cover, or "",
     // MediaPanel/AnimatedAlbumArt.qml's own rule (never render anything but
@@ -45,12 +48,15 @@ Singleton {
         ? AppleMusic.cacheKey(MediaService.artist, MediaService.album) : ""
 
     on_CacheKeyChanged: root._schedule()
-    onEnabledChanged: root._schedule()
-    Component.onCompleted: {
+    // Config.loaded means `enabled` never actually flips true until here,
+    // so this is the one and only place the 30-day prune can run: a
+    // Component.onCompleted prune would always see the pre-load `false`.
+    onEnabledChanged: {
         if (root.enabled)
             root._prune();
         root._schedule();
     }
+    Component.onCompleted: root._schedule()
 
     function _schedule() {
         root._serial++;
