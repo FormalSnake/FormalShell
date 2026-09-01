@@ -52,12 +52,7 @@ IpcHandler {
             isIdle: IdleService.isIdle,
             guardMediaPlayback: screensaver.guardMediaPlayback,
             mediaPlaying: MediaService.isPlaying,
-            stayAwake: IdleService.stayAwake,
-            // The output animating this activation (outputs.js), or, while
-            // inactive, the one that would be: resolved fresh on the call
-            // rather than answered from the last activation, which on a
-            // machine that has been undocked since would be a stale name.
-            mainOutput: screensaver.active ? screensaver.mainOutput : screensaver.previewMainOutput(false)
+            stayAwake: IdleService.stayAwake
         });
     }
 

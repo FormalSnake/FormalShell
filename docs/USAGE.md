@@ -1628,9 +1628,8 @@ laptop panel is on), or by the aliases `internal` (`eDP`, `LVDS`, `DSI`) and
 `external` (anything else). The list is re-applied whenever outputs change,
 so unplugging the main monitor hands the title down the list and plugging it
 back in takes it again. Unset, it is the focused output. It is read
-everywhere one screen has to be picked: the screensaver's animated head, the
-monitor panel's `MAIN DISPLAY` row, the launcher's monitor view, and this
-panel's own marker (which only appears with more than one output, since
+everywhere one screen has to be picked: the monitor panel's `MAIN DISPLAY`
+row, the launcher's monitor view, and this panel's own marker (which only appears with more than one output, since
 naming the only screen there is says nothing).
 
 ### Keyboard
@@ -2415,13 +2414,19 @@ spawned anywhere.
 
 The engine is [ttfx](https://github.com/omacom-io/ttfx), the same
 terminal-effect binary Omarchy's screensaver runs, bundled and on the
-wrapper's PATH. The shell runs it against a canvas measured in this screen's
+wrapper's PATH, invoked with Omarchy's own flags. The shell runs it against a canvas measured in this screen's
 own cells, splits its stdout on the cursor-up sequence it emits between
 frames, and paints each frame's truecolor runs itself: the animation is
 ttfx's, the glyph rendering is the shell's. That buys all 37 of its effects
 and their colors, since each arrives in its own upstream gradient (decrypt
 amber, matrix green, rain blue), which is what makes a random effect change
 the color too.
+
+The canvas is black with a white default foreground, at Omarchy's own 18pt
+banner size, since every ttfx gradient upstream is authored against black
+and a wallpaper palette behind one washes it out. A screen too narrow for
+the banner at that size shrinks the font until it fits rather than clipping
+it the way a terminal does.
 
 The block characters the banner is built from are painted as rectangles on
 the cell grid rather than as glyphs, so the banner is solid in whatever font
@@ -2450,8 +2455,8 @@ why the shell stays pure QML with nothing installed alongside it.
   "screensaver": {
     "timeoutSeconds": 300,
     "effect": "random",
-    "frameRate": 60,
-    "holdSeconds": 6,
+    "frameRate": 120,
+    "holdSeconds": 4,
     "guardMediaPlayback": true,
     "lockAfterSeconds": 0,
     "asciiPath": ""
@@ -2464,8 +2469,8 @@ why the shell stays pure QML with nothing installed alongside it.
 programs.formalshell.settings.screensaver = {
   timeoutSeconds = 300;
   effect = "random";
-  frameRate = 60;
-  holdSeconds = 6;
+  frameRate = 120;
+  holdSeconds = 4;
   guardMediaPlayback = true;
   lockAfterSeconds = 0;
   asciiPath = "";
@@ -2475,8 +2480,8 @@ programs.formalshell.settings.screensaver = {
 `effect` defaults to `random`, picking a fresh one on every activation. Pin
 it to any name the live engine knows; an unknown name falls back to random
 with a warning rather than erroring. `frameRate` is how fast ttfx is asked
-to produce frames, worth lowering on a machine where a full-screen canvas
-can't keep up.
+to produce frames, 120 like Omarchy's own screensaver, worth lowering on a
+machine where a full-screen canvas can't keep up.
 
 After converging, the banner holds for `holdSeconds`, then rerolls and
 animates again, indefinitely, until real input dismisses it. `random` never
@@ -2494,20 +2499,13 @@ track starting or ending mid-idle flips it immediately either way. Any real
 input dismisses the screensaver, and `lockAfterSeconds` (0 disables)
 optionally chains into the lock screen after it has been showing that long.
 
-**Which screen animates.** One does. Every other screen covers itself with
-the same surface holding the converged banner, painted once. A frame is a
-full-screen canvas repaint, a CPU rasterize plus a whole-surface texture
-upload, and on a hybrid laptop also a cross-GPU copy for outputs the
-compositor doesn't scan out on the shell's card, so animating every head is
-what makes a screensaver stutter on a multi-monitor session.
-
-The animating screen is the main display, `display.outputPriority`'s first
-connected entry. It is resolved at activation and held for the run, since
-re-resolving live would restart the effect from frame 0 on a screen already
-past it. Outputs arriving or leaving do re-resolve, so unplugging the
-animating screen hands the animation down the list. `screensaver status`
-reports the resolved `mainOutput` even while inactive, so a multi-head
-machine can be checked with a read instead of by covering it.
+**Which screens animate.** All of them, one ttfx run per output, the way
+Omarchy opens one screensaver terminal per monitor. Every screen carries the
+same effect, seed and cycle counter, so a multi-head session animates in
+step. A frame is a full-screen canvas repaint, a CPU rasterize plus a
+whole-surface texture upload, and on a hybrid laptop also a cross-GPU copy
+for outputs the compositor doesn't scan out on the shell's card: lower
+`frameRate` if a multi-monitor session can't keep up.
 
 **Stay awake** is an explicit session-only toggle that holds the whole
 screensaver and auto-lock chain, exactly like the media guard. It is never

@@ -89,8 +89,9 @@ function frameDelimiter(rows) {
 //     80x24 no matter what --canvas-width/height say (confirmed against the
 //     binary, omarchy doesn't need it because it really is inside a
 //     terminal, and passes --canvas-width 0 to mean "measure it").
-//   --terminal-background-color    ttfx blends against it; the surface is
-//     painted in the theme's background, not a hardcoded black.
+//   --terminal-background-color    ttfx blends against it; the caller
+//     passes the same black omarchy's screensaver terminal is pinned to,
+//     which is what every upstream effect gradient is authored against.
 //   --seed                         a pinned/recorded run has to replay
 //     identically; a live run gets the activation's own seed so successive
 //     cycles of the same effect don't animate identically.

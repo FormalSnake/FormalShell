@@ -61,7 +61,6 @@ ss_track_path="$shot_dir/ss-track.flac"
 ss_guard_status_path="$shot_dir/screensaver-guard-status.json"
 ss_auto_path="$shot_dir/screensaver-auto.png"
 ss_auto_status_path="$shot_dir/screensaver-auto-status.json"
-ss_outputs_path="$shot_dir/screensaver-outputs.json"
 ss_dismiss_status_path="$shot_dir/screensaver-dismiss-status.json"
 ss_manual_path="$shot_dir/screensaver-manual.png"
 ss_cycle_info1_path="$shot_dir/screensaver-cycle-info-1.json"
@@ -95,18 +94,7 @@ leg_screensaver_fixture() {
     -c:a flac -y "$ss_track_path"
   # holdSeconds is shortened the same way timeoutSeconds is: the cycle proof
   # waits out a real convergence and hold, just on an affordable schedule.
-  #
-  # display.outputPriority names two entries this session cannot match before
-  # one it can, so the mainOutput assertion below is about the list being
-  # walked in order rather than a single-output session having one obvious
-  # answer. "internal" is in there as the alias that must NOT match (nothing
-  # here hangs off eDP/LVDS/DSI), so a run that started matching it would be
-  # reporting the alias broke. Where the old rig could name its nested
-  # output literally ("winit"), Hyprland's own name depends on which backend
-  # brought the session up, so the entry that lands is the "external" alias.
-  # The key is shell-wide, not screensaver-owned: the screensaver is one
-  # reader of it.
-  settings_fragment ', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2'"$effect_json$ascii_json"'}, "display": {"outputPriority": ["HDMI-A-9", "internal", "external"]}'
+  settings_fragment ', "screensaver": {"timeoutSeconds": 3, "guardMediaPlayback": true, "holdSeconds": 2'"$effect_json$ascii_json"'}'
 }
 
 leg_screensaver_timing() {
@@ -149,10 +137,6 @@ if [ -f "$ss_pid_path" ]; then
 fi
 sleep 5
 "$grim_bin" "$ss_auto_path" > /dev/null 2>&1
-# The compositor's own monitor list, so the output status names as the
-# animating one can be checked against a real connector rather than merely
-# being a non-empty string.
-"$hyprctl_bin" -j monitors > "$ss_outputs_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 sleep 1
@@ -214,7 +198,7 @@ screensaver_row_profile() {
 }
 
 leg_screensaver_assert() {
-  local ss_main_output ss_hypr_output ss_cycle_effect1 ss_cycle_effect2
+  local ss_cycle_effect1 ss_cycle_effect2
   local ss_height ss_width ss_profile ss_first ss_last ss_gap_rows ss_busy ss_run
   # Guard proof: mpv still playing, the 3s idle timeout long since elapsed
   # with no real input anywhere in this session, so isIdle has to be true and
@@ -244,19 +228,6 @@ leg_screensaver_assert() {
   cat "$ss_auto_status_path"; echo
   if ! grep -q '"active":true' "$ss_auto_status_path"; then
     fail "screensaver did not auto-activate once the media guard cleared, got: $(cat "$ss_auto_status_path")"
-  fi
-  # One output animates (shell/Display/priority.js), the rest hold the
-  # converged banner. The fixture's list is walked past two entries this
-  # session cannot match, so this asserts it landed on a real connector name,
-  # never "" (nothing animating) and never an invented one.
-  if [ ! -s "$ss_outputs_path" ]; then
-    fail "no hyprland monitor dump produced for the screensaver"
-  fi
-  cat "$ss_outputs_path"; echo
-  ss_main_output=$(sed -n 's/.*"mainOutput":"\([^"]*\)".*/\1/p' "$ss_auto_status_path" | head -n1)
-  ss_hypr_output=$("$jq_bin" -r '.[0].name' "$ss_outputs_path")
-  if [ -z "$ss_main_output" ] || [ "$ss_main_output" != "$ss_hypr_output" ]; then
-    fail "screensaver mainOutput '$ss_main_output' is not hyprland's output '$ss_hypr_output', got: $(cat "$ss_auto_status_path")"
   fi
   if [ ! -s "$ss_dismiss_status_path" ] || ! grep -q '"active":false' "$ss_dismiss_status_path"; then
     fail "screensaver stop IPC call did not flip active back to false, got: $(cat "$ss_dismiss_status_path" 2>/dev/null)"

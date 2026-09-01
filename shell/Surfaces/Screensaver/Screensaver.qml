@@ -71,6 +71,20 @@ Item {
         }
     }
 
+    // ---- canvas palette and size ------------------------------------------
+    // omarchy runs its screensaver in a terminal pinned to black with a white
+    // default foreground (default/{alacritty,foot,ghostty}/screensaver*), and
+    // every ttfx gradient upstream is authored against that black. These three
+    // are deliberately not theme-derived: a wallpaper palette behind an effect
+    // that expects black washes the effect's own colors out.
+    readonly property color canvasBackground: "#000000"
+    readonly property color canvasForeground: "#ffffff"
+    // 18pt at 96dpi, the size omarchy pins every screensaver terminal to. The
+    // fit-to-width in the surface below caps it, so a screen too narrow for
+    // the banner at this size shrinks it instead of clipping it the way a
+    // terminal would.
+    readonly property real bannerFontSize: 24
+
     // ---- engine (ttfx, with effect.js as the no-binary fallback) -----------
     // ttfx is on PATH in every real install (nix/package.nix prefixes it onto
     // the wrapper), so `builtin` is what a bare `qs -p shell/` dev run, or an
@@ -96,7 +110,7 @@ Item {
     // config pinning `beams` still animates on a host with no ttfx.
 
     readonly property string _requestedEffect: Core.Config.get("screensaver.effect", "random")
-    readonly property int frameRate: Core.Config.get("screensaver.frameRate", 60)
+    readonly property int frameRate: Core.Config.get("screensaver.frameRate", 120)
     property int _activationSeed: 0
     property bool _loggedUnknownEffect: false
     property string _previousEffect: ""
@@ -117,7 +131,7 @@ Item {
     // anywhere here, so system suspend fires exactly as it would over a
     // static banner. --------------------------------------------------------
 
-    readonly property real holdSeconds: Core.Config.get("screensaver.holdSeconds", 6)
+    readonly property real holdSeconds: Core.Config.get("screensaver.holdSeconds", 4)
     readonly property int frameIntervalMs: 90
     property int cycles: 0
     readonly property int _rerollAtFrame: root.convergenceFrame() + Effect.holdFrames(root.holdSeconds, root.frameIntervalMs)
@@ -224,10 +238,6 @@ Item {
         // cycles:1 one second after a manual start, 2026-08-12).
         holdTimer.stop();
         if (root.active) {
-            // Fresh, not kept: focus moves freely while the session is awake,
-            // so the previous activation's answer says nothing about which
-            // screen was being used before this one.
-            root._resolveMainOutput(false);
             // A fresh seed per activation is what makes "random" (the
             // default) actually vary across activations instead of picking
             // once at shell startup and sticking forever. The previous-
@@ -252,38 +262,6 @@ Item {
             lockChainTimer.restart();
         else
             lockChainTimer.stop();
-    }
-
-    // ---- main output (MainOutputService) ----------------------------------
-    // The one screen that animates is the shell's main output:
-    // `display.outputPriority`'s first entry with a screen actually
-    // connected, e.g. ["HDMI", "internal"] for "the desk monitor while it's
-    // plugged in". With the key unset it's the focused output, resolved at
-    // activation rather than bound live, a focus event landing mid-run
-    // would restart ttfx on two screens at once, and nothing can move focus
-    // while the session is idle anyway.
-
-    property string mainOutput: ""
-
-    function _resolveMainOutput(keepCurrent) {
-        root.mainOutput = root.previewMainOutput(keepCurrent);
-    }
-
-    // The same answer without becoming it, so a multi-head host can be
-    // checked over `screensaver status` with a read instead of by putting a
-    // full-screen surface over a live session.
-    function previewMainOutput(keepCurrent) {
-        return MainOutputService.resolve(keepCurrent ? root.mainOutput : "");
-    }
-
-    // Bound rather than connected so this re-runs off screensChanged itself.
-    // Both directions matter: unplugging the animating screen leaves nothing
-    // animating at all without this, and plugging the priority list's first
-    // choice back in is meant to hand the animation over to it.
-    readonly property var _screens: Quickshell.screens
-    on_ScreensChanged: {
-        if (root.active)
-            root._resolveMainOutput(true);
     }
 
     // Optional chain into Lock after continued inactivity once already
@@ -317,7 +295,7 @@ Item {
                 // the two disagree, and activation is the one that means
                 // "this screensaver is running".
                 visible: root.active || content.opacity > 0
-                color: Core.Theme.color.background
+                color: root.canvasBackground
 
                 WlrLayershell.namespace: "formalshell:screensaver"
                 WlrLayershell.layer: WlrLayer.Overlay
@@ -345,17 +323,20 @@ Item {
                 readonly property real _advanceRatio: metric.implicitWidth / 1000
                 readonly property real _lineRatio: metric.implicitHeight / 100
 
-                // The banner is the entire subject of this surface (spec), so
-                // it is scaled well past body size, but never past the point
-                // where it stops fitting the screen. Before this clamp a
-                // 1276px-wide session rendered the bundled 64-column banner as
-                // "ORMALSHEL" (pre-M22),
-                // and ttfx would truncate its canvas identically. +4 columns
-                // keeps a little air at both edges.
+                // One pinned size on every screen (root.bannerFontSize), so a
+                // screen wide enough for it gets a canvas wider in cells than
+                // the banner, and the effect a field to animate across rather
+                // than a banner-shaped strip. The fit is the ceiling, not the
+                // size: a screen too narrow for the banner at 18pt (under
+                // ~950px for the bundled 62-column one) shrinks the font
+                // until it fits, where a terminal would just clip it.
+                // Before that clamp a 1276px-wide session rendered the banner
+                // as "ORMALSHEL" (pre-M22), and ttfx truncated its canvas
+                // identically. +4 columns keeps a little air at both edges.
                 readonly property real _fitFontSize: (root._banner.width > 0 && surface._advanceRatio > 0)
                     ? surface.width / ((root._banner.width + 4) * surface._advanceRatio)
-                    : Core.Theme.fontSize.body * 2.4
-                readonly property real _fontSize: Math.max(8, Math.min(Core.Theme.fontSize.body * 2.4, surface._fitFontSize))
+                    : root.bannerFontSize
+                readonly property real _fontSize: Math.max(8, Math.min(root.bannerFontSize, surface._fitFontSize))
                 readonly property real _cellWidth: Math.max(1, surface._fontSize * surface._advanceRatio)
                 // The font's own line spacing, with nothing added. This used
                 // to carry a 1.15 multiplier, which is 13% of every cell
@@ -369,25 +350,14 @@ Item {
                 readonly property int _columns: surface.visible ? Math.max(1, Math.floor(width / surface._cellWidth)) : 0
                 readonly property int _rows: surface.visible ? Math.max(1, Math.floor(height / surface._cellHeight)) : 0
 
-                // Only the main output animates (outputs.js); every other
-                // screen stays a bare background field. "" means the resolver
-                // found no outputs to choose between, which can only happen
-                // with none connected, animating then costs nothing and is
-                // the safer way to be wrong.
-                readonly property bool animated: root.mainOutput === "" || surface.modelData.name === root.mainOutput
-                onAnimatedChanged: {
-                    surface._grid = [];
-                    surface._startRun();
-                    canvas.requestPaint();
-                }
-
                 // ---- ttfx engine ---------------------------------------
-                // One process for the animating output. Its canvas is
-                // measured in that screen's own cells, so this stays inside
-                // the delegate rather than being hoisted to root, the
-                // surface that animates is decided per activation, and a
-                // hotplug can hand the run to a differently-sized screen.
-                // The effect name, seed and cycle counter all come from root.
+                // One process per output, the way omarchy runs one terminal
+                // per monitor. Its canvas is measured in that screen's own
+                // cells, so this stays inside the delegate rather than being
+                // hoisted to root, and a hotplug starts a run sized to
+                // whatever screen arrived. The effect name, seed and cycle
+                // counter all come from root, so every screen animates the
+                // same effect in step.
 
                 property var _grid: []          // parsed rows of the frame on screen
                 property int _chunks: 0         // stdout segments seen this run
@@ -418,7 +388,7 @@ Item {
                     ttfxProc.running = false;
                     surface._chunks = 0;
                     surface._runFrames = 0;
-                    if (root.engine !== "ttfx" || !root.active || !surface.animated || surface._columns <= 0 || surface._rows <= 0)
+                    if (root.engine !== "ttfx" || !root.active || surface._columns <= 0 || surface._rows <= 0)
                         return;
                     // A pinned run regenerates the effect from frame 0 and
                     // races to the requested frame with pacing disabled,
@@ -432,7 +402,7 @@ Item {
                         rows: surface._rows,
                         effect: root._effectiveEffect,
                         frameRate: pinned ? 0 : root.frameRate,
-                        background: String(Core.Theme.color.background),
+                        background: String(root.canvasBackground),
                         seed: root._activationSeed + root.cycles
                     }));
                     frameParser.splitMarker = Ttfx.frameDelimiter(surface._rows);
@@ -517,7 +487,7 @@ Item {
 
                 Timer {
                     interval: root.frameIntervalMs
-                    running: root.engine === "builtin" && surface.animated && Effect.autoTimerShouldRun(root.active, root._pinnedFrame)
+                    running: root.engine === "builtin" && Effect.autoTimerShouldRun(root.active, root._pinnedFrame)
                     repeat: true
                     onTriggered: {
                         surface._autoFrame += 1;
@@ -621,14 +591,13 @@ Item {
                         // something its paint happens to read. Frames repaint
                         // themselves, but the converged banner sits still for
                         // holdSeconds before the next cycle, and a recolor
-                        // landing in that window would hold the old palette
+                        // landing in that window would hold the old accent
                         // until it expired (a `wallpaper set` over IPC lands
                         // mid-idle with no input to dismiss the screensaver
-                        // first).
+                        // first). Only the builtin engine reads the theme at
+                        // all; ttfx's canvas is black and its own gradients.
                         readonly property color _accent: Core.Theme.color.primary
-                        readonly property color _background: Core.Theme.color.background
                         on_AccentChanged: canvas.requestPaint()
-                        on_BackgroundChanged: canvas.requestPaint()
 
                         // One run of cells laid on a strict grid, in whatever
                         // fillStyle the caller has already set.
@@ -699,14 +668,8 @@ Item {
 
                         onPaint: {
                             var ctx = canvas.getContext("2d");
-                            ctx.fillStyle = Core.Theme.color.background;
+                            ctx.fillStyle = root.canvasBackground;
                             ctx.fillRect(0, 0, width, height);
-                            // Only the main output carries the effect;
-                            // every other screen is left as a bare
-                            // background field (owner's call,
-                            // 2026-08-21).
-                            if (!surface.animated)
-                                return;
                             var banner = root._banner;
                             if (surface._columns <= 0 || surface._rows <= 0 || banner.width <= 0)
                                 return;
@@ -719,14 +682,15 @@ Item {
                             // each effect paints in its own upstream gradient
                             // (omarchy passes no gradient overrides either),
                             // and anything it leaves uncolored falls back to
-                            // the theme's foreground rather than a guess.
+                            // the same white a terminal's default foreground
+                            // gives it there.
                             if (root.engine === "ttfx") {
                                 var rows = surface._grid;
                                 for (var gr = 0; gr < rows.length; gr++) {
                                     var runs = rows[gr];
                                     for (var i = 0; i < runs.length; i++) {
                                         var run = runs[i];
-                                        ctx.fillStyle = run.color.length > 0 ? run.color : Core.Theme.color.foreground;
+                                        ctx.fillStyle = run.color.length > 0 ? run.color : root.canvasForeground;
                                         canvas.paintCells(ctx, run.text, run.col, gr, 1);
                                     }
                                 }
