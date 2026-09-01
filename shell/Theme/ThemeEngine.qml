@@ -111,6 +111,7 @@ Singleton {
     readonly property string _hyprChromeLuaPath: root._configDir + "/hypr/formalshell-chrome.lua"
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
     readonly property string _templateBoundary: "#--formalshell-template-boundary--"
+    readonly property string _chromeBoundary: "#--formalshell-chrome-boundary--"
     // Where a Flexoki-pinned run stages the rewritten copy of every template
     // it is about to hand matugen. Regenerated per run, never read back.
     readonly property string _flexokiDir: root.stateDir + "/flexoki-templates"
@@ -152,6 +153,18 @@ Singleton {
             root.pending = false;
             root.retheme();
         }
+    }
+
+    // quickshell's Process emits no `exited` when the command never starts
+    // (NightLightService.qml's own learned idiom: onErrorOccurred only
+    // emits runningChanged for FailedToStart). Every named Process in the
+    // retheme pipeline is one step `_finish()` is reached through, so a
+    // missing `matugen` or `sh` would otherwise latch `running` true
+    // forever and leave every later retheme() call only setting `pending`
+    // with nothing left to ever clear it.
+    function _pipelineFailedToStart(bin) {
+        console.warn("ThemeEngine:", bin, "not found (failed to start)");
+        root._finish();
     }
 
     function _writeFile(path, content, onDone) {
@@ -202,20 +215,80 @@ Singleton {
     // _publishFile is atomic per file, so two overlapping writes of the same
     // content cannot tear, and queueing them behind a matugen run would only
     // delay a value that is already known.
-    function _publishHyprChrome(onDone) {
-        var chrome = {
-            rounding: Core.Theme.radius,
-            blur: Core.Theme.blurBehind
-        };
-        root._publishFile(root._hyprChromePath, Chrome.hyprlandChrome(chrome), confCode => {
+    function _writeChromeFiles(confText, luaText, onDone) {
+        root._publishFile(root._hyprChromePath, confText, confCode => {
             if (confCode !== 0)
                 console.warn("ThemeEngine: failed to write formalshell-chrome.conf, code", confCode);
-            root._publishFile(root._hyprChromeLuaPath, Chrome.hyprlandChromeLua(chrome), luaCode => {
+            root._publishFile(root._hyprChromeLuaPath, luaText, luaCode => {
                 if (luaCode !== 0)
                     console.warn("ThemeEngine: failed to write formalshell-chrome.lua, code", luaCode);
                 onDone();
             });
         });
+    }
+
+    // Hyprland re-reads a sourced hyprlang file the moment it changes, so an
+    // unchanged startup still re-arranges every layer if this writes and
+    // reloads unconditionally. Probes the two files on disk first (a `cat`,
+    // empty when either is absent, which never equals real chrome text --
+    // a fresh install still gets its first write, docs/DESIGN.md's "must
+    // exist from first run") and skips both the write and the reload when
+    // the rendered text already matches. A probe that can't say (failed to
+    // start, or `text` null below) publishes unconditionally rather than
+    // risk silently skipping a real change.
+    function _publishHyprChrome(onDone) {
+        var chrome = {
+            rounding: Core.Theme.radius,
+            blur: Core.Theme.blurBehind
+        };
+        var confText = Chrome.hyprlandChrome(chrome);
+        var luaText = Chrome.hyprlandChromeLua(chrome);
+        var probe = chromeProbeComponent.createObject(root, {
+            _onResult: function (text) {
+                if (text !== null) {
+                    var parts = text.split(root._chromeBoundary);
+                    if ((parts[0] || "") === confText && (parts[1] || "") === luaText) {
+                        onDone();
+                        return;
+                    }
+                }
+                root._writeChromeFiles(confText, luaText, onDone);
+            }
+        });
+        probe.command = ["sh", "-c",
+            'cat "$1" 2>/dev/null; printf \'%s\' "$3"; cat "$2" 2>/dev/null',
+            "sh", root._hyprChromePath, root._hyprChromeLuaPath, root._chromeBoundary];
+        probe.running = true;
+    }
+
+    // Ephemeral per call, the same reason writeFileProcComponent is: two
+    // publishes racing (radius and blur landing in the same tick) must not
+    // share one Process and drop a callback.
+    Component {
+        id: chromeProbeComponent
+
+        Process {
+            id: chromeProbeProc
+            property var _onResult
+            property bool _sawExit: false
+
+            stdout: StdioCollector {
+                id: chromeProbeOut
+                onStreamFinished: {
+                    chromeProbeProc._sawExit = true;
+                    var cb = chromeProbeProc._onResult;
+                    chromeProbeProc.destroy();
+                    cb(chromeProbeOut.text);
+                }
+            }
+            onRunningChanged: {
+                if (chromeProbeProc.running || chromeProbeProc._sawExit)
+                    return;
+                var cb = chromeProbeProc._onResult;
+                chromeProbeProc.destroy();
+                cb(null);
+            }
+        }
     }
 
     // Hyprland re-reads a hyprlang file it sourced itself the moment it
@@ -245,8 +318,21 @@ Singleton {
         id: writeFileProcComponent
 
         Process {
+            id: writeFileProc
             property var _onDone
+            property bool _sawExit: false
+            // A missing `sh` synthesizes the same nonzero-exit-code shape
+            // every _onDone callback already handles (warn and carry on),
+            // so no call site needs its own FailedToStart branch.
+            onRunningChanged: {
+                if (writeFileProc.running || writeFileProc._sawExit)
+                    return;
+                var cb = _onDone;
+                destroy();
+                cb(-1);
+            }
             onExited: exitCode => {
+                writeFileProc._sawExit = true;
                 var cb = _onDone;
                 destroy();
                 cb(exitCode);
@@ -283,9 +369,13 @@ Singleton {
 
     // The static write the no-wallpaper zinc path and a Flexoki pin both end
     // on: theme.json straight from the palette object, then both Hyprland
-    // colours files, then one reload.
+    // colours files, then one reload. Goes through _publishFile rather than
+    // _writeFile: Core/Theme.qml watches theme.json directly, and _writeFile
+    // truncates before writing, so a reload catching that window would flip
+    // the shell to the fallback palette (the matugen path already renames
+    // atomically for the same reason).
     function _publishStatic(palette) {
-        root._writeFile(root._themeJsonPath, JSON.stringify(palette, null, 2), exitCode => {
+        root._publishFile(root._themeJsonPath, JSON.stringify(palette, null, 2), exitCode => {
             if (exitCode !== 0)
                 console.warn("ThemeEngine: failed to write static theme.json, code", exitCode);
             else
@@ -306,6 +396,7 @@ Singleton {
             root._publishStatic(Palette.fallback(Core.State.mode));
             return;
         }
+        readConfigsProc._sawExit = false;
         readConfigsProc.command = ["sh", "-c",
             'cat "$1" 2>/dev/null; echo "$3"; for f in "$2"/*.toml; do [ -f "$f" ] && cat "$f" && echo; done',
             "sh", root._userConfigPath, root._dropInDir, root._dropInBoundary];
@@ -314,9 +405,17 @@ Singleton {
 
     Process {
         id: readConfigsProc
+        property bool _sawExit: false
+
+        onRunningChanged: {
+            if (readConfigsProc.running || readConfigsProc._sawExit)
+                return;
+            root._pipelineFailedToStart("sh");
+        }
 
         stdout: StdioCollector {
             onStreamFinished: {
+                readConfigsProc._sawExit = true;
                 var parts = text.split(root._dropInBoundary);
                 var userConfigText = parts[0] || null;
                 var dropInsText = (parts[1] || "").trim();
@@ -359,6 +458,7 @@ Singleton {
         // cannot be read comes back as an empty section and keeps its
         // original input_path, so matugen fails on it exactly as it would
         // have without the pin.
+        readTemplatesProc._sawExit = false;
         readTemplatesProc.command = ["sh", "-c",
             "for f in \"$@\"; do printf '%s\\n' \"$0\"; cat \"$f\" 2>/dev/null; done",
             root._templateBoundary].concat(root._pinnedInputs);
@@ -386,6 +486,7 @@ Singleton {
                 return;
             }
             if (root._pinnedRun) {
+                matugenProc._sawExit = false;
                 matugenProc.command = ["matugen", "color", "hex", Palette.FLEXOKI_SOURCE,
                     "-m", Core.State.mode, "-c", root._mergedConfigPath];
                 matugenProc.running = true;
@@ -394,6 +495,7 @@ Singleton {
             // Extraction only: --dry-run writes no template and runs
             // no command, and -d is what prints the ranking. -q would
             // silence that ranking, so it is deliberately absent.
+            sourceProbeProc._sawExit = false;
             sourceProbeProc.command = ["matugen", "-d", "image", Core.State.wallpaper, "--dry-run",
                 "--prefer", "saturation"];
             sourceProbeProc.running = true;
@@ -402,9 +504,17 @@ Singleton {
 
     Process {
         id: readTemplatesProc
+        property bool _sawExit: false
+
+        onRunningChanged: {
+            if (readTemplatesProc.running || readTemplatesProc._sawExit)
+                return;
+            root._pipelineFailedToStart("sh");
+        }
 
         stdout: StdioCollector {
             onStreamFinished: {
+                readTemplatesProc._sawExit = true;
                 var sections = text.split(root._templateBoundary + "\n");
                 var staged = ({});
                 var pairs = [];
@@ -446,18 +556,27 @@ Singleton {
 
     Process {
         id: sourceProbeProc
+        property bool _sawExit: false
 
         stderr: StdioCollector {
             id: sourceProbeErr
         }
 
+        onRunningChanged: {
+            if (sourceProbeProc.running || sourceProbeProc._sawExit)
+                return;
+            root._pipelineFailedToStart("matugen");
+        }
+
         onExited: exitCode => {
+            sourceProbeProc._sawExit = true;
             var source = exitCode === 0 ? Matugen.rankedSourceColor(sourceProbeErr.text) : null;
             if (!source)
                 console.warn("ThemeEngine: no source-color ranking from matugen (code", exitCode + "), falling back to --prefer saturation");
             var pick = source
                 ? ["--prefer", "closest-to-fallback", "--fallback-color", source]
                 : ["--prefer", "saturation"];
+            matugenProc._sawExit = false;
             matugenProc.command = ["matugen", "image", Core.State.wallpaper, "-m", Core.State.mode,
                 "-c", root._mergedConfigPath].concat(pick);
             matugenProc.running = true;
@@ -466,8 +585,16 @@ Singleton {
 
     Process {
         id: matugenProc
+        property bool _sawExit: false
+
+        onRunningChanged: {
+            if (matugenProc.running || matugenProc._sawExit)
+                return;
+            root._pipelineFailedToStart("matugen");
+        }
 
         onExited: exitCode => {
+            matugenProc._sawExit = true;
             if (exitCode !== 0) {
                 console.warn("ThemeEngine: matugen exited with code", exitCode);
                 root._finish();
@@ -491,6 +618,7 @@ Singleton {
                 return;
             }
             // One mkdir covers both Hyprland paths, they share a directory.
+            renameProc._sawExit = false;
             renameProc.command = ["sh", "-c",
                 'mv -f "$1" "$2" && mkdir -p "$(dirname "$4")" && mv -f "$3" "$4" && mv -f "$5" "$6"',
                 "sh",
@@ -503,8 +631,16 @@ Singleton {
 
     Process {
         id: renameProc
+        property bool _sawExit: false
+
+        onRunningChanged: {
+            if (renameProc.running || renameProc._sawExit)
+                return;
+            root._pipelineFailedToStart("sh");
+        }
 
         onExited: exitCode => {
+            renameProc._sawExit = true;
             if (exitCode !== 0) {
                 console.warn("ThemeEngine: failed to publish theme.json/formalshell-colors.{conf,lua}, code", exitCode);
                 root._finish();
@@ -550,9 +686,20 @@ Singleton {
 
     // A live settings.json edit moves these two without any wallpaper or mode
     // change behind it, so the chrome file has its own trigger rather than
-    // riding the retheme one.
+    // riding the retheme one. Held disabled until Config.loaded (IdleService.
+    // qml's own gate pattern, ~:66): Theme.radius/blurBehind read straight off
+    // Config.get(), so the jump from their pre-load defaults to the real
+    // settings.json values would otherwise fire this the moment Config.loaded
+    // flips, right on top of themeProbe's own startup publish above.
+    // _armChromeConnections() below still publishes once at arm time, since
+    // themeProbe may itself have already run against the pre-load defaults
+    // (its own timing is independent of Config's) -- the byte-compare in
+    // _publishHyprChrome makes that catch-up call a no-op whenever nothing
+    // was actually missed.
     Connections {
+        id: chromeChangeConnections
         target: Core.Theme
+        enabled: false
         function onRadiusChanged() {
             root._publishHyprChrome(function () {
                 root._reloadHyprland();
@@ -563,5 +710,25 @@ Singleton {
                 root._reloadHyprland();
             });
         }
+    }
+
+    function _armChromeConnections() {
+        chromeChangeConnections.enabled = true;
+        root._publishHyprChrome(function () {
+            root._reloadHyprland();
+        });
+    }
+
+    Connections {
+        target: Core.Config
+        function onLoadedChanged() {
+            if (Core.Config.loaded)
+                root._armChromeConnections();
+        }
+    }
+
+    Component.onCompleted: {
+        if (Core.Config.loaded)
+            root._armChromeConnections();
     }
 }

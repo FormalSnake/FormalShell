@@ -132,6 +132,11 @@ Singleton {
     property string _finalizeSource: ""
     property string _finalizeProcessed: ""
     property bool _finalizeReencode: false
+    // Shared across the three-stage finalize chain (probe video, probe
+    // audio, ffmpeg), reset immediately before each stage starts: whichever
+    // stage's onRunningChanged sees it still false knows that stage never
+    // started, recProc's own FailedToStart idiom below.
+    property bool _finalizeSawExit: false
     property string _previewSource: ""
     property string _previewCleanupPath: ""
     // Webcam overlay state (M27 Task 5). _webcamTarget/_webcamAudioDevice are
@@ -497,9 +502,20 @@ Singleton {
         }
         root.finalizing = true;
         root._finalizeSource = path;
+        root._finalizeSawExit = false;
         finalizeProbeVideoProc.command = ["ffprobe", "-v", "error", "-select_streams", "v:0",
             "-read_intervals", "%+0.2", "-show_entries", "packet=flags", "-of", "csv=p=0", path];
         finalizeProbeVideoProc.running = true;
+    }
+
+    // A missing ffprobe/ffmpeg stops the finalize chain with no `exited`
+    // (recProc's own FailedToStart idiom above), which would otherwise
+    // latch `finalizing` forever and withhold the SAVED notification. Falls
+    // back to the same "keep the raw file" outcome a probe or ffmpeg
+    // failure already produces.
+    function _finalizeFailedToStart(why) {
+        console.warn("RecordingService:", why);
+        root._announceSaved(root._finalizeSource);
     }
 
     // The file itself is already fully settled here (finalizeCleanupProc's
@@ -790,8 +806,15 @@ Singleton {
         stdout: StdioCollector {
             id: finalizeVideoOut
         }
+        onRunningChanged: {
+            if (finalizeProbeVideoProc.running || root._finalizeSawExit)
+                return;
+            root._finalizeFailedToStart("ffprobe not found (failed to start)");
+        }
         onExited: exitCode => {
+            root._finalizeSawExit = true;
             root._finalizeReencode = Capture.finalizeNeedsReencode(finalizeVideoOut.text);
+            root._finalizeSawExit = false;
             finalizeProbeAudioProc.command = ["ffprobe", "-v", "error", "-select_streams", "a",
                 "-show_entries", "stream=codec_type", "-of", "csv=p=0", root._finalizeSource];
             finalizeProbeAudioProc.running = true;
@@ -804,13 +827,20 @@ Singleton {
         stdout: StdioCollector {
             id: finalizeAudioOut
         }
+        onRunningChanged: {
+            if (finalizeProbeAudioProc.running || root._finalizeSawExit)
+                return;
+            root._finalizeFailedToStart("ffprobe not found (failed to start)");
+        }
         onExited: exitCode => {
+            root._finalizeSawExit = true;
             const hasAudio = Capture.finalizeHasAudio(finalizeAudioOut.text);
             root._finalizeProcessed = Capture.finalizeOutputPath(root._finalizeSource);
             finalizeProc.command = Capture.finalizeArgv(root._finalizeSource, root._finalizeProcessed, {
                 reencode: root._finalizeReencode,
                 hasAudio: hasAudio
             });
+            root._finalizeSawExit = false;
             finalizeProc.running = true;
         }
     }
@@ -821,7 +851,13 @@ Singleton {
         stderr: StdioCollector {
             id: finalizeErr
         }
+        onRunningChanged: {
+            if (finalizeProc.running || root._finalizeSawExit)
+                return;
+            root._finalizeFailedToStart("ffmpeg not found (failed to start)");
+        }
         onExited: exitCode => {
+            root._finalizeSawExit = true;
             if (exitCode === 0) {
                 finalizeCleanupProc.command = ["mv", root._finalizeProcessed, root._finalizeSource];
             } else {
