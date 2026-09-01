@@ -15,6 +15,11 @@ import qs.Core
 Scope {
     id: root
     required property var modelData
+    // shell.qml's startup reveal gate. Every number a zone reserves comes
+    // out of settings.json, so a zone mapped before it lands reserves a
+    // default band and then republishes, which is a reflow of every tiled
+    // window on the output.
+    property bool ready: false
 
     readonly property bool _on: Theme.frameEnabled
 
@@ -22,7 +27,7 @@ Scope {
         id: zone
         required property string edge
         screen: root.modelData
-        visible: root._on
+        visible: root._on && root.ready
         anchors {
             top: zone.edge !== "bottom"
             bottom: zone.edge !== "top"

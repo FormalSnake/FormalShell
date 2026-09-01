@@ -33,6 +33,7 @@ Cell {
     // "Motion", M16 Task 2's contract, extended to every numeric bar cell
     // by M26 Task 7).
     Behavior on implicitWidth {
+        enabled: root.animateSize
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 

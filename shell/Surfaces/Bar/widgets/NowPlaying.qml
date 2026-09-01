@@ -85,10 +85,12 @@ Cell {
     // shoving the bar's other widgets instantly (DESIGN.md §4, M16 Task 2).
     // Both axes, since which one the cell grows along is the bar's edge.
     Behavior on implicitWidth {
+        enabled: root.animateSize
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 
     Behavior on implicitHeight {
+        enabled: root.animateSize
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 

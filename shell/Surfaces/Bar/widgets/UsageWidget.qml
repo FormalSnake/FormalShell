@@ -51,6 +51,7 @@ Cell {
     // The worst-window percent resizes this cell: glide the width instead of
     // shoving the bar's other widgets instantly (DESIGN.md §1 "Motion").
     Behavior on implicitWidth {
+        enabled: root.animateSize
         NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
     }
 

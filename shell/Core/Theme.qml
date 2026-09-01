@@ -26,7 +26,12 @@ Singleton {
     // set) replaces the placeholder outright instead of crossfading from it
     // (M51 D6/D9's boot rule). Background.qml's `_suppressTopFade` guards
     // the wallpaper crossfade the same way, for the same reason.
-    property bool _paletteReady: false
+    //
+    // Public, and one third of shell.qml's startup reveal gate (M52): the
+    // boot surfaces wait on it so they map already carrying the real
+    // palette. Both FileView branches funnel through `_applyPalette`, so an
+    // absent theme.json flips this as surely as a parsed one.
+    property bool paletteReady: false
 
     // theme.json's shadcn color roles (M51 D6): every key crossfades to a
     // new palette over `motion.reveal` on a mode toggle, a matugen
@@ -73,32 +78,32 @@ Singleton {
         property color chart4: root._bootFallback.chart4
         property color chart5: root._bootFallback.chart5
 
-        Behavior on background { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on foreground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on card { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on cardForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on popover { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on popoverForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on primary { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on primaryForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on secondary { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on secondaryForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on muted { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on mutedForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on accent { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on accentForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on destructive { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on destructiveForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on warning { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on warningForeground { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on border { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on input { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on ring { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart1 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart2 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart3 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart4 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart5 { enabled: root._paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on background { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on foreground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on card { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on cardForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on popover { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on popoverForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on primary { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on primaryForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on secondary { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on secondaryForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on muted { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on mutedForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on accent { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on accentForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on destructive { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on destructiveForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on warning { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on warningForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on border { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on input { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on ring { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart1 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart2 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart3 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart4 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on chart5 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
     }
 
     // theme.preset (M49 D1): one table of defaults behind the chrome knobs
@@ -372,6 +377,6 @@ Singleton {
     function _applyPalette(palette) {
         root.color.mode = palette.mode;
         Palette.COLOR_KEYS.forEach(key => root.color[key] = palette[key]);
-        root._paletteReady = true;
+        root.paletteReady = true;
     }
 }

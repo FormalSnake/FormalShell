@@ -25,12 +25,15 @@ import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
 import qs.Surfaces.Gallery
 import qs.Components
+import qs.Core
 import qs.Ipc
 import qs.Plugins
 import qs.Reminders
 import qs.Services
 
 ShellRoot {
+    id: shellRoot
+
     // Single-instance takeover lock (post-M16 addendum), wired first so a
     // stale/duplicate instance is caught before any surface renders. See
     // InstanceLock.qml's own header comment for the takeover protocol.
@@ -54,11 +57,38 @@ ShellRoot {
     // gate is there for.
     readonly property var _startupServices: [ClipboardService, ThumbnailService]
 
+    // The startup reveal gate (M52, DESIGN.md §1 Motion): the three boot
+    // surfaces below stay unmapped until the shell knows what it is drawing.
+    // settings.json, theme.json and the plugin scan all land after the
+    // process starts, and a layer surface mapped ahead of them publishes a
+    // default exclusive zone, a default palette and a default layout, then
+    // republishes each one as it arrives, with the compositor reflowing every
+    // tiled window behind it. A window that maps once, at its final geometry,
+    // costs a session one reflow instead of several seconds of them.
+    //
+    // All three flags flip on their own failure branches (an absent
+    // settings.json, an absent theme.json, a scan that finds no plugins), so
+    // a fresh install reveals as fast as a configured one. The backstop
+    // covers the case none of them can: a FileView whose watch never attaches
+    // answers neither way, and a shell that never maps is worse than one that
+    // maps on a default.
+    readonly property bool _ready: (Config.loaded && Theme.paletteReady && PluginService.loaded)
+        || readyBackstop.fired
+
+    Timer {
+        id: readyBackstop
+        // Not `triggered`, which is Timer's own signal.
+        property bool fired: false
+        interval: 400
+        running: true
+        onTriggered: readyBackstop.fired = true
+    }
+
     Variants {
         model: Quickshell.screens
 
         delegate: Component {
-            Background {}
+            Background { ready: shellRoot._ready }
         }
     }
 
@@ -67,6 +97,7 @@ ShellRoot {
 
         delegate: Component {
             Bar {
+                ready: shellRoot._ready
                 menu: menuInstance
                 appMenuPanel: appMenuPanelInstance
                 audioPanel: audioPanelInstance
@@ -96,7 +127,7 @@ ShellRoot {
         model: Quickshell.screens
 
         delegate: Component {
-            Frame {}
+            Frame { ready: shellRoot._ready }
         }
     }
 

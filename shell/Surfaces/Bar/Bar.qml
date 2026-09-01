@@ -79,7 +79,16 @@ PanelWindow {
     // The single Center instance (shell.qml's notificationsCenter), the
     // bell widget toggles it directly, same object NotificationsIpc drives.
     property var center: null
+    // shell.qml's startup reveal gate. Everything about this window's
+    // geometry is config-derived (its edge, its thickness, whether it is the
+    // strip or the whole output), and `exclusionMode: Auto` publishes the
+    // reservation off that geometry, so mapping before settings.json lands
+    // means publishing a zone twice and reflowing every tiled window with it.
+    // Unmapped reserves nothing, which is why a session now shifts its
+    // windows once, when the bar arrives, instead of over and over.
+    property bool ready: false
     screen: modelData
+    visible: bar.ready
     // The strip spans its own edge end to end and hugs that edge. With the
     // screen frame on the window is the whole output instead: it paints
     // the frame's ring, the strip included, and its cells over it, so the
@@ -539,6 +548,13 @@ PanelWindow {
                 // so a cell created against the default edge has to follow
                 // the bar to its real one.
                 entryLoader.item.barEdge = Qt.binding(function () { return bar._position; });
+                // Guarded, unlike the two above: `animateSize` lives on
+                // Cell, and the two group rails (Tray, Indicators) are the
+                // one widget kind whose root is not one. Neither carries a
+                // size Behavior to arm, so there is nothing to forward
+                // through them.
+                if (entryLoader.item.animateSize !== undefined)
+                    entryLoader.item.animateSize = Qt.binding(function () { return bar._revealed; });
                 if (entryLoader.modelData.kind === "module")
                     entryLoader.item.module = entryLoader.modelData.module;
                 else if (entryLoader.modelData.kind === "plugin")
@@ -550,6 +566,26 @@ PanelWindow {
             }
         }
     }
+
+    // The strip's own entrance (DESIGN.md §1 Motion, M51 D2's grammar): the
+    // window maps at its final geometry and the cells arrive in from the
+    // bar's edge behind it, so the one reflow the map costs lands under a
+    // deliberate movement rather than as a jump. Fade and slide only, no
+    // zoom: `motion.zoom` on a surface as wide as the output pulls both ends
+    // ~30px in and reads as the bar being the wrong length, not as depth.
+    Presence {
+        id: presence
+        open: bar.ready
+        edge: bar._position
+    }
+
+    // Cells arm their own width Behaviors off this (Components/Cell.qml's
+    // `animateSize`, pushed by the region delegate above). Held false until
+    // the entrance above has settled, so the async service answers landing
+    // over a session's first second (a battery percentage, a weather poll, a
+    // now-playing title) join the layout the strip arrives with instead of
+    // gliding twelve cells open one at a time behind it.
+    readonly property bool _revealed: presence.open && presence.settled
 
     // The frame's ring (Surfaces/Frame/FrameRing.qml), behind the strip
     // and only while the window is the whole output.
@@ -568,6 +604,12 @@ PanelWindow {
         y: bar._framed && bar._position === "bottom" ? parent.height - bar._strip.thickness : 0
         width: bar._framed && bar._vertical ? bar._strip.thickness : parent.width
         height: bar._framed && !bar._vertical ? bar._strip.thickness : parent.height
+
+        opacity: presence.opacity
+        transform: Translate {
+            x: presence.slideX
+            y: presence.slideY
+        }
 
         // Declared before the regions, so it stacks behind every cell. With the
         // screen frame on, the ring below already paints the strip as part of

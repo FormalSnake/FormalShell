@@ -46,7 +46,12 @@ import qs.Core as Core
 PanelWindow {
     id: background
     required property var modelData
+    // shell.qml's startup reveal gate. No entrance of its own: this surface
+    // is the ground every other one sits on, and the wallpaper's own hard
+    // cut below is what the first frame shows.
+    property bool ready: false
     screen: modelData
+    visible: background.ready
     anchors { top: true; bottom: true; left: true; right: true }
     color: Core.Theme.color.background
     WlrLayershell.layer: WlrLayer.Background
@@ -86,6 +91,14 @@ PanelWindow {
 
     function _applyWallpaper(path) {
         var url = background._wallpaperUrl(path);
+        // The empty wallpaper is not a first paint. State.wallpaper is ""
+        // until state.json lands, which is after this surface is built, so
+        // the Component.onCompleted call below used to spend the hard-cut
+        // path on nothing and leave the wallpaper the user actually set to
+        // arrive on the 400ms crossfade, off the boot palette's flat ground.
+        // Nothing is on screen to fade from here, so there is nothing to do.
+        if (background._firstPaint && url === "")
+            return;
         if (background._firstPaint || Core.Theme.motion.reveal === 0) {
             background._firstPaint = false;
             background._hasQueued = false;

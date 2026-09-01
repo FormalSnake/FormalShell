@@ -108,6 +108,15 @@ Item {
     // is open (DESIGN.md §3 Bar).
     property bool panelOpen: false
 
+    // Arms the `Behavior on implicitWidth` a dozen bar cells carry over
+    // their own changing content (Clock, Battery, Weather, NowPlaying and
+    // the rest). False makes a width change land in one frame instead.
+    // Bar.qml holds it false until the strip's entrance has settled, so a
+    // session's first second of async service answers arrives as one layout
+    // rather than as a dozen cells gliding open in sequence. Every cell
+    // elsewhere in the shell keeps the default and is untouched.
+    property bool animateSize: true
+
     // Hover paints below both fills (active > selected > hover).
     readonly property bool _hoverFillActive: root.hovered && !root.active && !root.selected
 

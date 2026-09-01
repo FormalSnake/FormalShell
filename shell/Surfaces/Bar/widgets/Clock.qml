@@ -35,10 +35,12 @@ Cell {
     // cell in the region instantly (DESIGN.md §4, M16 Task 2's contract).
     // Both axes, since which one the swap moves is the bar's edge.
     Behavior on implicitWidth {
+        enabled: root.animateSize
         NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
     }
 
     Behavior on implicitHeight {
+        enabled: root.animateSize
         NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
     }
 
