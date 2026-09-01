@@ -119,7 +119,7 @@ Panel {
     readonly property var _wiredEntries: root._entries.filter(function (e) { return e.device.type === DeviceType.Wired; })
     readonly property var _wifiEntries: root._entries.filter(function (e) { return e.device.type === DeviceType.Wifi; })
 
-    readonly property var _wifiSorted: NetworkModel.sortWifiRows(root._wifiEntries.map(function (e) {
+    readonly property var _wifiRows: NetworkModel.sortWifiRows(root._wifiEntries.map(function (e) {
         return {
             device: e.device,
             network: e.network,
@@ -129,6 +129,30 @@ Panel {
             security: e.network.security
         };
     }))
+
+    // Republished only when the resolved rows actually differ from the last
+    // publish: a scan tick recomputes _wifiRows on every poll even with
+    // nothing new to show, and the Repeater at ~:1439 rebuilding on every
+    // one of those destroys the inline passphrase Input mid-scan, dropping
+    // whatever the user is typing. Compared on the primitive fields rather
+    // than the row objects, since device/network are live Quickshell
+    // objects, not JSON-safe data.
+    property var _wifiSorted: []
+    property string _wifiSortedKey: "[]"
+
+    function _publishWifiSorted() {
+        var rows = root._wifiRows;
+        var key = JSON.stringify(rows.map(function (r) {
+            return [r.device.name, r.network.name, r.connected, r.known, r.signalStrength, r.security];
+        }));
+        if (key === root._wifiSortedKey)
+            return;
+        root._wifiSortedKey = key;
+        root._wifiSorted = rows;
+    }
+
+    on_WifiRowsChanged: root._publishWifiSorted()
+
     readonly property var _wifiDevices: Networking.devices.values.filter(function (d) { return d.type === DeviceType.Wifi; })
     readonly property bool _hasWifiDevice: root._wifiDevices.length > 0
 
@@ -155,7 +179,10 @@ Panel {
     }
 
     on_WifiDevicesChanged: root._applyScanner()
-    Component.onCompleted: root._applyScanner()
+    Component.onCompleted: {
+        root._applyScanner();
+        root._publishWifiSorted();
+    }
 
     onIsOpenChanged: {
         root._applyScanner();

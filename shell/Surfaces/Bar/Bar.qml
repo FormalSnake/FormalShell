@@ -132,10 +132,31 @@ PanelWindow {
         return result;
     }
 
-    // Recomputes (and re-warns) whenever Config.settings changes, Config.get()
-    // reads that property internally, so this binding tracks it same as any
-    // other Config.get() consumer in the shell.
-    readonly property var _layout: bar._resolveLayout()
+    // Private and always fresh: layout.js's _resolveRegion() returns new
+    // arrays on every call, tracking Config.settings and
+    // PluginService.barPlugins the same as the old raw binding did. Only
+    // `_layout` below controls whether that freshness reaches consumers.
+    readonly property var _resolvedLayout: bar._resolveLayout()
+
+    // Republished only when the resolved regions' JSON differs from the
+    // last publish, so the three region Repeaters below (~:644, :669, :700)
+    // keep their model identity, and with it hover/press state and any open
+    // panel, across a Config republish or plugin rescan that didn't
+    // actually change the layout. Same split as HyprlandBackend.qml's
+    // workspaces/windows dedupe.
+    property var _layout: ({ regions: { left: [], center: [], right: [] }, warnings: [] })
+    property string _layoutRegionsJson: ""
+
+    function _publishLayout() {
+        var json = JSON.stringify(bar._resolvedLayout.regions);
+        if (json === bar._layoutRegionsJson)
+            return;
+        bar._layoutRegionsJson = json;
+        bar._layout = bar._resolvedLayout;
+    }
+
+    on_ResolvedLayoutChanged: bar._publishLayout()
+    Component.onCompleted: bar._publishLayout()
 
     readonly property string _position: Theme.barPosition
     readonly property bool _vertical: Theme.barVertical

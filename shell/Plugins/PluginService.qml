@@ -146,13 +146,22 @@ Singleton {
     Component.onCompleted: root.rescan()
     onDisabledIdsChanged: root.rescan()
 
+    // A zero-plugin install still runs the scan on every rescan, and
+    // Manifest.resolve returns a fresh empty array each time; reassigning it
+    // rebuilds every Repeater keyed on `plugins` for no reason.
+    property string _pluginsJson: "[]"
+
     Process {
         id: scanProc
 
         stdout: StdioCollector {
             onStreamFinished: {
                 var result = Manifest.resolve(text, JSON.parse(root.disabledIds));
-                root.plugins = result.plugins;
+                var json = JSON.stringify(result.plugins);
+                if (json !== root._pluginsJson) {
+                    root._pluginsJson = json;
+                    root.plugins = result.plugins;
+                }
                 root.byId = result.byId;
                 root.warnings = result.warnings;
                 root.loaded = true;

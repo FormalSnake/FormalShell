@@ -32,7 +32,10 @@ Cell {
     id: root
 
     // Which region's group this cell holds, and that region's whole resolved
-    // entry array (the source of the names below). Set by Bar.qml.
+    // entry array (the source of the names below). Set by Bar.qml, which
+    // republishes `_layout` only when the resolved regions actually differ,
+    // so a Config or plugin-scan tick that changes nothing leaves this cell
+    // alone rather than resetting it.
     property string region: ""
     property var regionEntries: []
 

@@ -30,8 +30,34 @@ Cell {
 
     property string outputName: ""
 
-    readonly property var visibleWorkspaces: WorkspacesModel.visibleModel(
-        CompositorService.workspaces, CompositorService.windows, root.outputName)
+    // Maintained rather than a raw binding on CompositorService.workspaces/
+    // windows: HyprlandBackend.qml keeps windows apart from workspaces so a
+    // title-only tick can't republish the workspace list (its own header
+    // comment says so), but visibleModel() reads both, so a raw binding here
+    // would rebuild every dot on every title change anyway. Recomputed on
+    // both inputs and published only when the resolved model actually
+    // differs, closing that gap.
+    property var visibleWorkspaces: []
+    property string _visibleWorkspacesJson: "[]"
+
+    function _updateVisibleWorkspaces() {
+        var next = WorkspacesModel.visibleModel(
+            CompositorService.workspaces, CompositorService.windows, root.outputName);
+        var json = JSON.stringify(next);
+        if (json === root._visibleWorkspacesJson)
+            return;
+        root._visibleWorkspacesJson = json;
+        root.visibleWorkspaces = next;
+    }
+
+    onOutputNameChanged: root._updateVisibleWorkspaces()
+    Component.onCompleted: root._updateVisibleWorkspaces()
+
+    Connections {
+        target: CompositorService
+        function onWorkspacesChanged() { root._updateVisibleWorkspaces(); }
+        function onWindowsChanged() { root._updateVisibleWorkspaces(); }
+    }
 
     readonly property int _focusedIndex: {
         for (var i = 0; i < root.visibleWorkspaces.length; i++) {

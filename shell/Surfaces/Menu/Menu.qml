@@ -632,7 +632,43 @@ PanelWindow {
     // Quickshell.iconPath call per installed app, with the launcher closed
     // and nobody looking. Closed, the app rows carry no window matches, which
     // is exactly as observable as the clipboard being empty up there.
-    readonly property var _liveWindows: root.isOpen ? (CompositorService.windows || []) : []
+    //
+    // Even while open, `_liveWindowsLive` below is kept apart from a raw
+    // CompositorService.windows binding: appmatch.js only ever compares
+    // `id` and `appId` (never title), so it is republished only when that
+    // pair changes for some window, and a title-only tick (a browser tab
+    // switch, again) leaves the array's identity alone instead of rebuilding
+    // the tree under whoever is typing in the launcher.
+    readonly property var _liveWindows: root.isOpen ? root._liveWindowsLive : []
+
+    property var _liveWindowsLive: []
+    property string _liveWindowsKey: ""
+
+    function _updateLiveWindows() {
+        var windows = CompositorService.windows || [];
+        var pairs = [];
+        for (var i = 0; i < windows.length; i++) {
+            var w = windows[i] || {};
+            pairs.push((w.id || "") + "\0" + (w.appId || ""));
+        }
+        var key = JSON.stringify(pairs);
+        if (key === root._liveWindowsKey)
+            return;
+        root._liveWindowsKey = key;
+        root._liveWindowsLive = windows;
+    }
+
+    onIsOpenChanged: if (root.isOpen) root._updateLiveWindows()
+
+    // Enabled only while open, mirroring the ternary above: a windows tick
+    // while closed must cost nothing, the same guarantee the raw-binding
+    // form gave for free by simply not reading CompositorService.windows in
+    // the branch that isn't taken.
+    Connections {
+        target: CompositorService
+        enabled: root.isOpen
+        function onWindowsChanged() { root._updateLiveWindows(); }
+    }
 
     readonly property var _defaultObj: {
         if (!root._defaultMenuText) return {};

@@ -139,6 +139,7 @@ Scope {
     // them, and it carries `disabled`/`mirrorOf` too, which the model doesn't
     // expose at all.
     property var outputs: []
+    property string _outputsJson: "[]"
     // Declared here, not inherited: this backend is a Scope and BackendBase
     // is a contract on paper, so every property on it has to be repeated.
     // Without this one the assignments in outputsProc below hit no property
@@ -411,13 +412,13 @@ Scope {
             // last good list on screen, a stale row is not the truth. But it
             // is flagged as a FAILURE rather than as an empty result, so the
             // panel says so instead of claiming the session has no displays.
-            if (exitCode !== 0) {
-                root.outputs = [];
-                root.outputsState = "failed";
-                return;
+            var next = exitCode !== 0 ? [] : Outputs.parseHyprlandOutputs(outputsCollector.text);
+            var json = JSON.stringify(next);
+            if (json !== root._outputsJson) {
+                root._outputsJson = json;
+                root.outputs = next;
             }
-            root.outputs = Outputs.parseHyprlandOutputs(outputsCollector.text);
-            root.outputsState = "ok";
+            root.outputsState = exitCode !== 0 ? "failed" : "ok";
         }
     }
 

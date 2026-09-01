@@ -322,21 +322,33 @@ Singleton {
     // the tick above and rewatchTimer's own retry loop run whether or not
     // anything changed.
     property string _publishedText: ""
+    // Second guard below the byte one: a settings.json that reformats to the
+    // same structure (or the very first parse landing on a value equal to
+    // the `({})` default) still parses to a fresh object, and every
+    // Repeater/ListView keyed on `settings` would rebuild for no reason.
+    // Kept JSON-equal to the default so the first no-settings.json publish
+    // doesn't reassign either.
+    property string _settingsJson: "{}"
 
     function _publish(text) {
         if (root.loaded && text === root._publishedText)
             return;
         root._publishedText = text;
-        if (text === "") {
-            root.settings = ({});
+        var next = ({});
+        if (text !== "") {
+            try {
+                next = JSON.parse(text);
+            } catch (e) {
+                console.warn("Config: failed to parse settings.json:", e.message);
+                // Keep the last good value rather than falling back to {}.
+                return;
+            }
+        }
+        var json = JSON.stringify(next);
+        if (json === root._settingsJson)
             return;
-        }
-        try {
-            root.settings = JSON.parse(text);
-        } catch (e) {
-            console.warn("Config: failed to parse settings.json:", e.message);
-            // Keep the last good value rather than falling back to {}.
-        }
+        root._settingsJson = json;
+        root.settings = next;
     }
 
     function _applySettings() {
