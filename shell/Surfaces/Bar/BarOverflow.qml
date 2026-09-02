@@ -18,8 +18,8 @@ import qs.Components
 // A strip, so it takes Panel.qml's frame and none of its sheet: no header, no
 // title, and a width that is exactly the rail plus the card's own padding.
 //
-// The cells are Bar.qml's OWN region delegate, handed over by whichever
-// chevron attached (`attach()` below), not a second registry of widgets: a
+// The cells are Bar.qml's OWN region delegate, handed over by the chevron
+// that opened this (`openFor()` below), not a second registry of widgets: a
 // Component carries its creation context, so every entry instantiated here
 // still resolves the panel, screen and menu wiring that only Bar.qml has, and
 // a widget joins this surface by being on the bar. The entries themselves are
@@ -27,9 +27,10 @@ import qs.Components
 // `overflowEntries`), since the delegate's own collapse gate would otherwise
 // collapse the group here too.
 //
-// One instance for the whole shell (shell.qml), like TrayOverflow: which bar
-// attached last decides which output it lands on and which cell it anchors
-// under.
+// One instance for the whole shell (shell.qml), like TrayOverflow, so which
+// output it lands on and which cell it anchors under come from the chevron
+// that opened it, not from the bar that published last: every output's bar
+// carries a chevron for the same region, and they all write the same key.
 //
 // No keyboard cursor, unlike every other popout: a row here is an arbitrary
 // bar widget, and a bar cell has no activation contract beyond a click
@@ -40,19 +41,28 @@ Panel {
 
     showHeader: false
 
-    // Which region's group is up. Set by attach()'s callers through the
-    // open/toggle functions below, never bound.
+    // Which region's group is up. Set by the open/toggle functions below,
+    // never bound.
     property string region: ""
 
     // region -> { entries, delegate, cell }, written by every bar's chevron
     // cell so the group can be summoned without one (BarIpc's `bar chevron`
     // verbs, which is the only path the smoke rig has: no synthetic pointer
-    // exists there).
+    // exists there). One key per region and one bar per output, so on a
+    // multi-monitor session this holds whichever bar published last: it is
+    // the fallback for an open with no cell, never the answer for a click.
     property var sources: ({})
 
-    readonly property var _source: root.sources[root.region] || null
-    readonly property var _entries: root._source ? root._source.entries : []
-    readonly property Component _delegate: root._source ? root._source.delegate : null
+    // What the card is currently drawn from, and the cell it hangs off:
+    // the chevron that was actually clicked (openFor below), so the card
+    // lands on that bar's own output. Panel resolves both the screen and the
+    // position off this cell's window, so a stale one here is a card opening
+    // on the wrong monitor.
+    property var source: null
+    readonly property var sourceCell: root.source ? root.source.cell : null
+
+    readonly property var _entries: root.source ? root.source.entries : []
+    readonly property Component _delegate: root.source ? root.source.delegate : null
 
     readonly property bool _vertical: Theme.barVertical
 
@@ -62,20 +72,43 @@ Panel {
         var next = {};
         for (var key in root.sources)
             next[key] = root.sources[key];
-        next[regionName] = { entries: entries, delegate: delegate, cell: cell };
+        var entry = { entries: entries, delegate: delegate, cell: cell };
+        next[regionName] = entry;
         root.sources = next;
+        // A card already up on this cell takes the new contents, which is how
+        // a settings.json edit reaches a bar that is already open.
+        if (root.sourceCell === cell)
+            root.source = entry;
     }
 
-    function openRegion(regionName) {
-        var source = root.sources[regionName];
-        if (!source)
-            return false;
+    // The click path: the chevron hands over its own entries, delegate and
+    // cell rather than being looked up by region, since every output's bar
+    // writes the same region key and the map only remembers the last one.
+    function openFor(regionName, entries, delegate, cell) {
         root.region = regionName;
-        if (source.cell)
-            root.openFrom(source.cell);
+        root.source = { entries: entries, delegate: delegate, cell: cell };
+        if (cell)
+            root.openFrom(cell);
         else
             root.open();
         return true;
+    }
+
+    // A click on the chevron the card is already hanging off shuts it; one on
+    // another output's chevron moves it there rather than closing it.
+    function toggleFor(regionName, entries, delegate, cell) {
+        if (root.isOpen && root.region === regionName && root.sourceCell === cell) {
+            root.close();
+            return true;
+        }
+        return root.openFor(regionName, entries, delegate, cell);
+    }
+
+    function openRegion(regionName) {
+        var entry = root.sources[regionName];
+        if (!entry)
+            return false;
+        return root.openFor(regionName, entry.entries, entry.delegate, entry.cell);
     }
 
     function toggleRegion(regionName) {

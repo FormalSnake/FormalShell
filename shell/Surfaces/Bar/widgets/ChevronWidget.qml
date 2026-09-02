@@ -49,8 +49,11 @@ Cell {
     readonly property var hiddenNames: Layout.collapsedNames(root.regionEntries)
     readonly property var hiddenEntries: Layout.overflowEntries(root.regionEntries)
 
+    // This cell's own card, not the region's: every output's bar carries a
+    // chevron for the same region, and only the one the card hangs off is
+    // open.
     readonly property bool _open: root.overflow !== null && root.overflow.isOpen
-        && root.overflow.region === root.region
+        && root.overflow.region === root.region && root.overflow.sourceCell === root
 
     // The tray's own words for the same thing: what is behind this cell, and
     // how much of it.
@@ -103,14 +106,19 @@ Cell {
     }
 
     interactive: true
+    // The group goes with the click: this cell hands the second bar its own
+    // entries, delegate and cell rather than letting it look the region up,
+    // since the surface is one instance for the whole shell and every
+    // output's bar writes the same region key. Look it up and a click on the
+    // second monitor opens the card on the first.
     onClicked: {
         if (root.overflow)
-            root.overflow.toggleRegion(root.region);
+            root.overflow.toggleFor(root.region, root.hiddenEntries, root.entryDelegate, root);
     }
 
-    // Published to the shared surface rather than held here: the second bar
-    // has to be summonable without a click on this cell (BarIpc's `bar
-    // chevron` verbs are the smoke rig's only pointer, and a compositor
+    // Published to the shared surface as well as carried on the click: the
+    // second bar has to be summonable without a click on this cell (BarIpc's
+    // `bar chevron` verbs are the smoke rig's only pointer, and a compositor
     // keybind has no other route either), and it needs this cell as its
     // anchor. Re-run on every input its contents depend on, so a
     // settings.json edit reaches a bar that is already open.
