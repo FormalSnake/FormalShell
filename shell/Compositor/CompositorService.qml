@@ -3,6 +3,7 @@ import Quickshell
 import QtQuick
 
 import qs.Compositor.hyprland
+import qs.Core
 import "focus.js" as Focus
 
 Singleton {
@@ -24,6 +25,19 @@ Singleton {
     property var workspaces: backend.workspaces
     property var windows: backend.windows
     property var outputs: backend.outputs
+    property var fullscreenOutputs: backend.fullscreenOutputs
+    // Whether a surface should hide on an output while a fullscreen window
+    // covers it (Config.get default true). Off keeps the bar, frame and hot
+    // corners mapped through fullscreen, at the cost of the game never
+    // reaching direct scanout.
+    readonly property bool hideChromeOnFullscreen: Config.get("fullscreen.hideChrome", true)
+    // True when `name` is an output whose focused fullscreen window covers it
+    // AND the auto-hide is enabled. Surfaces read `fullscreenOutputs` through
+    // this so the binding tracks both.
+    function outputCoveredByFullscreen(name) {
+        return root.hideChromeOnFullscreen && root.fullscreenOutputs.indexOf(name) >= 0;
+    }
+
     property string focusedWindowId: backend.focusedWindowId
     property string focusedWorkspaceId: backend.focusedWorkspaceId
     property string focusedOutputName: backend.focusedOutputName

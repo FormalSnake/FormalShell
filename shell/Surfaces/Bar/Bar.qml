@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import qs.Compositor
 import qs.Core
 import qs.Components
 import qs.Plugins
@@ -88,7 +89,9 @@ PanelWindow {
     // windows once, when the bar arrives, instead of over and over.
     property bool ready: false
     screen: modelData
-    visible: bar.ready
+    // Hidden while a fullscreen window covers this output, so it reaches
+    // Hyprland's solitary / direct-scanout path (see CompositorService).
+    visible: bar.ready && !CompositorService.outputCoveredByFullscreen(bar.modelData.name)
     // The strip spans its own edge end to end and hugs that edge. With the
     // screen frame on the window is the whole output instead: it paints
     // the frame's ring, the strip included, and its cells over it, so the

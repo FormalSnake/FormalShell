@@ -108,6 +108,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `frame.sh` `--frame`: pins `frame.thickness` in the settings fixture so the
   bar's window grows to the output and paints the frame round it, and reads
   that box and the four exclusion zones off the compositor's own layer list.
+- `fullscreen.sh` `--fullscreen`: the fullscreen chrome auto-hide, read off
+  the compositor's own layer list: bar, frame zones and hot corners gone
+  while the fixture window is fullscreen and back to their starting counts
+  after, with `hyprctl clients` confirming a window really was fullscreen.
 - `gallery.sh` `--gallery`: the dev gallery sheet, every shared component
   drawn against the live theme.
 - `gpu.sh` `--gpu`: both cards of a hybrid laptop this rig is not, and the

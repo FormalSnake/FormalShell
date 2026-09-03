@@ -30,6 +30,14 @@ QtObject {
     // query tells a session with two lit monitors it has none.
     property string outputsState: "unknown"
 
+    // Output names whose focused fullscreen window covers them. The backend's
+    // signal to a surface that it may hide on that output so the fullscreen
+    // window reaches the compositor's solitary / direct-scanout path; empty
+    // here, the null backend's "no compositor detected" answer, which keeps
+    // every surface shown. See HyprlandBackend for how it is derived and why
+    // it is keyed on the window staying activated.
+    property var fullscreenOutputs: []
+
     property string focusedWindowId: ""
     property string focusedWorkspaceId: ""
     property string focusedOutputName: ""

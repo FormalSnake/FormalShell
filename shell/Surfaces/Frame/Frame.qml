@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Wayland
+import qs.Compositor
 import qs.Core
 
 // The screen frame's reservations, one per output: four 1px windows, one
@@ -27,7 +28,9 @@ Scope {
         id: zone
         required property string edge
         screen: root.modelData
-        visible: root._on && root.ready
+        // Also down while a fullscreen window covers this output: the zones
+        // sit on the overlay layer and would otherwise block its scanout.
+        visible: root._on && root.ready && !CompositorService.outputCoveredByFullscreen(root.modelData.name)
         anchors {
             top: zone.edge !== "bottom"
             bottom: zone.edge !== "top"

@@ -19,7 +19,12 @@ import QtQuick
 // default 0: the screen frame's band on the three edges the bar is not
 // on, Surfaces/Frame/Frame.qml; 0 draws no frame) and frame.radius (number,
 // default 20, or 0 when theme.radius is 0: the corner of the rounded
-// cut-out the frame leaves for the desktop), theme.fontDisplay (reserved), media.appleMusicArt
+// cut-out the frame leaves for the desktop), fullscreen.hideChrome (bool,
+// default true: hide the bar, screen frame and hot corners on an output
+// while a focused fullscreen window covers it, so the window reaches
+// Hyprland's solitary / direct-scanout path, Compositor/CompositorService.qml;
+// the surfaces come straight back when it leaves fullscreen or loses focus),
+// theme.fontDisplay (reserved), media.appleMusicArt
 // (bool, default false, AppleMusicArtService's opt-in, M7 Task 2).
 // media.animatedBarCover (bool, default true, whether the bar's mini cover
 // animates too; off, the animated cover decode exists only while the media

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQml
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -151,6 +152,64 @@ Scope {
     readonly property string focusedWindowId: Hyprland.activeToplevel ? Hyprland.activeToplevel.address : ""
     readonly property string focusedWorkspaceId: Hyprland.focusedWorkspace ? String(Hyprland.focusedWorkspace.id) : ""
     readonly property string focusedOutputName: Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
+
+    // Outputs whose focused fullscreen window covers them, so a surface that
+    // would otherwise sit on the overlay/top layer can hide and let the game
+    // reach Hyprland's solitary / direct-scanout fast path. That path is off
+    // whenever anything at all is mapped above the fullscreen window, so the
+    // panel then tracks the compositor's own repaint clock instead of the
+    // game's frame timing (VRR never follows the game) and every frame pays a
+    // full composite. Recomputed from three event-driven signals, never the
+    // stale `lastIpcObject`: the wlr-foreign-toplevel `fullscreen` and
+    // `activated` flags (pinned quickshell 43d4fa9, src/wayland/toplevel/
+    // qml.hpp:33,54) and the Hyprland-native `monitor` the window sits on
+    // (ipc/hyprland_toplevel.hpp:49). Keyed on `activated` on purpose: a
+    // window left fullscreen on a now-hidden workspace, or one the user has
+    // tabbed away from, is no longer activated, so its output drops out of the
+    // set and the chrome comes straight back. Anything the query cannot answer
+    // yet (a toplevel whose wayland handle or monitor has not been reported)
+    // leaves the set empty for that window, which shows the chrome: the safe
+    // direction.
+    property var fullscreenOutputs: []
+    property string _fullscreenOutputsJson: "[]"
+
+    function _recomputeFullscreen() {
+        var out = ({});
+        var tls = Hyprland.toplevels.values;
+        for (var i = 0; i < tls.length; i++) {
+            var h = tls[i];
+            var w = h.wayland;
+            if (w && w.fullscreen && h.activated && h.monitor && h.monitor.name)
+                out[h.monitor.name] = true;
+        }
+        var next = Object.keys(out).sort();
+        var json = JSON.stringify(next);
+        if (json === root._fullscreenOutputsJson)
+            return;
+        root._fullscreenOutputsJson = json;
+        root.fullscreenOutputs = next;
+    }
+
+    // One tracker object per toplevel. Its bindings read every reactive input
+    // the set depends on (the foreign-toplevel handle, its `fullscreen` and
+    // `activated`, and the Hyprland monitor's name), so a change to any of
+    // them re-fires the handler and republishes. Reacting to the bindings
+    // rather than to Hyprland's event stream sidesteps the race where the IPC
+    // `fullscreen` event and the wlr state change arrive a frame apart.
+    Instantiator {
+        model: Hyprland.toplevels
+        delegate: QtObject {
+            required property var modelData
+            readonly property var _w: modelData ? modelData.wayland : null
+            readonly property bool _covering: !!_w && _w.fullscreen
+                && !!modelData && modelData.activated && !!modelData.monitor
+            readonly property string _out: (modelData && modelData.monitor) ? modelData.monitor.name : ""
+            on_CoveringChanged: root._recomputeFullscreen()
+            on_OutChanged: root._recomputeFullscreen()
+            Component.onCompleted: root._recomputeFullscreen()
+            Component.onDestruction: root._recomputeFullscreen()
+        }
+    }
 
     signal configReloaded(bool failed)
 

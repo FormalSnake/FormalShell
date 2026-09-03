@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import qs.Compositor
 import qs.Core as Core
 import qs.Services
 import "../../HotCorners/corners.js" as Corners
@@ -127,6 +128,9 @@ Item {
                 readonly property var edges: Corners.edges(win.modelData.corner)
 
                 screen: win.modelData.screen
+                // Down while a fullscreen window covers this output, both to
+                // free its scanout and so a corner cannot fire mid-game.
+                visible: !CompositorService.outputCoveredByFullscreen(win.modelData.screen.name)
                 color: "transparent"
 
                 WlrLayershell.namespace: "formalshell:hotcorner"
