@@ -81,12 +81,12 @@ cmd_start() {
   mkdir -p "$pub_keys_dir"
   cp "$priv_key.pub" "$pub_keys_dir/"
   local keys_store_path
-  keys_store_path=$(nix-store --add "$repo_root/$pub_keys_dir")
+  keys_store_path=$(nix-store --add "$pub_keys_dir")
 
   (
     cd "$work_dir"
     set -m
-    KEYS="$keys_store_path" NIX_DISK_IMAGE="$repo_root/$disk_image" \
+    KEYS="$keys_store_path" NIX_DISK_IMAGE="$disk_image" \
       nohup "$vm_pkg/bin/run-formalshell-testvm-vm" >vm.log 2>&1 &
     echo $! >vm.pid
   )
