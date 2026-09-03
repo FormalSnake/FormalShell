@@ -61,6 +61,11 @@ stdenvNoCC.mkDerivation {
     # long-lived child it owned running, and PR_SET_PDEATHSIG is what closes
     # that. Unlike the optional CLIs above this one has no fallback state,
     # which is why it is wired here rather than guarded with `command -v`.
+    # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
+    # avif) wallpaper fails Background.qml's Image with "Unsupported image
+    # format" while matugen, which decodes the file itself, keeps recolouring.
+    # The plugin dir is a store path of its own, invisible to quickshell's Qt
+    # without this.
     # QSG_RENDER_LOOP: Qt 6.11 falls back to the basic render loop on the
     # nvidia/Wayland stack (QSG_INFO on the g815, 2026-08-31), and that loop
     # advances animations off a ~60Hz timer no matter what the panel runs
@@ -77,6 +82,7 @@ stdenvNoCC.mkDerivation {
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \
       --prefix QT_PLUGIN_PATH : ${qt6.qtmultimedia}/lib/qt-6/plugins \
+      --prefix QT_PLUGIN_PATH : ${qt6.qtimageformats}/lib/qt-6/plugins \
       --set-default QSG_RENDER_LOOP threaded
 
     # lock-before-sleep contract (spec §8): whatever a systemd unit calls
