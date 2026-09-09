@@ -37,6 +37,15 @@ Cell {
     // keep their reading unless a user who added the widget opts back out.
     readonly property bool _showLabel: Config.get("bar.widgets.keyboardLayout.showLabel", true)
 
+    // Layout codes differ in width ("US" against "NO LAYOUT"), and a switch
+    // is exactly the moment the cell is being looked at: glide the extent
+    // instead of shoving the rest of the region instantly (DESIGN.md §1
+    // "Motion").
+    Behavior on implicitWidth {
+        enabled: root.animateSize
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
     visible: root.shown
     tooltipText: Keyboard.tooltipText(root.layout)
 

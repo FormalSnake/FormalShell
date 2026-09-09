@@ -53,6 +53,15 @@ Cell {
     onOutputNameChanged: root._updateVisibleWorkspaces()
     Component.onCompleted: root._updateVisibleWorkspaces()
 
+    // A workspace opening or closing changes how many slots this cell holds:
+    // glide the extent instead of shoving the rest of the region instantly
+    // (DESIGN.md §1 "Motion"), on the same arm switch every other bar cell's
+    // width Behavior takes.
+    Behavior on implicitWidth {
+        enabled: root.animateSize
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
     Connections {
         target: CompositorService
         function onWorkspacesChanged() { root._updateVisibleWorkspaces(); }
@@ -70,6 +79,9 @@ Cell {
     readonly property var _focused: root._focusedIndex >= 0
         ? root.visibleWorkspaces[root._focusedIndex]
         : null
+
+    on_FocusedIndexChanged: pill._syncTarget()
+    onVisibleWorkspacesChanged: pill._syncTarget()
 
     // Counted the same way workspaces.js decides a workspace is occupied at
     // all: by workspaceId over the windows list, ids compared as the opaque
@@ -140,6 +152,15 @@ Cell {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: root._slotSpacing
                 layoutDirection: root._reversed ? Qt.RightToLeft : Qt.LeftToRight
+
+                // Move alone, no `add` (M53 D2's layout rule, DESIGN.md §3
+                // Bar): the dots hold fixed slots, and the model above is a
+                // fresh array on every focus change, which a Repeater
+                // answers by rebuilding every delegate. An `add` here would
+                // therefore fade the whole row up on a plain workspace
+                // switch, which is a rebuild narrated as an arrival rather
+                // than the one thing that actually moved, the pill.
+                move: MoveTransition {}
 
                 Repeater {
                     model: root.visibleWorkspaces
@@ -225,10 +246,27 @@ Cell {
             // pill is not a surface, and nothing else in the shell draws one.
             Rectangle {
                 id: pill
-                visible: root._focusedIndex >= 0
                 anchors.verticalCenter: parent.verticalCenter
                 radius: Theme.pillRadius(pill.height)
                 color: Theme.color.primary
+
+                // Focus leaving this output (another monitor took it) is the
+                // pill leaving a surface, not travelling: it fades out where
+                // it stood and fades back in at whatever slot focus returns
+                // to. `target` is held at the last focused slot meanwhile,
+                // and the travel Behaviors below are disarmed while nothing
+                // is drawn, so a re-entry lands at its slot instead of
+                // running there from a stale one.
+                readonly property bool _here: root._focusedIndex >= 0
+                opacity: pill._here ? 1 : 0
+                visible: pill.opacity > 0
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: pill._here ? Theme.motion.surface : Theme.motion.surfaceExit
+                        easing.type: Theme.motion.easing
+                    }
+                }
 
                 // The pointer's own answer that this is a target, same as a
                 // plain dot's, since the focused slot's dot never grows: this
@@ -246,7 +284,14 @@ Cell {
 
                 height: root._dotSize + pill.growth
 
-                readonly property real target: root._slotX(Math.max(0, root._focusedIndex))
+                property real target: 0
+
+                function _syncTarget() {
+                    if (root._focusedIndex >= 0)
+                        pill.target = root._slotX(root._focusedIndex);
+                }
+
+                Component.onCompleted: pill._syncTarget()
 
                 property real lead: pill.target
                 property real trail: pill.target
@@ -255,10 +300,12 @@ Cell {
                 width: Math.abs(pill.lead - pill.trail) + root._slotWidth + pill.growth
 
                 Behavior on lead {
+                    enabled: pill.visible
                     NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.emphasizedEasing }
                 }
 
                 Behavior on trail {
+                    enabled: pill.visible
                     NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
                 }
             }

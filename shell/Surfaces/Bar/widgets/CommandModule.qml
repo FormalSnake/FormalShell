@@ -34,6 +34,14 @@ Cell {
     // always fires first) apart from a process that never started at all.
     property bool _sawExit: false
 
+    // A module's text changes on its own interval and its failure states are
+    // a different width again: glide the extent instead of shoving the rest
+    // of the region instantly (DESIGN.md §1 "Motion").
+    Behavior on implicitWidth {
+        enabled: root.animateSize
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
     warning: root._class === "warning"
     destructive: root._class === "critical" || root._class === "urgent"
     tooltipText: root._tooltip

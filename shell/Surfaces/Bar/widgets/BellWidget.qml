@@ -29,6 +29,15 @@ Cell {
     // on unless a user opts out.
     readonly property bool _showLabel: Config.get("bar.widgets.bell.showLabel", true)
 
+    // The pending count arrives and leaves under the glyph, and crosses from
+    // one digit to two: glide the extent instead of shoving the rest of the
+    // region instantly (DESIGN.md §1 "Motion", the width Behavior every
+    // other numeric bar cell carries).
+    Behavior on implicitWidth {
+        enabled: root.animateSize
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
 
     // The bell-off glyph reads as "DND" only if you already know the pair,
     // and the bare count next to it doesn't say what it counts. Suppression

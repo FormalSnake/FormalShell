@@ -455,43 +455,32 @@ PanelWindow {
     // it can be set here, after creation, rather than at construction time).
     Component {
         id: regionDelegate
-        Loader {
-            id: entryLoader
+        Item {
+            id: entrySlot
             required property var modelData
-            // Every entry is the bar's own cell thickness across the strip,
-            // and its own length along it (`_along` below), whichever axis
-            // each of those is on this bar.
-            width: bar._vertical ? bar._cellThickness : entryLoader._implicitAlong
-            height: bar._vertical ? entryLoader._implicitAlong : bar._cellThickness
-            readonly property real _implicitAlong: bar._vertical ? entryLoader.implicitHeight : entryLoader.implicitWidth
             // A hidden widget (Battery with no laptop battery, NowPlaying
             // with no player, Tray with no items, Indicators with nothing
-            // active) sets `visible: false` on itself expecting Row to drop
-            // its slot entirely, but Row only inspects its *direct*
-            // children's `visible`, and every entry here loads behind this
-            // Loader, whose own `visible` defaults true regardless of its
-            // item's. Binding straight to `entryLoader.item.visible` looks
-            // right and even renders right once, but permanently kills that
-            // *same* item's own `visible` binding from ever updating again
-            // (confirmed by reproducing it in isolation, reading a
-            // Loader-hosted item's built-in `visible` from an external
-            // binding, declarative or imperative, silently detaches the
-            // item's own visible binding the moment it's read this way; a
-            // property under any other name doesn't have this problem).
-            // Each conditionally-hidden widget therefore exposes its
-            // condition a second time under `shown` (Tray/Indicators/
-            // Battery/NowPlaying) instead of `visible` itself; a widget with
-            // no such property is always shown, so `true` is the safe
-            // fallback rather than ever reading `.visible` here. `shown`
-            // stays the outer term below, so a widget that hides itself stays
-            // hidden whether the region's chevron is open or shut.
-            sourceComponent: {
-                switch (entryLoader.modelData.kind) {
-                case "builtin": return bar._builtinComponents[entryLoader.modelData.name];
-                case "plugin": return pluginModuleComponent;
-                }
-                return entryLoader.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent;
-            }
+            // active) sets `visible: false` on itself expecting the Rail to
+            // drop its slot entirely, but a positioner only inspects its
+            // *direct* children's `visible`, and every entry here loads
+            // behind the Loader below, whose own `visible` defaults true
+            // regardless of its item's. Binding straight to
+            // `entryLoader.item.visible` looks right and even renders right
+            // once, but permanently kills that *same* item's own `visible`
+            // binding from ever updating again (confirmed by reproducing it
+            // in isolation, reading a Loader-hosted item's built-in
+            // `visible` from an external binding, declarative or imperative,
+            // silently detaches the item's own visible binding the moment
+            // it's read this way; a property under any other name doesn't
+            // have this problem). Each conditionally-hidden widget therefore
+            // exposes its condition a second time under `shown` (Tray/
+            // Indicators/Battery/NowPlaying) instead of `visible` itself; a
+            // widget with no such property is always shown, so `true` is the
+            // safe fallback rather than ever reading `.visible` here.
+            readonly property bool _shown: entryLoader.item
+                ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
+                : false
+
             // M52: a governed entry is not on the strip at all. Everything
             // on a chevron's governed side is drawn in that chevron's second
             // bar (BarOverflow.qml), the way the tray lives behind its own
@@ -500,71 +489,106 @@ PanelWindow {
             // widget's own statement about itself (a Battery with no
             // battery), never written from here, which would put two authors
             // on one property.
-            //
-            // Nothing animates and nothing is clipped: there is no reveal on
-            // the strip to animate, and an invisible child costs a Grid
-            // neither a slot nor its spacing. M24's collapse gate and M25's
-            // width Behavior went with the inline group (owner, 2026-09-01:
-            // "I want the chevron to always open the second bar just like the
-            // three dots").
-            readonly property bool _shown: entryLoader.item
-                ? (entryLoader.item.shown !== undefined ? entryLoader.item.shown : true)
-                : false
-            // The width term is the chevron's, and it applies to governed
-            // entries only. Row lays out (and spaces) its visible children,
-            // so a cell that went invisible the moment the chevron shut
-            // would have nothing left to animate, while one left visible at
-            // width 0 would still be charged the region's own `spacing`, and
-            // six of those is ~48px of dead bar. Width crossing 0 is the one
-            // moment both are true at once.
-            //
-            // It must NOT apply to everything else, because for an entry
-            // whose width is a MEASUREMENT rather than the chevron's own
-            // number it closes a cycle: visible reads width, width reads the
-            // item's implicitWidth, and once that measurement has been 0 with
-            // this binding holding the entry hidden, nothing ever produces
-            // the width that would reopen it. It bites exactly the widgets
-            // that are empty at creation and gain content later, Indicators
-            // when its first glyph turns on, Tray registering its first item
-            //, and never the ones with content from the start, which is why
-            // the chevron's own collapse/expand has always worked. It
-            // escaped notice for the same reason: the indicators row's ONE
-            // cell with a live label, the reminder countdown, re-measures
-            // itself out of the deadlock every second and drags the rest of
-            // the row open behind it, so a live screen recording and a
-            // stay-awake toggle were invisible on their own but both
-            // appeared beside a pending reminder (g815, 2026-08-19).
+            readonly property bool _present: entrySlot._shown && !entrySlot.modelData.collapsible
+
+            // The cell's own presence (DESIGN.md §1 Motion, M53 D2): a
+            // widget that turns on opens its slot along the strip and fades
+            // up in it, one that turns off shrinks and fades out, and the
+            // Rail's `move` carries the cells beside it either way. One
+            // driver for both terms rather than a Behavior each, so the fade
+            // and the growth can never fall out of step, and the exit runs
+            // the shorter clock a surface leaving on always does. Held flat
+            // until the strip's entrance has settled (`bar._revealed`, the
+            // same arm switch the cells' own width Behaviors take), so a
+            // session's first second of service answers is one layout rather
+            // than a dozen cells opening in sequence behind it.
+            property real _progress: entrySlot._present ? 1 : 0
+
+            Behavior on _progress {
+                enabled: bar._revealed
+                NumberAnimation {
+                    duration: entrySlot._present ? Theme.motion.surface : Theme.motion.surfaceExit
+                    easing.type: Theme.motion.easing
+                }
+            }
+
+            // Every entry is the bar's own cell thickness across the strip,
+            // and its own length along it, whichever axis each of those is
+            // on this bar. Only this slot takes the presence term: the
+            // Loader below keeps the item at its full implicit size, so
+            // nothing an animation writes ever reaches what the item
+            // measures.
+            readonly property real _implicitAlong: bar._vertical ? entryLoader.implicitHeight : entryLoader.implicitWidth
+            width: bar._vertical ? bar._cellThickness : entrySlot._implicitAlong * entrySlot._progress
+            height: bar._vertical ? entrySlot._implicitAlong * entrySlot._progress : bar._cellThickness
+            // Only while the slot is shorter than what it holds, so a
+            // settled cell costs no clip node.
+            clip: entrySlot._progress < 1
+
+            // The presence driver and nothing measured, which is the whole
+            // point: a `visible` that reads a width closes a cycle for an
+            // entry whose extent is a MEASUREMENT rather than a fixed
+            // number, and once that measurement has been 0 with the binding
+            // holding the entry hidden, nothing ever produces the width that
+            // would reopen it. It bit exactly the widgets that are empty at
+            // creation and gain content later, Indicators when its first
+            // glyph turns on and Tray registering its first item, and never
+            // the ones with content from the start. It escaped notice for
+            // the same reason: the indicators row's ONE cell with a live
+            // label, the reminder countdown, re-measures itself out of the
+            // deadlock every second and drags the rest of the row open
+            // behind it, so a live screen recording and a stay-awake toggle
+            // were invisible on their own but both appeared beside a pending
+            // reminder (g815, 2026-08-19).
             // tests/tst_bar_entry_reveal.qml pins both halves of that.
-            visible: entryLoader._shown && !entryLoader.modelData.collapsible
-            onLoaded: {
-                // The one seam that makes every cell in the bar a ghost
-                // (DESIGN.md §3 Bar) and tells it which edge it sits on:
-                // each widget's root is either a `Cell`, which carries both
-                // properties itself, or one of the two group rails (Tray,
-                // Indicators), which forward them to the cells they hold.
-                // Set here rather than in the 25 registry Components above,
-                // so a new widget joins the strip by being listed.
-                entryLoader.item.ghost = true;
-                // A binding, not a value: settings.json lands after the
-                // first cells exist, and whether this Repeater resets
-                // before or after Theme.barPosition moves is not ordered,
-                // so a cell created against the default edge has to follow
-                // the bar to its real one.
-                entryLoader.item.barEdge = Qt.binding(function () { return bar._position; });
-                // Guarded, unlike the two above: `animateSize` lives on
-                // Cell, and the two group rails (Tray, Indicators) are the
-                // one widget kind whose root is not one. Neither carries a
-                // size Behavior to arm, so there is nothing to forward
-                // through them.
-                if (entryLoader.item.animateSize !== undefined)
-                    entryLoader.item.animateSize = Qt.binding(function () { return bar._revealed; });
-                if (entryLoader.modelData.kind === "module")
-                    entryLoader.item.module = entryLoader.modelData.module;
-                else if (entryLoader.modelData.kind === "plugin")
-                    entryLoader.item.plugin = entryLoader.modelData.plugin;
-                else if (entryLoader.modelData.name === "chevron") {
-                    entryLoader.item.region = entryLoader.modelData.region;
-                    entryLoader.item.regionEntries = bar._layout.regions[entryLoader.modelData.region];
+            visible: entrySlot._present || entrySlot._progress > 0
+
+            Loader {
+                id: entryLoader
+                width: bar._vertical ? bar._cellThickness : entrySlot._implicitAlong
+                height: bar._vertical ? entrySlot._implicitAlong : bar._cellThickness
+                // The fade lives here rather than on the slot: the Rail's
+                // `add` transition writes the slot's own opacity, and an
+                // animation writing a property drops whatever binding held
+                // it.
+                opacity: entrySlot._progress
+                sourceComponent: {
+                    switch (entrySlot.modelData.kind) {
+                    case "builtin": return bar._builtinComponents[entrySlot.modelData.name];
+                    case "plugin": return pluginModuleComponent;
+                    }
+                    return entrySlot.modelData.module.type === "command" ? commandModuleComponent : qmlModuleComponent;
+                }
+                onLoaded: {
+                    // The one seam that makes every cell in the bar a ghost
+                    // (DESIGN.md §3 Bar) and tells it which edge it sits on:
+                    // each widget's root is either a `Cell`, which carries both
+                    // properties itself, or one of the two group rails (Tray,
+                    // Indicators), which forward them to the cells they hold.
+                    // Set here rather than in the 25 registry Components above,
+                    // so a new widget joins the strip by being listed.
+                    entryLoader.item.ghost = true;
+                    // A binding, not a value: settings.json lands after the
+                    // first cells exist, and whether this Repeater resets
+                    // before or after Theme.barPosition moves is not ordered,
+                    // so a cell created against the default edge has to follow
+                    // the bar to its real one.
+                    entryLoader.item.barEdge = Qt.binding(function () { return bar._position; });
+                    // Guarded, unlike the two above: `animateSize` lives on
+                    // Cell, and the two group rails (Tray, Indicators) are the
+                    // one widget kind whose root is not one. Neither carries a
+                    // size Behavior to arm, so there is nothing to forward
+                    // through them.
+                    if (entryLoader.item.animateSize !== undefined)
+                        entryLoader.item.animateSize = Qt.binding(function () { return bar._revealed; });
+                    if (entrySlot.modelData.kind === "module")
+                        entryLoader.item.module = entrySlot.modelData.module;
+                    else if (entrySlot.modelData.kind === "plugin")
+                        entryLoader.item.plugin = entrySlot.modelData.plugin;
+                    else if (entrySlot.modelData.name === "chevron") {
+                        entryLoader.item.region = entrySlot.modelData.region;
+                        entryLoader.item.regionEntries = bar._layout.regions[entrySlot.modelData.region];
+                    }
                 }
             }
         }
@@ -707,6 +731,22 @@ PanelWindow {
             y: bar._vertical ? centerRegion._along : bar._strip.cellInset
             spacing: Theme.space.sm
 
+            // The clamp above re-decides where the centre sits every time a
+            // cell either side of it changes extent, so the region travels
+            // to the answer instead of arriving at it (DESIGN.md §1 Motion,
+            // M53 D2). The binding is untouched: a Behavior animates the
+            // value the binding produces. Both axes, since which one the
+            // clamp runs along is the bar's edge.
+            Behavior on x {
+                enabled: bar._revealed
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            }
+
+            Behavior on y {
+                enabled: bar._revealed
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            }
+
             Repeater {
                 id: centerRepeater
                 model: bar._layout.regions.center
@@ -729,14 +769,50 @@ PanelWindow {
                 ? Math.min(rightRail.implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
                 : rightRail.implicitHeight
 
+            // The end region is placed off its own extent, so a cell opening
+            // or closing inside it moves the whole box: the box travels and
+            // the strip's end stays put, rather than every cell in the
+            // region jumping a slot (M53 D2).
+            Behavior on x {
+                enabled: bar._revealed
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            }
+
+            Behavior on y {
+                enabled: bar._revealed
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            }
+
+            Behavior on width {
+                enabled: bar._revealed
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            }
+
+            Behavior on height {
+                enabled: bar._revealed
+                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            }
+
             // Held against the region's own end, so what the clip removes is
-            // the start of the rail, on the centre's side.
+            // the start of the rail, on the centre's side. The offset rides
+            // the same clock the box does, so the rail keeps its grip on
+            // that end through the travel instead of sliding inside the clip.
             Rail {
                 id: rightRail
                 vertical: bar._vertical
                 x: bar._vertical ? 0 : rightRegion.width - rightRail.width
                 y: bar._vertical ? rightRegion.height - rightRail.height : 0
                 spacing: Theme.space.sm
+
+                Behavior on x {
+                    enabled: bar._revealed
+                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                }
+
+                Behavior on y {
+                    enabled: bar._revealed
+                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                }
 
                 Repeater {
                     id: rightRepeater

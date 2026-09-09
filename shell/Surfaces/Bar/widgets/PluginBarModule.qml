@@ -26,6 +26,13 @@ Cell {
     // comment documents.
     readonly property bool shown: loader.item && loader.item.shown !== undefined ? loader.item.shown : true
 
+    // A plugin decides its own extent and can change it whenever it likes,
+    // and the error label is a width of its own: glide the change instead of
+    // shoving the rest of the region instantly (DESIGN.md §1 "Motion").
+    Behavior on implicitWidth {
+        enabled: root.animateSize
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
 
     Loader {
         id: loader

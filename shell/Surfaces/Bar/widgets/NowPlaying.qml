@@ -149,19 +149,88 @@ Cell {
         // title is free text of no fixed length (Bar/layout.js's
         // labelRotation). The slot swaps the marquee's own box, since a
         // rotated item still measures by the box it had before the turn.
+        //
+        // Two marquees rather than one, Icon.qml's own pattern (DESIGN.md §1
+        // Motion, M53 D3): a track change installs the incoming title in
+        // whichever slot is idle and `_cross` carries both opacities, so the
+        // swap reads as one label changing under the cell's width morph
+        // instead of cutting. Each slot restarts its own scroll off its own
+        // measured width exactly as a single one did.
         Item {
             id: titleSlot
-            width: root.vertical ? title.height : title.width
-            height: root.vertical ? title.width : title.height
+            readonly property string _title: MediaService.title !== "" ? MediaService.title : MediaService.identity
+
+            // 1 draws slot A, 0 draws slot B; the Behavior is on the driver
+            // rather than on each slot's opacity so the two can never fall
+            // out of step, and a title that changes again mid-fade retargets
+            // this animation instead of restarting it.
+            property real _cross: titleSlot._frontIsA ? 1 : 0
+            property bool _frontIsA: true
+            property bool _armed: false
+            // `_title`'s own binding is evaluated during creation, which
+            // emits a change of its own before the first install has run;
+            // without this the very first title would arrive as a crossfade
+            // out of an empty slot.
+            property bool _ready: false
+            property string _textA: ""
+            property string _textB: ""
+
+            readonly property Item _front: titleSlot._frontIsA ? titleA : titleB
+
+            Behavior on _cross {
+                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            }
+
+            width: root.vertical ? titleSlot._front.height : titleSlot._front.width
+            height: root.vertical ? titleSlot._front.width : titleSlot._front.height
+
+            Component.onCompleted: {
+                titleSlot._install(false);
+                titleSlot._ready = true;
+            }
+            on_TitleChanged: {
+                if (titleSlot._ready)
+                    titleSlot._install(true);
+            }
+
+            function _install(animate) {
+                if (animate && titleSlot._title === (titleSlot._frontIsA ? titleSlot._textA : titleSlot._textB))
+                    return;
+
+                if (!animate || !titleSlot._frontIsA)
+                    titleSlot._textA = titleSlot._title;
+                else
+                    titleSlot._textB = titleSlot._title;
+                if (!animate)
+                    return;
+                titleSlot._armed = true;
+                titleSlot._frontIsA = !titleSlot._frontIsA;
+            }
 
             MarqueeText {
-                id: title
+                id: titleA
                 anchors.centerIn: parent
                 rotation: root.labelRotation
-                text: MediaService.title !== "" ? MediaService.title : MediaService.identity
+                text: titleSlot._textA
                 color: root.foreground
                 maxWidth: root.maxWidth
-                windowVisible: root.windowVisible
+                opacity: titleSlot._cross
+                // The slot that has faded out stops scrolling: this is the
+                // same gate a hidden bar window uses, and a ticker nobody can
+                // see is exactly the idle cost it exists to avoid.
+                windowVisible: root.windowVisible && titleA.opacity > 0
+            }
+
+            MarqueeText {
+                id: titleB
+                visible: titleSlot._armed
+                anchors.centerIn: parent
+                rotation: root.labelRotation
+                text: titleSlot._textB
+                color: root.foreground
+                maxWidth: root.maxWidth
+                opacity: 1 - titleSlot._cross
+                windowVisible: root.windowVisible && titleB.opacity > 0
             }
         }
     }

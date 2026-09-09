@@ -32,6 +32,14 @@ Cell {
 
     readonly property string _state: Audio.sourceState(AudioService.sourceAvailable, AudioService.sourceMuted)
 
+    // The glyph and the NO MIC label are different widths, and a source
+    // appearing or going away swaps them: glide the extent instead of
+    // shoving the rest of the region instantly (DESIGN.md §1 "Motion").
+    Behavior on implicitWidth {
+        enabled: root.animateSize
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
+
     // The trailing segment states the M26 Task 9 middle-click action,
     // otherwise it's undiscoverable.
     tooltipText: {

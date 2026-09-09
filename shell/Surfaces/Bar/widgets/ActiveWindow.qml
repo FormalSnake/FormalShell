@@ -83,34 +83,121 @@ Cell {
             id: appIcon
             visible: root.iconSource !== ""
             source: root.iconSource
-            width: primaryText.implicitHeight
-            height: primaryText.implicitHeight
-            sourceSize.width: primaryText.implicitHeight
-            sourceSize.height: primaryText.implicitHeight
+            width: nameSlot.implicitHeight
+            height: nameSlot.implicitHeight
+            sourceSize.width: nameSlot.implicitHeight
+            sourceSize.height: nameSlot.implicitHeight
             fillMode: Image.PreserveAspectFit
         }
 
-        Text {
-            id: primaryText
+        // Two slots, Icon.qml's own pattern (DESIGN.md §1 Motion, M53 D3):
+        // the outgoing name stays in whichever slot is idle and fades while
+        // the incoming one rises, so a focus change reads as this label
+        // changing under the cell's width morph rather than as a cut. Each
+        // slot holds its own ink as well as its own string, so the name that
+        // is leaving keeps the colour it was written in.
+        Item {
+            id: nameSlot
+            // Entry found: its name leads in foreground. No entry: the raw
+            // appId, dimmed, today's exact fallback rendering.
+            readonly property string _name: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
+            readonly property bool _dim: !root.desktopEntry
+
+            // 1 draws slot A, 0 draws slot B; the Behavior is on the driver
+            // rather than on each slot's opacity so the two can never fall
+            // out of step, and a name that changes again mid-fade retargets
+            // this animation instead of restarting it.
+            property real _cross: nameSlot._frontIsA ? 1 : 0
+            property bool _frontIsA: true
+            property bool _armed: false
+            // The bindings below are evaluated during creation, which emits
+            // a change of its own before the first install has run; without
+            // this the very first name would arrive as a crossfade out of an
+            // empty slot.
+            property bool _ready: false
+            property string _textA: ""
+            property bool _dimA: false
+            property string _textB: ""
+            property bool _dimB: false
+
+            Behavior on _cross {
+                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            }
+
             // Dropped on a vertical bar: an app name is words, and 44px of
             // strip holds none of them upright. The icon above it says which
             // app this is and the tooltip spells it out, so the strip spends
             // its length on the title instead.
-            visible: text !== "" && !root.vertical
-            // Entry found: its name leads in foreground. No entry: the raw
-            // appId, dimmed, today's exact fallback rendering.
-            text: root.desktopEntry ? (root.desktopEntry.name || root.appId) : root.appId
-            color: root.desktopEntry ? root.foreground : root.dimForeground
-            font.family: Theme.fontFamilySans
-            font.pixelSize: Theme.fontSize.body
-            font.weight: Theme.weight.medium
-            // Never more than half the row's own budget: an entry name (or
-            // a raw appId in the no-entry fallback) long enough to eat the
-            // whole thing otherwise starves the title of every pixel and
-            // gets hard-cut mid-glyph by the row's own clip, since a Row
-            // won't shrink it.
-            width: Math.min(implicitWidth, root._contentMaxWidth * 0.5)
-            elide: Text.ElideRight
+            visible: nameSlot._name !== "" && !root.vertical
+            implicitWidth: nameSlot._frontIsA ? nameA.width : nameB.width
+            // The row's icon is sized off this, so it stays the line's own
+            // height whichever slot is in front and whether or not there is
+            // a name to draw at all.
+            implicitHeight: nameA.implicitHeight
+
+            Component.onCompleted: {
+                nameSlot._install(false);
+                nameSlot._ready = true;
+            }
+            on_NameChanged: {
+                if (nameSlot._ready)
+                    nameSlot._install(true);
+            }
+            on_DimChanged: {
+                if (nameSlot._ready)
+                    nameSlot._install(true);
+            }
+
+            function _install(animate) {
+                // Two windows of the same app carry one name, and a
+                // crossfade between a string and itself is a frame of
+                // nothing happening.
+                if (animate && nameSlot._name === (nameSlot._frontIsA ? nameSlot._textA : nameSlot._textB)
+                        && nameSlot._dim === (nameSlot._frontIsA ? nameSlot._dimA : nameSlot._dimB))
+                    return;
+
+                if (!animate || !nameSlot._frontIsA) {
+                    nameSlot._textA = nameSlot._name;
+                    nameSlot._dimA = nameSlot._dim;
+                } else {
+                    nameSlot._textB = nameSlot._name;
+                    nameSlot._dimB = nameSlot._dim;
+                }
+                if (!animate)
+                    return;
+                nameSlot._armed = true;
+                nameSlot._frontIsA = !nameSlot._frontIsA;
+            }
+
+            Text {
+                id: nameA
+                text: nameSlot._textA
+                color: nameSlot._dimA ? root.dimForeground : root.foreground
+                opacity: nameSlot._cross
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.body
+                font.weight: Theme.weight.medium
+                // Never more than half the row's own budget: an entry name (or
+                // a raw appId in the no-entry fallback) long enough to eat the
+                // whole thing otherwise starves the title of every pixel and
+                // gets hard-cut mid-glyph by the row's own clip, since a Row
+                // won't shrink it.
+                width: Math.min(implicitWidth, root._contentMaxWidth * 0.5)
+                elide: Text.ElideRight
+            }
+
+            Text {
+                id: nameB
+                visible: nameSlot._armed
+                text: nameSlot._textB
+                color: nameSlot._dimB ? root.dimForeground : root.foreground
+                opacity: 1 - nameSlot._cross
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.body
+                font.weight: Theme.weight.medium
+                width: Math.min(implicitWidth, root._contentMaxWidth * 0.5)
+                elide: Text.ElideRight
+            }
         }
 
         // M-polish batch item A: the window title scrolls on overflow via
@@ -144,8 +231,8 @@ Cell {
                     var used = 0;
                     if (appIcon.visible)
                         used += appIcon.width + row.spacing;
-                    if (primaryText.visible)
-                        used += primaryText.width + row.spacing;
+                    if (nameSlot.visible)
+                        used += nameSlot.width + row.spacing;
                     return Math.max(0, root._contentMaxWidth - used);
                 }
             }

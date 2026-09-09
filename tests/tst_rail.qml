@@ -59,18 +59,19 @@ TestCase {
 
     // The bar switches the same rail between the two when bar.position
     // changes under it, so both directions have to hold on one item.
+    // Waited for rather than read off the next frame: a rail carries a child
+    // it re-places to its new slot (M53 D2), so the frame after the switch
+    // has it partway there. The slot it ends at is the claim.
     function test_a_rail_stands_up_and_lies_back_down() {
         var rail = createTemporaryObject(railComponent, testCase);
         verify(rail);
         waitForRendering(rail);
         rail.stood = true;
-        waitForRendering(rail);
-        compare(rail.probeC.y, 48);
-        compare(rail.probeC.x, 0);
+        tryCompare(rail.probeC, "y", 48);
+        tryCompare(rail.probeC, "x", 0);
         rail.stood = false;
-        waitForRendering(rail);
-        compare(rail.probeC.x, 68);
-        compare(rail.probeC.y, 0);
+        tryCompare(rail.probeC, "x", 68);
+        tryCompare(rail.probeC, "y", 0);
     }
 
     // A hidden child takes no slot, the same as in a Row.
@@ -78,8 +79,7 @@ TestCase {
         var rail = createTemporaryObject(railComponent, testCase, { stood: true });
         verify(rail);
         rail.probeB.visible = false;
-        waitForRendering(rail);
-        compare(rail.probeC.y, 24);
-        compare(rail.implicitHeight, 44);
+        tryCompare(rail.probeC, "y", 24);
+        tryCompare(rail, "implicitHeight", 44);
     }
 }

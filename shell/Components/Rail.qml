@@ -17,4 +17,20 @@ Grid {
     columns: root.vertical ? 1 : -1
     verticalItemAlignment: Grid.AlignVCenter
     horizontalItemAlignment: Grid.AlignHCenter
+
+    // The layout rule (DESIGN.md §1 "Motion", M53 D2) for every strip in the
+    // shell: a child this positioner re-places because something beside it
+    // appeared, vanished or changed width travels to its new slot. It does
+    // not fire for the children the positioner is created with (`populate`
+    // is the one that would), so a bar's first layout still lands in one
+    // frame.
+    //
+    // Move only, deliberately. An `add` transition animates the child's own
+    // `opacity`, which drops whatever binding held it and leaves it wherever
+    // a cancelled run stopped: a strip whose children toggle their own
+    // visibility (a bar cell that turns on, a label inside a lockup) had
+    // cells stuck invisible for the rest of the session that way. A slot
+    // that wants to fade in carries its own presence instead, on a Behavior
+    // nothing else writes (Bar.qml's region delegate).
+    move: MoveTransition {}
 }

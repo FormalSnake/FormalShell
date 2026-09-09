@@ -537,8 +537,11 @@ TestCase {
         settle(cell);
 
         verify(cell.probeRow.vertical);
-        verify(cell.probeSecond.y > cell.probeFirst.y);
-        compare(cell.probeSecond.x, cell.probeFirst.x);
+        // Waited for: the lockup is a rail, and a rail carries a child it
+        // re-places to its new slot (M53 D2), so the axis flip lands over a
+        // frame or two rather than in one.
+        tryVerify(function () { return cell.probeSecond.y > cell.probeFirst.y; });
+        tryCompare(cell.probeSecond, "x", cell.probeFirst.x);
         // Nothing turns: the whole point of stacking rather than rotating.
         compare(cell.probeRow.rotation, 0);
         compare(cell.probeFirst.rotation, 0);
