@@ -51,7 +51,7 @@ Cell {
     // "Motion").
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     // A Row rather than siblings dropped straight into the cell: Cell's own

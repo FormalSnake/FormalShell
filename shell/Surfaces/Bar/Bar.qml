@@ -591,22 +591,26 @@ PanelWindow {
             // The cell's own presence (DESIGN.md §1 Motion, M53 D2): a
             // widget that turns on opens its slot along the strip and fades
             // up in it, one that turns off shrinks and fades out, and the
-            // Rail's `move` carries the cells beside it either way. One
-            // driver for both terms rather than a Behavior each, so the fade
-            // and the growth can never fall out of step, and the exit runs
-            // the shorter clock a surface leaving on always does. Held flat
-            // until the strip's entrance has settled (`_animate` above, the
-            // same arm switch the cells' own width Behaviors take), so a
-            // session's first second of service answers is one layout rather
-            // than a dozen cells opening in sequence behind it.
+            // Rail's `move` carries the cells beside it either way. Two
+            // terms, since the slot is geometry and the ink in it is not
+            // (M54 D2): the length runs `spatial` and springs a little past
+            // the cell's own measurement before it settles, the fade runs
+            // `effects` and lands well before it. Held flat until the
+            // strip's entrance has settled (`_animate` above, the same arm
+            // switch the cells' own width Behaviors take), so a session's
+            // first second of service answers is one layout rather than a
+            // dozen cells opening in sequence behind it.
             property real _progress: entrySlot._present ? 1 : 0
+            property real _fade: entrySlot._present ? 1 : 0
 
             Behavior on _progress {
                 enabled: entrySlot._animate
-                NumberAnimation {
-                    duration: entrySlot._present ? Theme.motion.surface : Theme.motion.surfaceExit
-                    easing.type: Theme.motion.easing
-                }
+                Anim {}
+            }
+
+            Behavior on _fade {
+                enabled: entrySlot._animate
+                Anim { kind: "effects" }
             }
 
             // Every entry is the bar's own cell thickness across the strip,
@@ -648,7 +652,7 @@ PanelWindow {
                 // `add` transition writes the slot's own opacity, and an
                 // animation writing a property drops whatever binding held
                 // it.
-                opacity: entrySlot._progress
+                opacity: entrySlot._fade
                 sourceComponent: {
                     switch (entrySlot.modelData.kind) {
                     case "builtin": return bar._builtinComponents[entrySlot.modelData.name];
@@ -845,6 +849,22 @@ PanelWindow {
                 ? Math.min(leftRail.implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
                 : leftRail.implicitHeight
 
+            // The start region is pinned to the strip's own start, so only
+            // its far edge moves when a cell inside it opens or closes: the
+            // clip travels with the rail instead of stepping to the new
+            // extent in one frame while the cells behind it glide (M54 D10).
+            // Both axes, since which one the region runs along is the bar's
+            // edge.
+            Behavior on width {
+                enabled: bar._revealed
+                Anim {}
+            }
+
+            Behavior on height {
+                enabled: bar._revealed
+                Anim {}
+            }
+
             Rail {
                 id: leftRail
                 vertical: bar._vertical
@@ -883,12 +903,12 @@ PanelWindow {
             // clamp runs along is the bar's edge.
             Behavior on x {
                 enabled: bar._revealed
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             Behavior on y {
                 enabled: bar._revealed
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             Repeater {
@@ -919,22 +939,22 @@ PanelWindow {
             // region jumping a slot (M53 D2).
             Behavior on x {
                 enabled: bar._revealed
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             Behavior on y {
                 enabled: bar._revealed
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             Behavior on width {
                 enabled: bar._revealed
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             Behavior on height {
                 enabled: bar._revealed
-                NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             // Held against the region's own end, so what the clip removes is
@@ -950,12 +970,12 @@ PanelWindow {
 
                 Behavior on x {
                     enabled: bar._revealed
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    Anim {}
                 }
 
                 Behavior on y {
                     enabled: bar._revealed
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    Anim {}
                 }
 
                 Repeater {

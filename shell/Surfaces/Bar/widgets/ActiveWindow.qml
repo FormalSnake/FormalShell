@@ -62,12 +62,12 @@ Cell {
     // cell grows along is the bar's edge.
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     Behavior on implicitHeight {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     CellRow {
@@ -121,7 +121,7 @@ Cell {
             property bool _dimB: false
 
             Behavior on _cross {
-                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                Anim { kind: "effects" }
             }
 
             // Dropped on a vertical bar: an app name is words, and 44px of

@@ -34,7 +34,7 @@ Cell {
     // by M26 Task 7).
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     CellRow {

@@ -47,7 +47,7 @@ Cell {
     // (DESIGN.md §1 "Motion", M16 Task 2's contract).
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     CellRow {

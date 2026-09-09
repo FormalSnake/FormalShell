@@ -25,7 +25,7 @@ Cell {
     // "Motion").
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     Loader {

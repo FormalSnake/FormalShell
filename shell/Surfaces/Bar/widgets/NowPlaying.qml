@@ -86,12 +86,12 @@ Cell {
     // Both axes, since which one the cell grows along is the bar's edge.
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     Behavior on implicitHeight {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     CellRow {
@@ -178,7 +178,7 @@ Cell {
             readonly property Item _front: titleSlot._frontIsA ? titleA : titleB
 
             Behavior on _cross {
-                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                Anim { kind: "effects" }
             }
 
             width: root.vertical ? titleSlot._front.height : titleSlot._front.width

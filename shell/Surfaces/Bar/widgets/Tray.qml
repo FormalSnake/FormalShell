@@ -188,7 +188,7 @@ Rail {
     // `_decidedTotal` and not `_total`.
     Timer {
         id: refitTimer
-        interval: Theme.motion.standard + 32
+        interval: Theme.motion.spatial + 32
         onTriggered: root._refit()
     }
 

@@ -158,7 +158,7 @@ Item {
     property color foreground: root._ink
 
     Behavior on foreground {
-        ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        CAnim {}
     }
 
     // Band-2 (meta) ink. A dim caption drawn onto a filled cell measures
@@ -171,7 +171,7 @@ Item {
         : Theme.color.mutedForeground
 
     Behavior on dimForeground {
-        ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        CAnim {}
     }
 
     // A badge sitting inside a row (the process table's KERNEL cell) rather
@@ -344,11 +344,11 @@ Item {
                     : Theme.color.border
 
         Behavior on color {
-            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            CAnim {}
         }
 
         Behavior on border.color {
-            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            CAnim {}
         }
     }
 
@@ -363,7 +363,7 @@ Item {
         opacity: root._hoverFillActive ? 1 : 0
 
         Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            Anim { kind: "effects" }
         }
     }
 
@@ -373,14 +373,18 @@ Item {
     // clear of the cell's own rounded corners, which cut in at this height.
     Rectangle {
         id: panelMark
-        // Drawn on the surface clock, not on `visible` (M53 D2): the panel
-        // it stands for enters and leaves as a surface, so the mark grows
-        // out of the cell's own centre along the bar and shrinks back into
-        // it rather than being switched on under a card that is still on
-        // its way in.
+        // Drawn on its own clocks, not on `visible` (M53 D2): the panel it
+        // stands for enters and leaves as a surface, so the mark grows out
+        // of the cell's own centre along the bar and shrinks back into it
+        // rather than being switched on under a card that is still on its
+        // way in. Two terms, since the growth is geometry and the fade is
+        // not (M54 D2): the scale takes `spatialFast` and carries the mark
+        // a hair past full before it settles, the opacity takes `effects`
+        // and never overshoots.
         property real _presence: root.panelOpen ? 1 : 0
+        property real _fade: root.panelOpen ? 1 : 0
         visible: panelMark.opacity > 0
-        opacity: panelMark._presence
+        opacity: panelMark._fade
         readonly property bool _sideways: root.vertical
         readonly property real _edgeMargin: root._borderless ? 0 : Theme.borderWidth
         width: panelMark._sideways ? Theme.borderWidth * 2 : root.width - Theme.space.xs * 2
@@ -399,10 +403,11 @@ Item {
         color: Theme.color.primary
 
         Behavior on _presence {
-            NumberAnimation {
-                duration: root.panelOpen ? Theme.motion.surface : Theme.motion.surfaceExit
-                easing.type: Theme.motion.easing
-            }
+            Anim { kind: "spatialFast" }
+        }
+
+        Behavior on _fade {
+            Anim { kind: "effects" }
         }
 
         transform: Scale {

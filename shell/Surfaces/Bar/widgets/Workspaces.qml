@@ -59,7 +59,7 @@ Cell {
     // width Behavior takes.
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     Connections {
@@ -194,14 +194,14 @@ Cell {
                                 : (slot.ws.isFocused ? Theme.color.primary : Theme.color.mutedForeground)
 
                             Behavior on width {
-                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                                Anim { kind: "spatialFast" }
                             }
 
                             // The dot under the pill takes the pill's own colour
                             // so the two read as one shape while the pill is
                             // arriving, and fades back once it has left.
                             Behavior on color {
-                                ColorAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                                CAnim {}
                             }
 
                             // One pulse when a workspace turns urgent, not a
@@ -209,8 +209,8 @@ Cell {
                             // state, the pulse is the thing that just happened.
                             SequentialAnimation {
                                 id: urgentPulse
-                                NumberAnimation { target: dot; property: "opacity"; to: 0.3; duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-                                NumberAnimation { target: dot; property: "opacity"; to: 1; duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                                Anim { target: dot; property: "opacity"; to: 0.3; kind: "effects" }
+                                Anim { target: dot; property: "opacity"; to: 1; kind: "effectsSlow" }
                             }
 
                         }
@@ -238,7 +238,7 @@ Cell {
                 }
             }
 
-            // The moving pill. `_lead` and `_trail` chase the same slot at
+            // The moving pill. `lead` and `trail` chase the same slot at
             // different speeds, so the span between them opens on the way out
             // and closes on the way in; which of the two is the leading edge
             // falls out of the arithmetic rather than needing the direction.
@@ -262,10 +262,7 @@ Cell {
                 visible: pill.opacity > 0
 
                 Behavior on opacity {
-                    NumberAnimation {
-                        duration: pill._here ? Theme.motion.surface : Theme.motion.surfaceExit
-                        easing.type: Theme.motion.easing
-                    }
+                    Anim { kind: "effects" }
                 }
 
                 // The pointer's own answer that this is a target, same as a
@@ -279,7 +276,7 @@ Cell {
                 property real growth: pill.hovered ? (Theme.space.lg - root._dotSize) : 0
 
                 Behavior on growth {
-                    NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                    Anim { kind: "spatialFast" }
                 }
 
                 height: root._dotSize + pill.growth
@@ -299,14 +296,22 @@ Cell {
                 x: Math.min(pill.lead, pill.trail) - pill.growth / 2
                 width: Math.abs(pill.lead - pill.trail) + root._slotWidth + pill.growth
 
+                // Both edges on `emphasized`, the trailing one over twice
+                // the clock (M54 D2, caelestia's ActiveIndicator): the
+                // leading edge reaches the new slot while the trailing edge
+                // is still leaving the old one, so the pill stretches across
+                // the gap and closes up behind itself. The one place in the
+                // shell that spells a duration of its own, because the
+                // relationship between the two edges IS the effect and a
+                // second token would be a name with one caller.
                 Behavior on lead {
                     enabled: pill.visible
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.emphasizedEasing }
+                    Anim { kind: "emphasized" }
                 }
 
                 Behavior on trail {
                     enabled: pill.visible
-                    NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.emphasizedEasing }
+                    Anim { kind: "emphasized"; duration: Theme.motion.emphasized * 2 }
                 }
             }
         }

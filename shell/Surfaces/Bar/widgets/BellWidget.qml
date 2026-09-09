@@ -35,7 +35,7 @@ Cell {
     // other numeric bar cell carries).
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
 

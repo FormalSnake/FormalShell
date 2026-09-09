@@ -313,7 +313,7 @@ Panel {
                         opacity: (rowWrap.hovered && !rowWrap.cursorHere) ? 1 : 0
 
                         Behavior on opacity {
-                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                            Anim { kind: "effects" }
                         }
                     }
 

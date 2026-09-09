@@ -36,12 +36,12 @@ Cell {
     // Both axes, since which one the swap moves is the bar's edge.
     Behavior on implicitWidth {
         enabled: root.animateSize
-        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+        Anim {}
     }
 
     Behavior on implicitHeight {
         enabled: root.animateSize
-        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+        Anim {}
     }
 
     // One line per field on a vertical bar (ClockModel.stackedLines), the

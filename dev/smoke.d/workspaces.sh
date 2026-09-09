@@ -10,7 +10,7 @@
 # the same row with the pill in two places.
 #
 # `hyprctl dispatch workspace 1` then fires and the run takes a burst of
-# frames across the next half second, plus a settled one three seconds on.
+# frames across the pill's own travel, plus a settled one three seconds on.
 # Every frame is cropped to the workspace cell alone, never the whole bar:
 # the switch changes the active-window title two cells over, so a wider crop
 # would differ between any two frames whether or not the indicator moved.
@@ -21,12 +21,14 @@
 # resolving after the switch had landed: at `motion.enabled=false` every one
 # of these tokens is 0 and all four frames would be the settled cell exactly.
 #
-# What the burst deliberately does NOT claim is a picture of the pill
-# stretched between the two slots. A nested software-rendered session cannot
-# pin a 250ms chrome animation to a chosen frame (grim's own capture is a
-# large fraction of it, and the compositor's event has to reach the shell
-# first: at 80ms the bar was still painting the old workspace entirely). The
-# durations themselves are asserted in tests/tst_theme_tokens.qml.
+# The burst frames also carry the picture the assertions do not claim: the
+# pill's two edges run `emphasized`, the trailing one over twice that clock
+# (M54 D2), so between roughly a quarter and a whole clock past the switch
+# the pill is one shape stretched across both dots rather than a pill at
+# either end. That is what the crops are for reading by eye. It is left out
+# of the assertions on purpose: a nested software-rendered session cannot
+# promise which frame a screencopy commits, and the durations themselves are
+# pinned in tests/tst_theme_tokens.qml.
 leg_workspaces_flag="--workspaces"
 leg_workspaces_order=195
 leg_workspaces_needs="foot convert"
@@ -39,7 +41,33 @@ workspaces_crop_dir="$shot_dir/workspaces-crops"
 # The workspace cell alone, at the left end of the bar's left region, past
 # the launcher cell beside it.
 workspaces_crop_geometry="50x24+48+8"
-workspaces_burst="1 2 3"
+# The pill's own clock (Theme.motion.emphasized, M54 D2/D11) and the delay
+# this rig costs between the dispatch and the shell's first frame carrying
+# it, both in milliseconds. Every burst frame is that delay plus a fraction
+# of the clock, so moving the token moves the sampling with it instead of
+# leaving the burst pinned to a duration that has gone.
+#
+# The fractions straddle the widest part of the stretch, which is earlier
+# and narrower than the clock alone suggests: M3's emphasized curve puts
+# 86% of the travel in its first third, so the leading edge is nearly home
+# by 0.3 of a clock while the trailing edge, on twice that, is barely a
+# third of the way. The gap between them peaks around a quarter of a clock
+# past the shell's first frame and is closed again by three quarters.
+#
+# A fraction says when a capture is ASKED for, not when the compositor
+# commits the frame it answers with, and all four are in flight at once, so
+# the frames read later than they are armed and not always in that order.
+# That is why the first one is negative and still lands inside the travel.
+workspaces_clock_ms=400
+workspaces_react_ms=130
+workspaces_burst_fractions=(-6 8 18 28)
+workspaces_burst_sleeps=()
+workspaces_burst=""
+for workspaces_f in "${workspaces_burst_fractions[@]}"; do
+  workspaces_at=$((workspaces_react_ms + workspaces_f * workspaces_clock_ms / 100))
+  workspaces_burst_sleeps+=("$(printf '%d.%03d' $((workspaces_at / 1000)) $((workspaces_at % 1000)))")
+  workspaces_burst="$workspaces_burst ${#workspaces_burst_sleeps[@]}"
+done
 
 workspaces_burst_path() {
   echo "$shot_dir/workspaces-moving-$1.png"
@@ -54,7 +82,14 @@ leg_workspaces_timing() {
 }
 
 leg_workspaces_drive() {
-  local script="$shot_dir/workspaces-drive.sh"
+  local script="$shot_dir/workspaces-drive.sh" i arm=""
+  # Each burst frame is armed off the switch rather than chained behind the
+  # one before it: a full-screen screencopy costs a good fraction of the
+  # clock being sampled, so chained sleeps would drag every later frame past
+  # the stretch it was meant to catch.
+  for i in "${!workspaces_burst_sleeps[@]}"; do
+    arm+="( sleep ${workspaces_burst_sleeps[$i]}; \"$grim_bin\" \"$(workspaces_burst_path $((i + 1)))\" > /dev/null 2>&1 ) &"$'\n'
+  done
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 5
@@ -64,12 +99,8 @@ sleep 1
 sleep 3
 "$grim_bin" "$workspaces_two_path" > /dev/null 2>&1
 "$hyprctl_bin" dispatch workspace 1 >> "$workspaces_dispatch_path" 2>&1
-sleep 0.15
-"$grim_bin" "$(workspaces_burst_path 1)" > /dev/null 2>&1
-sleep 0.15
-"$grim_bin" "$(workspaces_burst_path 2)" > /dev/null 2>&1
-sleep 0.15
-"$grim_bin" "$(workspaces_burst_path 3)" > /dev/null 2>&1
+$arm
+wait
 sleep 3
 "$grim_bin" "$workspaces_settled_path" > /dev/null 2>&1
 EOF
