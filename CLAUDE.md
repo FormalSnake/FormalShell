@@ -132,6 +132,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and the players switcher.
 - `menu.sh` `--menu`: the launcher at root, its fuzzy ranking against the
   live tree, and the select round trip.
+- `menu_unfold.sh` `--menu-unfold`: the launcher unfolding out of its own
+  search row, sampled frame by frame: the card drawn at the field's height
+  with nothing under the rule, then a ladder of probes down its gutter
+  showing the height grow to rest with the field never moving.
 - `mic.sh` `--mic`: the opt-in mic cell rendering its honest no-device state
   on a machine with no capture device.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
@@ -152,6 +156,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   left-region audio cell, the card in it once and the bare desktop once.
 - `panel_at.sh` `--panel-at <n>`: `panel toggleAt <n>` walking the resolved
   right region and stopping on a panel-bearing cell.
+- `panel_emerge.sh` `--panel-emerge`: `panel open network` sampled frame by
+  frame, the drawer open: a ladder of probes down the card's gutter showing
+  its visible height grow out of the bar's inner line to the resting rect,
+  and no card pixel inside the bar's own band in any frame.
 - `panel_handoff.sh` `--panel-handoff`: `audio` alone in the left region and
   `network` alone in the right, so the two cards rest ~1500px apart, and
   `panel toggle audio` over an open network panel is one card rather than

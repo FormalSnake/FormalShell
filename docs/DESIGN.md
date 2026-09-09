@@ -187,22 +187,35 @@ those same numbers. A surface never writes its own margin.
 state, icon and label crossfades and the cursor's travel, `standard` 130
 for anything that moves or resizes in place, `surface` 180 for a surface's
 enter with `surfaceExit` 120 for its exit, `emphasized` 250 on
-`emphasizedEasing` for the workspace pill, the toasts, a card's size morph
-and the panel handoff, `reveal` 400 for the wallpaper and palette
-crossfades and the lock's blank and wake, `slide` 8px, `zoom` 0.97. Enter,
-exit and any response to input take `easing` (OutQuint); travel and size
-changes take `easingInOut` (InOutQuart), and `emphasizedEasing` is the same
-curve on the long clock. `motion.enabled=false` zeroes the durations and
-the slide and sets the zoom to 1. The identity is Vercel's, so nothing
-overshoots or bounces.
+`emphasizedEasing` for the workspace pill, the toasts, a card's size morph,
+the panel handoff and an anchored surface's own open, `reveal` 400 for the
+wallpaper and palette crossfades and the lock's blank and wake, `slide` 8px,
+`zoom` 0.97. Enter, exit and any response to input take `easing`
+(OutQuint); travel and size changes take `easingInOut` (InOutQuart), and
+`emphasizedEasing` is the same curve on the long clock.
+`motion.enabled=false` zeroes the durations and the slide and sets the zoom
+to 1. The identity is Vercel's, so nothing overshoots or bounces.
 
-A surface enters as opacity 0 to 1, scale `zoom` to 1 from the cell that
-opened it (the bar edge's centre when no cell did) and a `slide` travel
-toward rest, on `surface`, and leaves the same way on `surfaceExit`; a
-modal surface (the launcher, polkit, the plugin overlay) zooms from centre
-with no slide, its scrim fading on the same clock. Opening a panel while
-another is open is a handoff, not two surfaces crossing: the new card is
-drawn on the old card's rect, the two contents crossfade on `standard`,
+An anchored surface opens as a drawer (amended 2026-09-09, owner: the fade,
+0.97 zoom and 8px slide it replaces read as the surface not animating at
+all). A panel, the notification centre and the OSD each hang off one edge:
+the card starts behind that edge, displaced toward it by its own extent on
+that axis, and travels to rest on `emphasized`, clipped at the line it
+rests on so it comes out from under the bar rather than across it. No fade
+and no zoom, since the clip is what hides it; its contents fade in behind
+the travel, so the card lands before its text. It retreats the same way on
+`surface`. The launcher unfolds instead: the card is drawn at its search
+row's height on `fast`, at full opacity, and its height carries the level
+under the rule on `emphasized` `easingInOut` while the card clips, so the
+rows are revealed rather than pushed into place; it folds back on
+`surface`. Polkit and the plugin overlay keep the modal recipe, opacity 0
+to 1 and `zoom` to 1 from centre with no slide, their scrim on the same
+clock, and the tooltip and the bar's own reveal keep it with the slide.
+Every one of them waits for its window to be on screen before it starts: a
+compositor can spend most of an enter putting the surface up, and an
+animation that ran behind it would land already at rest. Opening a panel
+while another is open is a handoff, not two surfaces crossing: the new card
+is drawn on the old card's rect, the two contents crossfade on `standard`,
 and the one card left travels and resizes to its own place on
 `emphasized`.
 

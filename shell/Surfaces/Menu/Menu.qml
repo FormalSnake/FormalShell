@@ -2145,11 +2145,17 @@ PanelWindow {
         + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + actionBar.height
 
     // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
-    // M51 D3): a modal surface, zooming from centre with no slide.
+    // M53 addendum): the card unfolds out of its own search field. It lands
+    // at `_fieldRowHeight` on `fast`, at full opacity and with no zoom, and
+    // its height carries the rest on the long clock while the level under the
+    // rule is revealed by the growing edge. A modal surface, so no slide and
+    // no emerge: the field is what it comes out of, not a screen edge.
     Presence {
         id: presence
         open: root.isOpen
         edge: "center"
+        mapped: root.backingWindowVisible
+        mode: "unfold"
     }
 
     // The card's actual width and height (DESIGN.md §1 Motion, M51 D5):
@@ -2188,6 +2194,20 @@ PanelWindow {
         enabled: presence.settled && root.isOpen
         NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
     }
+
+    // The fold (M53 addendum): the height the card is drawn at the instant it
+    // appears, which is the search field, its own padding and the rule under
+    // it. Nothing below the rule is laid out at this height; the card clips,
+    // so the level is revealed by the edge travelling rather than pushed into
+    // place by it.
+    readonly property real _fieldRowHeight: root._chrome + searchRow.height + searchRule.height
+
+    // What the card actually draws at: the fold plus however much of the rest
+    // Presence's own morph has handed over. A function of that pose rather
+    // than a Behavior of its own, so a re-toggle mid-unfold reverses from
+    // wherever the edge had got to instead of snapping to either end.
+    readonly property real _unfoldHeight: root._fieldRowHeight
+        + Math.max(0, root._morphHeight - root._fieldRowHeight) * presence.morph
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -2228,8 +2248,9 @@ PanelWindow {
         onPressed: root.close()
     }
 
-    // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a modal
-    // surface, so fade and zoom from centre only, no slide. `Card` paints
+    // Enter/exit lives in Presence (DESIGN.md §1 Motion, M53 addendum): the
+    // card unfolds from its own field, so it fades in on `fast` at the fold's
+    // height and grows from there, with no zoom and no slide. `Card` paints
     // the translucent `card` fill Hyprland's blur reads through, the 1px
     // border and the `radiusXl` corners, and insets its own slot by
     // `panelPadding`, so every child below anchors straight to that slot's
@@ -2239,16 +2260,17 @@ PanelWindow {
         x: Math.round((root._outputWidth - root._morphWidth) / 2)
         y: root._clampTop(root._preferredTop)
         width: root._morphWidth
-        height: root._morphHeight
+        height: root._unfoldHeight
         // Content sizes to its own target the instant a route changes (the
         // rows list, the action bar, the split pane), while this card's own
         // width/height above trail behind on the morph Behaviors: without a
         // clip the wider/taller instant would paint past whatever edge is
         // still catching up (M51 D5).
+        // The same clip is what makes the unfold a reveal: the level under
+        // the rule is laid out at its settled place from the first frame and
+        // the growing edge uncovers it.
         clip: true
         opacity: presence.opacity
-        scale: presence.scale
-        transformOrigin: presence.transformOrigin
 
         // Swallows presses that land on the card's own padding gutters
         // rather than on a row, so a click inside the frame never falls
@@ -2460,11 +2482,16 @@ PanelWindow {
             anchors.top: searchRule.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.bottom: parent.bottom
+            // The card's settled height, not its current one: anchored to the
+            // card's own bottom edge instead, everything in here that hangs
+            // off that edge (the action bar, the preview pane) would ride the
+            // unfold down through the rows rather than being revealed by it.
+            height: Math.max(0, root._morphHeight - root._fieldRowHeight)
             // The level entrance (M51 D3): plays when the level or the view
             // that stands in for the row list changes, never on a query
-            // re-rank.
-            opacity: root._levelEnterOpacity
+            // re-rank. The unfold's own term holds the whole level back until
+            // the card is most of the way open (M53 addendum).
+            opacity: root._levelEnterOpacity * presence.contentOpacity
             transform: Translate { x: root._levelEnterX }
 
             // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text

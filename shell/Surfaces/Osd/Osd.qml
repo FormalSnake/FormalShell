@@ -95,10 +95,18 @@ PanelWindow {
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+    // A drawer out of the bottom edge (Presence.qml, DESIGN.md §1 Motion,
+    // M53 addendum). This window is exactly the card, one `screenPadding`
+    // off the bottom of the output, so the window's own bounds are the slit:
+    // a pill displaced its own height downward is outside them and draws
+    // nothing, and no clipping item of its own is needed.
     Presence {
         id: presence
         open: root.kind !== ""
         edge: "bottom"
+        mapped: root.backingWindowVisible
+        mode: "emerge"
+        extent: frame.height
     }
 
     readonly property real _screenPadding: Theme.space.screenPadding
@@ -129,18 +137,19 @@ PanelWindow {
         // three surfaces Hyprland blurs behind (spec "Depth").
         color: Theme.color.card
 
-        // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51 D2/D4):
-        // fade, zoom and a rise from the bottom edge, one shared clock so a
-        // retrigger mid-exit reverses in place. Kind-to-kind swaps while
-        // already showing (volume -> brightness) stay instant: `open` never
-        // leaves true.
+        // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M53 addendum):
+        // the pill rises out of the bottom edge and retreats behind it, with
+        // no fade and no zoom, on one shared clock so a retrigger mid-exit
+        // reverses in place. Kind-to-kind swaps while already showing
+        // (volume -> brightness) stay instant: `open` never leaves true.
         opacity: presence.opacity
-        scale: presence.scale
-        transformOrigin: presence.transformOrigin
-        transform: Translate { y: presence.slideY }
+        transform: Translate { y: presence.emergeY }
 
         Item {
             id: row
+            // The pill lands before its readout does (Presence's own
+            // `contentOpacity`).
+            opacity: presence.contentOpacity
             width: Theme.space.popupWidthNarrow - frame.padding * 2
             height: Math.max(kindIcon.height, readout.implicitHeight, mediaLabel.implicitHeight,
                 Theme.space.trackThickness)

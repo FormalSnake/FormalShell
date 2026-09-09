@@ -8,6 +8,28 @@ path), b167743 (panel handoff), f21bdfd (keyed lists, cursor travel),
 d6394d0 (launcher and centre seams), aa8349f (modals, lock, picker),
 05d0062 (tooltip group). Task 9 is the docs commit carrying this line.
 
+Addendum 2026-09-09, after the owner rebuilt a real host on the branch:
+"nothing really looks different. In caelestia there are nice morph
+animations, here panels still open the same way." The M51 recipe this plan
+kept (fade, 0.97 zoom, an 8px slide, 180ms) is too small to register, and
+most of what there was never reached the screen at all: a surface maps its
+window on the tick it opens, the compositor takes a good part of the enter
+to put that surface up, and the animation had run out behind it. So the
+open itself became the morph. `Presence` grew two modes beside `fade`.
+`emerge` is the drawer every anchored surface now takes (the panels, the
+chevron's and the tray's second bars with them, the notification centre and
+the OSD): the card sits its own extent behind the edge it hangs off, cut at
+that edge by a clip, and travels out on `emphasized` with no fade and no
+zoom while its contents come up behind it. `unfold` is the launcher: the
+card is drawn at its search row on `fast` and its height carries the level
+under the rule on `emphasized`, revealed by the growing edge rather than
+pushed into place. Polkit and the plugin overlay keep the modal zoom, the
+tooltip and the bar keep `fade`, and every mode now waits on the surface
+being mapped before its clock starts. D1 to D10 stand; what changed is the
+surface recipe M51 D2/D4 set, which D5's handoff is untouched by (it still
+bypasses Presence). `dev/smoke.d/panel_emerge.sh` and
+`dev/smoke.d/menu_unfold.sh` sample the two opens frame by frame.
+
 Where the shipped code deviates from the task text, on purpose:
 
 - Task 2: a positioner `add` Transition animates the child's own
