@@ -18,8 +18,10 @@ import qs.Core
 //   (`contentOpacity`), so the card lands before its text.
 // - `unfold` (M53 addendum): the launcher. The card is there almost at once
 //   (`fast`) at whatever height the consumer seeds it with, and `morph`
-//   carries it to full size on `emphasized` `easingInOut` with the contents
-//   revealed under the growing edge.
+//   carries it to full size on `emphasized` with the enter easing, since an
+//   unfold is an entrance and the decelerating curve keeps the card in its
+//   partial states for most of the clock, with the contents revealed under
+//   the growing edge.
 //
 // A summonable surface binds its own frame's opacity/scale/transformOrigin
 // (and, where it wants the slide or the emerge, `transform: Translate {}`) to
@@ -106,14 +108,16 @@ QtObject {
         }
     }
 
-    // `unfold`'s size clock: the travel curve on the long duration, which is
-    // what every other size morph in the shell already rides (D2).
+    // `unfold`'s size clock: the long duration on the enter curve. InOutQuart
+    // covered most of the growth in the middle 100ms, which a keystroke read
+    // as a pause and then a jump; OutQuint starts the growth on the first
+    // frame and spends the tail settling.
     property real _morphProgress: (root.open && !root._held) ? 1 : 0
     Behavior on _morphProgress {
         NumberAnimation {
             id: _morphAnimation
             duration: root.open ? Theme.motion.emphasized : Theme.motion.surface
-            easing.type: Theme.motion.easingInOut
+            easing.type: Theme.motion.easing
         }
     }
 

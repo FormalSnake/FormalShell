@@ -2164,18 +2164,22 @@ PanelWindow {
     // (the split pane, an app view) or height mid-session morphs into it
     // instead of jumping; close() simply stops re-syncing these, so whatever
     // open() snaps them to next is the new route's real content size, never
-    // a morph from the frame the menu closed on. Declared after `presence`
-    // so its own settled flip, which shares the isOpenChanged signal these
-    // ternaries depend on, has already landed by the time they re-evaluate.
+    // a morph from the frame the menu closed on. Armed from the moment the
+    // window is up rather than from `presence.settled`: the rows land a tick
+    // or more after open() (the keyed sync is deferred), so the content
+    // height moves while the unfold is still running, and a Behavior gated
+    // on settled would let that jump straight through the growing edge.
+    // With the gate on `mapped` the edge retargets to wherever the rows put
+    // it, on the same clock, and the close freeze still holds.
     property real _morphWidth: root.isOpen ? root._cardWidth : _morphWidth
     property real _morphHeight: root.isOpen ? root._cardHeight : _morphHeight
 
     Behavior on _morphWidth {
-        enabled: presence.settled && root.isOpen
+        enabled: root.isOpen && presence.mapped
         NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
     }
     Behavior on _morphHeight {
-        enabled: presence.settled && root.isOpen
+        enabled: root.isOpen && presence.mapped
         NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
     }
 
@@ -2191,7 +2195,7 @@ PanelWindow {
     property real _morphRowsHeight: root.isOpen ? root._rowsAreaHeight : _morphRowsHeight
 
     Behavior on _morphRowsHeight {
-        enabled: presence.settled && root.isOpen
+        enabled: root.isOpen && presence.mapped
         NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
     }
 
@@ -2489,9 +2493,11 @@ PanelWindow {
             height: Math.max(0, root._morphHeight - root._fieldRowHeight)
             // The level entrance (M51 D3): plays when the level or the view
             // that stands in for the row list changes, never on a query
-            // re-rank. The unfold's own term holds the whole level back until
-            // the card is most of the way open (M53 addendum).
-            opacity: root._levelEnterOpacity * presence.contentOpacity
+            // re-rank. No fade against the unfold: the level sits at full
+            // opacity under the card's clip, so the growing edge is what
+            // reveals it. Fading it as well hid the reveal, since the rows
+            // were still transparent for most of the edge's travel.
+            opacity: root._levelEnterOpacity
             transform: Translate { x: root._levelEnterX }
 
             // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text
