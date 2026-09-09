@@ -1206,7 +1206,7 @@ Panel {
                             color: forgetHit.containsMouse ? Theme.color.destructive : wifiCell.dimForeground
 
                             Behavior on opacity {
-                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                                Anim { kind: "effects" }
                             }
 
                             // Sits above the cell's own pointer layer, so the

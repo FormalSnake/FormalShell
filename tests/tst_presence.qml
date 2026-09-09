@@ -3,11 +3,12 @@ import QtTest
 import qs.Core
 import "../shell/Components"
 
-// Presence's lifecycle (DESIGN.md §1 "Motion", M51 D2/D4, M53 addendum):
-// `shown` tracks `open` immediately but lags `close()` until the exit
-// settles, `center` never slides, `emerge` sits a closed card its whole
-// extent behind its edge while `unfold` carries a card's own size instead,
-// and `motion.enabled: false` collapses every mode to an instant swap.
+// Presence's lifecycle (DESIGN.md §1 "Motion", M51 D2/D4, M54 D8): `shown`
+// tracks `open` immediately but lags `close()` until the exit settles, a
+// `fade` zooms from 0.97 and never travels, `emerge` sits a closed card its
+// whole extent behind its edge while `unfold` carries a card's own size
+// instead, and `motion.enabled: false` collapses every mode to an instant
+// swap.
 TestCase {
     id: testCase
     name: "Presence"
@@ -49,16 +50,18 @@ TestCase {
         compare(presence.opacity, 0);
     }
 
-    function test_center_edge_never_slides() {
+    function test_a_fade_zooms_but_never_travels() {
+        // M54 D8: the 8px nudge is gone, and what is left of the arrival is
+        // the scale, which rides a clock of its own.
         var presence = createTemporaryObject(presenceComponent, testCase, { edge: "center" });
-        compare(presence.slideX, 0);
-        compare(presence.slideY, 0);
+        compare(presence.scale, 0.97);
+        compare(presence.emergeX, 0);
+        compare(presence.emergeY, 0);
         presence.open = true;
-        compare(presence.slideX, 0);
-        compare(presence.slideY, 0);
-        tryCompare(presence, "shown", true, 1000);
-        compare(presence.slideX, 0);
-        compare(presence.slideY, 0);
+        tryCompare(presence, "settled", true, 2000);
+        compare(presence.scale, 1);
+        compare(presence.emergeX, 0);
+        compare(presence.emergeY, 0);
     }
 
     function test_settled_drops_during_the_exit_and_returns_after() {
@@ -74,12 +77,11 @@ TestCase {
 
     function test_bypass_lands_on_the_pose_open_names() {
         // Panel's handoff (M53 D5) draws its own trajectory and must have no
-        // fade, no zoom and no slide running under it.
+        // fade and no zoom running under it.
         var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top", bypass: true });
         presence.open = true;
         compare(presence.opacity, 1);
         compare(presence.scale, 1);
-        compare(presence.slideY, 0);
         compare(presence.settled, true);
         compare(presence.shown, true);
     }
@@ -117,8 +119,6 @@ TestCase {
         // and scale stay put for the whole travel.
         compare(presence.opacity, 1);
         compare(presence.scale, 1);
-        compare(presence.slideX, 0);
-        compare(presence.slideY, 0);
         tryCompare(presence, "settled", true, 2000);
         compare(presence.opacity, 1);
         compare(presence.scale, 1);
@@ -144,6 +144,11 @@ TestCase {
         verify(presence.emergeY > 0);
         verify(presence.emergeY < 400);
         tryCompare(presence, "shown", false, 2000);
+        // Past `shown`, not past the clock: the spatial curve overshoots, so
+        // the card is further behind the edge than its own extent for the
+        // tail of the exit and comes back to it (M54 D1). The window is
+        // already unmapped by then, which is why `shown` may drop first.
+        tryCompare(presence, "settled", true, 2000);
         compare(presence.emergeY, 400);
     }
 
@@ -179,11 +184,14 @@ TestCase {
             { edge: "center", mode: "unfold", open: true });
         tryCompare(presence, "settled", true, 2000);
         presence.open = false;
-        // The fade is `fast` and the fold is the long clock, so the window
-        // has to stay mapped for the slower of the two.
+        // The card leaves on `effectsFast` and the fold on `spatial`, so the
+        // window has to stay mapped for the slower of the two.
         compare(presence.shown, true);
         verify(presence.morph > 0);
         tryCompare(presence, "shown", false, 2000);
+        // The fold overshoots below its own seed on the way out and settles
+        // back on it, behind a window that has already gone.
+        tryCompare(presence, "settled", true, 2000);
         compare(presence.morph, 0);
     }
 
@@ -205,14 +213,12 @@ TestCase {
         Theme.motionEnabled = false;
         var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top" });
         presence.open = true;
-        // No Behavior to wait out: motion.enabled=false zeros both surface
-        // durations (Theme/tokens.js's motionTokens), so the whole recipe
-        // lands on the same tick.
+        // No Behavior to wait out: motion.enabled=false zeros every duration
+        // (Theme/tokens.js's motionTokens), so the whole recipe lands on the
+        // same tick.
         compare(presence.shown, true);
         compare(presence.opacity, 1);
         compare(presence.scale, 1);
-        compare(presence.slideX, 0);
-        compare(presence.slideY, 0);
         presence.open = false;
         compare(presence.shown, false);
     }

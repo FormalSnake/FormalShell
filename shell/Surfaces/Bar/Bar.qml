@@ -695,11 +695,12 @@ PanelWindow {
     }
 
     // The strip's own entrance (DESIGN.md §1 Motion, M51 D2's grammar): the
-    // window maps at its final geometry and the cells arrive in from the
-    // bar's edge behind it, so the one reflow the map costs lands under a
-    // deliberate movement rather than as a jump. Fade and slide only, no
-    // zoom: `motion.zoom` on a surface as wide as the output pulls both ends
-    // ~30px in and reads as the bar being the wrong length, not as depth.
+    // window maps at its final geometry and the strip fades up behind it, so
+    // the one reflow the map costs lands under a deliberate movement rather
+    // than as a jump. The fade alone: Presence's own zoom is anchored to the
+    // bar's edge and a scale on a surface as wide as the output pulls both
+    // ends ~30px in, which reads as the bar being the wrong length rather
+    // than as depth.
     Presence {
         id: presence
         open: bar.ready
@@ -733,10 +734,6 @@ PanelWindow {
         height: bar._framed && !bar._vertical ? bar._strip.thickness : parent.height
 
         opacity: presence.opacity
-        transform: Translate {
-            x: presence.slideX
-            y: presence.slideY
-        }
 
         // Declared before the regions, so it stacks behind every cell. With the
         // screen frame on, the ring below already paints the strip as part of

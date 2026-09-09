@@ -185,7 +185,7 @@ PanelWindow {
 
     Behavior on _followY {
         enabled: !root._followSync
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+        Anim { kind: "spatialFast" }
     }
 
     on_FollowYChanged: contentFlickable.contentY = root._followY
@@ -331,13 +331,60 @@ PanelWindow {
     readonly property var _edge: BarLayout.edgeVector(Theme.barPosition)
 
     // What the card is allowed to paint on (M53 addendum, the drawer open):
-    // everything past the bar's inner line, which is also the card's own
-    // resting edge. The emerge below displaces a closed card behind that
-    // line by its whole extent, and this is what cuts it there.
+    // everything past the bar's own inner line, which the shape below reaches
+    // up to. The emerge displaces a closed card behind that line by its whole
+    // extent, shoulders included, and this is what cuts it there.
+    //
+    // A negative margin rather than a second geometry: `clipBand` cuts at the
+    // bar's edge plus whatever it is handed, so handing it `barMargin` less
+    // the reach moves the cut back onto the line itself, on all four edges,
+    // with the owner shift untouched.
     readonly property var _clipBand: root._screen
         ? Geometry.clipBand(Theme.barPosition, root._screen.width, root._screen.height,
-            Theme.edgeInset, Theme.space.barMargin, root._ownerShift)
+            Theme.edgeInset, Theme.space.barMargin - root._joinDepth, root._ownerShift)
         : ({ x: 0, y: 0, width: 0, height: 0 })
+
+    // Whether this card joins the bar (M54 D6). A panel with an owner hangs
+    // off that owner rather than off the bar and meets no line; nor does one
+    // on a framed screen, where the strip draws no hairline at all and the
+    // frame's own ring runs that edge.
+    readonly property bool _joined: !root.owner && !Theme.frameEnabled
+
+    // How far past its own rect the card's shape reaches toward the bar: the
+    // `barMargin` the frame hangs off the strip by, and the line's own row on
+    // top of it, so the fillets land ON the line and the two windows read as
+    // one silhouette. The frame's rect is untouched, so everything measured
+    // off it (the handoff, the content, `panel state`) is what it was.
+    readonly property real _joinDepth: root._joined
+        ? Theme.space.barMargin + Theme.borderWidth
+        : 0
+
+    // Where the card meets the bar right now, for the gap in the strip's line
+    // (Core/PanelRegistry.qml, Surfaces/Bar/Bar.qml). Read off the frame's
+    // live rect rather than its resting place, so a size morph and a handoff
+    // travel both carry the gap with them frame by frame. `x` and `width` run
+    // along the bar in the bar window's own coordinates, which this window,
+    // covering the whole output, already shares.
+    //
+    // A card being handed over publishes nothing: it is frozen where it was
+    // while the card that replaced it travels, and the gap follows the one
+    // that is moving.
+    readonly property var _join: (root._joined && root._screen && presence.shown
+        && !root.handingOver)
+        ? ({
+            edge: Theme.barPosition,
+            x: Theme.barVertical ? frame.y : frame.x,
+            width: Theme.barVertical ? frame.height : frame.width,
+            screen: root._screen.name
+        })
+        : null
+
+    on_JoinChanged: {
+        if (root._join)
+            PanelRegistry.setJoin(root, root._join);
+        else
+            PanelRegistry.clearJoin(root);
+    }
 
     readonly property real _contentWidth: root.panelWidth - Theme.space.panelPadding * 2
 
@@ -371,17 +418,20 @@ PanelWindow {
     // --- Handoff ---------------------------------------------------------
     //
     // Opening B while A is open is one card, not two surfaces crossing (M53
-    // D5): B's frame is seeded on A's rect and, once the two contents have
-    // crossfaded there, travels to its own. Since both are a `card` fill
-    // with the same border and radius, and A's card is cut the moment the
-    // crossfade ends, what the eye gets is one card whose contents change
-    // and which then moves and resizes into place.
+    // D5): B's frame is seeded on A's rect and travels from there to its own,
+    // resizing as it goes, with B's contents coming up over the first part of
+    // that travel. Since both are a `card` fill with the same border and
+    // radius, and A's card is cut at the instant B's takes its place, what
+    // the eye gets is one card that moves, resizes and changes what it
+    // holds.
     //
-    // The two phases are sequential rather than concurrent because two
-    // Wayland surfaces cannot commit a frame together: overlapped, the pair
-    // drew a doubled edge a frame's travel apart, which at this distance was
-    // 160px. Stationary they sit exactly on top of each other, and by the
-    // time anything moves there is only one card left.
+    // Two Wayland surfaces cannot commit a frame together: overlapped, the
+    // pair drew a doubled edge a frame's travel apart, which at this distance
+    // was 160px. So the incoming window still draws on the outgoing card's
+    // rect first, and the outgoing one is cut on the tick the travel starts,
+    // when the two are still exactly on top of each other. From there it is
+    // one card, and the crossfade runs over the first part of its travel
+    // rather than ahead of it (M54 D9).
     //
     // The card itself never crossfades, which is why Presence is bypassed on
     // both halves, and why the outgoing window is cut rather than faded: an
@@ -398,10 +448,10 @@ PanelWindow {
     // not.
     property real _travel: 1
     // Non-null on the outgoing half: the panel taking this card over. The
-    // frame itself does not move for it, the two morphs having frozen where
-    // they were; what it names is whose content is fading in under this
-    // one's, and that this window is a handed-over card rather than a
-    // closing one.
+    // frame itself never moves for it, the two morphs having frozen where
+    // they were; what it names is whose content this one's is complementary
+    // to while the incoming window comes up, and that this window is a
+    // handed-over card rather than a closing one.
     property var _handoffTo: null
     // Non-null on the incoming half over the same window as `_handoffFrom`:
     // the outgoing panel, waiting to be told the travel has begun.
@@ -424,25 +474,21 @@ PanelWindow {
     // What those three actually draw at. The outgoing half reads the
     // incoming one's alpha rather than running a fade of its own: one clock,
     // which a window that has yet to render its first frame cannot be
-    // behind, and the pair are exactly complementary at every step.
+    // behind, and the pair are exactly complementary at every step. What that
+    // buys while the incoming window is still coming up is the whole of it:
+    // the outgoing card holds its own contents at full until the tick the
+    // travel starts.
     // Presence's own term is what holds the contents back behind the emerge,
     // so the card arrives before its text; it is 1 whenever the surface is at
     // rest or bypassed, which leaves the handoff crossfade below alone.
     readonly property real _contentOpacity: ((root.handingOver && root._handoffTo)
         ? 1 - root._handoffTo._contentAlpha
         : root._contentAlpha) * presence.contentOpacity
-    // Set for the one write that seeds the alpha on an open, which has to
-    // land instantly rather than glide from whatever the last close left.
-    property bool _alphaSync: false
 
-    Behavior on _contentAlpha {
-        enabled: !root._alphaSync
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
-    }
-
-    // What this half of the handoff has left to live. Set on each phase
-    // rather than bound, since the two halves and the wait for the incoming
-    // window are three different lengths.
+    // What this half of the handoff has left to live. Set at each step rather
+    // than bound: the wait for the incoming window and the travel itself are
+    // different lengths, and the outgoing half's own end is an event rather
+    // than a clock.
     property int _handoffLife: 0
 
     Timer {
@@ -455,19 +501,35 @@ PanelWindow {
     // hundred milliseconds to map, and a clock that ran out first would cut
     // the outgoing card with nothing yet to replace it.
     function _handoffBackstop() {
-        return Theme.motion.emphasized * 8;
+        return Theme.motion.spatial * 6;
     }
 
-    SequentialAnimation {
+    // The travel and the crossfade under one clock (M54 D9): the card leaves
+    // the rect it took over on the first frame and its new contents come up
+    // over the first `effects` of the same movement.
+    //
+    // One animation over `_travel` rather than four over the frame's own x,
+    // y, width and height: `_framePlace` below interpolates the rect off it,
+    // which keeps the destination live (content that settles its height a
+    // frame late moves where the card is going rather than stranding the
+    // travel short of it), and an animation writing those four properties
+    // would break the bindings that read them. The four components share one
+    // curve either way, so easing the parameter and easing each of them is
+    // the same trajectory.
+    ParallelAnimation {
         id: travelAnimation
-        PauseAnimation { duration: Theme.motion.standard }
-        NumberAnimation {
+        Anim {
             target: root
             property: "_travel"
             from: 0
             to: 1
-            duration: Theme.motion.emphasized
-            easing.type: Theme.motion.easingInOut
+        }
+        Anim {
+            target: root
+            property: "_contentAlpha"
+            from: 0
+            to: 1
+            kind: "effects"
         }
     }
 
@@ -502,23 +564,21 @@ PanelWindow {
             return;
         var outgoing = root._handoffPending;
         root._handoffPending = null;
-        root._contentAlpha = 1;
-        root._handoffLife = Theme.motion.standard + Theme.motion.emphasized;
+        root._handoffLife = Theme.motion.spatial;
         travelAnimation.restart();
         handoffTimer.restart();
         outgoing.beginTravel();
     }
 
-    // Called on the outgoing half by the incoming one: its content is
-    // already following the incoming's, so all this sets is how long this
-    // window has left. It is the crossfade, not the travel: past that, the
-    // card standing on this rect is the incoming one and this is a duplicate
-    // of it that must not still be here when it moves.
+    // Called on the outgoing half by the incoming one, on the tick the travel
+    // starts: the card standing on this rect is the incoming one from here
+    // on, and this window is a duplicate of it that must not still be here
+    // when it moves. It goes now rather than on a clock of its own, since the
+    // two are only ever exactly on top of each other at this instant.
     function beginTravel() {
         if (!root._handoff)
             return;
-        root._handoffLife = Theme.motion.standard;
-        handoffTimer.restart();
+        root.endHandoff();
     }
 
     function endHandoff() {
@@ -533,12 +593,6 @@ PanelWindow {
         root._handoffTo = null;
         root._handoffPending = null;
         root._handoffLife = 0;
-    }
-
-    function _seedContent(alpha) {
-        root._alphaSync = true;
-        root._contentAlpha = alpha;
-        root._alphaSync = false;
     }
 
     // `anchor` is the opening cell's centre ({x, y}) in its own window, or
@@ -559,7 +613,9 @@ PanelWindow {
             previous.close();
         PanelRegistry.current = root;
         root._handedOver = false;
-        root._seedContent(from ? 0 : 1);
+        // Nothing glides here: the crossfade is the ParallelAnimation above,
+        // and this is only the value it starts from.
+        root._contentAlpha = from ? 0 : 1;
         root.isOpen = true;
         // Both halves in one pass, and the outgoing one last: it aims at
         // this panel's resolved place, which is only worth reading once
@@ -661,7 +717,23 @@ PanelWindow {
         // before anything of it was on screen.
         mapped: root.backingWindowVisible
         mode: "emerge"
-        extent: Theme.barVertical ? root._morphWidth : root._morphHeight
+        // The whole shape, not just the card: the fillets reach `_joinDepth`
+        // further toward the bar, and a closed card has to sit behind the
+        // line with those too.
+        extent: (Theme.barVertical ? root._morphWidth : root._morphHeight) + root._joinDepth
+    }
+
+    // The card squashes into the bar as it arrives and springs back (M54 D7).
+    // The target is the frame's own item and the matrix goes on the item
+    // inside it: `Deform` samples its target through `mapToItem`, which reads
+    // back any transform on that target, so sampling and deforming the same
+    // item would leave the deform driving itself.
+    Deform {
+        id: deform
+        target: frame
+        edge: Theme.barPosition
+        active: !presence.settled || root._handoff || frameX.running || frameY.running
+            || morphHeight.running || morphWidth.running
     }
 
     // The card is up and standing still: the arm switch for anything the
@@ -684,10 +756,10 @@ PanelWindow {
     property real _morphHeight: root.isOpen ? root._frameHeight : _morphHeight
 
     Behavior on _morphHeight {
-        // Off through a handoff: the frame's own size Behaviors below carry
-        // the travel then, and two clocks on one size would fight.
+        // Off through a handoff: the travel carries the size then, and two
+        // clocks on one size would fight.
         enabled: presence.settled && root.isOpen && !root._handoff
-        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+        Anim { id: morphHeight }
     }
 
     // The width's twin, on the same freeze and the same clock. A panel that
@@ -698,7 +770,7 @@ PanelWindow {
 
     Behavior on _morphWidth {
         enabled: presence.settled && root.isOpen && !root._handoff
-        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+        Anim { id: morphWidth }
     }
 
     // Where the frame sits: its own place, or, on the incoming half of a
@@ -816,14 +888,21 @@ PanelWindow {
                 width: backdrop.width
                 height: backdrop.height
 
-                Card {
+                // The card's own rect, and nothing drawn: the shape, the
+                // contents and the deform all sit inside it, so what this
+                // item carries is the geometry every other part of the panel
+                // measures itself against, unsquashed.
+                Item {
                     id: frame
                     x: root._framePlace.x
                     y: root._framePlace.y
                     width: root._framePlace.width
                     height: root._framePlace.height
-                    color: root.frameColor
-                    radius: root.frameRadius
+
+                    // `Card`'s own inset, kept as a property here because the
+                    // header's seam and the frame's click catcher reach back
+                    // out through it.
+                    readonly property real padding: Theme.space.panelPadding
 
                     // A morph that moves the card as well as resizing it (a centred
                     // frame growing, a measured panel widening, the owner under it
@@ -837,12 +916,12 @@ PanelWindow {
                     // clock over the frame, never two.
                     Behavior on x {
                         enabled: !root._handoff && presence.settled && root.isOpen
-                        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+                        Anim { id: frameX }
                     }
 
                     Behavior on y {
                         enabled: !root._handoff && presence.settled && root.isOpen
-                        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+                        Anim { id: frameY }
                     }
 
                     // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M53
@@ -860,197 +939,252 @@ PanelWindow {
                         y: presence.emergeY
                     }
 
-                    // Swallows clicks anywhere inside the frame (the card's own
-                    // padding included) before they ever reach the backdrop above:
-                    // ordinary nested-MouseArea priority, no manual event plumbing.
-                    // The negative margins undo the card's content inset, which this
-                    // has to cover.
-                    MouseArea {
-                        anchors.fill: parent
-                        anchors.margins: -frame.padding
-                        onClicked: {}
-                    }
-
-                    // The pointer leaving the card takes the cursor with it. A row
-                    // the pointer enters takes the cursor (every panel's own
-                    // `_pointAt`), and with nothing to clear it the last row kept
-                    // its ring after the pointer had gone, which reads as a hover
-                    // that never ended (owner, 2026-08-26). The next key or the next
-                    // row entered puts it back. On `frame` itself, padding included,
-                    // so crossing the card's own gutter is not a leave.
-                    HoverHandler {
-                        parent: frame
-                        onHoveredChanged: if (!hovered) root.cursorActive = false
-                    }
-
-                    // A header row is `controlHeight` tall (DESIGN.md §1 Padding),
-                    // stated rather than inferred from whichever control inside it
-                    // happens to be tallest.
-                    // The header, its seam and the rows carry the handoff crossfade;
-                    // the card under them does not (see the handoff block above).
+                    // Everything drawn, under the deform's matrix (M54 D7):
+                    // the frame and its contents squash together, so the card
+                    // stays one object rather than a shape with a rigid list
+                    // inside it.
                     Item {
-                        id: header
-                        visible: root.showHeader
-                        opacity: root._contentOpacity
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        height: root._headerHeight
+                        id: deformed
+                        anchors.fill: parent
+                        transform: Matrix4x4 { matrix: deform.matrix }
 
-                        Icon {
-                            id: headerIcon
-                            visible: root.panelIcon !== ""
-                            name: root.panelIcon
-                            size: Theme.fontSize.subtitle
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
+                        // The card joined to the bar (M54 D6): its three free
+                        // edges rounded, the edge facing the bar open, and a
+                        // concave fillet outside each of that edge's corners
+                        // running out to the line the strip opened a gap in.
+                        // Longer than the card by a fillet at either end and
+                        // deeper by `_joinDepth`, which is where the line is.
+                        Shoulders {
+                            id: frameShape
+                            visible: root._joined
+                            edge: Theme.barPosition
+                            radius: root.frameRadius
+                            color: root.frameColor
+                            x: Theme.barVertical
+                                ? (Theme.barPosition === "left" ? -root._joinDepth : 0)
+                                : -frameShape.overhang
+                            y: Theme.barVertical
+                                ? -frameShape.overhang
+                                : (Theme.barPosition === "top" ? -root._joinDepth : 0)
+                            width: frame.width + (Theme.barVertical ? root._joinDepth : frameShape.overhang * 2)
+                            height: frame.height + (Theme.barVertical ? frameShape.overhang * 2 : root._joinDepth)
                         }
 
-                        Text {
-                            id: titleText
-                            anchors.left: headerIcon.visible ? headerIcon.right : parent.left
-                            anchors.leftMargin: headerIcon.visible ? Theme.space.iconGap : 0
-                            anchors.right: actionsRow.left
-                            anchors.rightMargin: Theme.space.iconGap
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: root.panelTitle
-                            color: Theme.color.foreground
-                            font.family: Theme.fontFamilySans
-                            font.pixelSize: Theme.fontSize.subtitle
-                            font.weight: Theme.weight.semibold
-                            elide: Text.ElideRight
+                        // The same card where there is no line to meet: a panel
+                        // hanging off another panel, and any panel at all with the
+                        // screen frame on. `Card`'s own fill, border and radius,
+                        // since this is what `Card` would have drawn.
+                        Rectangle {
+                            id: frameFill
+                            visible: !root._joined
+                            anchors.fill: parent
+                            color: root.frameColor
+                            radius: root.frameRadius
+                            border.width: Theme.borderWidth
+                            border.color: Theme.color.border
                         }
 
-                        Row {
-                            id: actionsRow
-                            anchors.right: closeButton.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.space.xs
-                        }
+                        // What `Card`'s own default slot did: everything below is
+                        // laid out inside the card's padding and reaches back out
+                        // through it by negative margins.
+                        Item {
+                            id: inner
+                            anchors.fill: parent
+                            anchors.margins: frame.padding
 
-                        IconButton {
-                            id: closeButton
-                            name: "x"
-                            tooltipText: "Close"
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            onClicked: root.close()
-                        }
-                    }
+                            // Swallows clicks anywhere inside the frame (the card's own
+                            // padding included) before they ever reach the backdrop above:
+                            // ordinary nested-MouseArea priority, no manual event plumbing.
+                            // The negative margins undo the card's content inset, which this
+                            // has to cover.
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -frame.padding
+                                onClicked: {}
+                            }
 
-                    // The header's seam (DESIGN.md §1's ladder rung 4, §3 "Panel"):
-                    // every panel draws it, so the card reads as a titled sheet
-                    // rather than as a title floating over a list. Full-bleed, which
-                    // the negative margins buy back out of the Card's own padding:
-                    // a rule stopping short of the border would read as a division
-                    // of the rows rather than of the card.
-                    Separator {
-                        id: headerRule
-                        visible: root.showHeader
-                        opacity: root._contentOpacity
-                        anchors.top: header.bottom
-                        anchors.topMargin: Theme.space.panelPadding
-                        anchors.left: parent.left
-                        anchors.leftMargin: -frame.padding
-                        anchors.right: parent.right
-                        anchors.rightMargin: -frame.padding
-                    }
+                            // The pointer leaving the card takes the cursor with it. A row
+                            // the pointer enters takes the cursor (every panel's own
+                            // `_pointAt`), and with nothing to clear it the last row kept
+                            // its ring after the pointer had gone, which reads as a hover
+                            // that never ended (owner, 2026-08-26). The next key or the next
+                            // row entered puts it back. On `frame` itself, padding included,
+                            // so crossing the card's own gutter is not a leave.
+                            HoverHandler {
+                                parent: frame
+                                onHoveredChanged: if (!hovered) root.cursorActive = false
+                            }
 
-                    // The ring reservation (DESIGN.md §1 "Ring", M48 D2): a clipping
-                    // container grows its clip rect by `ringWidth` on every side and
-                    // insets its content by the same, so the halo a cursor row draws
-                    // outside its own border has somewhere to land and every row
-                    // keeps the x, width and top it had without one. The overhang
-                    // eats `ringWidth` of the card's own padding and of the gap under
-                    // the header, both of which are several times that.
-                    Flickable {
-                        id: contentFlickable
-                        opacity: root._contentOpacity
-                        // Held off the card's own inner top by the header and its
-                        // seam rather than anchored under the rule itself, so a
-                        // headerless panel (both terms 0) starts where the card's
-                        // padding leaves off instead of under an invisible rule.
-                        anchors.top: parent.top
-                        anchors.topMargin: root._headerHeight + root._headerGap - Theme.ringWidth
-                        anchors.left: parent.left
-                        anchors.leftMargin: -Theme.ringWidth
-                        anchors.right: parent.right
-                        anchors.rightMargin: -Theme.ringWidth
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: -Theme.ringWidth
-                        clip: true
-                        contentWidth: width
-                        contentHeight: contentColumn.implicitHeight + Theme.ringWidth * 2
+                            // A header row is `controlHeight` tall (DESIGN.md §1 Padding),
+                            // stated rather than inferred from whichever control inside it
+                            // happens to be tallest.
+                            // The header, its seam and the rows carry the handoff crossfade;
+                            // the card under them does not (see the handoff block above).
+                            Item {
+                                id: header
+                                visible: root.showHeader
+                                opacity: root._contentOpacity
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                height: root._headerHeight
 
-                        WheelScroll { flickable: contentFlickable }
-
-                        // Never focused: the backdrop owns the keyboard (see its
-                        // Keys.onPressed, which drives this by hand so `keyPressed`
-                        // consumers get first refusal).
-                        KeyCatcher {
-                            id: keyCatcher
-                            focus: false
-                            x: Theme.ringWidth
-                            y: Theme.ringWidth
-                            width: contentFlickable.width - Theme.ringWidth * 2
-                            height: contentColumn.implicitHeight
-                            blocked: Cursor.catcherBlocked(root.isOpen, root.inlineEditorFocused)
-
-                            // What Cell.qml reads off its ancestors: every row under
-                            // here leaves its halo to `cursorHalo` below.
-                            property bool ownsCursorHalo: true
-
-                            onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
-                            onActivateRequested: root.activateCursor()
-                            onDeleteRequested: root.deleteCursor()
-                            onCloseRequested: root.close()
-                            onTabRequested: direction => root.moveSection(direction)
-                            onTextKey: text => root.cursorTextKey(text)
-
-                            // Under the rows rather than over them, and outside the
-                            // Column, which would lay a bare rectangle out as a row
-                            // of its own.
-                            Rectangle {
-                                id: cursorHalo
-                                property Item row: null
-                                z: -1
-                                visible: cursorHalo.row !== null
-                                color: Theme.color.ring
-                                opacity: Theme.ringAlpha
-
-                                Behavior on x {
-                                    enabled: root._cursorTravels
-                                    NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                                Icon {
+                                    id: headerIcon
+                                    visible: root.panelIcon !== ""
+                                    name: root.panelIcon
+                                    size: Theme.fontSize.subtitle
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
                                 }
-                                Behavior on y {
-                                    enabled: root._cursorTravels
-                                    NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+
+                                Text {
+                                    id: titleText
+                                    anchors.left: headerIcon.visible ? headerIcon.right : parent.left
+                                    anchors.leftMargin: headerIcon.visible ? Theme.space.iconGap : 0
+                                    anchors.right: actionsRow.left
+                                    anchors.rightMargin: Theme.space.iconGap
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.panelTitle
+                                    color: Theme.color.foreground
+                                    font.family: Theme.fontFamilySans
+                                    font.pixelSize: Theme.fontSize.subtitle
+                                    font.weight: Theme.weight.semibold
+                                    elide: Text.ElideRight
                                 }
-                                Behavior on width {
-                                    enabled: root._cursorTravels
-                                    NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+
+                                Row {
+                                    id: actionsRow
+                                    anchors.right: closeButton.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: Theme.space.xs
                                 }
-                                Behavior on height {
-                                    enabled: root._cursorTravels
-                                    NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+
+                                IconButton {
+                                    id: closeButton
+                                    name: "x"
+                                    tooltipText: "Close"
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    onClicked: root.close()
                                 }
                             }
 
-                            Column {
-                                id: contentColumn
-                                width: parent.width
-                                spacing: Theme.space.sectionGap
+                            // The header's seam (DESIGN.md §1's ladder rung 4, §3 "Panel"):
+                            // every panel draws it, so the card reads as a titled sheet
+                            // rather than as a title floating over a list. Full-bleed, which
+                            // the negative margins buy back out of the Card's own padding:
+                            // a rule stopping short of the border would read as a division
+                            // of the rows rather than of the card.
+                            Separator {
+                                id: headerRule
+                                visible: root.showHeader
+                                opacity: root._contentOpacity
+                                anchors.top: header.bottom
+                                anchors.topMargin: Theme.space.panelPadding
+                                anchors.left: parent.left
+                                anchors.leftMargin: -frame.padding
+                                anchors.right: parent.right
+                                anchors.rightMargin: -frame.padding
+                            }
 
-                                // The frame's own `_morphHeight` carries every height
-                                // change inside this column, so a control that would
-                                // otherwise animate its own (Input's error caption)
-                                // lays out at the target and lets the card travel to
-                                // it. cursor.js documents the walk.
-                                property bool ownsSizeMorph: true
+                            // The ring reservation (DESIGN.md §1 "Ring", M48 D2): a clipping
+                            // container grows its clip rect by `ringWidth` on every side and
+                            // insets its content by the same, so the halo a cursor row draws
+                            // outside its own border has somewhere to land and every row
+                            // keeps the x, width and top it had without one. The overhang
+                            // eats `ringWidth` of the card's own padding and of the gap under
+                            // the header, both of which are several times that.
+                            Flickable {
+                                id: contentFlickable
+                                opacity: root._contentOpacity
+                                // Held off the card's own inner top by the header and its
+                                // seam rather than anchored under the rule itself, so a
+                                // headerless panel (both terms 0) starts where the card's
+                                // padding leaves off instead of under an invisible rule.
+                                anchors.top: parent.top
+                                anchors.topMargin: root._headerHeight + root._headerGap - Theme.ringWidth
+                                anchors.left: parent.left
+                                anchors.leftMargin: -Theme.ringWidth
+                                anchors.right: parent.right
+                                anchors.rightMargin: -Theme.ringWidth
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: -Theme.ringWidth
+                                clip: true
+                                contentWidth: width
+                                contentHeight: contentColumn.implicitHeight + Theme.ringWidth * 2
 
-                                // A row appearing, leaving or changing height moves
-                                // the cursor row without the cursor itself moving.
-                                onImplicitHeightChanged: Qt.callLater(root._syncCursorHalo)
+                                WheelScroll { flickable: contentFlickable }
+
+                                // Never focused: the backdrop owns the keyboard (see its
+                                // Keys.onPressed, which drives this by hand so `keyPressed`
+                                // consumers get first refusal).
+                                KeyCatcher {
+                                    id: keyCatcher
+                                    focus: false
+                                    x: Theme.ringWidth
+                                    y: Theme.ringWidth
+                                    width: contentFlickable.width - Theme.ringWidth * 2
+                                    height: contentColumn.implicitHeight
+                                    blocked: Cursor.catcherBlocked(root.isOpen, root.inlineEditorFocused)
+
+                                    // What Cell.qml reads off its ancestors: every row under
+                                    // here leaves its halo to `cursorHalo` below.
+                                    property bool ownsCursorHalo: true
+
+                                    onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
+                                    onActivateRequested: root.activateCursor()
+                                    onDeleteRequested: root.deleteCursor()
+                                    onCloseRequested: root.close()
+                                    onTabRequested: direction => root.moveSection(direction)
+                                    onTextKey: text => root.cursorTextKey(text)
+
+                                    // Under the rows rather than over them, and outside the
+                                    // Column, which would lay a bare rectangle out as a row
+                                    // of its own.
+                                    Rectangle {
+                                        id: cursorHalo
+                                        property Item row: null
+                                        z: -1
+                                        visible: cursorHalo.row !== null
+                                        color: Theme.color.ring
+                                        opacity: Theme.ringAlpha
+
+                                        Behavior on x {
+                                            enabled: root._cursorTravels
+                                            Anim { kind: "spatialFast" }
+                                        }
+                                        Behavior on y {
+                                            enabled: root._cursorTravels
+                                            Anim { kind: "spatialFast" }
+                                        }
+                                        Behavior on width {
+                                            enabled: root._cursorTravels
+                                            Anim { kind: "spatialFast" }
+                                        }
+                                        Behavior on height {
+                                            enabled: root._cursorTravels
+                                            Anim { kind: "spatialFast" }
+                                        }
+                                    }
+
+                                    Column {
+                                        id: contentColumn
+                                        width: parent.width
+                                        spacing: Theme.space.sectionGap
+
+                                        // The frame's own `_morphHeight` carries every height
+                                        // change inside this column, so a control that would
+                                        // otherwise animate its own (Input's error caption)
+                                        // lays out at the target and lets the card travel to
+                                        // it. cursor.js documents the walk.
+                                        property bool ownsSizeMorph: true
+
+                                        // A row appearing, leaving or changing height moves
+                                        // the cursor row without the cursor itself moving.
+                                        onImplicitHeightChanged: Qt.callLater(root._syncCursorHalo)
+                                    }
+                                }
                             }
                         }
                     }

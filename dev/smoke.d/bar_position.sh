@@ -140,15 +140,19 @@ leg_bar_position_assert() {
     fail "bar strip is $thickness thick, which is not a cell row plus its margin band"
   fi
 
+  # What the chevron governs, and whether its own second bar is up: since the
+  # group moved off the strip into that bar (M53), the governed names are off
+  # the strip for the whole session and `collapses` is the only list there is
+  # to report, so `open` is what the expand changes.
   local hidden_names='"bluetooth","weather","tray","bell","indicators","monitor","keyboardLayout","display","github","usage","tailscale","systemUpdate","clock"'
-  if ! grep -q "\"collapsed\":true,\"collapses\":\[$hidden_names\],\"hidden\":\[$hidden_names\]" "$bar_position_status_collapsed_path" 2>/dev/null; then
-    fail "bar chevron status did not report the governed names hidden while collapsed. Got: $(cat "$bar_position_status_collapsed_path" 2>/dev/null)"
+  if ! grep -q "\"chevron\":true,\"collapses\":\[$hidden_names\],\"open\":false" "$bar_position_status_collapsed_path" 2>/dev/null; then
+    fail "bar chevron status did not report the governed names off the strip while collapsed. Got: $(cat "$bar_position_status_collapsed_path" 2>/dev/null)"
   fi
   if ! grep -q '^ok$' "$bar_position_expand_reply_path" 2>/dev/null; then
     fail "bar chevron expand was refused. Got: $(cat "$bar_position_expand_reply_path" 2>/dev/null)"
   fi
-  if ! grep -q "\"collapsed\":false,\"collapses\":\[$hidden_names\],\"hidden\":\[\]" "$bar_position_status_expanded_path" 2>/dev/null; then
-    fail "bar chevron expand did not clear the hidden set. Got: $(cat "$bar_position_status_expanded_path" 2>/dev/null)"
+  if ! grep -q "\"chevron\":true,\"collapses\":\[$hidden_names\],\"open\":true" "$bar_position_status_expanded_path" 2>/dev/null; then
+    fail "bar chevron expand did not open the group's own bar. Got: $(cat "$bar_position_status_expanded_path" 2>/dev/null)"
   fi
   for f in "$bar_position_collapsed_path" "$bar_position_expanded_path"; do
     if [ ! -f "$f" ]; then

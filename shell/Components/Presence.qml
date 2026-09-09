@@ -2,33 +2,35 @@ import QtQuick
 import qs.Core
 
 // The surface enter/exit recipe, in one place (DESIGN.md §1 "Motion"). Three
-// modes, one clock discipline:
+// modes, and the two clock families of M54 D2 split between them:
 //
-// - `fade` (M51 D2/D4, the default): fade, zoom from `motion.zoom` and a
-//   `motion.slide` travel toward rest from the anchored edge, asymmetric in
-//   and out (`motion.surface` to open, `motion.surfaceExit` to close) on the
-//   enter easing both ways. Tooltips, the bar's own reveal, polkit and the
-//   plugin overlay.
-// - `emerge` (M53 addendum): the drawer. The card starts hidden behind the
-//   edge it hangs off, displaced toward it by its own `extent` on that axis,
-//   and travels to rest on `emphasized`. No fade and no zoom: the card's own
-//   opacity stays 1 and the consumer's clip at the edge is what hides it, so
-//   what arrives is a card coming out from under the bar rather than one
-//   materialising in place. Its contents fade in behind the travel
-//   (`contentOpacity`), so the card lands before its text.
-// - `unfold` (M53 addendum): the launcher. The card is there almost at once
-//   (`fast`) at whatever height the consumer seeds it with, and `morph`
-//   carries it to full size on `emphasized` with the enter easing, since an
-//   unfold is an entrance and the decelerating curve keeps the card in its
-//   partial states for most of the clock, with the contents revealed under
-//   the growing edge.
+// - `fade` (M51 D2/D4, the default): opacity on `effects` and a scale from
+//   0.97 on `spatialFast`, asymmetric in nothing: one clock each way, since
+//   an overshooting curve reversed part way through is already asymmetric.
+//   No slide. Tooltips, the bar's own reveal, polkit and the plugin overlay.
+// - `emerge` (M53 addendum, M54 D8): the drawer. The card starts hidden
+//   behind the edge it hangs off, displaced toward it by its own `extent` on
+//   that axis, and travels to rest on `spatial` both ways. No fade and no
+//   zoom: the card's own opacity stays 1 and the consumer's clip at the edge
+//   is what hides it, so what arrives is a card coming out from under the bar
+//   rather than one materialising in place. Its contents fade in behind the
+//   travel (`contentOpacity`), so the card lands before its text.
+// - `unfold` (M53 addendum, M54 D8): the launcher. The card is there almost
+//   at once (`effectsFast`) at whatever height the consumer seeds it with,
+//   and `morph` carries it to full size on `spatial`, with the contents
+//   revealed under the growing edge.
+//
+// The spatial curves overshoot by design (M54 D1): `emergeX`/`emergeY` pass
+// rest by a few pixels and settle back, and `scale` passes 1 the same way.
+// Nothing here clamps that; a consumer that did would be drawing the curve
+// this recipe exists to carry.
 //
 // A summonable surface binds its own frame's opacity/scale/transformOrigin
-// (and, where it wants the slide or the emerge, `transform: Translate {}`) to
-// these read-outs instead of hand-rolling the Behavior and the
-// opacity-triggered re-arm itself, and its window's `visible` binds to
-// `shown`, replacing the `isOpen || frame.opacity > 0` copy every summonable
-// surface used to spell out on its own.
+// (and, where it wants the emerge, `transform: Translate {}`) to these
+// read-outs instead of hand-rolling the Behavior and the opacity-triggered
+// re-arm itself, and its window's `visible` binds to `shown`, replacing the
+// `isOpen || frame.opacity > 0` copy every summonable surface used to spell
+// out on its own.
 //
 // One Behavior per clock, not a SequentialAnimation: re-toggling `open`
 // mid-flight retargets the same animation from wherever it is rather than
@@ -40,10 +42,10 @@ QtObject {
     id: root
 
     property bool open: false
-    // top/bottom/left/right anchors the zoom, the slide and the emerge to
-    // that screen edge, the direction a closed surface sits displaced
-    // toward. Anything else (the default, "center") is a modal surface:
-    // zoom from the middle, no slide, no emerge.
+    // top/bottom/left/right anchors the zoom and the emerge to that screen
+    // edge, the direction a closed surface sits displaced toward. Anything
+    // else (the default, "center") is a modal surface: zoom from the middle,
+    // no emerge.
     property string edge: "center"
 
     // "fade", "emerge" or "unfold"; see the header.
@@ -79,45 +81,40 @@ QtObject {
     // holds at rest closed rather than running behind an invisible window.
     readonly property bool _held: root.open && !root.mapped
 
-    // True from the instant `open` flips true until the exit settles back to
-    // 0. Both clocks count: a surface whose size is still folding back is
-    // still on screen.
+    // True from the instant `open` flips true until both poses are back at
+    // rest closed. Both clocks count: a surface whose size or scale is still
+    // folding back is still on screen. A spatial pose overshoots past 0 near
+    // the end of an exit and returns to it, so this can drop a frame or two
+    // before the animation itself stops: what is left of the exit by then is
+    // a card further behind its own edge than closed, which is nothing.
     readonly property bool shown: root.open || root._pose > 0
         || (root._twoClock && root._morphPose > 0)
 
-    // Whether the size morph runs on a clock of its own. It does in `unfold`
-    // alone: `emerge` puts the whole recipe on one clock, and `fade` has no
-    // morph at all.
-    readonly property bool _twoClock: root.mode === "unfold"
+    // Whether the second clock is running. `emerge` is the one mode without
+    // one: the travel IS the enter, and its contents ride the same pose.
+    readonly property bool _twoClock: root.mode !== "emerge"
 
+    // The pose everything that is not geometry reads: the card's own opacity
+    // in `fade`, the travel in `emerge`, the card's arrival in `unfold`.
     property real _progress: (root.open && !root._held) ? 1 : 0
     Behavior on _progress {
-        NumberAnimation {
+        Anim {
             id: _progressAnimation
-            // `emerge` runs the whole enter on the long clock, since the
-            // travel IS the enter; `unfold` lands its card almost at once and
-            // leaves the growth to the morph below.
-            duration: {
+            kind: {
                 if (root.mode === "emerge")
-                    return root.open ? Theme.motion.emphasized : Theme.motion.surface;
-                if (root._twoClock)
-                    return root.open ? Theme.motion.fast : Theme.motion.surfaceExit;
-                return root.open ? Theme.motion.surface : Theme.motion.surfaceExit;
+                    return "spatial";
+                return root.mode === "unfold" ? "effectsFast" : "effects";
             }
-            easing.type: Theme.motion.easing
         }
     }
 
-    // `unfold`'s size clock: the long duration on the enter curve. InOutQuart
-    // covered most of the growth in the middle 100ms, which a keystroke read
-    // as a pause and then a jump; OutQuint starts the growth on the first
-    // frame and spends the tail settling.
+    // The geometry clock: `unfold`'s size morph, and `fade`'s zoom, which is
+    // a scale and so belongs to the spatial family however small it is.
     property real _morphProgress: (root.open && !root._held) ? 1 : 0
     Behavior on _morphProgress {
-        NumberAnimation {
+        Anim {
             id: _morphAnimation
-            duration: root.open ? Theme.motion.emphasized : Theme.motion.surface
-            easing.type: Theme.motion.easing
+            kind: root.mode === "unfold" ? "spatial" : "spatialFast"
         }
     }
 
@@ -153,8 +150,12 @@ QtObject {
     // in (a translucent card fading over a translucent card is what made the
     // M51 open read as a flicker rather than as an arrival).
     readonly property real opacity: root.mode === "emerge" ? 1 : root._pose
+
+    // The zoom a modal surface arrives on. Its own clock, so the scale
+    // overshoots 1 and settles while the opacity underneath it does not.
+    readonly property real _zoom: 0.97
     readonly property real scale: root.mode === "fade"
-        ? Theme.motion.zoom + (1 - Theme.motion.zoom) * root._pose
+        ? root._zoom + (1 - root._zoom) * root._morphPose
         : 1
     readonly property int transformOrigin: {
         switch (root.edge) {
@@ -165,20 +166,12 @@ QtObject {
         default: return Item.Center;
         }
     }
-    // The remaining distance toward the anchor: full `slide` at rest closed,
-    // 0 once fully open, so a frame's own translate needs no Behavior of its
-    // own. 0 on both axes for `edge: "center"`, and 0 in any mode but `fade`,
-    // whose 8px nudge the emerge replaces outright.
-    readonly property real slideX: root.mode === "fade"
-        ? (1 - root._pose) * Theme.motion.slide * root._direction.x
-        : 0
-    readonly property real slideY: root.mode === "fade"
-        ? (1 - root._pose) * Theme.motion.slide * root._direction.y
-        : 0
 
-    // The emerge's own travel, on the same convention: the whole `extent` at
-    // rest closed, 0 open. The consumer applies it as a Translate and clips
-    // at the edge, so a card at rest closed is entirely behind that line.
+    // The emerge's own travel: the whole `extent` toward the anchor at rest
+    // closed, 0 open, so a frame's own translate needs no Behavior of its
+    // own. The pose passes 1 on the way in, which carries the card a few
+    // pixels past rest and back. 0 on both axes for `edge: "center"` and in
+    // any mode but `emerge`.
     readonly property real emergeX: root.mode === "emerge"
         ? (1 - root._pose) * root.extent * root._direction.x
         : 0
@@ -188,17 +181,18 @@ QtObject {
 
     // How far the size morph has come, for a consumer interpolating its own
     // geometry between a seed and its target (`unfold`'s card height).
-    readonly property real morph: root._twoClock ? root._morphPose : root._pose
+    readonly property real morph: root.mode === "unfold" ? root._morphPose : root._pose
 
     // What the card's contents draw at while the card itself arrives: 0 until
     // the surface is a third of the way there, 1 at rest. A function of the
     // pose rather than a Behavior of its own, so a re-toggle mid-flight
     // reverses it with everything else instead of running on to a target
-    // nothing is heading for any more.
+    // nothing is heading for any more. Clamped, since the pose it reads
+    // overshoots and an opacity may not.
     readonly property real contentOpacity: {
         if (root.mode === "fade")
             return 1;
-        var p = root._twoClock ? root._morphPose : root._pose;
+        var p = root.mode === "unfold" ? root._morphPose : root._pose;
         return Math.max(0, Math.min(1, (p - 0.3) / 0.7));
     }
 }

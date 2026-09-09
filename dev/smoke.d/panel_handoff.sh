@@ -2,8 +2,10 @@
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --panel-handoff proves what M53 D5 asks of one panel replacing another: not
 # two cards crossing, one card. The incoming card is seeded on the outgoing
-# one's rect, the two contents crossfade there, and only then does the card
-# left travel to its own place, so at no instant is there a card at both
+# one's rect, the outgoing window is cut on the tick the travel starts, while
+# the two are still exactly on top of each other, and the one card left
+# travels to its own place with its new contents coming up over the first
+# part of that travel (M54 D9). So at no instant is there a card at both
 # resting places and at some instant there is one between them.
 #
 # The default right region cannot show that: every panel-bearing cell there
@@ -33,6 +35,12 @@
 # Arming first spends that start-up during the round trip instead. The
 # spread runs wide because what is left, the round trip itself, is worth a
 # couple of hundred milliseconds on this rig and is not the same twice.
+#
+# The five are the incoming window's own map plus a fraction of the travel's
+# clock (Theme.motion.spatial, M54 D2), so a change to the token moves the
+# sampling with it rather than leaving it pinned to a duration that has gone.
+# The travel is front-loaded, which is why three of the five sit inside its
+# first third: that is where a card is between the two rests.
 leg_panel_handoff_flag="--panel-handoff"
 leg_panel_handoff_order=78
 leg_panel_handoff_needs="convert"
@@ -54,6 +62,15 @@ panel_handoff_mid_paths=(
   "$shot_dir/panel-handoff-mid-4.png"
   "$shot_dir/panel-handoff-mid-5.png"
 )
+
+panel_handoff_clock_ms=500
+panel_handoff_map_ms=200
+panel_handoff_mid_fractions=(0 16 32 72 130)
+panel_handoff_mid_sleeps=()
+for panel_handoff_f in "${panel_handoff_mid_fractions[@]}"; do
+  panel_handoff_at=$((panel_handoff_map_ms + panel_handoff_f * panel_handoff_clock_ms / 100))
+  panel_handoff_mid_sleeps+=("$(printf '%d.%03d' $((panel_handoff_at / 1000)) $((panel_handoff_at % 1000)))")
+done
 
 # ImageMagick geometry (WxH+X+Y), since these are cropped out of saved PNGs
 # rather than handed to grim. The band is below the 40px bar and inside any
@@ -83,7 +100,10 @@ leg_panel_handoff_timing() {
 }
 
 leg_panel_handoff_drive() {
-  local script="$shot_dir/panel-handoff-drive.sh"
+  local script="$shot_dir/panel-handoff-drive.sh" i arm=""
+  for i in "${!panel_handoff_mid_paths[@]}"; do
+    arm+="( sleep ${panel_handoff_mid_sleeps[$i]}; \"$grim_bin\" \"${panel_handoff_mid_paths[$i]}\" > /dev/null 2>&1 ) &"$'\n'
+  done
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
@@ -98,11 +118,7 @@ sleep 2
 sleep 2
 "$grim_bin" "$panel_handoff_network_rest_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call panel state > "$panel_handoff_network_state_path" 2>&1
-( sleep 0.20; "$grim_bin" "${panel_handoff_mid_paths[0]}" > /dev/null 2>&1 ) &
-( sleep 0.32; "$grim_bin" "${panel_handoff_mid_paths[1]}" > /dev/null 2>&1 ) &
-( sleep 0.44; "$grim_bin" "${panel_handoff_mid_paths[2]}" > /dev/null 2>&1 ) &
-( sleep 0.56; "$grim_bin" "${panel_handoff_mid_paths[3]}" > /dev/null 2>&1 ) &
-( sleep 0.68; "$grim_bin" "${panel_handoff_mid_paths[4]}" > /dev/null 2>&1 ) &
+$arm
 "$qs_bin" ipc -p "$shell_path" call panel toggle audio > "$panel_handoff_reply_path" 2>&1
 wait
 sleep 2

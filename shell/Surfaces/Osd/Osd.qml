@@ -106,7 +106,20 @@ PanelWindow {
         edge: "bottom"
         mapped: root.backingWindowVisible
         mode: "emerge"
-        extent: frame.height
+        extent: frameHost.height
+    }
+
+    // The pill squashes into the edge it rises out of and springs back
+    // (M54 D7), harder than a panel does: it is small, it travels its whole
+    // height, and 0.25 is what caelestia gives an OSD. Sampled off the item
+    // carrying its place rather than off the card the matrix goes on, which
+    // would read its own transform back through `mapToItem`.
+    Deform {
+        id: deform
+        target: frameHost
+        edge: "bottom"
+        amount: 0.25
+        active: !presence.settled
     }
 
     readonly property real _screenPadding: Theme.space.screenPadding
@@ -114,8 +127,8 @@ PanelWindow {
     anchors.bottom: true
     margins.bottom: root._screenPadding
 
-    implicitWidth: frame.implicitWidth
-    implicitHeight: frame.implicitHeight
+    implicitWidth: frameHost.width
+    implicitHeight: frameHost.height
 
     // Off-screen calibration: the widest readout this card can ever show,
     // rendered at the live font so the column is real metrics rather than a
@@ -131,75 +144,91 @@ PanelWindow {
         }
     }
 
-    Card {
-        id: frame
-        // Opaque, unlike the panels and the bar: the OSD is not one of the
-        // three surfaces Hyprland blurs behind (spec "Depth").
-        color: Theme.color.card
-
-        // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M53 addendum):
-        // the pill rises out of the bottom edge and retreats behind it, with
-        // no fade and no zoom, on one shared clock so a retrigger mid-exit
-        // reverses in place. Kind-to-kind swaps while already showing
-        // (volume -> brightness) stay instant: `open` never leaves true.
+    // Where the pill is, and nothing drawn: the deform's matrix goes on the
+    // card inside this, so the sampled item and the transformed one are never
+    // the same.
+    //
+    // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M53 addendum): the
+    // pill rises out of the bottom edge and retreats behind it, with no fade
+    // and no zoom, on one shared clock so a retrigger mid-exit reverses in
+    // place. Kind-to-kind swaps while already showing (volume -> brightness)
+    // stay instant: `open` never leaves true.
+    //
+    // A `Card` rather than the joined shape a panel takes (M54 D6): the
+    // window sits one `screenPadding` off the bottom of the output, so this
+    // pill meets no line and has nothing for a fillet to run out to.
+    Item {
+        id: frameHost
+        width: frame.implicitWidth
+        height: frame.implicitHeight
         opacity: presence.opacity
         transform: Translate { y: presence.emergeY }
 
-        Item {
-            id: row
-            // The pill lands before its readout does (Presence's own
-            // `contentOpacity`).
-            opacity: presence.contentOpacity
-            width: Theme.space.popupWidthNarrow - frame.padding * 2
-            height: Math.max(kindIcon.height, readout.implicitHeight, mediaLabel.implicitHeight,
-                Theme.space.trackThickness)
+        Card {
+            id: frame
+            // Opaque, unlike the panels and the bar: the OSD is not one of the
+            // three surfaces Hyprland blurs behind (spec "Depth").
+            color: Theme.color.card
+            width: frameHost.width
+            height: frameHost.height
+            transform: Matrix4x4 { matrix: deform.matrix }
 
-            Icon {
-                id: kindIcon
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                name: OsdIcon.iconName(root.kind, AudioService.volume, AudioService.muted)
-                size: Theme.fontSize.title
-                color: Theme.color.foreground
-            }
+            Item {
+                id: row
+                // The pill lands before its readout does (Presence's own
+                // `contentOpacity`).
+                opacity: presence.contentOpacity
+                width: Theme.space.popupWidthNarrow - frame.padding * 2
+                height: Math.max(kindIcon.height, readout.implicitHeight, mediaLabel.implicitHeight,
+                    Theme.space.trackThickness)
 
-            Text {
-                id: readout
-                visible: root._hasValue
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                width: percentMetric.implicitWidth
-                horizontalAlignment: Text.AlignRight
-                text: root._percent + "%"
-                color: Theme.color.foreground
-                font.family: Theme.fontFamilyMono
-                font.pixelSize: Theme.fontSize.bodySmall
-            }
+                Icon {
+                    id: kindIcon
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: OsdIcon.iconName(root.kind, AudioService.volume, AudioService.muted)
+                    size: Theme.fontSize.title
+                    color: Theme.color.foreground
+                }
 
-            Track {
-                visible: root._hasValue
-                anchors.left: kindIcon.right
-                anchors.leftMargin: Theme.space.iconGap
-                anchors.right: readout.left
-                anchors.rightMargin: Theme.space.iconGap
-                anchors.verticalCenter: parent.verticalCenter
-                value: root._fraction
-            }
+                Text {
+                    id: readout
+                    visible: root._hasValue
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: percentMetric.implicitWidth
+                    horizontalAlignment: Text.AlignRight
+                    text: root._percent + "%"
+                    color: Theme.color.foreground
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Theme.fontSize.bodySmall
+                }
 
-            // The media kind has no scalar to put in a track, so the title
-            // takes the whole run of the pill instead and elides.
-            Text {
-                id: mediaLabel
-                visible: root.kind === "media"
-                anchors.left: kindIcon.right
-                anchors.leftMargin: Theme.space.iconGap
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                elide: Text.ElideRight
-                text: root.mediaText
-                color: Theme.color.foreground
-                font.family: Theme.fontFamilySans
-                font.pixelSize: Theme.fontSize.body
+                Track {
+                    visible: root._hasValue
+                    anchors.left: kindIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: readout.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    value: root._fraction
+                }
+
+                // The media kind has no scalar to put in a track, so the title
+                // takes the whole run of the pill instead and elides.
+                Text {
+                    id: mediaLabel
+                    visible: root.kind === "media"
+                    anchors.left: kindIcon.right
+                    anchors.leftMargin: Theme.space.iconGap
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    text: root.mediaText
+                    color: Theme.color.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.body
+                }
             }
         }
     }

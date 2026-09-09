@@ -585,7 +585,7 @@ Panel {
                             color: trustHit.containsMouse ? Theme.color.foreground : btCell.dimForeground
 
                             Behavior on opacity {
-                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                                Anim { kind: "effects" }
                             }
 
                             // Sits above the cell's own pointer layer, so the
@@ -610,7 +610,7 @@ Panel {
                             color: forgetHit.containsMouse ? Theme.color.destructive : btCell.dimForeground
 
                             Behavior on opacity {
-                                NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                                Anim { kind: "effects" }
                             }
 
                             // The negative margins buy back a hit area a

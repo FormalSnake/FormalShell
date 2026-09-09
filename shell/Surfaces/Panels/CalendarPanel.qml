@@ -256,10 +256,12 @@ Panel {
 
     Behavior on _swapProgress {
         enabled: !root._swapOut
-        NumberAnimation {
+        Anim {
             id: swapAnimation
-            duration: Core.Theme.motion.standard
-            easing.type: Core.Theme.motion.easing
+            // The grid's own opacity rides this, so it takes the family that
+            // never overshoots even though a translate rides it too: a month
+            // swap that passed 1 would draw the grid over full opacity.
+            kind: "effects"
         }
     }
 
@@ -448,7 +450,7 @@ Panel {
                                 opacity: CalGrid.showsEventDot(dayCell.modelData, dayCell._eventCount) ? 1 : 0
 
                                 Behavior on opacity {
-                                    NumberAnimation { duration: Core.Theme.motion.fast; easing.type: Core.Theme.motion.easing }
+                                    Anim { kind: "effects" }
                                 }
                             }
                         }

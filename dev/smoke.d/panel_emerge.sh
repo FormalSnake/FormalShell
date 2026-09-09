@@ -6,26 +6,35 @@
 # and travels out from under it, so its visible height grows from nothing to
 # the whole card and no part of it is ever drawn inside the bar's own band.
 #
-# Measured off the card's left gutter, the `panelPadding` column between its
-# border and its content: it is plain card fill at every height, so a probe in
-# it says "the card reaches this far down" and nothing else. Rows would answer
-# the same question wrongly, since the Wi-Fi list rescans during the run
-# (panel_handoff.sh's own note) and a probe over a row compares content rather
-# than presence. A probe is "covered" when it is byte-identical to the same
-# probe in the settled frame: the card neither fades nor zooms on the way in,
-# so wherever it has arrived it is already drawing exactly what it will draw
-# at rest.
+# Measured down the card's own centre column, and a probe is "covered" when it
+# is NOT byte-identical to the same probe in the closed output: something the
+# desktop does not draw is being drawn there, which is the card.
+#
+# Both halves of that are the deform's doing (M54 D7). The card arrives
+# squashed and unwinds through its rest, so a probe cannot ask whether what it
+# sees is what the settled card draws: for the tail of every open it is the
+# same card a few percent narrower. What the deform does not move is the
+# midpoint of the anchored edge, which is what its matrix is centred on, so
+# the card's centre column stands still horizontally however hard it is
+# squashed and a probe on it is inside the card whenever the card has reached
+# that far down. The card fill is `card` at `surfaceOpacity` over a near-black
+# desktop, so "not the desktop" is a byte difference at every depth, whether
+# the pixel under the probe is fill or a row's own ink.
 #
 # The ladder sits deep in the card (60%, 75%, 88% and 97% of its height) on
-# purpose. `emphasized` on OutQuint is front-loaded, half the travel is gone
-# in 32ms, and probes near the top would be covered before the first frame
-# lands; the last tenth of the travel is the part a screenshot can catch.
+# purpose. The travel is front-loaded even on `spatial`: over half of it is
+# gone in the first fifth of the clock, and probes near the top would be
+# covered before the first frame lands.
 #
 # The card rect is not hardcoded: it comes out of the difference between the
 # frame with the panel open and the frame without it, cropped below the bar
-# first so the cell's own panel mark is not in the box.
+# first so the cell's own panel mark is not in the box. Below the card's
+# shoulders too (M54 D6): the two fillets reach a `radiusXl` outside the
+# card's own sides for the first `radiusXl` under the bar's line, so a box
+# that took them in would measure the silhouette rather than the card and
+# put the gutter probes below on bare desktop.
 #
-# Eight samples, each armed BEFORE the ipc call rather than after it: grim's
+# Ten samples, each armed BEFORE the ipc call rather than after it: grim's
 # own start-up costs about as much as the travel does, so a capture asked for
 # once the call has returned lands past the end of it every time (again
 # panel_handoff.sh's finding). Arming first spends that start-up during the
@@ -54,9 +63,25 @@ panel_emerge_mid_paths=(
   "$shot_dir/panel-emerge-mid-9.png"
   "$shot_dir/panel-emerge-mid-10.png"
 )
-# Bunched where the travel is: the window maps around 0.20 on this rig and
-# OutQuint spends over half the 250ms in its own last tenth.
-panel_emerge_mid_sleeps=(0.02 0.08 0.11 0.14 0.17 0.20 0.26 0.34 0.46 0.62)
+# The emerge's own clock (Theme.motion.spatial, M54 D2) and the moment this
+# rig has the window up, both in milliseconds; every sample is the map plus a
+# fraction of that clock, so a change to the token moves the sampling with it
+# rather than leaving the ladder pinned to a duration that has gone. The
+# negative fractions are the samples that land before the window is up, which
+# is where the ladder's first rungs come from, and the last one is well past
+# the end so the ladder has to have landed by it.
+panel_emerge_clock_ms=500
+panel_emerge_map_ms=200
+panel_emerge_mid_fractions=(-36 -24 -18 -12 -6 0 12 24 48 150)
+panel_emerge_mid_sleeps=()
+for panel_emerge_f in "${panel_emerge_mid_fractions[@]}"; do
+  panel_emerge_at=$((panel_emerge_map_ms + panel_emerge_f * panel_emerge_clock_ms / 100))
+  panel_emerge_mid_sleeps+=("$(printf '%d.%03d' $((panel_emerge_at / 1000)) $((panel_emerge_at % 1000)))")
+done
+
+# Where the card's own rect starts under the bar, past the strip (40), the
+# `barMargin` the card hangs off it by and the fillets' own reach.
+panel_emerge_body_top=60
 
 # The bar's own band, over the stretch of it the card hangs under and clear of
 # the right region's cells, whose panel mark and icons move on their own
@@ -119,11 +144,11 @@ panel_emerge_crop() {
 
 # How many of the four probes the card has reached in this frame.
 panel_emerge_depth() {
-  local frame="$1" name="$2" i depth=0 probe settled_probe
+  local frame="$1" name="$2" i depth=0 probe bare_probe
   for i in "${!panel_emerge_probe_boxes[@]}"; do
     probe=$(panel_emerge_crop "$frame" "${panel_emerge_probe_boxes[$i]}" "$name-$i")
-    settled_probe="$shot_dir/panel-emerge-crop-settled-$i.png"
-    if cmp -s "$probe" "$settled_probe"; then
+    bare_probe="$shot_dir/panel-emerge-crop-bare-$i.png"
+    if ! cmp -s "$probe" "$bare_probe"; then
       depth=$((depth + 1))
     fi
   done
@@ -155,11 +180,11 @@ leg_panel_emerge_assert() {
   # The card's own rect, off the two frames that differ by exactly one card.
   # Cropped below the bar first: the cell that owns an open panel draws a mark
   # of its own, which is a difference and is not the card.
-  local body_h=$((1080 - 46)) bare_body rest_body rect
+  local body_h=$((1080 - panel_emerge_body_top)) bare_body rest_body rect
   bare_body="$shot_dir/panel-emerge-body-bare.png"
   rest_body="$shot_dir/panel-emerge-body-rest.png"
-  $convert_bin "$panel_emerge_bare_path" -crop "1920x${body_h}+0+46" +repage "$bare_body" > /dev/null 2>&1
-  $convert_bin "$panel_emerge_rest_path" -crop "1920x${body_h}+0+46" +repage "$rest_body" > /dev/null 2>&1
+  $convert_bin "$panel_emerge_bare_path" -crop "1920x${body_h}+0+${panel_emerge_body_top}" +repage "$bare_body" > /dev/null 2>&1
+  $convert_bin "$panel_emerge_rest_path" -crop "1920x${body_h}+0+${panel_emerge_body_top}" +repage "$rest_body" > /dev/null 2>&1
   rect=$($convert_bin "$bare_body" "$rest_body" -compose difference -composite \
     -threshold 8% -format "%@" info: 2>/dev/null)
   local card_w card_h card_x card_y
@@ -167,30 +192,30 @@ leg_panel_emerge_assert() {
   card_h=${rect#*x}; card_h=${card_h%%+*}
   card_x=$(echo "$rect" | sed -n 's/.*+\([0-9]*\)+[0-9]*$/\1/p')
   card_y=$(echo "$rect" | sed -n 's/.*+\([0-9]*\)$/\1/p')
-  card_y=$((card_y + 46))
+  card_y=$((card_y + panel_emerge_body_top))
   if [ -z "$card_w" ] || [ "${card_w:-0}" -lt 200 ] || [ "${card_h:-0}" -lt 200 ]; then
     fail "could not measure the network card off the open/closed pair, got rect '$rect'"
   fi
   echo "SMOKE_PANEL_EMERGE_CARD ${card_w}x${card_h}+${card_x}+${card_y}"
 
-  # The ladder, deep in the card's own left gutter (see the header).
-  local gutter_x=$((card_x + 3)) depth_at
+  # The ladder, down the card's own centre column (see the header).
+  local centre_x=$((card_x + card_w / 2 - 2)) depth_at
   panel_emerge_probe_boxes=()
   for depth_at in 60 75 88 97; do
-    panel_emerge_probe_boxes+=("5x4+${gutter_x}+$((card_y + card_h * depth_at / 100 - 4))")
+    panel_emerge_probe_boxes+=("5x4+${centre_x}+$((card_y + card_h * depth_at / 100 - 4))")
   done
 
-  # The settled frame's own probes are the reference every other frame is read
+  # The closed output's own probes are the reference every other frame is read
   # against, so they are cropped first and by hand.
   for i in "${!panel_emerge_probe_boxes[@]}"; do
-    panel_emerge_crop "$panel_emerge_settled_path" "${panel_emerge_probe_boxes[$i]}" "settled-$i" > /dev/null
+    panel_emerge_crop "$panel_emerge_bare_path" "${panel_emerge_probe_boxes[$i]}" "bare-$i" > /dev/null
   done
   # The classifier has to be able to tell the two apart at every rung, or a
   # depth of 4 would mean nothing.
-  local bare_probe
+  local settled_probe
   for i in "${!panel_emerge_probe_boxes[@]}"; do
-    bare_probe=$(panel_emerge_crop "$panel_emerge_bare_path" "${panel_emerge_probe_boxes[$i]}" "bare-$i")
-    if cmp -s "$bare_probe" "$shot_dir/panel-emerge-crop-settled-$i.png"; then
+    settled_probe=$(panel_emerge_crop "$panel_emerge_settled_path" "${panel_emerge_probe_boxes[$i]}" "settled-$i")
+    if cmp -s "$settled_probe" "$shot_dir/panel-emerge-crop-bare-$i.png"; then
       fail "probe ${panel_emerge_probe_boxes[$i]} reads the same with the card there and gone, so it measures nothing"
     fi
   done
@@ -235,9 +260,9 @@ leg_panel_emerge_assert() {
     fail "the last sample never reached the card's own height (depths$ladder): the emerge did not land"
   fi
 
-  # And it landed on exactly the rect it rests at. The box straddles the
-  # card's own bottom edge (its padding, its border and the desktop under it)
-  # rather than taking in the rows, which rescan.
+  # And it landed on exactly the rect it rests at, the deform unwound. The box
+  # straddles the card's own bottom edge (its padding, its border and the
+  # desktop under it) rather than taking in the rows, which rescan.
   local rest_edge settled_edge edge_box
   edge_box="${card_w}x14+${card_x}+$((card_y + card_h - 7))"
   rest_edge=$(panel_emerge_crop "$panel_emerge_rest_path" "$edge_box" "edge-rest")

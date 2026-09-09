@@ -252,6 +252,9 @@ Panel {
         Cover {
             id: coverSlot
             visible: root._hasArt
+            // The slot closes and opens with the art rather than snapping,
+            // and the row's own spacing follows the card's height morph
+            // beside it (M54 D10).
             width: root._hasArt ? root._artSlotSize : 0
             height: root._artSlotSize
             anchors.verticalCenter: parent.verticalCenter
@@ -259,6 +262,10 @@ Panel {
             sourceSize.width: root._artSlotSize
             sourceSize.height: root._artSlotSize
             cache: false
+
+            Behavior on width {
+                Anim {}
+            }
 
             // Apple Music animated cover (opt-in): layered over the static
             // art, which stays the fallback for every path it doesn't cover
