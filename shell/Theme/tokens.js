@@ -227,10 +227,6 @@ function stateAlpha(mode) {
 // durations above; the caller (MarqueeText.qml's `_marquee`) gates the
 // whole animation on `Theme.motionEnabled` directly and falls back to the
 // elide instead of scrolling at 0px/s.
-//
-// `fast`/`standard`/`surface`/`surfaceExit`/`slide`/`zoom` are the M53 set,
-// still here because the surfaces still read them; M54 Task 6 deletes them
-// once the last consumer is on the primitive (M54 D3, no compat shim).
 var MOTION_BASE = {
     spatialFast: 350, spatial: 500, spatialSlow: 650,
     effectsFast: 150, effects: 200, effectsSlow: 300,

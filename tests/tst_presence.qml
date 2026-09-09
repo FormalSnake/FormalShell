@@ -137,7 +137,9 @@ TestCase {
         var presence = createTemporaryObject(presenceComponent, testCase,
             { edge: "bottom", mode: "emerge", extent: 400 });
         presence.open = true;
-        wait(60);
+        // Wait for the travel to have moved, not for a wall-clock slice of
+        // it: a slow runner can spend 60ms before the first animation frame.
+        tryVerify(function () { return presence.emergeY < 400; }, 1000);
         presence.open = false;
         // Part way out: a re-toggle turns the same travel around from where
         // it is, so the card is neither at rest nor back behind the edge.
