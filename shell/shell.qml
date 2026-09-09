@@ -142,6 +142,20 @@ ShellRoot {
         }
     }
 
+    // One tooltip card per output rather than one per cell (M53 D10): a
+    // pointer walking the bar pays the show delay once and the card travels
+    // between cells after that. Each registers itself with TooltipRegistry,
+    // which is where Cell.qml and Button.qml ask for the one on their own
+    // screen. Costs nothing until something is hovered: the surface stays
+    // unmapped while its Presence is closed.
+    Variants {
+        model: Quickshell.screens
+
+        delegate: Component {
+            Tooltip {}
+        }
+    }
+
     // One instance, not per-screen: it opens on the focused screen at
     // summon time rather than living on every output.
     // `menuInstance`, not a bare `menu`: Bar.qml carries a property of that

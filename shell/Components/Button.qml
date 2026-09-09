@@ -38,7 +38,7 @@ Item {
     property real paddingX: Theme.space.controlPaddingX
 
     // Hover tooltip, the same contract Cell.qml carries: one short line
-    // naming what this control does, after Tooltip.qml's own delay, dropped
+    // naming what this control does, after the group's own delay, dropped
     // the instant the pointer leaves. Empty (the default) means no tooltip.
     // Duplicated rather than shared because a QML type inherits from one
     // base and Cell and Button have nothing else in common.
@@ -49,26 +49,24 @@ Item {
     function _openTooltip() {
         if (!root.hovered || root.tooltipText === "")
             return;
-        tooltipLoader.active = true;
-        tooltipLoader.item.anchorItem = root;
-        tooltipLoader.item.text = root.tooltipText;
-        tooltipLoader.item.show();
+        TooltipRegistry.show(root, root.tooltipText, "");
     }
 
     onHoveredChanged: {
         if (root.hovered)
             root._openTooltip();
-        else if (tooltipLoader.item)
-            tooltipLoader.item.hide();
+        else
+            TooltipRegistry.hide(root);
     }
 
-    // Live while shown, never re-opened: a re-open would restart the show
-    // delay and blink the card on every change. The else branch covers the
-    // one case a text change IS an open, where the control had nothing to
-    // say when the pointer arrived and now does.
+    // Live while shown: a show for the control that already owns the card
+    // updates the line without touching the delay, which also covers the one
+    // case a text change IS an open, where the control had nothing to say
+    // when the pointer arrived and now does. A control that runs out of
+    // anything to say drops the card instead.
     onTooltipTextChanged: {
-        if (tooltipLoader.item)
-            tooltipLoader.item.text = root.tooltipText;
+        if (root.tooltipText === "")
+            TooltipRegistry.hide(root);
         else
             root._openTooltip();
     }
@@ -205,13 +203,4 @@ Item {
         onClicked: root.clicked()
     }
 
-    // Loaded by URL and activated imperatively, for the reasons Cell.qml's
-    // own loader spells out: Tooltip.qml pulls in Quickshell, which
-    // tests/tst_button.qml has no module for, and the load has to have
-    // completed by the next statement in _openTooltip().
-    Loader {
-        id: tooltipLoader
-        active: false
-        source: "Tooltip.qml"
-    }
 }

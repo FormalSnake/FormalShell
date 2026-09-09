@@ -29,5 +29,6 @@ Separator Separator.qml
 Segmented Segmented.qml
 Switch Switch.qml
 Tooltip Tooltip.qml
+TooltipGroup TooltipGroup.qml
 Track Track.qml
 WheelScroll WheelScroll.qml

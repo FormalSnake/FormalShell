@@ -122,16 +122,16 @@ Item {
     readonly property bool _hoverFillActive: root.hovered && !root.active && !root.selected
 
     // Hover tooltip: a short line naming what this cell is and what it
-    // currently reads, shown after Tooltip.qml's own delay once the pointer
+    // currently reads, shown after the group's own delay once the pointer
     // settles and dropped the instant it leaves. Empty (the default) means no
     // tooltip at all.
     //
-    // ⚠️ The surface deliberately does not live in `content`: _measure()
-    // below sizes the cell off EVERY direct child of `content` regardless of
-    // visibility, so a tooltip drawn as a child item would widen (and
-    // heighten) every cell it was attached to by its own card. Tooltip.qml
-    // is a layer-shell window of its own instead, held by the Loader below,
-    // which sits outside `content` and carries no size either way.
+    // ⚠️ Nothing here draws the card: the surface is one layer-shell window
+    // per output (Tooltip.qml, reached through TooltipRegistry), so a cell
+    // holds no card and no size for one. A tooltip drawn as a child item
+    // would widen and heighten every cell it was attached to, since
+    // _measure() below sizes the cell off EVERY direct child of `content`
+    // regardless of visibility.
     property string tooltipText: ""
 
     // Inert since the tooltip stopped uppercasing anything; tray items still
@@ -256,31 +256,27 @@ Item {
     function _openTooltip() {
         if (!root.hovered || root.tooltipText === "")
             return;
-        tooltipLoader.active = true;
-        tooltipLoader.item.anchorItem = root;
-        tooltipLoader.item.barEdge = root.barEdge;
-        tooltipLoader.item.verbatim = root.tooltipVerbatim;
-        tooltipLoader.item.text = root.tooltipText;
-        tooltipLoader.item.show();
+        TooltipRegistry.show(root, root.tooltipText, root.barEdge);
     }
 
     onHoveredChanged: {
         if (root.hovered)
             root._openTooltip();
-        else if (tooltipLoader.item)
-            tooltipLoader.item.hide();
+        else
+            TooltipRegistry.hide(root);
     }
 
     // Live while shown: a cell's value moves under a parked pointer (volume
     // ticking, a battery estimate settling), and the card is meant to read
     // as the cell's own state, not a snapshot of when the pointer arrived.
-    // Never re-opens through _openTooltip() once the surface exists: that
-    // would restart its show delay and blink the card on every tick. The
-    // else branch covers the one case a text change IS an open, where the
-    // cell had nothing to say when the pointer arrived and now does.
+    // A show for the cell that already owns the card updates the line
+    // without touching the delay, which also covers the one case a text
+    // change IS an open, where the cell had nothing to say when the pointer
+    // arrived and now does. A cell that runs out of anything to say drops
+    // the card instead.
     onTooltipTextChanged: {
-        if (tooltipLoader.item)
-            tooltipLoader.item.text = root.tooltipText;
+        if (root.tooltipText === "")
+            TooltipRegistry.hide(root);
         else
             root._openTooltip();
     }
@@ -462,25 +458,5 @@ Item {
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size
         // onto an item whose geometry those same children track.
-    }
-
-    // Loaded by URL rather than declared as a `Tooltip {}`: Tooltip.qml pulls
-    // in Quickshell and Quickshell.Wayland, while Cell.qml is instantiated
-    // head-on by tests/tst_cell_geometry.qml and tst_cell_states.qml under a
-    // plain qmltestrunner that has no Quickshell module at all. A URL
-    // resolves only when the Loader activates, which no test ever does.
-    //
-    // `active` starts false (Loader's own default is true) and is written
-    // imperatively from onHoveredChanged above, never bound: that load has
-    // to have completed by the next statement, which only a synchronous
-    // activation guarantees. It then stays loaded, since unloading on pointer
-    // exit would cut the exit fade short and re-pay the surface's creation on
-    // every pass along the bar, while every cell in the shell loading one up
-    // front would cost a layer-shell window per cell per output for cells
-    // that may never be hovered at all.
-    Loader {
-        id: tooltipLoader
-        active: false
-        source: "Tooltip.qml"
     }
 }
