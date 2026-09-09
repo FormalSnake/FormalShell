@@ -81,28 +81,13 @@ Cell {
     }
 
     // The flip (M51 Task 5): a crossfade rather than a rotation, since a
-    // rotated glyph would read mirrored for half the turn. Both icons sit
-    // stacked on the same spot (neither sets a horizontal anchor, matching
-    // the single icon this replaces), so it reads as one glyph turning
-    // rather than two glyphs trading places.
+    // rotated glyph would read mirrored for half the turn. The pair of
+    // stacked icons this used to spell out is what Icon itself does for
+    // every name change now (M53 D3), so the cell is back to one glyph.
     Icon {
         anchors.verticalCenter: parent.verticalCenter
-        name: root._awayName
+        name: root._open ? root._backName : root._awayName
         color: root.foreground
-        opacity: root._open ? 0 : 1
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
-        }
-    }
-
-    Icon {
-        anchors.verticalCenter: parent.verticalCenter
-        name: root._backName
-        color: root.foreground
-        opacity: root._open ? 1 : 0
-        Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
-        }
     }
 
     interactive: true

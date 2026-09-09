@@ -216,9 +216,9 @@ function stateAlpha(mode) {
 // `marqueePxPerSec`/`marqueeHoldMs` pace the now-playing bar cell's
 // overflow scroll (owner-requested, M16 Task 11), a constant scroll rate,
 // not a duration, so `enabled` doesn't zero them the way it zeroes the
-// durations above; the caller (NowPlaying.qml) gates the whole animation
-// on `Theme.motionEnabled` directly and falls back to today's elide
-// instead of scrolling at 0px/s.
+// durations above; the caller (MarqueeText.qml's `_marquee`) gates the
+// whole animation on `Theme.motionEnabled` directly and falls back to the
+// elide instead of scrolling at 0px/s.
 // `emphasized` (250) is the one duration longer than the 90-140ms control
 // band that still paces chrome rather than a full screen: the bar's
 // workspace indicator, a surface's size morph and the toasts, each needing

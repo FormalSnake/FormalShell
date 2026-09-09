@@ -61,10 +61,12 @@ TestCase {
         return control;
     }
 
-    // The painted layers in declaration order: ring halo, group, segment row.
+    // The painted layers in declaration order: ring halo, group, the one
+    // selection rectangle, segment row.
     function halo(control) { return control.children[0]; }
     function group(control) { return control.children[1]; }
-    function row(control) { return control.children[2]; }
+    function selection(control) { return control.children[2]; }
+    function row(control) { return control.children[3]; }
 
     function segment(control, index) {
         var items = row(control).children;
@@ -77,11 +79,11 @@ TestCase {
         return out[index];
     }
 
-    // A segment's own layers, in declaration order: the chosen-segment fill,
-    // the pointer wash, the label.
-    function fillOf(seg) { return seg.children[0]; }
-    function washOf(seg) { return seg.children[1]; }
-    function labelOf(seg) { return seg.children[2]; }
+    // A segment's own layers, in declaration order: the pointer wash and the
+    // label. The chosen-segment fill is no longer one of them; it is the
+    // single `selection` rectangle above, which travels between them.
+    function washOf(seg) { return seg.children[0]; }
+    function labelOf(seg) { return seg.children[1]; }
 
     function test_the_group_is_muted_at_radius_md() {
         var control = make({ options: ["DARK", "LIGHT"] });
@@ -94,20 +96,39 @@ TestCase {
 
     function test_the_selected_segment_is_background_behind_a_border() {
         var control = make({ options: ["DARK", "LIGHT"] });
-        var on = fillOf(segment(control, 0));
+        var on = selection(control);
         verify(on.visible);
         verify(Qt.colorEqual(on.color, Theme.color.background));
         compare(on.border.width, Theme.borderWidth);
         verify(Qt.colorEqual(on.border.color, Theme.color.border));
-        verify(!fillOf(segment(control, 1)).visible);
+        // One rectangle covering the chosen segment, not one per segment:
+        // it sits on the first segment's own box, inset by the padding.
+        compare(on.x, control.padding);
+        compare(on.width, control._segmentWidth);
+        compare(on.height, control.height - control.padding * 2);
     }
 
     // The concentric rule (spec "Radius"): the outer radius minus the padding
     // between them, floored at radiusSm.
     function test_the_segment_radius_is_concentric() {
         var control = make({ options: ["DARK", "LIGHT"] });
-        compare(fillOf(segment(control, 0)).radius,
+        compare(selection(control).radius,
                 Math.max(Theme.radiusSm, Theme.radiusMd - control.padding));
+    }
+
+    // M53 D2: the selection travels to the next segment rather than being
+    // redrawn there, so it is still short of its target on the tick the
+    // index changes.
+    function test_the_selection_travels_to_the_chosen_segment() {
+        var control = make({ options: ["DARK", "LIGHT"] });
+        var on = selection(control);
+        control.select(1);
+        compare(on.x, control.padding);
+        tryCompare(on, "x", control.padding + control._segmentWidth, 1000);
+    }
+
+    function test_no_options_draws_no_selection() {
+        verify(!selection(make({ options: [] })).visible);
     }
 
     function test_labels_are_sans_and_the_selected_one_is_not_muted() {

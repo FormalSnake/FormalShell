@@ -1,6 +1,8 @@
 module qs.Components
+AddTransition 1.0 ../../../../shell/Components/AddTransition.qml
 Cell 1.0 ../../../../shell/Components/Cell.qml
 CellLabel 1.0 ../../../../shell/Components/CellLabel.qml
 CellRow 1.0 ../../../../shell/Components/CellRow.qml
 Icon 1.0 ../../../../shell/Components/Icon.qml
+MoveTransition 1.0 ../../../../shell/Components/MoveTransition.qml
 Rail 1.0 ../../../../shell/Components/Rail.qml

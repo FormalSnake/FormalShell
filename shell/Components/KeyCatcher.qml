@@ -20,6 +20,14 @@ Item {
 
     property bool blocked: false
 
+    // Whether the keystroke being dispatched right now is one of Hyprland's
+    // repeats rather than a fresh press (M53 D4). Read inside a signal
+    // handler by the consumers that must not treat a held arrow as a
+    // sequence of independent presses; everything else glides, since its
+    // motion retargets rather than restarts.
+    readonly property bool repeating: root._repeating
+    property bool _repeating: false
+
     focus: true
     Keys.priority: Keys.BeforeItem
 
@@ -30,6 +38,7 @@ Item {
     // and calls this only after its `keyPressed` consumers have passed on
     // the event.
     function handle(event) {
+        root._repeating = event.isAutoRepeat === true;
         if (root.blocked)
             return;
 

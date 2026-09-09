@@ -1,3 +1,4 @@
+AddTransition AddTransition.qml
 AuthPrompt AuthPrompt.qml
 Button Button.qml
 ButtonGroup ButtonGroup.qml
@@ -14,6 +15,7 @@ IconButton IconButton.qml
 Input Input.qml
 KeyCatcher KeyCatcher.qml
 MarqueeText MarqueeText.qml
+MoveTransition MoveTransition.qml
 Panel Panel.qml
 PanelSlot PanelSlot.qml
 PanelHero PanelHero.qml

@@ -76,6 +76,28 @@ Item {
         border.color: Theme.color.ring
     }
 
+    // One selection, outside the Repeater (M53 D2): the chosen segment used
+    // to be a fill inside each delegate switched on `visible`, so a Left or
+    // Right arrow put the border down in the next place rather than moving
+    // it there. Its x is the only thing the index decides, which is what
+    // makes the travel a single Behavior.
+    Rectangle {
+        id: selection
+        visible: root.count > 0
+        x: root.padding + root.index * root._segmentWidth
+        y: root.padding
+        width: root._segmentWidth
+        height: root.height - root.padding * 2
+        radius: root._segmentRadius
+        color: Theme.color.background
+        border.width: Theme.borderWidth
+        border.color: Theme.color.border
+
+        Behavior on x {
+            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        }
+    }
+
     Row {
         id: row
         anchors.fill: parent
@@ -94,15 +116,6 @@ Item {
 
                 width: root._segmentWidth
                 height: row.height
-
-                Rectangle {
-                    anchors.fill: parent
-                    visible: segment._on
-                    radius: root._segmentRadius
-                    color: Theme.color.background
-                    border.width: Theme.borderWidth
-                    border.color: Theme.color.border
-                }
 
                 // An unhoverable segment was the one control in the shell
                 // that took the hand cursor and answered nothing. The wash

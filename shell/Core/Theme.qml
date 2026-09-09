@@ -296,7 +296,11 @@ Singleton {
             surface: m.surface,
             surfaceExit: m.surfaceExit,
             emphasized: m.emphasized,
-            emphasizedEasing: Easing.OutQuint,
+            // InOutQuart, for the same reason `easingInOut` below is: what
+            // this longer clock paces (the workspace pill, a surface's size
+            // morph, a toast's travel) is already on screen and going
+            // somewhere else, never arriving from nowhere.
+            emphasizedEasing: Easing.InOutQuart,
             slide: m.slide,
             zoom: m.zoom,
             // OutQuint, not OutCubic: Qt's cubic easings are the weak
@@ -308,7 +312,9 @@ Singleton {
             // already on screen that travels to a new place accelerates out
             // of rest and decelerates into it; an ease-out on a move starts
             // at full speed, which reads as a teleport that then slows down.
-            // Entering and exiting take `easing` above, moving takes this.
+            // Entering and exiting take `easing` above; moving and
+            // resizing take this, at `standard` for a piece of chrome and
+            // `emphasized` for a whole surface.
             easingInOut: Easing.InOutQuart,
             reveal: m.reveal,
             revealEasing: Easing.InOutQuad,

@@ -153,6 +153,28 @@ TestCase {
         compare(catcher.total, 1);
     }
 
+    // `repeating` (M53 D4): Hyprland's 25/s key repeat reaches a surface as
+    // ordinary presses, and the one consumer that must skip on a held key
+    // reads this inside its own handler. The QML key helpers cannot
+    // synthesize an auto-repeat, so the case goes through `handle()`, the
+    // same entry point Panel.qml's backdrop calls with the event it was
+    // given.
+    function test_a_held_key_dispatches_and_reports_itself_as_a_repeat() {
+        var catcher = makeCatcher({});
+        compare(catcher.repeating, false);
+
+        catcher.handle({ key: Qt.Key_Down, text: "", isAutoRepeat: true, accepted: false });
+        compare(catcher.moves, 1);
+        compare(catcher.dy, 1);
+        compare(catcher.repeating, true);
+
+        // A fresh press clears it again, so a consumer reading it never
+        // acts on the previous keystroke's answer.
+        keyClick(Qt.Key_Down);
+        compare(catcher.moves, 2);
+        compare(catcher.repeating, false);
+    }
+
     function test_blocked_fires_nothing() {
         var catcher = makeCatcher({ blocked: true });
         keyClick(Qt.Key_Escape);

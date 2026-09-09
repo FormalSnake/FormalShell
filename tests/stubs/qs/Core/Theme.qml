@@ -146,7 +146,7 @@ QtObject {
             surface: m.surface,
             surfaceExit: m.surfaceExit,
             emphasized: m.emphasized,
-            emphasizedEasing: Easing.OutQuint,
+            emphasizedEasing: Easing.InOutQuart,
             slide: m.slide,
             zoom: m.zoom,
             easing: Easing.OutQuint,

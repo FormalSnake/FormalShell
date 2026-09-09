@@ -137,7 +137,10 @@ Item {
     // set it.
     property bool tooltipVerbatim: false
 
-    readonly property color foreground: root.active
+    // What a state resolves the content ink to, before any crossfade: the
+    // band-2 ink below reads the same instant value rather than the animated
+    // one, so it travels beside `foreground` instead of chasing it.
+    readonly property color _ink: root.active
         ? Theme.color.primaryForeground
         : root.destructive
             ? Theme.color.destructive
@@ -147,14 +150,28 @@ Item {
                     ? Theme.color.accentForeground
                     : Theme.color.foreground
 
+    // Not readonly, so the Behavior has a property to intercept: the ink a
+    // cell's labels bind to crosses on the same clock its fill does, or the
+    // words would snap to `primaryForeground` over a fill still on its way
+    // to `primary`.
+    property color foreground: root._ink
+
+    Behavior on foreground {
+        ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+    }
+
     // Band-2 (meta) ink. A dim caption drawn onto a filled cell measures
     // under 1.1:1 contrast, so a fill promotes it to the same ink
     // `foreground` resolves for content. A destructive or warning cell is not
     // filled (its colour is on the border and the label), so its captions
     // stay dim.
-    readonly property color dimForeground: (root.active || root.selected)
-        ? foreground
+    property color dimForeground: (root.active || root.selected)
+        ? root._ink
         : Theme.color.mutedForeground
+
+    Behavior on dimForeground {
+        ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+    }
 
     // A badge sitting inside a row (the process table's KERNEL cell) rather
     // than being one: it hugs its own label, since a badge as tall as the
@@ -279,7 +296,13 @@ Item {
         opacity: Theme.ringAlpha
     }
 
-    // Fills snap; only the hover layer below fades.
+    // The body. Its fill and its border cross to their new colour on the
+    // control clock rather than cutting (M53 D3, withdrawing the "fills
+    // snap" contract): a ternary here is a state change on a cell that is
+    // already on screen, so `active`, `selected` and the cursor arrive the
+    // way the hover layer below already does. `border.width` is not in on
+    // it, since a border that grew from nothing would be the cell changing
+    // shape rather than colour.
     Rectangle {
         anchors.fill: parent
         radius: root.radius
@@ -298,6 +321,14 @@ Item {
                 : root.warning
                     ? Theme.color.warning
                     : Theme.color.border
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        }
+
+        Behavior on border.color {
+            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        }
     }
 
     // The pointer's own layer: a wash of the ink over whatever the cell
@@ -321,7 +352,14 @@ Item {
     // clear of the cell's own rounded corners, which cut in at this height.
     Rectangle {
         id: panelMark
-        visible: root.panelOpen
+        // Drawn on the surface clock, not on `visible` (M53 D2): the panel
+        // it stands for enters and leaves as a surface, so the mark grows
+        // out of the cell's own centre along the bar and shrinks back into
+        // it rather than being switched on under a card that is still on
+        // its way in.
+        property real _presence: root.panelOpen ? 1 : 0
+        visible: panelMark.opacity > 0
+        opacity: panelMark._presence
         readonly property bool _sideways: root.vertical
         readonly property real _edgeMargin: root._borderless ? 0 : Theme.borderWidth
         width: panelMark._sideways ? Theme.borderWidth * 2 : root.width - Theme.space.xs * 2
@@ -338,6 +376,20 @@ Item {
                 : root.height - panelMark.height - panelMark._edgeMargin
         radius: Theme.radiusSm
         color: Theme.color.primary
+
+        Behavior on _presence {
+            NumberAnimation {
+                duration: root.panelOpen ? Theme.motion.surface : Theme.motion.surfaceExit
+                easing.type: Theme.motion.easing
+            }
+        }
+
+        transform: Scale {
+            origin.x: panelMark.width / 2
+            origin.y: panelMark.height / 2
+            xScale: panelMark._sideways ? 1 : panelMark._presence
+            yScale: panelMark._sideways ? panelMark._presence : 1
+        }
     }
 
     // The cell's own target. A sibling of `hitLayer` rather than its child,
