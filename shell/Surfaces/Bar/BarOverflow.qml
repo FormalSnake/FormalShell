@@ -123,6 +123,16 @@ Panel {
         id: overflowRail
         vertical: root._vertical
         spacing: Theme.space.sm
+        // The card is built fresh on every open, so its cells measure
+        // themselves for the first time while it is arriving. Held flat
+        // until the card has finished opening (Panel's `settledOpen`), or
+        // every cell fades up and slides into its slot inside the entrance
+        // and the card inflates behind them, which reads as the group
+        // shuffling rather than as a card appearing (owner, 2026-09-09).
+        // It arms afterwards, so a cell that turns on or changes width while
+        // the card is up still travels. Bar.qml's own delegate reads this
+        // rail for the same gate.
+        animate: root.settledOpen
 
         Repeater {
             // Nothing to draw until a chevron has attached (a Repeater with a

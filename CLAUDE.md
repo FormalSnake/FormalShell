@@ -79,6 +79,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `chevron.sh` `--chevron`: a right-region chevron holding the five cells
   before it off the strip entirely, and `bar chevron expand` opening them in
   the second bar under it, the two frames asserted to differ.
+- `chevron_quiet.sh` `--chevron-quiet`: the same second bar OPENING, read
+  off a stamped burst of frames: the card is never narrower than the width
+  it settles on, and nothing inside it moves once its own entrance is over.
 - `clipboard.sh` `--clipboard`: the ledger's capture order and in-process row
   activation, with the image entry's preview and a copied-markup row's own
   angle brackets in the frame.

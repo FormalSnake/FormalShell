@@ -535,6 +535,19 @@ PanelWindow {
             // on one property.
             readonly property bool _present: entrySlot._shown && !entrySlot.modelData.collapsible
 
+            // Whether this slot may animate anything at all, asked of the
+            // strip it landed in rather than of the bar. The same delegate
+            // draws the cells of the chevron's second bar and of the tray's
+            // (BarOverflow.qml, TrayOverflow.qml), where `bar` is still this
+            // window but the surface arriving is the card, not the strip:
+            // those rails hold `animate` false until their card has finished
+            // opening, so a card opens with its cells already measured and
+            // in place. A Repeater parents its delegates to the Repeater's
+            // own parent, which is a Rail in all four places this delegate is
+            // used.
+            readonly property bool _animate: bar._revealed
+                && !!entrySlot.parent && entrySlot.parent.animate !== false
+
             // The cell's own presence (DESIGN.md §1 Motion, M53 D2): a
             // widget that turns on opens its slot along the strip and fades
             // up in it, one that turns off shrinks and fades out, and the
@@ -542,14 +555,14 @@ PanelWindow {
             // driver for both terms rather than a Behavior each, so the fade
             // and the growth can never fall out of step, and the exit runs
             // the shorter clock a surface leaving on always does. Held flat
-            // until the strip's entrance has settled (`bar._revealed`, the
+            // until the strip's entrance has settled (`_animate` above, the
             // same arm switch the cells' own width Behaviors take), so a
             // session's first second of service answers is one layout rather
             // than a dozen cells opening in sequence behind it.
             property real _progress: entrySlot._present ? 1 : 0
 
             Behavior on _progress {
-                enabled: bar._revealed
+                enabled: entrySlot._animate
                 NumberAnimation {
                     duration: entrySlot._present ? Theme.motion.surface : Theme.motion.surfaceExit
                     easing.type: Theme.motion.easing
@@ -618,13 +631,16 @@ PanelWindow {
                     // so a cell created against the default edge has to follow
                     // the bar to its real one.
                     entryLoader.item.barEdge = Qt.binding(function () { return bar._position; });
-                    // Guarded, unlike the two above: `animateSize` lives on
-                    // Cell, and the two group rails (Tray, Indicators) are the
-                    // one widget kind whose root is not one. Neither carries a
-                    // size Behavior to arm, so there is nothing to forward
-                    // through them.
+                    // Both guarded, unlike the two above, and between them
+                    // they cover every widget root: `animateSize` is Cell's
+                    // width Behavior, `animate` the `move` a Rail runs over
+                    // the cells it holds, and the two group rails (Tray,
+                    // Indicators) are the one widget kind rooted in the
+                    // second rather than the first.
                     if (entryLoader.item.animateSize !== undefined)
-                        entryLoader.item.animateSize = Qt.binding(function () { return bar._revealed; });
+                        entryLoader.item.animateSize = Qt.binding(function () { return entrySlot._animate; });
+                    if (entryLoader.item.animate !== undefined)
+                        entryLoader.item.animate = Qt.binding(function () { return entrySlot._animate; });
                     if (entrySlot.modelData.kind === "module")
                         entryLoader.item.module = entrySlot.modelData.module;
                     else if (entrySlot.modelData.kind === "plugin")

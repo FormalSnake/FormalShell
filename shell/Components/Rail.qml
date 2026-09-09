@@ -13,6 +13,16 @@ Grid {
 
     property bool vertical: false
 
+    // Whether this strip is allowed to move its children at all. A strip
+    // that is itself arriving has nothing to explain: a card whose cells
+    // are still measuring when it opens would slide every one of them into
+    // place inside its own entrance, which reads as the contents shuffling
+    // rather than as a card appearing. The chevron's second bar and the
+    // tray's hold this false until their card has finished opening
+    // (BarOverflow.qml, TrayOverflow.qml); the bar's own strip leaves it
+    // alone.
+    property bool animate: true
+
     rows: root.vertical ? -1 : 1
     columns: root.vertical ? 1 : -1
     verticalItemAlignment: Grid.AlignVCenter
@@ -32,5 +42,5 @@ Grid {
     // cells stuck invisible for the rest of the session that way. A slot
     // that wants to fade in carries its own presence instead, on a Behavior
     // nothing else writes (Bar.qml's region delegate).
-    move: MoveTransition {}
+    move: MoveTransition { enabled: root.animate }
 }
