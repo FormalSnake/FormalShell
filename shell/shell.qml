@@ -23,6 +23,7 @@ import qs.Surfaces.HotCorners
 import qs.Surfaces.Capture
 import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
+import qs.Surfaces.Debug
 import qs.Surfaces.Gallery
 import qs.Components
 import qs.Core
@@ -291,7 +292,11 @@ ShellRoot {
     // ordinary session pays nothing for it.
     Gallery { id: galleryInstance }
 
-    DebugIpc { menu: menuInstance }
+    DebugIpc { id: debugIpc; menu: menuInstance }
+    // The `debug join` verb's card (M54 Task 2, --shoulders). Unmapped until
+    // that verb publishes a join, so an ordinary session carries one window
+    // that never maps.
+    JoinPreview { join: debugIpc.debugJoin }
     ThemeIpc {}
     WallpaperIpc {}
     MenuIpc { menu: menuInstance }

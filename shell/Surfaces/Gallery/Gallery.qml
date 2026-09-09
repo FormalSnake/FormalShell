@@ -173,6 +173,94 @@ Panel {
                         leftPadding: Theme.space.controlPaddingX
                         text: "DIM / UNAVAILABLE"
                     }
+
+                    Column {
+                        width: parent.width
+                        spacing: Theme.space.rowGap
+
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "SHOULDERS / JOINED TO THE BAR"
+                        }
+
+                        Flow {
+                            width: parent.width
+                            spacing: Theme.space.sectionGap
+
+                            Repeater {
+                                // One specimen per edge, the edge being the
+                                // card's own anchored side. The two rules
+                                // either side of each card stand in for the
+                                // bar's line: real Separators at the real
+                                // border token, with the gap the strip opens
+                                // (Surfaces/Bar/Bar.qml) drawn at the width
+                                // the shape itself reports, so a fillet that
+                                // stopped short of the line would read here
+                                // as a notch instead of as a seam nobody can
+                                // see.
+                                model: ["top", "bottom", "left", "right"]
+
+                                delegate: Item {
+                                    id: joinSpec
+                                    required property string modelData
+
+                                    readonly property bool vertical: joinSpec.modelData === "left" || joinSpec.modelData === "right"
+                                    // The card's own rect, before the fillets
+                                    // take their room either side of it.
+                                    readonly property real span: Theme.space.huge * 5
+                                    readonly property real depth: Theme.space.huge * 3
+                                    // Line either side of the gap, and enough
+                                    // of it to see the fillet land on.
+                                    readonly property real run: Theme.space.huge * 2
+
+                                    width: joinSpec.vertical ? joinSpec.depth : joinSpec.span + joinSpec.run * 2
+                                    height: joinSpec.vertical ? joinSpec.span + joinSpec.run * 2 : joinSpec.depth
+
+                                    Shoulders {
+                                        id: shape
+                                        edge: joinSpec.modelData
+                                        x: joinSpec.vertical
+                                            ? (joinSpec.modelData === "right" ? joinSpec.width - joinSpec.depth : 0)
+                                            : joinSpec.run - shape.overhang
+                                        y: joinSpec.vertical
+                                            ? joinSpec.run - shape.overhang
+                                            : (joinSpec.modelData === "bottom" ? joinSpec.height - joinSpec.depth : 0)
+                                        width: joinSpec.vertical ? joinSpec.depth : joinSpec.span + shape.overhang * 2
+                                        height: joinSpec.vertical ? joinSpec.span + shape.overhang * 2 : joinSpec.depth
+                                    }
+
+                                    Repeater {
+                                        // The bar's line, in the same two
+                                        // segments the strip draws it in:
+                                        // before the gap and after it.
+                                        model: 2
+
+                                        delegate: Separator {
+                                            id: lineSegment
+                                            required property int index
+
+                                            readonly property real from: lineSegment.index === 0
+                                                ? 0
+                                                : (joinSpec.vertical ? shape.y + shape.height : shape.x + shape.width)
+                                            readonly property real to: lineSegment.index === 0
+                                                ? (joinSpec.vertical ? shape.y : shape.x)
+                                                : (joinSpec.vertical ? joinSpec.height : joinSpec.width)
+
+                                            vertical: joinSpec.vertical
+                                            x: joinSpec.vertical
+                                                ? (joinSpec.modelData === "right" ? joinSpec.width - Theme.borderWidth : 0)
+                                                : lineSegment.from
+                                            y: joinSpec.vertical
+                                                ? lineSegment.from
+                                                : (joinSpec.modelData === "bottom" ? joinSpec.height - Theme.borderWidth : 0)
+                                            width: joinSpec.vertical ? undefined : Math.max(0, lineSegment.to - lineSegment.from)
+                                            height: joinSpec.vertical ? Math.max(0, lineSegment.to - lineSegment.from) : undefined
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Column {

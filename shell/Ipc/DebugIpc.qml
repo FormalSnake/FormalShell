@@ -7,6 +7,7 @@ import qs.Services
 // `qs ipc call debug dump`, the scripted-verification hook every later
 // task uses to assert on live compositor state from outside the process.
 IpcHandler {
+    id: root
     target: "debug"
 
     // Set from shell.qml, the menu instance to query() against. Menu.qml
@@ -59,8 +60,73 @@ IpcHandler {
             brightness: {
                 available: BrightnessService.available,
                 percent: BrightnessService.percent
+            },
+            bar: root._bars(),
+            join: root._join(),
+            // The chrome numbers a leg would otherwise have to restate: the
+            // bar's gap is the joined card's rect plus a `radiusXl` fillet at
+            // either end, and a leg that hardcoded 14 would go quietly wrong
+            // under `theme.radius` or the retro preset.
+            theme: {
+                radius: Core.Theme.radius,
+                radiusXl: Core.Theme.radiusXl,
+                borderWidth: Core.Theme.borderWidth,
+                barPosition: Core.Theme.barPosition
             }
         });
+    }
+
+    // Every mapped strip and the two segments of its inward line (M54 D6):
+    // the gap a joined card opens is the shell's own number, so a rig leg
+    // asserts on it instead of measuring pixels through a screenshot.
+    function _bars() {
+        var bars = Core.PanelRegistry.bars;
+        var out = [];
+        for (var i = 0; i < bars.length; i++) {
+            var bar = bars[i];
+            out.push({
+                screen: bar.modelData ? bar.modelData.name : "",
+                edge: bar._position,
+                line: bar.lineRects()
+            });
+        }
+        return out;
+    }
+
+    function _join() {
+        var j = Core.PanelRegistry.join;
+        return j ? { edge: j.edge, x: j.x, width: j.width, screen: j.screen } : null;
+    }
+
+    // `qs ipc call debug join <edge> <x> <width>`: publishes a join so the
+    // bar's gap and Components/Shoulders.qml can be driven headlessly. No
+    // surface consumes either until M54 Task 3, so without this route the
+    // join could not be seen at all. `joinPreview` below is what draws the
+    // card; this handler only ever publishes the rect.
+    //
+    // A second verb rather than `join clear`, because quickshell dispatches
+    // IPC on exact arity (BarIpc.qml's header carries the finding), so one
+    // name cannot answer both shapes.
+    property var debugJoin: null
+
+    function join(edge: string, x: int, width: int): string {
+        if (["top", "bottom", "left", "right"].indexOf(edge) < 0)
+            return "error: unknown edge '" + edge + "' (top|bottom|left|right)";
+        if (width <= 0)
+            return "error: width must be positive";
+        var bars = Core.PanelRegistry.bars;
+        if (bars.length === 0)
+            return "error: no bar on screen";
+        var screen = bars[0].modelData ? bars[0].modelData.name : "";
+        root.debugJoin = { edge: edge, x: x, width: width, screen: screen };
+        Core.PanelRegistry.setJoin(root, root.debugJoin);
+        return "ok";
+    }
+
+    function joinClear(): string {
+        root.debugJoin = null;
+        Core.PanelRegistry.clearJoin(root);
+        return "ok";
     }
 
     // `qs ipc call debug query "<text>"`, ranks a query against the live

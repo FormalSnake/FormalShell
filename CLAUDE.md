@@ -197,6 +197,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   full-screen routes.
 - `share.sh` `--share`: the share route present (the copied text reaching
   LocalSend as a real file) and honestly absent with no binary on PATH.
+- `shoulders.sh` `--shoulders`: a join published over `debug join`, the gap
+  the bar opens in its own line read off the shell's numbers as the card's
+  rect plus a `radiusXl` fillet at either end, and the pixel where the line
+  stops and the arc starts.
 - `speedtest.sh` `--speedtest`: `network speedtest` settling both phases in
   the network panel.
 - `systemupdate.sh` `--systemupdate`: the flake-inputs-behind cell and panel

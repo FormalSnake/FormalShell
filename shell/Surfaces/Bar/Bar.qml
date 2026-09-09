@@ -222,6 +222,46 @@ PanelWindow {
     // cell's width cap is a fraction of.
     readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
 
+    // The card joined to THIS strip, if any (M54 D6, PanelRegistry.join): a
+    // join on another output or against another edge is somebody else's.
+    readonly property var _join: {
+        var j = PanelRegistry.join;
+        if (!j || j.edge !== bar._position)
+            return null;
+        return (bar.modelData && j.screen === bar.modelData.name) ? j : null;
+    }
+
+    // Where the two segments of the inward line meet while nothing hangs off
+    // the bar. Held past the join going away (the same freeze idiom
+    // Panel.qml's `_morphHeight` uses), so the line closes where the card
+    // was rather than sweeping shut from the end of the strip.
+    property real _gapCentre: bar._join ? (bar._join.x + bar._join.width / 2) : _gapCentre
+
+    // The gap itself: one card's rect plus a fillet's radius at either end,
+    // which is exactly the span Components/Shoulders.qml draws into.
+    readonly property real _gapStart: bar._join
+        ? Math.max(0, Math.min(bar._along, bar._join.x - Theme.radiusXl))
+        : bar._gapCentre
+    readonly property real _gapEnd: bar._join
+        ? Math.max(bar._gapStart, Math.min(bar._along, bar._join.x + bar._join.width + Theme.radiusXl))
+        : bar._gapCentre
+
+    // The inward line's two segments in this window's own coordinates, for
+    // `debug dump` (Ipc/DebugIpc.qml): a rig leg reads the gap a joined card
+    // opened off the shell's own numbers instead of hunting for it in
+    // pixels. A framed bar draws no hairline at all (FrameRing carries that
+    // edge), so this is empty there rather than reporting a hidden rect.
+    function lineRects() {
+        if (bar._framed)
+            return [];
+        return [bar._rectOf(hairlineStart), bar._rectOf(hairlineEnd)];
+    }
+
+    function _rectOf(item) {
+        var origin = item.mapToItem(null, 0, 0);
+        return { x: origin.x, y: origin.y, width: item.width, height: item.height };
+    }
+
     // What the strip has left over once all three regions have taken their
     // natural extent, the two end insets and the gap either side of the
     // centre are paid for. Negative means the layout is already clipping
@@ -712,13 +752,60 @@ PanelWindow {
             // screen's own edges. With the screen frame on, the frame's own
             // stroke runs this side too, round the corners into its band, and
             // this whole fill is off.
+            //
+            // Two segments rather than one (M54 D6): a card joined to the bar
+            // opens a gap between them, its own rect plus a fillet's radius at
+            // either end, and Components/Shoulders.qml draws the card's
+            // concave shoulders into exactly that span, so the line runs into
+            // the card instead of under it. The gap travels on `spatial`
+            // while a join exists and is simply gone when none does, which is
+            // what leaves an ordinary session's line whole and still.
             Rectangle {
-                id: hairline
-                width: bar._vertical ? Theme.borderWidth : parent.width
-                height: bar._vertical ? parent.height : Theme.borderWidth
-                x: bar._position === "left" ? parent.width - hairline.width : 0
-                y: bar._position === "top" ? parent.height - hairline.height : 0
+                id: hairlineStart
+                width: bar._vertical ? Theme.borderWidth : bar._gapStart
+                height: bar._vertical ? bar._gapStart : Theme.borderWidth
+                x: bar._position === "left" ? parent.width - hairlineStart.width : 0
+                y: bar._position === "top" ? parent.height - Theme.borderWidth : 0
                 color: Theme.color.border
+
+                Behavior on width {
+                    enabled: bar._join !== null && !bar._vertical
+                    Anim {}
+                }
+
+                Behavior on height {
+                    enabled: bar._join !== null && bar._vertical
+                    Anim {}
+                }
+            }
+
+            Rectangle {
+                id: hairlineEnd
+                width: bar._vertical ? Theme.borderWidth : Math.max(0, parent.width - bar._gapEnd)
+                height: bar._vertical ? Math.max(0, parent.height - bar._gapEnd) : Theme.borderWidth
+                x: bar._position === "left" ? parent.width - hairlineEnd.width : (bar._vertical ? 0 : bar._gapEnd)
+                y: bar._position === "top" ? parent.height - Theme.borderWidth : (bar._vertical ? bar._gapEnd : 0)
+                color: Theme.color.border
+
+                Behavior on width {
+                    enabled: bar._join !== null && !bar._vertical
+                    Anim {}
+                }
+
+                Behavior on height {
+                    enabled: bar._join !== null && bar._vertical
+                    Anim {}
+                }
+
+                Behavior on x {
+                    enabled: bar._join !== null && !bar._vertical
+                    Anim {}
+                }
+
+                Behavior on y {
+                    enabled: bar._join !== null && bar._vertical
+                    Anim {}
+                }
             }
         }
 

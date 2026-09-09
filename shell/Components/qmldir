@@ -29,6 +29,7 @@ RemoveTransition RemoveTransition.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
 Separator Separator.qml
+Shoulders Shoulders.qml
 Segmented Segmented.qml
 Switch Switch.qml
 Tooltip Tooltip.qml

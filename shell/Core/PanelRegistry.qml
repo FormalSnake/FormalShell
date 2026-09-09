@@ -58,6 +58,37 @@ Singleton {
         return rect;
     }
 
+    // Where a card is joined to the bar right now (M54 D6), or null while
+    // nothing hangs off it: `edge` the bar's edge, `x` and `width` the
+    // card's own rect along that bar in the bar's coordinates on `screen`
+    // (a screen name), the fillets outside it not counted. Bar.qml reads it
+    // to open the gap in its inward line, and it is the one thing the bar
+    // and the surface hanging off it share: two windows, one silhouette.
+    //
+    // Reassigned rather than mutated, like `bars` above, so a consumer
+    // binding to it re-evaluates. `owner` rides along so a surface can only
+    // ever clear its own join: a panel handing its card over to another one
+    // closes after the card it gave up has already been republished, and a
+    // clear that ignored the owner would take the new one down with it.
+    property var join: null
+
+    function setJoin(owner, join) {
+        if (!owner || !join)
+            return;
+        root.join = {
+            owner: owner,
+            edge: join.edge,
+            x: join.x,
+            width: join.width,
+            screen: join.screen
+        };
+    }
+
+    function clearJoin(owner) {
+        if (root.join && root.join.owner === owner)
+            root.join = null;
+    }
+
     // PluginOverlay joins the mutual-exclusion set above without being a
     // Panel, so the descriptor is built off what a Panel actually carries
     // rather than assumed of whatever holds the slot.
