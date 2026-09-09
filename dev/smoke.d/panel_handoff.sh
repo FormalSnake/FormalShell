@@ -1,0 +1,188 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
+# --panel-handoff proves what M53 D5 asks of one panel replacing another: not
+# two cards crossing, one card. The incoming card is seeded on the outgoing
+# one's rect, the two contents crossfade there, and only then does the card
+# left travel to its own place, so at no instant is there a card at both
+# resting places and at some instant there is one between them.
+#
+# The default right region cannot show that: every panel-bearing cell there
+# is within half a card's width of the screen edge, so geometry.js's clamp
+# lands both cards on the same x and the whole travel is a height change.
+# This leg therefore puts `audio` alone in the LEFT region and `network`
+# alone in the RIGHT one, which parks the two cards ~1500px apart.
+#
+# Four boxes in the band just under the bar carry the claim, all cropped out
+# of full frames afterwards rather than sampled live:
+#   left  over the audio card's resting place
+#   right over the network card's
+#   gap   the 1120px between them, bare desktop at both rests
+#   band  the whole strip, for the settled frame
+# A card is 380 wide and the two end boxes are 1300 apart, so one card can
+# never be in both: `left is bare OR right is bare` holds for every frame of
+# a handoff and fails for a pair crossing. The gap box is what a card in
+# transit is in, for most of the travel, and nothing at rest is in it, so it
+# says the card really moved rather than swapping ends. It is a box rather
+# than the whole band on purpose: the Wi-Fi list
+# rescans during the run, so a comparison that takes in the network card's
+# own rows answers "different" whether anything moved or not.
+#
+# Five samples, each armed BEFORE the ipc call rather than after it: grim's
+# own start-up costs about as much as the travel does here, so a capture
+# asked for once the call has returned lands past the end of it every time.
+# Arming first spends that start-up during the round trip instead. The
+# spread runs wide because what is left, the round trip itself, is worth a
+# couple of hundred milliseconds on this rig and is not the same twice.
+leg_panel_handoff_flag="--panel-handoff"
+leg_panel_handoff_order=78
+leg_panel_handoff_needs="convert"
+
+panel_handoff_audio_open_path="$shot_dir/panel-handoff-audio-open.txt"
+panel_handoff_audio_close_path="$shot_dir/panel-handoff-audio-close.txt"
+panel_handoff_network_open_path="$shot_dir/panel-handoff-network-open.txt"
+panel_handoff_network_state_path="$shot_dir/panel-handoff-network-state.txt"
+panel_handoff_reply_path="$shot_dir/panel-handoff-reply.txt"
+panel_handoff_state_path="$shot_dir/panel-handoff-state.txt"
+
+panel_handoff_audio_rest_path="$shot_dir/panel-handoff-audio-rest.png"
+panel_handoff_network_rest_path="$shot_dir/panel-handoff-network-rest.png"
+panel_handoff_settled_path="$shot_dir/panel-handoff-settled.png"
+panel_handoff_mid_paths=(
+  "$shot_dir/panel-handoff-mid-1.png"
+  "$shot_dir/panel-handoff-mid-2.png"
+  "$shot_dir/panel-handoff-mid-3.png"
+  "$shot_dir/panel-handoff-mid-4.png"
+  "$shot_dir/panel-handoff-mid-5.png"
+)
+
+# ImageMagick geometry (WxH+X+Y), since these are cropped out of saved PNGs
+# rather than handed to grim. The band is below the 40px bar and inside any
+# panel card: a card's own top is one barMargin under the bar, and its
+# padding, header row and seam alone already carry it past y=160.
+panel_handoff_left_box="200x100+100+60"
+panel_handoff_right_box="200x100+1600+60"
+panel_handoff_gap_box="1120x100+400+60"
+panel_handoff_band_box="1920x100+0+60"
+
+leg_panel_handoff_validate() {
+  local other
+  for other in bar_layout bar_position chevron config_reload mic monitor panel_anchor systemupdate tray_overflow visualizer; do
+    if leg_on "$other"; then
+      echo "usage: --panel-handoff carries its own bar.layout and cannot combine with --${other//_/-}" >&2
+      exit 1
+    fi
+  done
+}
+
+leg_panel_handoff_fixture() {
+  settings_fragment ', "bar": {"layout": {"left": ["audio"], "right": ["network"]}}'
+}
+
+leg_panel_handoff_timing() {
+  leg_timing 16 50
+}
+
+leg_panel_handoff_drive() {
+  local script="$shot_dir/panel-handoff-drive.sh"
+  write_script "$script" <<EOF
+#!/usr/bin/env bash
+sleep 4
+# The audio card's own resting place, captured before anything hands over,
+# so the settled frame at the end has something to be equal to.
+"$qs_bin" ipc -p "$shell_path" call panel toggle audio > "$panel_handoff_audio_open_path" 2>&1
+sleep 2
+"$grim_bin" "$panel_handoff_audio_rest_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel toggle audio > "$panel_handoff_audio_close_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call panel toggle network > "$panel_handoff_network_open_path" 2>&1
+sleep 2
+"$grim_bin" "$panel_handoff_network_rest_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel state > "$panel_handoff_network_state_path" 2>&1
+( sleep 0.20; "$grim_bin" "${panel_handoff_mid_paths[0]}" > /dev/null 2>&1 ) &
+( sleep 0.32; "$grim_bin" "${panel_handoff_mid_paths[1]}" > /dev/null 2>&1 ) &
+( sleep 0.44; "$grim_bin" "${panel_handoff_mid_paths[2]}" > /dev/null 2>&1 ) &
+( sleep 0.56; "$grim_bin" "${panel_handoff_mid_paths[3]}" > /dev/null 2>&1 ) &
+( sleep 0.68; "$grim_bin" "${panel_handoff_mid_paths[4]}" > /dev/null 2>&1 ) &
+"$qs_bin" ipc -p "$shell_path" call panel toggle audio > "$panel_handoff_reply_path" 2>&1
+wait
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call panel state > "$panel_handoff_state_path" 2>&1
+"$grim_bin" "$panel_handoff_settled_path" > /dev/null 2>&1
+EOF
+  echo "exec-once = bash $script"
+}
+
+# One box out of a saved frame, named after the two, so a comparison below
+# reads as the claim it is making. -strip because ImageMagick writes the
+# wall clock into a PNG's tIME chunk, which would leave two byte-identical
+# pictures comparing unequal.
+panel_handoff_crop() {
+  local source="$1" box="$2" name="$3" out
+  out="$shot_dir/panel-handoff-crop-$name.png"
+  $convert_bin "$source" -crop "$box" +repage -strip "$out" > /dev/null 2>&1
+  [ -s "$out" ] || fail "could not crop $box out of $source"
+  echo "$out"
+}
+
+leg_panel_handoff_assert() {
+  local f i
+  for f in "$panel_handoff_audio_open_path" "$panel_handoff_audio_close_path" \
+    "$panel_handoff_network_open_path" "$panel_handoff_reply_path"; do
+    if ! grep -q '^ok$' "$f" 2>/dev/null; then
+      fail "a panel route did not answer ok at $f, got: $(cat "$f" 2>/dev/null)"
+    fi
+  done
+  if ! grep -q '^network$' "$panel_handoff_network_state_path" 2>/dev/null; then
+    fail "panel state before the handoff is not network, got: $(cat "$panel_handoff_network_state_path" 2>/dev/null)"
+  fi
+  # Exactly one panel, by the shell's own bookkeeping: `panel state` names
+  # the first open one it finds, so a second surviving the handoff would
+  # either show up here or leave nothing named at all.
+  if ! grep -q '^audio$' "$panel_handoff_state_path" 2>/dev/null; then
+    fail "panel state after the handoff is not audio, got: $(cat "$panel_handoff_state_path" 2>/dev/null)"
+  fi
+  for f in "$panel_handoff_audio_rest_path" "$panel_handoff_network_rest_path" \
+    "$panel_handoff_settled_path" "${panel_handoff_mid_paths[@]}"; do
+    [ -f "$f" ] || fail "no screenshot produced at $f"
+  done
+
+  echo "SMOKE_PANEL_HANDOFF_AUDIO_REST $panel_handoff_audio_rest_path"
+  echo "SMOKE_PANEL_HANDOFF_NETWORK_REST $panel_handoff_network_rest_path"
+  echo "SMOKE_PANEL_HANDOFF_SETTLED $panel_handoff_settled_path"
+  for i in "${!panel_handoff_mid_paths[@]}"; do
+    echo "SMOKE_PANEL_HANDOFF_MID_$((i + 1)) ${panel_handoff_mid_paths[$i]}"
+  done
+
+  local audio_band settled_band bare_left bare_right audio_gap network_gap
+  audio_band=$(panel_handoff_crop "$panel_handoff_audio_rest_path" "$panel_handoff_band_box" "audio-band")
+  settled_band=$(panel_handoff_crop "$panel_handoff_settled_path" "$panel_handoff_band_box" "settled-band")
+  # Bare desktop in each end box: the box the OTHER panel's rest frame leaves
+  # empty. The gap between them is bare in both.
+  bare_left=$(panel_handoff_crop "$panel_handoff_network_rest_path" "$panel_handoff_left_box" "bare-left")
+  bare_right=$(panel_handoff_crop "$panel_handoff_audio_rest_path" "$panel_handoff_right_box" "bare-right")
+  audio_gap=$(panel_handoff_crop "$panel_handoff_audio_rest_path" "$panel_handoff_gap_box" "audio-gap")
+  network_gap=$(panel_handoff_crop "$panel_handoff_network_rest_path" "$panel_handoff_gap_box" "network-gap")
+
+  if ! cmp -s "$audio_gap" "$network_gap"; then
+    fail "the box at $panel_handoff_gap_box is not bare desktop at both resting places, so a card in it proves nothing"
+  fi
+  if ! cmp -s "$settled_band" "$audio_band"; then
+    fail "the handoff did not settle on the audio card's own rect: $panel_handoff_settled_path differs from $panel_handoff_audio_rest_path over $panel_handoff_band_box"
+  fi
+
+  local travelled=false mid_gap mid_left mid_right
+  for i in "${!panel_handoff_mid_paths[@]}"; do
+    mid_gap=$(panel_handoff_crop "${panel_handoff_mid_paths[$i]}" "$panel_handoff_gap_box" "mid-$((i + 1))-gap")
+    mid_left=$(panel_handoff_crop "${panel_handoff_mid_paths[$i]}" "$panel_handoff_left_box" "mid-$((i + 1))-left")
+    mid_right=$(panel_handoff_crop "${panel_handoff_mid_paths[$i]}" "$panel_handoff_right_box" "mid-$((i + 1))-right")
+    if ! cmp -s "$mid_gap" "$audio_gap"; then
+      travelled=true
+    fi
+    if ! cmp -s "$mid_left" "$bare_left" && ! cmp -s "$mid_right" "$bare_right"; then
+      fail "sample $((i + 1)) has a card at BOTH resting places: ${panel_handoff_mid_paths[$i]} is two cards crossing, not one travelling"
+    fi
+  done
+  if ! $travelled; then
+    fail "no mid-flight sample caught a card between the two resting places: the handoff swapped ends rather than travelling"
+  fi
+}

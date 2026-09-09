@@ -317,22 +317,214 @@ PanelWindow {
     readonly property real _frameHeight: Geometry.frameHeight(contentColumn.implicitHeight,
         root._maxContentHeight, Theme.space.panelPadding, root._headerHeight, root._headerGap)
 
+    // --- Handoff ---------------------------------------------------------
+    //
+    // Opening B while A is open is one card, not two surfaces crossing (M53
+    // D5): B's frame is seeded on A's rect and, once the two contents have
+    // crossfaded there, travels to its own. Since both are a `card` fill
+    // with the same border and radius, and A's card is cut the moment the
+    // crossfade ends, what the eye gets is one card whose contents change
+    // and which then moves and resizes into place.
+    //
+    // The two phases are sequential rather than concurrent because two
+    // Wayland surfaces cannot commit a frame together: overlapped, the pair
+    // drew a doubled edge a frame's travel apart, which at this distance was
+    // 160px. Stationary they sit exactly on top of each other, and by the
+    // time anything moves there is only one card left.
+    //
+    // The card itself never crossfades, which is why Presence is bypassed on
+    // both halves, and why the outgoing window is cut rather than faded: an
+    // exit fade would drag a shrinking ghost border across the card that has
+    // already taken its place.
+
+    // Non-null on the incoming half for the whole travel: the rect the frame
+    // starts from.
+    property var _handoffFrom: null
+    // How far along that travel the frame is, 0 at `_handoffFrom` and 1 at
+    // this panel's own place. One animation rather than a Behavior on the
+    // frame: a Behavior would need the seed, the arming and the retarget to
+    // land in that order across a window that is still mapping, and they do
+    // not.
+    property real _travel: 1
+    // Non-null on the outgoing half: the panel taking this card over. The
+    // frame itself does not move for it, the two morphs having frozen where
+    // they were; what it names is whose content is fading in under this
+    // one's, and that this window is a handed-over card rather than a
+    // closing one.
+    property var _handoffTo: null
+    // Non-null on the incoming half over the same window as `_handoffFrom`:
+    // the outgoing panel, waiting to be told the travel has begun.
+    property var _handoffPending: null
+    // Armed for the whole travel on both halves.
+    property bool _handoff: false
+    // Set the instant a handed-over card's travel ends, cleared by the next
+    // open. The window goes on it.
+    property bool _handedOver: false
+    readonly property bool handingOver: root._handoff && root._handoffTo !== null
+
+    // The frame's rect right now, in the output's own coordinates: what a
+    // handoff hands over. This window covers the whole output, so the
+    // frame's own x and y already are those coordinates.
+    readonly property rect frameRect: Qt.rect(frame.x, frame.y, frame.width, frame.height)
+
+    // The card's contents (the header, its seam and the row list), which
+    // crossfade across a handoff while the card itself does not.
+    property real _contentAlpha: 1
+    // What those three actually draw at. The outgoing half reads the
+    // incoming one's alpha rather than running a fade of its own: one clock,
+    // which a window that has yet to render its first frame cannot be
+    // behind, and the pair are exactly complementary at every step.
+    readonly property real _contentOpacity: (root.handingOver && root._handoffTo)
+        ? 1 - root._handoffTo._contentAlpha
+        : root._contentAlpha
+    // Set for the one write that seeds the alpha on an open, which has to
+    // land instantly rather than glide from whatever the last close left.
+    property bool _alphaSync: false
+
+    Behavior on _contentAlpha {
+        enabled: !root._alphaSync
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
+    // What this half of the handoff has left to live. Set on each phase
+    // rather than bound, since the two halves and the wait for the incoming
+    // window are three different lengths.
+    property int _handoffLife: 0
+
+    Timer {
+        id: handoffTimer
+        interval: root._handoffLife
+        onTriggered: root.endHandoff()
+    }
+
+    // A generous wait, not a duration: a cold panel's window can take a few
+    // hundred milliseconds to map, and a clock that ran out first would cut
+    // the outgoing card with nothing yet to replace it.
+    function _handoffBackstop() {
+        return Theme.motion.emphasized * 8;
+    }
+
+    SequentialAnimation {
+        id: travelAnimation
+        PauseAnimation { duration: Theme.motion.standard }
+        NumberAnimation {
+            target: root
+            property: "_travel"
+            from: 0
+            to: 1
+            duration: Theme.motion.emphasized
+            easing.type: Theme.motion.easingInOut
+        }
+    }
+
+    // The outgoing half. It closes, so keyboard focus, the backdrop and the
+    // registry slot all release on this tick exactly as an ordinary close
+    // does, and its card stays where it is with `next`'s card seeded on top
+    // of it. close() first, since close() is also what ends a handoff.
+    function handOver(next) {
+        root.close();
+        root._handoff = true;
+        root._handoffTo = next;
+        root._handoffLife = root._handoffBackstop();
+        handoffTimer.restart();
+    }
+
+    // The incoming half, seeded at the outgoing card's rect.
+    function takeOver(rect, outgoing) {
+        root._travel = 0;
+        root._handoffFrom = rect;
+        root._handoff = true;
+        root._handoffPending = outgoing;
+        root._handoffLife = root._handoffBackstop();
+        handoffTimer.restart();
+        if (root.backingWindowVisible)
+            Qt.callLater(root._beginTravel);
+    }
+
+    // Both halves start here, once this window is really up: see the block
+    // header for why a cold map is what decides the moment.
+    function _beginTravel() {
+        if (!root._handoff || !root._handoffPending)
+            return;
+        var outgoing = root._handoffPending;
+        root._handoffPending = null;
+        root._contentAlpha = 1;
+        root._handoffLife = Theme.motion.standard + Theme.motion.emphasized;
+        travelAnimation.restart();
+        handoffTimer.restart();
+        outgoing.beginTravel();
+    }
+
+    // Called on the outgoing half by the incoming one: its content is
+    // already following the incoming's, so all this sets is how long this
+    // window has left. It is the crossfade, not the travel: past that, the
+    // card standing on this rect is the incoming one and this is a duplicate
+    // of it that must not still be here when it moves.
+    function beginTravel() {
+        if (!root._handoff)
+            return;
+        root._handoffLife = Theme.motion.standard;
+        handoffTimer.restart();
+    }
+
+    function endHandoff() {
+        if (!root._handoff)
+            return;
+        handoffTimer.stop();
+        travelAnimation.stop();
+        root._travel = 1;
+        root._handedOver = root.handingOver;
+        root._handoff = false;
+        root._handoffFrom = null;
+        root._handoffTo = null;
+        root._handoffPending = null;
+        root._handoffLife = 0;
+    }
+
+    function _seedContent(alpha) {
+        root._alphaSync = true;
+        root._contentAlpha = alpha;
+        root._alphaSync = false;
+    }
+
     // `anchor` is the opening cell's centre ({x, y}) in its own window, or
     // undefined for an open with no cell.
     function open(anchor, screen) {
-        if (PanelRegistry.current && PanelRegistry.current !== root && PanelRegistry.current !== root.owner)
-            PanelRegistry.current.close();
-        PanelRegistry.current = root;
+        // First, because both of them decide where this frame is about to
+        // land and the handoff below is a question about that place.
         root.anchorX = anchor ? anchor.x : -1;
         root.anchorY = anchor ? anchor.y : -1;
         root.anchorScreen = screen !== undefined ? screen : null;
+
+        var previous = PanelRegistry.current;
+        var replacing = previous && previous !== root && previous !== root.owner;
+        // Asked before anything moves: the outgoing frame is only where it
+        // was until this panel takes the slot.
+        var from = replacing ? PanelRegistry.beginHandoff(previous, root) : null;
+        if (replacing && !from)
+            previous.close();
+        PanelRegistry.current = root;
+        root._handedOver = false;
+        root._seedContent(from ? 0 : 1);
         root.isOpen = true;
+        // Both halves in one pass, and the outgoing one last: it aims at
+        // this panel's resolved place, which is only worth reading once
+        // isOpen has unfrozen the two morphs it is built out of.
+        if (from) {
+            root.takeOver(from, previous);
+            previous.handOver(root);
+        }
         root._focusPrimed = false;
         root._beginFocusPrime();
         Qt.callLater(function () { backdrop.forceActiveFocus(); });
     }
 
     function close() {
+        root.endHandoff();
+        // A card still on its way to this one has nowhere left to go.
+        var handoff = PanelRegistry.handoff;
+        if (handoff && handoff.to === root && handoff.from && handoff.from !== root)
+            handoff.from.endHandoff();
         root.isOpen = false;
         root.cursorActive = false;
         // The slot goes back to whoever this opened on top of, so the next
@@ -381,7 +573,10 @@ PanelWindow {
     // release on isOpen itself, so input never lands on a fading-out panel.
     // `keepMapped` extends this past the fade for MediaPanel's grabToImage
     // need (M35).
-    visible: presence.shown || root.keepMapped
+    // A handed-over window is cut, never faded: the card that replaced it is
+    // already drawn at exactly its rect, so Presence's own exit would only
+    // draw a shrinking ghost of this one over it.
+    visible: root.keepMapped || (!root._handedOver && presence.shown)
     color: "transparent"
     // keepMapped alone (closed, fully faded, still mapped) is the one state
     // that must take no input at all: an empty Region resolves to an empty
@@ -389,7 +584,9 @@ PanelWindow {
     // click-through rather than a disabled MouseArea (Tooltip.qml's own
     // precedent), so a "closed" panel kept mapped for its Video decode never
     // eats a click meant for whatever is really on screen there.
-    mask: (!presence.shown && root.keepMapped) ? _clickThroughMask : null
+    // A card mid-handoff is drawn but no longer anybody's: it sits over the
+    // panel that took its place and must not eat that panel's clicks.
+    mask: (root.handingOver || (!presence.shown && root.keepMapped)) ? _clickThroughMask : null
 
     Region { id: _clickThroughMask }
 
@@ -398,7 +595,10 @@ PanelWindow {
     // off.
     Presence {
         id: presence
-        open: root.isOpen
+        // A card being handed over stays at its open pose for the length of
+        // the travel: it is not exiting, it is turning into the next panel.
+        open: root.isOpen || root.handingOver
+        bypass: root._handoff
         edge: Theme.barPosition
     }
 
@@ -413,7 +613,9 @@ PanelWindow {
     property real _morphHeight: root.isOpen ? root._frameHeight : _morphHeight
 
     Behavior on _morphHeight {
-        enabled: presence.settled && root.isOpen
+        // Off through a handoff: the frame's own size Behaviors below carry
+        // the travel then, and two clocks on one size would fight.
+        enabled: presence.settled && root.isOpen && !root._handoff
         NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
     }
 
@@ -424,8 +626,25 @@ PanelWindow {
     property real _morphWidth: root.isOpen ? root.panelWidth : _morphWidth
 
     Behavior on _morphWidth {
-        enabled: presence.settled && root.isOpen
+        enabled: presence.settled && root.isOpen && !root._handoff
         NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+    }
+
+    // Where the frame sits: its own place, or, on the incoming half of a
+    // handoff, somewhere on the line from the rect it took over to that.
+    // `own` is read live rather than snapshotted, so content that settles
+    // its height a frame late moves the destination rather than stranding
+    // the travel short of it.
+    readonly property rect _framePlace: {
+        var own = Qt.rect(root._frameX, root._frameY, root._morphWidth, root._morphHeight);
+        if (!root._handoffFrom)
+            return own;
+        var from = root._handoffFrom;
+        var t = root._travel;
+        return Qt.rect(from.x + (own.x - from.x) * t,
+            from.y + (own.y - from.y) * t,
+            from.width + (own.width - from.width) * t,
+            from.height + (own.height - from.height) * t);
     }
 
     WlrLayershell.namespace: "formalshell:panel"
@@ -461,7 +680,11 @@ PanelWindow {
     // this catches the map itself. A reopen mid-fade never changes this flag
     // (the window stayed mapped throughout), which is why open() arms the
     // prime as well. Between them every open path is covered exactly once.
-    onBackingWindowVisibleChanged: root._beginFocusPrime()
+    onBackingWindowVisibleChanged: {
+        root._beginFocusPrime();
+        if (root.backingWindowVisible)
+            Qt.callLater(root._beginTravel);
+    }
 
     function _beginFocusPrime() {
         if (root.isOpen && root.backingWindowVisible)
@@ -501,10 +724,10 @@ PanelWindow {
 
         Card {
             id: frame
-            x: root._frameX
-            y: root._frameY
-            width: root._morphWidth
-            height: root._morphHeight
+            x: root._framePlace.x
+            y: root._framePlace.y
+            width: root._framePlace.width
+            height: root._framePlace.height
             color: root.frameColor
             radius: root.frameRadius
 
@@ -516,13 +739,15 @@ PanelWindow {
             // gliding there from wherever the last open left the card:
             // open() flips isOpen, which drops presence.settled in the same
             // pass, well before either coordinate re-evaluates.
+            // Off through a handoff, which draws its own trajectory: one
+            // clock over the frame, never two.
             Behavior on x {
-                enabled: presence.settled && root.isOpen
+                enabled: !root._handoff && presence.settled && root.isOpen
                 NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
             }
 
             Behavior on y {
-                enabled: presence.settled && root.isOpen
+                enabled: !root._handoff && presence.settled && root.isOpen
                 NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
             }
 
@@ -559,7 +784,7 @@ PanelWindow {
             // zoom is a Scale rather than `scale`/`transformOrigin` because
             // an origin has to be a point on the bar's edge, not one of the
             // nine Item.TransformOrigin corners.
-            opacity: presence.opacity
+            opacity: root._handedOver ? 0 : presence.opacity
 
             transform: [
                 Scale {
@@ -600,9 +825,12 @@ PanelWindow {
             // A header row is `controlHeight` tall (DESIGN.md §1 Padding),
             // stated rather than inferred from whichever control inside it
             // happens to be tallest.
+            // The header, its seam and the rows carry the handoff crossfade;
+            // the card under them does not (see the handoff block above).
             Item {
                 id: header
                 visible: root.showHeader
+                opacity: root._contentOpacity
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -658,6 +886,7 @@ PanelWindow {
             Separator {
                 id: headerRule
                 visible: root.showHeader
+                opacity: root._contentOpacity
                 anchors.top: header.bottom
                 anchors.topMargin: Theme.space.panelPadding
                 anchors.left: parent.left
@@ -675,6 +904,7 @@ PanelWindow {
             // the header, both of which are several times that.
             Flickable {
                 id: contentFlickable
+                opacity: root._contentOpacity
                 // Held off the card's own inner top by the header and its
                 // seam rather than anchored under the rule itself, so a
                 // headerless panel (both terms 0) starts where the card's

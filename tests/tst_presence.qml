@@ -71,6 +71,30 @@ TestCase {
         tryCompare(presence, "settled", true, 1000);
     }
 
+    function test_bypass_lands_on_the_pose_open_names() {
+        // Panel's handoff (M53 D5) draws its own trajectory and must have no
+        // fade, no zoom and no slide running under it.
+        var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top", bypass: true });
+        presence.open = true;
+        compare(presence.opacity, 1);
+        compare(presence.scale, 1);
+        compare(presence.slideY, 0);
+        compare(presence.settled, true);
+        compare(presence.shown, true);
+    }
+
+    function test_bypass_holds_the_pose_through_an_interruption() {
+        var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top", open: true });
+        presence.open = false;
+        // Mid-exit: the bypass has to read the pose `open` names rather than
+        // wherever the fade had got to, or a surface handed the card back
+        // would pop to a third of its opacity.
+        presence.bypass = true;
+        presence.open = true;
+        compare(presence.opacity, 1);
+        compare(presence.settled, true);
+    }
+
     function test_motion_disabled_is_instant() {
         Theme.motionEnabled = false;
         var presence = createTemporaryObject(presenceComponent, testCase, { edge: "top" });

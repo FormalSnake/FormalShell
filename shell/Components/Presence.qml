@@ -25,9 +25,18 @@ QtObject {
     // middle, no slide.
     property string edge: "center"
 
+    // Set while a surface is entering or leaving by some other means than
+    // this recipe (Panel's handoff, M53 D5): every read-out below then lands
+    // on the pose `open` names instead of on the transition toward it, so a
+    // surface drawing its own trajectory has no fade and no zoom running
+    // under it, and an interruption part-way through finds the pose at rest
+    // rather than a third of the way in. `_progress` itself is left alone,
+    // so whatever it was doing has converged by the time the bypass lifts.
+    property bool bypass: false
+
     // True from the instant `open` flips true until the exit settles back
     // to `_progress` 0.
-    readonly property bool shown: root.open || root._progress > 0
+    readonly property bool shown: root.open || root._pose > 0
 
     property real _progress: root.open ? 1 : 0
     Behavior on _progress {
@@ -44,7 +53,10 @@ QtObject {
     // `_progress`'s own value, which only starts moving on the next frame,
     // so a consumer gating a size Behavior on this (DESIGN.md §1 Motion,
     // M51 D5) never mistakes the first tick of a fresh transition for rest.
-    readonly property bool settled: !_progressAnimation.running
+    readonly property bool settled: root.bypass || !_progressAnimation.running
+
+    // What every read-out below is a function of.
+    readonly property real _pose: root.bypass ? (root.open ? 1 : 0) : root._progress
 
     // Unit vector toward the anchored edge, the same convention
     // `shell/Bar/layout.js`'s edgeVector uses for the bar itself.
@@ -58,8 +70,8 @@ QtObject {
         }
     }
 
-    readonly property real opacity: root._progress
-    readonly property real scale: Theme.motion.zoom + (1 - Theme.motion.zoom) * root._progress
+    readonly property real opacity: root._pose
+    readonly property real scale: Theme.motion.zoom + (1 - Theme.motion.zoom) * root._pose
     readonly property int transformOrigin: {
         switch (root.edge) {
         case "top": return Item.Top;
@@ -72,6 +84,6 @@ QtObject {
     // The remaining distance toward the anchor: full `slide` at rest closed,
     // 0 once fully open, so a frame's own translate needs no Behavior of its
     // own. 0 on both axes for `edge: "center"`.
-    readonly property real slideX: (1 - root._progress) * Theme.motion.slide * root._direction.x
-    readonly property real slideY: (1 - root._progress) * Theme.motion.slide * root._direction.y
+    readonly property real slideX: (1 - root._pose) * Theme.motion.slide * root._direction.x
+    readonly property real slideY: (1 - root._pose) * Theme.motion.slide * root._direction.y
 }

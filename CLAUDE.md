@@ -152,6 +152,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   left-region audio cell, the card in it once and the bare desktop once.
 - `panel_at.sh` `--panel-at <n>`: `panel toggleAt <n>` walking the resolved
   right region and stopping on a panel-bearing cell.
+- `panel_handoff.sh` `--panel-handoff`: `audio` alone in the left region and
+  `network` alone in the right, so the two cards rest ~1500px apart, and
+  `panel toggle audio` over an open network panel is one card rather than
+  two crossing: five mid-flight frames, none carrying a card at both
+  resting places, one of them carrying a card between them, and the settled
+  frame equal to the audio card's own rest frame over the band under the bar.
 - `panel_keys.sh` `--panel-keys`: row-level keyboard navigation inside a
   panel, driven by real keystrokes rather than the IPC shortcuts.
 - `picker.sh` `--picker`: the wallpaper grid, the pick becoming the
