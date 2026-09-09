@@ -644,6 +644,15 @@ PanelWindow {
         edge: Theme.barPosition
     }
 
+    // The card is up and standing still: the arm switch for anything the
+    // panel's own CONTENT animates (M53 D2), the same gate the frame's two
+    // size morphs below take. A card arriving is already one movement, so
+    // its contents measuring themselves inside it must land in one frame;
+    // once it is open, a row or a cell that changes travels the way it
+    // would anywhere else. False again the instant close() fires, so the
+    // next open is as quiet as the first.
+    readonly property bool settledOpen: root.isOpen && presence.settled && !root._handoff
+
     // The frame's actual height (DESIGN.md §1 Motion, M51 D5): `_frameHeight`
     // above is the content's own target, tracked live only while the panel
     // sits open at rest, so a size change never fights the enter/exit fade.

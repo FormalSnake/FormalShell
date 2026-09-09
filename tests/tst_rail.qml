@@ -82,4 +82,19 @@ TestCase {
         tryCompare(rail.probeC, "y", 24);
         tryCompare(rail, "implicitHeight", 44);
     }
+
+    // `animate: false` is what a strip that is itself arriving takes: the
+    // re-place lands in the frame it was asked for rather than being
+    // travelled to, so a card built fresh on open (BarOverflow.qml) opens
+    // with its cells already in their slots. Compared on the next frame,
+    // not waited for, which is the whole claim.
+    function test_a_flat_rail_re_places_in_one_frame() {
+        var rail = createTemporaryObject(railComponent, testCase, { animate: false });
+        verify(rail);
+        waitForRendering(rail);
+        rail.probeA.width = 60;
+        waitForRendering(rail);
+        compare(rail.probeB.x, 64);
+        compare(rail.probeC.x, 98);
+    }
 }

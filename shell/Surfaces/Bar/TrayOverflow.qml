@@ -88,6 +88,12 @@ Panel {
         id: overflowRail
         vertical: root._vertical
         spacing: Theme.space.sm
+        // Flat until the card has finished opening, the same gate the
+        // chevron's second bar takes (BarOverflow.qml): an icon whose pixmap
+        // lands a frame after the card does must not slide the whole tray
+        // around inside the entrance. It arms afterwards, so an item
+        // registering while the bar is up still opens its slot.
+        animate: root.settledOpen
 
         // The same live ObjectModel the strip renders, not a `.values`
         // snapshot: a plain-array model is a full delegate reset on every one
@@ -107,6 +113,7 @@ Panel {
                 menuOwner: root
                 ghost: true
                 barEdge: Theme.barPosition
+                animateSize: root.settledOpen
                 cursor: root.cursorActive && itemCell.index === root.cursorIndex
                 // A pointer reaching a cell reveals the cursor on it, the
                 // same gate the first navigation key flips.
