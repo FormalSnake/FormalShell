@@ -141,10 +141,7 @@ Item {
                     implicitHeight: pair.implicitHeight
                     opacity: body.entered ? 1 : 0
                     Behavior on opacity {
-                        NumberAnimation {
-                            duration: Theme.motion.standard
-                            easing.type: Theme.motion.easing
-                        }
+                        Anim { kind: "effects" }
                     }
                     Component.onCompleted: body.entered = true
 

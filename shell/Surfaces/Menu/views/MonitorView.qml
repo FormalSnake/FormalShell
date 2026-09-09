@@ -1662,10 +1662,7 @@ Item {
 
             Behavior on y {
                 enabled: root._cursorTravels
-                NumberAnimation {
-                    duration: Core.Theme.motion.fast
-                    easing.type: Core.Theme.motion.easing
-                }
+                Anim { kind: "spatialFast" }
             }
         }
 
@@ -1706,7 +1703,7 @@ Item {
                 opacity: (procRow.hovered && !procRow.current) ? 1 : 0
 
                 Behavior on opacity {
-                    NumberAnimation { duration: Core.Theme.motion.fast; easing.type: Core.Theme.motion.easing }
+                    Anim { kind: "effects" }
                 }
             }
 

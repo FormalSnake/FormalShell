@@ -5,14 +5,23 @@
 # it, rather than appearing whole. Its top edge never moves while that
 # happens, which is what separates an unfold from a zoom or a slide.
 #
-# Measured the way --panel-emerge measures the drawer, and for the same
-# reason: probes in the card's left gutter, the `panelPadding` column between
-# its border and its content, which is plain card fill at every height. A
-# probe is "covered" when it is byte-identical to the same probe in the
-# settled frame. The card fades in on `fast` while it grows on `emphasized`,
-# so a probe reads as uncovered for the first 100ms whatever the height is;
-# the ladder starts at 30% of the card, which InOutQuart does not reach until
-# 138ms, so the fade is over before the first rung can be crossed.
+# Measured with probes down the card's own centre column, and a probe is
+# "covered" when its mean brightness clears a threshold halfway between the
+# card's fill and the scrim under it. Neither of the two tests the other legs
+# use works here. Byte-identity against the settled frame, which this leg used
+# until M54, cannot survive the deform (M54 D7): the card is still being
+# squashed for a beat after the growth stops, so a probe standing well inside
+# it compares unequal for most of the open. And --panel-emerge's "anything but
+# the desktop" cannot be used at all, since the launcher draws a scrim over
+# the whole output and every pixel of an open frame differs from a closed one
+# whatever the card has reached.
+#
+# The centre column is the one line of the card the deform never moves
+# horizontally, its stretch being about the midpoint of the top edge, and the
+# threshold survives the vertical half of it because nothing the card draws is
+# darker than its own fill. The card still fades in on `effectsFast` while it
+# grows on `spatial` (M54 D2), so a rung reads as uncovered until the fill is
+# a little past half way up, which is the first ~50ms of the open.
 #
 # The card's own left edge and top are spelled out below rather than measured:
 # a `popupWidthMenu` card centred on the output with its top at 30% of it is
@@ -57,7 +66,26 @@ menu_unfold_card_w=560
 # Armed before the ipc call, not after it: grim's own start-up costs about as
 # much as the unfold does (panel_handoff.sh's finding), so a capture asked for
 # once the call has returned lands past the end of it.
-menu_unfold_mid_sleeps=(0.02 0.08 0.11 0.14 0.17 0.20 0.26 0.34 0.46 0.62)
+#
+# Every sample is the moment this rig has the window up plus a fraction of the
+# unfold's own clock (Theme.motion.spatial, M54 D2/D11) rather than a
+# hard-coded millisecond, so a change to the token moves the ladder with it
+# instead of leaving it pinned to a duration that has gone. The unfold does not
+# start on the ipc call: `presence.mapped` holds it at the fold until the
+# compositor has the surface on screen, which on this rig is about 200ms in, so
+# fractions counted from the call alone would spend half the ladder on bare
+# desktop. The negative ones are the samples that land before the window is up,
+# which is where the first rungs come from, and the last is well past the end,
+# past the deform's spring tail too, so the card has to have landed and
+# unwound by it.
+menu_unfold_clock_ms=500
+menu_unfold_map_ms=200
+menu_unfold_mid_fractions=(-36 -24 -12 0 6 12 20 32 60 200)
+menu_unfold_mid_sleeps=()
+for menu_unfold_f in "${menu_unfold_mid_fractions[@]}"; do
+  menu_unfold_at=$((menu_unfold_map_ms + menu_unfold_f * menu_unfold_clock_ms / 100))
+  menu_unfold_mid_sleeps+=("$(printf '%d.%03d' $((menu_unfold_at / 1000)) $((menu_unfold_at % 1000)))")
+done
 
 leg_menu_unfold_validate() {
   local other
@@ -102,15 +130,18 @@ EOF
   echo "exec-once = bash $script"
 }
 
-# One box out of a saved frame. -strip because ImageMagick writes the wall
-# clock into a PNG's tIME chunk, which would leave two byte-identical
-# pictures comparing unequal.
-menu_unfold_crop() {
-  local source="$1" box="$2" name="$3" out
-  out="$shot_dir/menu-unfold-crop-$name.png"
-  $convert_bin "$source" -crop "$box" +repage -strip "$out" > /dev/null 2>&1
-  [ -s "$out" ] || fail "could not crop $box out of $source"
-  echo "$out"
+# How bright one box is on average. The card's own fill sits several times
+# above the scrim it is drawn over, so this separates "the card has reached
+# this depth" from "this is still the scrim" whatever the pixel under the
+# probe happens to be.
+menu_unfold_level() {
+  $convert_bin "$1" -crop "$2" +repage -format "%[fx:mean]" info: 2>/dev/null
+}
+
+# Halfway between the two, so neither the desktop nor the scrim clears it and
+# the card does from a little past half of its own fade in.
+menu_unfold_covered() {
+  awk -v v="$(menu_unfold_level "$1" "$2")" 'BEGIN { exit !(v > 0.06) }'
 }
 
 # How much of one box is bright, past a threshold that only the launcher's own
@@ -125,10 +156,9 @@ menu_unfold_has_ink() {
 
 # How many of the four rungs the card has grown past in this frame.
 menu_unfold_depth() {
-  local frame="$1" name="$2" i depth=0 probe
+  local frame="$1" i depth=0
   for i in "${!menu_unfold_probe_boxes[@]}"; do
-    probe=$(menu_unfold_crop "$frame" "${menu_unfold_probe_boxes[$i]}" "$name-$i")
-    if cmp -s "$probe" "$shot_dir/menu-unfold-crop-settled-$i.png"; then
+    if menu_unfold_covered "$frame" "${menu_unfold_probe_boxes[$i]}"; then
       depth=$((depth + 1))
     fi
   done
@@ -190,27 +220,26 @@ leg_menu_unfold_assert() {
   local card_x=$menu_unfold_card_x card_y=$menu_unfold_card_y card_w=$menu_unfold_card_w
   local card_h=$((ink_bottom - card_y))
 
-  # The ladder, in the card's own left gutter. The shallowest rung is well
-  # below the search row the card is first drawn at, so a folded card covers
-  # none of them.
-  local gutter_x=$((card_x + 3)) depth_at
+  # The ladder, down the card's own centre column. The deform (M54 D7) is a
+  # stretch about the midpoint of the card's top edge, so that column is the
+  # one line of the card whose x it never moves; a probe in the left gutter
+  # would be carried several pixels inward at the height of the travel and
+  # read the scrim beside the card instead of the card. The shallowest rung is
+  # well below the search row the card is first drawn at, so a folded card
+  # covers none of them.
+  local column_x=$((card_x + card_w / 2 - 2)) depth_at
   menu_unfold_probe_boxes=()
   for depth_at in 30 50 75 95; do
-    menu_unfold_probe_boxes+=("5x4+${gutter_x}+$((card_y + card_h * depth_at / 100 - 4))")
+    menu_unfold_probe_boxes+=("5x4+${column_x}+$((card_y + card_h * depth_at / 100 - 4))")
   done
   for i in "${!menu_unfold_probe_boxes[@]}"; do
-    menu_unfold_crop "$menu_unfold_settled_path" "${menu_unfold_probe_boxes[$i]}" "settled-$i" > /dev/null
-  done
-  local bare_probe
-  for i in "${!menu_unfold_probe_boxes[@]}"; do
-    bare_probe=$(menu_unfold_crop "$menu_unfold_bare_path" "${menu_unfold_probe_boxes[$i]}" "bare-$i")
-    if cmp -s "$bare_probe" "$shot_dir/menu-unfold-crop-settled-$i.png"; then
-      fail "probe ${menu_unfold_probe_boxes[$i]} reads the same with the card there and gone, so it measures nothing"
+    if menu_unfold_covered "$menu_unfold_bare_path" "${menu_unfold_probe_boxes[$i]}"; then
+      fail "probe ${menu_unfold_probe_boxes[$i]} already reads as covered with the card gone, so it measures nothing"
     fi
   done
 
   local settled_depth first_depth last_depth depth previous=-1 ladder="" grew=false
-  settled_depth=$(menu_unfold_depth "$menu_unfold_settled_path" "settled-check")
+  settled_depth=$(menu_unfold_depth "$menu_unfold_settled_path")
   if [ "$settled_depth" -ne 4 ]; then
     fail "the settled card does not cover its own ladder ($settled_depth of 4), so the probes are not where the measurement thinks"
   fi
@@ -238,7 +267,7 @@ leg_menu_unfold_assert() {
     ordered+=("$f")
   done < <(stat -c '%y %n' "${menu_unfold_mid_paths[@]}" | sort | sed 's/^[^ ]* [^ ]* [^ ]* //')
   for i in "${!ordered[@]}"; do
-    depth=$(menu_unfold_depth "${ordered[$i]}" "mid-$((i + 1))")
+    depth=$(menu_unfold_depth "${ordered[$i]}")
     ladder+=" $depth"
     if [ "$depth" -lt "$previous" ]; then
       echo "SMOKE_MENU_UNFOLD_NOTE the card read smaller between captures $i and $((i + 1)): depths$ladder"
