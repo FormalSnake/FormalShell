@@ -8,6 +8,8 @@ import qs.Plugins
 import qs.Surfaces.Frame
 import qs.Surfaces.Bar.widgets
 import "../../Bar/layout.js" as Layout
+import "../../Bar/panels.js" as Panels
+import "../../Components/tooltip.js" as Placement
 
 // The bar (DESIGN.md §3 Bar, spec §1, M6 Tasks 1+3, M8b Task 3 retrofit,
 // M10 Task 3 settings-driven retrofit): three regions, left, center,
@@ -168,7 +170,49 @@ PanelWindow {
     }
 
     on_ResolvedLayoutChanged: bar._publishLayout()
-    Component.onCompleted: bar._publishLayout()
+    Component.onCompleted: {
+        bar._publishLayout();
+        PanelRegistry.addBar(bar);
+    }
+    Component.onDestruction: PanelRegistry.removeBar(bar)
+
+    // Where a panel's own cell sits on this strip, for an open with no click
+    // to read one off (M53 D5, PanelIpc's `toggle`/`toggleAt` from a
+    // compositor keybind). Answers with the same screen-relative
+    // {anchor, screen} shape Panel.openFrom() builds from a real cell, or
+    // null when this bar has no cell for that panel on the strip: nothing in
+    // bar.layout opens it, the widget hid itself (a Battery with no
+    // battery), or a chevron holds it in the second bar, where there is
+    // nothing along the strip to hang under. The anchorless open, the frame
+    // at the end of the bar, is still the honest answer to all three.
+    function panelAnchor(name) {
+        var repeaters = [leftRepeater, centerRepeater, rightRepeater];
+        for (var r = 0; r < repeaters.length; r++) {
+            for (var i = 0; i < repeaters[r].count; i++) {
+                var slot = repeaters[r].itemAt(i);
+                if (!slot || !slot.visible || slot.modelData.collapsible)
+                    continue;
+                // Layout.entryName covers a bar plugin, whose cell and whose
+                // panel are registered under the one "plugin:<id>" name; a
+                // custom module resolves to a "custom:" name no panel can
+                // carry, which is the drop it should be.
+                var opens = slot.modelData.kind === "builtin"
+                    ? Panels.WIDGET_PANELS[slot.modelData.name]
+                    : Layout.entryName(slot.modelData);
+                if (opens !== name)
+                    continue;
+                var centre = slot.mapToItem(null, slot.width / 2, slot.height / 2);
+                var offset = Placement.windowOrigin(bar.anchors,
+                    Qt.size(bar.width, bar.height),
+                    Qt.size(bar.screen.width, bar.screen.height));
+                return {
+                    anchor: Qt.point(centre.x + offset.x, centre.y + offset.y),
+                    screen: bar.screen
+                };
+            }
+        }
+        return null;
+    }
 
     readonly property string _position: Theme.barPosition
     readonly property bool _vertical: Theme.barVertical

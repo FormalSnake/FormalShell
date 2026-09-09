@@ -116,4 +116,32 @@ TestCase {
     function test_the_catcher_is_blocked_on_a_closed_panel() {
         compare(Cursor.catcherBlocked(false, false), true);
     }
+
+    // --- Scroll-follow (M53) -------------------------------------------
+    //
+    // A 400px viewport over 1200px of rows, 40px rows, a 2px ring.
+
+    function test_a_row_already_in_view_does_not_scroll() {
+        compare(Cursor.follow(200, 40, 100, 400, 1200, 2), 100);
+    }
+
+    function test_a_row_below_the_viewport_scrolls_just_far_enough() {
+        compare(Cursor.follow(520, 40, 100, 400, 1200, 2), 162);
+    }
+
+    function test_a_row_above_the_viewport_scrolls_back_to_it() {
+        compare(Cursor.follow(80, 40, 200, 400, 1200, 2), 78);
+    }
+
+    function test_the_first_row_never_scrolls_past_the_top() {
+        compare(Cursor.follow(0, 40, 200, 400, 1200, 2), 0);
+    }
+
+    function test_the_last_row_stops_at_the_end_of_the_content() {
+        compare(Cursor.follow(1160, 40, 0, 400, 1200, 2), 800);
+    }
+
+    function test_content_shorter_than_the_viewport_never_scrolls() {
+        compare(Cursor.follow(200, 40, 0, 400, 300, 2), 0);
+    }
 }

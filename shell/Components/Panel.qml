@@ -153,6 +153,68 @@ PanelWindow {
         var next = Cursor.move(root.cursorIndex, root.cursorCount, root.cursorActive, dx, dy, root.cursorColumns);
         root.cursorIndex = next.index;
         root.cursorActive = next.active;
+        // Deferred so the row's own `cursor` binding, and any reflow the
+        // move caused, have both landed before the row is measured.
+        Qt.callLater(root._followCursor);
+    }
+
+    // --- Scroll-follow ---------------------------------------------------
+    //
+    // Arrowing past the visible rows of a capped panel brings the cursor row
+    // in rather than leaving it under the card's edge (M53 D2, a
+    // correctness bug before a motion one: nothing wrote contentY at all).
+    //
+    // The row is found by walking the content column for the item painting
+    // the cursor, which every panel row already declares (`cursor:` on its
+    // own Cell), so no panel has to state a second time where its rows are
+    // and a row nested inside a section reports its real y. Depth first, so
+    // a row whose own control also takes the cursor (Audio's tracks) reports
+    // the row rather than the control.
+    //
+    // Driven from moveCursor and nowhere else: the pointer moves the cursor
+    // too (every panel's `_pointAt`), and a wheel notch that slides a new
+    // row under a parked pointer must not then scroll the list again.
+    property real _followY: 0
+    // Set for the one write that resyncs `_followY` with a contentY the
+    // wheel or a drag moved, which has to land instantly.
+    property bool _followSync: false
+
+    Behavior on _followY {
+        enabled: !root._followSync
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easing }
+    }
+
+    on_FollowYChanged: contentFlickable.contentY = root._followY
+
+    function _cursorRow(item) {
+        if (!item || !item.visible)
+            return null;
+        if (item.cursor === true)
+            return item;
+        var kids = item.children;
+        for (var i = 0; i < kids.length; i++) {
+            var found = root._cursorRow(kids[i]);
+            if (found)
+                return found;
+        }
+        return null;
+    }
+
+    function _followCursor() {
+        if (!root.isOpen || !root.cursorActive)
+            return;
+        var row = root._cursorRow(contentColumn);
+        if (!row)
+            return;
+        var next = Cursor.follow(row.mapToItem(contentColumn, 0, 0).y + Theme.ringWidth, row.height,
+            contentFlickable.contentY, contentFlickable.height, contentFlickable.contentHeight,
+            Theme.ringWidth);
+        if (next === contentFlickable.contentY)
+            return;
+        root._followSync = true;
+        root._followY = contentFlickable.contentY;
+        root._followSync = false;
+        root._followY = next;
     }
 
     function activateCursor() {
@@ -203,16 +265,23 @@ PanelWindow {
     // `barMargin` clear of it, on the axis that hangs off the bar, which is
     // the one axis both of them are pinned on: beside it on a vertical bar,
     // under it on a horizontal one.
+    //
+    // Both of these read the ANIMATED size (`_morphWidth`/`_morphHeight`
+    // below), never the content's target: the frame hangs off the bar's
+    // inner edge, and on a bottom, left or right bar that edge is the one
+    // the card's own size decides. Reading the target instead placed the
+    // card where it was about to be and left it detached from the bar for
+    // the whole 250ms morph (M53 D2).
     readonly property real _ownerShift: (root.owner && root.owner.isOpen)
-        ? (Theme.space.barMargin + (Theme.barVertical ? root.owner.panelWidth : root.owner._frameHeight))
+        ? (Theme.space.barMargin + (Theme.barVertical ? root.owner._morphWidth : root.owner._morphHeight))
         : 0
 
     readonly property real _frameX: root._screen
-        ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root.panelWidth,
+        ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root._morphWidth,
             Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding) - root._edge.x * root._ownerShift
         : 0
     readonly property real _frameY: root._screen
-        ? Geometry.frameY(Theme.barPosition, root.anchorY, root._screen.height, root._frameHeight,
+        ? Geometry.frameY(Theme.barPosition, root.anchorY, root._screen.height, root._morphHeight,
             Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding) - root._edge.y * root._ownerShift
         : 0
 
@@ -348,6 +417,17 @@ PanelWindow {
         NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
     }
 
+    // The width's twin, on the same freeze and the same clock. A panel that
+    // measures its own width (BarOverflow and TrayOverflow both bind
+    // `panelWidth` to the rail they hold) changes it while it is open, and
+    // that has to travel the way a new height does.
+    property real _morphWidth: root.isOpen ? root.panelWidth : _morphWidth
+
+    Behavior on _morphWidth {
+        enabled: presence.settled && root.isOpen
+        NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+    }
+
     WlrLayershell.namespace: "formalshell:panel"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
@@ -423,21 +503,76 @@ PanelWindow {
             id: frame
             x: root._frameX
             y: root._frameY
-            width: root.panelWidth
+            width: root._morphWidth
             height: root._morphHeight
             color: root.frameColor
             radius: root.frameRadius
 
-            // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51
-            // D2/D4): fade, zoom and a slide in from the bar's edge.
-            opacity: presence.opacity
-            scale: presence.scale
-            transformOrigin: presence.transformOrigin
-
-            transform: Translate {
-                x: presence.slideX
-                y: presence.slideY
+            // A morph that moves the card as well as resizing it (a centred
+            // frame growing, a measured panel widening, the owner under it
+            // changing height) travels rather than jumps, on the same clock
+            // and curve the size itself rides. Gated like the two morphs
+            // above, so a fresh open lands at its real place instead of
+            // gliding there from wherever the last open left the card:
+            // open() flips isOpen, which drops presence.settled in the same
+            // pass, well before either coordinate re-evaluates.
+            Behavior on x {
+                enabled: presence.settled && root.isOpen
+                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
             }
+
+            Behavior on y {
+                enabled: presence.settled && root.isOpen
+                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+            }
+
+            // Where the zoom grows from (M53 D5): the cell that opened this
+            // panel, so the card comes out of the control that summoned it
+            // rather than out of the middle of the bar's edge. Across the
+            // bar it is the edge the card hangs off; along it, the cell's
+            // own centre in the frame's coordinates, clamped to the frame so
+            // a card pushed off its cell by the screen padding still grows
+            // from its own nearest corner. No cell named one (an IPC open)
+            // leaves the edge's centre, which is what `transformOrigin` gave
+            // every panel before.
+            readonly property real _originX: {
+                if (Theme.barPosition === "left")
+                    return 0;
+                if (Theme.barPosition === "right")
+                    return frame.width;
+                return root.anchorX >= 0
+                    ? Math.max(0, Math.min(frame.width, root.anchorX - frame.x))
+                    : frame.width / 2;
+            }
+            readonly property real _originY: {
+                if (Theme.barPosition === "bottom")
+                    return frame.height;
+                if (!Theme.barVertical)
+                    return 0;
+                return root.anchorY >= 0
+                    ? Math.max(0, Math.min(frame.height, root.anchorY - frame.y))
+                    : frame.height / 2;
+            }
+
+            // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51
+            // D2/D4): fade, zoom and a slide in from the bar's edge. The
+            // zoom is a Scale rather than `scale`/`transformOrigin` because
+            // an origin has to be a point on the bar's edge, not one of the
+            // nine Item.TransformOrigin corners.
+            opacity: presence.opacity
+
+            transform: [
+                Scale {
+                    origin.x: frame._originX
+                    origin.y: frame._originY
+                    xScale: presence.scale
+                    yScale: presence.scale
+                },
+                Translate {
+                    x: presence.slideX
+                    y: presence.slideY
+                }
+            ]
 
             // Swallows clicks anywhere inside the frame (the card's own
             // padding included) before they ever reach the backdrop above:

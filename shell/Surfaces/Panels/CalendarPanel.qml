@@ -235,20 +235,47 @@ Panel {
         }
     }
 
-    // Month swap (DESIGN.md §1 "Motion"): the regenerated grid fades in on
-    // view change, since a crossfade would need a second live grid instance
-    // for no visible gain. restart() makes rapid stepping interruptible.
-    readonly property string _viewKey: root._viewYear + "-" + root._viewMonth
-    on_ViewKeyChanged: if (root.isOpen) monthSwapAnim.restart()
+    // Month swap (DESIGN.md §1 "Motion", M53 D3): the regenerated grid comes
+    // in from the side the step went, a `slide` off rest, and settles back.
+    // A crossfade would need a second live grid instance for no visible
+    // gain, so this is one grid displaced rather than two crossing.
+    //
+    // The displacement is written once per swap and only from rest: a held
+    // bracket at Hyprland's 25/s repeat retargets the animation already
+    // running instead of dropping the grid back to the out pose forty times
+    // a second, which is what the old restart() with `from: 0` did and what
+    // read as a strobe. `_swapProgress` is a plain property the grid binds
+    // to, never an animation target, so nothing here can drop that binding.
+    readonly property int _viewIndex: root._viewYear * 12 + root._viewMonth
+    property int _swapFrom: root._viewIndex
+    property int _swapSign: 1
+    property real _swapProgress: 1
+    // Set for the one write that puts the grid in its out pose, which has to
+    // land in the same frame the new month is generated in.
+    property bool _swapOut: false
 
-    NumberAnimation {
-        id: monthSwapAnim
-        target: dayGrid
-        property: "opacity"
-        from: 0
-        to: 1
-        duration: Core.Theme.motion.standard
-        easing.type: Core.Theme.motion.easing
+    Behavior on _swapProgress {
+        enabled: !root._swapOut
+        NumberAnimation {
+            id: swapAnimation
+            duration: Core.Theme.motion.standard
+            easing.type: Core.Theme.motion.easing
+        }
+    }
+
+    on_ViewIndexChanged: {
+        var previous = root._swapFrom;
+        root._swapFrom = root._viewIndex;
+        // A swap still in flight keeps its own direction and finishes its
+        // own trajectory. The months under it change; the movement does not
+        // start over.
+        if (!root.isOpen || swapAnimation.running)
+            return;
+        root._swapSign = root._viewIndex >= previous ? 1 : -1;
+        root._swapOut = true;
+        root._swapProgress = 0;
+        root._swapOut = false;
+        root._swapProgress = 1;
     }
 
     readonly property bool _selectedIsToday: CalGrid.sameDate(root._selected, root._today)
@@ -331,6 +358,16 @@ Panel {
                 columns: CalGrid.COLUMNS
                 rowSpacing: Core.Theme.space.rowGap
                 columnSpacing: Core.Theme.space.rowGap
+
+                // The swap pose (the `_swapProgress` block above): a `slide`
+                // off rest on the side the step came from, next month from
+                // the right and previous from the left, carried back to 0 as
+                // the grid fades up. A Translate rather than an x, since the
+                // Row beside it owns that.
+                opacity: root._swapProgress
+                transform: Translate {
+                    x: (1 - root._swapProgress) * root._swapSign * Core.Theme.motion.slide
+                }
 
                 readonly property real cellWidth: (dayGrid.width - columnSpacing * (CalGrid.COLUMNS - 1)) / CalGrid.COLUMNS
                 // Square-ish day cells, measured off one so every row lines

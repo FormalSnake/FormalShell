@@ -59,6 +59,21 @@ function section(current, count, direction) {
     return ((current + direction) % count + count) % count;
 }
 
+// The smallest scroll that puts the cursor row inside the viewport, and the
+// position already held when it is in there (M53 D2). `top` and
+// `contentHeight` are in the flickable's content coordinates, `viewport` is
+// its visible height, and `pad` is the ring reservation a cursor row draws
+// its halo into (Panel.qml's Theme.ringWidth), so a row scrolled hard
+// against either edge keeps room for it.
+function follow(top, height, contentY, viewport, contentHeight, pad) {
+    var next = contentY;
+    if (top - pad < next)
+        next = top - pad;
+    else if (top + height + pad > next + viewport)
+        next = top + height + pad - viewport;
+    return Math.max(0, Math.min(Math.max(0, contentHeight - viewport), next));
+}
+
 // The panel's KeyCatcher takes no keys at all while an inline editor holds
 // focus, nor while the panel is closed but still mapped (Panel's
 // `keepMapped`), where a stray key would drive a surface nobody can see.

@@ -26,6 +26,35 @@ WheelHandler {
 
     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
 
+    // A notch glides rather than jumping a row (M53 D2). The animated value
+    // lives here and is written into the flickable, rather than the
+    // flickable carrying a `Behavior on contentY`, because a drag and a
+    // flick write that property themselves and neither may be animated
+    // behind the finger. `_target` is where the last notch asked to be, so a
+    // second notch mid-glide accumulates from that destination instead of
+    // from wherever the animation has reached, which is what keeps a held
+    // wheel at the wheel's pace.
+    property real _target: 0
+    property real _glide: 0
+    // Set for the one write that resyncs `_glide` with a contentY something
+    // else moved, which has to land instantly.
+    property bool _sync: false
+
+    Behavior on _glide {
+        enabled: !root._sync && root.flickable && !root.flickable.dragging && !root.flickable.flicking
+        NumberAnimation {
+            id: glideAnimation
+            duration: Theme.motion.standard
+            easing.type: Theme.motion.easing
+        }
+    }
+
+    on_GlideChanged: {
+        var flick = root.flickable;
+        if (flick && !flick.dragging && !flick.flicking)
+            flick.contentY = root._glide;
+    }
+
     onWheel: event => {
         var flick = root.flickable;
         if (!flick)
@@ -36,6 +65,15 @@ WheelHandler {
         var delta = event.pixelDelta.y !== 0
             ? event.pixelDelta.y
             : (event.angleDelta.y / 120) * root.step;
-        flick.contentY = Math.max(0, Math.min(max, flick.contentY - delta));
+        var base = flick.contentY;
+        if (glideAnimation.running) {
+            base = root._target;
+        } else {
+            root._sync = true;
+            root._glide = flick.contentY;
+            root._sync = false;
+        }
+        root._target = Math.max(0, Math.min(max, base - delta));
+        root._glide = root._target;
     }
 }

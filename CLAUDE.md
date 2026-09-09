@@ -147,6 +147,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and on a machine with no backlight.
 - `panel.sh` `--panel <name>`: one popout opened over the `panel` route, with
   `panel state` agreeing it is the only open one.
+- `panel_anchor.sh` `--panel-anchor`: `panel toggle` hanging its card under
+  the cell that owns the panel, read off one crop of the box under a
+  left-region audio cell, the card in it once and the bare desktop once.
 - `panel_at.sh` `--panel-at <n>`: `panel toggleAt <n>` walking the resolved
   right region and stopping on a panel-bearing cell.
 - `panel_keys.sh` `--panel-keys`: row-level keyboard navigation inside a
