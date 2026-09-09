@@ -293,6 +293,22 @@ Item {
 
     onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
 
+    // The same walk for the selection fill: a group drawing one fill that
+    // travels between its cells (RegionPicker's toolbar) needs there to be
+    // one of it, so a cell under such a group keeps its selected ink and
+    // leaves the fill to the group.
+    property bool _selectionOwned: false
+
+    function _resolveSelectionOwner() {
+        root._selectionOwned = Cursor.ownedAbove(root, "ownsSelectionFill");
+    }
+
+    // A tick late, unlike the halo's walk: a toolbar's first selection is
+    // set while its cell is still being created, and a Repeater parents a
+    // delegate only after it completes, so the chain to walk is not there yet
+    // at the moment `selected` first turns true.
+    onSelectedChanged: if (root.selected) Qt.callLater(root._resolveSelectionOwner);
+
     // The focus ring's outer halo (shadcn's `ring-[3px] ring-ring/50`), drawn
     // as a larger rounded rectangle behind the body rather than a shader, so
     // only the band outside the body's own edge is ever visible.
@@ -317,7 +333,7 @@ Item {
         radius: root.radius
         color: root.active
             ? Theme.color.primary
-            : root.selected
+            : (root.selected && !root._selectionOwned)
                 ? Theme.color.accent
                 : root.ghost
                     ? "transparent"

@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Core
+import "cursor.js" as Cursor
 
 // shadcn's text field (DESIGN.md §2): an `input` border at `radiusMd`,
 // `controlHeight` tall, the ring while it holds focus, a `destructive`
@@ -30,8 +31,41 @@ Item {
 
     readonly property bool _showsError: root.error && root.errorText !== ""
 
+    // True one tick past creation, so the field's first layout is not an
+    // animation: a Behavior fires on any write, including the one a fresh
+    // binding makes, and a card built with its caption already up would
+    // otherwise grow into place as it appeared.
+    property bool _settled: false
+    // Set when a framed surface above (Panel's content column, the polkit
+    // card) animates its own height: the caption's space then opens on that
+    // frame's clock instead, since two clocks on one size change leave the
+    // frame trailing its own content. Resolved a tick late for the reason
+    // cursor.js gives.
+    property bool _morphOwned: false
+
+    // A Timer rather than Component.onCompleted: callers of this field
+    // declare completion handlers of their own on it (NetworkPanel's two
+    // wifi fields both do), and this arming must not depend on how QML
+    // resolves two handlers for one signal on one object.
+    Timer {
+        interval: 0
+        running: true
+        onTriggered: {
+            root._morphOwned = Cursor.ownedAbove(root, "ownsSizeMorph");
+            root._settled = true;
+        }
+    }
+
     implicitWidth: input.implicitWidth + Theme.space.controlPaddingX * 2
     implicitHeight: frame.height + (root._showsError ? Theme.space.xs + errorLabel.implicitHeight : 0)
+
+    // The caption's height arrives as a size change on a control already on
+    // screen (M53 D2), so the field grows into it rather than jumping a row
+    // taller under whatever sits below it.
+    Behavior on implicitHeight {
+        enabled: root._settled && root.visible && !root._morphOwned
+        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+    }
 
     // The halo fades in and out with focus (M51 Task 5) rather than popping:
     // `visible` still drops it at 0 so it costs nothing at rest, and the
@@ -106,7 +140,14 @@ Item {
         anchors.right: parent.right
         anchors.top: frame.bottom
         anchors.topMargin: Theme.space.xs
-        visible: root._showsError
+        // The caption crosses in and out on the same clock the border does
+        // (M53 D3), so an error lands as one change rather than a word
+        // appearing over a colour still on its way.
+        visible: errorLabel.opacity > 0
+        opacity: root._showsError ? 1 : 0
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+        }
         text: root.errorText
         color: Theme.color.destructive
         font.family: Theme.fontFamilySans

@@ -101,6 +101,16 @@ PanelWindow {
         Keys.onEscapePressed: root.close()
         onClicked: root.close()
 
+        // The modal scrim (spec "Depth"), the same one PolkitDialog and the
+        // launcher draw: plain black at half opacity, bound straight to
+        // presence's own progress rather than a Behavior of its own, so it
+        // cannot drift out of step with the card it frames.
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            opacity: presence.opacity * 0.5
+        }
+
         Item {
             id: card
             anchors.fill: parent
@@ -143,7 +153,15 @@ PanelWindow {
             // the shell is unboxed because it sits inside a surface that is
             // already a card; this one has no surface at all.
             Card {
-                visible: root.loadFailed
+                id: errorCard
+                // The load outcome lands after the overlay is already up, so
+                // this arrives as a content change on an open surface (M53
+                // D3) rather than a card popping into the middle of it.
+                visible: errorCard.opacity > 0
+                opacity: root.loadFailed ? 1 : 0
+                Behavior on opacity {
+                    NumberAnimation { duration: Theme.motion.surface; easing.type: Theme.motion.easing }
+                }
                 anchors.centerIn: parent
                 radius: Theme.radiusMd
 

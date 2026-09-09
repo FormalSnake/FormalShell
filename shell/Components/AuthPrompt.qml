@@ -47,6 +47,12 @@ Item {
     }
 
     implicitWidth: column.implicitWidth
+    // The height morph a wrong password needs is the field's own (M53 D2,
+    // Input's `Behavior on implicitHeight`): this column is centred and has
+    // no frame holding its content, so it re-centres frame by frame as the
+    // caption's space opens and the whole block settles into its new height.
+    // A Behavior here would put a second clock on the same change and drag
+    // the clock away from the field growing under it.
     implicitHeight: column.implicitHeight
 
     // Escape and Ctrl+U clear the field. Handled here rather than inside

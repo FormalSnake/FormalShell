@@ -1022,6 +1022,13 @@ PanelWindow {
                         width: parent.width
                         spacing: Theme.space.sectionGap
 
+                        // The frame's own `_morphHeight` carries every height
+                        // change inside this column, so a control that would
+                        // otherwise animate its own (Input's error caption)
+                        // lays out at the target and lets the card travel to
+                        // it. cursor.js documents the walk.
+                        property bool ownsSizeMorph: true
+
                         // A row appearing, leaving or changing height moves
                         // the cursor row without the cursor itself moving.
                         onImplicitHeightChanged: Qt.callLater(root._syncCursorHalo)

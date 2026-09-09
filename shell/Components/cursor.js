@@ -74,24 +74,31 @@ function follow(top, height, contentY, viewport, contentHeight, pad) {
     return Math.max(0, Math.min(Math.max(0, contentHeight - viewport), next));
 }
 
-// Whether something above this item already draws the cursor halo for the
-// whole list it sits in (Panel.qml's `cursorHalo`, M53 D4), in which case the
-// item must not paint its own or there are two. Walked rather than declared
-// per row: a panel builds its rows in its own file and nests several of them
-// two or three items deep, so a flag spelled at every row would be one new
-// row away from a double halo.
+// Whether something above this item already draws `prop` for the whole group
+// it sits in, in which case the item must not draw its own or there are two.
+// Three flags ride this walk: `ownsCursorHalo` (Panel.qml's travelling halo,
+// M53 D4), `ownsSelectionFill` (RegionPicker's travelling tab fill) and
+// `ownsSizeMorph` (a framed surface animating its own height, so the controls
+// inside it lay out at the target and let the frame carry the change).
+// Walked rather than declared per item: a surface builds its rows in its own
+// file and nests several of them two or three items deep, so a flag spelled
+// at every row would be one new row away from drawing the thing twice.
 //
-// Call it when the item takes the cursor, never at creation: a Repeater
+// Call it when the item takes the state, never at creation: a Repeater
 // completes a delegate before it parents it, so the chain this needs is not
-// there yet when the row is built.
-function haloOwned(item) {
+// there yet when the item is built.
+function ownedAbove(item, prop) {
     var p = item ? item.parent : null;
     while (p) {
-        if (p.ownsCursorHalo === true)
+        if (p[prop] === true)
             return true;
         p = p.parent;
     }
     return false;
+}
+
+function haloOwned(item) {
+    return ownedAbove(item, "ownsCursorHalo");
 }
 
 // The panel's KeyCatcher takes no keys at all while an inline editor holds

@@ -675,6 +675,44 @@ Scope {
             function toGlobalX(x) { return x + surface.modelData.x; }
             function toGlobalY(y) { return y + surface.modelData.y; }
 
+            // The selection box, in this surface's own coordinates and on the
+            // move rule's clock (M53 D2): Tab cycling between candidates
+            // travels the rectangle across the screen instead of teleporting
+            // it, so the eye follows which window it landed on. A freeform
+            // drag is the one selection that must track the pointer to the
+            // pixel, so the Behaviors are off for as long as one is running.
+            //
+            // The scrim panes, the border and the readout all read these
+            // rather than `_current.rect`: four panes cutting a hole for a
+            // box on a different clock would leak the frozen screen down one
+            // edge for the length of the travel. What a capture actually
+            // crops to is `_current.rect` either way, never these.
+            //
+            // Held at the last box when there is no selection at all, so the
+            // next candidate arrives at its own place rather than growing out
+            // of the corner of the screen.
+            property real _selX: root._current ? surface.toLocalX(root._current.rect.x) : _selX
+            property real _selY: root._current ? surface.toLocalY(root._current.rect.y) : _selY
+            property real _selW: root._current ? root._current.rect.width : _selW
+            property real _selH: root._current ? root._current.rect.height : _selH
+
+            Behavior on _selX {
+                enabled: !root._dragRect
+                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+            }
+            Behavior on _selY {
+                enabled: !root._dragRect
+                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+            }
+            Behavior on _selW {
+                enabled: !root._dragRect
+                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+            }
+            Behavior on _selH {
+                enabled: !root._dragRect
+                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+            }
+
             // The frozen screen. This is what grim photographs at capture time,
             // so it sits under everything.
             //
@@ -705,10 +743,10 @@ Scope {
                 visible: !root._capturing
 
                 readonly property var sel: root._current ? root._current.rect : null
-                readonly property real sx: sel ? surface.toLocalX(sel.x) : 0
-                readonly property real sy: sel ? surface.toLocalY(sel.y) : 0
-                readonly property real sw: sel ? sel.width : 0
-                readonly property real sh: sel ? sel.height : 0
+                readonly property real sx: surface._selX
+                readonly property real sy: surface._selY
+                readonly property real sw: surface._selW
+                readonly property real sh: surface._selH
 
                 Rectangle {
                     color: Core.Theme.color.background
@@ -761,10 +799,10 @@ Scope {
                 // measured.
                 Rectangle {
                     visible: selectionChrome.sel !== null
-                    x: selectionChrome.sel ? surface.toLocalX(selectionChrome.sel.x) : 0
-                    y: selectionChrome.sel ? surface.toLocalY(selectionChrome.sel.y) : 0
-                    width: selectionChrome.sel ? selectionChrome.sel.width : 0
-                    height: selectionChrome.sel ? selectionChrome.sel.height : 0
+                    x: surface._selX
+                    y: surface._selY
+                    width: surface._selW
+                    height: surface._selH
                     color: "transparent"
                     // The record action borrows the recording indicator's own
                     // `urgent` role, the same swap the slurp-driven record
@@ -780,12 +818,13 @@ Scope {
                     id: readout
                     radius: Core.Theme.radiusSm
                     visible: selectionChrome.sel !== null
-                    x: selectionChrome.sel ? Math.max(0, surface.toLocalX(selectionChrome.sel.x)) : 0
+                    // Rides the animated box, so the card stays pinned to the
+                    // corner it labels; the numbers themselves read the real
+                    // selection rather than counting through the travel.
+                    x: Math.max(0, surface._selX)
                     y: {
-                        if (!selectionChrome.sel)
-                            return 0;
-                        const above = surface.toLocalY(selectionChrome.sel.y) - height - Core.Theme.space.xs;
-                        return above >= 0 ? above : surface.toLocalY(selectionChrome.sel.y) + Core.Theme.space.xs;
+                        const above = surface._selY - readout.height - Core.Theme.space.xs;
+                        return above >= 0 ? above : surface._selY + Core.Theme.space.xs;
                     }
 
                     Row {
@@ -960,12 +999,43 @@ Scope {
             Card {
                 id: toolbar
                 visible: !root._capturing
+
                 // Opaque, for the same reason nameList above is.
                 color: Core.Theme.color.card
                 width: toolbarRow.width + toolbar.padding * 2
                 height: toolbarRow.height + toolbar.padding * 2
                 x: Math.round((parent.width - width) / 2)
                 y: parent.height - height - Core.Theme.space.xl
+
+                // Which cell the shared fill sits on, and whether the move to
+                // it travels: a first placement (the picker opening, the
+                // labels settling) lands, every later one glides.
+                property Item selectedCell: null
+                property bool _fillTravels: false
+
+                onSelectedCellChanged: Qt.callLater(toolbar._travelToolFill)
+
+                function _syncToolFill(travel) {
+                    const cell = toolbar.selectedCell;
+                    if (!cell) {
+                        toolFill.width = 0;
+                        return;
+                    }
+                    const at = cell.mapToItem(toolFill.parent, 0, 0);
+                    toolbar._fillTravels = travel && toolFill.width > 0;
+                    toolFill.x = at.x;
+                    toolFill.y = at.y;
+                    toolFill.width = cell.width;
+                    toolFill.height = cell.height;
+                    toolbar._fillTravels = false;
+                }
+
+                // Two named entry points rather than one with an argument:
+                // Qt.callLater keys its dedupe on the function and its
+                // arguments, and a place and a travel queued in the same tick
+                // must not collapse into each other.
+                function _placeToolFill() { toolbar._syncToolFill(false); }
+                function _travelToolFill() { toolbar._syncToolFill(true); }
 
                 // Absorbs everything landing on the card: a click on its chrome
                 // must never reach the drag area underneath, and a pointer
@@ -989,6 +1059,15 @@ Scope {
                         ghost: true
                         selected: root._toolIndex === toolCell.modelData.key - 1
 
+                        // The row draws one fill for all six cells and moves
+                        // it between them (M53 D2), so each cell reports
+                        // itself when it takes the selection and paints only
+                        // its own ink. Reported off a property of its own
+                        // rather than a second handler on `selected`, which
+                        // the cell itself already watches.
+                        readonly property bool _fillHost: toolCell.selected
+                        on_FillHostChanged: if (toolCell._fillHost) toolbar.selectedCell = toolCell;
+
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Core.Theme.space.sm
@@ -1009,9 +1088,45 @@ Scope {
                     }
                 }
 
+                // The one selection fill the six mode cells share, under the
+                // row rather than in it (a bare Rectangle inside a Row is laid
+                // out as another item in it). Sized and placed by
+                // _syncToolFill() against whichever cell holds the selection,
+                // the same shape Panel.qml's travelling cursor halo takes.
+                //
+                // primitive-exempt: this is one cell's own fill drawn outside
+                // it so it can travel between six of them, at the cell radius
+                // it is standing in for. A Cell here would bring a border and
+                // a second hit area to a shape nothing can click.
+                Rectangle {
+                    id: toolFill
+                    z: -1
+                    visible: toolFill.width > 0
+                    radius: Core.Theme.radiusMd
+                    color: Core.Theme.color.accent
+
+                    Behavior on x {
+                        enabled: toolbar._fillTravels
+                        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                    }
+                    Behavior on width {
+                        enabled: toolbar._fillTravels
+                        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                    }
+                }
+
                 Row {
                     id: toolbarRow
                     spacing: Core.Theme.space.md
+
+                    // Every cell under here leaves its own selected fill to
+                    // toolFill above; cursor.js carries the walk that reads
+                    // this.
+                    property bool ownsSelectionFill: true
+
+                    // The cells are laid out once the labels have measured,
+                    // which is a frame or two past creation on a cold start.
+                    onWidthChanged: Qt.callLater(toolbar._placeToolFill)
 
                     SectionLabel {
                         anchors.verticalCenter: parent.verticalCenter

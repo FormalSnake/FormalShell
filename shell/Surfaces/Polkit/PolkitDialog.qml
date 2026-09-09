@@ -208,6 +208,36 @@ PanelWindow {
             id: card
             anchors.centerIn: parent
 
+            // The card carries every height change inside it (M53 D2), so
+            // the controls in it lay out at the target size and the frame
+            // travels to meet them: a wrong-password caption grows the card
+            // around its own centre instead of jumping a row taller. The
+            // field reads this flag through cursor.js to stay out of the
+            // way; without it the field's own morph and this one would run
+            // the same change on two clocks.
+            property bool ownsSizeMorph: true
+
+            // The M51 D5 freeze: the content's height is tracked live only
+            // while the dialog sits open at rest, so a size change never
+            // fights the enter/exit fade and a fresh request finds the real
+            // content height rather than morphing out of the card the last
+            // one closed on.
+            property real _morphHeight: root._active ? card.implicitHeight : _morphHeight
+
+            height: card._morphHeight
+
+            Behavior on _morphHeight {
+                enabled: presence.settled && root._active
+                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+            }
+
+            // The footer sits past the frame's edge for as long as the frame
+            // is short of its content, and a card leaking its own buttons is
+            // worse than one revealing them. The padding keeps content clear
+            // of the corner arcs, so a rectangular clip takes nothing the
+            // radius was drawing.
+            clip: true
+
             // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a
             // modal surface, so fade and zoom from centre only, no slide.
             opacity: presence.opacity

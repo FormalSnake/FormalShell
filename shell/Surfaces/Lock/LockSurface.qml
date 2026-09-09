@@ -47,8 +47,8 @@ WlSessionLockSurface {
     property string authError: ""
     property bool authenticating: false
     property bool fingerprintEnrolled: false
-    // Idle-blanked (M7 Task 4, forwarded from Lock.qml's `blanked`): hides
-    // the clock/backdrop/input entirely, leaving the plain background
+    // Idle-blanked (M7 Task 4, forwarded from Lock.qml's `blanked`): takes
+    // the clock/backdrop/input off entirely, leaving the plain background
     // Rectangle below, a real blank, not a dimmed clock, since the whole
     // point is nothing worth reading stays on screen while genuinely
     // unattended. Un-blanking flows from two places in Lock.qml: the
@@ -83,6 +83,24 @@ WlSessionLockSurface {
     // first frame regardless of where the animation is.
     property real _contentOpacity: 1
     property real _contentRise: 0
+
+    // Idle blank and wake (M53 Task 7): everything above the plain
+    // background Rectangle crosses to and from 0 on `reveal`, the same 400ms
+    // the wallpaper crossfade and the screensaver's own fade already use,
+    // since a full-screen swap paced at 130ms reads as a flash. Nothing here
+    // gates input: the field keeps its focus and its key handling through
+    // the fade, so the keystroke that woke the surface is also the first
+    // character of the password. `motion.enabled: false` zeroes `reveal`
+    // too, so a reduced-motion session still gets the hard cut.
+    property real _wakeOpacity: surfaceRoot.blanked ? 0 : 1
+
+    Behavior on _wakeOpacity {
+        NumberAnimation { duration: Theme.motion.reveal; easing.type: Theme.motion.easing }
+    }
+
+    // Mapped from the instant the blank lifts, not from the instant the fade
+    // reaches a pixel: the wake has to accept the key that caused it.
+    readonly property bool _wakeShown: !surfaceRoot.blanked || surfaceRoot._wakeOpacity > 0
 
     // Matches every other top-layer surface's own opaque-frame precaution
     // (Panel.qml/Center.qml): WlSessionLockSurface.color's own doc warns
@@ -134,7 +152,12 @@ WlSessionLockSurface {
     Image {
         id: wallpaperImage
         anchors.fill: parent
-        visible: !surfaceRoot._dither && Core.State.wallpaper !== "" && !surfaceRoot.blanked
+        visible: !surfaceRoot._dither && Core.State.wallpaper !== "" && surfaceRoot._wakeShown
+        // Held at 1 while the dither pass is the visible one: that pass
+        // samples this item, so an opacity here would reach its texture and
+        // fade the source out from under it. The pass carries the fade
+        // itself in that case.
+        opacity: surfaceRoot._dither ? 1 : surfaceRoot._wakeOpacity
         source: Core.State.wallpaper !== "" ? "file://" + Core.State.wallpaper : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
@@ -152,20 +175,21 @@ WlSessionLockSurface {
         anchors.fill: parent
         mode: "retro"
         sourceItem: wallpaperImage
-        visible: surfaceRoot._dither && Core.State.wallpaper !== "" && !surfaceRoot.blanked
+        visible: surfaceRoot._dither && Core.State.wallpaper !== "" && surfaceRoot._wakeShown
+        opacity: surfaceRoot._wakeOpacity
         chunk: 8
         paletteSize: 6
     }
 
     // The modal scrim (spec "Depth"): plain black at half opacity, the same
     // one the launcher draws, so the column above reads against any
-    // wallpaper. Hidden while blanked, where the point is that nothing at
+    // wallpaper. Gone while blanked, where the point is that nothing at
     // all is on screen.
     Rectangle {
         anchors.fill: parent
-        visible: Core.State.wallpaper !== "" && !surfaceRoot.blanked
+        visible: Core.State.wallpaper !== "" && surfaceRoot._wakeShown
         color: "black"
-        opacity: 0.5
+        opacity: 0.5 * surfaceRoot._wakeOpacity
     }
 
     // Mouse-move activity detector for `activity()` (see its declaration
@@ -182,8 +206,8 @@ WlSessionLockSurface {
     AuthPrompt {
         id: authPrompt
         anchors.centerIn: parent
-        visible: !surfaceRoot.blanked
-        opacity: surfaceRoot._contentOpacity
+        visible: surfaceRoot._wakeShown
+        opacity: surfaceRoot._contentOpacity * surfaceRoot._wakeOpacity
         transform: Translate { y: surfaceRoot._contentRise }
         now: surfaceRoot._now
         errorText: surfaceRoot.authError
