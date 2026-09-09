@@ -55,7 +55,7 @@ Item {
     property bool _ready: false
 
     Behavior on _cross {
-        NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        Anim { kind: "effects" }
     }
 
     // A square the size of the neighbouring text, so a row lays the glyph

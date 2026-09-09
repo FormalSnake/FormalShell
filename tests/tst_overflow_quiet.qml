@@ -57,7 +57,7 @@ TestCase {
 
             Behavior on progress {
                 enabled: slot.armed
-                NumberAnimation { duration: Theme.motion.surface }
+                Anim {}
             }
 
             width: 40 * slot.progress

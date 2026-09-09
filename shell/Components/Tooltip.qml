@@ -97,7 +97,7 @@ PanelWindow {
     property string _textB: ""
 
     Behavior on _cross {
-        NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+        Anim { kind: "effects" }
     }
 
     function _install(animate) {
@@ -192,14 +192,17 @@ PanelWindow {
         y: root._place.y
         // Only a card changing hands travels (M53 D10): one arriving at a
         // new item takes its rect in the frame it appears in, so nothing
-        // ever glides in from where the last card stood.
+        // ever glides in from where the last card stood. `spatialFast`, not
+        // the default: this is a caption hopping between two neighbouring
+        // buttons, a few tens of pixels, and the default clock spends that
+        // distance in a drift.
         Behavior on x {
             enabled: group.travel
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "spatialFast" }
         }
         Behavior on y {
             enabled: group.travel
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "spatialFast" }
         }
         implicitWidth: (root._frontIsA ? slotA.width : slotB.width) + Theme.space.controlPaddingX * 2
         implicitHeight: (root._frontIsA ? slotA.implicitHeight : slotB.implicitHeight)
@@ -207,7 +210,7 @@ PanelWindow {
         width: frame.implicitWidth
         Behavior on width {
             enabled: group.travel
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "spatialFast" }
         }
         // No Behavior: every card is one elided caption line, so the height
         // only ever changes with the type scale.

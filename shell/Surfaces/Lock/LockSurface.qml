@@ -85,17 +85,18 @@ WlSessionLockSurface {
     property real _contentRise: 0
 
     // Idle blank and wake (M53 Task 7): everything above the plain
-    // background Rectangle crosses to and from 0 on `reveal`, the same 400ms
+    // background Rectangle crosses to and from 0 on `reveal`, the same clock
     // the wallpaper crossfade and the screensaver's own fade already use,
-    // since a full-screen swap paced at 130ms reads as a flash. Nothing here
-    // gates input: the field keeps its focus and its key handling through
-    // the fade, so the keystroke that woke the surface is also the first
-    // character of the password. `motion.enabled: false` zeroes `reveal`
-    // too, so a reduced-motion session still gets the hard cut.
+    // since a full-screen swap paced at the length of a hover wash reads as
+    // a flash. Nothing here gates input: the field keeps its focus and its
+    // key handling through the fade, so the keystroke that woke the surface
+    // is also the first character of the password. `motion.enabled: false`
+    // zeroes `reveal` too, so a reduced-motion session still gets the hard
+    // cut.
     property real _wakeOpacity: surfaceRoot.blanked ? 0 : 1
 
     Behavior on _wakeOpacity {
-        NumberAnimation { duration: Theme.motion.reveal; easing.type: Theme.motion.easing }
+        Anim { kind: "reveal" }
     }
 
     // Mapped from the instant the blank lifts, not from the instant the fade
@@ -118,24 +119,28 @@ WlSessionLockSurface {
         contentEnterRise.restart();
     }
 
-    NumberAnimation {
+    // The entrance, as two terms rather than one (M54 D2): the fade is not
+    // geometry and must not overshoot, the rise is and does.
+    Anim {
         id: contentEnterOpacity
+        kind: "effects"
         target: surfaceRoot
         property: "_contentOpacity"
         from: 0
         to: 1
-        duration: Theme.motion.surface
-        easing.type: Theme.motion.easing
     }
 
-    NumberAnimation {
+    // How far the card comes up. A distance, so it takes the spacing scale
+    // rather than a literal: the same number on a 2x scale would read as
+    // half the travel.
+    readonly property real _contentRiseFrom: Theme.space.sectionGap
+
+    Anim {
         id: contentEnterRise
         target: surfaceRoot
         property: "_contentRise"
-        from: Theme.motion.slide
+        from: surfaceRoot._contentRiseFrom
         to: 0
-        duration: Theme.motion.surface
-        easing.type: Theme.motion.easing
     }
 
     Rectangle {

@@ -4,12 +4,18 @@
 # other half of the group (M53 D10): the card is one surface per output that
 # changes hands rather than one per item. It parks on the panel header's
 # close button, waits the 400ms show delay out, then moves one button left
-# onto the rescan button and photographs the result a quarter of a second
-# later. A quarter second is the discriminator: a card that had gone back to
-# paying its own delay at every item would still be 150ms from appearing,
-# so a tooltip surface in that second layer dump is the grace window doing
-# its job. The layer count either side is what says there is one card and
-# not two.
+# onto the rescan button.
+#
+# The layer dump lands a quarter of a second after that move, and a quarter
+# second is the discriminator: a card that had gone back to paying its own
+# delay at every item would still be 150ms from appearing, so a tooltip
+# surface in that second dump is the grace window doing its job. The layer
+# count either side is what says there is one card and not two.
+#
+# The frame comes later than the dump, not with it: the card travels between
+# the two anchors on the fast spatial clock (M54 D2), which outlasts the
+# dump's own quarter second, so a frame taken there would catch the card
+# between the buttons and say nothing about where it settled.
 #
 # Its own leg rather than two more parks inside --tooltip: that leg owns the
 # pointer for its own run, and a second drive script moving the same pointer
@@ -38,7 +44,9 @@ leg_tooltip_travel_validate() {
 }
 
 leg_tooltip_travel_timing() {
-  leg_timing 0 0 8
+  # One second more tail than --tooltip's own: the drive script waits the
+  # card's travel out between the layer dump and the frame.
+  leg_timing 0 0 9
 }
 
 leg_tooltip_travel_drive() {
@@ -63,6 +71,7 @@ sleep 2
 sleep 0.25
 "$hyprctl_bin" cursorpos >> "$tooltip_travel_dispatch_path" 2>&1
 "$hyprctl_bin" -j layers > "$tooltip_travel_layers_second_path" 2>&1
+sleep 1
 "$grim_bin" -c "$tooltip_travel_second_path" > /dev/null 2>&1
 EOF
   echo "exec-once = bash $script"

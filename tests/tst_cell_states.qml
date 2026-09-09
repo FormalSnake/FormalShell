@@ -125,7 +125,7 @@ TestCase {
         var rects = layers(cell);
         verify(Qt.colorEqual(rects[2].color, Theme.hoverFill));
         verify(rects[2].color.a < 1);
-        // The layer fades on Theme.motion.fast, so it is still climbing
+        // The layer fades on the effects clock, so it is still climbing
         // when settle() returns.
         tryCompare(rects[2], "opacity", 1);
         verify(Qt.colorEqual(rects[1].color, Theme.surface(Theme.color.card)));

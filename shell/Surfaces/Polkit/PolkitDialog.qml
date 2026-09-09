@@ -228,7 +228,7 @@ PanelWindow {
 
             Behavior on _morphHeight {
                 enabled: presence.settled && root._active
-                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+                Anim {}
             }
 
             // The footer sits past the frame's edge for as long as the frame

@@ -160,7 +160,7 @@ PanelWindow {
                 visible: errorCard.opacity > 0
                 opacity: root.loadFailed ? 1 : 0
                 Behavior on opacity {
-                    NumberAnimation { duration: Theme.motion.surface; easing.type: Theme.motion.easing }
+                    Anim { kind: "effects" }
                 }
                 anchors.centerIn: parent
                 radius: Theme.radiusMd

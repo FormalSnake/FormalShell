@@ -105,7 +105,7 @@ Item {
         border.color: Theme.color.border
 
         Behavior on x {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "spatialFast" }
         }
     }
 
@@ -139,7 +139,7 @@ Item {
                     opacity: (!segment._on && (segmentPointer.containsMouse || segmentPointer.pressed)) ? 1 : 0
 
                     Behavior on opacity {
-                        NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        Anim { kind: "effects" }
                     }
                 }
 

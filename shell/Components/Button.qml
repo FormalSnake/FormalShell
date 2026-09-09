@@ -150,7 +150,7 @@ Item {
                     : root._fill
 
         Behavior on color {
-            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            CAnim {}
         }
     }
 
@@ -166,7 +166,7 @@ Item {
         opacity: (!root._solid && (root.hovered || pointer.pressed)) ? 1 : 0
 
         Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+            Anim { kind: "effects" }
         }
     }
 

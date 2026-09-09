@@ -698,19 +698,19 @@ Scope {
 
             Behavior on _selX {
                 enabled: !root._dragRect
-                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                Anim {}
             }
             Behavior on _selY {
                 enabled: !root._dragRect
-                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                Anim {}
             }
             Behavior on _selW {
                 enabled: !root._dragRect
-                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                Anim {}
             }
             Behavior on _selH {
                 enabled: !root._dragRect
-                NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                Anim {}
             }
 
             // The frozen screen. This is what grim photographs at capture time,
@@ -1107,11 +1107,11 @@ Scope {
 
                     Behavior on x {
                         enabled: toolbar._fillTravels
-                        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                        Anim { kind: "spatialFast" }
                     }
                     Behavior on width {
                         enabled: toolbar._fillTravels
-                        NumberAnimation { duration: Core.Theme.motion.standard; easing.type: Core.Theme.motion.easingInOut }
+                        Anim { kind: "spatialFast" }
                     }
                 }
 

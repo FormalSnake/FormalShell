@@ -306,11 +306,6 @@ Singleton {
     // it DOES respect motion.enabled, but the consumer gates on
     // `motionEnabled` directly rather than this object zeroing the rate
     // to 0.
-    //
-    // `fast`/`standard`/`surface`/`surfaceExit`/`slide`/`zoom`/`easing`/
-    // `easingInOut`/`emphasizedEasing`/`revealEasing` are the M53 set, kept
-    // while the surfaces still read them; M54 Task 6 deletes them once the
-    // last consumer is on the primitive (M54 D3, no compat shim).
     readonly property bool motionEnabled: Config.get("motion.enabled", true) === true
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
@@ -335,16 +330,6 @@ Singleton {
                 emphasizedDecel: c.emphasizedDecel,
                 reveal: c.effectsSlow
             },
-            fast: m.fast,
-            standard: m.standard,
-            surface: m.surface,
-            surfaceExit: m.surfaceExit,
-            emphasizedEasing: Easing.InOutQuart,
-            slide: m.slide,
-            zoom: m.zoom,
-            easing: Easing.OutQuint,
-            easingInOut: Easing.InOutQuart,
-            revealEasing: Easing.InOutQuad,
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,
             marqueePxPerSec: m.marqueePxPerSec,

@@ -139,7 +139,7 @@ QtObject {
     property bool motionEnabled: true
 
     // The real singleton's `motion` object, key for key (M54 D5): the two
-    // families, the curves per kind, and the M53 names Task 6 deletes.
+    // families and the curves per kind.
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
         var c = Tokens.MOTION_CURVES;
@@ -163,16 +163,6 @@ QtObject {
                 emphasizedDecel: c.emphasizedDecel,
                 reveal: c.effectsSlow
             },
-            fast: m.fast,
-            standard: m.standard,
-            surface: m.surface,
-            surfaceExit: m.surfaceExit,
-            emphasizedEasing: Easing.InOutQuart,
-            slide: m.slide,
-            zoom: m.zoom,
-            easing: Easing.OutQuint,
-            easingInOut: Easing.InOutQuart,
-            revealEasing: Easing.InOutQuad,
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,
             marqueePxPerSec: m.marqueePxPerSec,

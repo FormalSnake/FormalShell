@@ -361,14 +361,16 @@ Panel {
                 rowSpacing: Core.Theme.space.rowGap
                 columnSpacing: Core.Theme.space.rowGap
 
-                // The swap pose (the `_swapProgress` block above): a `slide`
-                // off rest on the side the step came from, next month from
-                // the right and previous from the left, carried back to 0 as
-                // the grid fades up. A Translate rather than an x, since the
-                // Row beside it owns that.
+                // The swap pose (the `_swapProgress` block above): one
+                // spacing step off rest on the side the step came from, next
+                // month from the right and previous from the left, carried
+                // back to 0 as the grid fades up. A Translate rather than an
+                // x, since the Row beside it owns that. The distance comes
+                // off the spacing scale so it stays proportional to the cells
+                // it shifts.
                 opacity: root._swapProgress
                 transform: Translate {
-                    x: (1 - root._swapProgress) * root._swapSign * Core.Theme.motion.slide
+                    x: (1 - root._swapProgress) * root._swapSign * Core.Theme.space.lg
                 }
 
                 readonly property real cellWidth: (dayGrid.width - columnSpacing * (CalGrid.COLUMNS - 1)) / CalGrid.COLUMNS

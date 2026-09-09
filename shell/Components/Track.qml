@@ -94,7 +94,7 @@ Rectangle {
         // swept continuously, so every change is one on-screen edge
         // travelling to a new place rather than a constant rate.
         Behavior on width {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "spatialFast" }
         }
     }
 

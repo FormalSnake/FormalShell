@@ -6,7 +6,7 @@ import "../shell/Components"
 // Input's contract (DESIGN.md §2): an `input` border at `radiusMd`,
 // `controlHeight` tall, the ring while it holds focus, a `destructive`
 // border plus a caption while `error`. M51 Task 5: the border colour and
-// the ring's own opacity both transition on `Theme.motion.fast` for focus,
+// the ring's own opacity both transition on the effects family for focus,
 // blur and error, rather than popping.
 //
 // Asserted against a sentinel palette rather than Palette.fallback(): the
@@ -95,12 +95,12 @@ TestCase {
         tryCompare(ringOf(control), "opacity", 0, 1000);
     }
 
-    // `fast` is 100ms; a validation error still has to read as landing
-    // instantly, so it takes no special-cased skip past the same Behavior
-    // everything else uses, it just has a short enough curve to satisfy that.
-    function test_error_reaches_destructive_within_fast() {
+    // A validation error still has to read as landing instantly, so it
+    // takes no special-cased skip past the colour Behavior everything else
+    // uses, it just rides a clock short enough to satisfy that.
+    function test_error_reaches_destructive_on_the_colour_clock() {
         var control = make({ error: true });
-        tryCompare(frameOf(control).border, "color", Theme.color.destructive, Theme.motion.fast + 500);
+        tryCompare(frameOf(control).border, "color", Theme.color.destructive, Theme.motion.effectsSlow + 500);
     }
 
     function test_error_wins_over_focus() {

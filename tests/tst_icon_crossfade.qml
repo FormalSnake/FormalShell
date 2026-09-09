@@ -6,7 +6,8 @@ import "../shell/Theme/icons.js" as Icons
 
 // Icon's content rule (M53 D3): nineteen consumers bind `name` to a ternary,
 // so a glyph swap is a state change on a cell already on screen and crosses
-// on `fast` rather than cutting. The two slots trade places on each change;
+// on the effects clock rather than cutting. The two slots trade places on
+// each change;
 // the second one is not built into the frame until the first one, so an icon
 // that never swaps costs one node.
 //
@@ -112,7 +113,7 @@ TestCase {
         compare(pair[0].opacity, 1);
     }
 
-    // motion.enabled=false zeroes `fast`, and a zero-duration Behavior lands
+    // motion.enabled=false zeroes `effects`, and a zero-duration Behavior lands
     // on the same tick it starts, so the swap is a cut with no frame in
     // which both glyphs are up.
     function test_motion_disabled_swaps_on_the_same_tick() {

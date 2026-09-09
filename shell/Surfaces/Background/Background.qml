@@ -230,7 +230,7 @@ PanelWindow {
         }
         Behavior on opacity {
             enabled: !background._suppressTopFade
-            NumberAnimation { duration: Core.Theme.motion.reveal; easing.type: Core.Theme.motion.revealEasing }
+            Anim { kind: "reveal" }
         }
     }
 

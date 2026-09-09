@@ -26,7 +26,12 @@ WheelHandler {
 
     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
 
-    // A notch glides rather than jumping a row (M53 D2). The animated value
+    // A notch glides rather than jumping a row (M53 D2). On `spatialFast`,
+    // so a notch at either end of the list carries the content a few pixels
+    // past the bound and back: the flickable only enforces its bounds at the
+    // end of its own drag or flick, so a contentY written from here is free
+    // to overshoot.
+    // The animated value
     // lives here and is written into the flickable, rather than the
     // flickable carrying a `Behavior on contentY`, because a drag and a
     // flick write that property themselves and neither may be animated
@@ -42,10 +47,9 @@ WheelHandler {
 
     Behavior on _glide {
         enabled: !root._sync && root.flickable && !root.flickable.dragging && !root.flickable.flicking
-        NumberAnimation {
+        Anim {
             id: glideAnimation
-            duration: Theme.motion.standard
-            easing.type: Theme.motion.easing
+            kind: "spatialFast"
         }
     }
 

@@ -208,54 +208,13 @@ TestCase {
 
     // §4 motion tokens
 
-    function test_motion_tokens_sit_inside_the_design_bands() {
-        var m = Tokens.motionTokens(true);
-        verify(m.fast >= 90 && m.fast <= 140);
-        verify(m.standard >= 90 && m.standard <= 140);
-        verify(m.fast <= m.standard);
-        verify(m.slide >= 4 && m.slide <= 8);
-    }
-
-    function test_motion_tokens_disabled_zeroes_durations_and_slide() {
-        var m = Tokens.motionTokens(false);
-        compare(m.fast, 0);
-        compare(m.standard, 0);
-        compare(m.slide, 0);
-    }
-
-    // M51 D2: the surface enter/exit pair is asymmetric, exit shorter than
-    // enter, and both sit outside `fast`/`standard`'s 90-140ms control band.
-    function test_motion_tokens_surface_enter_is_longer_than_its_exit() {
-        var m = Tokens.motionTokens(true);
-        compare(m.surface, 180);
-        compare(m.surfaceExit, 120);
-        verify(m.surface > m.surfaceExit);
-    }
-
-    function test_motion_tokens_disabled_zeroes_surface_and_exit_too() {
-        var m = Tokens.motionTokens(false);
-        compare(m.surface, 0);
-        compare(m.surfaceExit, 0);
-    }
-
-    // M51 D2/D7: `zoom` is the scale a surface enters from and exits to;
-    // disabled neutralises it to 1 rather than zeroing it, since a zoom of
-    // 0 would collapse the surface to nothing instead of leaving it be.
-    function test_motion_tokens_zoom_is_the_shadcn_scale_step() {
-        compare(Tokens.motionTokens(true).zoom, 0.97);
-    }
-
-    function test_motion_tokens_disabled_neutralises_zoom() {
-        compare(Tokens.motionTokens(false).zoom, 1);
-    }
-
     // M54 D2: `emphasized` is M3's own clock for the workspace pill, whose
     // two edges ride it at different durations, which is what makes the
     // pill stretch across the gap and close up behind itself.
     function test_motion_tokens_emphasized_is_the_indicator_step() {
         var m = Tokens.motionTokens(true);
         compare(m.emphasized, 400);
-        verify(m.emphasized > m.standard);
+        verify(m.emphasized > m.effects);
     }
 
     function test_motion_tokens_disabled_zeroes_emphasized_too() {

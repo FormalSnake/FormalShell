@@ -235,7 +235,6 @@ var MOTION_BASE = {
     spatialFast: 350, spatial: 500, spatialSlow: 650,
     effectsFast: 150, effects: 200, effectsSlow: 300,
     emphasized: 400, reveal: 400,
-    fast: 100, standard: 130, surface: 180, surfaceExit: 120, slide: 8, zoom: 0.97,
     marqueePxPerSec: 30, marqueeHoldMs: 2000
 };
 
@@ -249,12 +248,6 @@ function motionTokens(enabled) {
         effectsSlow: enabled ? MOTION_BASE.effectsSlow : 0,
         emphasized: enabled ? MOTION_BASE.emphasized : 0,
         reveal: enabled ? MOTION_BASE.reveal : 0,
-        fast: enabled ? MOTION_BASE.fast : 0,
-        standard: enabled ? MOTION_BASE.standard : 0,
-        surface: enabled ? MOTION_BASE.surface : 0,
-        surfaceExit: enabled ? MOTION_BASE.surfaceExit : 0,
-        slide: enabled ? MOTION_BASE.slide : 0,
-        zoom: enabled ? MOTION_BASE.zoom : 1,
         marqueePxPerSec: MOTION_BASE.marqueePxPerSec,
         marqueeHoldMs: MOTION_BASE.marqueeHoldMs
     };

@@ -3,9 +3,9 @@ import qs.Core
 import "cursor.js" as Cursor
 
 // shadcn's switch (DESIGN.md §2): a `controlHeight` x `huge` track, `muted`
-// off and `primary` on, with a `background` knob that slides on
-// `Theme.motion.standard`. The cursor is the ring, drawn exactly as Button
-// and Cell draw it.
+// off and `primary` on, with a `background` knob that slides between the
+// two ends. The cursor is the ring, drawn exactly as Button and Cell draw
+// it.
 //
 // Controlled, not self-toggling: `checked` is an input the owner binds to
 // whatever it already stores (Center.qml binds NotificationService.dnd), and
@@ -72,7 +72,7 @@ Item {
         border.color: Theme.color.ring
 
         Behavior on color {
-            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+            CAnim {}
         }
     }
 
@@ -86,7 +86,7 @@ Item {
         color: Theme.color.background
 
         Behavior on x {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "spatialFast" }
         }
     }
 

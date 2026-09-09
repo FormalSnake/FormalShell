@@ -64,7 +64,7 @@ Item {
     // taller under whatever sits below it.
     Behavior on implicitHeight {
         enabled: root._settled && root.visible && !root._morphOwned
-        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+        Anim {}
     }
 
     // The halo fades in and out with focus (M51 Task 5) rather than popping:
@@ -80,7 +80,7 @@ Item {
         color: Theme.color.ring
         opacity: input.activeFocus ? Theme.ringAlpha : 0
         Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "effects" }
         }
     }
 
@@ -93,17 +93,17 @@ Item {
         radius: Theme.radiusMd
         color: "transparent"
         border.width: Theme.borderWidth
-        // Focus, blur and error all crossfade the border colour on the same
-        // `fast` Behavior: `fast` is short enough (100ms) that a validation
-        // error still reads as landing instantly, so error gets no special
-        // case that would make it look like a different kind of change.
+        // Focus, blur and error all crossfade the border colour on the one
+        // colour Behavior every other control takes, so an error gets no
+        // special case that would make it look like a different kind of
+        // change from a focus.
         border.color: root.error
             ? Theme.color.destructive
             : input.activeFocus
                 ? Theme.color.ring
                 : Theme.color.input
         Behavior on border.color {
-            ColorAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+            CAnim {}
         }
 
         Text {
@@ -140,13 +140,13 @@ Item {
         anchors.right: parent.right
         anchors.top: frame.bottom
         anchors.topMargin: Theme.space.xs
-        // The caption crosses in and out on the same clock the border does
-        // (M53 D3), so an error lands as one change rather than a word
-        // appearing over a colour still on its way.
+        // The caption crosses in and out on the effects family the border
+        // colour beside it takes (M53 D3), so an error lands as one change
+        // rather than a word appearing over a colour still on its way.
         visible: errorLabel.opacity > 0
         opacity: root._showsError ? 1 : 0
         Behavior on opacity {
-            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easingInOut }
+            Anim { kind: "effects" }
         }
         text: root.errorText
         color: Theme.color.destructive

@@ -279,7 +279,12 @@ PanelWindow {
             if (key === null || heights[key] !== undefined)
                 return;
             var item = poolRepeater.itemAt(key);
-            heights[key] = item ? item.height : 0;
+            // `implicitHeight`, not `height`: the drawn height glides when a
+            // card's content grows (the Behavior on it below), and a layout
+            // reading that would retarget every neighbour's y once a frame
+            // and leave the whole pile crawling after it. This is where the
+            // pile is going, so every card travels there on one clock.
+            heights[key] = item ? item.implicitHeight : 0;
         });
 
         return Stack.layout({
@@ -392,10 +397,10 @@ PanelWindow {
         // bottom edge (top-anchored) is where a card that just left used to
         // be, so this has to move with them rather than snap.
         // The stack frame growing and shrinking is part of the same morph as
-        // the cards inside it, so it rides the same curve rather than
+        // the cards inside it, so it rides the same kind rather than
         // decelerating on a different one underneath them.
         Behavior on height {
-            NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+            Anim {}
         }
 
         // Hover anywhere on the stack expands it (DESIGN.md §Notifications):
@@ -426,21 +431,31 @@ PanelWindow {
                 height: implicitHeight
 
                 // The expand/collapse morph: x, y and width are one movement
-                // of something already on screen, so all three take
-                // `easingInOut` and the same duration, and the card's own
-                // content fade below joins them. `width` had no Behavior at
-                // all, which is half of the "it clips for a moment" the
-                // owner reported: a peek card is inset, an expanded card is
-                // full width, and that step landed on the frame the pointer
-                // arrived while x and y were still gliding.
+                // of something already on screen, so all three take the one
+                // spatial kind, and the card's own content fade below joins
+                // them. `width` had no Behavior at all, which is half of the
+                // "it clips for a moment" the owner reported: a peek card is
+                // inset, an expanded card is full width, and that step landed
+                // on the frame the pointer arrived while x and y were still
+                // gliding.
                 Behavior on x {
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    Anim { id: frameX }
                 }
                 Behavior on y {
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    Anim { id: frameY }
                 }
                 Behavior on width {
-                    NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    Anim { id: frameWidth }
+                }
+
+                // The card's own content height (a group gaining a member,
+                // an image finishing its decode) follows live once the card
+                // is standing still (M54 D10). Gated on a settled presence:
+                // a card still arriving takes its content in the frame it is
+                // measured in, so nothing grows and slides at once.
+                Behavior on height {
+                    enabled: cardFrame.presence >= 1
+                    Anim { id: frameHeight }
                 }
 
                 // presence: 0 = off-stack, 1 = fully shown, one scalar
@@ -453,21 +468,26 @@ PanelWindow {
                 // simply starts its 0->1 climb from nothing, at its
                 // already-correct target x/y.
                 property real presence: (cardFrame._slot && !cardFrame._slot.departing) ? 1 : 0
-                // `emphasized`, not `standard`: a toast travels its own width
-                // in from off screen, and DESIGN.md §4's own note about the
-                // workspace pill applies unchanged here, 130ms reads that
-                // distance as a jump. `easing` rather than the expand morph's
-                // `easingInOut` because this is an entrance, not a move.
+                // The two halves take different curves (M54 D2): a toast
+                // arriving travels its own width in from off screen and
+                // decelerates into place without passing it, a toast leaving
+                // is the same card moving again and overshoots like anything
+                // else spatial. The direction comes off `targetValue`, which
+                // the Behavior sets before it starts the animation; `presence`
+                // itself carries the animated value in here, not the target.
                 Behavior on presence {
-                    NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easing }
+                    id: presenceBehavior
+                    Anim {
+                        id: presenceAnim
+                        kind: presenceBehavior.targetValue > 0.5 ? "emphasizedDecel" : "spatial"
+                    }
                 }
                 opacity: cardFrame.presence
                 // Enter/exit slide: the card comes in from past the anchored
                 // side edge and leaves the same way, which is what makes the
-                // dismiss direction obvious. §4.2's 4px `slide` is the rule
-                // for CHROME appearing in place; a toast is a surface
-                // arriving from off screen, so it travels its own width plus
-                // the gap it will sit in.
+                // dismiss direction obvious. Chrome appearing in place barely
+                // moves; a toast is a surface arriving from off screen, so it
+                // travels its own width plus the gap it will sit in.
                 transform: Translate {
                     x: (1 - cardFrame.presence)
                         * (cardFrame.width + Theme.space.screenPadding)
@@ -479,86 +499,112 @@ PanelWindow {
                         root._clearSlot(cardFrame.index);
                 }
 
-                NotificationCard {
-                    id: card
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-
-                    entry: cardFrame._slot ? cardFrame._slot.entry : root._emptyEntry
-                    now: root._now
-                    width: root._cardWidth
-                    // A peek level is a sliver of card, not a squeezed
-                    // layout: the content stays laid out (opacity only, per
-                    // M34) so this card's own implicit height never jumps
-                    // the moment it becomes the front one, and `peekShell`
-                    // below paints the narrower chrome in its place.
-                    // The other half of the clip: this flipped 0 to 1 with no
-                    // Behavior, so a peek card's body appeared at full
-                    // opacity while its frame was still travelling. On the
-                    // morph's own curve and duration, so the content arrives
-                    // exactly as the card finishes opening rather than
-                    // ahead of it.
-                    opacity: cardFrame._geom.contentVisible ? 1 : 0
-                    Behavior on opacity {
-                        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
-                    }
-                    enabled: cardFrame._geom.contentVisible
-
-                    // Gated on !root._expanded: `stackHover`'s HoverHandler
-                    // covers this same card's whole bounding box, so a card
-                    // hover inside an already-expanded stack always
-                    // coincides with `root._expanded` staying true, letting
-                    // this fire there too raced `_syncExpandPause`'s
-                    // stack-wide pause (moving the pointer from card A to
-                    // card B cleared A's id from `_hoveredPopups` with
-                    // neither `_expandedChanged` nor `_visibleMemberIdsChanged`
-                    // firing to restore it, so A could expire mid-hover).
-                    // Un-expanded, only the front card is interactive, and
-                    // this stays its per-card pause.
-                    onHoveredChanged: {
-                        if (cardFrame._slot && !root._expanded)
-                            NotificationService.setPopupHovered(cardFrame._slot.entry.memberIds, card.hovered);
-                    }
-                    onDismiss: {
-                        if (cardFrame._slot)
-                            NotificationService.dismissPopupGroup(cardFrame._slot.entry.memberIds);
-                    }
-                    onBodyClicked: {
-                        if (!cardFrame._slot)
-                            return;
-                        var entry = cardFrame._slot.entry;
-                        if (entry.actions.some(a => a.key === "default"))
-                            NotificationService.invokeAction(entry.id, "default");
-                        else
-                            NotificationService.focusSender(entry.id);
-                    }
-                    onActionInvoked: key => {
-                        if (cardFrame._slot)
-                            NotificationService.invokeAction(cardFrame._slot.entry.id, key);
-                    }
+                // The card squashes into the screen edge it came in from
+                // and springs back (M54 D7). The target is the frame and the
+                // matrix goes on the item inside it: `Deform` samples its
+                // target through `mapToItem`, which reads back any transform
+                // on that target, so sampling and deforming the same item
+                // would leave the deform driving itself.
+                Deform {
+                    id: deform
+                    target: cardFrame
+                    edge: root._positionSpec.right ? "right" : "left"
+                    active: presenceAnim.running || frameX.running || frameY.running
+                        || frameWidth.running || frameHeight.running
                 }
 
-                // A peek level's own card: the same chrome `card` draws,
-                // at this rank's narrower width, with nothing in it. It
-                // takes its height from the fixed-width card it stands for,
-                // which is what keeps the rank width out of that card's own
-                // text reflow (see `_cardWidth` above).
-                Card {
-                    id: peekShell
+                // Everything drawn, under the deform's matrix: the card and
+                // the peek shell it crosses against squash together, so a
+                // toast stays one object rather than a frame with a rigid
+                // body inside it.
+                Item {
+                    id: deformed
                     anchors.fill: parent
-                    // Crossfades against `card` above rather than switching:
-                    // the two draw the same chrome at the same place, so a
-                    // hard flip between them was a visible seam in the middle
-                    // of an otherwise continuous morph. `visible` still falls
-                    // away at zero so a fully faded shell costs nothing.
-                    opacity: cardFrame._geom.contentVisible ? 0 : 1
-                    visible: peekShell.opacity > 0
-                    Behavior on opacity {
-                        NumberAnimation { duration: Theme.motion.standard; easing.type: Theme.motion.easingInOut }
+                    transform: Matrix4x4 { matrix: deform.matrix }
+
+                    NotificationCard {
+                        id: card
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+
+                        entry: cardFrame._slot ? cardFrame._slot.entry : root._emptyEntry
+                        now: root._now
+                        width: root._cardWidth
+                        // A peek level is a sliver of card, not a squeezed
+                        // layout: the content stays laid out (opacity only, per
+                        // M34) so this card's own implicit height never jumps
+                        // the moment it becomes the front one, and `peekShell`
+                        // below paints the narrower chrome in its place.
+                        // The other half of the clip: this flipped 0 to 1 with no
+                        // Behavior, so a peek card's body appeared at full
+                        // opacity while its frame was still travelling. It
+                        // crosses over the front of the morph rather than for
+                        // its whole length, the way a panel's contents cross
+                        // through a handoff: an opacity that took the frame's
+                        // own clock would still be reading as translucent long
+                        // after the rect it sits in had settled.
+                        opacity: cardFrame._geom.contentVisible ? 1 : 0
+                        Behavior on opacity {
+                            Anim { kind: "effects" }
+                        }
+                        enabled: cardFrame._geom.contentVisible
+
+                        // Gated on !root._expanded: `stackHover`'s HoverHandler
+                        // covers this same card's whole bounding box, so a card
+                        // hover inside an already-expanded stack always
+                        // coincides with `root._expanded` staying true, letting
+                        // this fire there too raced `_syncExpandPause`'s
+                        // stack-wide pause (moving the pointer from card A to
+                        // card B cleared A's id from `_hoveredPopups` with
+                        // neither `_expandedChanged` nor `_visibleMemberIdsChanged`
+                        // firing to restore it, so A could expire mid-hover).
+                        // Un-expanded, only the front card is interactive, and
+                        // this stays its per-card pause.
+                        onHoveredChanged: {
+                            if (cardFrame._slot && !root._expanded)
+                                NotificationService.setPopupHovered(cardFrame._slot.entry.memberIds, card.hovered);
+                        }
+                        onDismiss: {
+                            if (cardFrame._slot)
+                                NotificationService.dismissPopupGroup(cardFrame._slot.entry.memberIds);
+                        }
+                        onBodyClicked: {
+                            if (!cardFrame._slot)
+                                return;
+                            var entry = cardFrame._slot.entry;
+                            if (entry.actions.some(a => a.key === "default"))
+                                NotificationService.invokeAction(entry.id, "default");
+                            else
+                                NotificationService.focusSender(entry.id);
+                        }
+                        onActionInvoked: key => {
+                            if (cardFrame._slot)
+                                NotificationService.invokeAction(cardFrame._slot.entry.id, key);
+                        }
                     }
-                    color: card.color
-                    radius: card.radius
-                    border.color: card.border.color
+
+                    // A peek level's own card: the same chrome `card` draws,
+                    // at this rank's narrower width, with nothing in it. It
+                    // takes its height from the fixed-width card it stands for,
+                    // which is what keeps the rank width out of that card's own
+                    // text reflow (see `_cardWidth` above).
+                    Card {
+                        id: peekShell
+                        anchors.fill: parent
+                        // Crossfades against `card` above rather than switching:
+                        // the two draw the same chrome at the same place, so a
+                        // hard flip between them was a visible seam in the middle
+                        // of an otherwise continuous morph. `visible` still falls
+                        // away at zero so a fully faded shell costs nothing.
+                        opacity: cardFrame._geom.contentVisible ? 0 : 1
+                        visible: peekShell.opacity > 0
+                        Behavior on opacity {
+                            Anim { kind: "effects" }
+                        }
+                        color: card.color
+                        radius: card.radius
+                        border.color: card.border.color
+                    }
                 }
             }
         }

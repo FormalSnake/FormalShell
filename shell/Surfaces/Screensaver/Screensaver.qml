@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Core as Core
+import qs.Components
 import qs.Compositor
 import qs.Services
 import "../../Screensaver/blocks.js" as Blocks
@@ -579,7 +580,7 @@ Item {
                     opacity: root.active ? 1 : 0
 
                     Behavior on opacity {
-                        NumberAnimation { duration: Core.Theme.motion.reveal; easing.type: Core.Theme.motion.easing }
+                        Anim { kind: "reveal" }
                     }
 
                     Canvas {
