@@ -7,6 +7,10 @@ primitives), 0a3b7fa (bar), 99b49de (panel geometry and the keyboard
 path), b167743 (panel handoff), f21bdfd (keyed lists, cursor travel),
 d6394d0 (launcher and centre seams), aa8349f (modals, lock, picker),
 05d0062 (tooltip group). Task 9 is the docs commit carrying this line.
+D1 (the Vercel identity, nothing overshooting) is reversed by the owner
+on 2026-09-09: the curves and the shape live in
+`docs/superpowers/plans/2026-09-09-m54-expressive-motion.md`, and D2 to
+D10 are what they run on.
 
 Addendum 2026-09-09, after the owner rebuilt a real host on the branch:
 "nothing really looks different. In caelestia there are nice morph

@@ -183,82 +183,142 @@ content scrolls (`WheelScroll`) rather than the surface running off the
 display. Toasts, the OSD pill, the notification centre and the tooltip take
 those same numbers. A surface never writes its own margin.
 
-**Motion** (`Theme.motion.*`): `fast` 100 for hover fills, control
-state, icon and label crossfades and the cursor's travel, `standard` 130
-for anything that moves or resizes in place, `surface` 180 for a surface's
-enter with `surfaceExit` 120 for its exit, `emphasized` 250 on
-`emphasizedEasing` for the workspace pill, the toasts, a card's size morph,
-the panel handoff and an anchored surface's own open, `reveal` 400 for the
-wallpaper and palette crossfades and the lock's blank and wake, `slide` 8px,
-`zoom` 0.97. Enter, exit and any response to input take `easing`
-(OutQuint); travel and size changes take `easingInOut` (InOutQuart), and
-`emphasizedEasing` is the same curve on the long clock.
-`motion.enabled=false` zeroes the durations and the slide and sets the zoom
-to 1. The identity is Vercel's, so nothing overshoots or bounces.
+**Motion** (`Theme.motion.*`): two families of clock, and the property picks
+the family, never the surface. `spatialFast` 350, `spatial` 500 and
+`spatialSlow` 650 pace anything with a position or a size: x, y, width,
+height, margins, scale, radius, rotation, an emerge, a morph, a cursor's
+travel. `effectsFast` 150, `effects` 200 and `effectsSlow` 300 pace anything
+with neither: opacity, colour, a progress that only drives alpha. Two names
+sit outside both families, `emphasized` 400 for the workspace pill and
+`emphasizedDecel` for a toast arriving from off screen, which is a curve on
+`spatial`'s clock with no duration of its own. `reveal` 400 is the
+full-screen fades: the wallpaper and palette crossfades, the lock's blank and
+wake, the screensaver's own enter and exit, on `effectsSlow`'s curve.
+
+The curves are Material 3 Expressive's, the set caelestia runs on (amended
+2026-09-09, owner: caelestia's morphs, not curves alone). Each is a cubic
+bezier through `easing.bezierCurve` rather than a Qt enum, since the enum
+curves cannot do what the spatial ones do: every spatial curve carries a y
+control point above 1, so what travels passes its rest by a few pixels and
+settles back on it. The effects curves never overshoot. A spatial kind put on
+an opacity is clamped by Qt instead, which reads as the fade stalling just
+short of the end. `motion.enabled=false` zeroes every duration and pins
+`Deform` to identity, so every surface lands at once, at rest and
+undeformed; the curves themselves are left alone, a zero-duration animation
+ending in the same place whatever it carries.
+
+A surface names a clock exactly one way. `Behavior on x { Anim {} }`,
+`Behavior on opacity { Anim { kind: "effects" } }`,
+`Behavior on color { CAnim {} }`. `Anim`'s `kind` is one of the eight names
+above and defaults to `spatial`; `CAnim` is the colour half, always
+`effectsSlow`, since a colour has no position to overshoot and a crossfade
+shorter than that reads as a flicker rather than as a change. The positioner
+transitions are the same primitive: `MoveTransition` on `spatial`,
+`AddTransition` on `effects`, `RemoveTransition` on `effectsFast`.
+
+An edge-anchored card and the bar are one silhouette (amended 2026-09-09).
+The bar draws a single 1px `border` along its inner edge, and a card hanging
+off that edge opens a gap in the line: the card's own rect plus a `radiusXl`
+at either end, both gap edges travelling on `spatial`. `Shoulders` draws the
+card with that edge left open and a concave quarter fillet outside each of
+its two corners, running out to where the line resumes, so the card grows out
+of the bar rather than parking against it. The open surface publishes the
+rect as `PanelRegistry.join` (the bar's edge, the card's x and width along
+it, the screen) off its frame's live position, so a size morph and a handoff
+carry the gap with them frame by frame; that rect is the only thing the two
+windows share. `theme.radius` 0 draws square corners and no fillets, which is
+a plain card against a whole line. The panels take `Shoulders`, and the
+chevron's and the tray's second bars with them. Everything that meets no line
+keeps `Card`: the notification centre and the OSD each sit a `screenPadding`
+clear of the output's own edge, and the launcher, the tooltip and the modals
+float with nothing for a fillet to run out to.
+
+A card that arrives squashes into the edge it came from (`Deform`, amended
+2026-09-09). Its scene position and size are sampled every frame, the
+velocity taken from the delta, and a matrix stretches the card along the
+direction of travel and compresses it across, so the area holds. Each
+component of that matrix rides an underdamped spring, so the card keeps
+deforming for a beat after the travel has stopped and unwinds through its
+rest instead of snapping to it. The stretch is capped at 35% however fast the
+card goes, and `amount` sets how much of it a surface takes: 0.25 on the OSD,
+0.15 on a popout, 0.1 on the launcher. The matrix is centred on the anchored
+edge's midpoint rather than on the card's own centre, so a drawer squashes
+into the bar and keeps its top edge on the line it hangs from. At rest it is
+identity and the frame loop is stopped, so a still shell costs nothing.
 
 An anchored surface opens as a drawer (amended 2026-09-09, owner: the fade,
 0.97 zoom and 8px slide it replaces read as the surface not animating at
 all). A panel, the notification centre and the OSD each hang off one edge:
 the card starts behind that edge, displaced toward it by its own extent on
-that axis, and travels to rest on `emphasized`, clipped at the line it
+that axis, and travels to rest on `spatial` both ways, clipped at the line it
 rests on so it comes out from under the bar rather than across it. No fade
-and no zoom, since the clip is what hides it; its contents fade in behind
-the travel, so the card lands before its text. It retreats the same way on
-`surface`. The launcher unfolds instead: the card is drawn at its search
-row's height on `fast`, at full opacity, and its height carries the level
-under the rule on `emphasized` `easingInOut` while the card clips, so the
-rows are revealed rather than pushed into place; it folds back on
-`surface`. Polkit and the plugin overlay keep the modal recipe, opacity 0
-to 1 and `zoom` to 1 from centre with no slide, their scrim on the same
-clock, and the tooltip and the bar's own reveal keep it with the slide.
-Every one of them waits for its window to be on screen before it starts: a
-compositor can spend most of an enter putting the surface up, and an
-animation that ran behind it would land already at rest. Opening a panel
-while another is open is a handoff, not two surfaces crossing: the new card
-is drawn on the old card's rect, the two contents crossfade on `standard`,
-and the one card left travels and resizes to its own place on
-`emphasized`.
+and no zoom, since the clip is what hides it; its contents come up on
+`effects` behind the travel, so the card lands before its text. The launcher
+unfolds instead: the card is drawn at its search row's height on
+`effectsFast`, at full opacity, and its height carries the level under the
+rule on `spatial` while the card clips, so the rows are revealed rather than
+pushed into place. That level takes no fade of its own, the growing edge
+being the reveal; a level change while the launcher is already open plays one
+`effects` fade in with no out half, since the route is resolved by the
+keystroke that asked for it and the body has already changed by the time an
+out half could run. Polkit and the plugin overlay keep the modal recipe,
+opacity on `effects` and scale from 0.97 on `spatialFast` from centre, and
+the tooltip and the bar's own reveal take the same. Every one of them waits
+for its window to be on screen before it starts: a compositor can spend most
+of an enter putting the surface up, and an animation that ran behind it would
+land already at rest.
+
+Opening a panel while another is open is a handoff, and it runs on one clock
+(amended 2026-09-09). The new card is drawn on the old card's rect, the old
+window is cut on the tick the travel starts, and the one card left travels
+and resizes to its own place on `spatial` while its contents crossfade on
+`effects` over the first part of that same movement. One eased parameter
+carries the rect rather than four animations over x, y, width and height:
+the destination stays live, so content that settles its height a frame late
+moves where the card is going instead of stranding the travel short of it,
+and the four components ride one curve either way. The shoulders travel with
+the frame and the bar's gap follows them.
 
 Geometry never jumps (M53). Anything whose x, y, width or height changes
 while it is on screen animates the change: a positioner carries
 `move: MoveTransition {}`, a list adds and removes rows through
 `AddTransition` and `RemoveTransition`, an item carries a Behavior, and a
-container whose size follows animated children rides their clock. A
-surface that changes size while open animates the change on `emphasized`,
-and a closing surface freezes its size first. Bar cells enter and leave
-through their own presence while the strip's rails carry the neighbours.
-The launcher's rows keep their identity across a query, so a re-rank moves
-rows instead of rebuilding them; only a level change or a diff touching
-more than 64 rows resets the list.
+container whose size follows animated children rides their clock. Sizes
+follow content live on `spatial`, a panel whose section count changes and the
+launcher's list under a query alike, and a closing surface freezes its size
+first. Bar cells enter and leave through their own presence while the strip's
+rails carry the neighbours. The launcher's rows keep their identity across a
+query, so a re-rank moves rows instead of rebuilding them; only a level
+change or a diff touching more than 64 rows resets the list.
 
-Content never snaps. What one slot draws crossfades on `fast` when it
+Content never snaps. What one slot draws crossfades on `effects` when it
 changes: an icon glyph, a label under a width morph, the launcher's empty
 state, the clipboard preview, a calendar month. A fill or border that
-switches which colour token it binds crossfades on `fast` too. A palette
+switches which colour token it binds crossfades through `CAnim`. A palette
 change (mode toggle, matugen recolour, preset swap) crossfades every
 `Theme.color.*` over `reveal`.
 
-The cursor travels (amended 2026-09-09, owner: a keyboard user wants what
-a keystroke moves to be seen moving). It is one item per list, the
-launcher's `accent` row and a panel's ring, moving on `fast` with
-`easing`; a one-step move travels, while a wrap, a filter reset and a
-level change snap, since nothing connects the two positions. A selection
-fill (`Segmented`, the picker's mode tabs) travels the same way on
-`standard`. Everything a key drives is a retargeting Behavior, never a
-restarting animation, so key repeat glides. A toast is the carve-out on
-the way in: it is a surface arriving from off screen rather than chrome
-appearing in place, so it travels its own width plus `screenPadding` from
-the anchored edge on `emphasized`, and leaves the same way (amended
-2026-08-26, owner: the 4px nudge read as not animating at all). The
-workspace pill keeps its own: it travels the width of the dot row, which
-`standard` reads as a jump, so it takes `emphasized` and its two edges take
-different durations, which is what makes the pill stretch across the gap
-and close up behind itself.
+The cursor travels (amended 2026-09-09, owner: a keyboard user wants what a
+keystroke moves to be seen moving). It is one item per list, the launcher's
+`accent` row and a panel's ring, moving on `spatialFast`; a one-step move
+travels, while a wrap, a filter reset and a level change snap, since nothing
+connects the two positions. A selection fill (`Segmented`, the picker's mode
+tabs) travels the same way on `spatial`. Everything a key drives is a
+retargeting Behavior, never a restarting animation, so key repeat glides. A
+toast is the carve-out on the way in: it is a surface arriving from off
+screen rather than chrome appearing in place, so it travels its own width
+plus `screenPadding` from the anchored edge on `emphasizedDecel`, which
+decelerates into rest without carrying it back past the edge it came from,
+and it leaves on `spatial`. The workspace pill keeps its own: both its edges
+take `emphasized` and the trailing one runs at twice that clock, so the
+leading edge reaches the new slot while the trailing edge is still leaving
+the old one, which is what makes the pill stretch across the gap and close up
+behind itself.
 
-Tooltips are one card per output. It appears 400ms after the pointer parks
-on a cell and, within 500ms of leaving, follows the pointer to the next
-cell instead of paying the delay again: the card travels on `standard`,
-its width morphing and its text crossfading on `fast`.
+Tooltips are one card per output. It appears 400ms after the pointer parks on
+a cell and, within 500ms of leaving, follows the pointer to the next cell
+instead of paying the delay again: the card travels and morphs its width on
+`spatial`, its text crossfading on `effects`.
 
 **Startup** (M52): nothing paints before the shell knows what it looks
 like. The boot surfaces (bar, background, frame) hold their windows
@@ -307,22 +367,26 @@ thing.
 
 | primitive | is | states |
 | --- | --- | --- |
-| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip; fill, border and ink crossfade on `fast`, and a cell under a list that owns the cursor or the selection fill draws neither itself | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`hoverFill`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
+| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip; fill, border and ink crossfade on `effects`, and a cell under a list that owns the cursor or the selection fill draws neither itself | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`hoverFill`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
 | `Button` | shadcn button, `variant`: `default` (`primary` fill), `outline` (`border`, transparent), `ghost` (no border), `selected` (`background` fill behind a border), `destructive` | hover and pressed (a fill blends toward `background`, everything else takes the wash), cursor, disabled (opacity 0.5) |
 | `IconButton` | a `ghost` Button that is `controlHeight` square, one `Icon` | as Button |
 | `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding`; the surface's own frame, never nested | none |
+| `Shoulders` | the same frame with the anchored edge left open and a concave fillet outside each of its two corners, running out to the bar's line (§1 Motion): what every surface hanging off the bar draws instead of `Card` | none |
 | `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
 | `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
 | `Input` | `input` border, `radiusMd`, `controlHeight`, placeholder `mutedForeground` | focus (ring), error (`destructive` border, caption below) |
 | `Switch` | 32x18 track, `muted` off, `primary` on, `background` knob | cursor (ring) |
 | `ButtonGroup` | a `muted` trough at `radiusMd` holding one ghost `Button` per option, `xs` inside: a choice among several (power profiles, the audio device pick) when `exclusive`, a set of actions (the media transport) when not | selected (`background` with a 1px `border`), active option (`primary` fill), cursor (ring on one button) |
-| `Segmented` | `muted` group, `radiusMd`, one `background` fill with a 1px `border` that travels to the active segment on `standard` | hover on an unchosen segment (the wash, ink lifted off `mutedForeground`), cursor (ring) |
+| `Segmented` | `muted` group, `radiusMd`, one `background` fill with a 1px `border` that travels to the active segment on `spatial` | hover on an unchosen segment (the wash, ink lifted off `mutedForeground`), cursor (ring) |
 | `Track` | a `trackThickness` progress or slider: `muted` track, `primary` fill, `radiusSm` | cursor (ring), for a surface that addresses the track as a row |
 | `Tooltip` | `popover`, `radiusSm`, `caption`, 6px off the anchor; one surface per output, driven through `TooltipRegistry` | delayed (400ms), travelling (within 500ms of the last hide) |
 | `KeyCatcher` | key dispatcher for keyboard-driven surfaces (Escape, Tab, arrows and hjkl, Enter, Space, x, printable) | `blocked` while an inline editor has focus |
-| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge `slide` to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
-| `Panel` | the popout window: `Card` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
+| `Anim` | the one `NumberAnimation` in the shell: `kind` resolves a duration and a bezier out of `Theme.motion` (§1 Motion), `spatial` by default | none |
+| `CAnim` | the colour half of it, always `effectsSlow`: every `Behavior on color` and `border.color` | none |
+| `Deform` | the velocity squash (§1 Motion): samples `target` each frame and exposes the `matrix4x4` its consumer hands to a `Matrix4x4` transform, `amount` per surface | running, at rest (identity, frame loop stopped) |
+| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge travel to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
+| `Panel` | the popout window: `Shoulders` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
 
 ## 3. Surface rules
 
@@ -459,6 +523,10 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 ## 5. Never
 
 - A literal colour, radius, duration or pixel size in a surface file.
+- A duration or a curve outside `Anim` and `CAnim`. The workspace pill's
+  trailing edge, which doubles the `emphasized` token on the primitive, is
+  the one carve-out: the relation between its two edges is the effect, and a
+  second token would be a name with one caller.
 - A hardcoded font family, a Nerd Font glyph, an SVG icon asset.
 - Words in mono or values in sans.
 - A shadow, a gradient, or a blur drawn by the shell (blur is the

@@ -1,11 +1,55 @@
 # M54: morphs, caelestia's shape and curves on this shell
 
 **Date:** 2026-09-09
-**Status:** planned.
+**Status:** implemented 2026-09-09 on `m54-expressive-motion`, oldest
+first: 1c5b61c (this plan), 57993c6 (the tokens, `Anim`/`CAnim` and
+`Deform`), 70b0bf6 (`Shoulders` and the bar's gap), 2a50c7f (Presence, the
+panels, the centre, the OSD and the handoff), a046072 (the launcher),
+b3a75b7 (the bar and the workspace pill), b9b67f7 (toasts, tooltips,
+controls, the old tokens gone). Task 7 is the docs commit carrying this
+line.
+
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (architecture, IPC and config from the 2026-07-27 spec). This plan amends
 DESIGN.md §1 "Motion" and M53 D1; the spec is silent on curves and on how
 a card meets the bar.
+
+Where the shipped code deviates from the task text, on purpose:
+
+- Task 3 (D9): the handoff is one eased parameter with the frame's rect
+  interpolated off it, not four animations over x, y, width and height.
+  That keeps the destination live, so content settling its height a frame
+  late moves where the card is going, and an animation writing those four
+  properties would break the bindings that read them.
+- Task 3 (D6): the joined shape reaches `barMargin` plus the border row
+  past the card's own rect, so the fillets land on the bar's line rather
+  than short of it. The frame's rect is untouched, so the handoff, the
+  content and `panel state` measure what they always did.
+- Task 3 (D6): the notification centre and the OSD keep `Card`. Each sits
+  a `screenPadding` clear of the output's own edge, meets no line, and has
+  nothing for a fillet to run out to.
+- Task 4 (D8): the launcher's level swap has no out half. A route is
+  resolved by the keystroke that asks for it, so the body has already
+  changed by the time an out fade could play, and fading from there took
+  the arriving level off screen and brought it straight back.
+- Task 6 (D10): the toast stack lays out on each card's `implicitHeight`
+  rather than its drawn height. Reading the drawn height retargets every
+  neighbour's y once a frame and leaves the pile crawling after the card
+  that grew.
+- Tasks 3 and 4 (D11): `panel_emerge.sh` and `menu_unfold.sh` moved their
+  probes to the card's own centre column and stopped comparing against the
+  settled frame. The first now asks whether a probe differs from the closed
+  output, the second whether its mean brightness clears the scrim. The
+  deform is still unwinding for a beat after the travel, so a probe inside
+  the card is not byte-identical to the settled one for most of an open;
+  the centre column is the one line the matrix never moves sideways, being
+  centred on the anchored edge's midpoint.
+- Task 3: `bar_position.sh` asserted a `bar chevron status` shape M52
+  (78ee367) changed, `collapsed`/`hidden` for `chevron`/`open`, one of the
+  two stale legs M53's own status paragraph names. Repaired in place.
+- Task 3: `--bar-position bottom --panel audio` still fails on a race that
+  predates this branch; `--bar-position` with `--panel` is on M53's list of
+  combinations that cannot share a session.
 
 ## Owner's ask (2026-09-09, after M53 landed)
 

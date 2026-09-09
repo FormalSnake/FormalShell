@@ -401,7 +401,9 @@ behavior on hosts where a real owner exists.
   compositor blurring the desktop behind that scrim, since the polkit
   layer takes the same blur layerrule its card's translucency implies),
   every other surface sits over the desktop with its border doing the
-  work. Never
+  work. Motion is `docs/DESIGN.md` §1 "Motion": the two clock families
+  behind `Anim`/`CAnim`, and the joined shape a card hanging off the bar
+  draws instead of a `Card`. Never
   reintroduce a `ScreencopyView`-based capture anywhere (see
   `LockSurface.qml`'s header comment: it crashes the whole shell outright,
   a fail-open on a security-critical surface).
