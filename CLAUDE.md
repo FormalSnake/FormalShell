@@ -197,6 +197,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   snapshot without the surface moving under them.
 - `tooltip.sh` `--tooltip`: rides `--panel <name>`; the tooltip surface
   absent before the pointer parks on a header button and present after.
+- `tooltip_travel.sh` `--tooltip-travel`: rides `--panel <name>`; the card
+  parked on the header's close button, then the pointer one button left and
+  a frame 250ms later showing one card, on the rescan button, with one
+  tooltip layer in both dumps: the group's grace window, not a second delay.
 - `tray.sh` `--tray`: six real StatusNotifierItem producers on a strip pinned
   to carry them (`tray.maxVisible: -1`), the D-Bus Activate round trip, and
   the shell-owned menu.

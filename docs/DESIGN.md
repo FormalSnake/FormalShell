@@ -183,29 +183,69 @@ content scrolls (`WheelScroll`) rather than the surface running off the
 display. Toasts, the OSD pill, the notification centre and the tooltip take
 those same numbers. A surface never writes its own margin.
 
-**Motion** (`Theme.motion.*`): `fast` 100 for hover fills and control
-state, `standard` 130 for in-place moves, `surface` 180 for a surface's
+**Motion** (`Theme.motion.*`): `fast` 100 for hover fills, control
+state, icon and label crossfades and the cursor's travel, `standard` 130
+for anything that moves or resizes in place, `surface` 180 for a surface's
 enter with `surfaceExit` 120 for its exit, `emphasized` 250 on
-`emphasizedEasing` for the bar's workspace indicator, the toasts and size
-morphs, `reveal` 400 for the wallpaper and palette crossfades, `slide` 8px,
-`zoom` 0.97. `motion.enabled=false` zeroes the durations and the slide and
-sets the zoom to 1. A surface enters as opacity 0 to 1, scale `zoom` to 1
-from its anchored edge and a `slide` travel toward rest, on `surface` with
-the OutQuint enter easing, and leaves the same way on `surfaceExit`; a
+`emphasizedEasing` for the workspace pill, the toasts, a card's size morph
+and the panel handoff, `reveal` 400 for the wallpaper and palette
+crossfades and the lock's blank and wake, `slide` 8px, `zoom` 0.97. Enter,
+exit and any response to input take `easing` (OutQuint); travel and size
+changes take `easingInOut` (InOutQuart), and `emphasizedEasing` is the same
+curve on the long clock. `motion.enabled=false` zeroes the durations and
+the slide and sets the zoom to 1. The identity is Vercel's, so nothing
+overshoots or bounces.
+
+A surface enters as opacity 0 to 1, scale `zoom` to 1 from the cell that
+opened it (the bar edge's centre when no cell did) and a `slide` travel
+toward rest, on `surface`, and leaves the same way on `surfaceExit`; a
 modal surface (the launcher, polkit, the plugin overlay) zooms from centre
-with no slide, its scrim fading on the same clock. A surface that changes
-size while open animates the change on `emphasized`, and a closing surface
-freezes its size first. A palette change (mode toggle, matugen recolour,
-preset swap) crossfades every `Theme.color.*` over `reveal`. A toast is
-the one carve-out: it is a surface arriving from off screen rather than
-chrome appearing in place, so it travels its own width plus
-`screenPadding` from the anchored
-edge on `emphasized`, and leaves the same way (amended 2026-08-26, owner: the
-4px nudge read as not animating at all). List cursors jump. The
-workspace pill is the one carve-out inside the chrome: it travels the width
-of the dot row, which `standard` reads as a jump, so it takes `emphasized`
-and its two edges take different durations, which is what makes the pill
-stretch across the gap and close up behind itself.
+with no slide, its scrim fading on the same clock. Opening a panel while
+another is open is a handoff, not two surfaces crossing: the new card is
+drawn on the old card's rect, the two contents crossfade on `standard`,
+and the one card left travels and resizes to its own place on
+`emphasized`.
+
+Geometry never jumps (M53). Anything whose x, y, width or height changes
+while it is on screen animates the change: a positioner carries
+`move: MoveTransition {}`, a list adds and removes rows through
+`AddTransition` and `RemoveTransition`, an item carries a Behavior, and a
+container whose size follows animated children rides their clock. A
+surface that changes size while open animates the change on `emphasized`,
+and a closing surface freezes its size first. Bar cells enter and leave
+through their own presence while the strip's rails carry the neighbours.
+The launcher's rows keep their identity across a query, so a re-rank moves
+rows instead of rebuilding them; only a level change or a diff touching
+more than 64 rows resets the list.
+
+Content never snaps. What one slot draws crossfades on `fast` when it
+changes: an icon glyph, a label under a width morph, the launcher's empty
+state, the clipboard preview, a calendar month. A fill or border that
+switches which colour token it binds crossfades on `fast` too. A palette
+change (mode toggle, matugen recolour, preset swap) crossfades every
+`Theme.color.*` over `reveal`.
+
+The cursor travels (amended 2026-09-09, owner: a keyboard user wants what
+a keystroke moves to be seen moving). It is one item per list, the
+launcher's `accent` row and a panel's ring, moving on `fast` with
+`easing`; a one-step move travels, while a wrap, a filter reset and a
+level change snap, since nothing connects the two positions. A selection
+fill (`Segmented`, the picker's mode tabs) travels the same way on
+`standard`. Everything a key drives is a retargeting Behavior, never a
+restarting animation, so key repeat glides. A toast is the carve-out on
+the way in: it is a surface arriving from off screen rather than chrome
+appearing in place, so it travels its own width plus `screenPadding` from
+the anchored edge on `emphasized`, and leaves the same way (amended
+2026-08-26, owner: the 4px nudge read as not animating at all). The
+workspace pill keeps its own: it travels the width of the dot row, which
+`standard` reads as a jump, so it takes `emphasized` and its two edges take
+different durations, which is what makes the pill stretch across the gap
+and close up behind itself.
+
+Tooltips are one card per output. It appears 400ms after the pointer parks
+on a cell and, within 500ms of leaving, follows the pointer to the next
+cell instead of paying the delay again: the card travels on `standard`,
+its width morphing and its text crossfading on `fast`.
 
 **Startup** (M52): nothing paints before the shell knows what it looks
 like. The boot surfaces (bar, background, frame) hold their windows
@@ -254,7 +294,7 @@ thing.
 
 | primitive | is | states |
 | --- | --- | --- |
-| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`hoverFill`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
+| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip; fill, border and ink crossfade on `fast`, and a cell under a list that owns the cursor or the selection fill draws neither itself | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`hoverFill`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
 | `Button` | shadcn button, `variant`: `default` (`primary` fill), `outline` (`border`, transparent), `ghost` (no border), `selected` (`background` fill behind a border), `destructive` | hover and pressed (a fill blends toward `background`, everything else takes the wash), cursor, disabled (opacity 0.5) |
 | `IconButton` | a `ghost` Button that is `controlHeight` square, one `Icon` | as Button |
 | `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding`; the surface's own frame, never nested | none |
@@ -264,12 +304,12 @@ thing.
 | `Input` | `input` border, `radiusMd`, `controlHeight`, placeholder `mutedForeground` | focus (ring), error (`destructive` border, caption below) |
 | `Switch` | 32x18 track, `muted` off, `primary` on, `background` knob | cursor (ring) |
 | `ButtonGroup` | a `muted` trough at `radiusMd` holding one ghost `Button` per option, `xs` inside: a choice among several (power profiles, the audio device pick) when `exclusive`, a set of actions (the media transport) when not | selected (`background` with a 1px `border`), active option (`primary` fill), cursor (ring on one button) |
-| `Segmented` | `muted` group, `radiusMd`, active segment `background` with a 1px `border` | hover on an unchosen segment (the wash, ink lifted off `mutedForeground`), cursor (ring) |
+| `Segmented` | `muted` group, `radiusMd`, one `background` fill with a 1px `border` that travels to the active segment on `standard` | hover on an unchosen segment (the wash, ink lifted off `mutedForeground`), cursor (ring) |
 | `Track` | a `trackThickness` progress or slider: `muted` track, `primary` fill, `radiusSm` | cursor (ring), for a surface that addresses the track as a row |
-| `Tooltip` | `popover`, `radiusSm`, `caption`, 6px off the anchor | none |
+| `Tooltip` | `popover`, `radiusSm`, `caption`, 6px off the anchor; one surface per output, driven through `TooltipRegistry` | delayed (400ms), travelling (within 500ms of the last hide) |
 | `KeyCatcher` | key dispatcher for keyboard-driven surfaces (Escape, Tab, arrows and hjkl, Enter, Space, x, printable) | `blocked` while an inline editor has focus |
-| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge `slide` to, gating the window's `visible` on `shown` | open, exiting, settled |
-| `Panel` | the popout window: `Card` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, cursor bookkeeping | open, closed |
+| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge `slide` to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
+| `Panel` | the popout window: `Card` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
 
 ## 3. Surface rules
 

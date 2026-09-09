@@ -1,8 +1,44 @@
 # M53: continuous motion, the Vercel OS
 
 **Date:** 2026-09-09
-**Status:** planned. Tasks run as sequential subagents on
-`m53-continuous-motion`, one commit each, verification read before commit.
+**Status:** implemented 2026-09-09. Tasks 1 to 8 landed on
+`m53-continuous-motion`, oldest first: 0b67449 (tokens, transitions,
+primitives), 0a3b7fa (bar), 99b49de (panel geometry and the keyboard
+path), b167743 (panel handoff), f21bdfd (keyed lists, cursor travel),
+d6394d0 (launcher and centre seams), aa8349f (modals, lock, picker),
+05d0062 (tooltip group). Task 9 is the docs commit carrying this line.
+
+Where the shipped code deviates from the task text, on purpose:
+
+- Task 2: a positioner `add` Transition animates the child's own
+  `opacity`, which drops its binding and left cells stuck invisible on the
+  first `--bar-layout` run. `Rail` carries `move` only; every arrival in the
+  shell fades through a Behavior on a property of its own instead.
+- Task 4 (D5): two Wayland surfaces cannot commit a frame together, so two
+  frames on one trajectory drew a doubled edge a frame's travel apart
+  (160px in the rig). The handoff is two phases instead: the contents
+  crossfade on the old rect on `standard`, the old window is cut, and the
+  one card left travels on `emphasized`. 380ms end to end, the one gesture
+  over the 250 ceiling, and it reads as one card.
+- Task 5 (D4): the launcher's cursor is a rectangle in the view's
+  contentItem, not the ListView `highlight`: a `MenuRow` carries its section
+  band inside the delegate, so a highlight sized to `currentItem` would
+  swallow the heading. `highlightMoveDuration: 0` stays for the scroll
+  follow at key-repeat speed.
+- Task 7: the lock's `AuthPrompt` column takes no Behavior of its own. It
+  is centred and frameless, so the field's own height ramp re-centring the
+  block frame by frame is the morph; a second one would only slide it.
+
+Not this plan's, found by its runs and left as they are (D8): `--bar-position`
+asserts a `bar chevron status` shape M52 (78ee367) changed, and
+`--screenshot`'s drive calls `screenshot region` with no argument while
+`ScreenshotIpc.region` has required one since 08d9067; both fail on `main`
+before this branch. Combinations that cannot share a session, run singly:
+`--gallery --chevron`, `--chevron --bar-layout`, `--panel <name>` with
+`--panel-at`, `--bar-position` with `--panel`, `--capture --screenshot`, and `--tooltip`
+with `--toggles` (the hub is a launcher route covering the output, so the
+panel header the tooltip parks on is gone). Task 9's second session ran
+as `--panel network --tooltip` and `--toggles` on their own.
 **Spec:** `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md`
 (spec wins on conflict). `docs/DESIGN.md` §1 Motion is the rulebook; Task 9
 amends it and this plan records why. M51
