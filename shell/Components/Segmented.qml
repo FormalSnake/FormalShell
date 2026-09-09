@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Core
+import "cursor.js" as Cursor
 
 // shadcn's segmented control (spec "Picker"): a `muted` group at `radiusMd`
 // holding one segment per option, the selected one filled `background` behind
@@ -57,12 +58,22 @@ Item {
         font.weight: Theme.weight.medium
     }
 
+
+    // Whether something above this control draws the cursor halo for the
+    // whole list it sits in (Panel.qml, M53 D4): one halo that travels
+    // between rows needs there to be one of it. cursor.js carries the walk
+    // and why it runs when the row takes the cursor rather than when it is
+    // built.
+    property bool _haloOwned: false
+
+    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+
     // The ring halo, drawn behind the group exactly as Cell and Button draw
     // it.
     Rectangle {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
-        visible: root.cursor
+        visible: root.cursor && !root._haloOwned
         radius: Theme.radiusMd + Theme.ringWidth
         color: Theme.color.ring
         opacity: Theme.ringAlpha

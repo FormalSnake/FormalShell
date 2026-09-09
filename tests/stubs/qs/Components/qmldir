@@ -5,4 +5,5 @@ CellLabel 1.0 ../../../../shell/Components/CellLabel.qml
 CellRow 1.0 ../../../../shell/Components/CellRow.qml
 Icon 1.0 ../../../../shell/Components/Icon.qml
 MoveTransition 1.0 ../../../../shell/Components/MoveTransition.qml
+RemoveTransition 1.0 ../../../../shell/Components/RemoveTransition.qml
 Rail 1.0 ../../../../shell/Components/Rail.qml

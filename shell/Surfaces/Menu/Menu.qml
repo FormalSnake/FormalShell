@@ -18,6 +18,7 @@ import "../../Menu/toggles.js" as Toggles
 import "../../Menu/actions.js" as Actions
 import "../../Menu/appviews.js" as AppViews
 import "../../Compositor/keybinds.js" as Keybinds
+import "../../Menu/rowsync.js" as RowSync
 import "../../Compositor/appmatch.js" as AppMatch
 
 // The unified menu, drawn as shadcn's Command palette (DESIGN.md §3
@@ -896,6 +897,114 @@ PanelWindow {
     // says is otherwise only observable by reading pixels off a frame.
     readonly property var sectionNames: Model.sectionNames(root.rowSections)
 
+    // --- The keyed row model (M53 D6) ------------------------------------
+    //
+    // `_displayRows` is a fresh JS array every keystroke, and a JS array
+    // handed to a ListView is a model reset: no row survives a re-rank, so
+    // nothing in the list can move, appear or leave. This model carries the
+    // same rows' ids in the same order, synced by Menu/rowsync.js's diff, so
+    // the delegate that was already drawing a row stays that row's delegate
+    // and the view's own add/displaced/move/remove transitions have
+    // something true to say.
+    //
+    // Ids only. The row objects themselves stay in `_displayRows` and reach
+    // the delegate through `_rowsById` below, which keeps this model out of
+    // the business of copying every field of every row into ListElement
+    // roles on every keystroke.
+    ListModel {
+        id: rowsModel
+    }
+
+    // Rows by id, this sync and the one before it. The delegate reads its
+    // own row out of these rather than off `_displayRows[index]`, because a
+    // row on its way out through the `remove` transition is still on screen
+    // after the model has stopped holding it: an index would then resolve to
+    // whichever row slid into that slot, and the fading row would spend its
+    // exit drawing somebody else's label. One generation of history is
+    // enough, since an exit is over inside a frame or two.
+    //
+    // Each entry is `{ row, section, sectionFirst }`: the heading a row
+    // opens comes off `rowSections`, which is index-aligned with
+    // `_displayRows`, and is resolved here so nothing downstream of the
+    // model has to reach back into an array by index either.
+    property var _rowsById: ({})
+    property var _rowsPrev: ({})
+
+    // What a delegate draws when its id resolves to neither generation,
+    // which nothing in the sync can produce and a stale delegate would
+    // otherwise answer with undefined in every band.
+    readonly property var _blankRow: ({ id: "", label: "", kind: "note", icon: "", desc: "", meta: "", dim: true })
+
+    // Above this many rows leaving, arriving or changing places, the change
+    // is a rebuild rather than a story about what moved (M53 D6), and the
+    // model is refilled with no transitions at all.
+    readonly property int _rowResetLimit: 64
+
+    // Armed for an incremental sync, disarmed for a refill. Cleared before a
+    // reset and set again by the next incremental sync rather than restored
+    // on a timer: the view applies a model change on its own polish pass,
+    // which is not ordered against anything this file could schedule, and
+    // the next sync is always at least a frame away.
+    property bool _rowsAnimate: false
+
+    // Whether the cursor travels to where it is going or is simply there
+    // (M53 D4). One arrow step travels; a wrap, a re-rank, a level change
+    // and the pointer all snap, since nothing meaningful connects the two
+    // positions.
+    property bool _cursorTravels: false
+
+    function _syncRows() {
+        var rows = root._displayRows;
+        var sections = root.rowSections;
+        var byId = {};
+        var ids = [];
+        for (var i = 0; i < rows.length; i++) {
+            var band = sections[i] || "";
+            if (band === (i > 0 ? (sections[i - 1] || "") : ""))
+                band = "";
+            byId[rows[i].id] = { row: rows[i], section: band, sectionFirst: i === 0 };
+            ids.push(rows[i].id);
+        }
+        root._rowsPrev = root._rowsById;
+        root._rowsById = byId;
+
+        var held = [];
+        for (i = 0; i < rowsModel.count; i++)
+            held.push(rowsModel.get(i).rowId);
+
+        var plan = RowSync.plan(held, ids, root._rowResetLimit);
+        if (plan.reset) {
+            root._rowsAnimate = false;
+            rowsModel.clear();
+            for (i = 0; i < ids.length; i++)
+                rowsModel.append({ rowId: ids[i] });
+            return;
+        }
+        if (plan.ops.length === 0)
+            return;
+        root._rowsAnimate = true;
+        for (i = 0; i < plan.ops.length; i++) {
+            var op = plan.ops[i];
+            if (op.op === "remove")
+                rowsModel.remove(op.index);
+            else if (op.op === "insert")
+                rowsModel.insert(op.index, { rowId: op.id });
+            else
+                rowsModel.move(op.from, op.to, 1);
+        }
+    }
+
+    on_DisplayRowsChanged: {
+        // A new row set is a new arrangement, never a step through the old
+        // one, so whatever the cursor lands on it lands on outright.
+        root._cursorTravels = false;
+        // Deferred, because this handler runs while the bindings that read
+        // the same rows are still catching up: `rowSections` is one of them,
+        // and syncing against the headings of the row set before this one
+        // put every band on the wrong row.
+        Qt.callLater(root._syncRows);
+    }
+
     // shadcn's `CommandEmpty`. Never in input mode, whose row list is empty
     // by design, and never on an app view, which is its own whole surface.
     readonly property bool _showEmpty: root._mode !== "input" && !root._isAppView
@@ -1601,7 +1710,12 @@ PanelWindow {
     function _moveCursor(delta) {
         var n = root._displayRows.length;
         if (n === 0) return;
-        var next = (root._cursorIndex + delta) % n;
+        var raw = root._cursorIndex + delta;
+        // A step travels, a wrap does not (M53 D4): the top of the list and
+        // the bottom of it are not next to each other, and a fill sliding
+        // the whole way between them says they are.
+        root._cursorTravels = raw >= 0 && raw < n;
+        var next = raw % n;
         root._cursorIndex = next < 0 ? next + n : next;
         root._confirmPendingId = "";
         pointerGate.reset();
@@ -1609,6 +1723,9 @@ PanelWindow {
 
     function _setCursor(index) {
         if (index === root._cursorIndex) return;
+        // The pointer names a row outright rather than stepping to it, and
+        // it can arrive on any row in the list from outside it.
+        root._cursorTravels = false;
         root._cursorIndex = index;
         root._confirmPendingId = "";
     }
@@ -2397,10 +2514,10 @@ PanelWindow {
             opacity: root._levelEnterOpacity
             transform: Translate { x: root._levelEnterX }
             clip: true
-            // Emptied, not merely hidden, on the grids' and an app view's
+            // Unread, not merely hidden, on the grids' and an app view's
             // routes: an unread model keeps its delegates alive, and
             // _viewContentHeight above needs the idle view to measure 0.
-            model: (root._isGrid || root._isAppView) ? [] : root._displayRows
+            model: (root._isGrid || root._isAppView) ? null : rowsModel
             currentIndex: root._cursorIndex
             // ListView tracks the cursor through its (always present, even
             // with no `highlight` component) highlight item, and the
@@ -2410,21 +2527,72 @@ PanelWindow {
             // stays off-screen for seconds after the cursor has already
             // reached it and wrapped back to the top. 0 makes the follow a
             // hard jump, the only thing that keeps the cursor row visible
-            // at repeat speed.
+            // at repeat speed. What the reader sees travelling is
+            // `rowCursor` below, which is not what the view scrolls to.
             highlightMoveDuration: 0
+
+            // Rows never reset (M53 D6), so they enter, leave and change
+            // places instead. Disarmed for the refill the diff falls back
+            // to, where there is no "instead" to describe.
+            add: AddTransition { enabled: root._rowsAnimate }
+            remove: RemoveTransition { enabled: root._rowsAnimate }
+            displaced: MoveTransition { enabled: root._rowsAnimate }
+            move: MoveTransition { enabled: root._rowsAnimate }
 
             WheelScroll { flickable: rowsView }
 
+            // The cursor (M53 D4): one fill that travels between rows on an
+            // arrow step, drawn here rather than per row so there is one of
+            // it to travel. A child of the ListView is a child of its
+            // contentItem, so it scrolls with the rows it sits under; `z`
+            // puts it under them, since the row's own ink draws over it.
+            //
+            // Offset by the current row's heading band: a row that opens a
+            // group is taller than its own body by that band, and a fill
+            // covering it would swallow the heading.
+            Rectangle {
+                id: rowCursor
+                readonly property var row: rowsView.currentItem
+                z: -1
+                visible: rowCursor.row !== null && rowsView.count > 0
+                width: rowsView.width
+                y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
+                height: rowCursor.row ? rowCursor.row._rowHeight : 0
+                radius: Core.Theme.radiusSm
+                color: Core.Theme.color.accent
+
+                Behavior on y {
+                    enabled: root._cursorTravels
+                    NumberAnimation {
+                        duration: Core.Theme.motion.fast
+                        easing.type: Core.Theme.motion.easing
+                    }
+                }
+            }
+
             delegate: MenuRow {
+                required property string rowId
+                // The row this delegate is drawing, by id rather than by
+                // index: a row fading out through the `remove` transition
+                // above has left the model but not the screen, and its
+                // index now belongs to whatever slid up into it.
+                readonly property var entry: root._rowsById[rowId] || root._rowsPrev[rowId] || null
+
+                // A delegate is pooled after its exit fade as well as after
+                // scrolling out of view, so its opacity is put back before
+                // it can be handed to a row that is not entering (M53 D6:
+                // an exit that leaves a recycled row invisible is worse
+                // than no exit at all).
+                ListView.onPooled: opacity = 1
+
+                modelData: entry ? entry.row : root._blankRow
                 current: root._cursorIndex === index
                 checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
                 confirming: root._confirmPendingId === node.id
                 // A heading rides the row that opens its group, so a row
                 // whose section matches the one above it carries none.
-                section: root.rowSections[index] === (index > 0 ? root.rowSections[index - 1] : "")
-                    ? ""
-                    : (root.rowSections[index] || "")
-                sectionFirst: index === 0
+                section: entry ? entry.section : ""
+                sectionFirst: entry ? entry.sectionFirst : false
 
                 onActivate: root._activateFromPointer(index)
                 onHoverMoved: (source, x, y) => {

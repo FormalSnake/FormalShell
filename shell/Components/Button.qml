@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Core
+import "cursor.js" as Cursor
 
 // shadcn's button (DESIGN.md §2). `variant` picks the resting treatment:
 // `default` fills with `primary`, `destructive` fills with `destructive`,
@@ -106,12 +107,22 @@ Item {
         return Math.max(0, Math.min(label.implicitWidth, root.labelBudget - taken));
     }
 
+
+    // Whether something above this control draws the cursor halo for the
+    // whole list it sits in (Panel.qml, M53 D4): one halo that travels
+    // between rows needs there to be one of it. cursor.js carries the walk
+    // and why it runs when the row takes the cursor rather than when it is
+    // built.
+    property bool _haloOwned: false
+
+    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+
     // The focus ring's outer halo, drawn behind the body exactly as Cell
     // draws it.
     Rectangle {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
-        visible: root.cursor
+        visible: root.cursor && !root._haloOwned
         radius: root.radius + Theme.ringWidth
         color: Theme.color.ring
         opacity: Theme.ringAlpha

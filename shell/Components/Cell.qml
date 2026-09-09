@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Core
+import "cursor.js" as Cursor
 
 // The shadcn item (DESIGN.md §2): a `card` fill with a 1px `border` at
 // `radiusMd`. Every bar cell, list row and chip on every surface is one of
@@ -284,13 +285,21 @@ Item {
             root._openTooltip();
     }
 
+    // Whether something above this cell draws the cursor halo for its whole
+    // list instead (Panel.qml, M53 D4): one halo that travels between rows
+    // needs there to be one of it. cursor.js carries the walk and why it
+    // runs when the row takes the cursor rather than when it is built.
+    property bool _haloOwned: false
+
+    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+
     // The focus ring's outer halo (shadcn's `ring-[3px] ring-ring/50`), drawn
     // as a larger rounded rectangle behind the body rather than a shader, so
     // only the band outside the body's own edge is ever visible.
     Rectangle {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
-        visible: root.cursor
+        visible: root.cursor && !root._haloOwned
         radius: root.radius + Theme.ringWidth
         color: Theme.color.ring
         opacity: Theme.ringAlpha

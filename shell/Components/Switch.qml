@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Core
+import "cursor.js" as Cursor
 
 // shadcn's switch (DESIGN.md §2): a `controlHeight` x `huge` track, `muted`
 // off and `primary` on, with a `background` knob that slides on
@@ -39,10 +40,19 @@ Item {
     // sits from either end.
     readonly property real _inset: Theme.borderWidth * 2
 
+    // Whether something above this control draws the cursor halo for the
+    // whole list it sits in (Panel.qml, M53 D4): one halo that travels
+    // between rows needs there to be one of it. cursor.js carries the walk
+    // and why it runs when the row takes the cursor rather than when it is
+    // built.
+    property bool _haloOwned: false
+
+    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+
     Rectangle {
         anchors.fill: track
         anchors.margins: -Theme.ringWidth
-        visible: root.cursor
+        visible: root.cursor && !root._haloOwned
         radius: Theme.pillRadius(height)
         color: Theme.color.ring
         opacity: Theme.ringAlpha

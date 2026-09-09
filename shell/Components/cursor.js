@@ -74,6 +74,26 @@ function follow(top, height, contentY, viewport, contentHeight, pad) {
     return Math.max(0, Math.min(Math.max(0, contentHeight - viewport), next));
 }
 
+// Whether something above this item already draws the cursor halo for the
+// whole list it sits in (Panel.qml's `cursorHalo`, M53 D4), in which case the
+// item must not paint its own or there are two. Walked rather than declared
+// per row: a panel builds its rows in its own file and nests several of them
+// two or three items deep, so a flag spelled at every row would be one new
+// row away from a double halo.
+//
+// Call it when the item takes the cursor, never at creation: a Repeater
+// completes a delegate before it parents it, so the chain this needs is not
+// there yet when the row is built.
+function haloOwned(item) {
+    var p = item ? item.parent : null;
+    while (p) {
+        if (p.ownsCursorHalo === true)
+            return true;
+        p = p.parent;
+    }
+    return false;
+}
+
 // The panel's KeyCatcher takes no keys at all while an inline editor holds
 // focus, nor while the panel is closed but still mapped (Panel's
 // `keepMapped`), where a stray key would drive a surface nobody can see.

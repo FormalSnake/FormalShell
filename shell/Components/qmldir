@@ -22,6 +22,7 @@ PanelHero PanelHero.qml
 Picture Picture.qml
 Presence Presence.qml
 Rail Rail.qml
+RemoveTransition RemoveTransition.qml
 PointerMoveGate PointerMoveGate.qml
 SectionLabel SectionLabel.qml
 Separator Separator.qml

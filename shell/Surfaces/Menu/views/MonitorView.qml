@@ -4,6 +4,7 @@ import qs.Components
 import qs.Services
 import "../../../Menu/actions.js" as Actions
 import "../../../Monitor/procs.js" as Procs
+import "../../../Menu/rowsync.js" as RowSync
 import "../../../Power/model.js" as Power
 
 // The full system monitor, rendered inside the launcher card (M38 Task 7).
@@ -120,6 +121,63 @@ Item {
         return root._rows.length > 0 ? 0 : -1;
     }
     readonly property var _cursorRow: root._cursorIndex >= 0 ? root._rows[root._cursorIndex] : null
+
+    // --- The keyed row model (M53 D6) ------------------------------------
+    //
+    // The table re-sorts on every 2s poll, and a JS array handed to a
+    // ListView is a model reset, so a row that overtook its neighbour used
+    // to be two rows redrawn rather than one row moving. This model holds
+    // the same pids in the same order, synced by Menu/rowsync.js's diff.
+    // Above the limit the poll has rearranged the table rather than moved
+    // anything through it, and the model is refilled with no transitions.
+    ListModel {
+        id: procModel
+    }
+
+    readonly property int _rowResetLimit: 64
+    property bool _rowsAnimate: false
+    // A one-row step travels; a page, a jump to either end and a poll that
+    // moves the cursor's own process do not (M53 D4).
+    property bool _cursorTravels: false
+
+    readonly property var _blankRow: ({ pid: 0, name: "", cmd: "", kernel: false, cpuFraction: null, memBytes: null })
+
+    function _syncRows() {
+        var rows = root._rows;
+        var pids = [];
+        for (var i = 0; i < rows.length; i++)
+            pids.push(rows[i].pid);
+
+        var held = [];
+        for (i = 0; i < procModel.count; i++)
+            held.push(procModel.get(i).procPid);
+
+        var plan = RowSync.plan(held, pids, root._rowResetLimit);
+        if (plan.reset) {
+            root._rowsAnimate = false;
+            procModel.clear();
+            for (i = 0; i < pids.length; i++)
+                procModel.append({ procPid: pids[i] });
+            return;
+        }
+        if (plan.ops.length === 0)
+            return;
+        root._rowsAnimate = true;
+        for (i = 0; i < plan.ops.length; i++) {
+            var op = plan.ops[i];
+            if (op.op === "remove")
+                procModel.remove(op.index);
+            else if (op.op === "insert")
+                procModel.insert(op.index, { procPid: op.id });
+            else
+                procModel.move(op.from, op.to, 1);
+        }
+    }
+
+    on_RowsChanged: {
+        root._cursorTravels = false;
+        root._syncRows();
+    }
 
     // Retyping the filter is a new decision about what to act on, so it
     // disarms too. A cursor move disarms in _moveCursor; a process that
@@ -1261,6 +1319,9 @@ Item {
         if (root._rows.length === 0)
             return;
         var next = Math.max(0, Math.min(root._rows.length - 1, root._cursorIndex + delta));
+        // One row apart is a step the eye can follow; a page or an end is
+        // not, and neither is a step that clamped against either end.
+        root._cursorTravels = Math.abs(next - root._cursorIndex) === 1;
         root.cursorPid = root._rows[next].pid;
         root._disarm();
         list.positionViewAtIndex(next, ListView.Contain);
@@ -1573,11 +1634,39 @@ Item {
         height: Math.max(0, Math.floor((root.height - statsPane.height - procChrome.height) / root._rowHeight) * root._rowHeight)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        model: root._rows
+        model: procModel
+        // A row that gained a percent point and overtook its neighbour slides
+        // past it instead of the two swapping between two frames (M53 D6).
+        // No `add` or `remove` to go with it: a process starting or exiting
+        // is not a movement of the table, and a poll that starts one row and
+        // ends another would otherwise fade two rows every two seconds.
+        displaced: MoveTransition { enabled: root._rowsAnimate }
+        move: MoveTransition { enabled: root._rowsAnimate }
 
         WheelScroll {
             flickable: list
             step: root._rowHeight
+        }
+
+        // The cursor (M53 D4). Uniform rows, so it needs no delegate to ask
+        // where the row is; a child of the ListView is a child of its
+        // contentItem, so it scrolls with them, and `z` puts it underneath.
+        Rectangle {
+            id: procCursor
+            z: -1
+            visible: root._cursorIndex >= 0
+            width: list.width
+            height: root._rowHeight
+            y: Math.max(0, root._cursorIndex) * root._rowHeight
+            color: Core.Theme.color.accent
+
+            Behavior on y {
+                enabled: root._cursorTravels
+                NumberAnimation {
+                    duration: Core.Theme.motion.fast
+                    easing.type: Core.Theme.motion.easing
+                }
+            }
         }
 
         // The palette's row, not a `Cell`: this list sits inside the
@@ -1586,9 +1675,15 @@ Item {
         delegate: Item {
             id: procRow
             required property int index
-            required property var modelData
+            required property int procPid
+            // The model carries pids so the rows keep their identity across a
+            // re-sort (M53 D6); the row itself still comes off `_rows`, which
+            // the sync leaves in step with the model. Safe by index here, and
+            // not in the launcher's list, because this view has no `remove`
+            // transition: nothing outlives the model row it draws.
+            readonly property var row: root._rows[procRow.index] || root._blankRow
 
-            readonly property bool armed: root.confirmAction !== "" && root.confirmPid === procRow.modelData.pid
+            readonly property bool armed: root.confirmAction !== "" && root.confirmPid === procRow.row.pid
             readonly property bool current: procRow.index === root._cursorIndex
             readonly property bool hovered: pointer.containsMouse
             readonly property bool filled: procRow.current || procRow.hovered
@@ -1602,14 +1697,9 @@ Item {
             width: list.width
             height: root._rowHeight
 
-            // The cursor snaps (DESIGN.md §1 Motion); only the hover fill
-            // below fades.
-            Rectangle {
-                anchors.fill: parent
-                visible: procRow.current
-                color: Core.Theme.color.accent
-            }
-
+            // The cursor fill is the list's, not the row's (M53 D4): one of
+            // it travels between rows, so it is drawn by the view under all
+            // of them. `current` stays here for the ink and the hover layer.
             Rectangle {
                 anchors.fill: parent
                 color: Core.Theme.hoverFill
@@ -1636,7 +1726,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    root.cursorPid = procRow.modelData.pid;
+                    root.cursorPid = procRow.row.pid;
                     root._disarm();
                 }
             }
@@ -1647,7 +1737,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: root._pidWidth
                 horizontalAlignment: Text.AlignRight
-                text: procRow.modelData.pid
+                text: procRow.row.pid
                 color: procRow.dimForeground
                 font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
@@ -1663,7 +1753,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: root._nameWidth
                 elide: Text.ElideRight
-                text: procRow.modelData.name
+                text: procRow.row.name
                 color: procRow.foreground
                 font.family: Core.Theme.fontFamilySans
                 font.pixelSize: Core.Theme.fontSize.body
@@ -1678,7 +1768,7 @@ Item {
                 anchors.left: nameText.right
                 anchors.leftMargin: Core.Theme.space.lg
                 anchors.verticalCenter: parent.verticalCenter
-                visible: procRow.modelData.kernel === true
+                visible: procRow.row.kernel === true
                 radius: Core.Theme.radiusSm
                 chip: true
                 selected: true
@@ -1695,9 +1785,9 @@ Item {
                 anchors.right: cpuText.left
                 anchors.rightMargin: Core.Theme.space.lg
                 anchors.verticalCenter: parent.verticalCenter
-                visible: procRow.modelData.kernel !== true
+                visible: procRow.row.kernel !== true
                 elide: Text.ElideRight
-                text: procRow.modelData.cmd
+                text: procRow.row.cmd
                 color: procRow.dimForeground
                 font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
@@ -1710,7 +1800,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: root._cpuWidth
                 horizontalAlignment: Text.AlignRight
-                text: root._procPct(procRow.modelData.cpuFraction)
+                text: root._procPct(procRow.row.cpuFraction)
                 color: procRow.foreground
                 font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body
@@ -1722,7 +1812,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: root._memWidth
                 horizontalAlignment: Text.AlignRight
-                text: root._bytes(procRow.modelData.memBytes)
+                text: root._bytes(procRow.row.memBytes)
                 color: procRow.foreground
                 font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.body

@@ -151,6 +151,10 @@ PanelWindow {
             return;
         }
         var next = Cursor.move(root.cursorIndex, root.cursorCount, root.cursorActive, dx, dy, root.cursorColumns);
+        // The halo travels for a key step and only for one (M53 D4): the
+        // press that reveals the cursor has nowhere to come from, and the
+        // pointer names a row outright rather than stepping to it.
+        root._cursorTravels = root.cursorActive && next.index !== root.cursorIndex;
         root.cursorIndex = next.index;
         root.cursorActive = next.active;
         // Deferred so the row's own `cursor` binding, and any reflow the
@@ -215,6 +219,44 @@ PanelWindow {
         root._followY = contentFlickable.contentY;
         root._followSync = false;
         root._followY = next;
+    }
+
+    // --- The cursor halo -------------------------------------------------
+    //
+    // One ring halo for the whole panel rather than one per row (M53 D4), so
+    // that an arrow key moves a cursor instead of turning one off and
+    // another on. The rows keep their `cursor` flag, which still colours
+    // their border and their ink and is still what `_cursorRow` above finds
+    // them by; what left them is the halo itself, suppressed inside anything
+    // declaring `ownsCursorHalo` (Cell.qml's own note).
+    //
+    // Positioned by hand rather than bound: the row is found by walking the
+    // tree, which is not a dependency QML can re-evaluate, and its place in
+    // the content column is a mapToItem, which is not one either. Deferred
+    // for the same reason the scroll-follow above is, and off the same
+    // moves: whatever changed the cursor has to have reflowed first.
+    property bool _cursorTravels: false
+
+    onCursorIndexChanged: Qt.callLater(root._syncCursorHalo)
+    onCursorActiveChanged: Qt.callLater(root._syncCursorHalo)
+    onCursorSectionChanged: Qt.callLater(root._syncCursorHalo)
+    onIsOpenChanged: Qt.callLater(root._syncCursorHalo)
+
+    function _syncCursorHalo() {
+        var row = (root.isOpen && root.cursorActive) ? root._cursorRow(contentColumn) : null;
+        cursorHalo.row = row;
+        if (!row) {
+            root._cursorTravels = false;
+            return;
+        }
+        var at = row.mapToItem(contentColumn, 0, 0);
+        var radius = row.radius === undefined ? Theme.radiusMd : row.radius;
+        cursorHalo.radius = radius + Theme.ringWidth;
+        cursorHalo.x = at.x - Theme.ringWidth;
+        cursorHalo.y = at.y - Theme.ringWidth;
+        cursorHalo.width = row.width + Theme.ringWidth * 2;
+        cursorHalo.height = row.height + Theme.ringWidth * 2;
+        root._cursorTravels = false;
     }
 
     function activateCursor() {
@@ -935,6 +977,10 @@ PanelWindow {
                     height: contentColumn.implicitHeight
                     blocked: Cursor.catcherBlocked(root.isOpen, root.inlineEditorFocused)
 
+                    // What Cell.qml reads off its ancestors: every row under
+                    // here leaves its halo to `cursorHalo` below.
+                    property bool ownsCursorHalo: true
+
                     onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
                     onActivateRequested: root.activateCursor()
                     onDeleteRequested: root.deleteCursor()
@@ -942,10 +988,43 @@ PanelWindow {
                     onTabRequested: direction => root.moveSection(direction)
                     onTextKey: text => root.cursorTextKey(text)
 
+                    // Under the rows rather than over them, and outside the
+                    // Column, which would lay a bare rectangle out as a row
+                    // of its own.
+                    Rectangle {
+                        id: cursorHalo
+                        property Item row: null
+                        z: -1
+                        visible: cursorHalo.row !== null
+                        color: Theme.color.ring
+                        opacity: Theme.ringAlpha
+
+                        Behavior on x {
+                            enabled: root._cursorTravels
+                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        }
+                        Behavior on y {
+                            enabled: root._cursorTravels
+                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        }
+                        Behavior on width {
+                            enabled: root._cursorTravels
+                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        }
+                        Behavior on height {
+                            enabled: root._cursorTravels
+                            NumberAnimation { duration: Theme.motion.fast; easing.type: Theme.motion.easing }
+                        }
+                    }
+
                     Column {
                         id: contentColumn
                         width: parent.width
                         spacing: Theme.space.sectionGap
+
+                        // A row appearing, leaving or changing height moves
+                        // the cursor row without the cursor itself moving.
+                        onImplicitHeightChanged: Qt.callLater(root._syncCursorHalo)
                     }
                 }
             }

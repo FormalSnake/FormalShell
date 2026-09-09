@@ -9,9 +9,11 @@ import "../../Menu/hints.js" as MenuHints
 // One row of the command palette, shadcn's `CommandItem` (M48 D6): a
 // `radiusSm` item carrying a named `Icon` (or an app's own themed image),
 // the label in sans, a muted detail, a right-aligned hint in mono, and a
-// trailing indicator. The cursor row and a hovered row both paint `accent`
-// with `accentForeground` ink; the list has no rules between rows and no
-// ring, since the cursor is the only focus a modal surface has.
+// trailing indicator. The cursor row and a hovered row both read as `accent`
+// with `accentForeground` ink, the cursor's own fill drawn by the view
+// beneath the rows so one of it can travel between them (M53 D4); the list
+// has no rules between rows and no ring, since the cursor is the only focus
+// a modal surface has.
 //
 // Padding is `controlPaddingX` either side and `controlPaddingY` top and
 // bottom, which is cmdk's own `px-2 py-1.5` at this shell's scale: a body
@@ -170,15 +172,10 @@ Item {
         anchors.right: parent.right
         height: root._rowHeight
 
-        // The cursor snaps (DESIGN.md §1 "List cursors jump"); only the hover
-        // fill below fades.
-        Rectangle {
-            anchors.fill: parent
-            visible: root.current
-            radius: Theme.radiusSm
-            color: Theme.color.accent
-        }
-
+        // The cursor fill is the list's, not the row's (M53 D4): one of it
+        // travels between rows, so it is drawn by the view under all of
+        // them. What stays here is `current` itself, which the ink and the
+        // hover layer below still read.
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusSm

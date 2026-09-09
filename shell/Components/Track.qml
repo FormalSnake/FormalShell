@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Core
+import "cursor.js" as Cursor
 
 // The one progress/slider groove (DESIGN.md §2): `primary` at 0.2 for the
 // groove, `primary` for the fill, `radiusSm` on both, `trackThickness` tall.
@@ -55,13 +56,23 @@ Rectangle {
     border.width: root.cursor ? Theme.borderWidth : 0
     border.color: Theme.color.ring
 
+
+    // Whether something above this control draws the cursor halo for the
+    // whole list it sits in (Panel.qml, M53 D4): one halo that travels
+    // between rows needs there to be one of it. cursor.js carries the walk
+    // and why it runs when the row takes the cursor rather than when it is
+    // built.
+    property bool _haloOwned: false
+
+    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+
     Rectangle {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
         // Behind the groove's own fill, which is what keeps the halo a ring
         // rather than a wash over the track.
         z: -1
-        visible: root.cursor
+        visible: root.cursor && !root._haloOwned
         radius: root.radius + Theme.ringWidth
         color: Theme.color.ring
         opacity: Theme.ringAlpha
