@@ -1019,6 +1019,21 @@ PanelWindow {
     readonly property bool _previewIsNote: !!root._cursorNode && root._cursorNode.kind === "note"
     readonly property bool _previewIsImage: !!root._cursorNode && !root._previewIsNote && (root._cursorNode.thumbSource || "") !== ""
     readonly property bool _previewIsText: !!root._cursorNode && !root._previewIsNote && !root._previewIsImage
+
+    // What the two preview slots draw, held past the row that put it there
+    // (M53 D3). An image row carries no `fullText` and a text row no
+    // `thumbSource`, so a slot reading the cursor row directly empties in the
+    // same tick the cursor leaves it and there is nothing left to fade: the
+    // slot going out would spend its crossfade blank. Same freeze-on-a-
+    // condition binding `_morphHeight` uses, for the same reason.
+    //
+    // The image one is let go with the route rather than held forever: what
+    // it holds is a decoded capture, and the pane it draws in is gone (M50
+    // idle cost).
+    property string _previewText: root._previewIsText ? (root._cursorNode.fullText || "") : _previewText
+    property string _previewImageSource: root._previewIsImage
+        ? "file://" + root._cursorNode.thumbSource
+        : (root.isOpen && root._isSplitRoute ? _previewImageSource : "")
     // Two bands, since the type is a word and the capture time is a value
     // (spec "Type"): the label takes the sans section face, the time the
     // mono one.
@@ -1667,6 +1682,27 @@ PanelWindow {
     property real _levelEnterOpacity: 1
     property real _levelEnterX: 0
 
+    // Which of the four views stands in for the row list. A level change is
+    // not the only way one of them arrives: `:e`, a wallpaper directory's own
+    // trigger and every app view are reached by typing, so the whole body of
+    // the card can swap under a field that never left the level it was on
+    // (M53 Task 6). That is the same seam entering a level is, so it takes
+    // the same entrance.
+    readonly property string _viewKind: root._isAppView
+        ? "app"
+        : (root._isPickerRoute ? "picker" : (root._isEmojiGrid ? "emoji" : "rows"))
+
+    on_ViewKindChanged: {
+        // Gated on the card sitting open at rest: a view resolved while the
+        // card is still arriving is part of that arrival, not a change to it.
+        // A level change plays its own entrance from _enterLevel, which knows
+        // the direction; this handler only ever runs ahead of that, because
+        // the bindings feeding _viewKind settle before _enterLevel reaches
+        // its last line, and a restart with the right direction wins.
+        if (root.isOpen && presence.settled)
+            root._playLevelEnter(1);
+    }
+
     function _playLevelEnter(direction) {
         levelEnterX.from = direction * Core.Theme.motion.slide;
         levelEnterOpacity.restart();
@@ -2137,6 +2173,22 @@ PanelWindow {
         NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
     }
 
+    // The rows area's own height, on the card's clock (M53 D2). `_cardHeight`
+    // above is `_rowsAreaHeight` plus fixed chrome, so the card's edge and
+    // the view inside it have to travel together: with the view snapping, a
+    // list that grew painted its new rows under an edge still on its way out,
+    // and a list that shrank left the gap behind it until the edge caught up.
+    // Same gate, same duration and same curve as `_morphHeight`, so the two
+    // move as one thing. No loop back into `_rowsAreaHeight`: a view's
+    // `contentHeight` is its delegates' own extent and does not read the
+    // viewport it is measured in.
+    property real _morphRowsHeight: root.isOpen ? root._rowsAreaHeight : _morphRowsHeight
+
+    Behavior on _morphRowsHeight {
+        enabled: presence.settled && root.isOpen
+        NumberAnimation { duration: Core.Theme.motion.emphasized; easing.type: Core.Theme.motion.easingInOut }
+    }
+
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.exclusiveZone: -1
@@ -2393,634 +2445,675 @@ PanelWindow {
             color: Core.Theme.color.border
         }
 
-        // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text
-        // line naming the path down to the level, hidden outright at the
-        // root, where the field is already the whole surface. It states
-        // where the level sits; it is not a control, so nothing in it
-        // answers a click. `_headerInset` puts the first label in the same
-        // column as the search icon above it and the row icons below it,
-        // which a chip could not do: its own `controlPaddingX` pushed the
-        // text a further 12px in and left it floating off every edge on the
-        // surface (owner, live shell, 2026-08-26).
+        // The level (M53 Task 6): everything under the rule is one item, so
+        // the entrance below is one arrival. Before it, the row list slid in
+        // while the breadcrumb naming the level, the footer describing it and
+        // the preview beside it were already sitting there.
         //
-        // The gap above is wider than the `rowGap` between two filled bands
-        // because what precedes it is a hairline rule, which bare text lands
-        // on at `rowGap`.
-        Row {
-            id: breadcrumbRow
+        // A plain Item with no size of its own beyond the slot it fills: the
+        // header's own two bands (breadcrumb, variant switcher) still report
+        // their heights to _headerHeight by id, the views still measure
+        // _viewContentHeight off their own content, and every anchor inside
+        // resolves to the same edges it did as a direct child of the card.
+        Item {
+            id: levelBody
             anchors.top: searchRule.bottom
-            anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.lg : 0
             anchors.left: parent.left
-            anchors.leftMargin: root._headerInset
-            spacing: Core.Theme.space.md
-            visible: root._breadcrumbVisible
-            height: root._breadcrumbVisible ? implicitHeight : 0
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            // The level entrance (M51 D3): plays when the level or the view
+            // that stands in for the row list changes, never on a query
+            // re-rank.
+            opacity: root._levelEnterOpacity
+            transform: Translate { x: root._levelEnterX }
 
-            Repeater {
-                model: root.breadcrumb
+            // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text
+            // line naming the path down to the level, hidden outright at the
+            // root, where the field is already the whole surface. It states
+            // where the level sits; it is not a control, so nothing in it
+            // answers a click. `_headerInset` puts the first label in the same
+            // column as the search icon above it and the row icons below it,
+            // which a chip could not do: its own `controlPaddingX` pushed the
+            // text a further 12px in and left it floating off every edge on the
+            // surface (owner, live shell, 2026-08-26).
+            //
+            // The gap above is wider than the `rowGap` between two filled bands
+            // because what precedes it is a hairline rule, which bare text lands
+            // on at `rowGap`.
+            Row {
+                id: breadcrumbRow
+                anchors.top: parent.top
+                anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.lg : 0
+                anchors.left: parent.left
+                anchors.leftMargin: root._headerInset
+                spacing: Core.Theme.space.md
+                visible: root._breadcrumbVisible
+                height: root._breadcrumbVisible ? implicitHeight : 0
 
-                // Separator then label, so the outer row's spacing lands on
-                // both sides of the chevron and the whole path reads at one
-                // rhythm. The first crumb's separator is not merely blank:
-                // a Row skips an invisible child's spacing too.
-                delegate: Row {
-                    id: crumb
-                    required property string modelData
-                    required property int index
+                Repeater {
+                    model: root.breadcrumb
 
-                    spacing: Core.Theme.space.md
-                    height: crumbLabel.implicitHeight
+                    // Separator then label, so the outer row's spacing lands on
+                    // both sides of the chevron and the whole path reads at one
+                    // rhythm. The first crumb's separator is not merely blank:
+                    // a Row skips an invisible child's spacing too.
+                    delegate: Row {
+                        id: crumb
+                        required property string modelData
+                        required property int index
 
-                    Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: crumb.index > 0
-                        name: "chevron-right"
-                        size: Core.Theme.fontSize.bodySmall
-                        color: Core.Theme.color.mutedForeground
-                    }
+                        spacing: Core.Theme.space.md
+                        height: crumbLabel.implicitHeight
 
-                    Text {
-                        id: crumbLabel
-                        text: crumb.modelData
-                        // The level is the page and everything above it is
-                        // the path to it (shadcn's BreadcrumbPage against
-                        // BreadcrumbLink). Colour is the whole difference:
-                        // neither one is bolder than the other.
-                        color: crumb.index === root.breadcrumb.length - 1
-                            ? Core.Theme.color.foreground
-                            : Core.Theme.color.mutedForeground
-                        font.family: Core.Theme.fontFamilySans
-                        font.pixelSize: Core.Theme.fontSize.bodySmall
-                        // Elided in the middle rather than at the tail: a
-                        // level's head and tail are what tell two of them
-                        // apart, and the path has to stay on one line at any
-                        // depth.
-                        elide: Text.ElideMiddle
-                        width: Math.min(implicitWidth, root._crumbMaxWidth)
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: crumb.index > 0
+                            name: "chevron-right"
+                            size: Core.Theme.fontSize.bodySmall
+                            color: Core.Theme.color.mutedForeground
+                        }
+
+                        Text {
+                            id: crumbLabel
+                            text: crumb.modelData
+                            // The level is the page and everything above it is
+                            // the path to it (shadcn's BreadcrumbPage against
+                            // BreadcrumbLink). Colour is the whole difference:
+                            // neither one is bolder than the other.
+                            color: crumb.index === root.breadcrumb.length - 1
+                                ? Core.Theme.color.foreground
+                                : Core.Theme.color.mutedForeground
+                            font.family: Core.Theme.fontFamilySans
+                            font.pixelSize: Core.Theme.fontSize.bodySmall
+                            // Elided in the middle rather than at the tail: a
+                            // level's head and tail are what tell two of them
+                            // apart, and the path has to stay on one line at any
+                            // depth.
+                            elide: Text.ElideMiddle
+                            width: Math.min(implicitWidth, root._crumbMaxWidth)
+                        }
                     }
                 }
             }
-        }
 
-        // The wallpaper route's Dark | Light switcher (spec "Picker"): the
-        // `Segmented` primitive. Absent entirely (zero height, no reserved
-        // gutter) for a directory with no Dark/Light pair, and on every
-        // other route.
-        //
-        // Both views below anchor to this rather than to the header, so the
-        // switcher pushes the grid down without either of them knowing
-        // whether it is there. It takes the same gap the breadcrumb takes
-        // above it: at `rowGap` a 32px trough sitting that close to a bare
-        // text line reads as one block with it.
-        Segmented {
-            id: variantRow
-            anchors.top: breadcrumbRow.bottom
-            anchors.topMargin: visible ? Core.Theme.space.lg : 0
-            anchors.left: parent.left
-            visible: root._isPickerRoute && root._pickerHasVariants
-            height: visible ? implicitHeight : 0
-            options: ["Dark", "Light"]
-            onChanged: i => root.setPickerVariant(i === 1 ? "light" : "dark")
-        }
-
-        // The variant belongs to the route, not to the control: Tab and
-        // `picker variant` over IPC move it too, and Segmented writes its own
-        // `index` on click, which a plain binding would not survive.
-        Binding {
-            target: variantRow
-            property: "index"
-            value: root._pickerVariant === "light" ? 1 : 0
-        }
-
-        ListView {
-            id: rowsView
-            // Delegates recycle rather than being destroyed and rebuilt on
-            // every flick. Safe here because every delegate in this file is
-            // required properties plus bindings off them, with no
-            // Component.onCompleted work that a reused item would skip.
-            reuseItems: true
-            anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.rowGap
-            anchors.left: parent.left
-            anchors.leftMargin: root._listInset
-            // Split route (M30): the list keeps the left half of
-            // _contentWidth so the preview pane below can own the right
-            // half. Every other route is unchanged, full width.
-            width: root._listWidth
-            height: root._rowsAreaHeight
-            visible: !root._isGrid && !root._isAppView
-            // The level entrance (M51 D3): plays only when `_enterLevel`
-            // actually changes the level, never on a query re-rank.
-            opacity: root._levelEnterOpacity
-            transform: Translate { x: root._levelEnterX }
-            clip: true
-            // Unread, not merely hidden, on the grids' and an app view's
-            // routes: an unread model keeps its delegates alive, and
-            // _viewContentHeight above needs the idle view to measure 0.
-            model: (root._isGrid || root._isAppView) ? null : rowsModel
-            currentIndex: root._cursorIndex
-            // ListView tracks the cursor through its (always present, even
-            // with no `highlight` component) highlight item, and the
-            // default `highlightMoveDuration: -1` moves that item at
-            // `highlightMoveVelocity`, 400px/s. Key repeat outruns it, so
-            // the view crawls behind the cursor and the tail of a long list
-            // stays off-screen for seconds after the cursor has already
-            // reached it and wrapped back to the top. 0 makes the follow a
-            // hard jump, the only thing that keeps the cursor row visible
-            // at repeat speed. What the reader sees travelling is
-            // `rowCursor` below, which is not what the view scrolls to.
-            highlightMoveDuration: 0
-
-            // Rows never reset (M53 D6), so they enter, leave and change
-            // places instead. Disarmed for the refill the diff falls back
-            // to, where there is no "instead" to describe.
-            add: AddTransition { enabled: root._rowsAnimate }
-            remove: RemoveTransition { enabled: root._rowsAnimate }
-            displaced: MoveTransition { enabled: root._rowsAnimate }
-            move: MoveTransition { enabled: root._rowsAnimate }
-
-            WheelScroll { flickable: rowsView }
-
-            // The cursor (M53 D4): one fill that travels between rows on an
-            // arrow step, drawn here rather than per row so there is one of
-            // it to travel. A child of the ListView is a child of its
-            // contentItem, so it scrolls with the rows it sits under; `z`
-            // puts it under them, since the row's own ink draws over it.
+            // The wallpaper route's Dark | Light switcher (spec "Picker"): the
+            // `Segmented` primitive. Absent entirely (zero height, no reserved
+            // gutter) for a directory with no Dark/Light pair, and on every
+            // other route.
             //
-            // Offset by the current row's heading band: a row that opens a
-            // group is taller than its own body by that band, and a fill
-            // covering it would swallow the heading.
-            Rectangle {
-                id: rowCursor
-                readonly property var row: rowsView.currentItem
-                z: -1
-                visible: rowCursor.row !== null && rowsView.count > 0
-                width: rowsView.width
-                y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
-                height: rowCursor.row ? rowCursor.row._rowHeight : 0
-                radius: Core.Theme.radiusSm
-                color: Core.Theme.color.accent
+            // Both views below anchor to this rather than to the header, so the
+            // switcher pushes the grid down without either of them knowing
+            // whether it is there. It takes the same gap the breadcrumb takes
+            // above it: at `rowGap` a 32px trough sitting that close to a bare
+            // text line reads as one block with it.
+            Segmented {
+                id: variantRow
+                anchors.top: breadcrumbRow.bottom
+                anchors.topMargin: visible ? Core.Theme.space.lg : 0
+                anchors.left: parent.left
+                visible: root._isPickerRoute && root._pickerHasVariants
+                height: visible ? implicitHeight : 0
+                options: ["Dark", "Light"]
+                onChanged: i => root.setPickerVariant(i === 1 ? "light" : "dark")
+            }
 
-                Behavior on y {
-                    enabled: root._cursorTravels
+            // The variant belongs to the route, not to the control: Tab and
+            // `picker variant` over IPC move it too, and Segmented writes its own
+            // `index` on click, which a plain binding would not survive.
+            Binding {
+                target: variantRow
+                property: "index"
+                value: root._pickerVariant === "light" ? 1 : 0
+            }
+
+            ListView {
+                id: rowsView
+                // Delegates recycle rather than being destroyed and rebuilt on
+                // every flick. Safe here because every delegate in this file is
+                // required properties plus bindings off them, with no
+                // Component.onCompleted work that a reused item would skip.
+                reuseItems: true
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                anchors.leftMargin: root._listInset
+                // Split route (M30): the list keeps the left half of
+                // _contentWidth so the preview pane below can own the right
+                // half. Every other route is unchanged, full width.
+                width: root._listWidth
+                height: root._morphRowsHeight
+                visible: !root._isGrid && !root._isAppView
+                clip: true
+                // Unread, not merely hidden, on the grids' and an app view's
+                // routes: an unread model keeps its delegates alive, and
+                // _viewContentHeight above needs the idle view to measure 0.
+                model: (root._isGrid || root._isAppView) ? null : rowsModel
+                currentIndex: root._cursorIndex
+                // ListView tracks the cursor through its (always present, even
+                // with no `highlight` component) highlight item, and the
+                // default `highlightMoveDuration: -1` moves that item at
+                // `highlightMoveVelocity`, 400px/s. Key repeat outruns it, so
+                // the view crawls behind the cursor and the tail of a long list
+                // stays off-screen for seconds after the cursor has already
+                // reached it and wrapped back to the top. 0 makes the follow a
+                // hard jump, the only thing that keeps the cursor row visible
+                // at repeat speed. What the reader sees travelling is
+                // `rowCursor` below, which is not what the view scrolls to.
+                highlightMoveDuration: 0
+
+                // Rows never reset (M53 D6), so they enter, leave and change
+                // places instead. Disarmed for the refill the diff falls back
+                // to, where there is no "instead" to describe.
+                add: AddTransition { enabled: root._rowsAnimate }
+                remove: RemoveTransition { enabled: root._rowsAnimate }
+                displaced: MoveTransition { enabled: root._rowsAnimate }
+                move: MoveTransition { enabled: root._rowsAnimate }
+
+                WheelScroll { flickable: rowsView }
+
+                // The cursor (M53 D4): one fill that travels between rows on an
+                // arrow step, drawn here rather than per row so there is one of
+                // it to travel. A child of the ListView is a child of its
+                // contentItem, so it scrolls with the rows it sits under; `z`
+                // puts it under them, since the row's own ink draws over it.
+                //
+                // Offset by the current row's heading band: a row that opens a
+                // group is taller than its own body by that band, and a fill
+                // covering it would swallow the heading.
+                Rectangle {
+                    id: rowCursor
+                    readonly property var row: rowsView.currentItem
+                    z: -1
+                    visible: rowCursor.row !== null && rowsView.count > 0
+                    width: rowsView.width
+                    y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
+                    height: rowCursor.row ? rowCursor.row._rowHeight : 0
+                    radius: Core.Theme.radiusSm
+                    color: Core.Theme.color.accent
+
+                    Behavior on y {
+                        enabled: root._cursorTravels
+                        NumberAnimation {
+                            duration: Core.Theme.motion.fast
+                            easing.type: Core.Theme.motion.easing
+                        }
+                    }
+                }
+
+                delegate: MenuRow {
+                    required property string rowId
+                    // The row this delegate is drawing, by id rather than by
+                    // index: a row fading out through the `remove` transition
+                    // above has left the model but not the screen, and its
+                    // index now belongs to whatever slid up into it.
+                    readonly property var entry: root._rowsById[rowId] || root._rowsPrev[rowId] || null
+
+                    // A delegate is pooled after its exit fade as well as after
+                    // scrolling out of view, so its opacity is put back before
+                    // it can be handed to a row that is not entering (M53 D6:
+                    // an exit that leaves a recycled row invisible is worse
+                    // than no exit at all).
+                    ListView.onPooled: opacity = 1
+
+                    modelData: entry ? entry.row : root._blankRow
+                    current: root._cursorIndex === index
+                    checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
+                    confirming: root._confirmPendingId === node.id
+                    // A heading rides the row that opens its group, so a row
+                    // whose section matches the one above it carries none.
+                    section: entry ? entry.section : ""
+                    sectionFirst: entry ? entry.sectionFirst : false
+
+                    onActivate: root._activateFromPointer(index)
+                    onHoverMoved: (source, x, y) => {
+                        if (pointerGate.moved(source, x, y))
+                            root._setCursor(index);
+                    }
+                }
+            }
+
+            // shadcn's `CommandEmpty` (M48 D6). Drawn in the row area rather
+            // than as a row of the list: it answers nothing, and a cursor
+            // sitting on it would offer a verb the footer would then have to
+            // take back.
+            Text {
+                id: emptyState
+                anchors.top: rowsView.top
+                anchors.left: rowsView.left
+                anchors.right: rowsView.right
+                height: root._morphRowsHeight
+                // Against the list rather than after it (M53 D3): the rows
+                // this replaces are leaving through their own remove
+                // transition, so the line rises over them instead of landing
+                // on the frame they used to fill. Hidden at 0 so it never
+                // hit-tests over a list that has come back.
+                opacity: root._showEmpty ? 1 : 0
+                visible: emptyState.opacity > 0
+                Behavior on opacity {
                     NumberAnimation {
                         duration: Core.Theme.motion.fast
                         easing.type: Core.Theme.motion.easing
                     }
                 }
-            }
-
-            delegate: MenuRow {
-                required property string rowId
-                // The row this delegate is drawing, by id rather than by
-                // index: a row fading out through the `remove` transition
-                // above has left the model but not the screen, and its
-                // index now belongs to whatever slid up into it.
-                readonly property var entry: root._rowsById[rowId] || root._rowsPrev[rowId] || null
-
-                // A delegate is pooled after its exit fade as well as after
-                // scrolling out of view, so its opacity is put back before
-                // it can be handed to a row that is not entering (M53 D6:
-                // an exit that leaves a recycled row invisible is worse
-                // than no exit at all).
-                ListView.onPooled: opacity = 1
-
-                modelData: entry ? entry.row : root._blankRow
-                current: root._cursorIndex === index
-                checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
-                confirming: root._confirmPendingId === node.id
-                // A heading rides the row that opens its group, so a row
-                // whose section matches the one above it carries none.
-                section: entry ? entry.section : ""
-                sectionFirst: entry ? entry.sectionFirst : false
-
-                onActivate: root._activateFromPointer(index)
-                onHoverMoved: (source, x, y) => {
-                    if (pointerGate.moved(source, x, y))
-                        root._setCursor(index);
-                }
-            }
-        }
-
-        // shadcn's `CommandEmpty` (M48 D6). Drawn in the row area rather
-        // than as a row of the list: it answers nothing, and a cursor
-        // sitting on it would offer a verb the footer would then have to
-        // take back.
-        Text {
-            id: emptyState
-            anchors.top: rowsView.top
-            anchors.left: rowsView.left
-            anchors.right: rowsView.right
-            height: root._rowsAreaHeight
-            visible: root._showEmpty
-            text: "No results found."
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: Core.Theme.color.mutedForeground
-            font.family: Core.Theme.fontFamilySans
-            font.pixelSize: Core.Theme.fontSize.body
-        }
-
-        // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
-        // of image cells sharing hairline rules", spec §11), the picker's
-        // own surface, now one of the menu's two views over the same
-        // _displayRows/_cursorIndex state rather than a panel of its own.
-        // Shares rowsView's geometry exactly, so the action bar below can
-        // anchor to whichever of the two is live without knowing which.
-        GridView {
-            id: gridView
-            // Delegates recycle rather than being destroyed and rebuilt on
-            // every flick. Safe here because every delegate in this file is
-            // required properties plus bindings off them, with no
-            // Component.onCompleted work that a reused item would skip.
-            reuseItems: true
-            anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.rowGap
-            anchors.left: parent.left
-            width: root._contentWidth
-            height: root._rowsAreaHeight
-            visible: root._isPickerRoute
-            // Same level entrance as rowsView above.
-            opacity: root._levelEnterOpacity
-            transform: Translate { x: root._levelEnterX }
-            clip: true
-            model: root._isPickerRoute ? root._displayRows : []
-            cellWidth: root._contentWidth / root.pickerColumns
-            cellHeight: gridView.cellWidth
-            currentIndex: root._cursorIndex
-            // Same hard-jump follow as rowsView, for the same reason: held
-            // arrow keys outrun the default animated highlight move and the
-            // cursor cell ends up off-viewport.
-            highlightMoveDuration: 0
-
-            // A row here is a row of thumbnails, not a text line.
-            WheelScroll {
-                flickable: gridView
-                step: gridView.cellHeight
-            }
-
-            // The wrapper carries the GridView's own cell, so the `Cell`
-            // inside it can hold the gutter between thumbnails in its
-            // margins and every gap comes out the same width, the edges of
-            // the grid included.
-            delegate: Item {
-                id: imageSlot
-                required property int index
-                required property var modelData
-
-                width: gridView.cellWidth
-                height: gridView.cellHeight
-
-                Cell {
-                    id: imageCell
-                    anchors.fill: parent
-                    anchors.margins: Core.Theme.space.xs
-                    radius: Core.Theme.radiusMd
-                    // A grid cursor is the ring (spec "Launcher"): the
-                    // thumbnail covers the cell, so a fill would sit under
-                    // the picture and never be seen.
-                    cursor: imageSlot.index === root._cursorIndex
-
-                    // The thumbnail is inset far enough that its square corners
-                    // sit inside the cell's rounded ones, which is what lets an
-                    // image live in a `radiusMd` frame with no mask: at `sm` the
-                    // corner of the inset square is 5.7px from the arc's centre
-                    // against a radius of 8.
-                    //
-                    // Decode capped at the cell's own on-screen size (M16 Task
-                    // 12): without this, a 6000×4000 source decodes at full
-                    // resolution into a ~130px cell, ~96MB of resident RGBA
-                    // per thumbnail, times every file in the directory.
-                    //
-                    // The 2x factor matters on the fallback path: sourceSize with
-                    // both dimensions set decodes to FIT INSIDE that box (Qt's
-                    // KeepAspectRatio), not to cover it, so a non-square source
-                    // into this square cell would decode short on one axis and
-                    // PreserveAspectCrop would upscale it back out, visibly
-                    // blurrier than an uncapped decode. A box 2x the cell's side
-                    // keeps the fit-inside decode covering the cell for any
-                    // source up to 2:1 either way, comfortably past 16:9, while
-                    // still capping memory to a small multiple of the cell. A
-                    // cached thumbnail is already a square crop, so the same box
-                    // is simply generous for it.
-                    // Sized off the GridView's own cell rather than off
-                    // `imageCell`: a `Cell` measures its content to publish
-                    // an implicit size, so a child measured back off the
-                    // cell closes a loop Qt then reports and breaks (its
-                    // own anchors already decide its size, but the detector
-                    // sees the cycle first).
-                    Image {
-                        id: thumb
-                        anchors.centerIn: parent
-                        width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                        height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                        // ThumbnailService's prerendered square crop when
-                        // there is one, the wallpaper itself otherwise. The
-                        // fallback is not a degraded mode, it is exactly
-                        // what this cell did before the cache existed: a
-                        // cold cache, an install with no ffmpeg, and a
-                        // format ffmpeg cannot decode all land on it.
-                        readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path, "cover")
-                        source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
-                        fillMode: Image.PreserveAspectCrop
-                        // PreserveAspectCrop paints past its own bounds
-                        // without this, over the cells beside it.
-                        clip: true
-                        asynchronous: true
-                        cache: false
-                        sourceSize.width: thumb.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                        sourceSize.height: thumb.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                    }
-
-                    interactive: true
-                    // Same gate as the row list: filtering re-renders cells
-                    // under a parked pointer, and Qt delivers that as a
-                    // hover move indistinguishable from a real one.
-                    onPointerMoved: (x, y) => {
-                        if (pointerGate.moved(imageCell, x, y))
-                            root._setCursor(imageSlot.index);
-                    }
-                    onClicked: root._activateFromPointer(imageSlot.index)
-                }
-            }
-        }
-
-        // The emoji route's grid (M48 D5). A second GridView rather than a
-        // kind-branching delegate inside the one above: the two share their
-        // geometry and their cursor, and nothing else. One holds a decoded
-        // image with a capped source size and its own cropping rules, the
-        // other holds a glyph.
-        GridView {
-            id: emojiGrid
-            // Delegates recycle rather than being destroyed and rebuilt on
-            // every flick. Safe here because every delegate in this file is
-            // required properties plus bindings off them, with no
-            // Component.onCompleted work that a reused item would skip.
-            reuseItems: true
-            anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.rowGap
-            anchors.left: parent.left
-            width: root._contentWidth
-            height: root._rowsAreaHeight
-            visible: root._isEmojiGrid
-            // Same level entrance as rowsView above.
-            opacity: root._levelEnterOpacity
-            transform: Translate { x: root._levelEnterX }
-            clip: true
-            model: root._isEmojiGrid ? root._displayRows : []
-            cellWidth: root._contentWidth / root.emojiColumns
-            cellHeight: emojiGrid.cellWidth
-            currentIndex: root._cursorIndex
-            // Same hard-jump follow as the two views above, for the same
-            // reason: held arrow keys outrun the default animated highlight
-            // move and the cursor cell ends up off-viewport.
-            highlightMoveDuration: 0
-
-            WheelScroll {
-                flickable: emojiGrid
-                step: emojiGrid.cellHeight
-            }
-
-            // The wrapper carries the GridView's own cell so the `Cell`
-            // inside it can hold the gutter between glyphs in its margins,
-            // exactly as the wallpaper grid does.
-            delegate: Item {
-                id: emojiSlot
-                required property int index
-                required property var modelData
-
-                width: emojiGrid.cellWidth
-                height: emojiGrid.cellHeight
-
-                Cell {
-                    id: emojiCell
-                    anchors.fill: parent
-                    anchors.margins: Core.Theme.space.xs
-                    radius: Core.Theme.radiusSm
-                    // Ghost, so a grid of 40 glyphs is 40 glyphs rather than
-                    // 40 boxes; hover fills `accent` and the cursor is the
-                    // ring, the same two states every other cell draws.
-                    ghost: true
-                    cursor: emojiSlot.index === root._cursorIndex
-                    interactive: true
-                    // Same gate as the row list: filtering re-renders cells
-                    // under a parked pointer, and Qt delivers that as a
-                    // hover move indistinguishable from a real one.
-                    onPointerMoved: (x, y) => {
-                        if (pointerGate.moved(emojiCell, x, y))
-                            root._setCursor(emojiSlot.index);
-                    }
-                    onClicked: root._activateFromPointer(emojiSlot.index)
-
-                    // The glyph IS the row's icon (providers.js's emojiRows),
-                    // carried in the mono font that renders it. At `display`
-                    // rather than `heading`: a cell eight columns into
-                    // `popupWidthMenu` is wide enough that a heading-sized
-                    // glyph read as a scatter of dots rather than as a
-                    // picture to pick from (read off menu-emoji.png).
-                    Text {
-                        anchors.centerIn: parent
-                        text: emojiSlot.modelData.icon
-                        color: Core.Theme.color.foreground
-                        font.family: Core.Theme.fontFamilyMono
-                        font.pixelSize: Core.Theme.fontSize.display
-                    }
-                }
-            }
-        }
-
-        // The third view (M38, D1): a whole component in place of the row
-        // list, for any route Menu/appviews.js registers. Shares rowsView's
-        // geometry exactly, like gridView above, so the action bar anchors
-        // to whichever of the three is live without knowing which.
-        //
-        // `source` empties off the route rather than the loader merely
-        // hiding: an app view holds a live subscription to whatever service
-        // it renders, and a hidden-but-loaded one would keep that service
-        // polling for a launcher nobody is looking at.
-        //
-        // It empties on the window going away too, not just on leaving the
-        // route. close() deliberately leaves currentNodeId where it was (so
-        // a resummon lands back on the same level), which would otherwise
-        // hold the subscription open for as long as the shell runs. Keyed
-        // off the window's own `visible` rather than `isOpen` so the view
-        // survives the exit fade instead of blanking the card mid-animation.
-        Loader {
-            id: appView
-            anchors.top: variantRow.bottom
-            anchors.topMargin: Core.Theme.space.rowGap
-            anchors.left: parent.left
-            width: root._contentWidth
-            height: root._rowsAreaHeight
-            visible: root._isAppView
-            // Same level entrance as rowsView above.
-            opacity: root._levelEnterOpacity
-            transform: Translate { x: root._levelEnterX }
-            source: (root._isAppView && root.visible) ? Qt.resolvedUrl(root._appViewSource) : ""
-        }
-
-        // The seam that makes the registry reusable: a view that wants the
-        // search field declares `property string query` and gets the live
-        // text; one that declares none (MonitorView) leaves the field inert
-        // rather than pretending to filter something.
-        Binding {
-            target: appView.item
-            property: "query"
-            value: searchInput.text
-            when: appView.item !== null && appView.item.query !== undefined
-        }
-
-        // The split route's right half (M30, M43 D4): the cursor row's full
-        // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
-        // list. Positioned by anchoring off rowsView itself (whichever width
-        // it currently has) rather than an independent x/width pair, so the
-        // two views can never drift apart.
-        //
-        // This is the launcher spending its one card (DESIGN.md §1's ladder,
-        // rung 5, owner 2026-08-26): the surface's own frame, and inside it
-        // exactly one block that outranks the rest. The left half is flat
-        // `MenuRow`s and this half is the card, so the pane reads as the
-        // thing the list is pointing at. What the rule rules out is a second
-        // frame INSIDE this one, which is what an image row used to get.
-        Card {
-            id: previewPane
-            visible: root._isSplitRoute
-            anchors.top: rowsView.top
-            anchors.left: rowsView.right
-            anchors.leftMargin: Core.Theme.space.sm
-            anchors.right: parent.right
-            height: rowsView.height
-            radius: Core.Theme.radiusMd
-
-            Row {
-                id: previewHeader
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                spacing: Core.Theme.space.sm
-
-                SectionLabel {
-                    id: previewMeta
-                    visible: root._previewKind !== ""
-                    text: root._previewKind
-                }
-
-                Text {
-                    visible: root._previewTime !== ""
-                    text: root._previewTime
-                    color: Core.Theme.color.mutedForeground
-                    font.family: Core.Theme.fontFamilyMono
-                    font.pixelSize: Core.Theme.fontSize.caption
-                }
-            }
-
-            Text {
-                anchors.top: previewHeader.bottom
-                anchors.topMargin: Core.Theme.space.rowGap
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                visible: root._previewIsText
-                clip: true
-                text: root._cursorNode ? (root._cursorNode.fullText || "") : ""
-                // A clipboard capture reaches this pane raw, so the preview
-                // has to show the bytes that will be pasted rather than let
-                // AutoText parse copied markup as a rich-text document.
-                textFormat: Text.PlainText
-                wrapMode: Text.WrapAnywhere
-                color: Core.Theme.color.foreground
-                font.family: Core.Theme.fontFamilyMono
+                text: "No results found."
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                color: Core.Theme.color.mutedForeground
+                font.family: Core.Theme.fontFamilySans
                 font.pixelSize: Core.Theme.fontSize.body
             }
 
-            // True-color (menu thumbnails are never dithered) full preview of
-            // the cursor row's capture, decode capped at the slot's own size
-            // for the picker grid's reason. Bare: no well, no frame, no
-            // outline. The pane around it is already the one card this
-            // surface gets, and a border inside that is the nesting the rule
-            // forbids. It fits rather than fills, so the pane's own ground
-            // shows around it, which is what a letterboxed capture is
-            // supposed to sit on.
-            Image {
-                id: previewImage
-                anchors.top: previewHeader.bottom
+            // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
+            // of image cells sharing hairline rules", spec §11), the picker's
+            // own surface, now one of the menu's two views over the same
+            // _displayRows/_cursorIndex state rather than a panel of its own.
+            // Shares rowsView's geometry exactly, so the action bar below can
+            // anchor to whichever of the two is live without knowing which.
+            GridView {
+                id: gridView
+                // Delegates recycle rather than being destroyed and rebuilt on
+                // every flick. Safe here because every delegate in this file is
+                // required properties plus bindings off them, with no
+                // Component.onCompleted work that a reused item would skip.
+                reuseItems: true
+                anchors.top: variantRow.bottom
                 anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                visible: root._previewIsImage
-                source: root._previewIsImage ? ("file://" + root._cursorNode.thumbSource) : ""
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-                cache: false
-                sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
-                sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
-            }
-        }
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isPickerRoute
+                clip: true
+                model: root._isPickerRoute ? root._displayRows : []
+                cellWidth: root._contentWidth / root.pickerColumns
+                cellHeight: gridView.cellWidth
+                currentIndex: root._cursorIndex
+                // Same hard-jump follow as rowsView, for the same reason: held
+                // arrow keys outrun the default animated highlight move and the
+                // cursor cell ends up off-viewport.
+                highlightMoveDuration: 0
 
-        // What the cursor cell is (M48 D5). A grid cell is a picture with no
-        // room for a name, so the name goes here, under the grid and above
-        // the footer, where it changes as the cursor moves rather than
-        // waiting for a pointer to hover something. Absent entirely (zero
-        // height, no reserved gutter) on every other route.
-        SectionLabel {
-            id: emojiCaption
-            anchors.top: rowsView.bottom
-            anchors.topMargin: visible ? Core.Theme.space.rowGap : 0
-            anchors.left: parent.left
-            anchors.leftMargin: root._headerInset
-            anchors.right: parent.right
-            anchors.rightMargin: root._headerInset
-            visible: root._isEmojiGrid && root._cursorNode !== null
-            height: visible ? implicitHeight : 0
-            elide: Text.ElideRight
-            text: root._cursorNode ? root._cursorNode.label : ""
-        }
-
-        // The footer hint line (spec "Launcher"): what Enter does to the
-        // row under the cursor, plus the keys that always apply.
-        // Menu/actions.js owns the wording.
-        MenuActionBar {
-            id: actionBar
-            anchors.top: emojiCaption.bottom
-            anchors.topMargin: Core.Theme.space.rowGap
-            // Same inset the rows and the input row take, so the legend
-            // starts under the column of labels rather than under the card's
-            // edge (DESIGN.md §1 Padding).
-            anchors.left: parent.left
-            anchors.leftMargin: root._headerInset
-            anchors.right: parent.right
-            anchors.rightMargin: root._headerInset
-            primary: root._actionBar.primary
-            hints: root._actionBar.hints
-
-            // Clicking the primary verb is the pointer acting, exactly like
-            // clicking the row itself: same path, same gate re-arm. On an
-            // app view it presses that view's own primary instead, at
-            // whatever its cursor already is (index -1).
-            onPrimaryActivated: {
-                if (root._isAppView) {
-                    if (appView.item && appView.item.viewActivate)
-                        appView.item.viewActivate(-1);
-                    return;
+                // A row here is a row of thumbnails, not a text line.
+                WheelScroll {
+                    flickable: gridView
+                    step: gridView.cellHeight
                 }
-                root._activateFromPointer(root._cursorIndex);
-            }
-        }
 
-        // The app view's overflow hint, at the footer's right end, where the
-        // hint line cannot reach it. In the footer rather than over the view
-        // because a hint sitting on the content it announces hides the rows
-        // the reader is reaching for.
-        Text {
-            anchors.right: actionBar.right
-            anchors.verticalCenter: actionBar.verticalCenter
-            visible: root._appViewScrollHint !== ""
-            text: root._appViewScrollHint
-            color: Core.Theme.color.mutedForeground
-            font.family: Core.Theme.fontFamilySans
-            font.pixelSize: Core.Theme.fontSize.caption
-            font.capitalization: Font.AllLowercase
+                // The wrapper carries the GridView's own cell, so the `Cell`
+                // inside it can hold the gutter between thumbnails in its
+                // margins and every gap comes out the same width, the edges of
+                // the grid included.
+                delegate: Item {
+                    id: imageSlot
+                    required property int index
+                    required property var modelData
+
+                    width: gridView.cellWidth
+                    height: gridView.cellHeight
+
+                    Cell {
+                        id: imageCell
+                        anchors.fill: parent
+                        anchors.margins: Core.Theme.space.xs
+                        radius: Core.Theme.radiusMd
+                        // A grid cursor is the ring (spec "Launcher"): the
+                        // thumbnail covers the cell, so a fill would sit under
+                        // the picture and never be seen.
+                        cursor: imageSlot.index === root._cursorIndex
+
+                        // The thumbnail is inset far enough that its square corners
+                        // sit inside the cell's rounded ones, which is what lets an
+                        // image live in a `radiusMd` frame with no mask: at `sm` the
+                        // corner of the inset square is 5.7px from the arc's centre
+                        // against a radius of 8.
+                        //
+                        // Decode capped at the cell's own on-screen size (M16 Task
+                        // 12): without this, a 6000×4000 source decodes at full
+                        // resolution into a ~130px cell, ~96MB of resident RGBA
+                        // per thumbnail, times every file in the directory.
+                        //
+                        // The 2x factor matters on the fallback path: sourceSize with
+                        // both dimensions set decodes to FIT INSIDE that box (Qt's
+                        // KeepAspectRatio), not to cover it, so a non-square source
+                        // into this square cell would decode short on one axis and
+                        // PreserveAspectCrop would upscale it back out, visibly
+                        // blurrier than an uncapped decode. A box 2x the cell's side
+                        // keeps the fit-inside decode covering the cell for any
+                        // source up to 2:1 either way, comfortably past 16:9, while
+                        // still capping memory to a small multiple of the cell. A
+                        // cached thumbnail is already a square crop, so the same box
+                        // is simply generous for it.
+                        // Sized off the GridView's own cell rather than off
+                        // `imageCell`: a `Cell` measures its content to publish
+                        // an implicit size, so a child measured back off the
+                        // cell closes a loop Qt then reports and breaks (its
+                        // own anchors already decide its size, but the detector
+                        // sees the cycle first).
+                        Image {
+                            id: thumb
+                            anchors.centerIn: parent
+                            width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                            height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                            // ThumbnailService's prerendered square crop when
+                            // there is one, the wallpaper itself otherwise. The
+                            // fallback is not a degraded mode, it is exactly
+                            // what this cell did before the cache existed: a
+                            // cold cache, an install with no ffmpeg, and a
+                            // format ffmpeg cannot decode all land on it.
+                            readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path, "cover")
+                            source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
+                            fillMode: Image.PreserveAspectCrop
+                            // PreserveAspectCrop paints past its own bounds
+                            // without this, over the cells beside it.
+                            clip: true
+                            asynchronous: true
+                            cache: false
+                            sourceSize.width: thumb.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                            sourceSize.height: thumb.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                        }
+
+                        interactive: true
+                        // Same gate as the row list: filtering re-renders cells
+                        // under a parked pointer, and Qt delivers that as a
+                        // hover move indistinguishable from a real one.
+                        onPointerMoved: (x, y) => {
+                            if (pointerGate.moved(imageCell, x, y))
+                                root._setCursor(imageSlot.index);
+                        }
+                        onClicked: root._activateFromPointer(imageSlot.index)
+                    }
+                }
+            }
+
+            // The emoji route's grid (M48 D5). A second GridView rather than a
+            // kind-branching delegate inside the one above: the two share their
+            // geometry and their cursor, and nothing else. One holds a decoded
+            // image with a capped source size and its own cropping rules, the
+            // other holds a glyph.
+            GridView {
+                id: emojiGrid
+                // Delegates recycle rather than being destroyed and rebuilt on
+                // every flick. Safe here because every delegate in this file is
+                // required properties plus bindings off them, with no
+                // Component.onCompleted work that a reused item would skip.
+                reuseItems: true
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isEmojiGrid
+                clip: true
+                model: root._isEmojiGrid ? root._displayRows : []
+                cellWidth: root._contentWidth / root.emojiColumns
+                cellHeight: emojiGrid.cellWidth
+                currentIndex: root._cursorIndex
+                // Same hard-jump follow as the two views above, for the same
+                // reason: held arrow keys outrun the default animated highlight
+                // move and the cursor cell ends up off-viewport.
+                highlightMoveDuration: 0
+
+                WheelScroll {
+                    flickable: emojiGrid
+                    step: emojiGrid.cellHeight
+                }
+
+                // The wrapper carries the GridView's own cell so the `Cell`
+                // inside it can hold the gutter between glyphs in its margins,
+                // exactly as the wallpaper grid does.
+                delegate: Item {
+                    id: emojiSlot
+                    required property int index
+                    required property var modelData
+
+                    width: emojiGrid.cellWidth
+                    height: emojiGrid.cellHeight
+
+                    Cell {
+                        id: emojiCell
+                        anchors.fill: parent
+                        anchors.margins: Core.Theme.space.xs
+                        radius: Core.Theme.radiusSm
+                        // Ghost, so a grid of 40 glyphs is 40 glyphs rather than
+                        // 40 boxes; hover fills `accent` and the cursor is the
+                        // ring, the same two states every other cell draws.
+                        ghost: true
+                        cursor: emojiSlot.index === root._cursorIndex
+                        interactive: true
+                        // Same gate as the row list: filtering re-renders cells
+                        // under a parked pointer, and Qt delivers that as a
+                        // hover move indistinguishable from a real one.
+                        onPointerMoved: (x, y) => {
+                            if (pointerGate.moved(emojiCell, x, y))
+                                root._setCursor(emojiSlot.index);
+                        }
+                        onClicked: root._activateFromPointer(emojiSlot.index)
+
+                        // The glyph IS the row's icon (providers.js's emojiRows),
+                        // carried in the mono font that renders it. At `display`
+                        // rather than `heading`: a cell eight columns into
+                        // `popupWidthMenu` is wide enough that a heading-sized
+                        // glyph read as a scatter of dots rather than as a
+                        // picture to pick from (read off menu-emoji.png).
+                        Text {
+                            anchors.centerIn: parent
+                            text: emojiSlot.modelData.icon
+                            color: Core.Theme.color.foreground
+                            font.family: Core.Theme.fontFamilyMono
+                            font.pixelSize: Core.Theme.fontSize.display
+                        }
+                    }
+                }
+            }
+
+            // The third view (M38, D1): a whole component in place of the row
+            // list, for any route Menu/appviews.js registers. Shares rowsView's
+            // geometry exactly, like gridView above, so the action bar anchors
+            // to whichever of the three is live without knowing which.
+            //
+            // `source` empties off the route rather than the loader merely
+            // hiding: an app view holds a live subscription to whatever service
+            // it renders, and a hidden-but-loaded one would keep that service
+            // polling for a launcher nobody is looking at.
+            //
+            // It empties on the window going away too, not just on leaving the
+            // route. close() deliberately leaves currentNodeId where it was (so
+            // a resummon lands back on the same level), which would otherwise
+            // hold the subscription open for as long as the shell runs. Keyed
+            // off the window's own `visible` rather than `isOpen` so the view
+            // survives the exit fade instead of blanking the card mid-animation.
+            Loader {
+                id: appView
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isAppView
+                source: (root._isAppView && root.visible) ? Qt.resolvedUrl(root._appViewSource) : ""
+            }
+
+            // The seam that makes the registry reusable: a view that wants the
+            // search field declares `property string query` and gets the live
+            // text; one that declares none (MonitorView) leaves the field inert
+            // rather than pretending to filter something.
+            Binding {
+                target: appView.item
+                property: "query"
+                value: searchInput.text
+                when: appView.item !== null && appView.item.query !== undefined
+            }
+
+            // The split route's right half (M30, M43 D4): the cursor row's full
+            // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
+            // list. Positioned by anchoring off rowsView itself (whichever width
+            // it currently has) rather than an independent x/width pair, so the
+            // two views can never drift apart.
+            //
+            // This is the launcher spending its one card (DESIGN.md §1's ladder,
+            // rung 5, owner 2026-08-26): the surface's own frame, and inside it
+            // exactly one block that outranks the rest. The left half is flat
+            // `MenuRow`s and this half is the card, so the pane reads as the
+            // thing the list is pointing at. What the rule rules out is a second
+            // frame INSIDE this one, which is what an image row used to get.
+            Card {
+                id: previewPane
+                visible: root._isSplitRoute
+                anchors.top: rowsView.top
+                anchors.left: rowsView.right
+                anchors.leftMargin: Core.Theme.space.sm
+                anchors.right: parent.right
+                height: rowsView.height
+                radius: Core.Theme.radiusMd
+
+                Row {
+                    id: previewHeader
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    spacing: Core.Theme.space.sm
+
+                    SectionLabel {
+                        id: previewMeta
+                        visible: root._previewKind !== ""
+                        text: root._previewKind
+                    }
+
+                    Text {
+                        visible: root._previewTime !== ""
+                        text: root._previewTime
+                        color: Core.Theme.color.mutedForeground
+                        font.family: Core.Theme.fontFamilyMono
+                        font.pixelSize: Core.Theme.fontSize.caption
+                    }
+                }
+
+                Text {
+                    id: previewText
+                    anchors.top: previewHeader.bottom
+                    anchors.topMargin: Core.Theme.space.rowGap
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    // The two slots share one frame, so the cursor stepping
+                    // from a text capture to an image one is a content swap
+                    // and crossfades (M53 D3).
+                    opacity: root._previewIsText ? 1 : 0
+                    visible: previewText.opacity > 0
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: Core.Theme.motion.fast
+                            easing.type: Core.Theme.motion.easing
+                        }
+                    }
+                    clip: true
+                    text: root._previewText
+                    // A clipboard capture reaches this pane raw, so the preview
+                    // has to show the bytes that will be pasted rather than let
+                    // AutoText parse copied markup as a rich-text document.
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WrapAnywhere
+                    color: Core.Theme.color.foreground
+                    font.family: Core.Theme.fontFamilyMono
+                    font.pixelSize: Core.Theme.fontSize.body
+                }
+
+                // True-color (menu thumbnails are never dithered) full preview of
+                // the cursor row's capture, decode capped at the slot's own size
+                // for the picker grid's reason. Bare: no well, no frame, no
+                // outline. The pane around it is already the one card this
+                // surface gets, and a border inside that is the nesting the rule
+                // forbids. It fits rather than fills, so the pane's own ground
+                // shows around it, which is what a letterboxed capture is
+                // supposed to sit on.
+                Image {
+                    id: previewImage
+                    anchors.top: previewHeader.bottom
+                    anchors.topMargin: Core.Theme.space.rowGap
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    // The other half of the swap above.
+                    opacity: root._previewIsImage ? 1 : 0
+                    visible: previewImage.opacity > 0
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: Core.Theme.motion.fast
+                            easing.type: Core.Theme.motion.easing
+                        }
+                    }
+                    source: root._previewImageSource
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                    sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
+                }
+            }
+
+            // What the cursor cell is (M48 D5). A grid cell is a picture with no
+            // room for a name, so the name goes here, under the grid and above
+            // the footer, where it changes as the cursor moves rather than
+            // waiting for a pointer to hover something. Absent entirely (zero
+            // height, no reserved gutter) on every other route.
+            SectionLabel {
+                id: emojiCaption
+                anchors.top: rowsView.bottom
+                anchors.topMargin: visible ? Core.Theme.space.rowGap : 0
+                anchors.left: parent.left
+                anchors.leftMargin: root._headerInset
+                anchors.right: parent.right
+                anchors.rightMargin: root._headerInset
+                visible: root._isEmojiGrid && root._cursorNode !== null
+                height: visible ? implicitHeight : 0
+                elide: Text.ElideRight
+                text: root._cursorNode ? root._cursorNode.label : ""
+            }
+
+            // The footer hint line (spec "Launcher"): what Enter does to the
+            // row under the cursor, plus the keys that always apply.
+            // Menu/actions.js owns the wording.
+            MenuActionBar {
+                id: actionBar
+                anchors.top: emojiCaption.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                // Same inset the rows and the input row take, so the legend
+                // starts under the column of labels rather than under the card's
+                // edge (DESIGN.md §1 Padding).
+                anchors.left: parent.left
+                anchors.leftMargin: root._headerInset
+                anchors.right: parent.right
+                anchors.rightMargin: root._headerInset
+                primary: root._actionBar.primary
+                hints: root._actionBar.hints
+
+                // Clicking the primary verb is the pointer acting, exactly like
+                // clicking the row itself: same path, same gate re-arm. On an
+                // app view it presses that view's own primary instead, at
+                // whatever its cursor already is (index -1).
+                onPrimaryActivated: {
+                    if (root._isAppView) {
+                        if (appView.item && appView.item.viewActivate)
+                            appView.item.viewActivate(-1);
+                        return;
+                    }
+                    root._activateFromPointer(root._cursorIndex);
+                }
+            }
+
+            // The app view's overflow hint, at the footer's right end, where the
+            // hint line cannot reach it. In the footer rather than over the view
+            // because a hint sitting on the content it announces hides the rows
+            // the reader is reaching for.
+            Text {
+                anchors.right: actionBar.right
+                anchors.verticalCenter: actionBar.verticalCenter
+                visible: root._appViewScrollHint !== ""
+                text: root._appViewScrollHint
+                color: Core.Theme.color.mutedForeground
+                font.family: Core.Theme.fontFamilySans
+                font.pixelSize: Core.Theme.fontSize.caption
+                font.capitalization: Font.AllLowercase
+            }
         }
     }
 

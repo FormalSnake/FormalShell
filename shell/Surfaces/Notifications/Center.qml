@@ -577,25 +577,51 @@ PanelWindow {
                     // name floats between two groups instead of heading one.
                     // Each section is one item so its label cannot outlive
                     // its rows.
+                    //
+                    // The gap between the two sections is the seen section's
+                    // own top padding rather than this positioner's spacing
+                    // (M53 Task 6): a section collapsing has to take the gap
+                    // above it with it, and a positioner drops the spacing
+                    // around an item in the frame that item stops being
+                    // visible.
                     Column {
                         id: column
                         width: parent.width
-                        spacing: Theme.space.sectionGap
+                        spacing: 0
 
                         SectionLabel {
-                            // Held back while a row is still collapsing out of
-                            // either section: it would otherwise sit beside a
-                            // fading last row instead of after it.
+                            // Held back while either section is still on
+                            // screen at all: it would otherwise sit beside a
+                            // fading last row, or over a label still
+                            // collapsing, instead of after both.
                             visible: root._rows.length === 0
                                 && !root._pendingSlots.some(s => s && s.departing)
                                 && !root._seenSlots.some(s => s && s.departing)
+                                && pendingSection._presence <= 0 && seenSection._presence <= 0
                             text: "NO NOTIFICATIONS"
                         }
 
                         Column {
+                            id: pendingSection
+                            // 1 while the section has anything to show, 0 once
+                            // its last row has finished collapsing out of it.
+                            // Height and opacity both ride it, so the label
+                            // leaves as part of the same movement its rows
+                            // leave in rather than popping out from over the
+                            // gap they left (M53 D2). Gated exactly like a
+                            // row's own scalar below: the centre's entrance
+                            // covers the first population.
+                            property real _presence: (root._pendingRows.length > 0
+                                || root._pendingSlots.some(s => s && s.departing)) ? 1 : 0
+                            Behavior on _presence {
+                                enabled: presence.settled && root.isOpen
+                                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+                            }
+
                             width: parent.width
-                            visible: root._pendingRows.length > 0
-                                || root._pendingSlots.some(s => s && s.departing)
+                            height: pendingSection._presence * pendingSection.implicitHeight
+                            opacity: pendingSection._presence
+                            visible: pendingSection._presence > 0
                             spacing: Theme.space.rowGap
 
                             SectionLabel {
@@ -655,9 +681,24 @@ PanelWindow {
                         }
 
                         Column {
+                            id: seenSection
+                            // Same scalar as the pending section above.
+                            property real _presence: (root._seenRows.length > 0
+                                || root._seenSlots.some(s => s && s.departing)) ? 1 : 0
+                            Behavior on _presence {
+                                enabled: presence.settled && root.isOpen
+                                NumberAnimation { duration: Theme.motion.emphasized; easing.type: Theme.motion.easingInOut }
+                            }
+
                             width: parent.width
-                            visible: root._seenRows.length > 0
-                                || root._seenSlots.some(s => s && s.departing)
+                            // The gap between the two sections belongs to
+                            // whichever of them is going: it shrinks with the
+                            // pending section above while that collapses, and
+                            // rides this section's own scale after.
+                            topPadding: Theme.space.sectionGap * pendingSection._presence
+                            height: seenSection._presence * seenSection.implicitHeight
+                            opacity: seenSection._presence
+                            visible: seenSection._presence > 0
                             spacing: Theme.space.rowGap
 
                             SectionLabel {
