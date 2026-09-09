@@ -379,7 +379,9 @@ PanelWindow {
     //   summon wallpaper`): scans picker.directory from settings.json;
     //   choosing calls Core.State.setWallpaper(), the exact call
     //   WallpaperIpc's set() makes, so ThemeEngine's retheme fires through
-    //   one trigger path and is never duplicated here.
+    //   one trigger path and is never duplicated here. A pick out of a
+    //   Dark/Light set also commits that set as the mode
+    //   (Providers.wallpaperPickMode), in the same write.
     // - "select" (openImageSelect(), PickerIpc's select(), spec §11's
     //   "doubles as a generic image-selector"): scans an arbitrary
     //   directory and writes {token, value: path} to picker-selection.txt
@@ -522,7 +524,7 @@ PanelWindow {
             root._writeSelectionFile(root._pickerSelectionPath, JSON.stringify({ token: root._pickerToken, value: path }));
             root._pickerToken = "";
         } else {
-            Core.State.setWallpaper(path);
+            Core.State.setWallpaper(path, Providers.wallpaperPickMode(root._pickerVariants, root._pickerVariant));
         }
         root.close();
         return true;

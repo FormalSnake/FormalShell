@@ -2649,7 +2649,9 @@ thumbnails don't outlive it. An empty or unset directory is an empty grid.
 `Light` subdirectories (either name, any case). If either exists, the grid
 shows one variant at a time with a two-way `Dark` / `Light` switch between
 the search field and the grid, `Tab` swaps it, and the route opens on
-whichever matches the current mode. Files sitting directly in the directory
+whichever matches the current mode. Choosing an image out of a set also
+switches the theme to that set's mode, so a pick from `Dark` while the
+theme is light goes dark with it. Files sitting directly in the directory
 are not listed in that case. A directory with neither subdirectory is
 listed flat and shows no switch, so nothing changes for a setup that
 doesn't use them.

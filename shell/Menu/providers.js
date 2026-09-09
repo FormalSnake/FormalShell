@@ -810,6 +810,18 @@ function wallpaperListing(variants, variant) {
     return variant === "light" ? variants.light : variants.dark;
 }
 
+// The mode a pick commits to: the set it came from when the listing is
+// split, "" for a flat listing, where the pick says nothing about mode and
+// the theme keeps whatever it was in. A wallpaper filed under Dark is a
+// dark-mode wallpaper by the owner's own sorting, so choosing it while the
+// theme is light must flip the theme along with it, otherwise the Dark |
+// Light switch reads as a browsing filter that never does anything.
+function wallpaperPickMode(variants, variant) {
+    if (!variants || !variants.hasVariants)
+        return "";
+    return variant === "light" ? "light" : "dark";
+}
+
 function imageRows(paths, query) {
     var q = String(query || "").trim().toLowerCase();
     return (paths || []).filter(function (p) {
