@@ -138,20 +138,40 @@ QtObject {
     // and tst_switch.qml reassign `color` above.
     property bool motionEnabled: true
 
+    // The real singleton's `motion` object, key for key (M54 D5): the two
+    // families, the curves per kind, and the M53 names Task 6 deletes.
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
+        var c = Tokens.MOTION_CURVES;
         return {
+            spatialFast: m.spatialFast,
+            spatial: m.spatial,
+            spatialSlow: m.spatialSlow,
+            effectsFast: m.effectsFast,
+            effects: m.effects,
+            effectsSlow: m.effectsSlow,
+            emphasized: m.emphasized,
+            reveal: m.reveal,
+            curves: {
+                spatialFast: c.spatialFast,
+                spatial: c.spatial,
+                spatialSlow: c.spatialSlow,
+                effectsFast: c.effectsFast,
+                effects: c.effects,
+                effectsSlow: c.effectsSlow,
+                emphasized: c.emphasized,
+                emphasizedDecel: c.emphasizedDecel,
+                reveal: c.effectsSlow
+            },
             fast: m.fast,
             standard: m.standard,
             surface: m.surface,
             surfaceExit: m.surfaceExit,
-            emphasized: m.emphasized,
             emphasizedEasing: Easing.InOutQuart,
             slide: m.slide,
             zoom: m.zoom,
             easing: Easing.OutQuint,
             easingInOut: Easing.InOutQuart,
-            reveal: m.reveal,
             revealEasing: Easing.InOutQuad,
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,

@@ -195,23 +195,31 @@ function stateAlpha(mode) {
 
 // --- §4 motion tokens ---------------------------------------------------
 
-// The owner's brief verbatim: "fast and subtle, it should just look
-// better". `fast` paces hover fills and control state, `standard` paces
-// in-place moves, both inside DESIGN.md §4's 90-140ms band. `surface`/
-// `surfaceExit` pace a surface's own enter and exit (M51 D2: asymmetric,
-// exit shorter than enter). `slide` is the travel distance that goes with
-// them (§4's 4-8px, M51 widened 4 to 8: the owner already ruled 4px read
-// as not animating at all when the toasts were amended) and `zoom` is the
-// scale a surface enters from and exits to (M51 D2, shadcn's own ~0.97).
-// `reveal` paces the two full-screen fades: the wallpaper crossfade (§4's
-// third named carve-out, beside the pulse and the screensaver) and the
-// screensaver's own enter/exit (§4 rule 6, owner's call 2026-08-12),
-// deliberately outside the 90-140ms band since a full-screen swap reads
-// better slower than a control hover. `enabled: false` (the motion.enabled
-// settings key) short-circuits every duration above to 0 and `slide` to 0
-// too (M51 D7): a zero-duration animation with no travel still lands on
-// the same end state, so disabling motion never moves a single pixel of
-// chrome. `zoom` goes to 1 instead, its own neutral (no scale change).
+// Two families and the property picks the family (M54 D1/D2): `spatial*`
+// paces anything with a position or a size (x, y, width, height, margins,
+// scale, radius, rotation, an emerge, a morph, a cursor), `effects*` paces
+// anything with none (opacity, colour, a progress that only drives alpha).
+// The spatial curves carry a y control point above 1, so what travels
+// overshoots its rest by a few pixels and settles back; the effects curves
+// never do, since an opacity past 1 is not a look, it is a clamp. Material
+// 3 Expressive's own numbers, the same set caelestia runs on, read at
+// ce84c7b: mechanics and values, no ported code.
+//
+// `emphasized` is the workspace pill alone (two edges on one clock at
+// different durations is what makes it stretch across the gap) and
+// `emphasizedDecel` a toast's arrival from off screen; both are curves M3
+// defines outside the two families. `emphasizedDecel` has no duration of
+// its own, it runs on `spatial`.
+//
+// `reveal` paces the full-screen fades: the wallpaper and palette
+// crossfades, the lock's blank and wake and the screensaver's own
+// enter/exit (§4 rule 6, owner's call 2026-08-12), on `effectsSlow`'s
+// curve since a full-screen swap is opacity end to end.
+//
+// `enabled: false` (the motion.enabled settings key) zeroes every duration
+// and leaves the curves alone: a zero-duration animation lands on the same
+// end state whatever curve it carries, so disabling motion never moves a
+// pixel of chrome, and `Deform` holds identity (M54 D5).
 //
 // `marqueePxPerSec`/`marqueeHoldMs` pace the now-playing bar cell's
 // overflow scroll (owner-requested, M16 Task 11), a constant scroll rate,
@@ -219,23 +227,70 @@ function stateAlpha(mode) {
 // durations above; the caller (MarqueeText.qml's `_marquee`) gates the
 // whole animation on `Theme.motionEnabled` directly and falls back to the
 // elide instead of scrolling at 0px/s.
-// `emphasized` (250) is the one duration longer than the 90-140ms control
-// band that still paces chrome rather than a full screen: the bar's
-// workspace indicator, a surface's size morph and the toasts, each needing
-// enough travel or resize to read as one movement rather than a jump.
-var MOTION_BASE = { fast: 100, standard: 130, surface: 180, surfaceExit: 120, emphasized: 250, slide: 8, zoom: 0.97, reveal: 400, marqueePxPerSec: 30, marqueeHoldMs: 2000 };
+//
+// `fast`/`standard`/`surface`/`surfaceExit`/`slide`/`zoom` are the M53 set,
+// still here because the surfaces still read them; M54 Task 6 deletes them
+// once the last consumer is on the primitive (M54 D3, no compat shim).
+var MOTION_BASE = {
+    spatialFast: 350, spatial: 500, spatialSlow: 650,
+    effectsFast: 150, effects: 200, effectsSlow: 300,
+    emphasized: 400, reveal: 400,
+    fast: 100, standard: 130, surface: 180, surfaceExit: 120, slide: 8, zoom: 0.97,
+    marqueePxPerSec: 30, marqueeHoldMs: 2000
+};
 
 function motionTokens(enabled) {
     return {
+        spatialFast: enabled ? MOTION_BASE.spatialFast : 0,
+        spatial: enabled ? MOTION_BASE.spatial : 0,
+        spatialSlow: enabled ? MOTION_BASE.spatialSlow : 0,
+        effectsFast: enabled ? MOTION_BASE.effectsFast : 0,
+        effects: enabled ? MOTION_BASE.effects : 0,
+        effectsSlow: enabled ? MOTION_BASE.effectsSlow : 0,
+        emphasized: enabled ? MOTION_BASE.emphasized : 0,
+        reveal: enabled ? MOTION_BASE.reveal : 0,
         fast: enabled ? MOTION_BASE.fast : 0,
         standard: enabled ? MOTION_BASE.standard : 0,
         surface: enabled ? MOTION_BASE.surface : 0,
         surfaceExit: enabled ? MOTION_BASE.surfaceExit : 0,
-        emphasized: enabled ? MOTION_BASE.emphasized : 0,
         slide: enabled ? MOTION_BASE.slide : 0,
         zoom: enabled ? MOTION_BASE.zoom : 1,
-        reveal: enabled ? MOTION_BASE.reveal : 0,
         marqueePxPerSec: MOTION_BASE.marqueePxPerSec,
         marqueeHoldMs: MOTION_BASE.marqueeHoldMs
     };
 }
+
+// One cubic bezier per kind as Qt wants it for `easing.bezierCurve`: the
+// two control points followed by the end point, which is always (1, 1).
+// `emphasized` is two segments (12 numbers), M3's own shape: a long flat
+// lead-in to (1/6, 0.4) and a fast decel out of it.
+var MOTION_CURVES = {
+    spatialFast: [0.42, 1.67, 0.21, 0.9, 1, 1],
+    spatial: [0.38, 1.21, 0.22, 1, 1, 1],
+    spatialSlow: [0.39, 1.29, 0.35, 0.98, 1, 1],
+    effectsFast: [0.31, 0.94, 0.34, 1, 1, 1],
+    effects: [0.34, 0.8, 0.34, 1, 1, 1],
+    effectsSlow: [0.34, 0.88, 0.34, 1, 1, 1],
+    emphasized: [0.05, 0, 2 / 15, 0.06, 1 / 6, 0.4, 5 / 24, 0.82, 0.25, 1, 1, 1],
+    emphasizedDecel: [0.05, 0.7, 0.1, 1, 1, 1]
+};
+
+// `reveal` rides `effectsSlow`'s curve on its own longer clock. An unknown
+// kind falls back to the default spatial curve rather than throwing: a
+// binding that lost its curve would land the animation on Qt's linear
+// default, which reads as a machine moving something.
+function motionCurve(kind) {
+    if (kind === "reveal")
+        return MOTION_CURVES.effectsSlow;
+    return MOTION_CURVES[kind] || MOTION_CURVES.spatial;
+}
+
+// The velocity deform (M54 D7), caelestia's constants verbatim
+// (blobrect.cpp at ce84c7b). `maxStretch` caps the squash at 35% however
+// fast a card travels, `deadBand` is the px/s under which a sample counts
+// as standing still, `stiffness`/`damping` are the spring the three matrix
+// components ride (underdamped: it overshoots and settles), and `epsilon`
+// is the deviation under which the matrix snaps to identity so a card at
+// rest costs nothing. `amount` is per consumer, not a constant: 0.1 for
+// the launcher, 0.15 for a popout, 0.25 for the OSD.
+var DEFORM = { maxStretch: 0.35, deadBand: 5, stiffness: 200, damping: 16, epsilon: 0.002 };

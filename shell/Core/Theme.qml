@@ -33,6 +33,15 @@ Singleton {
     // absent theme.json flips this as surely as a parsed one.
     property bool paletteReady: false
 
+    // The palette crossfade, spelled once (M54 Task 1): 26 Behaviors below
+    // take it, and an inline component keeps each of them one line. It
+    // carries the curve but not the clock, since an inline component has no
+    // access to this file's ids and `motion.reveal` is behind one.
+    component RevealAnim: ColorAnimation {
+        easing.type: Easing.BezierSpline
+        easing.bezierCurve: Tokens.MOTION_CURVES.effectsSlow
+    }
+
     // theme.json's shadcn color roles (M51 D6): every key crossfades to a
     // new palette over `motion.reveal` on a mode toggle, a matugen
     // recolour, a preset swap or the Flexoki pin, in step with the
@@ -78,32 +87,32 @@ Singleton {
         property color chart4: root._bootFallback.chart4
         property color chart5: root._bootFallback.chart5
 
-        Behavior on background { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on foreground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on card { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on cardForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on popover { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on popoverForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on primary { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on primaryForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on secondary { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on secondaryForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on muted { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on mutedForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on accent { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on accentForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on destructive { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on destructiveForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on warning { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on warningForeground { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on border { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on input { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on ring { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart1 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart2 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart3 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart4 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
-        Behavior on chart5 { enabled: root.paletteReady; ColorAnimation { duration: root.motion.reveal; easing.type: root.motion.revealEasing } }
+        Behavior on background { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on foreground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on card { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on cardForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on popover { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on popoverForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on primary { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on primaryForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on secondary { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on secondaryForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on muted { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on mutedForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on accent { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on accentForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on destructive { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on destructiveForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on warning { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on warningForeground { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on border { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on input { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on ring { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on chart1 { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on chart2 { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on chart3 { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on chart4 { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
+        Behavior on chart5 { enabled: root.paletteReady; RevealAnim { duration: root.motion.reveal } }
     }
 
     // theme.preset (M49 D1): one table of defaults behind the chrome knobs
@@ -262,61 +271,79 @@ Singleton {
         return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledPress));
     }
 
-    // --- DESIGN.md §4 motion tokens -----------------------------------------
-    // `fast` (hover fills and control state) / `standard` (in-place moves) /
-    // `surface`/`surfaceExit` (a surface's own enter and exit, M51 D2:
-    // asymmetric, exit shorter) / `emphasized` (the bar's workspace pill, a
-    // surface's size morph and the toasts, on `emphasizedEasing`'s longer
-    // decel) / `slide` (the enter/exit translate distance) / `zoom` (the
-    // scale a surface enters from and exits to, M51 D2, shadcn's own ~0.97) /
-    // `easing` (the ease-out curve a transition that ENTERS or EXITS uses) /
-    // `easingInOut` (the curve a transition that MOVES something already on
-    // screen uses) / `reveal` (the wallpaper crossfade duration,
-    // §4's third carve-out) / `revealEasing` (its own curve, a full-screen
-    // image swap reads better on InOutQuad than the control-chrome OutCubic).
-    // motion.enabled=false in settings.json zeroes every duration above
-    // (`fast`/`standard`/`surface`/`surfaceExit`/`emphasized`/`reveal`) and
-    // `slide` too (M51 D7), and neutralises `zoom` to 1 (Tokens.motionTokens),
-    // the shell's reduced-motion switch, since no Wayland analog of
-    // prefers-reduced-motion exists. The "breathing"
-    // opacity pulse (PowerPanel's charging state) and the screensaver's
-    // frame effect remain §4's other two continuous-motion carve-outs and
-    // keep their own pacing, unaffected by motion.enabled. `marqueePxPerSec`/
+    // --- DESIGN.md §1 motion tokens -----------------------------------------
+    // Two families, and the property picks the family (M54 D1/D2). A
+    // surface never spells a duration or a curve of its own: it writes
+    // `Behavior on x { Anim {} }`, `Behavior on opacity { Anim { kind:
+    // "effects" } }`, `Behavior on color { CAnim {} }`, and the primitive
+    // (Components/Anim.qml) reads this object by kind.
+    //
+    // `spatialFast` 350 / `spatial` 500 / `spatialSlow` 650 pace anything
+    // with a position or a size: x, y, width, height, margins, scale,
+    // radius, rotation, an emerge, a morph, a cursor's travel. Their curves
+    // carry a y control above 1, so what travels overshoots its rest by a
+    // few pixels and settles back.
+    // `effectsFast` 150 / `effects` 200 / `effectsSlow` 300 pace anything
+    // with neither: opacity, colour, a progress that only drives alpha.
+    // They never overshoot.
+    // `emphasized` 400 is the workspace pill alone and `emphasizedDecel` a
+    // toast arriving from off screen (a curve on `spatial`'s clock, so it
+    // has no duration here). `reveal` 400 is the full-screen fades, the
+    // wallpaper and palette crossfades and the lock's blank and wake, on
+    // `effectsSlow`'s curve.
+    // `curves` is the bezier per kind as `easing.bezierCurve` wants it,
+    // control points then the (1, 1) end point.
+    //
+    // motion.enabled=false in settings.json zeroes every duration
+    // (Tokens.motionTokens) and pins `Deform` to identity (M54 D5), the
+    // shell's reduced-motion switch, since no Wayland analog of
+    // prefers-reduced-motion exists. The "breathing" opacity pulse
+    // (PowerPanel's charging state) and the screensaver's frame effect
+    // remain §4's other two continuous-motion carve-outs and keep their own
+    // pacing, unaffected by motion.enabled. `marqueePxPerSec`/
     // `marqueeHoldMs` (the now-playing bar cell's overflow scroll) are the
     // fourth carve-out (M16 Task 11), unlike the pulse and the screensaver,
     // it DOES respect motion.enabled, but the consumer gates on
     // `motionEnabled` directly rather than this object zeroing the rate
     // to 0.
+    //
+    // `fast`/`standard`/`surface`/`surfaceExit`/`slide`/`zoom`/`easing`/
+    // `easingInOut`/`emphasizedEasing`/`revealEasing` are the M53 set, kept
+    // while the surfaces still read them; M54 Task 6 deletes them once the
+    // last consumer is on the primitive (M54 D3, no compat shim).
     readonly property bool motionEnabled: Config.get("motion.enabled", true) === true
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
+        var c = Tokens.MOTION_CURVES;
         return {
+            spatialFast: m.spatialFast,
+            spatial: m.spatial,
+            spatialSlow: m.spatialSlow,
+            effectsFast: m.effectsFast,
+            effects: m.effects,
+            effectsSlow: m.effectsSlow,
+            emphasized: m.emphasized,
+            reveal: m.reveal,
+            curves: {
+                spatialFast: c.spatialFast,
+                spatial: c.spatial,
+                spatialSlow: c.spatialSlow,
+                effectsFast: c.effectsFast,
+                effects: c.effects,
+                effectsSlow: c.effectsSlow,
+                emphasized: c.emphasized,
+                emphasizedDecel: c.emphasizedDecel,
+                reveal: c.effectsSlow
+            },
             fast: m.fast,
             standard: m.standard,
             surface: m.surface,
             surfaceExit: m.surfaceExit,
-            emphasized: m.emphasized,
-            // InOutQuart, for the same reason `easingInOut` below is: what
-            // this longer clock paces (the workspace pill, a surface's size
-            // morph, a toast's travel) is already on screen and going
-            // somewhere else, never arriving from nowhere.
             emphasizedEasing: Easing.InOutQuart,
             slide: m.slide,
             zoom: m.zoom,
-            // OutQuint, not OutCubic: Qt's cubic easings are the weak
-            // built-ins, and a decel that shallow reads as drift rather
-            // than as a stop. OutQuint is cubic-bezier(0.23, 1, 0.32, 1),
-            // the curve UI motion actually wants for an entrance.
             easing: Easing.OutQuint,
-            // InOutQuart, cubic-bezier(0.77, 0, 0.175, 1). Something
-            // already on screen that travels to a new place accelerates out
-            // of rest and decelerates into it; an ease-out on a move starts
-            // at full speed, which reads as a teleport that then slows down.
-            // Entering and exiting take `easing` above; moving and
-            // resizing take this, at `standard` for a piece of chrome and
-            // `emphasized` for a whole surface.
             easingInOut: Easing.InOutQuart,
-            reveal: m.reveal,
             revealEasing: Easing.InOutQuad,
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,

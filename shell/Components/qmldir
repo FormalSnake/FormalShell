@@ -1,12 +1,15 @@
 AddTransition AddTransition.qml
+Anim Anim.qml
 AuthPrompt AuthPrompt.qml
 Button Button.qml
 ButtonGroup ButtonGroup.qml
+CAnim CAnim.qml
 Card Card.qml
 Cell Cell.qml
 CellLabel CellLabel.qml
 CellRow CellRow.qml
 Cover Cover.qml
+Deform Deform.qml
 DismissTwins DismissTwins.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml

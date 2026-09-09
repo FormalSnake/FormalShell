@@ -249,12 +249,12 @@ TestCase {
         compare(Tokens.motionTokens(false).zoom, 1);
     }
 
-    // M48: the workspace pill's travel spans a whole row of dots, which
-    // `standard` reads as a jump, so it takes a step of its own outside the
-    // 90-140ms control band while still being ordinary chrome.
+    // M54 D2: `emphasized` is M3's own clock for the workspace pill, whose
+    // two edges ride it at different durations, which is what makes the
+    // pill stretch across the gap and close up behind itself.
     function test_motion_tokens_emphasized_is_the_indicator_step() {
         var m = Tokens.motionTokens(true);
-        compare(m.emphasized, 250);
+        compare(m.emphasized, 400);
         verify(m.emphasized > m.standard);
     }
 
@@ -286,6 +286,83 @@ TestCase {
         var disabled = Tokens.motionTokens(false);
         compare(disabled.marqueePxPerSec, enabled.marqueePxPerSec);
         compare(disabled.marqueeHoldMs, enabled.marqueeHoldMs);
+    }
+
+    // --- M54: the two families ------------------------------------------
+
+    // The eight clocks, pinned: M3 Expressive's own numbers, three spatial,
+    // three effects, plus the pill's and the full-screen fade's.
+    function test_motion_tokens_pin_the_expressive_durations() {
+        var m = Tokens.motionTokens(true);
+        compare(m.spatialFast, 350);
+        compare(m.spatial, 500);
+        compare(m.spatialSlow, 650);
+        compare(m.effectsFast, 150);
+        compare(m.effects, 200);
+        compare(m.effectsSlow, 300);
+        compare(m.emphasized, 400);
+        compare(m.reveal, 400);
+    }
+
+    function test_motion_tokens_disabled_zeroes_every_expressive_duration() {
+        var m = Tokens.motionTokens(false);
+        compare(m.spatialFast, 0);
+        compare(m.spatial, 0);
+        compare(m.spatialSlow, 0);
+        compare(m.effectsFast, 0);
+        compare(m.effects, 0);
+        compare(m.effectsSlow, 0);
+        compare(m.emphasized, 0);
+        compare(m.reveal, 0);
+    }
+
+    // `easing.bezierCurve` takes control points then the end point, and Qt
+    // rejects a spline whose last point is anything but (1, 1). The
+    // two-segment `emphasized` carries twelve numbers, everything else six.
+    function test_motion_curves_end_at_one_one() {
+        for (var kind in Tokens.MOTION_CURVES) {
+            var c = Tokens.MOTION_CURVES[kind];
+            compare(c.length % 6, 0, kind + " is not whole segments");
+            compare(c[c.length - 2], 1, kind + " does not end at x 1");
+            compare(c[c.length - 1], 1, kind + " does not end at y 1");
+        }
+        compare(Tokens.MOTION_CURVES.emphasized.length, 12);
+        compare(Tokens.MOTION_CURVES.spatial.length, 6);
+    }
+
+    // M54 D1: what travels overshoots its rest, what fades never does. The
+    // y control points are where that lives: above 1 carries the value past
+    // its target and back, and on an opacity Qt would clamp it instead.
+    function test_spatial_curves_overshoot_and_effects_curves_do_not() {
+        var spatial = ["spatialFast", "spatial", "spatialSlow"];
+        for (var i = 0; i < spatial.length; i++) {
+            var c = Tokens.MOTION_CURVES[spatial[i]];
+            verify(c[1] > 1 || c[3] > 1, spatial[i] + " has no control point above 1");
+        }
+        var effects = ["effectsFast", "effects", "effectsSlow"];
+        for (var j = 0; j < effects.length; j++) {
+            var e = Tokens.MOTION_CURVES[effects[j]];
+            verify(e[1] <= 1 && e[3] <= 1, effects[j] + " overshoots");
+        }
+    }
+
+    // `reveal` is a clock of its own on `effectsSlow`'s curve, and an
+    // unknown kind falls back to the default spatial curve rather than
+    // leaving a binding undefined.
+    function test_motion_curve_resolves_reveal_and_falls_back() {
+        compare(Tokens.motionCurve("reveal"), Tokens.MOTION_CURVES.effectsSlow);
+        compare(Tokens.motionCurve("spatialSlow"), Tokens.MOTION_CURVES.spatialSlow);
+        compare(Tokens.motionCurve("nonsense"), Tokens.MOTION_CURVES.spatial);
+    }
+
+    // M54 D7: caelestia's deform constants, which the spring in
+    // Components/Deform.qml integrates.
+    function test_deform_constants_match_the_ported_mechanics() {
+        compare(Tokens.DEFORM.maxStretch, 0.35);
+        compare(Tokens.DEFORM.deadBand, 5);
+        compare(Tokens.DEFORM.stiffness, 200);
+        compare(Tokens.DEFORM.damping, 16);
+        compare(Tokens.DEFORM.epsilon, 0.002);
     }
 
     // Regression guard (M16 Task 1): the legacy fixed Theme.spacing object
