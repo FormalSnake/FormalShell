@@ -181,6 +181,15 @@ TestCase {
         compare(Providers.wallpaperListing(flat, "light")[0], "/pics/a.png");
     }
 
+    function test_a_pick_out_of_a_set_commits_that_mode() {
+        var pair = Providers.wallpaperVariants(["/pics/Dark/n.png", "/pics/Light/d.png"], "/pics");
+        compare(Providers.wallpaperPickMode(pair, "dark"), "dark");
+        compare(Providers.wallpaperPickMode(pair, "light"), "light");
+        var flat = Providers.wallpaperVariants(["/pics/a.png"], "/pics");
+        compare(Providers.wallpaperPickMode(flat, "dark"), "");
+        compare(Providers.wallpaperPickMode(null, "light"), "");
+    }
+
     function test_variants_tolerate_an_empty_scan() {
         var v = Providers.wallpaperVariants([], "/pics");
         verify(!v.hasVariants);

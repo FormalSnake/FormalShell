@@ -21,7 +21,13 @@ Singleton {
     property alias reminders: adapter.reminders
     property alias batteryShowPercent: adapter.batteryShowPercent
 
-    function setWallpaper(path) {
+    // `mode` is optional: the picker's Dark/Light sets pass the set the
+    // pick came from so wallpaper and mode land in one write. Mode goes
+    // first so the retheme the wallpaper change triggers already reads the
+    // final mode; the mode change's own retheme coalesces behind it.
+    function setWallpaper(path, mode) {
+        if (mode === "dark" || mode === "light")
+            adapter.mode = mode;
         adapter.wallpaper = path;
         stateFile.writeAdapter();
     }
