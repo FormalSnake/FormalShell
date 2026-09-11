@@ -26,6 +26,11 @@ import qs.Services
 // (MediaPanel.qml), so `visible` here is a finer-grained gate on top of
 // that: the Video can exist for a moment before it has actually started
 // playing real frames.
+//
+// The decode is software only (nix/package.nix sets
+// QT_FFMPEG_DECODING_HW_DEVICE_TYPES empty): a VA-API frame on the NVIDIA
+// driver hung the render thread inside vaSyncSurface and froze the whole
+// shell with it (g815, 2026-09-11). Never hand this Video a hardware frame.
 Item {
     id: root
 

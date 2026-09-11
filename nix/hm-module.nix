@@ -13,6 +13,7 @@ let cfg = config.programs.formalshell; in
       enable = lib.mkEnableOption "systemd user service" // { default = true; };
       target = lib.mkOption { type = lib.types.str; default = "graphical-session.target"; };
       lockBeforeSleep = lib.mkEnableOption "lock-before-sleep systemd user unit" // { default = true; };
+      watchdog = lib.mkEnableOption "timer that restarts the shell when its IPC socket stops answering" // { default = true; };
     };
   };
   config = lib.mkIf cfg.enable {
@@ -23,6 +24,19 @@ let cfg = config.programs.formalshell; in
     systemd.user.services.formalshell = lib.mkIf cfg.systemd.enable {
       Unit = { Description = "FormalShell"; PartOf = [ cfg.systemd.target ]; After = [ cfg.systemd.target ]; };
       Service = { ExecStart = lib.getExe cfg.package; Restart = "on-failure"; };
+      Install = { WantedBy = [ cfg.systemd.target ]; };
+    };
+    # `formalshell-watchdog` (nix/package.nix) probes the shell over IPC
+    # every 30s and restarts the service after two timeouts in a row. A
+    # main thread hung on a render thread is a live process to systemd, so
+    # Restart=on-failure alone never brings it back.
+    systemd.user.services.formalshell-watchdog = lib.mkIf (cfg.systemd.enable && cfg.systemd.watchdog) {
+      Unit = { Description = "FormalShell liveness probe"; PartOf = [ cfg.systemd.target ]; After = [ "formalshell.service" ]; };
+      Service = { Type = "oneshot"; ExecStart = lib.getExe' cfg.package "formalshell-watchdog"; };
+    };
+    systemd.user.timers.formalshell-watchdog = lib.mkIf (cfg.systemd.enable && cfg.systemd.watchdog) {
+      Unit = { Description = "FormalShell liveness probe"; PartOf = [ cfg.systemd.target ]; };
+      Timer = { OnActiveSec = "30s"; OnUnitActiveSec = "30s"; AccuracySec = "5s"; Unit = "formalshell-watchdog.service"; };
       Install = { WantedBy = [ cfg.systemd.target ]; };
     };
     # Spec §8's lock-before-sleep contract: `formalshell-lock-before-sleep`

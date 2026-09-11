@@ -1,6 +1,6 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, lucide-font, nerd-fonts
-, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv, util-linux }:
+, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv, util-linux, coreutils, systemd }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -72,6 +72,18 @@ stdenvNoCC.mkDerivation {
     # at. threaded paces each window off its own vsync (the 240Hz panel
     # logs "Animation Driver: using vsync: 4.17 ms"). set-default keeps the
     # smoke rig and any debugging session free to override it.
+    # QT_FFMPEG_DECODING_HW_DEVICE_TYPES set empty: QtMultimedia's ffmpeg
+    # backend then decodes AnimatedAlbumArt.qml's Video in software. Set to
+    # nothing rather than left unset on purpose (qffmpeghwaccel.cpp treats an
+    # unset variable as "probe every hwaccel", an empty one as "none"). With
+    # VA-API on nvidia_drv_video, vaExportSurfaceHandle fails on every frame
+    # and Qt falls back to mapping the frame on the render thread, which
+    # blocks inside vaSyncSurface for good; the main thread then waits on
+    # that render thread in polishAndSync and the whole shell freezes with
+    # every window and the IPC socket dead (g815, 2026-09-11, gdb backtrace).
+    # The frames are grabbed to CPU for the bar's mini cover anyway, so
+    # hardware decode bought nothing here. --set, not --set-default: no
+    # session variable may put the hwaccel back.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux ]} \
@@ -83,7 +95,8 @@ stdenvNoCC.mkDerivation {
       --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \
       --prefix QT_PLUGIN_PATH : ${qt6.qtmultimedia}/lib/qt-6/plugins \
       --prefix QT_PLUGIN_PATH : ${qt6.qtimageformats}/lib/qt-6/plugins \
-      --set-default QSG_RENDER_LOOP threaded
+      --set-default QSG_RENDER_LOOP threaded \
+      --set QT_FFMPEG_DECODING_HW_DEVICE_TYPES ""
 
     # lock-before-sleep contract (spec §8): whatever a systemd unit calls
     # before suspend must keep an exit-0-always behaviour so a lock failure
@@ -96,6 +109,27 @@ ${lib.getExe' quickshell "qs"} ipc --any-display -p $out/share/formalshell call 
 exit 0
 SCRIPT
     chmod +x $out/bin/formalshell-lock-before-sleep
+
+    # Liveness probe for the home-manager module's formalshell-watchdog
+    # timer. A main thread hung on a render thread (the vaSyncSurface case
+    # above) leaves a live process that answers nothing, so Restart=on-failure
+    # never fires and the session stays dead until someone restarts the unit
+    # by hand. `qs ipc show` is served by the main thread's event loop, so a
+    # timeout here means that loop is stuck. Two timeouts in a row restart
+    # the service; "no running instance" exits fast with 255 and is a
+    # stopped shell, not a hung one, so it clears the strike and does nothing.
+    cat > $out/bin/formalshell-watchdog <<SCRIPT
+#!/usr/bin/env bash
+strikes=\''${XDG_RUNTIME_DIR:-/tmp}/formalshell-watchdog.strikes
+${lib.getExe' coreutils "timeout"} -k 5 20 ${lib.getExe' quickshell "qs"} ipc --any-display -p $out/share/formalshell show >/dev/null 2>&1
+if [ \$? -ne 124 ]; then rm -f "\$strikes"; exit 0; fi
+n=\$(( \$(cat "\$strikes" 2>/dev/null || echo 0) + 1 ))
+if [ \$n -lt 2 ]; then echo "\$n" > "\$strikes"; exit 0; fi
+rm -f "\$strikes"
+echo "formalshell answered no IPC probe twice in a row, restarting it" >&2
+exec ${lib.getExe' systemd "systemctl"} --user restart formalshell.service
+SCRIPT
+    chmod +x $out/bin/formalshell-watchdog
     runHook postInstall
   '';
   meta = { mainProgram = "formalshell"; license = lib.licenses.mit; platforms = lib.platforms.linux; };
