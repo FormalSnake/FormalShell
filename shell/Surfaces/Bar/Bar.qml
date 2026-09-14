@@ -231,20 +231,19 @@ PanelWindow {
         return (bar.modelData && j.screen === bar.modelData.name) ? j : null;
     }
 
-    // Where the two segments of the inward line meet while nothing hangs off
-    // the bar. Held past the join going away (the same freeze idiom
-    // Panel.qml's `_morphHeight` uses), so the line closes where the card
-    // was rather than sweeping shut from the end of the strip.
-    property real _gapCentre: bar._join ? (bar._join.x + bar._join.width / 2) : _gapCentre
-
-    // The gap itself: one card's rect plus a fillet's radius at either end,
-    // which is exactly the span Components/Shoulders.qml draws into.
+    // The gap itself: one card's rect plus the fillets' `reach` at either
+    // end, which is exactly the span Components/Shoulders.qml draws into. A
+    // pure function of the join, with no clock of its own: the join is read
+    // off the card's live rect, which the card's own clocks already carry,
+    // and a second clock here left the line lagging the shoulders it has to
+    // meet. Closed, the two segments meet at the start and the line is
+    // whole.
     readonly property real _gapStart: bar._join
-        ? Math.max(0, Math.min(bar._along, bar._join.x - Theme.radiusXl))
-        : bar._gapCentre
+        ? Math.max(0, Math.min(bar._along, bar._join.x - bar._join.reach))
+        : 0
     readonly property real _gapEnd: bar._join
-        ? Math.max(bar._gapStart, Math.min(bar._along, bar._join.x + bar._join.width + Theme.radiusXl))
-        : bar._gapCentre
+        ? Math.max(bar._gapStart, Math.min(bar._along, bar._join.x + bar._join.width + bar._join.reach))
+        : 0
 
     // The inward line's two segments in this window's own coordinates, for
     // `debug dump` (Ipc/DebugIpc.qml): a rig leg reads the gap a joined card
@@ -758,9 +757,9 @@ PanelWindow {
             // opens a gap between them, its own rect plus a fillet's radius at
             // either end, and Components/Shoulders.qml draws the card's
             // concave shoulders into exactly that span, so the line runs into
-            // the card instead of under it. The gap travels on `spatial`
-            // while a join exists and is simply gone when none does, which is
-            // what leaves an ordinary session's line whole and still.
+            // the card instead of under it. The gap follows the join frame by
+            // frame (see `_gapStart`) and is simply gone when none exists,
+            // which is what leaves an ordinary session's line whole and still.
             Rectangle {
                 id: hairlineStart
                 width: bar._vertical ? Theme.borderWidth : bar._gapStart
@@ -768,16 +767,6 @@ PanelWindow {
                 x: bar._position === "left" ? parent.width - hairlineStart.width : 0
                 y: bar._position === "top" ? parent.height - Theme.borderWidth : 0
                 color: Theme.color.border
-
-                Behavior on width {
-                    enabled: bar._join !== null && !bar._vertical
-                    Anim {}
-                }
-
-                Behavior on height {
-                    enabled: bar._join !== null && bar._vertical
-                    Anim {}
-                }
             }
 
             Rectangle {
@@ -787,26 +776,6 @@ PanelWindow {
                 x: bar._position === "left" ? parent.width - hairlineEnd.width : (bar._vertical ? 0 : bar._gapEnd)
                 y: bar._position === "top" ? parent.height - Theme.borderWidth : (bar._vertical ? bar._gapEnd : 0)
                 color: Theme.color.border
-
-                Behavior on width {
-                    enabled: bar._join !== null && !bar._vertical
-                    Anim {}
-                }
-
-                Behavior on height {
-                    enabled: bar._join !== null && bar._vertical
-                    Anim {}
-                }
-
-                Behavior on x {
-                    enabled: bar._join !== null && !bar._vertical
-                    Anim {}
-                }
-
-                Behavior on y {
-                    enabled: bar._join !== null && bar._vertical
-                    Anim {}
-                }
             }
         }
 

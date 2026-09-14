@@ -167,6 +167,53 @@ TestCase {
         compare(presence.emergeY, -300);
     }
 
+    // --- grow (2026-09-14, the panels) -----------------------------------
+
+    function test_grow_carries_the_extent_from_nothing_to_rest() {
+        var presence = createTemporaryObject(presenceComponent, testCase,
+            { edge: "top", mode: "grow" });
+        compare(presence.morph, 0);
+        presence.open = true;
+        tryCompare(presence, "settled", true, 2000);
+        compare(presence.morph, 1);
+        // The anchored edge holds its place: nothing about a grow translates.
+        compare(presence.emergeX, 0);
+        compare(presence.emergeY, 0);
+    }
+
+    function test_grow_never_fades_or_zooms_the_card() {
+        var presence = createTemporaryObject(presenceComponent, testCase,
+            { edge: "bottom", mode: "grow" });
+        presence.open = true;
+        compare(presence.opacity, 1);
+        compare(presence.scale, 1);
+        tryCompare(presence, "settled", true, 2000);
+        compare(presence.opacity, 1);
+        compare(presence.scale, 1);
+    }
+
+    function test_grow_holds_its_contents_back_until_the_card_is_out() {
+        var presence = createTemporaryObject(presenceComponent, testCase,
+            { edge: "left", mode: "grow" });
+        compare(presence.contentOpacity, 0);
+        presence.open = true;
+        tryCompare(presence, "settled", true, 2000);
+        compare(presence.contentOpacity, 1);
+    }
+
+    function test_grow_retargets_mid_travel_rather_than_snapping() {
+        var presence = createTemporaryObject(presenceComponent, testCase,
+            { edge: "top", mode: "grow" });
+        presence.open = true;
+        tryVerify(function () { return presence.morph > 0; }, 1000);
+        presence.open = false;
+        verify(presence.morph > 0);
+        verify(presence.morph < 1);
+        tryCompare(presence, "shown", false, 2000);
+        tryCompare(presence, "settled", true, 2000);
+        compare(presence.morph, 0);
+    }
+
     // --- unfold (M53 addendum, the launcher) -----------------------------
 
     function test_unfold_carries_its_morph_from_the_fold_to_the_card() {

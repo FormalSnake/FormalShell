@@ -1,10 +1,10 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --panel-emerge proves the drawer open (M53 addendum 2026-09-09): a panel
-# comes out from under the bar rather than fading in where it will end up. The
-# card is displaced behind the bar's inner line by its own height while closed
-# and travels out from under it, so its visible height grows from nothing to
-# the whole card and no part of it is ever drawn inside the bar's own band.
+# --panel-emerge proves the grow open (DESIGN.md §1 Motion, 2026-09-14): a
+# panel grows out of the bar's line rather than fading in where it will end
+# up. The card's edge on the bar holds its place while its height carries from
+# nothing to the whole card, so its visible height grows from nothing and no
+# part of it is ever drawn inside the bar's own band.
 #
 # Measured down the card's own centre column, and a probe is "covered" when it
 # is NOT byte-identical to the same probe in the closed output: something the
@@ -63,7 +63,7 @@ panel_emerge_mid_paths=(
   "$shot_dir/panel-emerge-mid-9.png"
   "$shot_dir/panel-emerge-mid-10.png"
 )
-# The emerge's own clock (Theme.motion.spatial, M54 D2) and the moment this
+# The grow's own clock (Theme.motion.spatial, M54 D2) and the moment this
 # rig has the window up, both in milliseconds; every sample is the map plus a
 # fraction of that clock, so a change to the token moves the sampling with it
 # rather than leaving the ladder pinned to a duration that has gone. The

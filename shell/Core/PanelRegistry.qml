@@ -61,7 +61,9 @@ Singleton {
     // Where a card is joined to the bar right now (M54 D6), or null while
     // nothing hangs off it: `edge` the bar's edge, `x` and `width` the
     // card's own rect along that bar in the bar's coordinates on `screen`
-    // (a screen name), the fillets outside it not counted. Bar.qml reads it
+    // (a screen name), the fillets outside it not counted, and `reach` how
+    // far past that rect the fillets run along the bar (their radius, capped
+    // at the card's depth while it grows out of the line). Bar.qml reads it
     // to open the gap in its inward line, and it is the one thing the bar
     // and the surface hanging off it share: two windows, one silhouette.
     //
@@ -80,6 +82,7 @@ Singleton {
             edge: join.edge,
             x: join.x,
             width: join.width,
+            reach: join.reach,
             screen: join.screen
         };
     }

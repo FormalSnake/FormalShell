@@ -48,11 +48,14 @@ function outline(edge, width, height, radius, inset) {
     var depth = (vertical(edge) ? width : height);
     var length = Math.max(0, along - r * 2);
     // The three free corners are capped by the card they round. The fillets
-    // are not: they are the join's own radius, and the gap the bar opens is
-    // measured off it, so capping them would move the line's ends away from
-    // where the arcs actually land.
+    // are capped by the depth alone: a card growing out of the bar is
+    // shallower than the join's radius for its first and last frames, and a
+    // fillet deeper than the card would run past the card's own far edge.
+    // The gap the bar opens is measured off the same number
+    // (Components/Panel.qml publishes it as the join's `reach`), so the
+    // line's ends stay where the arcs actually land.
     var rc = Math.max(0, Math.min(r, Math.min(length, depth) / 2) - i);
-    var rf = r > 0 ? r + i : 0;
+    var rf = r > 0 ? filletRadius(r, depth) + i : 0;
     var far = depth - i;
     var canonical = [
         [i - rf, i],
@@ -74,6 +77,12 @@ function outline(edge, width, height, radius, inset) {
         filletRadius: rf,
         mirrored: mirrored(edge)
     };
+}
+
+// The concave fillet's radius for a card `depth` deep across the bar: the
+// join's own radius until the card is shallower than that.
+function filletRadius(radius, depth) {
+    return Math.max(0, Math.min(radius, depth));
 }
 
 // Canonical (u, v) onto the item. `over` is the near fillet's room along the

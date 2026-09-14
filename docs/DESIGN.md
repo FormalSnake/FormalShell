@@ -219,7 +219,9 @@ transitions are the same primitive: `MoveTransition` on `spatial`,
 An edge-anchored card and the bar are one silhouette (amended 2026-09-09).
 The bar draws a single 1px `border` along its inner edge, and a card hanging
 off that edge opens a gap in the line: the card's own rect plus a `radiusXl`
-at either end, both gap edges travelling on `spatial`. `Shoulders` draws the
+at either end, a plain function of the card's live rect with no clock of its
+own, since the card's own clocks already carry that rect and a second one
+left the line lagging the shoulders it has to meet. `Shoulders` draws the
 card with that edge left open and a concave quarter fillet outside each of
 its two corners, running out to where the line resumes, so the card grows out
 of the bar rather than parking against it. The open surface publishes the
@@ -248,12 +250,21 @@ identity and the frame loop is stopped, so a still shell costs nothing.
 
 An anchored surface opens as a drawer (amended 2026-09-09, owner: the fade,
 0.97 zoom and 8px slide it replaces read as the surface not animating at
-all). A panel, the notification centre and the OSD each hang off one edge:
-the card starts behind that edge, displaced toward it by its own extent on
-that axis, and travels to rest on `spatial` both ways, clipped at the line it
-rests on so it comes out from under the bar rather than across it. No fade
-and no zoom, since the clip is what hides it; its contents come up on
-`effects` behind the travel, so the card lands before its text. The launcher
+all). The notification centre and the OSD each hang off one edge: the card
+starts behind that edge, displaced toward it by its own extent on that axis,
+and travels to rest on `spatial` both ways, clipped at the line it rests on
+so it comes out from under the bar rather than across it. No fade and no
+zoom, since the clip is what hides it; its contents come up on `effects`
+behind the travel, so the card lands before its text. A panel grows out of
+the bar instead (amended 2026-09-14, owner: caelestia's morph; the drawer
+hid the shoulders behind the line for the length of the travel, so the card
+slid out of a gap rather than growing out of the strip). The edge that meets
+the bar holds its place on the line, shoulders on it from the first frame,
+and the card's extent across the bar carries from nothing to rest on
+`spatial` both ways, the free edge being what travels; its contents are laid
+out at their resting size, pinned to the edge on the bar, and revealed under
+the travelling one, coming up on `effects` behind it the same way. The bar's
+gap is open under the shoulders from that first frame. The launcher
 unfolds instead: the card is drawn at its search row's height on
 `effectsFast`, at full opacity, and its height carries the level under the
 rule on `spatial` while the card clips, so the rows are revealed rather than
@@ -385,7 +396,7 @@ thing.
 | `Anim` | the one `NumberAnimation` in the shell: `kind` resolves a duration and a bezier out of `Theme.motion` (§1 Motion), `spatial` by default | none |
 | `CAnim` | the colour half of it, always `effectsSlow`: every `Behavior on color` and `border.color` | none |
 | `Deform` | the velocity squash (§1 Motion): samples `target` each frame and exposes the `matrix4x4` its consumer hands to a `Matrix4x4` transform, `amount` per surface | running, at rest (identity, frame loop stopped) |
-| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge travel to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
+| `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge travel or its extent (`morph`) to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
 | `Panel` | the popout window: `Shoulders` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
 
 ## 3. Surface rules

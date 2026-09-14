@@ -95,7 +95,7 @@ IpcHandler {
 
     function _join() {
         var j = Core.PanelRegistry.join;
-        return j ? { edge: j.edge, x: j.x, width: j.width, screen: j.screen } : null;
+        return j ? { edge: j.edge, x: j.x, width: j.width, reach: j.reach, screen: j.screen } : null;
     }
 
     // `qs ipc call debug join <edge> <x> <width>`: publishes a join so the
@@ -118,7 +118,7 @@ IpcHandler {
         if (bars.length === 0)
             return "error: no bar on screen";
         var screen = bars[0].modelData ? bars[0].modelData.name : "";
-        root.debugJoin = { edge: edge, x: x, width: width, screen: screen };
+        root.debugJoin = { edge: edge, x: x, width: width, reach: Core.Theme.radiusXl, screen: screen };
         Core.PanelRegistry.setJoin(root, root.debugJoin);
         return "ok";
     }
