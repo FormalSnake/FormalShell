@@ -445,6 +445,16 @@ same call the tray's dots take: the group is somewhere else rather than
 sometimes here and sometimes there, so nothing on the strip moves when a
 track starts playing.
 
+A crowded strip gives up room in a fixed order rather than clipping a cell
+in half. The now-playing track gives ground first: its title shrinks, down
+to the cover or icon alone with the title still in its tooltip, before
+anything else on the bar moves. Past that, what still does not fit hides
+whole cells from an end region's own inner edge, the one nearest the
+centre, never the one against the screen edge; a cell comes back the
+instant the room does. The chevron takes no part in any of this: it stays
+config-only, collapsing whatever bar.layout put on its governed side
+whether the strip is crowded or not.
+
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
 continues round the other three edges as a band `frame.thickness` wide, and
 a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut
