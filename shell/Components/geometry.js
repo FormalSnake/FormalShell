@@ -72,3 +72,28 @@ function maxContentHeight(maxFrame, panelPadding, headerHeight, headerGap) {
 function frameHeight(contentHeight, maxContent, panelPadding, headerHeight, headerGap) {
     return panelPadding * 2 + headerHeight + headerGap + Math.min(contentHeight, maxContent);
 }
+
+// The band a panel's card may paint in (M53 addendum 2026-09-09, the drawer
+// open): from the bar's inner line, the edge every card hangs off, to the far
+// edge of the output. A card displaced behind that line by the emerge is cut
+// at it, so it comes out from under the bar rather than crossing over it. The
+// line is the card's own resting edge, `barMargin` clear of the bar, and
+// `ownerShift` moves it out to the owner's inner edge for a panel hanging off
+// another panel.
+function clipBand(barPosition, screenWidth, screenHeight, insets, barMargin, ownerShift) {
+    var shift = barMargin + ownerShift;
+    if (barPosition === "bottom") {
+        var bottom = Math.max(0, screenHeight - insets.bottom - shift);
+        return { x: 0, y: 0, width: screenWidth, height: bottom };
+    }
+    if (barPosition === "left") {
+        var left = insets.left + shift;
+        return { x: left, y: 0, width: Math.max(0, screenWidth - left), height: screenHeight };
+    }
+    if (barPosition === "right") {
+        var right = Math.max(0, screenWidth - insets.right - shift);
+        return { x: 0, y: 0, width: right, height: screenHeight };
+    }
+    var top = insets.top + shift;
+    return { x: 0, y: top, width: screenWidth, height: Math.max(0, screenHeight - top) };
+}

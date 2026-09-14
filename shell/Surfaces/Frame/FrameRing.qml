@@ -16,9 +16,20 @@ import "../../Frame/geometry.js" as Geometry
 Item {
     id: ring
 
+    // The bar's side, and the span of the hairline on it a joined card's
+    // shoulders draw into (Bar.qml's `_gapStart`/`_gapEnd`, in this
+    // window's coordinates along that side): the same gap the unframed
+    // strip opens in its own line, cut here out of the ring's, so a card
+    // hanging off a framed bar meets the line the way it meets a bare one.
+    property string edge: "top"
+    property real gapStart: 0
+    property real gapEnd: 0
+
     readonly property var _g: Geometry.frameGeometry(ring.width, ring.height,
         Theme.edgeInset, Theme.frameRadius)
     readonly property var _line: Geometry.strokeRect(ring._g.inner, ring._g.radius, Theme.borderWidth)
+    readonly property var _walk: Geometry.lineWalk(ring._line, ring._line.radius, ring.edge,
+        ring.gapStart, ring.gapEnd)
 
     Shape {
         anchors.fill: parent
@@ -52,24 +63,28 @@ Item {
         }
 
         // The hairline along the cut-out, the one edge the frame draws
-        // (DESIGN.md §3 Bar), half a stroke inside the band.
+        // (DESIGN.md §3 Bar), half a stroke inside the band: one open walk
+        // round it, clockwise from one end of the gap on the bar's side to
+        // the other (Frame/geometry.js's lineWalk), which with no gap is
+        // the whole ring.
         ShapePath {
             id: line
-            readonly property var i: ring._line
+            readonly property var p: ring._walk
             readonly property real r: ring._line.radius
             fillColor: "transparent"
             strokeColor: Theme.color.border
             strokeWidth: Theme.borderWidth
-            startX: line.i.x + line.r
-            startY: line.i.y
-            PathLine { x: line.i.x + line.i.width - line.r; y: line.i.y }
-            PathArc { x: line.i.x + line.i.width; y: line.i.y + line.r; radiusX: line.r; radiusY: line.r }
-            PathLine { x: line.i.x + line.i.width; y: line.i.y + line.i.height - line.r }
-            PathArc { x: line.i.x + line.i.width - line.r; y: line.i.y + line.i.height; radiusX: line.r; radiusY: line.r }
-            PathLine { x: line.i.x + line.r; y: line.i.y + line.i.height }
-            PathArc { x: line.i.x; y: line.i.y + line.i.height - line.r; radiusX: line.r; radiusY: line.r }
-            PathLine { x: line.i.x; y: line.i.y + line.r }
-            PathArc { x: line.i.x + line.r; y: line.i.y; radiusX: line.r; radiusY: line.r }
+            startX: line.p[0].x
+            startY: line.p[0].y
+            PathLine { x: line.p[1].x; y: line.p[1].y }
+            PathArc { x: line.p[2].x; y: line.p[2].y; radiusX: line.r; radiusY: line.r }
+            PathLine { x: line.p[3].x; y: line.p[3].y }
+            PathArc { x: line.p[4].x; y: line.p[4].y; radiusX: line.r; radiusY: line.r }
+            PathLine { x: line.p[5].x; y: line.p[5].y }
+            PathArc { x: line.p[6].x; y: line.p[6].y; radiusX: line.r; radiusY: line.r }
+            PathLine { x: line.p[7].x; y: line.p[7].y }
+            PathArc { x: line.p[8].x; y: line.p[8].y; radiusX: line.r; radiusY: line.r }
+            PathLine { x: line.p[9].x; y: line.p[9].y }
         }
     }
 }

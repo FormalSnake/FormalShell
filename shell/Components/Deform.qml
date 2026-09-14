@@ -46,6 +46,13 @@ QtObject {
     // own centre.
     property string edge: "top"
 
+    // How far past that edge the pivot sits, toward whatever the target
+    // hangs off. A drawer mid-travel has its own edge behind the bar's line
+    // and its visible root on it, so the panel puts the pivot on the line
+    // (Components/Panel.qml) and the card squashes into the bar rather than
+    // about an edge nobody can see. Negative moves it inside the target.
+    property real inset: 0
+
     readonly property matrix4x4 matrix: {
         const item = root.target;
         if (!Theme.motionEnabled || item === null || root._atRest)
@@ -53,8 +60,8 @@ QtObject {
 
         const w = item.width;
         const h = item.height;
-        const cx = root.edge === "left" ? 0 : root.edge === "right" ? w : w / 2;
-        const cy = root.edge === "top" ? 0 : root.edge === "bottom" ? h : h / 2;
+        const cx = root.edge === "left" ? -root.inset : root.edge === "right" ? w + root.inset : w / 2;
+        const cy = root.edge === "top" ? -root.inset : root.edge === "bottom" ? h + root.inset : h / 2;
         const s = root._spring;
         const m = Qt.matrix4x4(s.m00, s.m01, 0, 0, s.m01, s.m11, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
         return Qt.matrix4x4(1, 0, 0, cx, 0, 1, 0, cy, 0, 0, 1, 0, 0, 0, 0, 1)

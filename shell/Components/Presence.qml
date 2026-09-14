@@ -1,7 +1,7 @@
 import QtQuick
 import qs.Core
 
-// The surface enter/exit recipe, in one place (DESIGN.md §1 "Motion"). Four
+// The surface enter/exit recipe, in one place (DESIGN.md §1 "Motion"). Three
 // modes, and the two clock families of M54 D2 split between them:
 //
 // - `fade` (M51 D2/D4, the default): opacity on `effects` and a scale from
@@ -15,13 +15,6 @@ import qs.Core
 //   is what hides it, so what arrives is a card coming out from under the bar
 //   rather than one materialising in place. Its contents fade in behind the
 //   travel (`contentOpacity`), so the card lands before its text.
-// - `grow` (2026-09-14): the panels. The card's edge that meets the bar holds
-//   its place and its extent across the bar carries from nothing to rest on
-//   `spatial` both ways, so the shoulders sit on the bar's line from the first
-//   frame and the free edge is what travels. No fade and no zoom, as with
-//   `emerge`; the consumer applies `morph` to its own geometry and reveals
-//   the contents under the growing edge. The pose overshoots past rest and,
-//   at the end of an exit, past 0: a consumer clamps the extent it derives.
 // - `unfold` (M53 addendum, M54 D8): the launcher. The card is there almost
 //   at once (`effectsFast`) at whatever height the consumer seeds it with,
 //   and `morph` carries it to full size on `spatial`, with the contents
@@ -55,7 +48,7 @@ QtObject {
     // no emerge.
     property string edge: "center"
 
-    // "fade", "emerge", "grow" or "unfold"; see the header.
+    // "fade", "emerge" or "unfold"; see the header.
     property string mode: "fade"
 
     // `emerge` only: the card's own size on the anchored axis (its height
@@ -97,10 +90,9 @@ QtObject {
     readonly property bool shown: root.open || root._pose > 0
         || (root._twoClock && root._morphPose > 0)
 
-    // Whether the second clock is running. `emerge` and `grow` have none:
-    // the travel IS the enter, and their contents ride the same pose.
-    readonly property bool _twoClock: !root._oneClock
-    readonly property bool _oneClock: root.mode === "emerge" || root.mode === "grow"
+    // Whether the second clock is running. `emerge` is the one mode without
+    // one: the travel IS the enter, and its contents ride the same pose.
+    readonly property bool _twoClock: root.mode !== "emerge"
 
     // The pose everything that is not geometry reads: the card's own opacity
     // in `fade`, the travel in `emerge`, the card's arrival in `unfold`.
@@ -109,7 +101,7 @@ QtObject {
         Anim {
             id: _progressAnimation
             kind: {
-                if (root._oneClock)
+                if (root.mode === "emerge")
                     return "spatial";
                 return root.mode === "unfold" ? "effectsFast" : "effects";
             }
@@ -153,12 +145,11 @@ QtObject {
         }
     }
 
-    // 1 throughout in `emerge` and `grow`: the card is hidden by the
-    // consumer's clip or by its own size, never by its own alpha, so nothing
-    // about it is see-through on the way in (a translucent card fading over
-    // a translucent card is what made the M51 open read as a flicker rather
-    // than as an arrival).
-    readonly property real opacity: root._oneClock ? 1 : root._pose
+    // 1 throughout in `emerge`: the card is hidden by the consumer's clip,
+    // never by its own alpha, so nothing about it is see-through on the way
+    // in (a translucent card fading over a translucent card is what made the
+    // M51 open read as a flicker rather than as an arrival).
+    readonly property real opacity: root.mode === "emerge" ? 1 : root._pose
 
     // The zoom a modal surface arrives on. Its own clock, so the scale
     // overshoots 1 and settles while the opacity underneath it does not.
@@ -189,8 +180,7 @@ QtObject {
         : 0
 
     // How far the size morph has come, for a consumer interpolating its own
-    // geometry between a seed and its target (`unfold`'s card height, the
-    // extent a `grow` card draws across the bar).
+    // geometry between a seed and its target (`unfold`'s card height).
     readonly property real morph: root.mode === "unfold" ? root._morphPose : root._pose
 
     // What the card's contents draw at while the card itself arrives: 0 until

@@ -230,7 +230,9 @@ it, the screen) off its frame's live position, so a size morph and a handoff
 carry the gap with them frame by frame; that rect is the only thing the two
 windows share. `theme.radius` 0 draws square corners and no fillets, which is
 a plain card against a whole line. The panels take `Shoulders`, and the
-chevron's and the tray's second bars with them. Everything that meets no line
+chevron's and the tray's second bars with them, on a framed screen as on a
+bare one: the ring's hairline runs the bar's edge there and opens the same
+gap. Everything that meets no line
 keeps `Card`: the notification centre and the OSD each sit a `screenPadding`
 clear of the output's own edge, and the launcher, the tooltip and the modals
 float with nothing for a fillet to run out to.
@@ -250,21 +252,21 @@ identity and the frame loop is stopped, so a still shell costs nothing.
 
 An anchored surface opens as a drawer (amended 2026-09-09, owner: the fade,
 0.97 zoom and 8px slide it replaces read as the surface not animating at
-all). The notification centre and the OSD each hang off one edge: the card
-starts behind that edge, displaced toward it by its own extent on that axis,
-and travels to rest on `spatial` both ways, clipped at the line it rests on
-so it comes out from under the bar rather than across it. No fade and no
-zoom, since the clip is what hides it; its contents come up on `effects`
-behind the travel, so the card lands before its text. A panel grows out of
-the bar instead (amended 2026-09-14, owner: caelestia's morph; the drawer
-hid the shoulders behind the line for the length of the travel, so the card
-slid out of a gap rather than growing out of the strip). The edge that meets
-the bar holds its place on the line, shoulders on it from the first frame,
-and the card's extent across the bar carries from nothing to rest on
-`spatial` both ways, the free edge being what travels; its contents are laid
-out at their resting size, pinned to the edge on the bar, and revealed under
-the travelling one, coming up on `effects` behind it the same way. The bar's
-gap is open under the shoulders from that first frame. The launcher
+all). A panel, the notification centre and the OSD each hang off one edge:
+the card starts behind that edge, displaced toward it by its own extent on
+that axis, and travels to rest on `spatial` both ways, clipped at the line it
+rests on so it comes out from under the bar rather than across it. No fade
+and no zoom, since the clip is what hides it; its contents come up on
+`effects` behind the travel, so the card lands before its text. A panel's
+silhouette does not travel with it (amended 2026-09-14, owner: caelestia's
+popouts and Material's container morph; a drawer whose shoulders rode behind
+the line slid out of a slot in the bar with an empty gap between the two for
+the length of the travel): the `Shoulders` are drawn from the bar's line to
+the card's far edge, the fillets on the line from the first frame with their
+radius capped at that depth, so what comes out is one shape budding off the
+strip while the contents slide out inside it, and the deform pivots on the
+line rather than on the card's own edge, so the card squashes into the bar.
+The bar's gap follows the fillets' reach frame by frame. The launcher
 unfolds instead: the card is drawn at its search row's height on
 `effectsFast`, at full opacity, and its height carries the level under the
 rule on `spatial` while the card clips, so the rows are revealed rather than

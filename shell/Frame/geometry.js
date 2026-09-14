@@ -36,3 +36,52 @@ function strokeRect(inner, radius, strokeWidth) {
         radius: Math.max(0, radius - half)
     };
 }
+
+// The ring's hairline as one open walk round the cut-out, clockwise, with a
+// gap on the bar's own side between `gapStart` and `gapEnd` (window
+// coordinates along that side, the span a joined card's shoulders draw
+// into: Surfaces/Bar/Bar.qml's `_gapStart`/`_gapEnd`). Ten points: the walk
+// starts at one end of the gap, takes the four sides and the four corner
+// arcs, and ends at the gap's other end, so the segments alternate line,
+// arc, line, arc from p0 to p9 whichever side the bar is on. The gap is
+// held to the straight run of that side, and an empty one lands both ends
+// on the corner where the walk begins, which is a whole ring.
+function lineWalk(inner, radius, edge, gapStart, gapEnd) {
+    var x = inner.x;
+    var y = inner.y;
+    var w = inner.width;
+    var h = inner.height;
+    var r = radius;
+    var vertical = edge === "left" || edge === "right";
+    var along = vertical ? h : w;
+    var origin = vertical ? y : x;
+    var lo = Math.max(r, Math.min(along - r, gapStart - origin));
+    var hi = Math.max(lo, Math.min(along - r, gapEnd - origin));
+    if (edge === "left")
+        return [
+            { x: x, y: y + lo }, { x: x, y: y + r }, { x: x + r, y: y },
+            { x: x + w - r, y: y }, { x: x + w, y: y + r },
+            { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h },
+            { x: x + r, y: y + h }, { x: x, y: y + h - r }, { x: x, y: y + hi }
+        ];
+    if (edge === "right")
+        return [
+            { x: x + w, y: y + hi }, { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h },
+            { x: x + r, y: y + h }, { x: x, y: y + h - r },
+            { x: x, y: y + r }, { x: x + r, y: y },
+            { x: x + w - r, y: y }, { x: x + w, y: y + r }, { x: x + w, y: y + lo }
+        ];
+    if (edge === "bottom")
+        return [
+            { x: x + lo, y: y + h }, { x: x + r, y: y + h }, { x: x, y: y + h - r },
+            { x: x, y: y + r }, { x: x + r, y: y },
+            { x: x + w - r, y: y }, { x: x + w, y: y + r },
+            { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h }, { x: x + hi, y: y + h }
+        ];
+    return [
+        { x: x + hi, y: y }, { x: x + w - r, y: y }, { x: x + w, y: y + r },
+        { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h },
+        { x: x + r, y: y + h }, { x: x, y: y + h - r },
+        { x: x, y: y + r }, { x: x + r, y: y }, { x: x + lo, y: y }
+    ];
+}

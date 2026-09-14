@@ -723,6 +723,9 @@ PanelWindow {
     FrameRing {
         anchors.fill: parent
         visible: bar._framed
+        edge: bar._position
+        gapStart: bar._gapStart
+        gapEnd: bar._gapEnd
     }
 
     // The strip: the whole window on its own, or the bar's edge of a

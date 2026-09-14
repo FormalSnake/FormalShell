@@ -159,4 +159,48 @@ TestCase {
         compare(Geometry.frameHeight(4000, maxContent, testCase.panelPadding,
             testCase.headerHeight, testCase.headerGap), max);
     }
+    // --- The drawer's slit (M53 addendum) --------------------------------
+    //
+    // The band a card may paint in runs from its own resting edge, one
+    // barMargin off the bar, to the far edge of the output, so a card
+    // displaced behind that line by the emerge is cut at it.
+
+    function band(position, ownerShift) {
+        return Geometry.clipBand(position, 1920, 1080, insets(position),
+            testCase.barMargin, ownerShift || 0);
+    }
+
+    function test_a_top_bar_cuts_the_card_at_its_own_resting_top() {
+        var b = band("top");
+        compare(b.y, 46);
+        compare(b.x, 0);
+        compare(b.width, 1920);
+        compare(b.height, 1080 - 46);
+    }
+
+    function test_a_bottom_bar_cuts_the_card_at_its_own_resting_bottom() {
+        var b = band("bottom");
+        compare(b.y, 0);
+        compare(b.height, 1080 - 46);
+    }
+
+    function test_a_left_bar_cuts_the_card_at_its_own_resting_left() {
+        var b = band("left");
+        compare(b.x, 46);
+        compare(b.width, 1920 - 46);
+        compare(b.height, 1080);
+    }
+
+    function test_a_right_bar_cuts_the_card_at_its_own_resting_right() {
+        var b = band("right");
+        compare(b.x, 0);
+        compare(b.width, 1920 - 46);
+    }
+
+    // A panel hanging off another panel comes out from under the OWNER's
+    // inner edge, which is where its own resting edge is.
+    function test_an_owned_panel_is_cut_at_the_owners_inner_edge() {
+        compare(band("top", 200).y, 246);
+        compare(band("bottom", 200).height, 1080 - 246);
+    }
 }
