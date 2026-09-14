@@ -487,7 +487,12 @@ own type doing the ranking the border used to do: a `subtitle` title over a
 `bodySmall` caption, an optional `display` readout beside them, an optional
 `Track` under them. Footer: `outline` Button left, `display`
 number right. Width `Default`; `Wide` for media, monitor, calendar. Nothing
-in a panel scrolls except a row list longer than the screen.
+in a panel scrolls except a row list longer than the screen. The media
+panel's `LYRICS` block anchors its active line at the centre of a clipped
+five-row viewport that travels to meet it, ranks every other line by a
+four-step opacity ramp on its distance from that line, wipes a synced
+line's words from `mutedForeground` to `foreground` as they're sung, and
+draws none of it with a glow, a blur or a shadow.
 
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
 with a bottom rule only; a shadcn Breadcrumb under it (ancestors in
