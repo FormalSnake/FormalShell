@@ -3,12 +3,17 @@ import qs.Core
 import qs.Components
 import qs.Services
 import "../../Lyrics/model.js" as Lyrics
+import "../../Visualizer/model.js" as Visualizer
 
 // MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"). Four
 // blocks, each a section of the panel's own content column and so
 // `sectionGap` apart: the cover beside the source, title, artist and album;
 // the position track with its two times under it; the transport; the
-// player's own volume. A `LYRICS` block follows once lrclib has synced
+// player's own volume. A spectrum band sits between the now-playing block
+// and the position track (M55 D6): 24 columns off the same cava process the
+// bar cell shares, absent whenever cava is off PATH or `media.visualizer`
+// is false, and empty-troughed rather than hidden while the panel is open
+// and the track is paused. A `LYRICS` block follows once lrclib has synced
 // timing for the track (M55 D4/D5): absent for every other state, no
 // spinner and no placeholder. A chip per registered player follows once
 // more than one is on the bus.
@@ -82,6 +87,19 @@ Panel {
         target: LyricsService
         property: "panelWants"
         value: root.isOpen
+    }
+
+    // media.visualizer (spec D8): the panel's own opt-out for the spectrum
+    // band, independent of the bar cell's bar.layout opt-in.
+    readonly property bool _spectrumEnabled: Config.loaded && Config.get("media.visualizer", true)
+
+    // VisualizerService's second gate consumer (spec D6): the shared cava
+    // process runs for this panel's sake too while it is open and the band
+    // is enabled, on top of whatever bar cells already want it for.
+    Binding {
+        target: VisualizerService
+        property: "panelWants"
+        value: root.isOpen && root._spectrumEnabled
     }
 
     // The lyrics block's position clock (spec D5, Quickshell's documented
@@ -391,6 +409,61 @@ Panel {
                 font.family: Theme.fontFamilySans
                 font.pixelSize: Theme.fontSize.bodySmall
                 elide: Text.ElideRight
+            }
+        }
+    }
+
+    // The spectrum band: the same 24-column cava frame the bar cell reads,
+    // drawn at content width instead of downsampled (spec D6). Empty
+    // troughs while the panel is open and the track is paused are the
+    // honest state, the same one the bar cell draws when its own process
+    // isn't running: no extra handling needed since VisualizerService.levels
+    // is already the all-zero baseline then.
+    Item {
+        id: spectrumBand
+        width: parent.width
+        height: Theme.space.controlHeight
+        visible: MediaService.available && root._spectrumEnabled && VisualizerService.state === "available"
+
+        readonly property real _columnWidth: (spectrumBand.width - (Visualizer.BAR_COUNT - 1) * Theme.space.xxs) / Visualizer.BAR_COUNT
+
+        Row {
+            anchors.fill: parent
+            spacing: Theme.space.xxs
+
+            Repeater {
+                model: Visualizer.BAR_COUNT
+
+                // primitive-exempt: one spectrum column's groove, the panel's own
+                // copy of the bar cell's vertical track.
+                Rectangle {
+                    id: column
+                    required property int index
+
+                    width: spectrumBand._columnWidth
+                    height: parent.height
+                    radius: Math.min(Theme.radiusSm, width / 2)
+                    color: Theme.color.muted
+
+                    readonly property real _level: VisualizerService.levels[column.index] || 0
+                    readonly property string _band: Visualizer.levelColorBand(column._level)
+
+                    // primitive-exempt: the column's fill, bottom-up like the bar
+                    // cell's own track.
+                    Rectangle {
+                        y: parent.height - height
+                        width: parent.width
+                        height: column._level > 0
+                            ? Math.max(parent.height * column._level, column.radius * 2)
+                            : 0
+                        radius: column.radius
+                        color: column._band === "accent"
+                            ? Theme.color.primary
+                            : column._band === "content"
+                                ? Theme.color.foreground
+                                : Theme.color.mutedForeground
+                    }
+                }
             }
         }
     }

@@ -132,4 +132,29 @@ TestCase {
     function test_level_color_band_full_scale_is_accent() {
         compare(Model.levelColorBand(1), "accent");
     }
+
+    function test_baseline_is_bar_count_long() {
+        compare(Model.baselineLevels().length, 24);
+        compare(Model.BAR_COUNT, 24);
+    }
+
+    function test_downsample_takes_the_peak_of_each_group() {
+        var levels = [1, 2, 3, 4, 9, 1, 2, 3, 5, 6, 7, 8, 1, 1, 1, 1, 9, 1, 1, 1, 1, 1, 1, 5];
+        var d = Model.downsample(levels, 6);
+        compare(d, [4, 9, 8, 1, 9, 5]);
+    }
+
+    function test_downsample_short_input_pads_with_zeros() {
+        var d = Model.downsample([3, 7], 6);
+        compare(d, [3, 7, 0, 0, 0, 0]);
+    }
+
+    function test_downsample_empty_input_is_all_zeros() {
+        compare(Model.downsample([], 6), [0, 0, 0, 0, 0, 0]);
+    }
+
+    function test_downsample_count_equal_to_length_is_identity() {
+        var levels = [1, 2, 3, 4, 5, 6];
+        compare(Model.downsample(levels, 6), levels);
+    }
 }

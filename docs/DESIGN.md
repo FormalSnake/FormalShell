@@ -492,7 +492,10 @@ panel's `LYRICS` block anchors its active line at the centre of a clipped
 five-row viewport that travels to meet it, ranks every other line by a
 four-step opacity ramp on its distance from that line, wipes a synced
 line's words from `mutedForeground` to `foreground` as they're sung, and
-draws none of it with a glow, a blur or a shadow.
+draws none of it with a glow, a blur or a shadow. The media panel's
+spectrum band, under the now-playing block, is 24 columns of the same
+`muted` trough and bottom-up fill the bar cell draws, coloured by the same
+three energy bands off the one shared cava process.
 
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
 with a bottom rule only; a shadcn Breadcrumb under it (ancestors in

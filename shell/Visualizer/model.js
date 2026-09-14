@@ -20,11 +20,18 @@
 // bad line from cava must never crash the widget or freeze it on a stale
 // render.
 
-// 6 bars at caption size, not 10 at body, the owner wants the cell
-// DMS-compact ("less wide"), and a fixed-frequency spectrum reads fine
-// at this resolution.
-var BAR_COUNT = 6;
+// cava's own bar count (M55: raised from 6 to 24 for the media panel's
+// spectrum band, which draws every column at the panel's own width). The
+// bar cell still reads as six tracks: Visualizer.qml downsamples
+// VisualizerService.levels to CELL_BAR_COUNT below rather than drawing all
+// 24 at the cell's own DMS-compact size.
+var BAR_COUNT = 24;
 var MAX_LEVEL = 100;
+
+// The bar cell's own track count: 6 bars at caption size, not 10 at body,
+// the owner wants the cell DMS-compact ("less wide"), and a
+// fixed-frequency spectrum reads fine at this resolution.
+var CELL_BAR_COUNT = 6;
 
 // Below this level a bar reads as silence and snaps flat. cava's own
 // `ignore` knob would do the same job but has been deprecated since 0.8.0
@@ -50,6 +57,34 @@ function baselineLevels() {
     for (var i = 0; i < BAR_COUNT; i++)
         levels[i] = 0;
     return levels;
+}
+
+// Folds a `BAR_COUNT`-long frame down to `count` columns for the bar cell,
+// each the peak (not the average) of its own contiguous group: a peak keeps
+// a transient visible even when it lands in only one of the four raw bars a
+// cell column now stands for, where an average would smear it out. Groups
+// split as evenly as possible when `levels.length` doesn't divide by
+// `count`, the remainder spread one-wide over the first groups so no group
+// but the last ever comes up short. A group with nothing in it (levels
+// shorter than count) reads as its own zero rather than an out-of-bounds
+// read, which is what makes an empty or short frame downsample to zeros.
+function downsample(levels, count) {
+    var input = levels || [];
+    var result = new Array(count);
+    var base = Math.floor(input.length / count);
+    var remainder = input.length % count;
+    var idx = 0;
+    for (var g = 0; g < count; g++) {
+        var size = base + (g < remainder ? 1 : 0);
+        var peak = 0;
+        for (var j = 0; j < size; j++) {
+            if (input[idx + j] > peak)
+                peak = input[idx + j];
+        }
+        idx += size;
+        result[g] = peak;
+    }
+    return result;
 }
 
 function parseFrame(line, barCount) {
