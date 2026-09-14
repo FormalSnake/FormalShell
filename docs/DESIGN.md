@@ -216,26 +216,29 @@ shorter than that reads as a flicker rather than as a change. The positioner
 transitions are the same primitive: `MoveTransition` on `spatial`,
 `AddTransition` on `effects`, `RemoveTransition` on `effectsFast`.
 
-An edge-anchored card and the bar are one silhouette (amended 2026-09-09).
-The bar draws a single 1px `border` along its inner edge, and a card hanging
-off that edge opens a gap in the line: the card's own rect plus a `radiusXl`
-at either end, a plain function of the card's live rect with no clock of its
+An edge-anchored card and the line it comes out of are one silhouette while
+it comes out (amended 2026-09-09, and 2026-09-14 for the let-go). The bar
+draws a single 1px `border` along its inner edge, the frame ring one round
+its cut-out, and a card coming out of that line opens a gap in it: the
+card's own rect plus the fillets' reach at either end (`radiusXl` while
+attached), a plain function of the card's live rect with no clock of its
 own, since the card's own clocks already carry that rect and a second one
 left the line lagging the shoulders it has to meet. `Shoulders` draws the
 card with that edge left open and a concave quarter fillet outside each of
-its two corners, running out to where the line resumes, so the card grows out
-of the bar rather than parking against it. The open surface publishes the
-rect as `PanelRegistry.join` (the bar's edge, the card's x and width along
-it, the screen) off its frame's live position, so a size morph and a handoff
-carry the gap with them frame by frame; that rect is the only thing the two
-windows share. `theme.radius` 0 draws square corners and no fillets, which is
-a plain card against a whole line. The panels take `Shoulders`, and the
+its two corners, running out to where the line resumes, so the card grows
+out of the bar rather than parking against it. The surface publishes the
+rect into `PanelRegistry.joins` (the line's edge, the card's x and width
+along it, the reach, the screen) off its frame's live position, so a size
+morph and a handoff carry the gap with them frame by frame; that rect is
+the only thing the two windows share, and it is gone once the card has let
+go (§1 Motion). `theme.radius` 0 draws square corners and no fillets, which
+is a plain card against a whole line. The panels take `Shoulders`, and the
 chevron's and the tray's second bars with them, on a framed screen as on a
 bare one: the ring's hairline runs the bar's edge there and opens the same
-gap. Everything that meets no line
-keeps `Card`: the notification centre and the OSD each sit a `screenPadding`
-clear of the output's own edge, and the launcher, the tooltip and the modals
-float with nothing for a fillet to run out to.
+gap; the notification centre takes it against the ring's far side or a
+right bar. Everything that meets no line keeps `Card`: the OSD sits a
+`screenPadding` clear of the output's own edge, and the launcher, the
+tooltip and the modals float with nothing for a fillet to run out to.
 
 A card that arrives squashes into the edge it came from (`Deform`, amended
 2026-09-09). Its scene position and size are sampled every frame, the
@@ -257,17 +260,29 @@ the card starts behind that edge, displaced toward it by its own extent on
 that axis, and travels to rest on `spatial` both ways, clipped at the line it
 rests on so it comes out from under the bar rather than across it. No fade
 and no zoom, since the clip is what hides it; its contents come up on
-`effects` behind the travel, so the card lands before its text. A panel's
-silhouette does not travel with it (amended 2026-09-14, owner: caelestia's
-popouts and Material's container morph; a drawer whose shoulders rode behind
-the line slid out of a slot in the bar with an empty gap between the two for
-the length of the travel): the `Shoulders` are drawn from the bar's line to
-the card's far edge, the fillets on the line from the first frame with their
-radius capped at that depth, so what comes out is one shape budding off the
-strip while the contents slide out inside it, and the deform pivots on the
-line rather than on the card's own edge, so the card squashes into the bar.
-The bar's gap follows the fillets' reach frame by frame. The launcher
-unfolds instead: the card is drawn at its search row's height on
+`effects` behind the travel, so the card lands before its text. A card's silhouette
+does not travel with it (amended 2026-09-14, owner: caelestia's popouts and
+Material's container morph; a drawer whose shoulders rode behind the line
+slid out of a slot in the bar with an empty gap between the two for the
+length of the travel): the `Shoulders` are drawn from the line to the card's
+far edge, the fillets on the line from the first frame with their radius
+capped at that depth, so what comes out is one shape budding off the strip
+while the contents slide out inside it, and the deform pivots on the line
+rather than on the card's own edge, so the card squashes into the bar. Then
+it lets go (`Joint`, the metamorphosis, owner: the card comes morphing out
+of the bar and is then its own thing): as the pose passes 0.85, into the
+overshoot, `attach` runs to 0 on `spatialFast`, the fillets shrinking to
+sharp corners and rounding out the other way, the near edge pulling off the
+line to its resting margin with its border coming up, and the line's gap
+closing in from both ends under the card. At rest a panel is a plain `Card`
+one `barMargin` off a whole line; a close runs the whole thing backwards,
+the card reattaching as it slides back under. A panel takes its line from
+the bar, framed or bare, and a panel hanging off another panel (a tray
+item's menu off the tray's second bar) takes that panel's far edge, which
+opens the same gap in its own border; the notification centre takes the
+frame ring's far side, or the bar's own hairline when the bar is on the
+right, and comes out from behind the output's edge as before when there is
+neither. The launcher unfolds instead: the card is drawn at its search row's height on
 `effectsFast`, at full opacity, and its height carries the level under the
 rule on `spatial` while the card clips, so the rows are revealed rather than
 pushed into place. That level takes no fade of its own, the growing edge
@@ -384,7 +399,8 @@ thing.
 | `Button` | shadcn button, `variant`: `default` (`primary` fill), `outline` (`border`, transparent), `ghost` (no border), `selected` (`background` fill behind a border), `destructive` | hover and pressed (a fill blends toward `background`, everything else takes the wash), cursor, disabled (opacity 0.5) |
 | `IconButton` | a `ghost` Button that is `controlHeight` square, one `Icon` | as Button |
 | `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding`; the surface's own frame, never nested | none |
-| `Shoulders` | the same frame with the anchored edge left open and a concave fillet outside each of its two corners, running out to the bar's line (§1 Motion): what every surface hanging off the bar draws instead of `Card` | none |
+| `Shoulders` | the same frame with the anchored edge left open and a concave fillet outside each of its two corners, running out to the line it came out of (§1 Motion), and, at `attach` 0, a plain `Card` again: what every surface coming out of a line draws instead of `Card` | attached, letting go, free |
+| `Joint` | the join controller beside a `Presence` (§1 Motion): the silhouette's depth from the line, the let-go clock, the deform's pivot, and the gap it publishes to the line | attached, released |
 | `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
 | `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |

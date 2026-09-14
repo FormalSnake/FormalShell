@@ -16,6 +16,7 @@ DitherImage DitherImage.qml
 Icon Icon.qml
 IconButton IconButton.qml
 Input Input.qml
+Joint Joint.qml
 KeyCatcher KeyCatcher.qml
 MarqueeText MarqueeText.qml
 MoveTransition MoveTransition.qml

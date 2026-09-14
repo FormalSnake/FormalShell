@@ -7,7 +7,6 @@ import "cursor.js" as Cursor
 import "geometry.js" as Geometry
 import "tooltip.js" as Placement
 import "../Bar/layout.js" as BarLayout
-import "shoulders.js" as Outline
 
 // The shared per-widget popout (DESIGN.md §3 "Panel", spec "Panels"): a
 // bordered card anchored under the bar cell that opened it, opening with a
@@ -345,71 +344,46 @@ PanelWindow {
             Theme.edgeInset, Theme.space.barMargin - root._joinDepth, root._ownerShift)
         : ({ x: 0, y: 0, width: 0, height: 0 })
 
-    // Whether this card joins the bar (M54 D6). A panel with an owner hangs
-    // off that owner rather than off the bar and meets no line. A framed
-    // screen joins like a bare one: the ring's hairline runs the bar's edge
-    // there and opens the same gap (Surfaces/Frame/FrameRing.qml).
-    readonly property bool _joined: !root.owner
+    // How far past its own rect the card's shape reaches toward the line it
+    // comes out of (M54 D6): the `barMargin` the frame hangs off it by, and
+    // the line's own row on top of it, so the fillets land ON the line and
+    // the two windows read as one silhouette. The line is the bar's
+    // hairline, the frame ring's on a framed screen (Surfaces/Frame/
+    // FrameRing.qml), or the far edge of the panel this one hangs off (a
+    // tray item's menu off the tray's second bar), which opens the same gap
+    // in its own border below. The frame's rect is untouched, so everything
+    // measured off it (the handoff, the content, `panel state`) is what it
+    // was.
+    readonly property real _joinDepth: Theme.space.barMargin + Theme.borderWidth
 
-    // How far past its own rect the card's shape reaches toward the bar: the
-    // `barMargin` the frame hangs off the strip by, and the line's own row on
-    // top of it, so the fillets land ON the line and the two windows read as
-    // one silhouette. The frame's rect is untouched, so everything measured
-    // off it (the handoff, the content, `panel state`) is what it was.
-    readonly property real _joinDepth: root._joined
-        ? Theme.space.barMargin + Theme.borderWidth
-        : 0
+    // A card hanging off THIS one, for the gap in the far edge's border.
+    readonly property var _childJoin: PanelRegistry.joinOn(Theme.barPosition,
+        root._screen ? root._screen.name : "", root)
 
-    // How far behind its rest the drawer is right now, toward the bar: the
-    // whole shape's extent closed, 0 at rest, a few pixels negative while
-    // the spatial curve overshoots (Presence.qml's emerge).
-    readonly property real _slide: presence.emergeX * root._edge.x + presence.emergeY * root._edge.y
-
-    // How much of the shape is out from under the line: everything of it
-    // past the clip, which is what the shoulders are drawn over (the
-    // Shoulders item below). The contents travel with the frame; the
-    // silhouette does not, it grows out of the line as the card comes out,
-    // so the card and the bar are one shape from the first frame rather
-    // than a card sliding out of a slot with its shoulders arriving last
-    // (owner, 2026-09-14). Past rest it follows the overshoot outward, the
-    // line end pinned, so the neck stretches rather than the shape tearing
-    // off the bar. Off the frame's live extent rather than the morph's
-    // target, so a handoff's travel, which draws the frame between two
-    // rects, keeps the shape's far edge on the card's.
-    readonly property real _growDepth: Math.max(0,
-        (Theme.barVertical ? frame.width : frame.height) + root._joinDepth - root._slide)
-
-    // Where the card meets the bar right now, for the gap in the strip's line
-    // (Core/PanelRegistry.qml, Surfaces/Bar/Bar.qml). Read off the frame's
-    // live rect rather than its resting place, so a size morph and a handoff
-    // travel both carry the gap with them frame by frame. `x` and `width` run
-    // along the bar in the bar window's own coordinates, which this window,
-    // covering the whole output, already shares.
-    //
-    // A card being handed over publishes nothing: it is frozen where it was
-    // while the card that replaced it travels, and the gap follows the one
-    // that is moving.
-    //
-    // `reach` is how far outside that rect the shoulders run along the bar:
-    // the fillet's radius, which shoulders.js caps at the shape's depth, so
-    // the gap follows the fillets in through the first and last frames of
-    // the travel rather than standing open at the full radius over a sliver.
-    readonly property var _join: (root._joined && root._screen && presence.shown
-        && !root.handingOver)
-        ? ({
-            edge: Theme.barPosition,
-            x: Theme.barVertical ? frame.y : frame.x,
-            width: Theme.barVertical ? frame.height : frame.width,
-            reach: Outline.filletRadius(root.frameRadius, root._growDepth),
-            screen: root._screen.name
-        })
-        : null
-
-    on_JoinChanged: {
-        if (root._join)
-            PanelRegistry.setJoin(root, root._join);
-        else
-            PanelRegistry.clearJoin(root);
+    // The join itself (Components/Joint.qml): the silhouette drawn from the
+    // line rather than travelling with the frame, the let-go once the card
+    // is nearly at rest, and the gap published to the strip's line
+    // (Core/PanelRegistry.qml, Surfaces/Bar/Bar.qml). The rect along the
+    // bar is read off the frame's live rect rather than its resting place,
+    // so a size morph and a handoff travel both carry the gap with them
+    // frame by frame, in the bar window's own coordinates, which this
+    // window, covering the whole output, already shares. A card being
+    // handed over publishes nothing: it is frozen where it was while the
+    // card that replaced it travels, and the gap follows the one that is
+    // moving.
+    Joint {
+        id: joint
+        owner: root
+        presence: presence
+        edge: Theme.barPosition
+        joined: root._screen !== null && !root.handingOver
+        target: root.owner
+        depth: root._joinDepth
+        radius: root.frameRadius
+        extent: Theme.barVertical ? frame.width : frame.height
+        along: Theme.barVertical ? frame.y : frame.x
+        length: Theme.barVertical ? frame.height : frame.width
+        screen: root._screen ? root._screen.name : ""
     }
 
     readonly property real _contentWidth: root.panelWidth - Theme.space.panelPadding * 2
@@ -761,8 +735,8 @@ PanelWindow {
         // The pivot on the bar's line rather than on the card's own edge,
         // which is behind the line for most of the travel: the card squashes
         // into the bar, and the shoulders, pinned to the line, stay on it
-        // under the matrix.
-        inset: root._joinDepth - root._slide
+        // under the matrix. Back on the card's edge once it has let go.
+        inset: joint.pivotInset
         active: !presence.settled || root._handoff || frameX.running || frameY.running
             || morphHeight.running || morphWidth.running
     }
@@ -979,49 +953,46 @@ PanelWindow {
                         anchors.fill: parent
                         transform: Matrix4x4 { matrix: deform.matrix }
 
-                        // The card joined to the bar (M54 D6): its three free
-                        // edges rounded, the edge facing the bar open, and a
-                        // concave fillet outside each of that edge's corners
-                        // running out to the line the strip opened a gap in.
-                        // Longer than the card by a fillet at either end, and
-                        // pinned to the line rather than to the frame: `_slide`
-                        // undoes the frame's own travel on the anchored axis
-                        // and `_growDepth` is what is out from under the line,
-                        // so at rest it is the card plus `_joinDepth`, and mid
-                        // travel a shorter shape whose far edge is still the
-                        // card's.
+                        // The card (M54 D6, Components/Shoulders.qml): joined
+                        // to the bar, its three free edges rounded, the edge
+                        // facing the bar open, and a concave fillet outside
+                        // each of that edge's corners running out to the line
+                        // the strip opened a gap in; let go, the plain card
+                        // `Card` draws. Longer than the card by a fillet at
+                        // either end, and pinned to the line rather than to
+                        // the frame: `joint.slide` undoes the frame's own
+                        // travel on the anchored axis and `joint.shapeDepth`
+                        // is what is out from under the line, so at rest it is
+                        // the card plus `_joinDepth`, and mid travel a shorter
+                        // shape whose far edge is still the card's. `farGap`
+                        // is a card coming out of this one, its rect along the
+                        // bar put into this item's own coordinates.
                         Shoulders {
                             id: frameShape
-                            visible: root._joined
                             edge: Theme.barPosition
                             radius: root.frameRadius
                             color: root.frameColor
+                            attach: joint.attach
+                            nearInset: joint.nearInset
+                            farGap: {
+                                var j = root._childJoin;
+                                if (!j)
+                                    return null;
+                                var origin = (Theme.barVertical ? frame.y : frame.x) - frameShape.overhang;
+                                return [j.x - j.reach - origin, j.x + j.width + j.reach - origin];
+                            }
                             x: Theme.barVertical
                                 ? (Theme.barPosition === "left"
-                                    ? root._slide - root._joinDepth
-                                    : frame.width + root._joinDepth - root._slide - root._growDepth)
+                                    ? joint.slide - root._joinDepth
+                                    : frame.width + root._joinDepth - joint.slide - joint.shapeDepth)
                                 : -frameShape.overhang
                             y: Theme.barVertical
                                 ? -frameShape.overhang
                                 : (Theme.barPosition === "top"
-                                    ? root._slide - root._joinDepth
-                                    : frame.height + root._joinDepth - root._slide - root._growDepth)
-                            width: Theme.barVertical ? root._growDepth : frame.width + frameShape.overhang * 2
-                            height: Theme.barVertical ? frame.height + frameShape.overhang * 2 : root._growDepth
-                        }
-
-                        // The same card where there is no line to meet: a panel
-                        // hanging off another panel, and any panel at all with the
-                        // screen frame on. `Card`'s own fill, border and radius,
-                        // since this is what `Card` would have drawn.
-                        Rectangle {
-                            id: frameFill
-                            visible: !root._joined
-                            anchors.fill: parent
-                            color: root.frameColor
-                            radius: root.frameRadius
-                            border.width: Theme.borderWidth
-                            border.color: Theme.color.border
+                                    ? joint.slide - root._joinDepth
+                                    : frame.height + root._joinDepth - joint.slide - joint.shapeDepth)
+                            width: Theme.barVertical ? joint.shapeDepth : frame.width + frameShape.overhang * 2
+                            height: Theme.barVertical ? frame.height + frameShape.overhang * 2 : joint.shapeDepth
                         }
 
                         // What `Card`'s own default slot did: everything below is

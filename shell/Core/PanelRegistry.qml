@@ -58,38 +58,58 @@ Singleton {
         return rect;
     }
 
-    // Where a card is joined to the bar right now (M54 D6), or null while
-    // nothing hangs off it: `edge` the bar's edge, `x` and `width` the
-    // card's own rect along that bar in the bar's coordinates on `screen`
-    // (a screen name), the fillets outside it not counted, and `reach` how
-    // far past that rect the fillets run along the bar (their radius, capped
-    // at the card's depth while it grows out of the line). Bar.qml reads it
-    // to open the gap in its inward line, and it is the one thing the bar
-    // and the surface hanging off it share: two windows, one silhouette.
+    // Where cards are joined to a line right now (M54 D6), one entry per
+    // surface: `edge` the line's edge, `x` and `width` the card's own rect
+    // along that edge in output coordinates on `screen` (a screen name),
+    // the fillets outside it not counted, and `reach` how far past that
+    // rect the fillets run along the line (their radius, capped at the
+    // card's depth while it comes out from under the line, and shrinking
+    // as the card lets go). Bar.qml reads the one on its own edge to open
+    // the gap in its hairline, FrameRing.qml every edge's for the ring's,
+    // and it is the one thing the line and the surface hanging off it
+    // share: two windows, one silhouette. `target` is whose line: null for
+    // the screen's own, or the surface the card hangs off (a tray item's
+    // menu off the tray's second bar), which opens the gap in its own far
+    // edge. A panel on the bar and the notification centre on the frame's
+    // far side can be up together, which is why this is a list rather than
+    // one join.
     //
     // Reassigned rather than mutated, like `bars` above, so a consumer
     // binding to it re-evaluates. `owner` rides along so a surface can only
     // ever clear its own join: a panel handing its card over to another one
     // closes after the card it gave up has already been republished, and a
     // clear that ignored the owner would take the new one down with it.
-    property var join: null
+    property var joins: []
 
     function setJoin(owner, join) {
         if (!owner || !join)
             return;
-        root.join = {
+        root.joins = root.joins.filter(function (j) { return j.owner !== owner; }).concat([{
             owner: owner,
             edge: join.edge,
             x: join.x,
             width: join.width,
             reach: join.reach,
-            screen: join.screen
-        };
+            screen: join.screen,
+            target: join.target === undefined ? null : join.target
+        }]);
     }
 
     function clearJoin(owner) {
-        if (root.join && root.join.owner === owner)
-            root.join = null;
+        if (root.joins.some(function (j) { return j.owner === owner; }))
+            root.joins = root.joins.filter(function (j) { return j.owner !== owner; });
+    }
+
+    // The join on one edge of one output against one line (the screen's
+    // own when `target` is left out), or null. Reads `joins`, so a binding
+    // calling it re-evaluates when the list does.
+    function joinOn(edge, screen, target) {
+        var t = target === undefined ? null : target;
+        var joins = root.joins;
+        for (var i = 0; i < joins.length; i++)
+            if (joins[i].edge === edge && joins[i].screen === screen && joins[i].target === t)
+                return joins[i];
+        return null;
     }
 
     // PluginOverlay joins the mutual-exclusion set above without being a

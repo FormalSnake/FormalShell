@@ -37,51 +37,43 @@ function strokeRect(inner, radius, strokeWidth) {
     };
 }
 
-// The ring's hairline as one open walk round the cut-out, clockwise, with a
-// gap on the bar's own side between `gapStart` and `gapEnd` (window
-// coordinates along that side, the span a joined card's shoulders draw
-// into: Surfaces/Bar/Bar.qml's `_gapStart`/`_gapEnd`). Ten points: the walk
-// starts at one end of the gap, takes the four sides and the four corner
-// arcs, and ends at the gap's other end, so the segments alternate line,
-// arc, line, arc from p0 to p9 whichever side the bar is on. The gap is
-// held to the straight run of that side, and an empty one lands both ends
-// on the corner where the walk begins, which is a whole ring.
-function lineWalk(inner, radius, edge, gapStart, gapEnd) {
+// The ring's hairline as twelve strokes: each side of the cut-out in two
+// runs, split at the gap a joined card's shoulders draw into on that side
+// (`gaps[edge]` is `[start, end]` in window coordinates along the side, the
+// span Surfaces/Bar/Bar.qml's `_gapStart`/`_gapEnd` computes, absent for a
+// side with nothing on it), and the four corner arcs, clockwise. Sides are
+// cut only on their straight run; a gap outside it or empty gives a second
+// run of nothing and a first that is the whole side. Strokes are separate
+// so any side can open on any frame, which one walk cannot do once two
+// cards are up on two sides at once.
+function ringLine(inner, radius, gaps) {
     var x = inner.x;
     var y = inner.y;
     var w = inner.width;
     var h = inner.height;
     var r = radius;
-    var vertical = edge === "left" || edge === "right";
-    var along = vertical ? h : w;
-    var origin = vertical ? y : x;
-    var lo = Math.max(r, Math.min(along - r, gapStart - origin));
-    var hi = Math.max(lo, Math.min(along - r, gapEnd - origin));
-    if (edge === "left")
-        return [
-            { x: x, y: y + lo }, { x: x, y: y + r }, { x: x + r, y: y },
-            { x: x + w - r, y: y }, { x: x + w, y: y + r },
-            { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h },
-            { x: x + r, y: y + h }, { x: x, y: y + h - r }, { x: x, y: y + hi }
-        ];
-    if (edge === "right")
-        return [
-            { x: x + w, y: y + hi }, { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h },
-            { x: x + r, y: y + h }, { x: x, y: y + h - r },
-            { x: x, y: y + r }, { x: x + r, y: y },
-            { x: x + w - r, y: y }, { x: x + w, y: y + r }, { x: x + w, y: y + lo }
-        ];
-    if (edge === "bottom")
-        return [
-            { x: x + lo, y: y + h }, { x: x + r, y: y + h }, { x: x, y: y + h - r },
-            { x: x, y: y + r }, { x: x + r, y: y },
-            { x: x + w - r, y: y }, { x: x + w, y: y + r },
-            { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h }, { x: x + hi, y: y + h }
-        ];
-    return [
-        { x: x + hi, y: y }, { x: x + w - r, y: y }, { x: x + w, y: y + r },
-        { x: x + w, y: y + h - r }, { x: x + w - r, y: y + h },
-        { x: x + r, y: y + h }, { x: x, y: y + h - r },
-        { x: x, y: y + r }, { x: x + r, y: y }, { x: x + lo, y: y }
-    ];
+    function runs(edge, origin, extent, a, b) {
+        var g = gaps && gaps[edge] ? gaps[edge] : null;
+        var lo = g ? Math.max(r, Math.min(extent - r, g[0] - origin)) : extent - r;
+        var hi = g ? Math.max(lo, Math.min(extent - r, g[1] - origin)) : extent - r;
+        return [[r, lo], [hi, extent - r]];
+    }
+    var top = runs("top", x, w);
+    var bottom = runs("bottom", x, w);
+    var left = runs("left", y, h);
+    var right = runs("right", y, h);
+    return {
+        sides: {
+            top: top.map(function (s) { return { x1: x + s[0], y1: y, x2: x + s[1], y2: y }; }),
+            right: right.map(function (s) { return { x1: x + w, y1: y + s[0], x2: x + w, y2: y + s[1] }; }),
+            bottom: bottom.map(function (s) { return { x1: x + s[0], y1: y + h, x2: x + s[1], y2: y + h }; }),
+            left: left.map(function (s) { return { x1: x, y1: y + s[0], x2: x, y2: y + s[1] }; })
+        },
+        corners: [
+            { x1: x + w - r, y1: y, x2: x + w, y2: y + r },
+            { x1: x + w, y1: y + h - r, x2: x + w - r, y2: y + h },
+            { x1: x + r, y1: y + h, x2: x, y2: y + h - r },
+            { x1: x, y1: y + r, x2: x + r, y2: y }
+        ]
+    };
 }

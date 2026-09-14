@@ -93,8 +93,12 @@ IpcHandler {
         return out;
     }
 
+    // The join on the bar's own edge, which is the one the shoulders leg
+    // measures the strip's gap against.
     function _join() {
-        var j = Core.PanelRegistry.join;
+        var bars = Core.PanelRegistry.bars;
+        var screen = bars.length > 0 && bars[0].modelData ? bars[0].modelData.name : "";
+        var j = Core.PanelRegistry.joinOn(Core.Theme.barPosition, screen);
         return j ? { edge: j.edge, x: j.x, width: j.width, reach: j.reach, screen: j.screen } : null;
     }
 

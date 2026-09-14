@@ -3,3 +3,4 @@ singleton Theme Theme.qml
 singleton Config Config.qml
 singleton State State.qml
 singleton TooltipRegistry TooltipRegistry.qml
+singleton PanelRegistry PanelRegistry.qml

@@ -222,14 +222,9 @@ PanelWindow {
     // cell's width cap is a fraction of.
     readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
 
-    // The card joined to THIS strip, if any (M54 D6, PanelRegistry.join): a
+    // The card joined to THIS strip, if any (M54 D6, PanelRegistry.joins): a
     // join on another output or against another edge is somebody else's.
-    readonly property var _join: {
-        var j = PanelRegistry.join;
-        if (!j || j.edge !== bar._position)
-            return null;
-        return (bar.modelData && j.screen === bar.modelData.name) ? j : null;
-    }
+    readonly property var _join: PanelRegistry.joinOn(bar._position, bar.modelData ? bar.modelData.name : "")
 
     // The gap itself: one card's rect plus the fillets' `reach` at either
     // end, which is exactly the span Components/Shoulders.qml draws into. A
@@ -723,9 +718,7 @@ PanelWindow {
     FrameRing {
         anchors.fill: parent
         visible: bar._framed
-        edge: bar._position
-        gapStart: bar._gapStart
-        gapEnd: bar._gapEnd
+        screenName: bar.modelData ? bar.modelData.name : ""
     }
 
     // The strip: the whole window on its own, or the bar's edge of a

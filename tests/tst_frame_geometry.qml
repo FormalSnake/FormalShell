@@ -68,46 +68,42 @@ TestCase {
         compare(s.radius, 19.5);
     }
 
-    // --- The hairline's walk (2026-09-14, the joined card on a framed screen)
+    // --- The hairline's strokes (2026-09-14, the joined card on a framed screen)
 
-    function walk(position, gapStart, gapEnd) {
+    function line(position, gaps) {
         var g = frame(position, 10, 20);
-        return Geometry.lineWalk(g.inner, g.radius, position, gapStart, gapEnd);
+        return Geometry.ringLine(g.inner, g.radius, gaps);
     }
 
-    function test_no_gap_is_a_whole_ring_that_starts_and_ends_on_one_corner() {
-        var p = walk("top", 0, 0);
-        compare(p.length, 10);
-        compare(JSON.stringify(p[0]), JSON.stringify({ x: 30, y: 40 }));
-        compare(JSON.stringify(p[9]), JSON.stringify({ x: 30, y: 40 }));
-        compare(JSON.stringify(p[8]), JSON.stringify({ x: 30, y: 40 }));
+    function test_no_gap_leaves_every_side_one_whole_run() {
+        var l = line("top", {});
+        compare(JSON.stringify(l.sides.top[0]), JSON.stringify({ x1: 30, y1: 40, x2: 1890, y2: 40 }));
+        compare(l.sides.top[1].x1, l.sides.top[1].x2);
+        compare(JSON.stringify(l.sides.left[0]), JSON.stringify({ x1: 10, y1: 60, x2: 10, y2: 1050 }));
+        compare(l.corners.length, 4);
+        compare(JSON.stringify(l.corners[3]), JSON.stringify({ x1: 10, y1: 60, x2: 30, y2: 40 }));
     }
 
-    function test_a_gap_on_a_left_bar_opens_between_its_two_ends() {
-        var p = walk("left", 300, 500);
-        compare(p[0].x, 40);
-        compare(p[0].y, 300);
-        compare(p[9].x, 40);
-        compare(p[9].y, 500);
-        // The first side runs up to the top left corner's arc.
-        compare(JSON.stringify(p[1]), JSON.stringify({ x: 40, y: 30 }));
-        compare(JSON.stringify(p[2]), JSON.stringify({ x: 60, y: 10 }));
+    function test_a_gap_on_a_left_bar_splits_its_side_at_the_gap() {
+        var l = line("left", { left: [300, 500] });
+        compare(JSON.stringify(l.sides.left[0]), JSON.stringify({ x1: 40, y1: 30, x2: 40, y2: 300 }));
+        compare(JSON.stringify(l.sides.left[1]), JSON.stringify({ x1: 40, y1: 500, x2: 40, y2: 1050 }));
+        compare(l.sides.right[1].y1, l.sides.right[1].y2);
     }
 
-    function test_a_gap_on_a_bottom_bar_walks_left_first() {
-        var p = walk("bottom", 800, 1000);
-        compare(p[0].y, 1040);
-        compare(p[0].x, 800);
-        compare(p[9].x, 1000);
-        compare(JSON.stringify(p[1]), JSON.stringify({ x: 30, y: 1040 }));
+    function test_two_sides_can_open_at_once() {
+        var l = line("left", { left: [300, 500], right: [700, 900] });
+        compare(l.sides.left[1].y1, 500);
+        compare(l.sides.right[0].y2, 700);
+        compare(l.sides.right[1].y1, 900);
     }
 
     function test_the_gap_is_held_to_the_straight_run() {
-        var p = walk("top", 0, 5);
-        compare(p[9].x, 30);
-        compare(p[0].x, 30);
-        var q = walk("right", 1070, 1090);
-        compare(q[0].y, 1050);
-        compare(q[9].y, 1050);
+        var l = line("top", { top: [0, 5] });
+        compare(l.sides.top[0].x2, 30);
+        compare(l.sides.top[1].x1, 30);
+        var m = line("right", { right: [1070, 1090] });
+        compare(m.sides.right[0].y2, 1050);
+        compare(m.sides.right[1].y1, 1050);
     }
 }
