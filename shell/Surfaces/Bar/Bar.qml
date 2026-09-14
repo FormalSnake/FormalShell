@@ -276,6 +276,94 @@ PanelWindow {
         - (bar._vertical ? centerRegion.implicitHeight : centerRegion.implicitWidth)
         - (bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth)
 
+    // Each visible child's along-axis extent on a rail, in the order
+    // `Layout.fitExtent` should spend the room in: the region's own
+    // anchored edge first. `reversed` is true for the right region, whose
+    // rail is right/bottom-aligned within its box (rightRail's own `x`/`y`
+    // below), so its LAST child sits nearest that anchored edge and its
+    // first is the one nearest the centre. A hidden or not-yet-present
+    // child (Tray's own toggle-only state, a widget still animating open
+    // from nothing) reads 0 here and `fitExtent` already skips those, so
+    // no separate filter is needed beyond `visible`.
+    function _railExtents(rail, vertical, reversed) {
+        var out = [];
+        var kids = rail.children;
+        for (var i = 0; i < kids.length; i++) {
+            var child = kids[reversed ? kids.length - 1 - i : i];
+            if (child.visible)
+                out.push(vertical ? child.height : child.width);
+        }
+        return out;
+    }
+
+    readonly property var _leftExtents: bar._railExtents(leftRail, bar._vertical, false)
+    readonly property var _rightExtents: bar._railExtents(rightRail, bar._vertical, true)
+    readonly property var _centerExtents: bar._railExtents(centerRegion, bar._vertical, false)
+
+    // The room each end region has before it runs into the centre, the same
+    // arithmetic the two regions' own width/height below used to hand
+    // straight to a `Math.min`. Kept as properties so `roomState()` can
+    // report against the same numbers the regions actually draw with.
+    readonly property real _leftRoom: bar._vertical
+        ? Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm)
+        : Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm)
+    readonly property real _rightRoom: bar._vertical
+        ? Math.max(0, bar._along - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height)
+        : Math.max(0, bar._along - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width)
+
+    readonly property var _leftFit: Layout.fitExtent(bar._leftExtents, Theme.space.sm, bar._leftRoom)
+    readonly property var _rightFit: Layout.fitExtent(bar._rightExtents, Theme.space.sm, bar._rightRoom)
+
+    // Every cell on a rail regardless of room, `fitExtent`'s own answer with
+    // no ceiling: what `roomState()` calls a region's `cells`, against
+    // which `_leftFit`/`_rightFit`'s count is how many of them actually fit.
+    readonly property int _leftTotal: Layout.fitExtent(bar._leftExtents, Theme.space.sm, Number.POSITIVE_INFINITY).count
+    readonly property int _rightTotal: Layout.fitExtent(bar._rightExtents, Theme.space.sm, Number.POSITIVE_INFINITY).count
+    readonly property int _centerTotal: Layout.fitExtent(bar._centerExtents, Theme.space.sm, Number.POSITIVE_INFINITY).count
+
+    // The loaded widget behind bar.layout's one "nowPlaying" entry, wherever
+    // a user put it, or null with none configured. Walks `bar._layout`
+    // itself, the same array each region's Repeater already binds as
+    // `model`, rather than assuming a region: bar.layout is free to put the
+    // entry anywhere, or nowhere.
+    readonly property var _regionRepeaters: ({ left: leftRepeater, center: centerRepeater, right: rightRepeater })
+
+    function _nowPlayingWidget() {
+        for (var r = 0; r < Layout.REGIONS.length; r++) {
+            var region = Layout.REGIONS[r];
+            var entries = bar._layout.regions[region];
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].kind === "builtin" && entries[i].name === "nowPlaying") {
+                    var slot = bar._regionRepeaters[region].itemAt(i);
+                    return slot ? slot.loadedItem : null;
+                }
+            }
+        }
+        return null;
+    }
+
+    // `bar room` (Ipc/BarIpc.qml, spec D7/D9): the slack, each region's own
+    // cell and hidden counts, and the now-playing cell's own label budget,
+    // for this one bar. A hidden count of 0 across every run is the room
+    // rule holding; the smoke leg crowds the strip until it isn't.
+    function roomState() {
+        var nowPlaying = bar._nowPlayingWidget();
+        return {
+            screen: bar.modelData ? bar.modelData.name : "",
+            edge: bar._position,
+            slack: bar._along > 0 ? bar._slack : 0,
+            regions: {
+                left: { cells: bar._leftTotal, hidden: bar._leftTotal - bar._leftFit.count },
+                center: { cells: bar._centerTotal, hidden: 0 },
+                right: { cells: bar._rightTotal, hidden: bar._rightTotal - bar._rightFit.count }
+            },
+            nowPlaying: {
+                budget: nowPlaying ? nowPlaying.labelBudget : -1,
+                natural: nowPlaying ? nowPlaying.naturalLabelWidth : 0
+            }
+        };
+    }
+
     // One thickness for every cell in every region, so a widget with a
     // taller line of content can no longer drag the whole strip with it.
     readonly property real _cellThickness: bar._strip.cellThickness
@@ -339,9 +427,15 @@ PanelWindow {
             panel: bar.mediaPanel
             // The widget's own default cap, scaled down on a strip too
             // short to afford it: a vertical bar is a third of a wide
-            // bar's length and the title marquee is the one cell that can
-            // take whatever it is given.
-            maxWidth: Math.min(220, bar._along * 0.15)
+            // bar's length. `maxWidth` itself is the widget's own, worked
+            // out against this cap and `slackAlong` below (M55 D7); binding
+            // straight to it would fight the widget's own assignment.
+            stripCap: Math.min(220, bar._along * 0.15)
+            // The now-playing cell gives ground before an end region loses
+            // a whole cell (M55 D7): the same room the tray reads
+            // (`_slack` above), infinite until the strip has a measured
+            // length of its own.
+            slackAlong: bar._along > 0 ? bar._slack : Number.POSITIVE_INFINITY
             // M16 Task 11: gates the marquee off while the bar's own
             // PanelWindow isn't on screen.
             windowVisible: bar.visible
@@ -574,6 +668,12 @@ PanelWindow {
             // on one property.
             readonly property bool _present: entrySlot._shown && !entrySlot.modelData.collapsible
 
+            // The loaded widget itself, `bar._nowPlayingWidget()`'s own way
+            // in past the Loader: an external id can't reach `entryLoader`
+            // from outside this Component, so the slot hands its own load
+            // out under a name that can.
+            readonly property var loadedItem: entryLoader.item
+
             // Whether this slot may animate anything at all, asked of the
             // strip it landed in rather than of the bar. The same delegate
             // draws the cells of the chevron's second bar and of the tray's
@@ -789,15 +889,23 @@ PanelWindow {
         // and `cellInset` in from the strip's outer edge. `left` is the start
         // of the strip and `right` its end whichever way it runs.
         //
-        // Room along the strip is shared in a fixed order. The centre sits at
-        // the middle while it can, and slides toward the shorter end once the
-        // two end regions together with it outgrow the strip, the start region
-        // winning over the end one. What still does not fit clips at the
-        // centre's side of each end region, never at the strip's own end, so
-        // the cells against the screen edge (an end region's permanent cells,
-        // past its chevron) stay whatever an expanded group costs: a vertical
-        // bar has a third of a wide bar's length, and a right region long
-        // enough to be worth a chevron overflows it the moment it opens.
+        // Room along the strip is shared in a fixed order (DESIGN.md §3 Bar,
+        // spec D7). The now-playing cell gives ground first, on its own
+        // (widgets/NowPlaying.qml's `_refit`, fed the same `_slack` the tray
+        // reads below): its label shrinks before anything else on the strip
+        // moves. The centre sits at the middle while it can, and slides
+        // toward the shorter end once the two end regions together with it
+        // outgrow the strip, the start region winning over the end one, same
+        // as before. What still does not fit past that clamp hides WHOLE
+        // cells rather than clipping into one: an end region's own extent is
+        // `Layout.fitExtent` over its rail's visible children (`_leftFit`/
+        // `_rightFit` above), taken from the region's own anchored edge
+        // inward, so the cap always lands on a cell boundary and the hidden
+        // cell is always the one nearest the centre, never the one against
+        // the screen edge. A cell comes back the moment the room does. The
+        // chevron is unrelated to any of this: still config-only, still
+        // collapsing whatever bar.layout put on its governed side, whether
+        // the strip is crowded or not.
         //
         // Placed by x/y rather than anchors on purpose: the edge can change
         // while the regions exist (settings.json lands after the first frame),
@@ -811,15 +919,13 @@ PanelWindow {
             x: bar._vertical ? bar._strip.cellInset : bar._strip.edgeInset
             y: bar._vertical ? bar._strip.edgeInset : bar._strip.cellInset
             clip: true
-            // Capped to whatever space actually remains before centerRegion
-            // (custom command/qml modules have no fixed count), so overflow
-            // clips here instead of drawing over the clock.
-            width: bar._vertical
-                ? leftRail.implicitWidth
-                : Math.min(leftRail.implicitWidth, Math.max(0, centerRegion.x - bar._strip.edgeInset - Theme.space.sm))
-            height: bar._vertical
-                ? Math.min(leftRail.implicitHeight, Math.max(0, centerRegion.y - bar._strip.edgeInset - Theme.space.sm))
-                : leftRail.implicitHeight
+            // Capped to `_leftFit`'s own answer, never to the raw room
+            // before centerRegion directly: that raw number can land inside
+            // a cell (custom command/qml modules have no fixed count), and
+            // `fitExtent` is what snaps it back to the nearest cell boundary
+            // behind it.
+            width: bar._vertical ? leftRail.implicitWidth : bar._leftFit.extent
+            height: bar._vertical ? bar._leftFit.extent : leftRail.implicitHeight
 
             // The start region is pinned to the strip's own start, so only
             // its far edge moves when a cell inside it opens or closes: the
@@ -895,15 +1001,12 @@ PanelWindow {
             x: bar._vertical ? bar._strip.cellInset : parent.width - bar._strip.edgeInset - rightRegion.width
             y: bar._vertical ? parent.height - bar._strip.edgeInset - rightRegion.height : bar._strip.cellInset
             clip: true
-            // Mirror of leftRegion's cap: never draws back past centerRegion's
-            // far edge, regardless of how many built-ins plus custom modules
-            // settings.json's bar.layout.right names.
-            width: bar._vertical
-                ? rightRail.implicitWidth
-                : Math.min(rightRail.implicitWidth, Math.max(0, parent.width - bar._strip.edgeInset - Theme.space.sm - centerRegion.x - centerRegion.width))
-            height: bar._vertical
-                ? Math.min(rightRail.implicitHeight, Math.max(0, parent.height - bar._strip.edgeInset - Theme.space.sm - centerRegion.y - centerRegion.height))
-                : rightRail.implicitHeight
+            // Mirror of leftRegion's cap, `_rightFit` rather than `_leftFit`:
+            // never draws back past centerRegion's far edge, regardless of
+            // how many built-ins plus custom modules settings.json's
+            // bar.layout.right names, and always on a cell boundary.
+            width: bar._vertical ? rightRail.implicitWidth : bar._rightFit.extent
+            height: bar._vertical ? bar._rightFit.extent : rightRail.implicitHeight
 
             // The end region is placed off its own extent, so a cell opening
             // or closing inside it moves the whole box: the box travels and

@@ -115,4 +115,18 @@ IpcHandler {
         }
         return JSON.stringify({ regions: out, chevronRegions: root._chevronRegions() });
     }
+
+    // `qs ipc call bar room` (spec D7/D9, M55 Task 5): each mapped bar's own
+    // `roomState()` (Bar.qml), the slack it has left, every region's cell
+    // and hidden counts, and the now-playing cell's own label budget. One
+    // array entry per screen, the same fan-out `debug dump`'s `_bars()`
+    // takes, since Bar.qml is one instance per output and this handler
+    // answers for the whole shell.
+    function room(): string {
+        var bars = PanelRegistry.bars;
+        var out = [];
+        for (var i = 0; i < bars.length; i++)
+            out.push(bars[i].roomState());
+        return JSON.stringify(out);
+    }
 }

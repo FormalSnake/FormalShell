@@ -155,6 +155,34 @@ function labelRotation(pos) {
     return 0;
 }
 
+// How much of a rail's own extents fit a room (DESIGN.md §3 Bar, spec D7,
+// M55 Task 5): the sum of the longest prefix of `extents`, `gap` between
+// each pair of counted neighbours, that still fits `room`. An entry of 0
+// (a hidden or not-yet-shown cell) is skipped rather than ending the
+// prefix, and costs no gap either side; the first entry that does not fit
+// stops the run there; nothing past it is considered, so the answer is
+// always a whole number of cells, never a cell cut in half. `room <= 0` or
+// an empty list answers `{extent: 0, count: 0}` outright. Bar.qml feeds
+// this an end region's rail extents from that region's own anchored edge
+// inward, so what does not fit is dropped from the centre-facing side.
+function fitExtent(extents, gap, room) {
+    if (!Array.isArray(extents) || extents.length === 0 || !(room > 0))
+        return { extent: 0, count: 0 };
+    var extent = 0;
+    var count = 0;
+    for (var i = 0; i < extents.length; i++) {
+        var e = extents[i];
+        if (!(e > 0))
+            continue;
+        var next = extent + (count > 0 ? gap : 0) + e;
+        if (next > room)
+            break;
+        extent = next;
+        count++;
+    }
+    return { extent: extent, count: count };
+}
+
 var CUSTOM_PREFIX = "custom:";
 
 // Must stay byte-identical to shell/Plugins/manifest.js's own PLUGIN_PREFIX:
