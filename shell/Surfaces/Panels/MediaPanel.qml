@@ -106,7 +106,10 @@ Panel {
     // (Panel.qml's own click-through mask covers input during that state).
     // Staying mapped is only for the bar's frames, so it is behind
     // `media.animatedBarCover` too; off, closing this panel always unmaps it.
-    keepMapped: AnimatedCoverFrameSource.barEnabled && AnimatedCoverFrameSource.active
+    // Gated on `playing` rather than `active` (A6): a paused track has
+    // nothing left to grab, so staying mapped for the bar's sake would hold
+    // a window open for no new frames.
+    keepMapped: AnimatedCoverFrameSource.barEnabled && AnimatedCoverFrameSource.playing
     Binding {
         target: AnimatedCoverFrameSource
         property: "panelWants"

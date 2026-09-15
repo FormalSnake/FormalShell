@@ -31,19 +31,35 @@ Singleton {
         root._barWanters += isWanted ? 1 : -1;
     }
 
-    // The full gate (DESIGN.md §4 item 8's visualizer precedent, restated
+    // The load gate (DESIGN.md §4 item 8's visualizer precedent, restated
     // for a decode instead of a child process): any leg going false kills
-    // the decode outright, MediaPanel's Loader unloads its Video entirely
-    //, never just a paused paint.
+    // the decode outright, MediaPanel's Loader unloads its Video entirely.
+    // `MediaService.isPlaying` is deliberately NOT in here (A6, owner,
+    // 2026-09-15): folding pause into the load gate is what dropped the
+    // Loader on every pause and swapped the animated cover for the static
+    // one, which read as broken rather than paused. Whether the Video
+    // actually runs is `playing`, below.
     readonly property bool active: (root.panelWants || (root.barEnabled && root._barWanters > 0))
-        && MediaService.isPlaying && AppleMusicArtService.animatedArtUrl !== "" && Theme.motionEnabled
+        && AppleMusicArtService.animatedArtUrl !== "" && Theme.motionEnabled
+
+    // Drives the decoder and the grab Timer (AnimatedAlbumArt.qml). Loaded
+    // but not playing is a paused track: the Video stays mapped on its last
+    // frame instead of unloading.
+    readonly property bool playing: root.active && MediaService.isPlaying
 
     // Latest grabbed frame, published by AnimatedAlbumArt.qml's own Timer.
     // Every consumer (the panel's own dither pass, NowPlaying's mini cover)
-    // reads this instead of touching the Video directly. Cleared the moment
-    // the gate drops so a consumer that re-activates later never paints a
-    // stale frame from a previous track or session.
+    // reads this instead of touching the Video directly. Cleared when the
+    // load gate drops or the track's art changes, never on a pause, so a
+    // held frame survives exactly as long as it's still honest.
     property url frameUrl: ""
 
     onActiveChanged: if (!root.active) root.frameUrl = "";
+
+    Connections {
+        target: AppleMusicArtService
+        function onAnimatedArtUrlChanged() {
+            root.frameUrl = "";
+        }
+    }
 }

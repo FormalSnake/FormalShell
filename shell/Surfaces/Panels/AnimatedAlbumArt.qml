@@ -19,13 +19,13 @@ import qs.Services
 // surfaces.
 //
 // `visible` folds in the full motion carve-out (DESIGN §4): a decoded,
-// error-free, actually-playing frame AND `Theme.motionEnabled`. Motion
-// disabled, paused, stalled, or errored all fall through to the same state,
-// invisible, letting the static art beneath show instead. This Loader itself
-// only exists while AnimatedCoverFrameSource.active is true
-// (MediaPanel.qml), so `visible` here is a finer-grained gate on top of
-// that: the Video can exist for a moment before it has actually started
-// playing real frames.
+// error-free frame, playing or paused, AND `Theme.motionEnabled`. Motion
+// disabled, stalled, or errored fall through to invisible, letting the
+// static art beneath show instead; a pause (A6) stays visible on its held
+// frame rather than falling back. This Loader itself only exists while
+// AnimatedCoverFrameSource.active is true (MediaPanel.qml), so `visible`
+// here is a finer-grained gate on top of that: the Video can exist for a
+// moment before it has actually started playing real frames.
 //
 // The decode is software only (nix/package.nix sets
 // QT_FFMPEG_DECODING_HW_DEVICE_TYPES empty): a VA-API frame on the NVIDIA
@@ -34,7 +34,12 @@ import qs.Services
 Item {
     id: root
 
-    visible: Theme.motionEnabled && video.hasVideo && video.playbackState === MediaPlayer.PlayingState && video.error === MediaPlayer.NoError
+    visible: Theme.motionEnabled && video.hasVideo && video.error === MediaPlayer.NoError
+        && (video.playbackState === MediaPlayer.PlayingState || video.playbackState === MediaPlayer.PausedState)
+
+    function _grab() {
+        video.grabToImage(function (result) { AnimatedCoverFrameSource.frameUrl = result.url; });
+    }
 
     Video {
         id: video
@@ -47,10 +52,28 @@ Item {
         Component.onCompleted: if (source != "") play();
     }
 
+    // Mirrors the song's own playing state (A6) rather than unloading on
+    // pause: `play()`/`pause()` hold the decoder's position so a resume
+    // continues from where it stopped instead of restarting the loop.
+    Connections {
+        target: AnimatedCoverFrameSource
+        function onPlayingChanged() {
+            if (AnimatedCoverFrameSource.playing) {
+                video.play();
+            } else {
+                video.pause();
+                // One extra grab on the transition: the 120ms Timer can be
+                // mid-interval when the pause lands, so the last published
+                // frame may trail the video's actual paused position.
+                root._grab();
+            }
+        }
+    }
+
     Timer {
         interval: 120
         repeat: true
-        running: root.visible
-        onTriggered: video.grabToImage(function (result) { AnimatedCoverFrameSource.frameUrl = result.url; })
+        running: AnimatedCoverFrameSource.playing
+        onTriggered: root._grab()
     }
 }
