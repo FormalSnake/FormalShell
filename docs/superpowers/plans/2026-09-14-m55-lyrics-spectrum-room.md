@@ -274,3 +274,25 @@ Spec A1 to A5. Three more tasks, sequential, same rules as above.
   wipe. `docs/USAGE.md`'s media paragraphs follow A1/A2.
 - `--lyrics`, `--spectrum`, `--media`, `--visualizer` green, PNGs read.
 - Merge to `main`, push, bump `~/.config/nix`, rebuild the g815.
+
+### Task 11: the animated cover holds its frame on pause (A6)
+
+- `shell/Services/AnimatedCoverFrameSource.qml`: `active` drops
+  `MediaService.isPlaying` from its gate (loaded while wanted, the art
+  exists and motion is on); a new `readonly property bool playing:
+  active && MediaService.isPlaying` is what drives the decoder and the
+  grabs; `frameUrl` is no longer cleared on a pause, only when `active`
+  drops or the art url changes.
+- `shell/Surfaces/Panels/AnimatedAlbumArt.qml`: `video.play()` while
+  `AnimatedCoverFrameSource.playing`, `video.pause()` otherwise (a
+  `Connections`/binding on that flag, plus the existing play on source);
+  `visible` accepts `PausedState` as well as `PlayingState` once
+  `hasVideo`; the grab Timer runs on `playing`, with one grab fired on the
+  transition to paused so the bar holds the same frame.
+- `shell/Surfaces/Panels/MediaPanel.qml`: `keepMapped` binds to
+  `AnimatedCoverFrameSource.barEnabled && AnimatedCoverFrameSource.playing`.
+- `shell/Surfaces/Bar/widgets/NowPlaying.qml`: whatever gate it holds on
+  `isPlaying` for the mini cover's animated frame is relaxed the same way.
+- Verify: `just test`, `just lint`, `dev/vm-lock.sh just vm-lint`,
+  `--media` in the VM; the animated path needs Apple Music art the VM
+  cannot fetch, so the owner confirms on the g815 after the rebuild.

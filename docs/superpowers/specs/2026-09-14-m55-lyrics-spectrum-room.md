@@ -215,3 +215,15 @@ the frame clock, kopuz's own note. The three dots are gone.
 the row's hover wash and nothing else; the cursor ring and the follow-the-
 cursor anchor belong to the keyboard alone (Tab into the section, Up and
 Down). A click still seeks.
+
+**A6 The animated cover holds on pause** (owner, 2026-09-15: "if a track
+has animated cover, the cover doesn't pause when the song pauses, it
+returns to the static one; jarring, they can look very different"). A
+paused track keeps its animated cover on the frame it stopped at, in the
+panel and in the bar's mini cover alike, and resumes from there. What
+stops on pause is the work: the decoder is paused rather than unloaded,
+the bar's frame grabs stop after one last grab of the held frame, and the
+panel is no longer kept mapped for the bar's sake while nothing moves. The
+static art is the fallback for a track with no animated cover, a disabled
+opt-in or a decode failure, as before, never for a pause. A track change
+still starts the new cover from its first frame.
