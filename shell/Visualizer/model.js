@@ -87,6 +87,48 @@ function downsample(levels, count) {
     return result;
 }
 
+// cava's own frame arrives on its own clock (VisualizerService's framerate)
+// while the screen repaints on the compositor's, and the two are never the
+// same rate. Rather than snapping the drawn levels to whatever frame cava
+// last sent, VisualizerService carries them toward it a little every screen
+// frame, so the motion runs at the display's own rate regardless of how
+// cava's frames land (M55 A3). `1 - exp(-dt / tau)` is the standard
+// exponential approach to a moving target: independent of dt, so a slow
+// screen frame and a fast one converge at the same real-time rate rather
+// than overshooting or lagging. Rising and falling take different time
+// constants: quick on the way up so a transient still reads as a hit, slower
+// on the way down so a bar doesn't blink off between two loud frames the way
+// a linear decay would.
+var RISE_SECONDS = 0.03;
+var FALL_SECONDS = 0.09;
+
+// Returns a NEW array, `target.length` long: `shown` is read, never
+// mutated, since VisualizerService's own `levels` binding is what's being
+// carried forward here. A `shown` shorter than `target` reads its missing
+// entries as 0 (a bar that just appeared starts from silence); a `shown`
+// longer than `target` has its extra entries dropped, reconciling the two
+// lengths. A non-finite or non-positive `dtSeconds` (a stalled or repeated
+// frame) moves nothing: the reconciled `shown` values pass through
+// unchanged rather than jumping to `target` or extrapolating from a
+// meaningless delta.
+function smoothLevels(shown, target, dtSeconds) {
+    var from = shown || [];
+    var to = target || [];
+    var result = new Array(to.length);
+    var canMove = typeof dtSeconds === "number" && isFinite(dtSeconds) && dtSeconds > 0;
+    for (var i = 0; i < to.length; i++) {
+        var start = from[i] || 0;
+        if (!canMove) {
+            result[i] = start;
+            continue;
+        }
+        var tau = to[i] >= start ? RISE_SECONDS : FALL_SECONDS;
+        var factor = 1 - Math.exp(-dtSeconds / tau);
+        result[i] = start + (to[i] - start) * factor;
+    }
+    return result;
+}
+
 function parseFrame(line, barCount) {
     var count = barCount === undefined ? BAR_COUNT : barCount;
     var levels = new Array(count);

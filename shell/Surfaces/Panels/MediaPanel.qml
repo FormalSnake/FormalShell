@@ -7,16 +7,17 @@ import "../../Visualizer/model.js" as Visualizer
 
 // MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"). Four
 // blocks, each a section of the panel's own content column and so
-// `sectionGap` apart: the cover beside the source, title, artist and album;
-// the position track with its two times under it; the transport; the
-// player's own volume. A spectrum band sits between the now-playing block
-// and the position track (M55 D6): 24 columns off the same cava process the
-// bar cell shares, absent whenever cava is off PATH or `media.visualizer`
-// is false, and empty-troughed rather than hidden while the panel is open
-// and the track is paused. A `LYRICS` block follows once lrclib has synced
-// timing for the track (M55 D4/D5): absent for every other state, no
-// spinner and no placeholder. A chip per registered player follows once
-// more than one is on the bus.
+// `sectionGap` apart: the cover beside the source, title, artist and album,
+// with a twelve-column spectrum inline at the row's trailing end (M55 A2):
+// the same cava frame the bar cell shares, downsampled and smoothed toward
+// it every screen frame by VisualizerService, absent whenever cava is off
+// PATH or `media.visualizer` is false, and empty-troughed rather than
+// hidden while the panel is open and the track is paused. Then the position
+// track with its two times under it; the transport; the player's own
+// volume. A `LYRICS` block follows once lrclib has synced timing for the
+// track (M55 D4/D5): absent for every other state, no spinner and no
+// placeholder. A chip per registered player follows once more than one is
+// on the bus.
 //
 // The whole panel is one card and nothing inside it is another (owner,
 // 2026-08-26). The chrome left is the panel frame, the transport's trough,
@@ -92,6 +93,16 @@ Panel {
     // media.visualizer (spec D8): the panel's own opt-out for the spectrum
     // band, independent of the bar cell's bar.layout opt-in.
     readonly property bool _spectrumEnabled: Config.loaded && Config.get("media.visualizer", true)
+
+    // The inline spectrum's own visibility (M55 A2) and footprint: twelve
+    // fixed-width columns, never stretched to fill whatever room the
+    // identity row has left, since it sits beside the title rather than
+    // under it.
+    readonly property bool _spectrumVisible: MediaService.available && root._spectrumEnabled
+        && VisualizerService.state === "available"
+    readonly property int _spectrumColumns: 12
+    readonly property real _spectrumWidth: root._spectrumColumns * Theme.space.trackThickness
+        + (root._spectrumColumns - 1) * Theme.space.xxs
 
     // VisualizerService's second gate consumer (spec D6): the shared cava
     // process runs for this panel's sake too while it is open and the band
@@ -337,7 +348,11 @@ Panel {
         id: infoRow
         width: parent.width
         visible: MediaService.available
-        spacing: root._hasArt ? Theme.space.xxl : 0
+        // One spacing value for both gaps: Row skips the gap around a
+        // child whose `visible` is false, so this is `xxl` before the text
+        // column when the cover is shown, `xxl` after it when the
+        // spectrum is, and both or neither follow from the same rule.
+        spacing: Theme.space.xxl
 
         Cover {
             id: coverSlot
@@ -370,7 +385,8 @@ Panel {
         }
 
         Column {
-            width: infoRow.width - coverSlot.width - infoRow.spacing
+            width: infoRow.width - coverSlot.width - (root._hasArt ? infoRow.spacing : 0)
+                - (root._spectrumVisible ? infoRow.spacing + root._spectrumWidth : 0)
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.space.xxs
 
@@ -411,57 +427,62 @@ Panel {
                 elide: Text.ElideRight
             }
         }
-    }
 
-    // The spectrum band: the same 24-column cava frame the bar cell reads,
-    // drawn at content width instead of downsampled (spec D6). Empty
-    // troughs while the panel is open and the track is paused are the
-    // honest state, the same one the bar cell draws when its own process
-    // isn't running: no extra handling needed since VisualizerService.levels
-    // is already the all-zero baseline then.
-    Item {
-        id: spectrumBand
-        width: parent.width
-        height: Theme.space.controlHeight
-        visible: MediaService.available && root._spectrumEnabled && VisualizerService.state === "available"
+        // The spectrum, inline at the row's trailing end rather than a band
+        // of its own (M55 A2, the owner's own reference: Apple's now-playing
+        // widget keeps its bars beside the title). The same cava frame the
+        // bar cell reads, downsampled to twelve columns and smoothed toward
+        // every screen frame by VisualizerService (M55 A3), so a 240Hz and a
+        // 144Hz screen both draw the same motion at their own rate. Empty
+        // troughs while the panel is open and the track is paused are the
+        // honest state, the same one the bar cell draws when its own
+        // process isn't running: no extra handling needed since
+        // VisualizerService.levels is already the all-zero baseline then.
+        Item {
+            id: spectrumInline
+            visible: root._spectrumVisible
+            anchors.verticalCenter: parent.verticalCenter
+            width: root._spectrumWidth
+            height: Theme.space.controlHeight
 
-        readonly property real _columnWidth: (spectrumBand.width - (Visualizer.BAR_COUNT - 1) * Theme.space.xxs) / Visualizer.BAR_COUNT
+            readonly property var _levels: Visualizer.downsample(VisualizerService.levels, root._spectrumColumns)
 
-        Row {
-            anchors.fill: parent
-            spacing: Theme.space.xxs
+            Row {
+                anchors.fill: parent
+                spacing: Theme.space.xxs
 
-            Repeater {
-                model: Visualizer.BAR_COUNT
+                Repeater {
+                    model: root._spectrumColumns
 
-                // primitive-exempt: one spectrum column's groove, the panel's own
-                // copy of the bar cell's vertical track.
-                Rectangle {
-                    id: column
-                    required property int index
-
-                    width: spectrumBand._columnWidth
-                    height: parent.height
-                    radius: Math.min(Theme.radiusSm, width / 2)
-                    color: Theme.color.muted
-
-                    readonly property real _level: VisualizerService.levels[column.index] || 0
-                    readonly property string _band: Visualizer.levelColorBand(column._level)
-
-                    // primitive-exempt: the column's fill, bottom-up like the bar
-                    // cell's own track.
+                    // primitive-exempt: one spectrum column's groove, the panel's own
+                    // copy of the bar cell's vertical track.
                     Rectangle {
-                        y: parent.height - height
-                        width: parent.width
-                        height: column._level > 0
-                            ? Math.max(parent.height * column._level, column.radius * 2)
-                            : 0
-                        radius: column.radius
-                        color: column._band === "accent"
-                            ? Theme.color.primary
-                            : column._band === "content"
-                                ? Theme.color.foreground
-                                : Theme.color.mutedForeground
+                        id: column
+                        required property int index
+
+                        width: Theme.space.trackThickness
+                        height: parent.height
+                        radius: Math.min(Theme.radiusSm, width / 2)
+                        color: Theme.color.muted
+
+                        readonly property real _level: spectrumInline._levels[column.index] || 0
+                        readonly property string _band: Visualizer.levelColorBand(column._level)
+
+                        // primitive-exempt: the column's fill, bottom-up like the bar
+                        // cell's own track.
+                        Rectangle {
+                            y: parent.height - height
+                            width: parent.width
+                            height: column._level > 0
+                                ? Math.max(parent.height * column._level, column.radius * 2)
+                                : 0
+                            radius: column.radius
+                            color: column._band === "accent"
+                                ? Theme.color.primary
+                                : column._band === "content"
+                                    ? Theme.color.foreground
+                                    : Theme.color.mutedForeground
+                        }
                     }
                 }
             }

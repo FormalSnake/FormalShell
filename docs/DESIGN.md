@@ -519,9 +519,11 @@ five-row viewport that travels to meet it, ranks every other line by a
 four-step opacity ramp on its distance from that line, wipes a synced
 line's words from `mutedForeground` to `foreground` as they're sung, and
 draws none of it with a glow, a blur or a shadow. The media panel's
-spectrum band, under the now-playing block, is 24 columns of the same
-`muted` trough and bottom-up fill the bar cell draws, coloured by the same
-three energy bands off the one shared cava process.
+spectrum sits inline at the trailing end of the identity row, beside the
+title rather than under it: twelve columns of the same `muted` trough and
+bottom-up fill the bar cell draws, coloured by the same three energy bands
+off the one shared cava process, carried toward every new frame rather than
+snapped to it, so the motion runs at the screen's own refresh rate.
 
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
 with a bottom rule only; a shadcn Breadcrumb under it (ancestors in

@@ -157,4 +157,67 @@ TestCase {
         var levels = [1, 2, 3, 4, 5, 6];
         compare(Model.downsample(levels, 6), levels);
     }
+
+    function test_smooth_levels_moves_toward_the_target() {
+        var result = Model.smoothLevels([0], [1], Model.RISE_SECONDS);
+        verify(result[0] > 0);
+        verify(result[0] < 1);
+    }
+
+    function test_smooth_levels_rises_faster_than_it_falls() {
+        var dt = 0.02;
+        var rising = Model.smoothLevels([0], [1], dt);
+        var falling = Model.smoothLevels([1], [0], dt);
+        var riseDelta = rising[0] - 0;
+        var fallDelta = 1 - falling[0];
+        verify(riseDelta > fallDelta);
+    }
+
+    function test_smooth_levels_zero_dt_does_not_move() {
+        compare(Model.smoothLevels([0.5], [1], 0), [0.5]);
+    }
+
+    function test_smooth_levels_non_finite_dt_does_not_move() {
+        compare(Model.smoothLevels([0.5], [1], NaN), [0.5]);
+        compare(Model.smoothLevels([0.5], [1], -1), [0.5]);
+        compare(Model.smoothLevels([0.5], [1], undefined), [0.5]);
+    }
+
+    function test_smooth_levels_converges_within_half_a_second_of_16ms_steps() {
+        var shown = [0];
+        var target = [1];
+        var steps = Math.round(0.5 / 0.016);
+        for (var i = 0; i < steps; i++)
+            shown = Model.smoothLevels(shown, target, 0.016);
+        verify(Math.abs(shown[0] - 1) < 0.01);
+    }
+
+    function test_smooth_levels_reconciles_lengths_to_the_target() {
+        compare(Model.smoothLevels([1, 2, 3], [0, 0], 0.03).length, 2);
+        compare(Model.smoothLevels([1], [0, 0, 0], 0.03).length, 3);
+        // A missing shown value starts from 0, not undefined.
+        var grown = Model.smoothLevels([1], [1, 1], Model.RISE_SECONDS);
+        verify(grown[1] > 0);
+    }
+
+    function test_smooth_levels_empty_target_is_empty() {
+        compare(Model.smoothLevels([1, 2, 3], [], 0.03), []);
+    }
+
+    // Two windows syncing at different refresh rates (240Hz, 144Hz) feed
+    // this different, irregular dt every call; the factor has to be a
+    // function of dt alone, not of an assumed frame length, or the two
+    // screens would carry the same levels at visibly different speeds.
+    function test_smooth_levels_is_time_invariant_not_frame_count_invariant() {
+        var twoSteps = Model.smoothLevels(Model.smoothLevels([0], [1], 0.008), [1], 0.008);
+        var oneStep = Model.smoothLevels([0], [1], 0.016);
+        verify(Math.abs(twoSteps[0] - oneStep[0]) < 1e-6);
+    }
+
+    function test_smooth_levels_large_dt_moves_nearly_all_the_way() {
+        // dt this far past RISE_SECONDS (0.1s against a 0.03s time
+        // constant) should land past 95% of the way there.
+        var result = Model.smoothLevels([0], [1], 0.1);
+        verify(result[0] > 0.95);
+    }
 }

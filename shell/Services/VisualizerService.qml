@@ -67,11 +67,17 @@ Singleton {
     readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying
         && Theme.motionEnabled && (root._visibleBars > 0 || root.panelWants)
 
-    // Rendered levels for the current frame, one 0..1 fill fraction per
-    // bar, reset to the all-zero baseline array the instant the process
-    // isn't running, so a paused/hidden widget never shows a frozen "still
-    // playing" frame.
+    // Drawn levels, one 0..1 fill fraction per bar, reset to the all-zero
+    // baseline array the instant the process isn't running, so a
+    // paused/hidden widget never shows a frozen "still playing" frame. Not
+    // cava's own frame: `_smoothClock` below carries this toward `_target`
+    // every screen frame (M55 A3) rather than snapping to whatever cava
+    // last sent, so what's drawn moves at the compositor's own rate.
     property var levels: Model.baselineLevels()
+
+    // The most recent frame cava actually sent, a target rather than a
+    // value anything draws directly.
+    property var _target: Model.baselineLevels()
 
     // Every key below is in cava 0.10.7's own example config (checked there,
     // not from memory), and every one that departs from cava's default does
@@ -104,17 +110,20 @@ Singleton {
     //   sleep_timer = 3                cava idles itself after 3s of silence.
     //     The _shouldRun gate already kills the process on pause; this covers
     //     silence *inside* a playing track.
-    //   framerate = 60                  raised from cava's 25 default (M55):
-    //     the media panel's spectrum band draws all 24 bars at content
-    //     width, and 25fps steps visibly there even though it was smooth
-    //     enough for the bar cell's six downsampled columns.
+    //   framerate = 120                 raised again from 60 (M55 A3): a
+    //     60-frame source under a screen well past that (240Hz is common)
+    //     holds each frame for four repaints then jumps to the next, which
+    //     reads as a stutter no matter how the levels are drawn. 120 halves
+    //     that hold, and `_smoothClock` below carries the drawn levels the
+    //     rest of the way every screen frame, so the two together hide what
+    //     cava's own rate can't cover alone.
     //
     // DMS's `integral`/`gravity`/`ignore` are deliberately not carried over:
     // all three have been deprecated in favour of noise_reduction since cava
     // 0.8.0. The `ignore` behaviour lives in model.js's NOISE_FLOOR instead.
     function _configText() {
         return "[general]\n" +
-            "framerate = 60\n" +
+            "framerate = 120\n" +
             "autosens = 0\n" +
             "sensitivity = 800\n" +
             "bars = " + Model.BAR_COUNT + "\n" +
@@ -178,11 +187,24 @@ Singleton {
         running: root._shouldRun
         command: Proc.dieWithParent(["sh", "-c", 'command -v cava >/dev/null 2>&1 || exit 127; exec cava -p "$1"', "sh", root._configPath])
         stdout: SplitParser {
-            onRead: line => root.levels = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL)
+            onRead: line => root._target = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL)
         }
         onRunningChanged: {
-            if (!cavaProc.running)
+            if (!cavaProc.running) {
+                root._target = Model.baselineLevels();
                 root.levels = Model.baselineLevels();
+            }
         }
+    }
+
+    // Carries `levels` toward `_target` every screen frame rather than
+    // every cava frame (M55 A3), on `Deform`'s own `FrameAnimation`
+    // precedent: runs only while cava does, so a paused/hidden widget costs
+    // nothing, and stops needing to move once `onRunningChanged` above has
+    // already snapped both to the baseline.
+    FrameAnimation {
+        id: _smoothClock
+        running: cavaProc.running
+        onTriggered: root.levels = Model.smoothLevels(root.levels, root._target, frameTime)
     }
 }
