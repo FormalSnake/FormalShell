@@ -18,9 +18,9 @@ import "../Lyrics/model.js" as Lyrics
 // lrclib.net alone (D1): `/api/get` by tag and duration, falling back to
 // `/api/search` by tag alone, is the one open provider both caelestia and
 // kopuz share; `plainLyrics` is never read, only synced. Every URL, the
-// cache key and every bit of LRC parsing lives in Lyrics/model.js (TDD'd
-// first, M55 Task 1); this file is pure side-effect orchestration plus the
-// in-memory record of what has already resolved this session.
+// cache key and every bit of LRC parsing lives in Lyrics/model.js (M55); this
+// file is pure side-effect orchestration plus the in-memory record of what
+// has already resolved this session.
 //
 // Disk cache (D2): a hit is `<key>.lrc`, kept forever; a known miss is an
 // empty `<key>.none` marker, re-asked once it is seven days old rather than

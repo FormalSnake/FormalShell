@@ -1,7 +1,30 @@
 # M55: synced lyrics, the spectrum in the media panel, room on the bar
 
 **Date:** 2026-09-14
-**Status:** in progress on `m55-lyrics` (worktree `../FormalShell-m55`).
+**Status:** implemented 2026-09-14/15 on `m55-lyrics`, oldest first:
+ee18b43 (this plan and the spec), 4b9dd64 (the lrc model), 4832d23
+(LyricsService and `media lyrics`), 22916f7 (the lyrics block), 81e795d
+(the spectrum band, the cell downsampled), 69b4bf6 (room on the bar, on
+`m55-room`, merged as f141b55), e9c4015 (the three smoke legs and the
+docs). Task 7 is the docs commit carrying this line.
+
+Where the shipped code deviates from the task text, on purpose:
+
+- Task 5: `NowPlaying.qml`'s `_refit` has no cover-width trigger. The
+  cover slot is a font-derived constant, so there is no signal to run it
+  on; slack, strip cap and the natural label width cover every change.
+- Task 5: `--bar-layout --chevron` in one session fails before and after
+  this branch: both legs write a top-level `bar` fragment and the scaffold
+  concatenates fragments, so the later one wins. Each passes alone.
+  `--bar-position left --media` races on `panel open` the same way M54
+  already lists for `--bar-position` with `--panel`.
+- Task 6: the legs carry their own fixture tracks (80s and 70s) rather
+  than riding `--media`'s, whose 20s track drops off MPRIS before a panel
+  can open and settle.
+- Verification ran the unit tests and the primitives check natively on
+  the mac (`just test`, `just lint`: the flake's dev shell carries qt6 for
+  aarch64-darwin); qmllint and the smoke legs ran in the VM through
+  `dev/vm-lock.sh`.
 **Spec:** `docs/superpowers/specs/2026-09-14-m55-lyrics-spectrum-room.md`
 (wins on conflict), over the 2026-08-25 and 2026-07-27 specs.
 
