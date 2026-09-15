@@ -219,3 +219,46 @@ and `dev/vm-lock.sh just vm-smoke <flags>`; read every PNG under
 ### Task 7: the record
 
 - This plan's status line, the commit list, deviations.
+
+## Amendments (2026-09-15): the owner's first look on the g815
+
+Spec A1 to A5. Three more tasks, sequential, same rules as above.
+
+### Task 8: the spectrum at the refresh rate, inline
+
+- `shell/Visualizer/model.js`: `smoothLevels(shown, target, dtSeconds)`
+  returning a new array where each value moves toward its target by
+  `1 - exp(-dt / tau)`, `tau` `RISE_SECONDS` 0.03 going up and
+  `FALL_SECONDS` 0.09 going down; lengths reconciled to `target`'s. Tests.
+- `shell/Services/VisualizerService.qml`: `framerate = 120`; the parser
+  writes `_target`; a `FrameAnimation` running while `cavaProc.running`
+  carries `levels` toward `_target` with `smoothLevels(levels, _target,
+  frameTime)`; when the process stops, `_target` and `levels` reset to the
+  baseline as before. The comment block says why (a 60-frame source on a
+  240Hz screen holds four identical frames then jumps).
+- `MediaPanel.qml`: the band leaves its own row and sits at the trailing
+  end of the identity row per A2, twelve downsampled columns.
+- Verify: `just test`, `just lint`, `dev/vm-lock.sh just vm-lint`,
+  `--spectrum` and `--visualizer` in the VM, PNGs read.
+
+### Task 9: the two-column panel, the subcard, the wipe, the note, hover
+
+- `MediaPanel.qml` per A1, A2 (the position row and the transport row),
+  A3's word wipe, A4's note, A5's hover. `panelWidth` binds to the lyrics
+  state. The pane mirrors the launcher preview pane's chrome
+  (`Surfaces/Menu/Menu.qml`'s split route).
+- `docs/DESIGN.md` §3 "Panel": the media panel's two sentences rewritten
+  for the pane, the inline spectrum and the horizontal rows; the "Which
+  primitive" / ladder note that the media panel now spends its one card
+  on the lyrics pane.
+- Verify: `just test`, `just lint`, `dev/vm-lock.sh just vm-lint`,
+  `--lyrics` and `--media` in the VM, PNGs read.
+
+### Task 10: the legs and the docs, then the g815
+
+- `dev/smoke.d/lyrics.sh`: the size assert compares the panel's WIDTH
+  (`popupWidthMenuSplit` synced, `popupWidthWide` after), not its height;
+  the synced frame is read for the pane on the left and the note or the
+  wipe. `docs/USAGE.md`'s media paragraphs follow A1/A2.
+- `--lyrics`, `--spectrum`, `--media`, `--visualizer` green, PNGs read.
+- Merge to `main`, push, bump `~/.config/nix`, rebuild the g815.

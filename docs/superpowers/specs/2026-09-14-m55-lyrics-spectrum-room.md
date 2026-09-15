@@ -145,3 +145,57 @@ keys; the cell is still governed by `bar.layout` alone.
   reports hidden cells and a now-playing budget under 220; the PNG shows a
   whole cell at each end region's inner edge.
 - `--visualizer`, `--media`, `--chevron`, `--bar-layout` still pass.
+
+## Amendments (owner, 2026-09-15, on the live g815)
+
+"Everything is so vertical. It must be more horizontal, the visualizer
+more inline (like the Apple now playing widget), the lyrics on the left
+side in their own subcard of the panel. It must run at the monitor's
+refresh rate, it feels jumpy and choppy. I don't like that it scrolls with
+a mouse hover. Unlike kopuz there isn't a music symbol during
+instrumentals; I asked for full support." These win over D5 and D6 where
+they differ.
+
+**A1 Two columns.** With synced lyrics the panel is `popupWidthMenuSplit`
+wide and its content is one `Row`: the lyrics pane on the left, an `sm`
+gutter, the now-playing column on the right, the two sharing the content
+width equally. Without lyrics the panel is `popupWidthWide` and only the
+column remains; the width morphs on `spatial` through the panel's own
+`_morphWidth`. The lyrics pane is the one card this panel spends inside
+its frame, the launcher preview pane's own allowance (§1's ladder, rung 5):
+`radiusMd`, a 1px `border`, no fill of its own beyond `card`, the `LYRICS`
+label at its top and the viewport filling the rest, stretched to the
+column's height and never shorter than `controlHeight * 6`.
+
+**A2 The now-playing column, horizontal.** The identity row is the cover
+(`controlHeight * 3` square) beside the source, title, artist and album,
+with the spectrum inline at the row's trailing end: twelve columns
+(`Model.downsample(levels, 12)`), `trackThickness` wide, `xxs` apart,
+`controlHeight` tall, vertically centred, the way Apple's widget keeps its
+bars beside the title rather than under it. The position row is the
+elapsed time, the track and the total on ONE line. The transport and the
+player's volume share ONE line, transport leading, the volume's icon,
+track and readout filling the rest. The player chips follow as before.
+Cursor sections keep their order: transport, tracks, lyrics, chips.
+
+**A3 Refresh rate.** Nothing the panel draws steps at a rate of its own.
+cava runs at 120 frames and its frame is only a target: `VisualizerService`
+carries the displayed levels toward it every frame (`Model.smoothLevels`,
+an exponential approach with a rise constant of 30ms and a fall of 90ms,
+on a `FrameAnimation` running while the process runs), so the cell and
+the band both move at whatever the compositor's refresh is. The lyrics'
+word wipe is continuous: the sung part of the active word is a clipped
+`foreground` copy over the `mutedForeground` word, its width the fraction
+of the word's span elapsed (from its stamp to the next word's, capped at
+1.2s so a pause holds rather than creeps), read off the same frame clock.
+Sung words are whole, unsung whole, no colour crossfade.
+
+**A4 Instrumentals.** An interlude row is a `music` icon (the icon set's
+own, never raw SVG) at `title` size, `mutedForeground`, with a `foreground`
+copy over it clipped to the fraction of the gap elapsed, left to right on
+the frame clock, kopuz's own note. The three dots are gone.
+
+**A5 Hover.** The pointer never moves the column. Hovering a line draws
+the row's hover wash and nothing else; the cursor ring and the follow-the-
+cursor anchor belong to the keyboard alone (Tab into the section, Up and
+Down). A click still seeks.
