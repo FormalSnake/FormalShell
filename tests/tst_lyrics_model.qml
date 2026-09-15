@@ -182,8 +182,30 @@ TestCase {
         compare(lines.length, 1);
         compare(lines[0].text, "Hello world");
         compare(lines[0].words.length, 2);
-        compare(lines[0].words[0], { time: 1, text: "Hello" });
-        compare(lines[0].words[1], { time: 1.5, text: "world" });
+        compare(lines[0].words[0], { time: 1, text: "Hello", joinsNext: false });
+        compare(lines[0].words[1], { time: 1.5, text: "world", joinsNext: false });
+    }
+
+    function test_parse_lrc_groups_syllable_stamps_as_one_word() {
+        var lines = Lyrics.parseLrc("[00:01.00]<00:01.00>Hel<00:01.20>lo <00:01.50>world");
+        compare(lines[0].text, "Hello world");
+        compare(lines[0].words[0], { time: 1, text: "Hel", joinsNext: true });
+        compare(lines[0].words[1], { time: 1.2, text: "lo", joinsNext: false });
+        compare(lines[0].words[2], { time: 1.5, text: "world", joinsNext: false });
+        var groups = Lyrics.chunkWords(lines[0].words);
+        compare(groups.length, 2);
+        compare(groups[0].map(function (c) { return c.text; }), ["Hel", "lo"]);
+        compare(groups[1].map(function (c) { return c.text; }), ["world"]);
+    }
+
+    function test_parse_lrc_a_stray_stamp_with_no_text_still_separates() {
+        // The middle stamp owns nothing (immediately followed by the next
+        // stamp), so it is dropped from `words`, but the chunk before it
+        // still doesn't join across it: there was no text there to join to.
+        var lines = Lyrics.parseLrc("[00:01.00]<00:01.00>One<00:01.10><00:01.20>Two");
+        compare(lines[0].words.length, 2);
+        compare(lines[0].words[0], { time: 1, text: "One", joinsNext: false });
+        compare(lines[0].words[1], { time: 1.2, text: "Two", joinsNext: false });
     }
 
     function test_parse_lrc_of_empty_text_is_empty() {
@@ -330,5 +352,95 @@ TestCase {
     function test_depth_opacity_floors_at_three_lines_away() {
         compare(Lyrics.depthOpacity(4), 0.25);
         compare(Lyrics.depthOpacity(-10), 0.25);
+    }
+
+    // chunkWords
+
+    function test_chunk_words_one_chunk_per_word_for_a_word_stamped_line() {
+        var words = [
+            { time: 1, text: "Hello", joinsNext: false },
+            { time: 1.5, text: "world", joinsNext: false }
+        ];
+        var groups = Lyrics.chunkWords(words);
+        compare(groups.length, 2);
+        compare(groups[0].length, 1);
+        compare(groups[1].length, 1);
+    }
+
+    function test_chunk_words_of_nothing_is_empty() {
+        compare(Lyrics.chunkWords([]).length, 0);
+        compare(Lyrics.chunkWords(null).length, 0);
+    }
+
+    // chunkEnd / chunkProgress
+
+    function test_chunk_end_runs_to_the_next_chunk() {
+        var words = [{ time: 1, text: "A" }, { time: 2, text: "B" }];
+        compare(Lyrics.chunkEnd(words, 0, 10), 2);
+    }
+
+    function test_chunk_end_of_the_last_chunk_runs_to_the_line_end() {
+        var words = [{ time: 1, text: "A" }];
+        compare(Lyrics.chunkEnd(words, 0, 4), 4);
+    }
+
+    function test_chunk_end_of_the_last_chunk_with_no_line_end_falls_back() {
+        var words = [{ time: 1, text: "A" }];
+        compare(Lyrics.chunkEnd(words, 0, undefined), 1 + Lyrics.WORD_FALLBACK_SECONDS);
+    }
+
+    function test_chunk_progress_before_its_stamp_is_zero() {
+        var words = [{ time: 5, text: "A" }, { time: 6, text: "B" }];
+        compare(Lyrics.chunkProgress(words, 0, undefined, 4), 0);
+    }
+
+    function test_chunk_progress_partway_through_its_span() {
+        var words = [{ time: 5, text: "A" }, { time: 6, text: "B" }];
+        compare(Lyrics.chunkProgress(words, 0, undefined, 5.5), 0.5);
+    }
+
+    function test_chunk_progress_after_its_span_is_one() {
+        var words = [{ time: 5, text: "A" }, { time: 6, text: "B" }];
+        compare(Lyrics.chunkProgress(words, 0, undefined, 100), 1);
+    }
+
+    function test_chunk_progress_caps_the_span_at_wipe_max_seconds() {
+        // The next chunk is 10s out; the wipe still finishes at the cap
+        // rather than creeping toward it.
+        var words = [{ time: 0, text: "A" }, { time: 10, text: "B" }];
+        compare(Lyrics.chunkProgress(words, 0, undefined, Lyrics.WIPE_MAX_SECONDS), 1);
+        verify(Lyrics.chunkProgress(words, 0, undefined, Lyrics.WIPE_MAX_SECONDS / 2) < 1);
+    }
+
+    function test_chunk_progress_of_the_last_chunk_runs_to_the_line_end() {
+        var words = [{ time: 0, text: "A" }];
+        compare(Lyrics.chunkProgress(words, 0, 0.5, 0.5), 1);
+        compare(Lyrics.chunkProgress(words, 0, 0.5, 0.25), 0.5);
+    }
+
+    // edgeFraction
+
+    function test_edge_fraction_fully_inside_is_one() {
+        compare(Lyrics.edgeFraction(10, 20, 100), 1);
+    }
+
+    function test_edge_fraction_half_out_at_the_top() {
+        compare(Lyrics.edgeFraction(-10, 20, 100), 0.5);
+    }
+
+    function test_edge_fraction_half_out_at_the_bottom() {
+        compare(Lyrics.edgeFraction(90, 20, 100), 0.5);
+    }
+
+    function test_edge_fraction_fully_out_above_is_zero() {
+        compare(Lyrics.edgeFraction(-30, 20, 100), 0);
+    }
+
+    function test_edge_fraction_fully_out_below_is_zero() {
+        compare(Lyrics.edgeFraction(110, 20, 100), 0);
+    }
+
+    function test_edge_fraction_of_a_zero_height_item_is_zero() {
+        compare(Lyrics.edgeFraction(10, 0, 100), 0);
     }
 }

@@ -137,11 +137,14 @@ does this boundary have to go".
    Where each surface spends the allowance, or doesn't. The launcher's split
    route spends it on the preview pane: flat `MenuRow`s down one side and the
    card down the other, so the pane reads as the thing the list is pointing
-   at. A panel spends it on nothing: the header's rule and `sectionGap`
-   already rank the hero over the sections under it, and the border the hero
-   used to draw was the "too big usage of cards everywhere" the owner called
-   out. The notification centre spends it on nothing either: its rows are the
-   list, not a block the list points at.
+   at. A panel spends it on nothing, save the media panel, which spends its
+   one card on the `LYRICS` pane beside the now-playing column (M55 A1),
+   the launcher's own preview-pane grammar reused rather than a second
+   shape: otherwise the header's rule and `sectionGap` already rank the
+   hero over the sections under it, and the border the hero used to draw
+   was the "too big usage of cards everywhere" the owner called out. The
+   notification centre spends it on nothing either: its rows are the list,
+   not a block the list points at.
 
    What a resting box actually marks decides whether it is one. A fill and a
    border at rest say *the pointer or the keyboard acts on this*: a
@@ -514,16 +517,27 @@ own type doing the ranking the border used to do: a `subtitle` title over a
 `Track` under them. Footer: `outline` Button left, `display`
 number right. Width `Default`; `Wide` for media, monitor, calendar. Nothing
 in a panel scrolls except a row list longer than the screen. The media
-panel's `LYRICS` block anchors its active line at the centre of a clipped
-five-row viewport that travels to meet it, ranks every other line by a
-four-step opacity ramp on its distance from that line, wipes a synced
-line's words from `mutedForeground` to `foreground` as they're sung, and
-draws none of it with a glow, a blur or a shadow. The media panel's
-spectrum sits inline at the trailing end of the identity row, beside the
-title rather than under it: twelve columns of the same `muted` trough and
-bottom-up fill the bar cell draws, coloured by the same three energy bands
-off the one shared cava process, carried toward every new frame rather than
-snapped to it, so the motion runs at the screen's own refresh rate.
+panel spends its one card (§1's ladder, rung 5) on a `LYRICS` pane beside
+the now-playing column rather than under it (M55 A1), `radiusMd` and a
+`card` fill with nothing else drawn inside it: the pane's viewport anchors
+the active line at its own centre and travels to meet it, ranks every
+other line by a four-step opacity ramp on its distance from that line, and
+is never shorter than six rows, following the now-playing column's own
+height above that. A chunk-stamped line wipes a `foreground` copy clipped
+over its `mutedForeground` chunks rather than a whole word at a time (M55
+A3b): a syllable-stamped source reads as a sweep through a word's own
+letters and a word-stamped one as a sweep word by word, with no colour
+crossfade anywhere in it, only the clip's own width moving. A silence
+draws a `music` icon the same way, its lit copy clipped left to right over
+the gap (M55 A4); none of it carries a glow, a blur or a shadow. The
+now-playing column itself runs horizontal (M55 A2): the elapsed time, the
+track and the total sit on one line, and the transport and the player's
+own volume share another, transport leading. Its spectrum sits inline at
+the trailing end of the identity row, beside the title rather than under
+it: twelve columns of the same `muted` trough and bottom-up fill the bar
+cell draws, coloured by the same three energy bands off the one shared
+cava process, carried toward every new frame rather than snapped to it, so
+the motion runs at the screen's own refresh rate.
 
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
 with a bottom rule only; a shadcn Breadcrumb under it (ancestors in

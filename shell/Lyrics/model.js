@@ -9,22 +9,35 @@
 // every network and disk side effect (curl, the cache read/write, the
 // XDG_CACHE_HOME path), this file stays deterministic under test.
 //
-// Accepts plain LRC ([mm:ss], [mm:ss.xx], [mm:ss.xxx]) and enhanced
-// LRC's inline word stamps (<mm:ss.xx>word inside the line text). A
-// line can carry several leading [..] stamps, one entry per stamp, all
-// sharing the line's text and words; a stamp whose contents are not a
-// bare number and a colon (metadata like [ar:..], [ti:..], [offset:..])
-// is skipped rather than read as a time, and a line with no valid stamp
-// at all contributes nothing. Two entries landing on the same time
-// merge: the first line's text and word timing are kept, the second is
-// folded onto a new line below it, kopuz's translation-line rule.
-// plainLyrics is never read, only syncedLyrics.
+// Accepts plain LRC ([mm:ss], [mm:ss.xx], [mm:ss.xxx]) and enhanced LRC's
+// inline <mm:ss.xx> stamps inside the line text. A line can carry several
+// leading [..] stamps, one entry per stamp, all sharing the line's text
+// and words; a stamp whose contents are not a bare number and a colon
+// (metadata like [ar:..], [ti:..], [offset:..]) is skipped rather than
+// read as a time, and a line with no valid stamp at all contributes
+// nothing. Two entries landing on the same time merge: the first line's
+// text and word timing are kept, the second is folded onto a new line
+// below it, kopuz's translation-line rule. plainLyrics is never read,
+// only syncedLyrics.
+//
+// `words` (M55 Task 9) is a list of chunks, not pre-grouped words: the
+// raw text between one <..> stamp and the next, trimmed, so a source that
+// stamps whole words yields one chunk per word and one that stamps inside
+// a word (a syllable split) yields several. `chunkWords` groups a run of
+// chunks joined by no whitespace (`joinsNext`) into the word the panel
+// draws as one `Row`; `chunkEnd`/`chunkProgress` are the wipe's own span
+// and its 0..1 fraction at a given position, capped at `WIPE_MAX_SECONDS`.
 
 var INTERLUDE_MIN_SECONDS = 5;
 var FUDGE_SECONDS = 0.1;
 var MISS_TTL_DAYS = 7;
 var LINE_ASSUMED_SECONDS = 7;
 var WORD_FALLBACK_SECONDS = 0.35;
+// A chunk runs until the next one starts, which over a pause or a line's
+// own tail can be far longer than the syllable itself. The wipe caps there
+// so it lands on the beat and holds instead of creeping through the
+// silence (kopuz's MAX_WIPE_SECONDS).
+var WIPE_MAX_SECONDS = 1.2;
 
 var _DEPTH_OPACITY = [1, 0.7, 0.45, 0.25];
 
@@ -105,19 +118,51 @@ function _leadingTags(line) {
     return { tags: tags, rest: rest };
 }
 
-// Enhanced LRC's inline <mm:ss.xx>word stamps: each tag owns the text
-// up to the next tag (or the end of the line), trimmed to the bare word.
+// Enhanced LRC's inline <mm:ss.xx> stamps, kept as raw chunks rather than
+// pre-grouped into words (kopuz's parse_enhanced_words): each tag owns the
+// raw text up to the next tag (or the end of the line), untrimmed, so a
+// syllable split mid-word ("<0:01.0>Hel<0:01.2>lo") is two chunks rather
+// than two words. `joinsNext` is true only when this chunk's own raw text
+// carries no trailing whitespace AND the very next raw chunk carries no
+// leading whitespace, which also covers a chunk that trims to nothing
+// (a stray stamp with no text, or pure whitespace between two others): its
+// own emptiness reads as `next.raw.trim() !== ""` failing, so the chunk
+// before it is never joined across it even though it is dropped from the
+// returned list. Returns the words plus the whole span's text (every raw
+// chunk concatenated, then trimmed once), since the caller needs the raw
+// concatenation rather than a join(" ") of the trimmed chunks to keep a
+// mid-word split from gaining a space it never had.
 function _parseWords(rest) {
-    var words = [];
-    var re = /<(\d+):(\d+(?:\.\d+)?)>([^<]*)/g;
+    var re = /<(\d+):(\d+(?:\.\d+)?)>/g;
+    var matches = [];
     var m;
-    while ((m = re.exec(rest))) {
-        var text = m[3].trim();
+    while ((m = re.exec(rest)))
+        matches.push({ time: parseInt(m[1], 10) * 60 + parseFloat(m[2]), start: m.index, end: re.lastIndex });
+    if (matches.length === 0)
+        return { words: [], text: "" };
+
+    var raw = [];
+    for (var i = 0; i < matches.length; i++) {
+        var textStart = matches[i].end;
+        var textEnd = (i + 1 < matches.length) ? matches[i + 1].start : rest.length;
+        raw.push({ time: matches[i].time, text: rest.slice(textStart, textEnd) });
+    }
+
+    var words = [];
+    var joined = "";
+    for (var j = 0; j < raw.length; j++) {
+        joined += raw[j].text;
+        var text = raw[j].text.trim();
         if (text === "")
             continue;
-        words.push({ time: parseInt(m[1], 10) * 60 + parseFloat(m[2]), text: text });
+        var next = raw[j + 1];
+        var joinsNext = next !== undefined
+            && next.text.trim() !== ""
+            && !/\s$/.test(raw[j].text)
+            && !/^\s/.test(next.text);
+        words.push({ time: raw[j].time, text: text, joinsNext: joinsNext });
     }
-    return words;
+    return { words: words, text: joined.trim() };
 }
 
 // [{time, text, words: [{time, text}]}], sorted by time, equal times
@@ -136,10 +181,10 @@ function parseLrc(text) {
         }
         if (times.length === 0)
             continue;
-        var words = _parseWords(parsed.rest);
-        var lineText = words.length > 0 ? words.map(function (w) { return w.text; }).join(" ") : parsed.rest.trim();
+        var parsedWords = _parseWords(parsed.rest);
+        var lineText = parsedWords.words.length > 0 ? parsedWords.text : parsed.rest.trim();
         for (var k = 0; k < times.length; k++)
-            entries.push({ time: times[k], text: lineText, words: words });
+            entries.push({ time: times[k], text: lineText, words: parsedWords.words });
     }
     entries.sort(function (a, b) { return a.time - b.time; });
     var merged = [];
@@ -228,4 +273,65 @@ function depthOpacity(distance) {
     if (d > 3)
         d = 3;
     return _DEPTH_OPACITY[d];
+}
+
+// The 0..1 fraction of a `height`-tall item starting at `top` that falls
+// inside `[0, viewportHeight]`: 1 fully in, 0 fully out either side, and
+// linear in between (a line sliced by the viewport's own edge fades out
+// rather than reading as a cut-off line under whatever sits above the
+// viewport). `top` is the item's position after the column's own travel,
+// so the caller adds the column's animated `y` to the item's own.
+function edgeFraction(top, height, viewportHeight) {
+    if (!(height > 0))
+        return 0;
+    var overlap = Math.min(top + height, viewportHeight) - Math.max(top, 0);
+    return Math.max(0, Math.min(1, overlap / height));
+}
+
+// Runs of chunks joined by `joinsNext` grouped into one word each, so a
+// syllable-stamped file reads as several chunks per word and a
+// word-stamped one as one chunk per word once the caller draws each group
+// as a `Row` of chunks with no spacing between them.
+function chunkWords(words) {
+    var out = [];
+    var current = [];
+    for (var i = 0; i < (words || []).length; i++) {
+        current.push(words[i]);
+        if (!words[i].joinsNext) {
+            out.push(current);
+            current = [];
+        }
+    }
+    if (current.length > 0)
+        out.push(current);
+    return out;
+}
+
+// A chunk's own span ends where the next one starts; the last chunk of a
+// line has no next, so it runs to the line's end, and a line with no end
+// of its own (the last display entry) falls back to a chunk-sized fudge
+// past its own stamp (kopuz's chunk_end_time).
+function chunkEnd(words, index, lineEnd) {
+    var next = words[index + 1];
+    if (next)
+        return next.time;
+    if (typeof lineEnd === "number" && isFinite(lineEnd))
+        return lineEnd;
+    return words[index].time + WORD_FALLBACK_SECONDS;
+}
+
+// The 0..1 fraction of chunk `index`'s own wipe elapsed at `t`: 0 before
+// its stamp, 1 once its (capped) span has passed. The cap runs off the
+// span's own start rather than off `chunkEnd`'s raw answer, so a chunk
+// whose next stamp (or line end) is far in the future still finishes its
+// wipe at WIPE_MAX_SECONDS instead of creeping toward it.
+function chunkProgress(words, index, lineEnd, t) {
+    var chunk = words[index];
+    if (!chunk)
+        return 0;
+    var start = chunk.time;
+    var end = Math.min(chunkEnd(words, index, lineEnd), start + WIPE_MAX_SECONDS);
+    if (end <= start)
+        return t >= start ? 1 : 0;
+    return Math.max(0, Math.min(1, (t - start) / (end - start)));
 }

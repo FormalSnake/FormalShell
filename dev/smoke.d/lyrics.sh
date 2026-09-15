@@ -15,10 +15,12 @@
 # The claim: `media lyrics` reaches `synced`, `source: "cache"`, `words:
 # true` (the fixture LRC carries inline word stamps) and its own `index`
 # moves with playback; switching the active player to the untimed track
-# reaches `none`; the panel itself is visibly shorter with no LYRICS block
-# to draw, measured as a pixel-diff rect against a bare frame taken before
-# either open (panel_emerge.sh's own trick), since neither `panel state`
-# nor `debug dump` carries panel geometry.
+# reaches `none`; the panel itself is visibly narrower with no lyrics pane
+# to draw beside the now-playing column (M55 A1: `popupWidthMenuSplit`
+# synced, `popupWidthWide` once it drops to `none`), measured as a
+# pixel-diff rect against a bare frame taken before either open
+# (panel_emerge.sh's own trick), since neither `panel state` nor `debug
+# dump` carries panel geometry.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
 leg_lyrics_needs="mpv ffmpeg convert jq"
@@ -230,20 +232,24 @@ EOF
 # panel mark is not counted in it. Written as a small JSON file rather than
 # left as a bare rect string, so the assert step (and anyone reading
 # artifacts/ later) can read it with jq like every other leg's evidence.
-lyrics_panel_height() {
-  local open_frame="$1" out_json="$2" body_h=$((1080 - 60)) bare_body open_body rect h
+# Width is the claim now (M55 Task 9/10): the panel changed from a fixed
+# height (a shorter card with no LYRICS block) to a fixed WIDTH
+# (`popupWidthMenuSplit`/`popupWidthWide`, the two-column layout), so height
+# is no longer what tells the two states apart.
+lyrics_panel_rect() {
+  local open_frame="$1" out_json="$2" body_h=$((1080 - 60)) bare_body open_body rect w h
   bare_body="$shot_dir/lyrics-body-bare.png"
   open_body="$shot_dir/lyrics-body-$(basename "$open_frame").png"
   $convert_bin "$lyrics_bare_path" -crop "1920x${body_h}+0+60" +repage "$bare_body" > /dev/null 2>&1
   $convert_bin "$open_frame" -crop "1920x${body_h}+0+60" +repage "$open_body" > /dev/null 2>&1
   rect=$($convert_bin "$bare_body" "$open_body" -compose difference -composite \
     -threshold 8% -format "%@" info: 2>/dev/null)
-  h=${rect#*x}; h=${h%%+*}
-  printf '{"rect": "%s", "height": %s}\n' "$rect" "${h:-0}" > "$out_json"
+  w=${rect%%x*}; h=${rect#*x}; h=${h%%+*}
+  printf '{"rect": "%s", "width": %s, "height": %s}\n' "$rect" "${w:-0}" "${h:-0}" > "$out_json"
 }
 
 leg_lyrics_assert() {
-  local index_synced index_later pos_synced pos_later height_synced height_none
+  local index_synced index_later pos_synced pos_later width_synced width_none
 
   [ -s "$lyrics_status1_path" ] || fail "no media status produced for the first lyrics track"
   grep -qF "\"title\":\"$lyrics_track1_title\"" "$lyrics_status1_path" \
@@ -285,7 +291,7 @@ leg_lyrics_assert() {
     fail "neither the lyrics index nor the playback position advanced over the 3s wait (synced: index=$index_synced position=$pos_synced, later: index=$index_later position=$pos_later)"
   fi
 
-  lyrics_panel_height "$lyrics_synced_png_path" "$lyrics_panel_synced_json_path"
+  lyrics_panel_rect "$lyrics_synced_png_path" "$lyrics_panel_synced_json_path"
   echo "SMOKE_LYRICS_PANEL_SYNCED $lyrics_panel_synced_json_path"
   cat "$lyrics_panel_synced_json_path"; echo
 
@@ -299,13 +305,20 @@ leg_lyrics_assert() {
   fi
   [ -f "$lyrics_none_png_path" ] || fail "no lyrics-none screenshot produced"
 
-  lyrics_panel_height "$lyrics_none_png_path" "$lyrics_panel_none_json_path"
+  lyrics_panel_rect "$lyrics_none_png_path" "$lyrics_panel_none_json_path"
   echo "SMOKE_LYRICS_PANEL_NONE $lyrics_panel_none_json_path"
   cat "$lyrics_panel_none_json_path"; echo
 
-  height_synced=$("$jq_bin" -r '.height' "$lyrics_panel_synced_json_path" 2>/dev/null)
-  height_none=$("$jq_bin" -r '.height' "$lyrics_panel_none_json_path" 2>/dev/null)
-  if ! awk -v s="${height_synced:-0}" -v n="${height_none:-0}" 'BEGIN { exit !(n > 0 && s > 0 && n < s) }'; then
-    fail "the panel is not shorter with no LYRICS block (synced height=$height_synced, none height=$height_none)"
+  # M55 A1: `popupWidthMenuSplit` (840) synced, the two-column layout;
+  # `popupWidthWide` (480) once lyrics drop to `none` and only the
+  # now-playing column remains. A generous tolerance for the diff rect's
+  # own edge antialiasing rather than the exact token value.
+  width_synced=$("$jq_bin" -r '.width' "$lyrics_panel_synced_json_path" 2>/dev/null)
+  width_none=$("$jq_bin" -r '.width' "$lyrics_panel_none_json_path" 2>/dev/null)
+  if ! awk -v w="${width_synced:-0}" -v want=840 -v tol=30 'BEGIN { exit !(w > want - tol && w < want + tol) }'; then
+    fail "the synced panel is not popupWidthMenuSplit wide (want ~840, got width=$width_synced)"
+  fi
+  if ! awk -v w="${width_none:-0}" -v want=480 -v tol=30 'BEGIN { exit !(w > want - tol && w < want + tol) }'; then
+    fail "the untimed panel is not popupWidthWide wide (want ~480, got width=$width_none)"
   fi
 }
