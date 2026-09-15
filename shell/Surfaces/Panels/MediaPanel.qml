@@ -2,13 +2,21 @@ import QtQuick
 import qs.Core
 import qs.Components
 import qs.Services
+import "../../Lyrics/model.js" as Lyrics
+import "../../Visualizer/model.js" as Visualizer
 
 // MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels"). Four
 // blocks, each a section of the panel's own content column and so
 // `sectionGap` apart: the cover beside the source, title, artist and album;
 // the position track with its two times under it; the transport; the
-// player's own volume. A chip per registered player follows once more than
-// one is on the bus.
+// player's own volume. A spectrum band sits between the now-playing block
+// and the position track (M55 D6): 24 columns off the same cava process the
+// bar cell shares, absent whenever cava is off PATH or `media.visualizer`
+// is false, and empty-troughed rather than hidden while the panel is open
+// and the track is paused. A `LYRICS` block follows once lrclib has synced
+// timing for the track (M55 D4/D5): absent for every other state, no
+// spinner and no placeholder. A chip per registered player follows once
+// more than one is on the bus.
 //
 // The whole panel is one card and nothing inside it is another (owner,
 // 2026-08-26). The chrome left is the panel frame, the transport's trough,
@@ -27,13 +35,18 @@ import qs.Services
 // shuffle, loop, volume or seek renders the same three transport buttons and
 // nothing else. Honest states: no registered player at all is `NO PLAYER`,
 // and a player publishing no `mpris:artUrl` (browsers, mostly) leaves the
-// cover slot out rather than showing an empty 96px square.
+// cover slot out rather than showing an empty 96px square. The lyrics block
+// carries the same honesty: gone whenever `LyricsService.state` is anything
+// but `synced` (off, no track, loading, a known miss, a failed lookup), so
+// a track lrclib has nothing timed for never flashes a placeholder.
 //
-// Keyboard (spec "Keyboard model"): Tab cycles three sections. Transport
-// first, where Left/Right walk the buttons and Enter presses one; the two
-// tracks next, where Left/Right seek five seconds or step the volume five
-// percent and Enter plays/pauses; the player chips last, where Enter pins
-// the shell to that player.
+// Keyboard (spec "Keyboard model"): Tab cycles whatever sections are
+// present. Transport first, where Left/Right walk the buttons and Enter
+// presses one; the two tracks next, where Left/Right seek five seconds or
+// step the volume five percent and Enter plays/pauses; lyrics next, when
+// synced, where Up/Down walk the lines, Enter seeks, and the column follows
+// the cursor instead of the song for as long as it sits here; the player
+// chips last, where Enter pins the shell to that player.
 Panel {
     id: root
 
@@ -66,6 +79,40 @@ Panel {
         target: AnimatedCoverFrameSource
         property: "panelWants"
         value: root.isOpen
+    }
+
+    // LyricsService's own hidden-work gate (spec D3): a lookup only ever
+    // runs while this panel is open.
+    Binding {
+        target: LyricsService
+        property: "panelWants"
+        value: root.isOpen
+    }
+
+    // media.visualizer (spec D8): the panel's own opt-out for the spectrum
+    // band, independent of the bar cell's bar.layout opt-in.
+    readonly property bool _spectrumEnabled: Config.loaded && Config.get("media.visualizer", true)
+
+    // VisualizerService's second gate consumer (spec D6): the shared cava
+    // process runs for this panel's sake too while it is open and the band
+    // is enabled, on top of whatever bar cells already want it for.
+    Binding {
+        target: VisualizerService
+        property: "panelWants"
+        value: root.isOpen && root._spectrumEnabled
+    }
+
+    // The lyrics block's position clock (spec D5, Quickshell's documented
+    // MprisPlayer.position idiom): re-emits `positionChanged` every frame so
+    // the active line and the word wipe track playback smoothly, running
+    // only while there is a synced line to move. MediaService's own Timer
+    // covers the progress track at a much coarser grain and is left alone.
+    FrameAnimation {
+        running: root.isOpen && MediaService.isPlaying && LyricsService.state === "synced"
+        onTriggered: {
+            if (MediaService.activePlayer)
+                MediaService.activePlayer.positionChanged();
+        }
     }
 
     // The album-art slot, three control heights square so it scales with
@@ -113,9 +160,44 @@ Panel {
         return out;
     }
 
-    // Section 2. A list of one would just repeat the identity line above, so
-    // the whole section is absent with a single player.
+    // Section 2, when lrclib has synced timing (spec D4/D5): interludes
+    // spliced in beside the lines themselves, both carrying `time`, so
+    // `Lyrics.indexForTime` addresses the two alike.
+    readonly property bool _lyricsPresent: LyricsService.state === "synced"
+    readonly property var _lyricsLines: root._lyricsPresent ? Lyrics.displayLines(LyricsService.lines) : []
+    readonly property int _lyricsSection: root._lyricsPresent ? 2 : -1
+
+    // The song's own place in `_lyricsLines`, -1 before the first entry.
+    readonly property int _lyricsActiveIndex: Lyrics.indexForTime(root._lyricsLines, MediaService.position)
+
+    // What the column centres: the keyboard cursor's row while it sits in
+    // this section, the song's own row otherwise (spec D5), clamped to the
+    // first entry before anything has started.
+    readonly property int _lyricsAnchorIndex: (root.cursorActive && root.cursorSection === root._lyricsSection)
+        ? root.cursorIndex
+        : Math.max(0, root._lyricsActiveIndex)
+
+    function _seekLyricLine(time) {
+        if (!MediaService.canSeek || MediaService.length <= 0)
+            return;
+        MediaService.seek(time / MediaService.length);
+    }
+
+    // An interlude's three dots light in order as their third of its
+    // `[time, end]` span elapses.
+    function _interludeDotLit(interlude, dotIndex) {
+        var span = interlude.end - interlude.time;
+        if (span <= 0)
+            return true;
+        return MediaService.position >= interlude.time + span * (dotIndex + 1) / 3;
+    }
+
+    // Section 3 (2 without lyrics). A list of one would just repeat the
+    // identity line above, so the whole section is absent with a single
+    // player.
     readonly property var _playerRows: MediaService.players.length > 1 ? MediaService.players : []
+    readonly property int _playersSection: root._playerRows.length > 0
+        ? (2 + (root._lyricsPresent ? 1 : 0)) : -1
 
     // The transport as `ButtonGroup` options, in the order `_transport`
     // built: icon only, no label, so the row stays a strip of controls.
@@ -187,11 +269,15 @@ Panel {
         root.cursorIndex = index;
     }
 
-    sectionCount: root._playerRows.length > 0 ? 3 : 2
+    sectionCount: 2 + (root._lyricsPresent ? 1 : 0) + (root._playerRows.length > 0 ? 1 : 0)
 
     cursorCount: root.cursorSection === 0
         ? root._transport.length
-        : (root.cursorSection === 1 ? root._tracks.length : root._playerRows.length)
+        : root.cursorSection === 1
+            ? root._tracks.length
+            : root.cursorSection === root._lyricsSection
+                ? root._lyricsLines.length
+                : root._playerRows.length
 
     // Left/Right belongs to the track under the cursor in section 1, and to
     // the list itself in the other two.
@@ -209,6 +295,10 @@ Panel {
         } else if (root.cursorSection === 1) {
             if (root._tracks[index] === "progress")
                 MediaService.playPause();
+        } else if (root.cursorSection === root._lyricsSection) {
+            var entry = root._lyricsLines[index];
+            if (entry)
+                root._seekLyricLine(entry.time);
         } else {
             var player = root._playerRows[index];
             if (player)
@@ -319,6 +409,61 @@ Panel {
                 font.family: Theme.fontFamilySans
                 font.pixelSize: Theme.fontSize.bodySmall
                 elide: Text.ElideRight
+            }
+        }
+    }
+
+    // The spectrum band: the same 24-column cava frame the bar cell reads,
+    // drawn at content width instead of downsampled (spec D6). Empty
+    // troughs while the panel is open and the track is paused are the
+    // honest state, the same one the bar cell draws when its own process
+    // isn't running: no extra handling needed since VisualizerService.levels
+    // is already the all-zero baseline then.
+    Item {
+        id: spectrumBand
+        width: parent.width
+        height: Theme.space.controlHeight
+        visible: MediaService.available && root._spectrumEnabled && VisualizerService.state === "available"
+
+        readonly property real _columnWidth: (spectrumBand.width - (Visualizer.BAR_COUNT - 1) * Theme.space.xxs) / Visualizer.BAR_COUNT
+
+        Row {
+            anchors.fill: parent
+            spacing: Theme.space.xxs
+
+            Repeater {
+                model: Visualizer.BAR_COUNT
+
+                // primitive-exempt: one spectrum column's groove, the panel's own
+                // copy of the bar cell's vertical track.
+                Rectangle {
+                    id: column
+                    required property int index
+
+                    width: spectrumBand._columnWidth
+                    height: parent.height
+                    radius: Math.min(Theme.radiusSm, width / 2)
+                    color: Theme.color.muted
+
+                    readonly property real _level: VisualizerService.levels[column.index] || 0
+                    readonly property string _band: Visualizer.levelColorBand(column._level)
+
+                    // primitive-exempt: the column's fill, bottom-up like the bar
+                    // cell's own track.
+                    Rectangle {
+                        y: parent.height - height
+                        width: parent.width
+                        height: column._level > 0
+                            ? Math.max(parent.height * column._level, column.radius * 2)
+                            : 0
+                        radius: column.radius
+                        color: column._band === "accent"
+                            ? Theme.color.primary
+                            : column._band === "content"
+                                ? Theme.color.foreground
+                                : Theme.color.mutedForeground
+                    }
+                }
             }
         }
     }
@@ -452,6 +597,175 @@ Panel {
         }
     }
 
+    // Lines a word at a time under the active line, ranked by distance
+    // otherwise: kopuz's blur and caelestia's mask, drawn here as the one
+    // dimension DESIGN.md's ladder allows (spec D5). Every row is
+    // interactive (a seek), so the section takes `Cell { ghost: true }` at
+    // `spacing: 0` like any other uniform list (DESIGN.md §3 "Panel").
+    Column {
+        width: parent.width
+        visible: root._lyricsPresent
+        spacing: Theme.space.rowGap
+
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "LYRICS"
+        }
+
+        Item {
+            id: lyricsViewport
+            width: parent.width
+            height: Theme.space.controlHeight * 5
+            clip: true
+
+            Column {
+                id: lyricsColumn
+                width: parent.width
+                spacing: 0
+                // The active (or cursored) item's vertical centre on the
+                // viewport's own centre; before the first entry that is the
+                // first item, `_lyricsAnchorIndex`'s own floor.
+                y: {
+                    var item = lyricsRepeater.itemAt(root._lyricsAnchorIndex);
+                    var centre = lyricsViewport.height / 2;
+                    return item ? centre - item.y - item.height / 2 : centre;
+                }
+
+                Behavior on y {
+                    Anim {}
+                }
+
+                Repeater {
+                    id: lyricsRepeater
+                    model: root._lyricsLines
+
+                    delegate: Cell {
+                        id: lineCell
+                        required property int index
+                        required property var modelData
+
+                        width: parent.width
+                        ghost: true
+                        interactive: true
+                        cursor: root.cursorActive && root.cursorSection === root._lyricsSection
+                            && root.cursorIndex === lineCell.index
+                        onContainsPointerChanged: if (lineCell.containsPointer)
+                            root._pointAt(root._lyricsSection, lineCell.index)
+                        onClicked: root._seekLyricLine(lineCell.modelData.time)
+
+                        readonly property bool _interlude: lineCell.modelData.interlude === true
+                        readonly property bool _active: !lineCell._interlude
+                            && lineCell.index === root._lyricsActiveIndex
+                        readonly property bool _hasWordWipe: lineCell._active
+                            && lineCell.modelData.words && lineCell.modelData.words.length > 0
+                        readonly property int _activeWordIndex: lineCell._hasWordWipe
+                            ? Lyrics.wordIndexForTime(lineCell.modelData.words, MediaService.position) : -1
+
+                        Item {
+                            width: parent.width
+                            height: lineCell._interlude
+                                ? interludeRow.implicitHeight
+                                : (lineCell._hasWordWipe ? wordFlow.implicitHeight : lineText.implicitHeight)
+                            // Depth alone carries the ramp (spec D5): 1 at
+                            // the active line, then 0.7, 0.45, 0.25 and no
+                            // lower, an interlude ranked exactly like a line.
+                            opacity: Lyrics.depthOpacity(lineCell.index - root._lyricsActiveIndex)
+
+                            Behavior on opacity {
+                                Anim { kind: "effects" }
+                            }
+
+                            Row {
+                                id: interludeRow
+                                visible: lineCell._interlude
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: Theme.space.xxs
+
+                                Repeater {
+                                    model: 3
+
+                                    delegate: Rectangle {
+                                        id: interludeDot
+                                        required property int index
+
+                                        // primitive-exempt: one of an interlude's three timing
+                                        // dots, a decorative indicator no primitive draws.
+                                        width: 6
+                                        height: 6
+                                        radius: Theme.pillRadius(interludeDot.width)
+                                        color: root._interludeDotLit(lineCell.modelData, interludeDot.index)
+                                            ? Theme.color.foreground : Theme.color.mutedForeground
+
+                                        Behavior on color {
+                                            CAnim {}
+                                        }
+                                    }
+                                }
+                            }
+
+                            TextMetrics {
+                                id: spaceMetrics
+                                font.family: Theme.fontFamilySans
+                                font.pixelSize: Theme.fontSize.title
+                                font.weight: Theme.weight.medium
+                                text: " "
+                            }
+
+                            // Sung words light on their own crossing rather than the
+                            // line's as a whole (spec D5): only the active line ever
+                            // carries word timing worth drawing this way.
+                            Flow {
+                                id: wordFlow
+                                visible: lineCell._hasWordWipe
+                                width: parent.width
+                                spacing: spaceMetrics.advanceWidth
+
+                                Repeater {
+                                    model: wordFlow.visible ? lineCell.modelData.words : []
+
+                                    delegate: Text {
+                                        required property int index
+                                        required property var modelData
+
+                                        text: modelData.text
+                                        font.family: Theme.fontFamilySans
+                                        font.pixelSize: Theme.fontSize.title
+                                        font.weight: Theme.weight.medium
+                                        color: index <= lineCell._activeWordIndex
+                                            ? Theme.color.foreground : Theme.color.mutedForeground
+
+                                        Behavior on color {
+                                            CAnim {}
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                id: lineText
+                                visible: !lineCell._interlude && !lineCell._hasWordWipe
+                                width: parent.width
+                                wrapMode: Text.Wrap
+                                text: lineCell.modelData.text || ""
+                                font.family: Theme.fontFamilySans
+                                font.pixelSize: lineCell._active ? Theme.fontSize.title : Theme.fontSize.body
+                                font.weight: lineCell._active ? Theme.weight.medium : Theme.weight.normal
+                                color: lineCell._active ? Theme.color.foreground : Theme.color.mutedForeground
+
+                                Behavior on font.pixelSize {
+                                    Anim { kind: "spatialFast" }
+                                }
+                                Behavior on color {
+                                    CAnim {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Two players at once is the ordinary case (a browser tab plus a music
     // app) and MPRIS names them all, so the pick MediaService makes is worth
     // overriding by hand.
@@ -483,9 +797,11 @@ Panel {
                     chip: true
                     radius: Theme.radiusSm
                     selected: playerChip.modelData.id === MediaService.activeId
-                    cursor: root.cursorActive && root.cursorSection === 2 && root.cursorIndex === playerChip.index
+                    cursor: root.cursorActive && root.cursorSection === root._playersSection
+                        && root.cursorIndex === playerChip.index
                     interactive: true
-                    onContainsPointerChanged: if (playerChip.containsPointer) root._pointAt(2, playerChip.index)
+                    onContainsPointerChanged: if (playerChip.containsPointer)
+                        root._pointAt(root._playersSection, playerChip.index)
                     onClicked: MediaService.select(playerChip.modelData.id)
 
                     Row {

@@ -461,6 +461,16 @@ same call the tray's dots take: the group is somewhere else rather than
 sometimes here and sometimes there, so nothing on the strip moves when a
 track starts playing.
 
+A crowded strip gives up room in a fixed order rather than clipping a cell
+in half. The now-playing track gives ground first: its title shrinks, down
+to the cover or icon alone with the title still in its tooltip, before
+anything else on the bar moves. Past that, what still does not fit hides
+whole cells from an end region's own inner edge, the one nearest the
+centre, never the one against the screen edge; a cell comes back the
+instant the room does. The chevron takes no part in any of this: it stays
+config-only, collapsing whatever bar.layout put on its governed side
+whether the strip is crowded or not.
+
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
 continues round the other three edges as a band `frame.thickness` wide, and
 a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut
@@ -503,7 +513,15 @@ own type doing the ranking the border used to do: a `subtitle` title over a
 `bodySmall` caption, an optional `display` readout beside them, an optional
 `Track` under them. Footer: `outline` Button left, `display`
 number right. Width `Default`; `Wide` for media, monitor, calendar. Nothing
-in a panel scrolls except a row list longer than the screen.
+in a panel scrolls except a row list longer than the screen. The media
+panel's `LYRICS` block anchors its active line at the centre of a clipped
+five-row viewport that travels to meet it, ranks every other line by a
+four-step opacity ramp on its distance from that line, wipes a synced
+line's words from `mutedForeground` to `foreground` as they're sung, and
+draws none of it with a glow, a blur or a shadow. The media panel's
+spectrum band, under the now-playing block, is 24 columns of the same
+`muted` trough and bottom-up fill the bar cell draws, coloured by the same
+three energy bands off the one shared cava process.
 
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
 with a bottom rule only; a shadcn Breadcrumb under it (ancestors in

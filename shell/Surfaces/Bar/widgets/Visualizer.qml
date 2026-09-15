@@ -119,10 +119,17 @@ Cell {
     Component {
         id: tracksComponent
         Row {
+            id: tracksRow
             spacing: Theme.space.xxs
 
+            // VisualizerService now runs cava at Model.BAR_COUNT (24, for the
+            // media panel's own band, M55); the cell still reads as six
+            // tracks, so it downsamples to Model.CELL_BAR_COUNT here, once
+            // per frame rather than once per delegate.
+            readonly property var _cellLevels: Model.downsample(VisualizerService.levels, Model.CELL_BAR_COUNT)
+
             Repeater {
-                model: VisualizerService.levels.length
+                model: Model.CELL_BAR_COUNT
 
                 // primitive-exempt: one spectrum bar's groove, vertical where `Track`
                 // is horizontal.
@@ -136,7 +143,7 @@ Cell {
                     radius: Math.min(Theme.radiusSm, width / 2)
                     color: Theme.color.muted
 
-                    readonly property real _level: VisualizerService.levels[index] || 0
+                    readonly property real _level: tracksRow._cellLevels[index] || 0
                     readonly property string _band: Model.levelColorBand(track._level)
 
                     // primitive-exempt: the bar's fill. `Track` fills left to right; a

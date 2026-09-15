@@ -1,10 +1,11 @@
 import Quickshell.Io
 import qs.Services
+import "../Lyrics/model.js" as Lyrics
 
 // `qs ipc call media play-pause|next|previous|shuffle|loop|volume|raise|
-// select|status`, the spec's IPC list (§IPC/CLI). MediaPanel's own transport
-// cells call MediaService directly; this exists for compositor keybinds and
-// headless smoke verification, same division of labour as
+// select|status|lyrics`, the spec's IPC list (§IPC/CLI). MediaPanel's own
+// transport cells call MediaService directly; this exists for compositor
+// keybinds and headless smoke verification, same division of labour as
 // WallpaperIpc/ThemeIpc over their own singletons.
 //
 // Every route that acts on a player it doesn't have (no player at all, or a
@@ -120,6 +121,21 @@ IpcHandler {
             loop: MediaService.loopState,
             volumeSupported: MediaService.volumeSupported,
             volume: MediaService.volume
+        });
+    }
+
+    // D9: the panel's own read of LyricsService, over IPC for headless
+    // smoke verification. `index` is worked out here rather than cached on
+    // the service, so it's always current as of the call rather than the
+    // last time some binding happened to re-evaluate it.
+    function lyrics(): string {
+        return JSON.stringify({
+            state: LyricsService.state,
+            source: LyricsService.source,
+            lines: LyricsService.lines,
+            words: LyricsService.hasWords,
+            index: Lyrics.indexForTime(LyricsService.lines, MediaService.position),
+            position: MediaService.position
         });
     }
 }

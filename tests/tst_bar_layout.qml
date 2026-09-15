@@ -508,4 +508,37 @@ TestCase {
         compare(Layout.labelRotation("top"), 0);
         compare(Layout.labelRotation("bottom"), 0);
     }
+
+    // fitExtent: an end region's cap, snapped to a cell boundary rather than
+    // a raw pixel budget.
+    function test_fitExtent_empty_list_is_nothing() {
+        compare(JSON.stringify(Layout.fitExtent([], 8, 100)), JSON.stringify({ extent: 0, count: 0 }));
+    }
+
+    function test_fitExtent_everything_fits() {
+        compare(JSON.stringify(Layout.fitExtent([10, 20, 30], 5, 100)), JSON.stringify({ extent: 70, count: 3 }));
+    }
+
+    function test_fitExtent_only_the_first_fits() {
+        compare(JSON.stringify(Layout.fitExtent([10, 20], 5, 12)), JSON.stringify({ extent: 10, count: 1 }));
+    }
+
+    function test_fitExtent_none_fit() {
+        compare(JSON.stringify(Layout.fitExtent([10, 20], 5, 5)), JSON.stringify({ extent: 0, count: 0 }));
+    }
+
+    function test_fitExtent_zero_entries_are_skipped_not_counted() {
+        compare(JSON.stringify(Layout.fitExtent([0, 10, 0, 20], 5, 100)), JSON.stringify({ extent: 35, count: 2 }));
+    }
+
+    function test_fitExtent_gap_arithmetic_is_exact_at_the_boundary() {
+        // 10 + 5 + 10 === 25, so the room is fully spent and both still fit.
+        compare(JSON.stringify(Layout.fitExtent([10, 10], 5, 25)), JSON.stringify({ extent: 25, count: 2 }));
+        // One pixel short of the same sum drops the second entry.
+        compare(JSON.stringify(Layout.fitExtent([10, 10], 5, 24)), JSON.stringify({ extent: 10, count: 1 }));
+    }
+
+    function test_fitExtent_negative_room_is_nothing() {
+        compare(JSON.stringify(Layout.fitExtent([10, 20], 5, -5)), JSON.stringify({ extent: 0, count: 0 }));
+    }
 }

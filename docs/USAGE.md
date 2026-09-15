@@ -279,7 +279,18 @@ nothing is worse than no control.
 fs bar chevron status              # which regions collapse, and what is hidden now
 fs bar chevron toggle              # expand | collapse | toggle | status
 fs bar chevronAt expand right      # spell out the region when several regions have one
+fs bar room                        # per screen: slack, each region's cells/hidden, nowPlaying budget
 ```
+
+**Room on the bar.** A crowded end region never cuts a cell in half. The
+`nowPlaying` cell gives ground first, its label shrinking toward its cover
+or icon alone as the strip's own slack falls, down to `220px` and no
+smaller when there is room to spare. What still does not fit past that
+hides whole cells from the end region's own inner edge, never a pixel
+inside one, and every cell returns the moment room does. The chevron stays
+config-only through this: a hidden cell is not moved to it, it is simply
+off the strip until there is room. `fs bar room` reports the numbers behind
+it, one entry per screen.
 
 **Bell** is always visible: a bell glyph, bell-off while DND is on, plus a
 count of whatever is sitting in the pending tier. Left click toggles the
@@ -318,10 +329,14 @@ before the panel opens.
 
 **Visualizer** puts a live six-bar ASCII spectrum (`▁▂▃▄▅▆▇█`) next to
 `nowPlaying`, driven by a shared `cava` process reading real audio over
-PipeWire. It exists only while something is genuinely playing, a bar showing
-it is on screen, and motion is enabled; otherwise the process is killed and
-the row falls back to its flat baseline rather than freezing on a last
-frame. No `cava` on PATH reads `NO CAVA`.
+PipeWire, the same process the media panel's own 24-column spectrum band
+reads (`media.visualizer`, see Now playing below). One process runs while
+something is genuinely playing, motion is enabled, and either a bar cell
+showing it is on screen or the panel is open with its band enabled;
+otherwise the process is killed and a visible cell falls back to its flat
+baseline rather than freezing on a last frame. Unlike the panel's band the
+bar cell stays opt-in, never shown until named in `bar.layout`. No `cava`
+on PATH reads `NO CAVA`.
 
 The generated `cava.conf` is tuned rather than left at defaults, none of it
 configurable: `autosens` off in favour of a fixed 800% sensitivity (auto-gain
@@ -2238,6 +2253,34 @@ as music plays.
 { "media": { "animatedBarCover": false } }
 ```
 
+**Synced lyrics** are opt-in through `media.lyrics` (default true) and run
+only while the panel is open and the active player publishes a title and an
+artist. The one source is [lrclib.net](https://lrclib.net): a lookup by tag
+and duration, falling back to a search by tag alone, cached forever at
+`~/.cache/formalshell/lyrics/<key>.lrc`. A track lrclib has nothing timed
+for gets an empty `.none` marker instead, re-asked once it is seven days
+old rather than on every open. Only synced lyrics are ever shown,
+`plainLyrics` is never read, so a track with nothing timed for it draws no
+lyrics block at all rather than a placeholder. A line with word-level
+timing wipes word by word as it plays; a line with only its own timestamp
+lights whole.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "media": { "lyrics": false } }
+```
+
+**The spectrum band** is opt-in through `media.visualizer` (default true):
+a 24-column band under the now-playing block whenever the panel is open
+with a track playing, the same shared `cava` process the bar's own
+`visualizer` cell reads (see Visualizer under the Bar section above for the
+process gate both consumers share).
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "media": { "visualizer": false } }
+```
+
 ```sh
 fs media playPause
 fs media next
@@ -2249,6 +2292,7 @@ fs media raise
 fs media players          # [{"id":…,"identity":…,"label":…,"isPlaying":…}]
 fs media select org.mpris.MediaPlayer2.mpv
 fs media status
+fs media lyrics           # {state, source, lines, words, index, position}
 ```
 
 A route acting on something the player doesn't implement answers with an

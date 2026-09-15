@@ -28,7 +28,10 @@ import QtQuick
 // (bool, default false, AppleMusicArtService's opt-in, M7 Task 2).
 // media.animatedBarCover (bool, default true, whether the bar's mini cover
 // animates too; off, the animated cover decode exists only while the media
-// panel is open).
+// panel is open). media.lyrics (bool, default true, LyricsService's gate:
+// off, no lrclib lookup ever runs). media.visualizer (bool, default true,
+// the media panel's spectrum band; the bar's own visualizer cell stays
+// governed by bar.layout alone, M55).
 // lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank
 // timeout, seconds, fed straight to IdleMonitor.timeout), lock.
 // fingerprintPamService (string, default "", the PAM service name for

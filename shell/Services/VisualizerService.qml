@@ -17,14 +17,16 @@ import "../Core/proc.js" as Proc
 // just be duplicated work.
 //
 // Hard gate (DESIGN.md §4, CLAUDE.md's M16 hidden-work rule): the process
-// runs ONLY while a track is actually playing AND at least one bar
-// window showing the widget is on screen AND motion is enabled, paused
-// music is a dead process, zero CPU, the same discipline the now-playing
-// marquee's own windowVisible gate already follows. This singleton isn't
-// even constructed unless "visualizer" is opted into some bar's
-// bar.layout (Visualizer.qml is the only thing that references it, and it
-// only loads when named, layout.js's BUILTIN_WIDGETS/DEFAULT_LAYOUT
-// split), so an unconfigured shell touches none of this.
+// runs ONLY while a track is actually playing AND motion is enabled AND
+// something wants the levels, either a bar window showing the widget is on
+// screen or the media panel is open with its spectrum band enabled
+// (M55 D6). Paused music is a dead process, zero CPU, the same discipline
+// the now-playing marquee's own windowVisible gate already follows.
+// MediaPanel.qml now references this singleton unconditionally (to bind
+// `panelWants`), so it is constructed on every shell, not only one with
+// "visualizer" opted into some bar's bar.layout; the probe and the config
+// write below always run, but the cava process itself stays behind
+// `_shouldRun` regardless of who is asking for it.
 //
 // cava's own raw output format (verified against its 0.10.7 example
 // config, not memory): [output] method=raw writes bar heights to
@@ -58,7 +60,12 @@ Singleton {
         root._visibleBars += isVisible ? 1 : -1;
     }
 
-    readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying && root._visibleBars > 0 && Theme.motionEnabled
+    // MediaPanel's own half of the gate (M55 D6): bound to `isOpen &&
+    // media.visualizer` there, mirroring `_visibleBars`' bar-side count.
+    property bool panelWants: false
+
+    readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying
+        && Theme.motionEnabled && (root._visibleBars > 0 || root.panelWants)
 
     // Rendered levels for the current frame, one 0..1 fill fraction per
     // bar, reset to the all-zero baseline array the instant the process
@@ -97,13 +104,17 @@ Singleton {
     //   sleep_timer = 3                cava idles itself after 3s of silence.
     //     The _shouldRun gate already kills the process on pause; this covers
     //     silence *inside* a playing track.
+    //   framerate = 60                  raised from cava's 25 default (M55):
+    //     the media panel's spectrum band draws all 24 bars at content
+    //     width, and 25fps steps visibly there even though it was smooth
+    //     enough for the bar cell's six downsampled columns.
     //
     // DMS's `integral`/`gravity`/`ignore` are deliberately not carried over:
     // all three have been deprecated in favour of noise_reduction since cava
     // 0.8.0. The `ignore` behaviour lives in model.js's NOISE_FLOOR instead.
     function _configText() {
         return "[general]\n" +
-            "framerate = 25\n" +
+            "framerate = 60\n" +
             "autosens = 0\n" +
             "sensitivity = 800\n" +
             "bars = " + Model.BAR_COUNT + "\n" +
