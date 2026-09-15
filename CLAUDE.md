@@ -68,6 +68,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `bar_position.sh` `--bar-position <edge>`: the strip on a bottom, left or
   right edge, read off the compositor's own layer geometry, with a chevron
   collapsing and expanding along it and a panel hanging off its inner edge.
+- `bar_room.sh` `--bar-room`: a strip crowded past its own length, `bar
+  room` reporting a hidden cell in the right region and a now-playing
+  budget under 220, the frame read for a whole cell at the region's own
+  inner edge, never a cut one.
 - `capture.sh` `--capture`: the shell's own region picker (smart pick, tab
   cycling, commit) measured against the compositor's output, the toolbar's
   record commit, and the cancel path.
@@ -134,6 +138,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Hyprland's own expanded bind table.
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
   unlocked, typed by a real virtual-keyboard client.
+- `lyrics.sh` `--lyrics`: a word-timed LRC seeded into the cache for one
+  real MPRIS track reaching `synced` with its index moving, a second
+  track's empty `.none` marker reaching `none`, and the panel visibly
+  shorter with no LYRICS block to draw.
 - `media.sh` `--media`: the media panel read off a real MPRIS player, both
   marquee states, shuffle/loop/volume set over IPC and read back out of mpv,
   and the players switcher.
@@ -205,6 +213,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the bar opens in its own line read off the shell's numbers as the card's
   rect plus a `radiusXl` fillet at either end, and the pixel where the line
   stops and the arc starts.
+- `spectrum.sh` `--spectrum`: the media panel's own spectrum band, a cava
+  child owned by `panelWants` alone with no `visualizer` cell anywhere in
+  bar.layout, pgrep proving it appears on open and dies on close.
 - `speedtest.sh` `--speedtest`: `network speedtest` settling both phases in
   the network panel.
 - `systemupdate.sh` `--systemupdate`: the flake-inputs-behind cell and panel
