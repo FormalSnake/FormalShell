@@ -329,14 +329,16 @@ before the panel opens.
 
 **Visualizer** puts a live six-bar ASCII spectrum (`▁▂▃▄▅▆▇█`) next to
 `nowPlaying`, driven by a shared `cava` process reading real audio over
-PipeWire, the same process the media panel's own 24-column spectrum band
-reads (`media.visualizer`, see Now playing below). One process runs while
+PipeWire, the same process the media panel's own inline spectrum reads
+(`media.visualizer`, see Now playing below). One process runs while
 something is genuinely playing, motion is enabled, and either a bar cell
-showing it is on screen or the panel is open with its band enabled;
+showing it is on screen or the panel is open with its spectrum enabled;
 otherwise the process is killed and a visible cell falls back to its flat
-baseline rather than freezing on a last frame. Unlike the panel's band the
-bar cell stays opt-in, never shown until named in `bar.layout`. No `cava`
-on PATH reads `NO CAVA`.
+baseline rather than freezing on a last frame. cava delivers 120 frames a
+second and every consumer draws levels carried toward that frame every
+screen frame, so the bars move at the monitor's own refresh rate, whatever
+it is. Unlike the panel's spectrum the bar cell stays opt-in, never shown
+until named in `bar.layout`. No `cava` on PATH reads `NO CAVA`.
 
 The generated `cava.conf` is tuned rather than left at defaults, none of it
 configurable: `autosens` off in favour of a fixed 800% sensitivity (auto-gain
@@ -2204,13 +2206,16 @@ The bar cell is hidden entirely with no player present.
 
 ![The media panel](screenshots/media-hyprland.png)
 
-The panel shows album art, a `NOW PLAYING / <app>` row, title and artist, a
-progress cell you can drag to seek where the player supports it, and
-transport cells that invert on hover. Shuffle and loop are the outer two
-cells of the transport cluster, the player's own volume is a second track
-under it, `RAISE` sits in the title band, and a row per player appears above
-the progress track once more than one is on the bus. Clicking one pins the
-bar cell, the panel and the IPC routes to it until that player quits.
+The panel is laid out across rather than down: album art beside the
+source, title, artist and album, with the live spectrum inline at the end
+of that row; the elapsed time, a progress track you can drag to seek where
+the player supports it, and the total on one line; the transport and the
+player's own volume on the next. Shuffle and loop are the outer two cells
+of the transport cluster, `RAISE` sits in the title band, and a row per
+player appears at the bottom once more than one is on the bus. Clicking one
+pins the bar cell, the panel and the IPC routes to it until that player
+quits. With synced lyrics the panel widens and the lyrics take their own
+pane on the left (see Synced lyrics below).
 
 Every control is gated on the player's own capability flag, so a player that
 implements none of them renders the panel it always did. A toggle that is on
@@ -2261,20 +2266,29 @@ and duration, falling back to a search by tag alone, cached forever at
 for gets an empty `.none` marker instead, re-asked once it is seven days
 old rather than on every open. Only synced lyrics are ever shown,
 `plainLyrics` is never read, so a track with nothing timed for it draws no
-lyrics block at all rather than a placeholder. A line with word-level
-timing wipes word by word as it plays; a line with only its own timestamp
-lights whole.
+lyrics pane at all rather than a placeholder. The pane sits on the left of
+the widened panel: the current line at the pane's centre, full size and
+bright, the lines around it smaller and dimmer the further they are, the
+column sliding so the next line lands in the centre. A line with chunk
+timing (enhanced LRC `<mm:ss.xx>` stamps) wipes through as it plays, word
+by word when the stamps sit on words and letter by letter when a file
+stamps inside them, the way Apple Music and kopuz draw theirs; a line with
+only its own timestamp lights whole. An instrumental stretch of five
+seconds or more is a note that fills as the gap elapses. Clicking a line
+seeks there; Up and Down walk the lines from the keyboard and Enter seeks.
+Hovering never moves the column. A paused track keeps its animated cover
+on the frame it stopped at rather than dropping back to the static art.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
 { "media": { "lyrics": false } }
 ```
 
-**The spectrum band** is opt-in through `media.visualizer` (default true):
-a 24-column band under the now-playing block whenever the panel is open
-with a track playing, the same shared `cava` process the bar's own
-`visualizer` cell reads (see Visualizer under the Bar section above for the
-process gate both consumers share).
+**The spectrum** is opt-in through `media.visualizer` (default true):
+twelve columns inline beside the title whenever the panel is open with a
+track playing, the same shared `cava` process the bar's own `visualizer`
+cell reads (see Visualizer under the Bar section above for the process
+gate both consumers share and the refresh-rate smoothing).
 
 ```jsonc
 // ~/.config/formalshell/settings.json

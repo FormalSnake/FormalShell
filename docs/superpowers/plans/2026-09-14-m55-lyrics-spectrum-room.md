@@ -224,6 +224,11 @@ and `dev/vm-lock.sh just vm-smoke <flags>`; read every PNG under
 
 Spec A1 to A5. Three more tasks, sequential, same rules as above.
 
+Landed 2026-09-15 on `main`, oldest first: c25ebb6 (Task 8), d7d1f6f
+(Task 9, with the edge fade and the constant-size lines that keep the
+line-to-line travel exact), 9a45135 (Task 11), then Task 10's docs commit
+carrying this line. The `--lyrics` leg asserts the panel's width now.
+
 ### Task 8: the spectrum at the refresh rate, inline
 
 - `shell/Visualizer/model.js`: `smoothLevels(shown, target, dtSeconds)`
