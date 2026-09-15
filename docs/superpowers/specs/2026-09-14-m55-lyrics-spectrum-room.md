@@ -188,7 +188,23 @@ word wipe is continuous: the sung part of the active word is a clipped
 `foreground` copy over the `mutedForeground` word, its width the fraction
 of the word's span elapsed (from its stamp to the next word's, capped at
 1.2s so a pause holds rather than creeps), read off the same frame clock.
-Sung words are whole, unsung whole, no colour crossfade.
+Sung chunks are whole, unsung whole, no colour crossfade.
+
+**A3b Chunks, not words** (owner, 2026-09-15: "just like kopuz/apple
+music it has a word swipe or a letter swipe effect, depending on whether
+the lyrics have the data"). A timed line is a list of chunks, each the
+raw text between one `<m:ss.xx>` stamp and the next, exactly as kopuz's
+`parse_enhanced_words` keeps it (`crates/utils/src/lyrics/lrc.rs`):
+whole words from most providers, syllables when a file stamps inside a
+word. The parser keeps whether whitespace separated a chunk from the next
+(`joinsNext` false) or not (`joinsNext` true), and `Lyrics.chunkWords`
+groups a run of joined chunks into one word. The active line is a `Flow`
+of words, a word a `Row` of its chunks with no spacing, every chunk its
+own `Text` with the clipped sung copy over it, so a syllable-stamped file
+reads as a sweep through the letters of each word and a word-stamped one
+as a sweep word by word; nothing else changes between the two. A chunk's
+span runs from its stamp to the next chunk's on the line, else to the
+line's end, capped at 1.2s (kopuz's `MAX_WIPE_SECONDS`).
 
 **A4 Instrumentals.** An interlude row is a `music` icon (the icon set's
 own, never raw SVG) at `title` size, `mutedForeground`, with a `foreground`

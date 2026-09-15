@@ -243,8 +243,20 @@ Spec A1 to A5. Three more tasks, sequential, same rules as above.
 
 ### Task 9: the two-column panel, the subcard, the wipe, the note, hover
 
+- `shell/Lyrics/model.js`: `parseLrc` keeps each chunk's raw text between
+  stamps (kopuz's `parse_enhanced_words`, read it at
+  `../kopuz/crates/utils/src/lyrics/lrc.rs`), emitting `words` as
+  `[{time, text (trimmed), joinsNext}]` with `joinsNext` true when no
+  whitespace sat between the chunk and the next; the line's `text` is the
+  chunks concatenated raw, then trimmed. `chunkWords(words)` groups joined
+  runs into words. `chunkProgress(words, index, lineEnd, t)` is the 0..1
+  fraction of chunk `index`'s span elapsed at `t`, the span capped at
+  `WIPE_MAX_SECONDS` 1.2. Tests for a syllable-stamped line, a
+  word-stamped line, the cap, and the last chunk running to the line end.
 - `MediaPanel.qml` per A1, A2 (the position row and the transport row),
-  A3's word wipe, A4's note, A5's hover. `panelWidth` binds to the lyrics
+  A3/A3b's chunk wipe (read kopuz's `paintChunks`/`chunk_end_time` in
+  `../kopuz/crates/components/src/playback/lyrics.rs` for the mechanics),
+  A4's note, A5's hover. `panelWidth` binds to the lyrics
   state. The pane mirrors the launcher preview pane's chrome
   (`Surfaces/Menu/Menu.qml`'s split route).
 - `docs/DESIGN.md` §3 "Panel": the media panel's two sentences rewritten
