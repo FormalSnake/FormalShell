@@ -1026,8 +1026,8 @@ PanelWindow {
     // (M53 D3). An image row carries no `fullText` and a text row no
     // `thumbSource`, so a slot reading the cursor row directly empties in the
     // same tick the cursor leaves it and there is nothing left to fade: the
-    // slot going out would spend its crossfade blank. Same freeze-on-a-
-    // condition binding `_morphHeight` uses, for the same reason.
+    // slot going out would spend its crossfade blank. The same freeze on a
+    // condition the card's own size morph takes, for the same reason.
     //
     // The image one is let go with the route rather than held forever: what
     // it holds is a decoded capture, and the pane it draws in is gone (M50
@@ -2134,30 +2134,25 @@ PanelWindow {
     readonly property real _cardHeight: root._chrome + root._headerHeight
         + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + actionBar.height
 
-    // The card's actual width and height (DESIGN.md §1 Motion, M51 D5):
-    // _cardWidth/_cardHeight above are the route's own target, tracked live
-    // only while the surface sits open at rest. A route that changes width
-    // (the split pane, an app view) or height mid-session morphs into it
-    // instead of jumping; close() simply stops re-syncing these, so whatever
-    // open() snaps them to next is the new route's real content size, never
-    // a morph from the frame the menu closed on. Armed from the moment the
-    // window is up rather than from `drawer.presence.settled`: the rows land
-    // a tick or more after open() (the keyed sync is deferred), so the
-    // content height moves while the card is still travelling out of the
-    // line, and a Behavior gated on settled would let that jump straight
-    // through the far edge. With the gate on `mapped` that edge retargets to
-    // wherever the rows put it, on its own clock and under the card's own
-    // cut, and the close freeze still holds.
-    property real _morphWidth: root.isOpen ? root._cardWidth : _morphWidth
-    property real _morphHeight: root.isOpen ? root._cardHeight : _morphHeight
+    // The card's actual width and height (Components/SizeMorph.qml, M57 D7):
+    // _cardWidth/_cardHeight above are the route's own target, and a route
+    // that changes width (the split pane, an app view) or height mid-session
+    // travels into it instead of jumping.
+    readonly property real _morphWidth: morphWidth.value
+    readonly property real _morphHeight: morphHeight.value
 
-    Behavior on _morphWidth {
-        enabled: root.isOpen && drawer.presence.mapped
-        Anim { id: morphWidth }
+    SizeMorph {
+        id: morphWidth
+        target: root._cardWidth
+        open: root.isOpen
+        mapped: root.backingWindowVisible
     }
-    Behavior on _morphHeight {
-        enabled: root.isOpen && drawer.presence.mapped
-        Anim { id: morphHeight }
+
+    SizeMorph {
+        id: morphHeight
+        target: root._cardHeight
+        open: root.isOpen
+        mapped: root.backingWindowVisible
     }
 
     // The rows area's own height, on the card's clock (M53 D2). `_cardHeight`
@@ -2165,15 +2160,16 @@ PanelWindow {
     // the view inside it have to travel together: with the view snapping, a
     // list that grew painted its new rows under an edge still on its way out,
     // and a list that shrank left the gap behind it until the edge caught up.
-    // Same gate, same duration and same curve as `_morphHeight`, so the two
-    // move as one thing. No loop back into `_rowsAreaHeight`: a view's
-    // `contentHeight` is its delegates' own extent and does not read the
-    // viewport it is measured in.
-    property real _morphRowsHeight: root.isOpen ? root._rowsAreaHeight : _morphRowsHeight
+    // The same morph as the card's own, so the two move as one thing. No loop
+    // back into `_rowsAreaHeight`: a view's `contentHeight` is its delegates'
+    // own extent and does not read the viewport it is measured in.
+    readonly property real _morphRowsHeight: morphRowsHeight.value
 
-    Behavior on _morphRowsHeight {
-        enabled: root.isOpen && drawer.presence.mapped
-        Anim { id: morphRowsHeight }
+    SizeMorph {
+        id: morphRowsHeight
+        target: root._rowsAreaHeight
+        open: root.isOpen
+        mapped: root.backingWindowVisible
     }
 
     // The search field's own band: the field, the card's top padding and the

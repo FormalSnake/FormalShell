@@ -79,6 +79,15 @@ PanelWindow {
     // instead of sliding to stay centred on its cell. 0 leaves the frame
     // centred by whatever it currently measures, which is every other panel.
     property int panelHoldWidth: 0
+    // Set by a popout that measures its own content rather than stating a
+    // width (the chevron's second bar and the tray's, both binding
+    // `panelWidth` to the rail they hold): the rail is rebuilt on every
+    // open, so the width it first reports is this card's own layout rather
+    // than a change to it, and the card has to be there at that width rather
+    // than opening around its cells (M53 D2,
+    // dev/smoke.d/chevron_quiet.sh). Once the card is up and standing still
+    // a new width is data, like every other panel's, and travels.
+    property bool panelWidthMeasured: false
     // The frame's own fill and corner. A panel is a `card` at `radiusXl`
     // (DESIGN.md §3); the tray menu is the one popout that is a menu rather
     // than a panel and takes the `popover` fill at `radiusMd` instead.
@@ -982,32 +991,34 @@ PanelWindow {
         }
     }
 
-    // The frame's actual height (DESIGN.md §1 Motion, M51 D5): `_frameHeight`
-    // above is the content's own target, tracked live only while the panel
-    // sits open at rest, so a size change never fights the enter/exit fade.
-    // close() simply stops re-syncing this, so whatever open() finds next is
-    // the real content height, never a morph from the frame the panel closed
-    // on. Declared after the drawer so its presence's settled flip, which
-    // shares the isOpenChanged signal this ternary depends on, has already
-    // landed by the time this re-evaluates.
-    property real _morphHeight: root.isOpen ? root._frameHeight : _morphHeight
+    // The frame's actual width and height (Components/SizeMorph.qml, M57
+    // D7): `_frameHeight` and `panelWidth` above are the content's own
+    // targets, and these two are what the frame is placed and drawn by.
+    // Everything else reads them, `_ownerShift` and a child panel's own
+    // lookup of it included.
+    readonly property real _morphWidth: morphWidth.value
+    readonly property real _morphHeight: morphHeight.value
 
-    Behavior on _morphHeight {
-        // Off through a handoff: the travel carries the size then, and two
-        // clocks on one size would fight.
-        enabled: drawer.presence.settled && root.isOpen && !root._handoff
-        Anim { id: morphHeight }
+    SizeMorph {
+        id: morphHeight
+        target: root._frameHeight
+        open: root.isOpen
+        mapped: root.backingWindowVisible
+        // The handoff's travel carries the size then (see the handoff block
+        // above): one clock over the frame, never two.
+        bypass: root._handoff
     }
 
-    // The width's twin, on the same freeze and the same clock. A panel that
-    // measures its own width (BarOverflow and TrayOverflow both bind
-    // `panelWidth` to the rail they hold) changes it while it is open, and
-    // that has to travel the way a new height does.
-    property real _morphWidth: root.isOpen ? root.panelWidth : _morphWidth
-
-    Behavior on _morphWidth {
-        enabled: drawer.presence.settled && root.isOpen && !root._handoff
-        Anim { id: morphWidth }
+    // A panel that measures its own width (BarOverflow and TrayOverflow both
+    // bind `panelWidth` to the rail they hold) changes it while it is open,
+    // and that travels the way a new height does.
+    SizeMorph {
+        id: morphWidth
+        target: root.panelWidth
+        open: root.isOpen
+        mapped: root.backingWindowVisible
+        bypass: root._handoff
+        held: root.panelWidthMeasured && !root.settledOpen
     }
 
     // Multi-monitor dismiss (M16 Task 7): backdrop above only ever catches

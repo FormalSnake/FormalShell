@@ -49,6 +49,7 @@ Panel {
     readonly property int _count: SystemTray.items.values.length
 
     panelWidth: overflowRail.implicitWidth + Theme.space.panelPadding * 2
+    panelWidthMeasured: true
 
     // A row on a horizontal bar walks under Left/Right (one row of `_count`
     // columns); a column beside a vertical one is an ordinary list.
