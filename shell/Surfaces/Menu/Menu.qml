@@ -17,6 +17,8 @@ import "../../Menu/frecency.js" as Frecency
 import "../../Menu/toggles.js" as Toggles
 import "../../Menu/actions.js" as Actions
 import "../../Menu/appviews.js" as AppViews
+import "../../Menu/appgrid.js" as AppGrid
+import "views"
 import "../../Compositor/keybinds.js" as Keybinds
 import "../../Menu/rowsync.js" as RowSync
 import "../../Compositor/appmatch.js" as AppMatch
@@ -594,14 +596,52 @@ PanelWindow {
         && !root._isPickerRoute && !root._isSplitRoute && !root._isAppView
         && (root.currentNodeId === "emoji" || Providers.emojiTriggerQuery(searchInput.text) !== null)
 
-    readonly property bool _isGrid: root._isPickerRoute || root._isEmojiGrid
+    // --- App grid (M58 G1-G4) --------------------------------------------
+    //
+    // `menu.appGrid` off (the default) leaves every level exactly the row
+    // list it has always been; on, wherever the launcher would draw rows and
+    // some of them are apps, those apps draw as a grid of icons with their
+    // names under them and whatever else ranked draws as rows beneath
+    // (Surfaces/Menu/views/AppGridView.qml). The owner asked for their app
+    // icons (2026-09-17: "similar to what macOS does").
+    //
+    // The ranking is untouched: `AppGrid.partition` is a stable split of the
+    // rows this level already resolved, so both blocks keep the order the
+    // score gave them and a cell's index is still an index into
+    // `_displayRows`. That is what lets Enter, Shift+Enter and the action
+    // bar act on the cursor without knowing which view drew it.
+    //
+    // Every route-local surface is excluded by construction rather than by
+    // name: none of them produces an "app" row, so the partition finds
+    // nothing and `_appGridCount` is 0. An app view is the exception worth
+    // naming, since a query there still falls through to whole-tree ranking
+    // under a body that is not the row list at all.
+    readonly property bool _appGridWanted: Core.Config.get("menu.appGrid", false)
+        && root._mode === "menu" && !root._isAppView
+    readonly property var _appGrid: root._appGridWanted
+        ? AppGrid.partition(root._rankedRows)
+        : ({ rows: root._rankedRows, appCount: 0 })
+    readonly property int _appGridCount: root._appGrid.appCount
+    readonly property bool _isAppGrid: root._appGridCount > 0
+
+    readonly property bool _isGrid: root._isPickerRoute || root._isEmojiGrid || root._isAppGrid
+
+    // Whether the cursor is sitting on a cell rather than on a row, which on
+    // the app grid changes with the cursor instead of with the level: ←→ and
+    // the footer's own key legend belong to the grid half of it and the rows
+    // under it keep ↑↓ alone.
+    readonly property bool _gridCursor: root._isAppGrid
+        ? root._cursorIndex < root._appGridCount
+        : root._isGrid
 
     // How far one Up/Down press moves the cursor: a row list moves a row, a
     // grid moves a whole row of cells. On `menu status` because a grid and a
     // list are otherwise indistinguishable in a JSON dump.
     readonly property int cursorColumns: root._isPickerRoute
         ? root.pickerColumns
-        : (root._isEmojiGrid ? root.emojiColumns : 1)
+        : (root._isEmojiGrid
+            ? root.emojiColumns
+            : (root._isAppGrid ? appGrid.columns : 1))
 
     // True while the rows are a whole-tree ranked list rather than one
     // level's own children: every route-local surface (the picker grid, the
@@ -793,7 +833,12 @@ PanelWindow {
         return node ? !Model.isWhenVisible(node, root._condResults) : false;
     }
 
-    readonly property var _displayRows: {
+    // What the level resolved, before the app grid's own split: every branch
+    // below is this file's original row resolution and nothing in it knows
+    // about the grid. `_displayRows` is that list with the apps moved to the
+    // front when the grid is live, which is the one arrangement both views
+    // can share an index into.
+    readonly property var _rankedRows: {
         if (root._mode === "select") {
             var query = searchInput.text.toLowerCase();
             return root._selectOptions
@@ -874,9 +919,16 @@ PanelWindow {
         return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
+    readonly property var _displayRows: root._appGrid.rows
+
     readonly property var _cursorNode: root._displayRows[root._cursorIndex] || null
 
     readonly property int rowCount: root._displayRows.length
+
+    // On `menu status` (M58 G5): which row or cell the cursor sits on. A
+    // frame shows the ring, but only a number says an arrow press moved by
+    // one cell rather than by a whole row of them.
+    readonly property int cursorIndex: root._cursorIndex
 
     // One heading per row (M48 D6), index-aligned with _displayRows: the
     // delegate draws its `SectionLabel` wherever this array changes value,
@@ -1059,7 +1111,7 @@ PanelWindow {
         mode: root._mode,
         node: root._cursorNode,
         atRoot: root.currentNodeId === null,
-        grid: root._isGrid,
+        grid: root._gridCursor,
         pickerSelect: root._pickerMode === "select",
         // The variant Tab would switch TO, null wherever Tab does nothing.
         variantSwitch: root._isPickerRoute && root._pickerHasVariants
@@ -1183,7 +1235,9 @@ PanelWindow {
         ? gridView.contentHeight
         : (root._isEmojiGrid
             ? emojiGrid.contentHeight
-            : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight))
+            : (root._isAppGrid
+                ? appGrid.contentHeight
+                : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight)))
     // The empty state is a row of its own: with no floor the card would
     // collapse onto the input line and say nothing at all.
     readonly property real _emptyHeight: root._showEmpty ? Core.Theme.space.controlHeight : 0
@@ -1201,7 +1255,7 @@ PanelWindow {
         ? root._rowsAreaCap
         : Math.min(Math.max(root._viewContentHeight, root._emptyHeight), root._rowsAreaCap)
 
-    // How far the live view is scrolled, whichever of the three owns the
+    // How far the live view is scrolled, whichever of the five owns the
     // level. On `menu status` because a wheel notch is otherwise
     // unobservable from the rig: a screenshot shows different rows, but
     // nothing says the cursor stayed put rather than moved with them.
@@ -1209,9 +1263,11 @@ PanelWindow {
         ? gridView.contentY
         : (root._isEmojiGrid
             ? emojiGrid.contentY
-            : (root._isAppView
-                ? (root._appViewScroll ? root._appViewScroll.contentY : 0)
-                : rowsView.contentY))
+            : (root._isAppGrid
+                ? appGrid.contentY
+                : (root._isAppView
+                    ? (root._appViewScroll ? root._appViewScroll.contentY : 0)
+                    : rowsView.contentY)))
 
     // The card's top edge sits at 30% of the output height (spec
     // "Launcher"), which is where the eye already is and which leaves the
@@ -1678,21 +1734,25 @@ PanelWindow {
     // navigation from queuing: the previous play is simply abandoned.
     property real _levelEnterOpacity: 1
 
-    // Which of the four views stands in for the row list. A level change is
+    // Which of the five views stands in for the row list. A level change is
     // not the only way one of them arrives: `:e`, a wallpaper directory's own
     // trigger and every app view are reached by typing, so the whole body of
     // the card can swap under a field that never left the level it was on
     // (M53 Task 6). That is the same seam entering a level is, so it takes
     // the same entrance.
-    readonly property string _viewKind: root._isAppView
+    // Public because `menu status` reports it (M58 G5): a frame cannot tell
+    // a grid of app icons from a row list that happens to carry icons.
+    readonly property string viewKind: root._isAppView
         ? "app"
-        : (root._isPickerRoute ? "picker" : (root._isEmojiGrid ? "emoji" : "rows"))
+        : (root._isPickerRoute
+            ? "picker"
+            : (root._isEmojiGrid ? "emoji" : (root._isAppGrid ? "appGrid" : "rows")))
 
-    on_ViewKindChanged: {
+    onViewKindChanged: {
         // Gated on the card sitting open at rest: a view resolved while the
         // card is still arriving is part of that arrival, not a change to it.
         // A level change plays its own entrance from _enterLevel; this handler
-        // only ever runs ahead of that, because the bindings feeding _viewKind
+        // only ever runs ahead of that, because the bindings feeding viewKind
         // settle before _enterLevel reaches its last line, and the later
         // restart wins.
         if (root.isOpen && drawer.presence.settled)
@@ -1736,6 +1796,11 @@ PanelWindow {
     function _moveCursor(delta) {
         var n = root._displayRows.length;
         if (n === 0) return;
+        // The app grid is half a grid: below the cells the rows are a list
+        // and a list moves by a row, so the column step only applies while
+        // the cursor is still in the cells (Menu/appgrid.js).
+        if (root._isAppGrid)
+            delta = AppGrid.verticalStep(delta, root._cursorIndex, root._appGridCount, n);
         var raw = root._cursorIndex + delta;
         // A step travels, a wrap does not (M53 D4): the top of the list and
         // the bottom of it are not next to each other, and a fill sliding
@@ -2328,13 +2393,13 @@ PanelWindow {
                     // cursor everywhere except a grid, so they're
                     // claimed only there, never accepted otherwise.
                     case Qt.Key_Left:
-                        if (root._isGrid) {
+                        if (root._gridCursor) {
                             root._moveCursor(-1);
                             event.accepted = true;
                         }
                         break;
                     case Qt.Key_Right:
-                        if (root._isGrid) {
+                        if (root._gridCursor) {
                             root._moveCursor(1);
                             event.accepted = true;
                         }
@@ -2904,10 +2969,40 @@ PanelWindow {
                 }
             }
 
-            // The third view (M38, D1): a whole component in place of the row
+            // The app grid (M58): the level's own app rows drawn as icons
+            // with their names under them, with everything else the ranking
+            // returned as rows under the grid. Shares rowsView's geometry
+            // exactly, like the two grids above, so the action bar anchors to
+            // whichever view is live without knowing which.
+            //
+            // Emptied off the route rather than merely hidden, the same
+            // reason the picker's listing is dropped on the way out: every
+            // cell holds a decoded icon, and a hidden grid would hold a few
+            // hundred of them for a launcher nobody is looking at.
+            AppGridView {
+                id: appGrid
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isAppGrid
+                rows: root._isAppGrid ? root._displayRows : []
+                appCount: root._appGridCount
+                cursor: root._cursorIndex
+                hoverGate: pointerGate
+                stateSnapshot: root._stateSnapshot
+                checkedResults: root._checkedResults
+                confirmPendingId: root._confirmPendingId
+                pixelRatio: root.screen ? root.screen.devicePixelRatio : 1
+                onActivated: index => root._activateFromPointer(index)
+                onCursorRequested: index => root._setCursor(index)
+            }
+
+            // The fourth view (M38, D1): a whole component in place of the row
             // list, for any route Menu/appviews.js registers. Shares rowsView's
             // geometry exactly, like gridView above, so the action bar anchors
-            // to whichever of the three is live without knowing which.
+            // to whichever of the five is live without knowing which.
             //
             // `source` empties off the route rather than the loader merely
             // hiding: an app view holds a live subscription to whatever service

@@ -255,6 +255,12 @@ import QtQuick
 // match tier only, never across one: a better name match still leads.
 // False browses in Unicode's own file order. The ledger
 // (state.json's `emojiUses`) records either way.
+// menu.appGrid (bool, default false): the launcher draws its app results as
+// a grid of icons with the app's name under each one instead of a row per
+// app, macOS Launchpad's reading. The apps take the grid and whatever else
+// the same query ranked draws as rows under it; the ranking, the frecency
+// order and the launch path are the ones the row list already used. Off
+// leaves every level the row list it has always been.
 // clipssh.alias (string, default ""): the alias ~/.clipssh/aliases holds
 // that the two callers with no row to read one off use, Shift+Enter on a
 // clipboard image row and the auto-send below. Unset takes the only alias

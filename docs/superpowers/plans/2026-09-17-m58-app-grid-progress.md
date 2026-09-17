@@ -86,6 +86,44 @@ with the smallest possible hooks in `Menu.qml`: another session is moving
 over this. Verify: `just test`, lint, `--app-grid` green twice with the
 PNGs read, `--menu`, `--emoji`, `--picker`, `--keybinds` green.
 
+## Task 2 decisions
+
+- The cell is `iconExtent * 2` wide and the columns come from
+  `floor(contentWidth / that)`, which is four at `popupWidthMenu`; the grid
+  then divides the width by four so the gutters, the outer two included,
+  come out equal.
+- The icon is `controlHeight * 2` (64px): icon themes ship a 64 directory and
+  `Quickshell.iconPath` returns an `image://icon` url, so the decode asks for
+  the size the cell draws at instead of scaling a 48 up.
+- The name takes the cell's own width less `sm` either side rather than the
+  `controlPaddingX` a `Cell` insets a row's text by: a centred name lines up
+  with no column of labels, and that padding was two characters of elision.
+- The name band is `TextMetrics` on the sans face at `body`, so the cell
+  height is exact rather than a guess; the cell is 133x105 at default scale.
+- Rows before it scrolls: whatever `_rowsAreaCap` gives (0.6 of the output
+  less chrome), the same cap every other view takes, so nothing new decides
+  the card's height.
+- The cell is the emoji grid's contract: `ghost`, `radiusMd`, hover wash,
+  cursor ring, `sm` margins so the ring's halo lands in the gutter rather
+  than under the neighbour or the view's own clip.
+- An app the icon theme cannot answer for draws the apps route's own
+  `layout-grid` mark in `mutedForeground`; the row list renders no icon slot
+  there, which a cell cannot do without collapsing.
+- An elided name carries the full one in the shell's `Tooltip`, through
+  `Cell.tooltipText`, gated on `Text.truncated` so it never appears on a name
+  that fits.
+- The mixed case (G2) is the grid's own `footer`: the apps keep virtualising
+  and the rest draw as `MenuRow`s under a `Separator` (DESIGN.md §1's ladder,
+  rung 4), one wheel carrying both. A grid reports `sections: []`, so the
+  rule is the seam rather than a heading.
+- Secondary actions need no code: `AppGrid.partition` is a stable split of
+  the level's own rows, so a cell's index IS its `_cursorIndex`, and
+  Shift+Enter and the action bar's primary act on that index whichever view
+  drew it.
+- `menu status` gained `view` and `cursor`: a frame cannot tell a grid of app
+  icons from a row list carrying icons, and only a number says an arrow moved
+  by one cell rather than by a row of them.
+
 ### Task 3: the record
 
 `CLAUDE.md`'s leg list, `docs/USAGE.md`, `docs/DESIGN.md` if the grid adds

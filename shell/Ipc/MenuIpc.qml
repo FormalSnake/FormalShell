@@ -98,6 +98,11 @@ IpcHandler {
     // is (1 for a row list, the grid's own count for the wallpaper and emoji
     // routes). All three are otherwise only readable by measuring pixels off
     // a screenshot, which cannot tell a wide row from a grid at all.
+    //
+    // `view` names which of the launcher's views drew the level
+    // (`rows`|`picker`|`emoji`|`appGrid`|`app`, M58 G5), for the same reason:
+    // a grid of app icons and a row list carrying icons are the same picture
+    // from outside.
     function status(): string {
         if (!menu)
             return "error: menu not ready";
@@ -107,7 +112,9 @@ IpcHandler {
             scrollTop: Math.round(menu.scrollTop),
             placeholder: menu.placeholder,
             sections: menu.sectionNames,
+            view: menu.viewKind,
             columns: menu.cursorColumns,
+            cursor: menu.cursorIndex,
             rows: menu.rowCount
         });
     }
