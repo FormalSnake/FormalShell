@@ -270,6 +270,12 @@ import QtQuick
 // content imagery through the retro dither pass, and it is the default for
 // wallpaper.dither and lock.dither above. Resolved by
 // shell/Theme/presets.js, read by Core/Theme.qml alone.
+// gtk.theme (string, default "adw-gtk3") and gtk.themeDark (string, default
+// "adw-gtk3-dark"): the GTK theme name ThemeEngine's _syncSystemScheme()
+// writes to org.gnome.desktop.interface/gtk-theme for light and dark mode,
+// so a NixOS module generating its own theme pair (e.g. a matugen-derived
+// one) can point GTK apps at it instead of adw-gtk3. Either left "" falls
+// back to its own default (shell/Theme/gtk.js's gtkThemeName()).
 Singleton {
     id: root
 
