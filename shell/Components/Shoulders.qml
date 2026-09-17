@@ -24,9 +24,10 @@ import "shoulders.js" as Outline
 // travel.
 //
 // A side with no room for its fillet is walled (M57 D2, `wallStart` /
-// `wallEnd`): attached, the silhouette runs out to the wall instead, square
-// where the wall meets the line and carrying the near fillet turned a
-// quarter against the wall past its own far edge. That side pulls back off
+// `wallEnd`): attached, the silhouette runs out to the wall instead, taking
+// the corner the wall's own line meets this card's in (`wallRadius`, square
+// against a bare output edge) and carrying the near fillet turned a quarter
+// against the wall past its own far edge. That side pulls back off
 // the wall on the same attach clock, and its border, absent while the fill
 // runs into the wall, comes up with the near edge's.
 //
@@ -63,6 +64,10 @@ Shape {
     // consumer that never walls.
     property real wallStart: -1
     property real wallEnd: -1
+    // The radius the wall's own line and this card's meet in, for the corner
+    // between them: a frame ring's rounded cut-out, 0 for the output's own
+    // square edge (Components/Joint.qml decides, Drawer.qml measures the ring).
+    property real wallRadius: 0
     // A gap in the far edge's border, `[start, end]` along the item's own
     // bar axis, for a card coming out of THIS one the way this one comes
     // out of the bar (a tray item's menu off the tray's second bar). Null
@@ -76,7 +81,8 @@ Shape {
     // The near corners' one signed radius: the fillet at 1, sharp at 0.5,
     // the card's own rounding at 0.
     readonly property real _corner: root.radius * (2 * root._attach - 1)
-    readonly property var _walls: ({ start: root.wallStart, end: root.wallEnd, attach: root._attach })
+    readonly property var _walls: ({ start: root.wallStart, end: root.wallEnd,
+        attach: root._attach, radius: root.wallRadius })
 
     // Two paths off one construction: the fill on the card's own rect, the
     // stroke half a border in from it so a 1px line lands on one pixel row

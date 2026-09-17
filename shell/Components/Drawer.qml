@@ -2,6 +2,7 @@ import QtQuick
 import qs.Core
 import "drawer.js" as Geometry
 import "../Bar/layout.js" as BarLayout
+import "../Frame/geometry.js" as FrameGeometry
 
 // The drawer every edge-anchored card is (DESIGN.md §1 "Motion", M57 D4):
 // the `Presence`, the `Joint`, the `Deform`, the slit the card comes out of,
@@ -162,6 +163,18 @@ Item {
 
     // A card coming out of THIS one, for the gap in the far edge's border.
     readonly property var _childJoin: PanelRegistry.joinOn(root.edge, root._screenName, root.owner)
+
+    // The corner a walled side runs into (M57 D2): the frame ring ends the
+    // line this card comes out of and the line it runs into in one rounded
+    // corner, and the silhouette follows it rather than squaring it off over
+    // the band inside it. The ring's own number, off the same geometry the
+    // ring is drawn from, so a `frame.radius` change carries. An output edge
+    // with no ring on it ends square and the run-out goes a radius past the
+    // screen, which is where it has always gone.
+    readonly property real _wallRadius: (Theme.frameEnabled && root.screen)
+        ? FrameGeometry.frameGeometry(root._screenWidth, root._screenHeight,
+            Theme.edgeInset, Theme.frameRadius).radius
+        : 0
 
     // The frame's enter/exit recipe (Presence.qml, DESIGN.md §1 "Motion"): a
     // drawer out of the line's edge. The extent is the whole shape and not
@@ -324,6 +337,7 @@ Item {
                         nearInset: joint.nearInset
                         wallStart: joint.wallStart
                         wallEnd: joint.wallEnd
+                        wallRadius: root._wallRadius
                         // A gap in the far edge's border for the card hanging
                         // off this one, its rect along the line put into this
                         // item's own coordinates.

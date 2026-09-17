@@ -46,6 +46,12 @@ function strokeRect(inner, radius, strokeWidth) {
 // run of nothing and a first that is the whole side. Strokes are separate
 // so any side can open on any frame, which one walk cannot do once two
 // cards are up on two sides at once.
+//
+// A corner is `gone` when the gaps on both of its sides run into it (M57 D2):
+// a card that comes out of one of those lines and runs out to the other
+// covers the arc between them with its own silhouette, and an arc drawn there
+// would read as a line across the card's fill. Both sides, so a card that
+// merely rests near the end of one line keeps the corner it never reaches.
 function ringLine(inner, radius, gaps) {
     var x = inner.x;
     var y = inner.y;
@@ -57,6 +63,19 @@ function ringLine(inner, radius, gaps) {
         var lo = g ? Math.max(r, Math.min(extent - r, g[0] - origin)) : extent - r;
         var hi = g ? Math.max(lo, Math.min(extent - r, g[1] - origin)) : extent - r;
         return [[r, lo], [hi, extent - r]];
+    }
+    // Whether the gap on one side covers the whole corner at one of its ends,
+    // which is the last `radius` of that side. The whole of it, not just its
+    // start: a card still coming out from under the line has not reached the
+    // arc yet, and the frame keeps a corner until something is there to draw
+    // that stretch of the cut-out's edge instead.
+    function reaches(edge, origin, extent, far) {
+        var g = gaps && gaps[edge] ? gaps[edge] : null;
+        if (!g || !(g[1] > g[0]))
+            return false;
+        return far
+            ? (g[0] - origin <= extent - r && g[1] - origin >= extent)
+            : (g[0] - origin <= 0 && g[1] - origin >= r);
     }
     var top = runs("top", x, w);
     var bottom = runs("bottom", x, w);
@@ -70,10 +89,14 @@ function ringLine(inner, radius, gaps) {
             left: left.map(function (s) { return { x1: x, y1: y + s[0], x2: x, y2: y + s[1] }; })
         },
         corners: [
-            { x1: x + w - r, y1: y, x2: x + w, y2: y + r },
-            { x1: x + w, y1: y + h - r, x2: x + w - r, y2: y + h },
-            { x1: x + r, y1: y + h, x2: x, y2: y + h - r },
-            { x1: x, y1: y + r, x2: x + r, y2: y }
+            { x1: x + w - r, y1: y, x2: x + w, y2: y + r,
+                gone: reaches("top", x, w, true) && reaches("right", y, h, false) },
+            { x1: x + w, y1: y + h - r, x2: x + w - r, y2: y + h,
+                gone: reaches("right", y, h, true) && reaches("bottom", x, w, true) },
+            { x1: x + r, y1: y + h, x2: x, y2: y + h - r,
+                gone: reaches("bottom", x, w, false) && reaches("left", y, h, true) },
+            { x1: x, y1: y + r, x2: x + r, y2: y,
+                gone: reaches("left", y, h, false) && reaches("top", x, w, false) }
         ]
     };
 }
