@@ -61,7 +61,12 @@ line ends (the output's edge, or the frame ring's inner line when
 that wall instead of drawing a fillet that cannot fit. The far corner on a
 walled side is a concave fillet past the far edge, against the wall (the
 near fillet's own construction turned a quarter); the corner between the
-line and the wall is square while attached. On the attach clock the walled
+line and the wall takes the corner those two lines meet in, which against a
+frame ring is `frame.radius` (2026-09-17, read off the owner's own layout:
+squaring it off there covers the wedge of band the ring's corner curves in
+by, and two translucent surfaces make that a lighter triangle; the ring gives
+its arc up over the same span, Frame/geometry.js's `gone`) and square against
+a bare output edge. On the attach clock the walled
 side pulls in from the wall by its resting room exactly as the near edge
 pulls off the line by `neck`, that side's border comes up with `1 - attach`
 the way the near edge's does, and all four corners arrive at the card's own
