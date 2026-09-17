@@ -55,7 +55,11 @@ lyrics` per P11 (the fields the panel owns, `active`, `secondary`, `follow`,
 `just lint` in the VM, and the by-hand provider run the spec asks for, its
 output pasted under "Evidence" below.
 
-### Task 3: the pane (spec P5 to P9, P11's panel fields)
+### Task 3: the pane (spec P5 to P9, P13, P11's panel fields)
+
+P13 first: the pane moves to the trailing side of the row, and a frame
+burst through a lyrics arrival shows the now-playing column's leading edge
+at one x throughout.
 
 `shell/Surfaces/Panels/MediaPanel.qml`, split into
 `shell/Surfaces/Panels/Media/LyricsPane.qml` and `LyricLine.qml` if the

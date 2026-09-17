@@ -162,6 +162,16 @@ in the shell blurs or shadows anything. The lyrics pane's depth of field and
 the sung-chunk glow are the exception, the owner's call of 2026-09-17, and
 both files say so where the rule is stated. Nothing else gains a blur.
 
+**P13 The pane on the right** (owner, 2026-09-17: "move lyrics to the right
+side of the panel, this way it feels less jarring when the lyrics suddenly
+load"). M55's A1 is reversed: the now-playing column leads and the lyrics
+pane trails it, same gutter, same equal split. The column keeps its place
+when lyrics arrive and the panel grows away from it, so nothing the pointer
+or the eye was on moves. Where the panel's own anchoring would shift the
+column as the width morphs (a panel hung off a right-region cell grows to
+the left), the morph holds the column's leading edge still and the pane
+opens out of its trailing side. Cursor sections keep their order.
+
 ## Verification
 
 - `tests/tst_lyrics_model.qml`: kopuz's own test cases for P5 ported by name
