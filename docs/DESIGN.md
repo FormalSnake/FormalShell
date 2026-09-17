@@ -71,6 +71,36 @@ rather than 0.2: the scrim falls under the mark and only darkens the desktop,
 while the card over it stays above and keeps its blur (owner, 2026-09-17:
 "make the overlay just darken instead of blur").
 
+**Depth** (`Theme.depth`, the `pantheon` preset, owner 2026-09-17: "a more
+skeuomorphic pantheon style instead of just flat"): elementary's relief,
+read off its stylesheet rather than ported, on top of the chrome above and
+changing none of it. Three tricks, each a primitive, and every one of them
+gone under a preset without depth so the shadcn look is untouched:
+
+- A raised control (`Relief`) carries a 1px `highlight` line just inside
+  its top edge, round its two top corners and no further, and, with `lift`,
+  a wash of `lift` over its face fading from the top to nothing at the
+  bottom. The filled `Button` variants, the chosen option of a group, an
+  active `Cell`, the `Switch` knob and `Segmented`'s travelling chip are
+  raised. List rows and selection stay flat, as elementary's do.
+- A sunken control is the same line in `insetLine`, the shadow its top edge
+  casts into a well: `Input`, the `Track` groove, the `Switch` track and
+  the troughs of `ButtonGroup` and `Segmented`.
+- A floating surface (`Shadow`) casts `Theme.shadow.offset` downward, a
+  black at `shadowAlpha` blurred by `Theme.shadow.blur`, and nothing inside
+  its own silhouette: the cast is masked at the surface's edge, so a
+  translucent card keeps the blurred desktop it shows rather than a black
+  backing. Every `Card`, every `Drawer` (following the join's silhouette
+  frame by frame, cut at the line like the card) and the tooltip cast one.
+  A card inside another surface (`Card.depth: false`) casts nothing and
+  carries no line. The bar strip casts nothing: wingpanel is flat.
+
+Alphas are per mode (`Tokens.DEPTH_ALPHA`): light mode leans on the light
+line, which has a face to sit on there, and less on the shadow, which lands
+on a bright desktop. The compositor's blur and `surfaceOpacity` are what
+they were; the shadow is the one thing the shell now draws that reaches
+past a surface's own edge.
+
 **Type** (`Theme.fontFamilySans`, `Theme.fontFamilyMono`,
 `Theme.fontSize.*`, `Theme.weight.*`): sans for words (titles, labels,
 buttons, section labels, descriptions, hints), mono for values (numbers,
@@ -477,6 +507,8 @@ thing.
 | `Deform` | the velocity squash (§1 Motion): samples `target` each frame and exposes the `matrix4x4` its consumer hands to a `Matrix4x4` transform, `amount` per surface | running, at rest (identity, frame loop stopped) |
 | `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge travel or its extent (`morph`) to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
 | `SizeMorph` | one size-morph recipe (§1 Motion, M57 D7): tracks a content size live while open, freezes it on close, arms off the surface being `mapped` rather than `settled`, and sits out under `held` while a surface like a second bar is still measuring its own cells | tracking, frozen, `held` |
+| `Relief` | the pantheon relief on one body (§1 Depth): the top-edge line cut to the band the corners span, `lift` for the wash; nothing at all without `theme.depth` | raised, `sunken`, `lift`, `shown` |
+| `Shadow` | the cast under a floating surface (§1 Depth): a black silhouette in the default slot rendered into one padded layer that is both the shadow's source and, inverted, its mask, at `z: -1` inside the surface; nothing without `theme.depth` | shown, hidden |
 | `Scrim` | the modal backdrop (§1 Motion): plain black at 0.5 on a drawer's own pose, its share over the line's own band riding `1 - attach` so a card buds off a lit bar and dims it only as it lets go | attached, letting go, free |
 | `Panel` | the popout window: a `Drawer` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
 
@@ -662,7 +694,10 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 - Words in mono or values in sans.
 - A shadow, a gradient, or a blur drawn by the shell (blur is the
   compositor's, behind a translucent card), save the lyrics pane's depth
-  of field and its sung-chunk glow (owner, 2026-09-17). Dither only behind
+  of field and its sung-chunk glow (owner, 2026-09-17), and save `Relief`
+  and `Shadow` under `theme.depth` (§1 Depth), which are the only shadow
+  and the only gradient a surface may carry, and never by hand: a surface
+  takes the primitive or stays flat. Dither only behind
   `wallpaper.dither` or `lock.dither`, both off by default. The bar's own
   mini cover stops animating behind `media.animatedBarCover: false`; the
   media panel's own cover animates unconditionally.

@@ -328,6 +328,32 @@ Item {
                     // under the line, so at rest it is the card plus `_depth`,
                     // and mid travel a shorter shape whose far edge is still
                     // the card's.
+                    // The cast under the silhouette (§1 "Depth"): the same
+                    // shape drawn black into Shadow's layer, following the
+                    // join frame by frame, so a bud on the line casts a bud's
+                    // shadow and a card that has let go casts a card's. Under
+                    // the slit's cut like everything else here, so nothing of
+                    // it lands on the line the card comes out of.
+                    Shadow {
+                        x: frameShape.x
+                        y: frameShape.y
+                        width: frameShape.width
+                        height: frameShape.height
+
+                        Shoulders {
+                            anchors.fill: parent
+                            edge: root.edge
+                            radius: root.radius
+                            color: "black"
+                            borderColor: "black"
+                            attach: joint.attach
+                            nearInset: joint.nearInset
+                            wallStart: joint.wallStart
+                            wallEnd: joint.wallEnd
+                            wallRadius: root._wallRadius
+                        }
+                    }
+
                     Shoulders {
                         id: frameShape
                         edge: root.edge
@@ -406,6 +432,19 @@ Item {
                             y: -contentClip.y
                             width: frame.width
                             height: frame.height
+
+                            // The line inside the card's top edge (§1
+                            // "Depth"). A card budding off a top line has no
+                            // top edge of its own yet, so there it comes up
+                            // with the near edge's border as the join lets
+                            // go; on every other edge the top is a free edge
+                            // from the first frame.
+                            Relief {
+                                anchors.fill: parent
+                                radius: root.radius
+                                opacity: root.edge === "top"
+                                    ? 1 - Math.max(0, Math.min(1, joint.attach)) : 1
+                            }
 
                             // What `Card`'s own default slot does: the
                             // contents inside the card's padding, reaching

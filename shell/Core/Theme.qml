@@ -242,6 +242,19 @@ Singleton {
     readonly property bool wallpaperDither: root._preset.wallpaperDither
     readonly property bool lockDither: root._preset.lockDither
 
+    // theme.depth (the pantheon preset, 2026-09-17): the relief every control
+    // draws through Components/Relief.qml and the shadow every floating
+    // surface draws through Components/Shadow.qml. Off, both draw nothing and
+    // the chrome is shadcn's flat card and border. `Tokens.DEPTH_ALPHA`'s
+    // header carries the per-mode arithmetic.
+    readonly property bool depth: root._preset.depth
+    readonly property var _depthAlpha: Tokens.depthAlpha(root.color.mode)
+    readonly property color highlight: Qt.rgba(1, 1, 1, root._depthAlpha.highlight)
+    readonly property color insetLine: Qt.rgba(0, 0, 0, root._depthAlpha.inset)
+    readonly property color lift: Qt.rgba(1, 1, 1, root._depthAlpha.lift)
+    readonly property real shadowAlpha: root._depthAlpha.shadow
+    readonly property var shadow: Tokens.SHADOW
+
     // Qt.alpha rather than Qt.rgba(c.r, c.g, c.b, alpha): no channel
     // extraction needed to add an alpha on top of a color already in hand.
     function surface(c) {

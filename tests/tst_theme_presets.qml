@@ -22,10 +22,11 @@ TestCase {
         };
     }
 
-    function test_names_are_the_two_presets() {
-        compare(Presets.NAMES.length, 2);
+    function test_names_are_the_three_presets() {
+        compare(Presets.NAMES.length, 3);
         compare(Presets.NAMES[0], "shadcn");
         compare(Presets.NAMES[1], "retro");
+        compare(Presets.NAMES[2], "pantheon");
     }
 
     function test_unknown_name_resolves_to_the_shadcn_table() {
@@ -39,6 +40,32 @@ TestCase {
         compare(t.dither, false);
         compare(t.wallpaperDither, false);
         compare(t.lockDither, false);
+        compare(t.depth, false);
+    }
+
+    // The pantheon preset (2026-09-17) is shadcn's table with the relief and
+    // the shadow on: every other knob stays where shadcn put it, so the two
+    // differ by `depth` alone.
+    function test_pantheon_is_shadcn_with_depth() {
+        var t = Presets.resolve("pantheon", makeGet({}));
+        var s = Presets.resolve("shadcn", makeGet({}));
+        compare(t.preset, "pantheon");
+        compare(t.depth, true);
+        compare(t.radius, s.radius);
+        compare(t.icons, s.icons);
+        compare(t.fonts, s.fonts);
+        compare(t.surfaceOpacity, s.surfaceOpacity);
+        compare(t.blur, s.blur);
+        compare(t.dither, s.dither);
+        compare(Presets.defaults("pantheon").depth, true);
+        compare(Presets.defaults("retro").depth, false);
+    }
+
+    function test_theme_depth_moves_alone_over_any_preset() {
+        compare(Presets.resolve("shadcn", makeGet({ theme: { depth: true } })).depth, true);
+        compare(Presets.resolve("pantheon", makeGet({ theme: { depth: false } })).depth, false);
+        compare(Presets.resolve("pantheon", makeGet({ theme: { depth: "false" } })).depth, true);
+        compare(Presets.resolve("retro", makeGet({ theme: { depth: 1 } })).depth, false);
     }
 
     function test_a_name_that_is_not_a_string_resolves_to_shadcn() {

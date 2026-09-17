@@ -83,6 +83,31 @@ TestCase {
 
     // 1.3 radius tokens (shadcn redesign, spec "Radius")
 
+    // The depth alphas (theme.depth, 2026-09-17): one table per mode, every
+    // value an alpha, and an unknown mode reading as dark the way stateAlpha
+    // does.
+    function test_depth_alpha_is_a_table_per_mode() {
+        var dark = Tokens.depthAlpha("dark");
+        var light = Tokens.depthAlpha("light");
+        var keys = ["highlight", "inset", "lift", "shadow"];
+        for (var i = 0; i < keys.length; i++) {
+            verify(dark[keys[i]] > 0 && dark[keys[i]] < 1, keys[i] + " dark");
+            verify(light[keys[i]] > 0 && light[keys[i]] < 1, keys[i] + " light");
+        }
+        compare(Tokens.depthAlpha("sepia").highlight, dark.highlight);
+        verify(light.highlight > dark.highlight);
+        verify(light.shadow < dark.shadow);
+    }
+
+    // The shadow's layer reaches past the silhouette by more than the cast
+    // can travel: the blur's own radius plus the downward offset, so nothing
+    // of it is ever cut at the layer's edge.
+    function test_shadow_extent_covers_the_blur_and_the_offset() {
+        var s = Tokens.SHADOW;
+        verify(s.extent >= s.blur * s.blurMax + s.offset);
+        verify(s.blur > 0 && s.blur <= 1);
+    }
+
     function test_radius_tokens_at_default_base_match_the_spec_table() {
         var r = Tokens.radiusTokens(10);
         compare(r.sm, 6);

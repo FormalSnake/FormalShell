@@ -68,12 +68,14 @@ TestCase {
         return control;
     }
 
-    // Declaration order: ring halo, track, knob.
+    // Declaration order: ring halo, track, knob. Filtered on `color` as
+    // well as `radius`, which keeps the two Relief layers (radius, no fill
+    // of their own) out of the count.
     function layers(control) {
         var out = [];
         for (var i = 0; i < control.children.length; i++) {
             var child = control.children[i];
-            if (child.radius !== undefined)
+            if (child.radius !== undefined && child.color !== undefined)
                 out.push(child);
         }
         return out;

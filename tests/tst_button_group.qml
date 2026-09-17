@@ -72,12 +72,13 @@ TestCase {
         return group;
     }
 
-    // The trough is the group's first child; the buttons live in the Row
-    // after it, alongside the Repeater that created them.
+    // The trough is the group's first child and its Relief the second; the
+    // buttons live in the Row after them, alongside the Repeater that
+    // created them.
     function trough(group) { return group.children[0]; }
 
     function buttons(group) {
-        var row = group.children[1];
+        var row = group.children[2];
         var out = [];
         for (var i = 0; i < row.children.length; i++) {
             if (row.children[i].variant !== undefined)

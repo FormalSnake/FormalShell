@@ -62,6 +62,7 @@ Card {
     signal seekRequested(real time)
 
     radius: Theme.radiusMd
+    depth: false
 
     // The one per-frame read in the pane (spec P5): every lit-set function
     // and every chunk takes its time from here.

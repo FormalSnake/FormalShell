@@ -151,6 +151,13 @@ Item {
         color: Theme.color.muted
     }
 
+    Relief {
+        anchors.fill: parent
+        radius: Theme.radiusMd
+        sunken: true
+        inset: 0
+    }
+
     Row {
         id: buttonRow
         anchors.fill: parent

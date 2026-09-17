@@ -107,6 +107,13 @@ Rectangle {
         }
     }
 
+    Relief {
+        anchors.fill: parent
+        radius: root.radius
+        sunken: true
+        inset: 0
+    }
+
     Rectangle {
         visible: root.notch >= 0
         x: root.width * root.notch - width / 2

@@ -87,6 +87,13 @@ Item {
         border.color: Theme.color.ring
     }
 
+    Relief {
+        anchors.fill: parent
+        radius: Theme.radiusMd
+        sunken: true
+        inset: 0
+    }
+
     // One selection, outside the Repeater (M53 D2): the chosen segment used
     // to be a fill inside each delegate switched on `visible`, so a Left or
     // Right arrow put the border down in the next place rather than moving
@@ -106,6 +113,12 @@ Item {
 
         Behavior on x {
             Anim { kind: "spatialFast" }
+        }
+
+        Relief {
+            anchors.fill: parent
+            radius: selection.radius
+            lift: true
         }
     }
 

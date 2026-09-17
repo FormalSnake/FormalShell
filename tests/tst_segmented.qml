@@ -61,12 +61,12 @@ TestCase {
         return control;
     }
 
-    // The painted layers in declaration order: ring halo, group, the one
-    // selection rectangle, segment row.
+    // The painted layers in declaration order: ring halo, group, the
+    // group's Relief, the one selection rectangle, segment row.
     function halo(control) { return control.children[0]; }
     function group(control) { return control.children[1]; }
-    function selection(control) { return control.children[2]; }
-    function row(control) { return control.children[3]; }
+    function selection(control) { return control.children[3]; }
+    function row(control) { return control.children[4]; }
 
     function segment(control, index) {
         var items = row(control).children;

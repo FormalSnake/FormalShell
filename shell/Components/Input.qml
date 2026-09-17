@@ -106,6 +106,12 @@ Item {
             CAnim {}
         }
 
+        Relief {
+            anchors.fill: parent
+            radius: frame.radius
+            sunken: true
+        }
+
         Text {
             anchors.fill: input
             visible: input.text === ""

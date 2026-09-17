@@ -76,6 +76,13 @@ Item {
         }
     }
 
+    Relief {
+        anchors.fill: track
+        radius: track.radius
+        sunken: true
+        inset: 0
+    }
+
     Rectangle {
         id: knob
         width: track.height - root._inset * 2
@@ -88,6 +95,13 @@ Item {
         Behavior on x {
             Anim { kind: "spatialFast" }
         }
+    }
+
+    Relief {
+        anchors.fill: knob
+        radius: knob.radius
+        lift: true
+        inset: 0
     }
 
     MouseArea {

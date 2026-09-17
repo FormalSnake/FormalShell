@@ -154,6 +154,17 @@ Item {
         }
     }
 
+    // The relief on a variant with a face to carry it (§1 "Depth"): the
+    // filled ones and the chosen option of a group. A ghost has no face,
+    // and an outline's is the surface under it.
+    Relief {
+        anchors.fill: parent
+        radius: root.radius
+        lift: true
+        inset: (root.cursor || root.variant === "selected") ? Theme.borderWidth : 0
+        shown: root._solid || root.variant === "selected"
+    }
+
     // The wash every other variant takes, over whatever is behind it: an
     // opaque `accent` chip on a panel drawn at `surfaceOpacity` lands at a
     // delta the wallpaper decides (Theme.hoverFill). Press is the same wash

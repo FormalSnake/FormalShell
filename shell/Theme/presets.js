@@ -10,11 +10,16 @@
 // the one it replaced, square corners, one mono face, opaque surfaces with
 // no compositor blur, and the dither pass over content imagery.
 
-var NAMES = ["shadcn", "retro"];
+// `pantheon` is shadcn's table with `depth` on (2026-09-17): elementary's
+// relief on every control and a shadow under every floating surface,
+// Components/Relief.qml and Components/Shadow.qml, gated by `theme.depth`.
+
+var NAMES = ["shadcn", "retro", "pantheon"];
 
 var _TABLE = {
-    shadcn: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false },
-    retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true }
+    shadcn: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false, depth: false },
+    retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true, depth: false },
+    pantheon: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false, depth: true }
 };
 
 // Anything that is not one of NAMES resolves to shadcn, the same
@@ -46,7 +51,8 @@ function defaults(name) {
         fonts: d.fonts,
         surfaceOpacity: d.surfaceOpacity,
         blur: d.blur,
-        dither: d.dither
+        dither: d.dither,
+        depth: d.depth
     };
 }
 
@@ -76,6 +82,7 @@ function resolve(name, get) {
         surfaceOpacity: get("theme.surfaceOpacity", d.surfaceOpacity),
         blur: _bool(get("theme.blur", d.blur), d.blur),
         dither: dither,
+        depth: _bool(get("theme.depth", d.depth), d.depth),
         // The two full-screen image passes follow `theme.dither` unless they
         // say otherwise, so one key carries the texture everywhere and
         // either surface can still opt out on its own.

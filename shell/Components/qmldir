@@ -27,11 +27,13 @@ PanelHero PanelHero.qml
 Picture Picture.qml
 Presence Presence.qml
 Rail Rail.qml
+Relief Relief.qml
 RemoveTransition RemoveTransition.qml
 PointerMoveGate PointerMoveGate.qml
 Scrim Scrim.qml
 SectionLabel SectionLabel.qml
 Separator Separator.qml
+Shadow Shadow.qml
 Shoulders Shoulders.qml
 SizeMorph SizeMorph.qml
 Segmented Segmented.qml

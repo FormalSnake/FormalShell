@@ -227,6 +227,22 @@ PanelWindow {
         scale: presence.scale
         transformOrigin: presence.transformOrigin
 
+        Shadow {
+            anchors.fill: parent
+            z: -1
+
+            Rectangle {
+                anchors.fill: parent
+                radius: frame.radius
+                color: "black"
+            }
+        }
+
+        Relief {
+            anchors.fill: parent
+            radius: frame.radius
+        }
+
         // Each slot is bound to its own implicit width so the card hugs
         // short text and only the overlong outliers elide; implicitWidth
         // stays the unelided metric regardless of the width assigned here.

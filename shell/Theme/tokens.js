@@ -193,6 +193,31 @@ function stateAlpha(mode) {
     return mode === "light" ? STATE_ALPHA.light : STATE_ALPHA.dark;
 }
 
+// --- Depth (theme.depth, the pantheon preset) ---------------------------
+// elementary's relief, read off its stylesheet rather than ported
+// (2026-09-17): a raised control carries a light line just inside its top
+// edge and a wash lighter at the top of its face than at the bottom, a
+// sunken one a dark line inside its top edge, and a floating surface a soft
+// shadow cast a few pixels below it. Alphas per mode, since the same white
+// line that reads on a dark button vanishes on a white card: light mode
+// leans harder on the light line where it has a colour to sit on, and less
+// on the shadow, which lands on a bright desktop.
+var DEPTH_ALPHA = {
+    dark: { highlight: 0.14, inset: 0.35, lift: 0.07, shadow: 0.55 },
+    light: { highlight: 0.55, inset: 0.12, lift: 0.12, shadow: 0.28 }
+};
+
+function depthAlpha(mode) {
+    return mode === "light" ? DEPTH_ALPHA.light : DEPTH_ALPHA.dark;
+}
+
+// The shadow's geometry, in px, the same in both modes: `extent` is how far
+// past the silhouette the layer it is blurred in reaches on every side,
+// `offset` how far down the cast lands, `blur` the blur radius as MultiEffect
+// takes it, a fraction of `blurMax`. The extent covers the blur plus the
+// offset with room to spare, so nothing of the cast is ever cut.
+var SHADOW = { extent: 28, offset: 6, blur: 0.45, blurMax: 32 };
+
 // --- §4 motion tokens ---------------------------------------------------
 
 // Two families and the property picks the family (M54 D1/D2): `spatial*`

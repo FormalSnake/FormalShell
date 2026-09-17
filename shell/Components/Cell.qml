@@ -352,6 +352,17 @@ Item {
         }
     }
 
+    // The relief on the one state that is an object rather than a row (§1
+    // "Depth"): an active cell's `primary` fill is a pressed toggle, and
+    // elementary raises those; its list rows and its selection stay flat.
+    Relief {
+        anchors.fill: parent
+        radius: root.radius
+        lift: true
+        inset: root._borderless ? 0 : Theme.borderWidth
+        shown: root.active
+    }
+
     // The pointer's own layer: a wash of the ink over whatever the cell
     // resolved to, never an opaque `accent` chip. A bar cell is a ghost over
     // a strip drawn at `surfaceOpacity`, so an opaque fill lands at a delta

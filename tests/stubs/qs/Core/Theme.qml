@@ -69,6 +69,19 @@ QtObject {
     readonly property bool lockDither: false
     readonly property bool blurBehind: true
 
+    // theme.depth (the pantheon preset, 2026-09-17): the relief every control
+    // draws through Components/Relief.qml and the shadow every floating
+    // surface draws through Components/Shadow.qml. Off, both draw nothing and
+    // the chrome is shadcn's flat card and border. `Tokens.DEPTH_ALPHA`'s
+    // header carries the per-mode arithmetic.
+    readonly property bool depth: false
+    readonly property var _depthAlpha: Tokens.depthAlpha(root.color.mode)
+    readonly property color highlight: Qt.rgba(1, 1, 1, root._depthAlpha.highlight)
+    readonly property color insetLine: Qt.rgba(0, 0, 0, root._depthAlpha.inset)
+    readonly property color lift: Qt.rgba(1, 1, 1, root._depthAlpha.lift)
+    readonly property real shadowAlpha: root._depthAlpha.shadow
+    readonly property var shadow: Tokens.SHADOW
+
     readonly property int borderWidth: 1
     readonly property int radius: 10
     readonly property var _radiusTokens: Tokens.radiusTokens(radius)

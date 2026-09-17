@@ -64,11 +64,12 @@ TestCase {
         return control;
     }
 
-    // Declaration order: the ring halo, the frame, the error caption.
+    // Declaration order: the ring halo, the frame, the error caption; inside
+    // the frame, its Relief, the placeholder, the field itself.
     function ringOf(control) { return control.children[0]; }
     function frameOf(control) { return control.children[1]; }
     function errorLabelOf(control) { return control.children[2]; }
-    function textInputOf(control) { return frameOf(control).children[1]; }
+    function textInputOf(control) { return frameOf(control).children[2]; }
 
     function test_at_rest_the_border_is_input_and_the_ring_is_hidden() {
         var control = make({});

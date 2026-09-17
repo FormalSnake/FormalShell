@@ -3054,6 +3054,7 @@ PanelWindow {
                 anchors.right: parent.right
                 height: rowsView.height
                 radius: Core.Theme.radiusMd
+                depth: false
 
                 Row {
                     id: previewHeader

@@ -66,14 +66,15 @@ TestCase {
 
     // The groove's painted children, in declaration order: the ring halo,
     // the fill, then the optional notch (invisible unless `notch` is set).
-    // Filtered on `radius` so the hover tracker (a MouseArea) and the
-    // dither remainder (a Loader, inactive under the stub's shadcn preset)
-    // stay out of the count.
+    // Filtered on `radius` and `color` so the hover tracker (a MouseArea),
+    // the dither remainder (a Loader, inactive under the stub's shadcn
+    // preset) and the groove's Relief (radius, no fill) stay out of the
+    // count.
     function layers(track) {
         var out = [];
         for (var i = 0; i < track.children.length; i++) {
             var child = track.children[i];
-            if (child.radius !== undefined)
+            if (child.radius !== undefined && child.color !== undefined)
                 out.push(child);
         }
         compare(out.length, 3);

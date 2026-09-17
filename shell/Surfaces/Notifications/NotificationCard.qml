@@ -60,6 +60,7 @@ Card {
     readonly property real _iconSlot: Theme.fontSize.heading
 
     color: root.flat ? "transparent" : Theme.color.card
+    depth: !root.flat
     // The only border a flat card draws is the one urgency asked for
     // (Cell.qml's `_borderless`, same rule): critical is a `destructive`
     // border and icon, so the border has to survive the flattening.

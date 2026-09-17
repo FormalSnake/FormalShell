@@ -645,18 +645,23 @@ when `HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed
 fall back to. `shadcn` (the default) is the look documented here. `retro`
 is the shell's earlier language as a setting of this one: everything
 square, every word in the mono face, Nerd Font glyphs, opaque surfaces,
-no compositor blur, and dithered imagery. Any key you write explicitly
-wins over the preset, so `retro` with `"radius": 4` is the retro look on
-slightly rounded corners.
+no compositor blur, and dithered imagery. `pantheon` is the shadcn look
+with elementary's relief on it: a light line inside the top edge of every
+raised control and a lighter wash down its face, a dark line inside every
+sunken one, and a soft shadow under every card, panel and tooltip. Any key
+you write explicitly wins over the preset, so `retro` with `"radius": 4`
+is the retro look on slightly rounded corners and `shadcn` with
+`"depth": true` is pantheon by another name.
 
-| key | `shadcn` | `retro` |
-| --- | --- | --- |
-| `theme.radius` | 10 | 0 |
-| `theme.icons` | `lucide` | `nerd` |
-| `theme.fonts` | `pair` | `mono` |
-| `theme.surfaceOpacity` | 0.85 | 1 |
-| `theme.blur` | true | false |
-| `theme.dither` | false | true |
+| key | `shadcn` | `retro` | `pantheon` |
+| --- | --- | --- | --- |
+| `theme.radius` | 10 | 0 | 10 |
+| `theme.icons` | `lucide` | `nerd` | `lucide` |
+| `theme.fonts` | `pair` | `mono` | `pair` |
+| `theme.surfaceOpacity` | 0.85 | 1 | 0.85 |
+| `theme.blur` | true | false | true |
+| `theme.dither` | false | true | false |
+| `theme.depth` | false | false | true |
 
 ```jsonc
 // ~/.config/formalshell/settings.json
