@@ -1,9 +1,9 @@
 # M56: the lyrics pane at parity with kopuz
 
 **Date:** 2026-09-17
-**Over:** the M55 spec (`2026-09-14-m55-lyrics-spectrum-room.md`). M55's D3
-(when a lookup runs), D4 (only synced lyrics show), A1/A2 (the two-column
-panel) and the keyboard section stand. D1, D2, D5, D9, A3 and A3b are
+**Over:** the M55 spec (`2026-09-14-m55-lyrics-spectrum-room.md`). M55's D4
+(only synced lyrics show), A2 (the now-playing column) and the keyboard
+section stand. D1, D2, D3, D5, D9, A1's choice of side, A3 and A3b are
 replaced by what follows.
 
 ## The brief
