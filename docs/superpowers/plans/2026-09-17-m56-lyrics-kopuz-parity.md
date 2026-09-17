@@ -34,6 +34,12 @@ Where the shipped code deviates from the task text, on purpose:
   found when the panel's two bindings disagreed for one evaluation. P13's
   hold check lives inside `lyrics.sh` rather than a leg of its own. The
   blur leg's margin is `off > on * 1.10` against a measured 1.15 to 1.24.
+- The merge with M57's drawer (94520b9): `Drawer`'s `Behavior on x` chased
+  a place that `_morphWidth` was already animating, so a card resting on the
+  screen's far padding trailed its own width by hundreds of pixels and ran
+  past the display's edge as the pane came back. `Panel` turns `travel` off
+  while either size morph runs, and `lyrics.sh` reads the far edge off eight
+  frames through a track change.
 **Spec:** `docs/superpowers/specs/2026-09-17-m56-lyrics-kopuz-parity.md`
 (wins on conflict), over the M55 spec.
 
