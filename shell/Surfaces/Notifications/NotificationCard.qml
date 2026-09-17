@@ -62,7 +62,7 @@ Card {
     // The `notification` box rather than a panel's `card`: a toast has
     // nothing blurred behind it, so its fill is opaque. A flat card paints
     // neither fill nor border, except the one urgency asked for (Cell.qml's
-    // `_borderless`, same rule): critical is a `destructive` border and
+    // ghost state, same rule): critical is a `destructive` border and
     // icon, so the border has to survive the flattening.
     role: "notification"
     state: root.flat

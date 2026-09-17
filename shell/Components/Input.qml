@@ -2,9 +2,14 @@ import QtQuick
 import qs.Core
 import "cursor.js" as Cursor
 
-// shadcn's text field (DESIGN.md §2): an `input` border at `radiusMd`,
-// `controlHeight` tall, the ring while it holds focus, a `destructive`
-// border plus a caption under it while `error`.
+// shadcn's text field (DESIGN.md §2), drawn from the table's `input` role:
+// its resting border, the ring while it holds focus, the error border, and
+// a caption under it the field itself owns. `controlHeight` tall, which is
+// geometry rather than chrome.
+//
+// The halo stays hand-drawn rather than composed out of a `Box`: it fades
+// in and out with focus (M51 Task 5), which a ring the renderer
+// instantiates on a state change cannot do.
 //
 // `editing` is what a surrounding KeyCatcher blocks on: while the field has
 // focus the keys are the field's, not the panel's.
@@ -30,6 +35,24 @@ Item {
     }
 
     readonly property bool _showsError: root.error && root.errorText !== ""
+
+    // Which of the role's three states the field is in. Focus, blur and
+    // error all cross on one colour Behavior below, so an error gets no
+    // special case that would read as a different kind of change.
+    readonly property var _box: Theme.box("input",
+        root.error ? "error" : input.activeFocus ? "focus" : "rest")
+
+    // The frame's corner, off the resting box rather than the live one: the
+    // halo is drawn around that corner, and a state that moved it would slide
+    // the halo out from under the frame it belongs to.
+    readonly property real _radius: Theme.boxRadius(Theme.box("input"), frame.height)
+
+    // The halo the table hangs on `focus`, resolved. A table declaring none
+    // reads as nothing rather than as undefined.
+    readonly property var _focusRing: {
+        var rings = Theme.box("input", "focus").rings;
+        return rings.length > 0 ? rings[0] : ({ spread: 0, color: "transparent" });
+    }
 
     // True one tick past creation, so the field's first layout is not an
     // animation: a Behavior fires on any write, including the one a fresh
@@ -74,11 +97,11 @@ Item {
     Rectangle {
         id: ring
         anchors.fill: frame
-        anchors.margins: -Theme.ringWidth
+        anchors.margins: -root._focusRing.spread
         visible: ring.opacity > 0
-        radius: Theme.radiusMd + Theme.ringWidth
-        color: Theme.color.ring
-        opacity: input.activeFocus ? Theme.ringAlpha : 0
+        radius: root._radius + root._focusRing.spread
+        color: root._focusRing.color
+        opacity: input.activeFocus ? 1 : 0
         Behavior on opacity {
             Anim { kind: "effects" }
         }
@@ -90,18 +113,10 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         height: Theme.space.controlHeight
-        radius: Theme.radiusMd
-        color: "transparent"
-        border.width: Theme.borderWidth
-        // Focus, blur and error all crossfade the border colour on the one
-        // colour Behavior every other control takes, so an error gets no
-        // special case that would make it look like a different kind of
-        // change from a focus.
-        border.color: root.error
-            ? Theme.color.destructive
-            : input.activeFocus
-                ? Theme.color.ring
-                : Theme.color.input
+        radius: root._radius
+        color: root._box.fill
+        border.width: root._box.border ? root._box.border.width : 0
+        border.color: root._box.border ? root._box.border.color : "transparent"
         Behavior on border.color {
             CAnim {}
         }
@@ -127,7 +142,7 @@ Item {
             font.family: Theme.fontFamilySans
             font.pixelSize: Theme.fontSize.body
             selectByMouse: true
-            selectionColor: Theme.color.primary
+            selectionColor: Theme.box("input.selection").fill
             selectedTextColor: Theme.color.primaryForeground
             Keys.onPressed: event => root.activity()
             onAccepted: root.accepted()

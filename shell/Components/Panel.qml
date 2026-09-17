@@ -951,8 +951,10 @@ PanelWindow {
                         property Item row: null
                         z: -1
                         visible: cursorHalo.row !== null
-                        color: Theme.color.ring
-                        opacity: Theme.ringAlpha
+                        // The table's own cursor ring (M59 T6), the same
+                        // layer a row draws for itself when no list owns
+                        // one, so the two never disagree.
+                        color: Theme.cursorRing.color
 
                         Behavior on x {
                             enabled: root._cursorTravels

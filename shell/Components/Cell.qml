@@ -2,9 +2,15 @@ import QtQuick
 import qs.Core
 import "cursor.js" as Cursor
 
-// The shadcn item (DESIGN.md §2): a `card` fill with a 1px `border` at
-// `radiusMd`. Every bar cell, list row and chip on every surface is one of
-// these, so the chrome lives in exactly one place.
+// The shadcn item (DESIGN.md §2), drawn from the `cell` role of the live
+// table (shell/Theme/themes/). Every bar cell, list row and chip on every
+// surface is one of these, so what a row looks like is one theme entry
+// rather than a literal in this file.
+//
+// Its four layers stay hand-drawn rather than composed out of a `Box`: the
+// halo belongs to the list when a list owns one, the fill and the border
+// answer different states, and the open-panel mark is a line whose length
+// and edge only the cell knows.
 Item {
     id: root
 
@@ -101,9 +107,42 @@ Item {
     // Everything else in the cell ignores it.
     readonly property int labelRotation: root.barEdge === "left" ? -90 : root.barEdge === "right" ? 90 : 0
 
-    // The only border a ghost draws is one a state asked for.
-    readonly property bool _borderless: root.ghost && !root.cursor
-        && !root.destructive && !root.warning
+    // The cell's chrome is two answers rather than one: which fill it
+    // carries and which border. `ghost` drops both, but never a colour a
+    // state asked for, so the two resolve from their own states: `active`
+    // over a ghost is a primary fill and no border, `destructive` over one
+    // is a destructive border and no fill.
+    readonly property string _fillState: root.active
+        ? "active"
+        : (root.selected && !root._selectionOwned)
+            ? "selected"
+            : root.ghost ? "ghost" : "rest"
+
+    readonly property string _borderState: root.destructive
+        ? "destructive"
+        : root.warning
+            ? "warning"
+            : root.ghost ? "ghost" : "rest"
+
+    // The cursor takes the border over whatever the state resolved (M59 T6),
+    // and a state that asked for none leaves the cell with none.
+    readonly property var _border: root.cursor
+        ? Theme.box("cursor").border
+        : Theme.box("cell", root._borderState).border
+
+    // A border that is not drawn keeps the resting colour under it, so a
+    // ghost cell taking the cursor travels from `border` to `ring` instead
+    // of fading in out of nothing.
+    readonly property color _borderColor: {
+        if (root._border)
+            return root._border.color;
+        var rest = Theme.box("cell").border;
+        return rest ? rest.color : "transparent";
+    }
+
+    readonly property color _hoverWash: Theme.box("cell", "hover").wash || "transparent"
+
+    readonly property var _markBox: Theme.box("cell.mark")
 
     // A bar cell whose panel (or the launcher, or the notification center)
     // is open (DESIGN.md §3 Bar).
@@ -305,43 +344,31 @@ Item {
     // at the moment `selected` first turns true.
     onSelectedChanged: if (root.selected) Qt.callLater(root._resolveSelectionOwner);
 
-    // The focus ring's outer halo (shadcn's `ring-[3px] ring-ring/50`), drawn
-    // as a larger rounded rectangle behind the body rather than a shader, so
-    // only the band outside the body's own edge is ever visible.
+    // The cursor's halo, the one ring layer the table's `cursor` entry
+    // declares, drawn as a larger rounded rectangle behind the body rather
+    // than as a shader, so only the band outside the body's own edge is ever
+    // visible. Filled at the layer's own alpha: the body over it is opaque
+    // where it matters, and a stroked band could not follow the border's arc.
     Rectangle {
         anchors.fill: parent
         anchors.margins: -Theme.ringWidth
         visible: root.cursor && !root._haloOwned
         radius: root.radius + Theme.ringWidth
-        color: Theme.color.ring
-        opacity: Theme.ringAlpha
+        color: Theme.cursorRing.color
     }
 
     // The body. Its fill and its border cross to their new colour on the
     // control clock rather than cutting (M53 D3, withdrawing the "fills
-    // snap" contract): a ternary here is a state change on a cell that is
-    // already on screen, so `active`, `selected` and the cursor arrive the
-    // way the hover layer below already does. `border.width` is not in on
-    // it, since a border that grew from nothing would be the cell changing
-    // shape rather than colour.
+    // snap" contract): a state change on a cell that is already on screen
+    // arrives as a colour travelling, the way the hover layer below already
+    // does. `border.width` is not in on it, since a border that grew from
+    // nothing would be the cell changing shape rather than colour.
     Rectangle {
         anchors.fill: parent
         radius: root.radius
-        color: root.active
-            ? Theme.color.primary
-            : (root.selected && !root._selectionOwned)
-                ? Theme.color.accent
-                : root.ghost
-                    ? "transparent"
-                    : Theme.surface(Theme.color.card)
-        border.width: root._borderless ? 0 : Theme.borderWidth
-        border.color: root.cursor
-            ? Theme.color.ring
-            : root.destructive
-                ? Theme.color.destructive
-                : root.warning
-                    ? Theme.color.warning
-                    : Theme.color.border
+        color: Theme.box("cell", root._fillState).fill
+        border.width: root._border ? root._border.width : 0
+        border.color: root._borderColor
 
         Behavior on color {
             CAnim {}
@@ -352,14 +379,15 @@ Item {
         }
     }
 
-    // The pointer's own layer: a wash of the ink over whatever the cell
-    // resolved to, never an opaque `accent` chip. A bar cell is a ghost over
-    // a strip drawn at `surfaceOpacity`, so an opaque fill lands at a delta
-    // the wallpaper decides and a bright one cancels it (Theme.hoverFill).
+    // The pointer's own layer: the wash the table's `hover` state names,
+    // over whatever the cell resolved to, never an opaque `accent` chip. A
+    // bar cell is a ghost over a strip drawn at `surfaceOpacity`, so an
+    // opaque fill lands at a delta the wallpaper decides and a bright one
+    // cancels it.
     Rectangle {
         anchors.fill: parent
         radius: root.radius
-        color: Theme.hoverFill
+        color: root._hoverWash
         opacity: root._hoverFillActive ? 1 : 0
 
         Behavior on opacity {
@@ -386,7 +414,9 @@ Item {
         visible: panelMark.opacity > 0
         opacity: panelMark._fade
         readonly property bool _sideways: root.vertical
-        readonly property real _edgeMargin: root._borderless ? 0 : Theme.borderWidth
+        // Inside whatever border the cell actually draws, so the line sits
+        // on the cell's own edge when there is none.
+        readonly property real _edgeMargin: root._border ? root._border.width : 0
         width: panelMark._sideways ? Theme.borderWidth * 2 : root.width - Theme.space.xs * 2
         height: panelMark._sideways ? root.height - Theme.space.xs * 2 : Theme.borderWidth * 2
         x: root.barEdge === "right"
@@ -399,8 +429,8 @@ Item {
             : panelMark._sideways
                 ? Theme.space.xs
                 : root.height - panelMark.height - panelMark._edgeMargin
-        radius: Theme.radiusSm
-        color: Theme.color.primary
+        radius: Theme.boxRadius(root._markBox, Math.min(panelMark.width, panelMark.height))
+        color: root._markBox.fill
 
         Behavior on _presence {
             Anim { kind: "spatialFast" }

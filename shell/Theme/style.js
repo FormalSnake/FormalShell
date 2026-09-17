@@ -25,16 +25,19 @@ var ROLES = {
     "popover": [],
     "menu": [],
     "cell": ["rest", "ghost", "hover", "active", "selected", "destructive", "warning"],
+    "cell.mark": [],
     "button.default": ["rest", "hover", "press"],
     "button.outline": ["rest", "hover", "press"],
     "button.ghost": ["rest", "hover", "press"],
     "button.selected": ["rest", "hover", "press"],
     "button.destructive": ["rest", "hover", "press"],
     "input": ["rest", "focus", "error"],
+    "input.selection": [],
     "switch.track": ["off", "on"],
     "switch.knob": [],
     "track.groove": [],
     "track.fill": [],
+    "track.notch": [],
     "trough": [],
     "segmented.chip": [],
     "cursor": [],
@@ -274,6 +277,24 @@ function wash(style, key, ctx) {
     if (!entryValue)
         return LITERAL_COLORS.transparent;
     return paint(entryValue.color, entryValue.alpha, ctx);
+}
+
+// The keyboard cursor composed over whatever box carries it (T6): the
+// cursor's own border in place of the box's, and its halo appended to the
+// rings, so one table entry decides what a cursor looks like on a cell, a
+// button or a segmented control. The halo is a second answer rather than
+// part of the border, because a list draws one halo for every row it owns
+// (cursor.js's `ownsCursorHalo` walk) while each of those rows still swaps
+// its own border.
+function withCursor(box, cursor, halo) {
+    var out = {};
+    for (var key in box)
+        out[key] = box[key];
+    if (cursor.border)
+        out.border = cursor.border;
+    if (halo)
+        out.rings = box.rings.concat(cursor.rings);
+    return out;
 }
 
 // Every colour name a table references, for the validation test: a name

@@ -2,15 +2,17 @@ import QtQuick
 import qs.Core
 import "cursor.js" as Cursor
 
-// shadcn's button (DESIGN.md §2). `variant` picks the resting treatment:
-// `default` fills with `primary`, `destructive` fills with `destructive`,
-// `outline` is transparent behind a 1px `border`, `ghost` is transparent
-// with no border at all, `selected` fills with `background` behind a 1px
-// `border` (the segmented look `ButtonGroup` paints on the chosen option).
+// shadcn's button (DESIGN.md §2), drawn as a `Box` over the table's own
+// `button.<variant>` role: `default` and `destructive` carry a colour of
+// their own, `outline` is transparent behind a border, `ghost` is
+// transparent with no border at all, and `selected` is the segmented look
+// `ButtonGroup` paints on the chosen option. What each of those looks like,
+// and what the pointer does to it, is the theme's answer; this file states
+// which role and which state it is in.
 //
 // `enabled` is QQuickItem's own: it gates the pointer target as well as
 // dimming the button, so a disabled one neither hovers nor clicks.
-Item {
+Box {
     id: root
 
     property string variant: "default"
@@ -23,7 +25,7 @@ Item {
     // The concentric rule (spec "Radius"): a button nested inside a bordered
     // trough takes the outer radius minus the padding between them.
     // `radiusMd` is the free-standing case.
-    property int radius: Theme.radiusMd
+    radius: Theme.radiusMd
 
     // A ceiling for the label, for a button whose width its owner decides
     // (`ButtonGroup` divides its trough evenly). -1 leaves the label at its
@@ -71,19 +73,17 @@ Item {
             root._openTooltip();
     }
 
-    // A variant carrying a colour of its own. `selected` is deliberately not
-    // one: its fill is `background`, which the ink wash sits on exactly as it
-    // sits on a ghost, and washing it is what keeps a chosen option in a
-    // `ButtonGroup` reading as chosen while the pointer is on it.
-    readonly property bool _solid: root.variant === "default"
-        || root.variant === "destructive"
-    readonly property color _fill: root.variant === "default"
-        ? Theme.color.primary
-        : root.variant === "destructive"
-            ? Theme.color.destructive
-            : root.variant === "selected"
-                ? Theme.color.background
-                : "transparent"
+    // The role and the state the table answers. A variant carrying a colour
+    // of its own blends toward `background` under the pointer and takes no
+    // wash, which is the `tint` its hover and press states name; the three
+    // that carry none take the ink wash instead. `selected` is deliberately
+    // among those: its fill is `background`, and washing it is what keeps a
+    // chosen option in a `ButtonGroup` reading as chosen while the pointer
+    // sits on it.
+    role: "button." + root.variant
+    state: pointer.pressed ? "press" : root.hovered ? "hover" : "rest"
+    box: Theme.withCursor(Theme.box(root.role, root.state), root.cursor, !root._haloOwned)
+
     readonly property color _ink: root.variant === "default"
         ? Theme.color.primaryForeground
         : root.variant === "destructive"
@@ -105,70 +105,15 @@ Item {
         return Math.max(0, Math.min(label.implicitWidth, root.labelBudget - taken));
     }
 
-
     // Whether something above this control draws the cursor halo for the
     // whole list it sits in (Panel.qml, M53 D4): one halo that travels
-    // between rows needs there to be one of it. cursor.js carries the walk
-    // and why it runs when the row takes the cursor rather than when it is
-    // built.
+    // between rows needs there to be one of it, and only the halo is
+    // suppressed, never the border swap that marks which row has it.
+    // cursor.js carries the walk and why it runs when the row takes the
+    // cursor rather than when it is built.
     property bool _haloOwned: false
 
     onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
-
-    // The focus ring's outer halo, drawn behind the body exactly as Cell
-    // draws it.
-    Rectangle {
-        anchors.fill: parent
-        anchors.margins: -Theme.ringWidth
-        visible: root.cursor && !root._haloOwned
-        radius: root.radius + Theme.ringWidth
-        color: Theme.color.ring
-        opacity: Theme.ringAlpha
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        // `default` and `destructive` carry no border of their own, so the
-        // cursor's border swap is the only thing that gives them one;
-        // `outline` and `selected` are bordered at rest and the swap only
-        // recolours what is already there.
-        border.width: (root.cursor || root.variant === "outline" || root.variant === "selected")
-            ? Theme.borderWidth : 0
-        border.color: root.cursor ? Theme.color.ring : Theme.color.border
-        // A variant carrying its own colour blends toward `background` and
-        // stays opaque (shadcn's `hover:bg-primary/90`). Dropping this
-        // rectangle's opacity instead, which is what `/90` means on an opaque
-        // page, makes a primary button on a translucent panel see-through and
-        // the wallpaper reads straight through its label.
-        color: !root._solid
-            ? root._fill
-            : pointer.pressed
-                ? Theme.pressFilled(root._fill)
-                : root.hovered
-                    ? Theme.hoverFilled(root._fill)
-                    : root._fill
-
-        Behavior on color {
-            CAnim {}
-        }
-    }
-
-    // The wash every other variant takes, over whatever is behind it: an
-    // opaque `accent` chip on a panel drawn at `surfaceOpacity` lands at a
-    // delta the wallpaper decides (Theme.hoverFill). Press is the same wash
-    // one step on, and lands without a fade, since the pointer is already
-    // there.
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        color: pointer.pressed ? Theme.pressFill : Theme.hoverFill
-        opacity: (!root._solid && (root.hovered || pointer.pressed)) ? 1 : 0
-
-        Behavior on opacity {
-            Anim { kind: "effects" }
-        }
-    }
 
     Row {
         id: row
@@ -202,5 +147,4 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
     }
-
 }

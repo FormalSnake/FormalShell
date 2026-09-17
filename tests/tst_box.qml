@@ -25,6 +25,11 @@ TestCase {
     visible: true
     when: windowShown
 
+    // The alpha the table's `cursor` ring layer carries, written out rather
+    // than read back off the table: an assertion sourced from the same place
+    // as the value under test agrees with itself whatever the table says.
+    readonly property real ringAlpha: 0.5
+
     readonly property var sentinelColors: ({
         background: "#010101",
         foreground: "#eeeeee",
@@ -229,7 +234,7 @@ TestCase {
         compare(ring.anchors.margins, -Theme.ringWidth);
         compare(ring.width, box.width + Theme.ringWidth * 2);
         compare(ring.radius, 8 + Theme.ringWidth);
-        verify(Qt.colorEqual(ring.color, Qt.alpha(Theme.color.ring, Theme.ringAlpha)));
+        verify(Qt.colorEqual(ring.color, Qt.alpha(Theme.color.ring, testCase.ringAlpha)));
         verify(Qt.colorEqual(drawn[1].border.color, Theme.color.ring));
     }
 

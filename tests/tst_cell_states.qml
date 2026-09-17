@@ -19,6 +19,11 @@ TestCase {
     visible: true
     when: windowShown
 
+    // The alpha the table's `cursor` ring layer carries, written out rather
+    // than read back off the table: an assertion sourced from the same place
+    // as the value under test agrees with itself whatever the table says.
+    readonly property real ringAlpha: 0.5
+
     readonly property var sentinelColors: ({
         background: "#010101",
         foreground: "#eeeeee",
@@ -178,12 +183,15 @@ TestCase {
         verify(Qt.colorEqual(cell.foreground, Theme.color.warning));
     }
 
+    // The halo is the table's own ring layer (M59 T6): filled at that
+    // layer's alpha rather than painted opaque under a 0.5 opacity, which is
+    // the same band of pixels either way.
     function test_cursor_draws_the_ring() {
         var cell = makeCell({ cursor: true });
         var rects = layers(cell);
         verify(rects[0].visible);
-        verify(Qt.colorEqual(rects[0].color, Theme.color.ring));
-        compare(rects[0].opacity, Theme.ringAlpha);
+        verify(Qt.colorEqual(rects[0].color, Qt.alpha(Theme.color.ring, testCase.ringAlpha)));
+        compare(rects[0].opacity, 1);
         compare(rects[0].radius, Theme.radiusMd + Theme.ringWidth);
         verify(Qt.colorEqual(rects[1].border.color, Theme.color.ring));
     }

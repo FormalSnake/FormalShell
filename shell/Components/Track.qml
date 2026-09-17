@@ -2,18 +2,18 @@ import QtQuick
 import qs.Core
 import "cursor.js" as Cursor
 
-// The one progress/slider groove (DESIGN.md §2): `primary` at 0.2 for the
-// groove, `primary` for the fill, `radiusSm` on both, `trackThickness` tall.
+// The one progress/slider groove (DESIGN.md §2), drawn from the table's
+// `track.groove` and `track.fill` roles, `trackThickness` tall.
+//
+// The layers stay hand-drawn rather than composed out of a `Box`: the fill
+// is a second box living inside the groove, clipped by nothing but its own
+// width, and the halo is sized off the groove while painted outside it.
 //
 // Under `theme.dither` (M49 D3) the remainder carries DitherFill's checker
 // over that colour, the era's own way of drawing "not yet". It is loaded
 // only while the knob is on, so a shadcn install pays for no Canvas, and it
 // paints the groove's full rect: the preset that turns it on squares the
 // radius too, so there are no rounded corners for it to sit proud of.
-//
-// The groove is shadcn's own `primary/20` rather than `muted`: `muted` and
-// `accent` resolve to the same zinc step in the dark fallback, so a groove
-// painted `muted` vanishes on a row carrying a `selected` or `active` fill.
 //
 // A track can carry the keyboard cursor itself (MediaPanel's progress and
 // volume), so the ring is drawn here rather than by a Cell wrapped around
@@ -56,13 +56,18 @@ Rectangle {
 
     readonly property real _fraction: Math.max(0, Math.min(1, root.value))
 
-    implicitHeight: Theme.space.trackThickness
-    radius: Theme.radiusSm
-    color: Qt.alpha(Theme.color.primary, 0.2)
+    readonly property var _grooveBox: Theme.box("track.groove")
+    readonly property var _fillBox: Theme.box("track.fill")
+
     // A filled groove has no border of its own, so the cursor's border swap
-    // is the only thing that gives it one.
-    border.width: root.cursor ? Theme.borderWidth : 0
-    border.color: Theme.color.ring
+    // is the only thing that ever gives it one.
+    readonly property var _cursorBorder: Theme.box("cursor").border
+
+    implicitHeight: Theme.space.trackThickness
+    radius: Theme.boxRadius(root._grooveBox, Theme.space.trackThickness)
+    color: root._grooveBox.fill
+    border.width: root.cursor ? root._cursorBorder.width : 0
+    border.color: root._cursorBorder.color
 
 
     // Whether something above this control draws the cursor halo for the
@@ -82,8 +87,7 @@ Rectangle {
         z: -1
         visible: root.cursor && !root._haloOwned
         radius: root.radius + Theme.ringWidth
-        color: Theme.color.ring
-        opacity: Theme.ringAlpha
+        color: Theme.cursorRing.color
     }
 
     Loader {
@@ -95,8 +99,8 @@ Rectangle {
     Rectangle {
         height: parent.height
         width: root.width * root._fraction
-        radius: Theme.radiusSm
-        color: Theme.color.primary
+        radius: Theme.boxRadius(root._fillBox, parent.height)
+        color: root._fillBox.fill
 
         // Not Linear: a level is set in steps by a poll or a drag, never
         // swept continuously, so every change is one on-screen edge
@@ -112,7 +116,7 @@ Rectangle {
         x: root.width * root.notch - width / 2
         width: Theme.borderWidth
         height: parent.height
-        color: Theme.color.background
+        color: Theme.box("track.notch").fill
     }
 
     MouseArea {

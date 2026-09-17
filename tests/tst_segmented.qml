@@ -19,6 +19,11 @@ TestCase {
     visible: true
     when: windowShown
 
+    // The alpha the table's `cursor` ring layer carries, written out rather
+    // than read back off the table: an assertion sourced from the same place
+    // as the value under test agrees with itself whatever the table says.
+    readonly property real ringAlpha: 0.5
+
     readonly property var sentinelColors: ({
         background: "#010101",
         foreground: "#eeeeee",
@@ -61,12 +66,37 @@ TestCase {
         return control;
     }
 
-    // The painted layers in declaration order: ring halo, group, the one
-    // selection rectangle, segment row.
-    function halo(control) { return control.children[0]; }
-    function group(control) { return control.children[1]; }
-    function selection(control) { return control.children[2]; }
-    function row(control) { return control.children[3]; }
+    // The control's own children, in declaration order: the trough, the one
+    // selection chip that travels between segments, and the segment row. The
+    // first two are `Box`es, so their fill and the cursor's halo are the
+    // rectangles Box draws inside them (tst_box.qml walks the same shape):
+    // the halo when there is one, then the fill, then the pointer's wash.
+    function trough(control) { return control.children[0]; }
+    function selection(control) { return control.children[1]; }
+    function row(control) { return control.children[2]; }
+
+    function boxRects(box) {
+        var out = [];
+        for (var i = 0; i < box.children.length; i++) {
+            var child = box.children[i];
+            if (child.radius !== undefined && child.border !== undefined)
+                out.push(child);
+        }
+        return out;
+    }
+
+    function fillOf(box) {
+        var all = boxRects(box);
+        return all[all.length - 2];
+    }
+
+    function haloOf(box) {
+        var all = boxRects(box);
+        return all.length > 2 ? all[0] : null;
+    }
+
+    function group(control) { return fillOf(trough(control)); }
+    function chip(control) { return fillOf(selection(control)); }
 
     function segment(control, index) {
         var items = row(control).children;
@@ -98,9 +128,9 @@ TestCase {
         var control = make({ options: ["DARK", "LIGHT"] });
         var on = selection(control);
         verify(on.visible);
-        verify(Qt.colorEqual(on.color, Theme.color.background));
-        compare(on.border.width, Theme.borderWidth);
-        verify(Qt.colorEqual(on.border.color, Theme.color.border));
+        verify(Qt.colorEqual(chip(control).color, Theme.color.background));
+        compare(chip(control).border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(chip(control).border.color, Theme.color.border));
         // One rectangle covering the chosen segment, not one per segment:
         // it sits on the first segment's own box, inset by the padding.
         compare(on.x, control.padding);
@@ -112,8 +142,9 @@ TestCase {
     // between them, floored at radiusSm.
     function test_the_segment_radius_is_concentric() {
         var control = make({ options: ["DARK", "LIGHT"] });
-        compare(selection(control).radius,
-                Math.max(Theme.radiusSm, Theme.radiusMd - control.padding));
+        var concentric = Math.max(Theme.radiusSm, Theme.radiusMd - control.padding);
+        compare(selection(control).radius, concentric);
+        compare(chip(control).radius, concentric);
     }
 
     // M53 D2: the selection travels to the next segment rather than being
@@ -189,14 +220,17 @@ TestCase {
 
     function test_cursor_draws_the_ring() {
         var control = make({ options: ["DARK", "LIGHT"], cursor: true });
-        verify(halo(control).visible);
-        verify(Qt.colorEqual(halo(control).color, Theme.color.ring));
-        compare(halo(control).opacity, Theme.ringAlpha);
+        var halo = haloOf(trough(control));
+        verify(halo.visible);
+        // The table's own ring layer: filled at that layer's alpha rather
+        // than opaque under a 0.5 opacity, the same band of pixels.
+        verify(Qt.colorEqual(halo.color, Qt.alpha(Theme.color.ring, testCase.ringAlpha)));
+        compare(halo.opacity, 1);
         compare(group(control).border.width, Theme.borderWidth);
         verify(Qt.colorEqual(group(control).border.color, Theme.color.ring));
 
         var resting = make({ options: ["DARK", "LIGHT"] });
-        verify(!halo(resting).visible);
+        compare(haloOf(trough(resting)), null);
     }
 
     // The group used to take the hand cursor and answer nothing on an

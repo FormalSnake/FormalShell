@@ -114,11 +114,13 @@ TestCase {
         return { left: topLeft.x, top: topLeft.y, right: topLeft.x + h.width, bottom: topLeft.y + h.height };
     }
 
+    // The ring colour carries the `cursor` layer's own alpha, so the halo is
+    // filled rather than drawn opaque under an opacity.
     function test_the_halo_exists_and_is_the_ring() {
         var item = make(reservedComponent);
         var h = halo(item.cell);
         verify(h.visible);
-        verify(Qt.colorEqual(h.color, Theme.color.ring));
+        verify(Qt.colorEqual(h.color, Qt.alpha(Theme.color.ring, 0.5)));
     }
 
     function test_a_reserved_container_holds_the_whole_halo() {

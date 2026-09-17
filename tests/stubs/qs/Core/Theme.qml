@@ -84,8 +84,13 @@ QtObject {
     readonly property int radiusMd: _radiusTokens.md
     readonly property int radiusLg: _radiusTokens.lg
     readonly property int radiusXl: _radiusTokens.xl
-    readonly property int ringWidth: 3
-    readonly property real ringAlpha: 0.5
+
+    // The room the cursor's halo needs outside a row (DESIGN.md §1 "Ring"):
+    // a clipping container grows its clip rect by this and insets its
+    // content by the same, and the app grid leaves it in its gutter. That
+    // reservation is geometry rather than chrome, so it stays a number here,
+    // taken off the spread the table's own ring layer asks for.
+    readonly property int ringWidth: root.cursorRing.spread
 
     function pillRadius(extent) {
         return root.radius > 0 ? extent / 2 : 0;
@@ -142,6 +147,33 @@ QtObject {
 
     function box(role, state) {
         return Style.resolve(root.style, role, state, root._styleCtx());
+    }
+
+    // The keyboard cursor composed over the box a control already carries
+    // (M59 T6): one table entry decides what a cursor looks like wherever it
+    // lands. `halo` is a second answer from `on`, because a list draws one
+    // halo for every row under it (cursor.js's `ownsCursorHalo` walk) while
+    // each of those rows still swaps its own border.
+    function withCursor(box, on, halo) {
+        return on ? Style.withCursor(box, root.box("cursor"), halo) : box;
+    }
+
+    // A resolved box's radius against the item drawing it. `pill` survives
+    // resolution as itself because it needs that item's extent, so a
+    // primitive keeping its own layers (Switch's knob riding its track)
+    // resolves it here rather than spelling out the ternary Box carries.
+    function boxRadius(box, extent) {
+        return box.radius === "pill" ? root.pillRadius(extent) : box.radius;
+    }
+
+    // The halo the `cursor` entry declares, resolved, for the surfaces that
+    // draw one by hand rather than through a Box: a list owns a single halo
+    // for all of its rows, so that one cannot come out of a row's own box. A
+    // table declaring no ring layer reads as nothing rather than as
+    // undefined.
+    readonly property var cursorRing: {
+        var rings = root.box("cursor").rings;
+        return rings.length > 0 ? rings[0] : ({ spread: 0, color: "transparent" });
     }
 
     readonly property color hoverFill: Style.wash(root.style, "hover", root._styleCtx())

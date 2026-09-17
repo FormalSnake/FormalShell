@@ -2,9 +2,9 @@ import QtQuick
 import qs.Core
 import "cursor.js" as Cursor
 
-// shadcn's segmented control (spec "Picker"): a `muted` group at `radiusMd`
-// holding one segment per option, the selected one filled `background` behind
-// a 1px `border`. The picker's DARK | LIGHT switcher is the first user.
+// shadcn's segmented control (spec "Picker"): the table's `trough` holding
+// one segment per option, with its `segmented.chip` on the chosen one. The
+// picker's DARK | LIGHT switcher is the first user.
 //
 // The control never takes focus of its own. The surface holding the keyboard
 // owns the KeyCatcher and forwards Left/Right into step(), which is why
@@ -23,7 +23,16 @@ Item {
     signal changed(int index)
 
     readonly property int count: root.options ? root.options.length : 0
-    readonly property int _segmentRadius: Math.max(Theme.radiusSm, Theme.radiusMd - root.padding)
+
+    // The concentric rule (spec "Radius") measured off the trough the
+    // segments actually sit in, floored at `radiusSm`.
+    readonly property real _troughRadius: Theme.boxRadius(Theme.box("trough"), root.height)
+    readonly property int _segmentRadius: Math.max(Theme.radiusSm, root._troughRadius - root.padding)
+
+    // What the pointer paints on an unchosen segment: a segment is a ghost
+    // button sitting in a trough, so it takes that role's own washes.
+    readonly property color _hoverWash: Theme.box("button.ghost", "hover").wash || "transparent"
+    readonly property color _pressWash: Theme.box("button.ghost", "press").wash || "transparent"
 
     // Every segment is the width of the widest label, so the group reads as
     // one control rather than as labels of assorted lengths.
@@ -68,23 +77,12 @@ Item {
 
     onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
 
-    // The ring halo, drawn behind the group exactly as Cell and Button draw
-    // it.
-    Rectangle {
+    // The trough, with the cursor composed over it: the ring takes its
+    // border, and the halo outside it belongs to whatever owns one.
+    Box {
         anchors.fill: parent
-        anchors.margins: -Theme.ringWidth
-        visible: root.cursor && !root._haloOwned
-        radius: Theme.radiusMd + Theme.ringWidth
-        color: Theme.color.ring
-        opacity: Theme.ringAlpha
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        radius: Theme.radiusMd
-        color: Theme.color.muted
-        border.width: root.cursor ? Theme.borderWidth : 0
-        border.color: Theme.color.ring
+        role: "trough"
+        box: Theme.withCursor(Theme.box("trough"), root.cursor, !root._haloOwned)
     }
 
     // One selection, outside the Repeater (M53 D2): the chosen segment used
@@ -92,17 +90,15 @@ Item {
     // Right arrow put the border down in the next place rather than moving
     // it there. Its x is the only thing the index decides, which is what
     // makes the travel a single Behavior.
-    Rectangle {
+    Box {
         id: selection
+        role: "segmented.chip"
         visible: root.count > 0
         x: root.padding + root.index * root._segmentWidth
         y: root.padding
         width: root._segmentWidth
         height: root.height - root.padding * 2
         radius: root._segmentRadius
-        color: Theme.color.background
-        border.width: Theme.borderWidth
-        border.color: Theme.color.border
 
         Behavior on x {
             Anim { kind: "spatialFast" }
@@ -135,7 +131,7 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: root._segmentRadius
-                    color: segmentPointer.pressed ? Theme.pressFill : Theme.hoverFill
+                    color: segmentPointer.pressed ? root._pressWash : root._hoverWash
                     opacity: (!segment._on && (segmentPointer.containsMouse || segmentPointer.pressed)) ? 1 : 0
 
                     Behavior on opacity {

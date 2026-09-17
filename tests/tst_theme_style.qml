@@ -171,6 +171,42 @@ TestCase {
         compare(cursor.casts.length, 0);
     }
 
+    // T5: the three marks a control paints that are not boxes of their own
+    // shape, so the table still decides what colour each of them is.
+    function test_the_marks_a_control_paints_come_off_the_table() {
+        var style = Metamorphosis.STYLE;
+        var mark = Style.resolve(style, "cell.mark", null, ctx("dark"));
+        compare(mark.fill, "role:primary");
+        compare(mark.radius, 6);
+        compare(Style.resolve(style, "track.notch", null, ctx("dark")).fill, "role:background");
+        compare(Style.resolve(style, "input.selection", null, ctx("dark")).fill, "role:primary");
+    }
+
+    // T6: the cursor composes over whatever box carries it, and its halo is
+    // a second answer from its border, because a list draws one halo for
+    // every row under it while each of those rows still swaps its border.
+    function test_the_cursor_composes_over_a_box() {
+        var style = Metamorphosis.STYLE;
+        var ghost = Style.resolve(style, "button.ghost", "rest", ctx("dark"));
+        var cursor = Style.resolve(style, "cursor", null, ctx("dark"));
+
+        var haloed = Style.withCursor(ghost, cursor, true);
+        compare(haloed.fill, ghost.fill);
+        compare(haloed.radius, ghost.radius);
+        compare(haloed.border.color, "role:ring");
+        compare(haloed.rings.length, 1);
+        compare(haloed.rings[0].spread, 3);
+
+        var bordered = Style.withCursor(ghost, cursor, false);
+        compare(bordered.border.color, "role:ring");
+        compare(bordered.rings.length, 0);
+
+        // The box it composed over is left as it was, so a resolved box can
+        // be handed to two controls.
+        compare(ghost.border, null);
+        compare(ghost.rings.length, 0);
+    }
+
     function test_the_scrim_is_black_at_a_half() {
         var scrim = Style.resolve(Metamorphosis.STYLE, "scrim", null, ctx("dark"));
         compare(scrim.fill, Style.LITERAL_COLORS.black + "@0.5");

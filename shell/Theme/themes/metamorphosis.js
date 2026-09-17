@@ -142,6 +142,12 @@ var STYLE = {
             warning: { border: { color: "warning", width: 1 } }
         },
 
+        // The open-panel mark a bar cell draws along the edge facing the
+        // desktop (DESIGN.md §3 Bar). A line rather than a box: how long and
+        // how thick it is belongs to the cell, which knows which edge its bar
+        // sits on, and only its colour and its ends are the theme's.
+        "cell.mark": { fill: "primary", radius: "sm" },
+
         // shadcn's button variants. The two that carry a colour of their own
         // blend toward `background` under the pointer; the three that do not
         // take the ink wash, `selected` included, which is what keeps a
@@ -186,6 +192,11 @@ var STYLE = {
             error: { border: { color: "destructive", width: 1 } }
         },
 
+        // What a dragged selection paints behind the text it covers; the
+        // text's own ink over it is `primaryForeground`, which is content
+        // rather than chrome and so stays in the field.
+        "input.selection": { fill: "primary" },
+
         "switch.track": {
             off: { fill: "muted", radius: "pill" },
             on: { fill: "primary" }
@@ -199,6 +210,11 @@ var STYLE = {
         // `selected` or `active` fill.
         "track.groove": { fill: "primary", fillAlpha: 0.2, radius: "sm" },
         "track.fill": { fill: "primary", radius: "sm" },
+
+        // The one mark a track can carry, cut through groove and fill alike
+        // (AudioPanel's overdrive boundary), so it takes the colour of the
+        // surface behind both rather than either of theirs.
+        "track.notch": { fill: "background" },
 
         // The well a `ButtonGroup`'s row of ghost buttons and a `Segmented`'s
         // segments sit in, and the chip that marks the chosen one. The chip's

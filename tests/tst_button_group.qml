@@ -72,9 +72,10 @@ TestCase {
         return group;
     }
 
-    // The trough is the group's first child; the buttons live in the Row
-    // after it, alongside the Repeater that created them.
-    function trough(group) { return group.children[0]; }
+    // The trough is the group's first child, a `Box`, so its fill is the
+    // rectangle that Box draws rather than the item itself; the buttons live
+    // in the Row after it, alongside the Repeater that created them.
+    function troughFill(group) { return body(group.children[0]); }
 
     function buttons(group) {
         var row = group.children[1];
@@ -86,20 +87,24 @@ TestCase {
         return out;
     }
 
-    function body(button) {
+    // A Box's own fill: its rectangles are the cursor's halo when there is
+    // one, then the fill, then the pointer's wash, so the fill is the
+    // second from the end (tst_box.qml and tst_button.qml walk the same
+    // shape).
+    function body(box) {
         var out = [];
-        for (var i = 0; i < button.children.length; i++) {
-            var child = button.children[i];
+        for (var i = 0; i < box.children.length; i++) {
+            var child = box.children[i];
             if (child.radius !== undefined && child.border !== undefined)
                 out.push(child);
         }
-        return out[1];
+        return out[out.length - 2];
     }
 
     function test_the_trough_is_muted_at_the_control_radius() {
         var group = make({ options: testCase.profileOptions });
-        verify(Qt.colorEqual(trough(group).color, Theme.color.muted));
-        compare(trough(group).radius, Theme.radiusMd);
+        verify(Qt.colorEqual(troughFill(group).color, Theme.color.muted));
+        compare(troughFill(group).radius, Theme.radiusMd);
     }
 
     function test_one_button_per_option() {

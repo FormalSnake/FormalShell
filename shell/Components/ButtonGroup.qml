@@ -2,7 +2,7 @@ import QtQuick
 import qs.Core
 
 // Omarchy's row of panel buttons, drawn as shadcn (DESIGN.md §2, M48 D1):
-// one `muted` trough at `radiusMd` holding a `Button` per option, each ghost
+// one `trough` off the table holding a `Button` per option, each ghost
 // inside it so the trough carries the chrome and the row reads as one
 // control. `exclusive` paints the button at `index` the way a segmented
 // control paints its selected segment (`background` behind a 1px `border`);
@@ -47,7 +47,11 @@ Item {
     signal hovered(int index, bool isHovered)
 
     readonly property int count: root.options ? root.options.length : 0
-    readonly property int _buttonRadius: Math.max(Theme.radiusSm, Theme.radiusMd - root.padding)
+
+    // The concentric rule (spec "Radius") measured off the trough the
+    // buttons actually sit in, floored at `radiusSm`.
+    readonly property real _troughRadius: Theme.boxRadius(Theme.box("trough"), root.height)
+    readonly property int _buttonRadius: Math.max(Theme.radiusSm, root._troughRadius - root.padding)
 
     function optionAt(i) {
         return (i >= 0 && i < root.count) ? root.options[i] : null;
@@ -145,10 +149,9 @@ Item {
         font.weight: Theme.weight.medium
     }
 
-    Rectangle {
+    Box {
         anchors.fill: parent
-        radius: Theme.radiusMd
-        color: Theme.color.muted
+        role: "trough"
     }
 
     Row {

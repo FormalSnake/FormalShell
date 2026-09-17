@@ -21,6 +21,11 @@ TestCase {
     visible: true
     when: windowShown
 
+    // The alpha the table's `cursor` ring layer carries, written out rather
+    // than read back off the table: an assertion sourced from the same place
+    // as the value under test agrees with itself whatever the table says.
+    readonly property real ringAlpha: 0.5
+
     readonly property var sentinelColors: ({
         background: "#010101",
         foreground: "#eeeeee",
@@ -81,7 +86,10 @@ TestCase {
         var control = make({});
         textInputOf(control).forceActiveFocus();
         tryCompare(frameOf(control).border, "color", Theme.color.ring, 1000);
-        tryCompare(ringOf(control), "opacity", Theme.ringAlpha, 1000);
+        // The halo is the table's own ring layer, filled at that layer's
+        // alpha, so what fades is its presence and not its colour.
+        tryCompare(ringOf(control), "opacity", 1, 1000);
+        verify(Qt.colorEqual(ringOf(control).color, Qt.alpha(Theme.color.ring, testCase.ringAlpha)));
         verify(ringOf(control).visible);
     }
 

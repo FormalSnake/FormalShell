@@ -840,9 +840,9 @@ PanelWindow {
 
         // The ring (DESIGN.md §1), drawn here rather than by the card: a flat
         // card has no resting border for the cursor to swap, so this surface
-        // owns both halves. Both are stroked, not filled: Cell.qml can fill
-        // its halo because its own opaque body masks the inside of it, and a
-        // flat card has nothing to mask with.
+        // owns both halves, off the table's `cursor` entry. Both are stroked,
+        // not filled: Cell.qml can fill its halo because its own opaque body
+        // masks the inside of it, and a flat card has nothing to mask with.
         Rectangle {
             anchors.fill: card
             anchors.margins: -Theme.ringWidth
@@ -850,8 +850,7 @@ PanelWindow {
             radius: Theme.radiusMd + Theme.ringWidth
             color: "transparent"
             border.width: Theme.ringWidth
-            border.color: Theme.color.ring
-            opacity: Theme.ringAlpha
+            border.color: Theme.cursorRing.color
         }
 
         Rectangle {
@@ -859,8 +858,8 @@ PanelWindow {
             visible: row.cursor
             radius: Theme.radiusMd
             color: "transparent"
-            border.width: Theme.borderWidth
-            border.color: Theme.color.ring
+            border.width: Theme.box("cursor").border.width
+            border.color: Theme.box("cursor").border.color
         }
 
         NotificationCard {

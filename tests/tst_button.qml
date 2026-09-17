@@ -7,6 +7,12 @@ import "../shell/Components"
 // ink, plus the ring, the hover treatment and the disabled dim. IconButton
 // is the same component as a square ghost, so it rides along here.
 //
+// The button is a `Box`, so its rectangles are the ones Box draws in that
+// order (tst_box.qml walks the same shape): the cursor's halo when there is
+// one, then the fill, then the pointer's wash. The halo exists only while
+// the cursor is on it, so the three are found by shape rather than by a
+// fixed index.
+//
 // Verified against a synthetic palette, not Palette.fallback()'s real hex
 // values: the zinc fallback shares a hex between roles, which would make a
 // hex-equality assertion unable to tell a correct role from a swapped one.
@@ -17,6 +23,11 @@ TestCase {
     height: 200
     visible: true
     when: windowShown
+
+    // The alpha the table's `cursor` ring layer carries, written out rather
+    // than read back off the table: an assertion sourced from the same place
+    // as the value under test agrees with itself whatever the table says.
+    readonly property real ringAlpha: 0.5
 
     readonly property var sentinelColors: ({
         background: "#010101",
@@ -59,10 +70,7 @@ TestCase {
         wait(50);
     }
 
-    // The painted layers, in declaration order: ring halo, body, pointer
-    // wash. test_button_paints_three_layers is what fails if that order
-    // changes under the tests below.
-    function layers(button) {
+    function rects(button) {
         var out = [];
         for (var i = 0; i < button.children.length; i++) {
             var child = button.children[i];
@@ -70,6 +78,24 @@ TestCase {
                 out.push(child);
         }
         return out;
+    }
+
+    // The fill and the wash are always drawn, in that order and last, so the
+    // halo is whatever is in front of them; test_a_resting_button_is_a_fill
+    // _and_its_wash is what fails if that stops being true.
+    function body(button) {
+        var all = rects(button);
+        return all[all.length - 2];
+    }
+
+    function wash(button) {
+        var all = rects(button);
+        return all[all.length - 1];
+    }
+
+    function halo(button) {
+        var all = rects(button);
+        return all.length > 2 ? all[0] : null;
     }
 
     function findText(item, wanted) {
@@ -91,15 +117,20 @@ TestCase {
         return button;
     }
 
-    function test_button_paints_three_layers() {
+    function test_a_resting_button_is_a_fill_and_its_wash() {
         var button = make(buttonComponent, { text: "OK" });
-        compare(layers(button).length, 3);
+        compare(rects(button).length, 2);
+        compare(halo(button), null);
+        // The cursor's halo is a third rectangle, and only then.
+        var ringed = make(buttonComponent, { text: "OK", cursor: true });
+        compare(rects(ringed).length, 3);
+        verify(halo(ringed));
     }
 
     function test_geometry_tokens() {
         var button = make(buttonComponent, { text: "Speed test" });
         compare(button.implicitHeight, Theme.space.controlHeight);
-        compare(layers(button)[1].radius, Theme.radiusMd);
+        compare(body(button).radius, Theme.radiusMd);
         // The label plus a control gutter either side.
         var label = findText(button, "Speed test");
         verify(label);
@@ -108,50 +139,48 @@ TestCase {
 
     function test_default_fills_with_primary() {
         var button = make(buttonComponent, { text: "Connect" });
-        var body = layers(button)[1];
-        verify(Qt.colorEqual(body.color, Theme.color.primary));
-        compare(body.border.width, 0);
+        verify(Qt.colorEqual(body(button).color, Theme.color.primary));
+        compare(body(button).border.width, 0);
         verify(Qt.colorEqual(findText(button, "Connect").color, Theme.color.primaryForeground));
     }
 
     function test_destructive_fills_with_destructive() {
         var button = make(buttonComponent, { variant: "destructive", text: "Forget" });
-        var body = layers(button)[1];
-        verify(Qt.colorEqual(body.color, Theme.color.destructive));
-        compare(body.border.width, 0);
+        verify(Qt.colorEqual(body(button).color, Theme.color.destructive));
+        compare(body(button).border.width, 0);
         verify(Qt.colorEqual(findText(button, "Forget").color, Theme.color.destructiveForeground));
     }
 
     function test_outline_is_transparent_behind_a_border() {
         var button = make(buttonComponent, { variant: "outline", text: "Speed test" });
-        var body = layers(button)[1];
-        compare(body.color.a, 0);
-        compare(body.border.width, Theme.borderWidth);
-        verify(Qt.colorEqual(body.border.color, Theme.color.border));
+        compare(body(button).color.a, 0);
+        compare(body(button).border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(body(button).border.color, Theme.color.border));
         verify(Qt.colorEqual(findText(button, "Speed test").color, Theme.color.foreground));
     }
 
     function test_ghost_draws_no_chrome_at_rest() {
         var button = make(buttonComponent, { variant: "ghost", text: "Clear" });
-        var body = layers(button)[1];
-        compare(body.color.a, 0);
-        compare(body.border.width, 0);
+        compare(body(button).color.a, 0);
+        compare(body(button).border.width, 0);
         verify(Qt.colorEqual(findText(button, "Clear").color, Theme.color.foreground));
     }
 
     function test_cursor_draws_the_ring_on_any_variant() {
         var filled = make(buttonComponent, { text: "Connect", cursor: true });
-        var halo = layers(filled)[0];
-        verify(halo.visible);
-        verify(Qt.colorEqual(halo.color, Theme.color.ring));
-        compare(halo.opacity, Theme.ringAlpha);
+        var ring = halo(filled);
+        verify(ring.visible);
+        // The table's own ring layer: filled at its alpha rather than opaque
+        // under a 0.5 opacity, which is the same band of pixels.
+        verify(Qt.colorEqual(ring.color, Qt.alpha(Theme.color.ring, testCase.ringAlpha)));
+        compare(ring.opacity, 1);
         // A filled variant has no border of its own, so the ring is the only
         // thing that gives it one.
-        compare(layers(filled)[1].border.width, Theme.borderWidth);
-        verify(Qt.colorEqual(layers(filled)[1].border.color, Theme.color.ring));
+        compare(body(filled).border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(body(filled).border.color, Theme.color.ring));
 
         var ghost = make(buttonComponent, { variant: "ghost", text: "Clear" });
-        verify(!layers(ghost)[0].visible);
+        compare(halo(ghost), null);
     }
 
     // A variant carrying its own colour blends toward `background` and stays
@@ -160,17 +189,16 @@ TestCase {
     // wallpaper through the button.
     function test_hover_blends_a_colour_and_washes_everything_else() {
         var filled = make(buttonComponent, { text: "Connect", hovered: true });
-        var body = layers(filled)[1];
-        compare(body.opacity, 1);
-        tryCompare(body, "color", Theme.hoverFilled(Theme.color.primary));
-        verify(!Qt.colorEqual(body.color, Theme.color.primary));
-        compare(body.color.a, 1);
-        compare(layers(filled)[2].opacity, 0);
+        compare(body(filled).opacity, 1);
+        tryCompare(body(filled), "color", Theme.hoverFilled(Theme.color.primary));
+        verify(!Qt.colorEqual(body(filled).color, Theme.color.primary));
+        compare(body(filled).color.a, 1);
+        compare(wash(filled).opacity, 0);
 
         var ghost = make(buttonComponent, { variant: "ghost", text: "Clear", hovered: true });
-        verify(Qt.colorEqual(layers(ghost)[2].color, Theme.hoverFill));
-        tryCompare(layers(ghost)[2], "opacity", 1);
-        compare(layers(ghost)[1].opacity, 1);
+        verify(Qt.colorEqual(wash(ghost).color, Theme.hoverFill));
+        tryCompare(wash(ghost), "opacity", 1);
+        compare(body(ghost).opacity, 1);
     }
 
     // The chosen option in a `ButtonGroup`: its fill is `background`, so it
@@ -178,9 +206,9 @@ TestCase {
     // the pointer.
     function test_selected_takes_the_wash_over_its_own_fill() {
         var chosen = make(buttonComponent, { variant: "selected", text: "Balanced", hovered: true });
-        verify(Qt.colorEqual(layers(chosen)[1].color, Theme.color.background));
-        verify(Qt.colorEqual(layers(chosen)[2].color, Theme.hoverFill));
-        tryCompare(layers(chosen)[2], "opacity", 1);
+        verify(Qt.colorEqual(body(chosen).color, Theme.color.background));
+        verify(Qt.colorEqual(wash(chosen).color, Theme.hoverFill));
+        tryCompare(wash(chosen), "opacity", 1);
     }
 
     // Press is the same wash one step on, never `accent` painted over a
@@ -188,13 +216,13 @@ TestCase {
     function test_press_deepens_the_treatment_the_variant_already_takes() {
         var ghost = make(buttonComponent, { variant: "ghost", text: "Clear" });
         mousePress(ghost, ghost.width / 2, ghost.height / 2);
-        verify(Qt.colorEqual(layers(ghost)[2].color, Theme.pressFill));
+        verify(Qt.colorEqual(wash(ghost).color, Theme.pressFill));
         mouseRelease(ghost, ghost.width / 2, ghost.height / 2);
 
         var filled = make(buttonComponent, { text: "Connect" });
         mousePress(filled, filled.width / 2, filled.height / 2);
-        tryCompare(layers(filled)[1], "color", Theme.pressFilled(Theme.color.primary));
-        compare(layers(filled)[2].opacity, 0);
+        tryCompare(body(filled), "color", Theme.pressFilled(Theme.color.primary));
+        compare(wash(filled).opacity, 0);
         mouseRelease(filled, filled.width / 2, filled.height / 2);
     }
 
@@ -220,7 +248,7 @@ TestCase {
         compare(button.variant, "ghost");
         compare(button.implicitWidth, Theme.space.controlHeight);
         compare(button.implicitHeight, Theme.space.controlHeight);
-        compare(layers(button)[1].border.width, 0);
+        compare(body(button).border.width, 0);
     }
 
     function test_click_fires_once() {

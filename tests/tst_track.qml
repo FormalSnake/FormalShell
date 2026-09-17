@@ -22,6 +22,11 @@ TestCase {
 
     readonly property real grooveAlpha: 0.2
 
+    // The alpha the table's `cursor` ring layer carries, written out rather
+    // than read back off the table: an assertion sourced from the same place
+    // as the value under test agrees with itself whatever the table says.
+    readonly property real ringAlpha: 0.5
+
     readonly property var sentinelColors: ({
         background: "#010101",
         foreground: "#eeeeee",
@@ -168,8 +173,10 @@ TestCase {
         var track = make({ value: 0.5, cursor: true });
         var halo = haloOf(track);
         verify(halo.visible);
-        verify(Qt.colorEqual(halo.color, Theme.color.ring));
-        compare(halo.opacity, Theme.ringAlpha);
+        // The table's own ring layer: filled at that layer's alpha rather
+        // than opaque under a 0.5 opacity, the same band of pixels.
+        verify(Qt.colorEqual(halo.color, Qt.alpha(Theme.color.ring, testCase.ringAlpha)));
+        compare(halo.opacity, 1);
         compare(halo.radius, Theme.radiusSm + Theme.ringWidth);
         compare(halo.width, track.width + Theme.ringWidth * 2);
         compare(track.border.width, Theme.borderWidth);

@@ -2,10 +2,14 @@ import QtQuick
 import qs.Core
 import "cursor.js" as Cursor
 
-// shadcn's switch (DESIGN.md §2): a `controlHeight` x `huge` track, `muted`
-// off and `primary` on, with a `background` knob that slides between the
-// two ends. The cursor is the ring, drawn exactly as Button and Cell draw
-// it.
+// shadcn's switch (DESIGN.md §2): a `controlHeight` x `huge` track drawn
+// from the table's `switch.track` role, off and on, with a `switch.knob`
+// that slides between its two ends. The cursor is the ring, drawn exactly
+// as Cell draws it.
+//
+// The layers stay hand-drawn rather than composed out of a `Box`: the knob
+// rides the track rather than sitting inside it, and the halo follows the
+// track rather than the control's own square.
 //
 // Controlled, not self-toggling: `checked` is an input the owner binds to
 // whatever it already stores (Center.qml binds NotificationService.dnd), and
@@ -37,8 +41,18 @@ Item {
     opacity: root.enabled ? 1 : 0.5
 
     // The gap between the knob and the track, which is also how far the knob
-    // sits from either end.
+    // sits from either end. Geometry, in hairlines, rather than a colour the
+    // table would carry.
     readonly property real _inset: Theme.borderWidth * 2
+
+    readonly property var _trackBox: Theme.box("switch.track", root.checked ? "on" : "off")
+    readonly property var _knobBox: Theme.box("switch.knob")
+
+    // A filled track has no border of its own, so the cursor's border swap
+    // is the only thing that ever gives it one.
+    readonly property var _cursorBorder: Theme.box("cursor").border
+
+    readonly property real _trackRadius: Theme.boxRadius(root._trackBox, Theme.space.huge)
 
     // Whether something above this control draws the cursor halo for the
     // whole list it sits in (Panel.qml, M53 D4): one halo that travels
@@ -53,9 +67,8 @@ Item {
         anchors.fill: track
         anchors.margins: -Theme.ringWidth
         visible: root.cursor && !root._haloOwned
-        radius: Theme.pillRadius(height)
-        color: Theme.color.ring
-        opacity: Theme.ringAlpha
+        radius: root._trackRadius + Theme.ringWidth
+        color: Theme.cursorRing.color
     }
 
     Rectangle {
@@ -64,12 +77,10 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         height: Theme.space.huge
-        radius: Theme.pillRadius(height)
-        color: root.checked ? Theme.color.primary : Theme.color.muted
-        // A filled track has no border of its own, so the cursor's border
-        // swap is the only thing that gives it one.
-        border.width: root.cursor ? Theme.borderWidth : 0
-        border.color: Theme.color.ring
+        radius: root._trackRadius
+        color: root._trackBox.fill
+        border.width: root.cursor ? root._cursorBorder.width : 0
+        border.color: root._cursorBorder.color
 
         Behavior on color {
             CAnim {}
@@ -80,10 +91,10 @@ Item {
         id: knob
         width: track.height - root._inset * 2
         height: width
-        radius: Theme.pillRadius(height)
+        radius: Theme.boxRadius(root._knobBox, knob.height)
         y: track.y + root._inset
         x: root.checked ? root.width - width - root._inset : root._inset
-        color: Theme.color.background
+        color: root._knobBox.fill
 
         Behavior on x {
             Anim { kind: "spatialFast" }
