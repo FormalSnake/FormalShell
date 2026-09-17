@@ -11,6 +11,9 @@
 # rather than as its own exec-once entry: the script has to keep typing into
 # the dialog while pkexec sits blocked on the conversation, then collect its
 # real exit code once that resolves.
+#
+# The open itself is photographed on the way in, at a tenth speed, before the
+# scale goes back and the conversation proper starts.
 leg_polkit_flag="--polkit"
 leg_polkit_order=280
 leg_polkit_needs="pkexec wtype"
@@ -46,13 +49,21 @@ polkit_t0() {
   if leg_on wallpaper; then echo 16; else echo 3; fi
 }
 
+# How many frames the open is photographed across, and at what fraction of
+# speed. The consent card buds off the top line like every other
+# centre-floating card (M57 D5) and is gone into its resting place inside one
+# screencopy at full speed, so the open runs at a tenth and is sampled across
+# it. Read by eye: `--menu-emerge` is where that travel is measured, and
+# repeating its probes here would pin this leg to the launcher's geometry.
+polkit_open_frames=10
+
 leg_polkit_timing() {
   local t0
   t0=$(polkit_t0)
-  # The script's own sleeps sum to t0+21; the `wait` past that blocks for
+  # The script's own sleeps sum to t0+27; the `wait` past that blocks for
   # however long the socket-activated polkit-agent-helper conversation takes
   # to resolve, and a first-ever activation in this session is the slow path.
-  leg_timing $((t0 + 29)) $((t0 + 60))
+  leg_timing $((t0 + 35)) $((t0 + 66))
 }
 
 leg_polkit_drive() {
@@ -64,10 +75,17 @@ leg_polkit_drive() {
 log() { echo "\$(date +%s.%N) \$1" >> "$polkit_debug_path"; }
 log start
 sleep $t0
+"$qs_bin" ipc -p "$shell_path" call debug motionScale 1000 >> "$polkit_debug_path" 2>&1
 "$pkexec_bin" "$polkit_true_bin" 2> "$polkit_stderr_path" &
 polkit_pid=\$!
 log "pkexec launched pid=\$polkit_pid"
-sleep 3
+for i in \$(seq 1 $polkit_open_frames); do
+  sleep 0.4
+  "$grim_bin" "$shot_dir/polkit-open-\$i.png" > /dev/null 2>&1
+done
+log open-sampled
+"$qs_bin" ipc -p "$shell_path" call debug motionScale 100 >> "$polkit_debug_path" 2>&1
+sleep 2
 "$grim_bin" "$polkit_active_path" > /dev/null 2>&1
 log active-screenshot
 sleep 1
@@ -94,6 +112,12 @@ EOF
 }
 
 leg_polkit_assert() {
+  local i path
+  for i in $(seq 1 $polkit_open_frames); do
+    path="$shot_dir/polkit-open-$i.png"
+    [ -f "$path" ] || fail "no polkit-open screenshot produced at $path"
+    echo "SMOKE_POLKIT_OPEN_$i $path"
+  done
   [ -f "$polkit_active_path" ] || fail "no polkit-active screenshot produced"
   echo "SMOKE_POLKIT_ACTIVE $polkit_active_path"
   [ -f "$polkit_error_path" ] || fail "no polkit-error screenshot produced"
