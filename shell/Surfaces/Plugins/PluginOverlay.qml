@@ -65,22 +65,29 @@ PanelWindow {
     Component.onCompleted: PluginService.registerSurface(Manifest.surfaceKey(root.plugin), root)
     Component.onDestruction: PluginService.unregisterSurface(Manifest.surfaceKey(root.plugin))
 
-    screen: root._screen
-    // Held visible through the exit fade (DESIGN.md §1 Motion), same as
-    // every other summoned surface: close() drops isOpen, presence's own
-    // Behavior runs its progress to 0, and only then does the window
-    // unmap. Keyboard focus releases on isOpen itself so nothing types into
-    // a fading-out overlay.
-    visible: presence.shown
-    color: "transparent"
+    // Measured off the output rather than off this window: the window is
+    // unmapped while the overlay is closed, and a card placed off a window
+    // with no size yet would jump to the middle a frame after the open.
+    readonly property real _outputWidth: root.width > 0 ? root.width : (root._screen ? root._screen.width : 0)
+    readonly property real _outputHeight: root.height > 0 ? root.height : (root._screen ? root._screen.height : 0)
 
-    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
-    // M51 D3): a modal surface, zooming from centre with no slide.
-    Presence {
-        id: presence
-        open: root.isOpen
-        edge: "center"
-    }
+    // The card is as big as what it holds: the shell cannot know how big a
+    // plugin's overlay wants to be, and forcing a size on it would make every
+    // one of them full screen. A plugin whose entry failed to load leaves the
+    // caption below as the only thing to measure.
+    readonly property real _cardWidth: (root.loadFailed ? errorLabel.implicitWidth : contentLoader.width)
+        + Theme.space.panelPadding * 2
+    readonly property real _cardHeight: (root.loadFailed ? errorLabel.implicitHeight : contentLoader.height)
+        + Theme.space.panelPadding * 2
+
+    screen: root._screen
+    // Held visible through the exit (DESIGN.md §1 Motion), same as
+    // every other summoned surface: close() drops isOpen, the drawer's own
+    // Behavior runs its pose back to 0, and only then does the window
+    // unmap. Keyboard focus releases on isOpen itself so nothing types into
+    // a leaving overlay.
+    visible: drawer.presence.shown
+    color: "transparent"
 
     WlrLayershell.namespace: "formalshell:plugin-overlay"
     WlrLayershell.layer: WlrLayer.Top
@@ -101,43 +108,38 @@ PanelWindow {
         Keys.onEscapePressed: root.close()
         onClicked: root.close()
 
-        // The modal scrim (spec "Depth"), the same one PolkitDialog and the
-        // launcher draw: plain black at half opacity, bound straight to
-        // presence's own progress rather than a Behavior of its own, so it
-        // cannot drift out of step with the card it frames.
-        Rectangle {
+        // The modal scrim (Components/Scrim.qml): on the drawer's own pose,
+        // and off the band the top line belongs to while the card is still
+        // budding out of it.
+        Scrim {
             anchors.fill: parent
-            color: "black"
-            opacity: presence.opacity * 0.5
+            drawer: drawer
         }
 
-        Item {
-            id: card
+        // Everything from the top line to the card's own padding is the
+        // drawer's (Components/Drawer.qml, M57 D5): a plugin's overlay comes
+        // out of the same line the launcher does, on the same clock, and is a
+        // plain card holding whatever the plugin drew once it has let go.
+        Drawer {
+            id: drawer
             anchors.fill: parent
+            owner: root
+            open: root.isOpen
+            mapped: root.backingWindowVisible
+            edge: "top"
+            screen: root._screen
+            rect: Qt.rect(Math.round((root._outputWidth - root._cardWidth) / 2),
+                Math.round((root._outputHeight - root._cardHeight) / 2),
+                root._cardWidth, root._cardHeight)
 
-            // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a
-            // modal surface, so fade and zoom from centre only, no slide.
-            opacity: presence.opacity
-            scale: presence.scale
-            transformOrigin: presence.transformOrigin
-
-            // Declared before the content so the plugin's own interactive
-            // items sit on top of it: clicks the plugin handles never reach
-            // here, clicks anywhere inside its footprint that it ignores are
-            // swallowed, and only clicks outside it fall through to the
-            // backdrop's own close. Panel.qml's frame does exactly this.
-            MouseArea {
-                anchors.fill: contentLoader
-                onClicked: {}
-            }
-
-            // Sized by the loaded item, never the other way round: the shell
-            // cannot know how big a plugin's card wants to be, and forcing a
-            // size on it would make every overlay full-screen.
             Loader {
                 id: contentLoader
                 anchors.centerIn: parent
-                active: root.plugin ? (root.plugin.keepLoaded || root.isOpen) : false
+                // Held loaded for as long as the card is on screen, not just
+                // while it is open: the card is as big as what it holds, and
+                // unloading on close() would collapse it to its own padding
+                // half way through the exit.
+                active: root.plugin ? (root.plugin.keepLoaded || drawer.presence.shown) : false
                 source: root.plugin ? root.plugin.entryUrl : ""
 
                 onStatusChanged: {
@@ -146,28 +148,20 @@ PanelWindow {
                 }
             }
 
-            // The one empty state in the shell that keeps a card, and the
-            // ladder's own rung-5 clause is why (DESIGN.md §1): this window
-            // is transparent and full-screen, so the caption sits on the raw
-            // wallpaper with nothing behind it. Every other empty state in
-            // the shell is unboxed because it sits inside a surface that is
-            // already a card; this one has no surface at all.
-            Card {
-                id: errorCard
-                // The load outcome lands after the overlay is already up, so
-                // this arrives as a content change on an open surface (M53
-                // D3) rather than a card popping into the middle of it.
-                visible: errorCard.opacity > 0
+            // Unboxed, like every other empty state in the shell (DESIGN.md
+            // §1's ladder, rung 5): the drawer around it is already the card.
+            // The load outcome lands after the overlay is up, so this arrives
+            // as a content change on an open surface (M53 D3) rather than a
+            // caption popping into the middle of it.
+            SectionLabel {
+                id: errorLabel
+                anchors.centerIn: parent
+                visible: errorLabel.opacity > 0
                 opacity: root.loadFailed ? 1 : 0
                 Behavior on opacity {
                     Anim { kind: "effects" }
                 }
-                anchors.centerIn: parent
-                radius: Theme.radiusMd
-
-                SectionLabel {
-                    text: "PLUGIN ERROR"
-                }
+                text: "PLUGIN ERROR"
             }
         }
     }

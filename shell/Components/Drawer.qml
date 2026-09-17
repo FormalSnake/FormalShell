@@ -113,11 +113,32 @@ Item {
     readonly property bool _joined: root.joined && root.screen !== null
         && (root._targetRect !== null || Theme.edgeInset[root.edge] > 0)
 
+    // The card's own size across the line, which is both how far behind it a
+    // closed card sits and what the depth back to the line is weighed against.
+    readonly property real _restExtent: Geometry.across(root.edge, root.restRect)
+
     readonly property real _lineAt: Geometry.lineAt(root.edge, root._screenWidth,
         root._screenHeight, Theme.edgeInset, root._targetRect)
-    readonly property real _depth: root._joined
+    // The reach back to that line, which a card takes whether or not there is
+    // anything drawn on it to join: an edge with no bar and no ring is still
+    // the output's own, and a card resting hundreds of pixels in from it has
+    // to come out from behind it rather than wipe out of an empty row at its
+    // own edge. With no line to join, `Joint` pins `attach` at 0 and the
+    // shape is the card's own rect drawn inside a taller item.
+    readonly property real _depth: root.screen
         ? Geometry.depth(root.edge, root.restRect, root._lineAt, Theme.borderWidth)
         : 0
+
+    // Where on the travel the card lets go of the line. The let-go is a clock
+    // of its own started at that mark, so the two overlap by less and less the
+    // further the card has to come: a card still on the line four fifths of
+    // the way through a long travel finishes well after the travel itself
+    // does, and the open reads as slower for it. Scaled by how deep the line
+    // is against the card's own size across it, so a panel a `barMargin` off
+    // the bar keeps the mark the join was drawn against and a centre-floating
+    // card hundreds of pixels down the output takes the early one.
+    readonly property real _releaseAt: 0.85 - 0.35 * Math.max(0, Math.min(1,
+        root._depth / Math.max(1, root._restExtent)))
 
     readonly property var _band: Geometry.clipAlong(
         Geometry.clipBand(root.edge, Geometry.cut(root.edge, root.restRect, root._depth),
@@ -141,7 +162,7 @@ Item {
         // anything of it was on screen.
         mapped: root.mapped
         mode: "emerge"
-        extent: Geometry.across(root.edge, root.restRect) + root._depth
+        extent: root._restExtent + root._depth
     }
 
     // The join itself (Components/Joint.qml): the silhouette drawn from the
@@ -163,6 +184,7 @@ Item {
         targetRadius: (root.target && root.target.frameRadius !== undefined)
             ? root.target.frameRadius : 0
         depth: root._depth
+        releaseAt: root._releaseAt
         radius: root.radius
         extent: Geometry.across(root.edge, root.frameRect)
         along: Geometry.alongStart(root.edge, root.frameRect)
@@ -183,7 +205,15 @@ Item {
         id: deform
         target: frame
         edge: root.edge
-        amount: root.deformAmount
+        // The consumer's figure is the squash it wants on arrival, and a deep
+        // drawer arrives faster: it covers its own extent AND the depth back
+        // to the line inside one clock, so the same figure squashes a
+        // centre-floating card half again as hard as a panel a `barMargin`
+        // off the bar, and leaves its spring unwinding long after the travel
+        // has stopped. Scaled back by that ratio, so what a consumer states
+        // is what the card does however far it has come.
+        amount: root.deformAmount * root._restExtent
+            / Math.max(1, root._restExtent + root._depth)
         // The pivot on the line rather than on the card's own edge, which is
         // behind the line for most of the travel: the card squashes into the
         // bar, and the shoulders, pinned to the line, stay on it under the
@@ -319,22 +349,39 @@ Item {
                         readonly property real _length: joint.clampedLength + frameShape.overhang * 2
                     }
 
-                    // What `Card`'s own default slot does: the contents inside
-                    // the card's padding, reaching back out through it by
-                    // negative margins where they need to.
+                    // Cut at the card's own rect, and the shape left out of
+                    // it: contents size to their own target the instant a
+                    // route changes while the rect trails behind on its
+                    // morph, so without this the taller instant would paint
+                    // past an edge still catching up (M51 D5), and the same
+                    // cut is what makes a card that grows a reveal. The
+                    // silhouette is longer and deeper than the rect by
+                    // construction and is drawn outside it.
                     Item {
-                        id: inner
+                        id: contentClip
                         anchors.fill: parent
-                        anchors.margins: root.padding
+                        clip: true
 
-                        // Swallows clicks anywhere inside the frame (the card's
-                        // own padding included) before they reach the backdrop
-                        // the consumer put this drawer in: ordinary nested
-                        // MouseArea priority, no manual event plumbing.
-                        MouseArea {
+                        // What `Card`'s own default slot does: the contents
+                        // inside the card's padding, reaching back out through
+                        // it by negative margins where they need to.
+                        Item {
+                            id: inner
                             anchors.fill: parent
-                            anchors.margins: -root.padding
-                            onClicked: {}
+                            anchors.margins: root.padding
+
+                            // Swallows clicks anywhere inside the frame (the
+                            // card's own padding included) before they reach
+                            // the backdrop the consumer put this drawer in:
+                            // ordinary nested MouseArea priority, no manual
+                            // event plumbing. Every button, so a right-click
+                            // on the card cannot dismiss it either.
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -root.padding
+                                acceptedButtons: Qt.AllButtons
+                                onClicked: {}
+                            }
                         }
                     }
                 }

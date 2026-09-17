@@ -285,19 +285,22 @@ item's menu off the tray's second bar) takes that panel's far edge, which
 opens the same gap in its own border; the notification centre takes the
 frame ring's far side, or the bar's own hairline when the bar is on the
 right, and comes out from behind the output's edge as before when there is
-neither. The launcher unfolds instead: the card is drawn at its search row's height on
-`effectsFast`, at full opacity, and its height carries the level under the
-rule on `spatial` while the card clips, so the rows are revealed rather than
-pushed into place. That level takes no fade of its own, the growing edge
-being the reveal; a level change while the launcher is already open plays one
+neither. A card that floats in the middle of the output does the same thing
+off the top line (M57 D5): the launcher, the polkit request and a plugin's
+overlay all take the top bar's hairline, the frame ring's top line, or the
+output's own top edge with neither, and the depth back to it is hundreds of
+pixels rather than a panel's handful. No fade, no zoom. The card's contents
+are laid out at its settled size from the first frame and the card's own cut
+is what reveals them, so a level under the launcher's rule is uncovered by
+the far edge rather than pushed into place; that level takes no fade of its
+own, and a level change while the launcher is already open plays one
 `effects` fade in with no out half, since the route is resolved by the
 keystroke that asked for it and the body has already changed by the time an
-out half could run. Polkit and the plugin overlay keep the modal recipe,
-opacity on `effects` and scale from 0.97 on `spatialFast` from centre, and
-the tooltip and the bar's own reveal take the same. Every one of them waits
-for its window to be on screen before it starts: a compositor can spend most
-of an enter putting the surface up, and an animation that ran behind it would
-land already at rest.
+out half could run. The tooltip and the bar's own reveal keep the fade
+recipe, opacity on `effects` and scale from 0.97 on `spatialFast` from
+centre. Every one of them waits for its window to be on screen before it
+starts: a compositor can spend most of an enter putting the surface up, and
+an animation that ran behind it would land already at rest.
 
 Opening a panel while another is open is a handoff, and it runs on one clock
 (amended 2026-09-09). The new card is drawn on the old card's rect, the old

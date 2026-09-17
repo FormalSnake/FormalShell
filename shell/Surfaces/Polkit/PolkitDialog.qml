@@ -141,21 +141,35 @@ PanelWindow {
         }
     }
 
+    // Measured off the output rather than off this window: the window is
+    // unmapped while no request is live, and a card placed off a window with
+    // no size yet would jump to the middle a frame after the request lands.
+    readonly property real _outputWidth: root.width > 0 ? root.width : (root._screen ? root._screen.width : 0)
+    readonly property real _outputHeight: root.height > 0 ? root.height : (root._screen ? root._screen.height : 0)
+
+    // The card's own rect: the field's width carries it, and its height is
+    // the content's, tracked live only while the dialog sits open at rest
+    // (M51 D5), so a wrong-password caption grows the card around its own
+    // centre instead of jumping a row taller and a fresh request finds the
+    // real content height rather than morphing out of the card the last one
+    // closed on.
+    readonly property real _cardWidth: Theme.space.popupWidthNarrow + Theme.space.panelPadding * 2
+    readonly property real _cardHeight: column.implicitHeight + Theme.space.panelPadding * 2
+
+    property real _morphHeight: root._active ? root._cardHeight : _morphHeight
+
+    Behavior on _morphHeight {
+        enabled: drawer.presence.settled && root._active
+        Anim {}
+    }
+
     screen: root._screen
-    // Held visible through the exit fade (DESIGN.md §1 Motion), same idiom
+    // Held visible through the exit (DESIGN.md §1 Motion), same idiom
     // as every other floating surface here, `_active` dropping (auth
     // succeeded, or the daemon/user cancelled) is this surface's only
     // "close" path; there is no summon/dismiss API of its own to call.
-    visible: presence.shown
+    visible: drawer.presence.shown
     color: "transparent"
-
-    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
-    // M51 D3): a modal surface, zooming from centre with no slide.
-    Presence {
-        id: presence
-        open: root._active
-        edge: "center"
-    }
 
     // Top, matching Menu.qml's own layer, not Overlay: reproduced
     // directly, an Overlay-layer surface with `keyboardFocus: Exclusive`
@@ -188,15 +202,12 @@ PanelWindow {
 
         Keys.onEscapePressed: root._cancel()
 
-        // The modal scrim (spec "Depth"): plain black at half opacity, the
-        // same one the launcher and the lock screen draw. Bound straight to
-        // presence's own progress, never a Behavior of its own (M51 D3): a
-        // scrim animating on a separate clock from the card it frames could
-        // drift out of step with it.
-        Rectangle {
+        // The modal scrim (Components/Scrim.qml): on the drawer's own pose,
+        // and off the band the top line belongs to while the card is still
+        // budding out of it.
+        Scrim {
             anchors.fill: parent
-            color: "black"
-            opacity: presence.opacity * 0.5
+            drawer: drawer
         }
 
         MouseArea {
@@ -204,45 +215,21 @@ PanelWindow {
             onClicked: root._refocus()
         }
 
-        Card {
-            id: card
-            anchors.centerIn: parent
-
-            // The card carries every height change inside it (M53 D2), so
-            // the controls in it lay out at the target size and the frame
-            // travels to meet them: a wrong-password caption grows the card
-            // around its own centre instead of jumping a row taller. The
-            // field reads this flag through cursor.js to stay out of the
-            // way; without it the field's own morph and this one would run
-            // the same change on two clocks.
-            property bool ownsSizeMorph: true
-
-            // The M51 D5 freeze: the content's height is tracked live only
-            // while the dialog sits open at rest, so a size change never
-            // fights the enter/exit fade and a fresh request finds the real
-            // content height rather than morphing out of the card the last
-            // one closed on.
-            property real _morphHeight: root._active ? card.implicitHeight : _morphHeight
-
-            height: card._morphHeight
-
-            Behavior on _morphHeight {
-                enabled: presence.settled && root._active
-                Anim {}
-            }
-
-            // The footer sits past the frame's edge for as long as the frame
-            // is short of its content, and a card leaking its own buttons is
-            // worse than one revealing them. The padding keeps content clear
-            // of the corner arcs, so a rectangular clip takes nothing the
-            // radius was drawing.
-            clip: true
-
-            // Enter/exit lives in Presence (DESIGN.md §1 Motion, M51 D3): a
-            // modal surface, so fade and zoom from centre only, no slide.
-            opacity: presence.opacity
-            scale: presence.scale
-            transformOrigin: presence.transformOrigin
+        // Everything from the top line to the card's own padding is the
+        // drawer's (Components/Drawer.qml, M57 D5): the consent card comes
+        // out of the same line the launcher does, on the same clock, and is
+        // a plain card once it has let go.
+        Drawer {
+            id: drawer
+            anchors.fill: parent
+            owner: root
+            open: root._active
+            mapped: root.backingWindowVisible
+            edge: "top"
+            screen: root._screen
+            rect: Qt.rect(Math.round((root._outputWidth - root._cardWidth) / 2),
+                Math.round((root._outputHeight - root._morphHeight) / 2),
+                root._cardWidth, root._morphHeight)
 
             MouseArea {
                 anchors.fill: parent
@@ -253,8 +240,16 @@ PanelWindow {
                 id: column
                 // The field's own width carries the card: the request text
                 // wraps to it and the footer sits under it.
-                width: Theme.space.popupWidthNarrow
+                width: parent.width
                 spacing: Theme.space.sectionGap
+
+                // The card carries every height change inside it (M53 D2),
+                // so the controls in it lay out at the target size and the
+                // frame travels to meet them. The field reads this flag
+                // through cursor.js to stay out of the way; without it the
+                // field's own morph and the card's would run the same change
+                // on two clocks.
+                property bool ownsSizeMorph: true
 
                 SectionLabel {
                     text: "Authentication required"
