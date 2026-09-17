@@ -19,6 +19,7 @@ the overlay just darken instead of blur." Then: "for the launcher, do the
 same principle with any other panel that floats in the middle if it exists."
 Then: "also make it so that all panels when they suddenly resize, like wifi
 or now playing, that they are all smoothly animated. This must be DRY."
+Then: "things like the volume popup also needs proper metamorphosis ofc."
 
 ## What the rig showed (2026-09-17, `--join`, every clock at 1000%)
 
@@ -94,6 +95,15 @@ Inputs: `open`, `edge`, the resting rect, where the line is, `joined`,
 `target`, `owner`, `screen`, `radius`, `color`, `bypass`, `mapped`. Panel and
 Center move onto it with no visual change (every existing leg still passes).
 
+Owner, 2026-09-17: "it must be DRY and dynamic." So a consumer states two
+things, the edge it comes out of and its resting rect, and the drawer
+derives the rest from the output and `Theme.edgeInset`: where that edge's
+line is (bar, ring or the output's own edge), the depth back to it, which
+sides are walled (D2), the span a target gives (D3). No surface carries its
+own join arithmetic, and a surface that moves, resizes or changes edge at
+runtime (`bar.position`, `frame.thickness`, a second bar growing) is
+followed without being told.
+
 **D5, centre-floating cards bud off the top line.** Menu.qml (every route),
 PolkitDialog.qml and PluginOverlay.qml use `Drawer` with `edge: "top"`: the
 line is the top bar's hairline, the frame ring's top line, or the output's
@@ -110,6 +120,14 @@ The scrim stays plain black at 0.5 on `presence`'s own pose, except over the
 band the line belongs to (`Theme.edgeInset.top`, nothing when the top edge
 has no bar and no ring): that band's share is `* (1 - attach)`, so the card
 buds off a lit bar and the bar dims as the card lets go.
+
+**D8, the OSD is a drawer too.** Osd.qml already emerges from the bottom
+edge; it moves onto `Drawer` with `edge: "bottom"` and joins the line there
+(a bottom bar's hairline, the ring's bottom line, the output's bottom edge),
+attached for the travel and let go at rest like every other card. It keeps
+its own timing and its no-focus, click-through surface. Toasts are not part
+of this: they arrive on `emphasizedDecel` from off screen as a stack, not
+out of a line.
 
 **D6, darken, not blur.** The modal namespaces (`formalshell:menu`,
 `formalshell:polkit`, the plugin overlay's) take `ignore_alpha = 0.6` in
@@ -179,6 +197,12 @@ becomes `--menu-emerge` (the card out of the top line, attached mid-flight,
 a plain card at its old resting rect at rest, the bar's band undimmed while
 attached); `--menu`, `--picker`, `--clipboard`, `--polkit`, `--plugins`,
 `--keybinds`, `--emoji` still pass.
+
+### Task 6b: the OSD (D8)
+
+Osd.qml onto `Drawer`, bottom edge. `--osd` still passes, and a
+`motionScale 1000` sample of one `osd` call shows the pill attached to the
+bottom line mid-flight and a plain pill at rest.
 
 ### Task 7: one size morph (D7)
 
