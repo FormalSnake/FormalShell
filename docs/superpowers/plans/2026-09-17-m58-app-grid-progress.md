@@ -1,9 +1,24 @@
 # M58: the launcher's app grid, and the media panel's progress that stalls
 
 **Date:** 2026-09-17
-**Status:** in progress on `m58-app-grid` (worktree `../FormalShell-m58`).
+**Status:** implemented 2026-09-17 on `m58-app-grid` (worktree
+`../FormalShell-m58`), oldest first: b324144 (this plan), dabb5c4 (the
+progress fix, landed straight to main), a2738b5 (merge of main, carrying
+M57 Task 6's Drawer-based Menu), cb7bf25 (the app grid). Task 3 is the docs
+commit carrying this line.
 **Spec:** this file; the 2026-08-25 and 2026-07-27 specs and `docs/DESIGN.md`
 win where it is silent.
+
+Where the shipped work deviates from the task order above, on purpose:
+
+- Task 1 landed on main directly rather than through this branch: the
+  progress stall was live on the owner's own host, the fix touched no
+  `Menu.qml` or other Task 2 file, and there was no reason to make the
+  owner wait on the grid for it.
+- Task 2 started after pulling M57 Task 6's Drawer-based `Menu.qml` in from
+  local main, rather than against the `Menu.qml` this branch forked from,
+  since that rewrite was already merged and the grid would otherwise have
+  needed a second pass to land on top of it.
 
 ## Owner's ask (2026-09-17)
 

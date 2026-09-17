@@ -62,6 +62,13 @@ How a run works:
 Every leg is one file, `dev/smoke.d/<name>.sh`, whose header carries the
 detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 
+- `app_grid.sh` `--app-grid`: `menu.appGrid` drawing the launcher's app
+  results as icons over their names, read off the probe entry's own colour
+  covering a 64px cell rather than a row's glyph, with real arrow keys
+  moving the cursor one cell across and a column count down, a real Enter
+  launching through the row path, apps and a ranked route sharing the card,
+  and the key deleted underneath the running shell putting the row list
+  back.
 - `bar_layout.sh` `--bar-layout`: user `bar.modules` and a reordered layout
   resolved from settings.json alone, every `CommandModule` failure path in
   the one frame.
@@ -153,6 +160,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `media.sh` `--media`: the media panel read off a real MPRIS player, both
   marquee states, shuffle/loop/volume set over IPC and read back out of mpv,
   and the players switcher.
+- `media_progress.sh` `--media-progress`: the media panel opened once and
+  held through playback, a pause and resume, a seek, a track change and a
+  player switch, with and without synced lyrics, the drawn progress fill
+  measured off the frame against the position `media status` reports at
+  every sample.
 - `menu.sh` `--menu`: the launcher at root, its fuzzy ranking against the
   live tree, and the select round trip.
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
