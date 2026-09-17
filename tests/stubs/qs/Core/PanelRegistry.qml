@@ -12,7 +12,9 @@ QtObject {
     function setJoin(owner, join) {
         if (!owner || !join)
             return;
-        root.joins = root.joins.filter(function (j) { return j.owner !== owner; }).concat([{
+        root.joins = root.joins.filter(function (j) {
+            return j.owner !== owner || j.edge !== join.edge;
+        }).concat([{
             owner: owner,
             edge: join.edge,
             x: join.x,
@@ -23,9 +25,11 @@ QtObject {
         }]);
     }
 
-    function clearJoin(owner) {
-        if (root.joins.some(function (j) { return j.owner === owner; }))
-            root.joins = root.joins.filter(function (j) { return j.owner !== owner; });
+    function clearJoin(owner, edge) {
+        var all = edge === undefined || edge === null;
+        function mine(j) { return j.owner === owner && (all || j.edge === edge); }
+        if (root.joins.some(mine))
+            root.joins = root.joins.filter(function (j) { return !mine(j); });
     }
 
     function joinOn(edge, screen, target) {

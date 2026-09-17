@@ -133,6 +133,18 @@ IpcHandler {
         return "ok";
     }
 
+    // `qs ipc call debug motionScale <percent>`: every motion clock at that
+    // percentage of its own length (Core/Theme.qml's `motionScale`), 100 to
+    // put them back. A rig leg slows an entrance down far enough to capture
+    // the pose it is asserting on, which at full speed is over inside one
+    // screencopy.
+    function motionScale(percent: int): string {
+        if (percent < 1 || percent > 5000)
+            return "error: percent must be 1..5000";
+        Core.Theme.motionScale = percent / 100;
+        return "ok";
+    }
+
     // `qs ipc call debug query "<text>"`, ranks a query against the live
     // menu tree without opening the surface (no keyboard injection in a
     // nested test session); verifies the apps provider + fuzzy filtering.

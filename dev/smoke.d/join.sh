@@ -1,0 +1,315 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
+# --join photographs the join mid-flight. At full speed a card is on the line
+# for about as long as one screencopy takes, so every open here runs at a
+# tenth of its speed (`debug motionScale`) and is sampled across the travel:
+#
+#   a  `panel open network` with no cell, which lands against the far end of
+#      the bar, a `screenPadding` off the screen's own edge
+#   b  the chevron's second bar
+#   c  a panel opened by a click on a cell inside that second bar
+#
+# Every frame is saved for reading by eye; three claims are asserted, the
+# first two on an attached frame of case a and the third on case c:
+#
+#   the seam (M57 D1)   the line's own row inside the gap must be byte-equal
+#                       to the bar's fill two rows above it: the bar paints
+#                       that row, and a card whose fill starts on it too
+#                       leaves a line across the whole gap wherever the
+#                       surfaces are translucent.
+#   the wall (M57 D2)   case a rests a screenPadding off the output and its
+#                       fillet wants radiusXl, so there is no room for one:
+#                       the attached silhouette runs out to the screen's own
+#                       edge instead, and the output's last column carries
+#                       card fill from under the line down to the shape's far
+#                       edge. At rest that column is bare desktop again.
+#   the bud (M57 D3)    case c's 380px card hangs off a second bar a third of
+#                       its width. On the frames taken before it lets go of
+#                       that bar's edge, nothing it paints under that edge may
+#                       lie outside the bar's own columns, and at rest it is
+#                       the full card again. Everything the claim is measured
+#                       against, the second bar's rect and the card's resting
+#                       rect, is read off the rig's own pixels: the strip is
+#                       as wide as its cells measured themselves at, which is
+#                       no number to pin.
+#
+# Every probe is pinned to the unframed rig's own numbers, so `--join
+# --frame` photographs the ring case and leaves them out; that combination is
+# read by eye.
+leg_join_flag="--join"
+leg_join_order=182
+leg_join_needs="wlrctl convert"
+
+join_region="1380,0 540x600"
+join_crop_width=540
+join_frames=10
+join_reply_path="$shot_dir/join-replies.txt"
+join_desktop_path="$shot_dir/join-desktop.png"
+
+# Case a's card in the crop's own coordinates: `panel open network` with no
+# cell is `Theme.space.n` (380) wide and rests one screenPadding (12) off the
+# 1920 output's right edge, and the crop starts at x = 1380, so it ends on
+# the output's own last column. The bar is 40 rows, so its inward line is the
+# last of them.
+join_card_x=148
+join_card_width=380
+join_line_row=39
+
+leg_join_validate() {
+  local other
+  for other in bar_layout bar_position chevron chevron_quiet panel_handoff tray_overflow; do
+    if leg_on "$other"; then
+      echo "usage: --join carries its own bar.layout and cannot combine with --${other//_/-}" >&2
+      exit 1
+    fi
+  done
+}
+
+leg_join_fixture() {
+  settings_fragment ', "bar": {"layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "chevron", "battery", "audio", "network"]}}'
+}
+
+leg_join_timing() {
+  leg_timing 75 140
+}
+
+leg_join_drive() {
+  local script="$shot_dir/join-drive.sh"
+  write_script "$script" <<EOF
+#!/usr/bin/env bash
+call() { "$qs_bin" ipc -p "$shell_path" call "\$@" >> "$join_reply_path" 2>&1; }
+sample() {
+  local name=\$1 i
+  for i in \$(seq 1 $join_frames); do
+    sleep 0.3
+    "$grim_bin" -g "$join_region" "$shot_dir/join-\$name-\$i.png" > /dev/null 2>&1
+  done
+}
+sleep 5
+call debug motionScale 1000
+"$grim_bin" -g "$join_region" "$join_desktop_path" > /dev/null 2>&1
+call panel open network
+sample a
+sleep 3
+"$grim_bin" -g "$join_region" "$shot_dir/join-a-rest.png" > /dev/null 2>&1
+call panel close
+sample a-close
+sleep 3
+call bar chevron expand
+sample b
+sleep 3
+"$grim_bin" -g "$join_region" "$shot_dir/join-b-rest.png" > /dev/null 2>&1
+"$wlrctl_bin" pointer move -4000 -4000 >> "$join_reply_path" 2>&1
+sleep 0.5
+"$wlrctl_bin" pointer move 1813 72 >> "$join_reply_path" 2>&1
+sleep 0.2
+"$wlrctl_bin" pointer click left >> "$join_reply_path" 2>&1
+"$wlrctl_bin" pointer move -4000 -4000 >> "$join_reply_path" 2>&1
+sample c
+sleep 3
+"$grim_bin" -g "$join_region" "$shot_dir/join-c-rest.png" > /dev/null 2>&1
+call panel close
+sample c-close
+sleep 2
+call bar chevron collapse
+sample b-close
+call debug motionScale 100
+EOF
+  echo "exec-once = bash $script"
+}
+
+# One pixel out of a frame, as six hex digits.
+join_pixel() {
+  local rgb
+  rgb=$($convert_bin "$1" -format \
+    "%[fx:int(255*p{$2,$3}.r+0.5)] %[fx:int(255*p{$2,$3}.g+0.5)] %[fx:int(255*p{$2,$3}.b+0.5)]" \
+    info: 2>/dev/null)
+  [ -n "$rgb" ] || fail "could not read the pixel at ($2,$3) out of $1"
+  # shellcheck disable=SC2086  # three fields, one per channel
+  printf '%02X%02X%02X' $rgb
+}
+
+# One whole column of a frame, as six hex digits per row, top to bottom: the
+# wall runs the length of the card, and one read beats a probe per row.
+join_column() {
+  $convert_bin "$1" -crop "1x4096+$2+0" +repage -depth 8 txt:- 2>/dev/null \
+    | awk 'NR > 1 { print toupper(substr($3, 2, 6)) }'
+}
+
+# One row of a frame from column $2 to the crop's own end, the same way.
+join_row() {
+  $convert_bin "$1" -crop "4096x1+$2+$3" +repage -depth 8 txt:- 2>/dev/null \
+    | awk 'NR > 1 { print toupper(substr($3, 2, 6)) }'
+}
+
+# How far under the line the shape reaches at column $2 of frame $1: the last
+# row that is not the bare desktop's own. The card comes out from under the
+# line, so this is what says how much of the wall there is to read.
+join_shape_depth() {
+  local i last=$join_line_row
+  local -a shot desk
+  mapfile -t shot < <(join_column "$1" "$2")
+  mapfile -t desk < <(join_column "$join_desktop_path" "$2")
+  for ((i = join_line_row + 1; i < ${#shot[@]} && i < ${#desk[@]}; i++)); do
+    [ "${shot[i]}" = "${desk[i]}" ] && break
+    last=$i
+  done
+  echo "$last"
+}
+
+# The box of everything that differs between two frames, from row $3 down for
+# $4 rows (to the bottom of the crop with no count), as "W H X Y" with Y back
+# in the crop's own rows. Nothing at all, and a non-zero status, when the two
+# are identical there.
+join_bbox() {
+  local box
+  box=$($convert_bin "$1" "$2" -compose difference -composite -colorspace Gray \
+    -crop "${join_crop_width}x${4:-4096}+0+$3" +repage -threshold 0 -format '%@' info: 2>/dev/null)
+  case "$box" in
+    ''|0x0*) return 1 ;;
+  esac
+  echo "$box" | awk -F'[x+]' -v y0="$3" '{ print $1, $2, $3, $4 + y0 }'
+}
+
+# The first frame of case a with the card attached: its fill both a few rows
+# under the line and on the very first row under it, that first row the same
+# ink as the one below it. A card that has begun to let go pulls its near
+# edge off the line and brings its own border up there, so both of those
+# rows change and the frame is passed over; a card still behind the line has
+# not reached the deep probe yet.
+join_attached_frame() {
+  local col=$1 i path deep near below deep_desk near_desk
+  deep_desk=$(join_pixel "$join_desktop_path" "$col" $((join_line_row + 5)))
+  near_desk=$(join_pixel "$join_desktop_path" "$col" $((join_line_row + 1)))
+  for i in $(seq 1 $join_frames); do
+    path="$shot_dir/join-a-$i.png"
+    [ -f "$path" ] || continue
+    deep=$(join_pixel "$path" "$col" $((join_line_row + 5)))
+    near=$(join_pixel "$path" "$col" $((join_line_row + 1)))
+    below=$(join_pixel "$path" "$col" $((join_line_row + 2)))
+    if [ "$deep" != "$deep_desk" ] && [ "$near" != "$near_desk" ] && [ "$near" = "$below" ]; then
+      echo "$path"
+      return 0
+    fi
+  done
+  return 1
+}
+
+leg_join_assert() {
+  local name i path
+  for name in a a-close b c c-close b-close; do
+    for i in $(seq 1 $join_frames); do
+      path="$shot_dir/join-$name-$i.png"
+      [ -f "$path" ] || fail "no join frame $path"
+      echo "SMOKE_JOIN_$(echo "$name" | tr 'a-z-' 'A-Z_')_$i $path"
+    done
+  done
+  for name in a b c; do
+    path="$shot_dir/join-$name-rest.png"
+    [ -f "$path" ] || fail "no join frame $path"
+    echo "SMOKE_JOIN_$(echo "$name" | tr 'a-z' 'A-Z')_REST $path"
+  done
+  [ -f "$join_desktop_path" ] || fail "no bare desktop frame at $join_desktop_path"
+  echo "SMOKE_JOIN_DESKTOP $join_desktop_path"
+
+  if leg_on frame; then
+    echo "SMOKE_JOIN_FRAMED read by eye: the probes below are pinned to the unframed rig's own numbers"
+    return 0
+  fi
+
+  local col attached seam bar
+  col=$((join_card_x + join_card_width / 2))
+  attached=$(join_attached_frame "$col") || fail \
+    "no attached frame among join-a-1..$join_frames: nothing sits on the line's row at column $col"
+  seam=$(join_pixel "$attached" "$col" "$join_line_row")
+  bar=$(join_pixel "$attached" "$col" $((join_line_row - 2)))
+  if [ "$seam" != "$bar" ]; then
+    fail "the line's row at ($col,$join_line_row) reads $seam against the bar's own $bar two rows up in $attached: the card's fill covers it a second time"
+  fi
+  echo "SMOKE_JOIN_SEAM ok $seam $attached"
+
+  local edge ink far top bottom row
+  edge=$((join_crop_width - 1))
+  ink=$(join_pixel "$attached" "$col" $((join_line_row + 5)))
+  far=$(join_shape_depth "$attached" "$col")
+  top=$((join_line_row + 2))
+  bottom=$((far - 3))
+  [ "$bottom" -gt "$top" ] || fail \
+    "the shape reaches only row $far at column $col of $attached: too shallow to read the wall against"
+  local -a wall rest desk
+  mapfile -t wall < <(join_column "$attached" "$edge")
+  mapfile -t rest < <(join_column "$shot_dir/join-a-rest.png" "$edge")
+  mapfile -t desk < <(join_column "$join_desktop_path" "$edge")
+  for ((row = top; row <= bottom; row++)); do
+    [ "${wall[row]}" = "$ink" ] || fail \
+      "the output's last column reads ${wall[row]} at row $row of $attached against the card's own $ink: the walled silhouette stops short of the screen's edge"
+    [ "${rest[row]}" = "${desk[row]}" ] || fail \
+      "the output's last column still reads ${rest[row]} at row $row of join-a-rest.png against the bare desktop's ${desk[row]}: the card has let go and the edge should be desktop again"
+  done
+
+  # And the run out to the wall is one unbroken fill: two whole rows read
+  # across, from the card's own middle to that last column, may not carry the
+  # bare desktop's ink anywhere. A column probe alone misses a seam between
+  # the card's side and the run-out, which is exactly where the two meet.
+  local -a scan bare
+  local depth col_i bad
+  for depth in $((join_line_row + 8)) $((join_line_row + (bottom - join_line_row) * 2 / 3)); do
+    mapfile -t scan < <(join_row "$attached" "$col" "$depth")
+    mapfile -t bare < <(join_row "$join_desktop_path" "$col" "$depth")
+    bad=""
+    for ((col_i = 0; col_i < ${#scan[@]}; col_i++)); do
+      [ "${scan[col_i]}" = "${bare[col_i]}" ] && bad="$bad $((col + col_i))"
+    done
+    [ -z "$bad" ] || fail \
+      "row $depth of $attached shows the bare desktop at column(s)$bad between the card's middle and the output's end: the attached silhouette is not one unbroken fill"
+    echo "SMOKE_JOIN_WALL_ROW ok row $depth columns $col-$edge $attached"
+  done
+  echo "SMOKE_JOIN_WALL ok $ink rows $top-$bottom at column $edge $attached"
+
+  # --- The bud (M57 D3) ------------------------------------------------
+  #
+  # The second bar itself, off the frame taken with it open and nothing
+  # hanging off it, and the child's resting top under it. join-b-rest.png is
+  # the reference the whole claim is read against: the bare desktop has no
+  # second bar in it at all, and the rows the second bar covers carry the
+  # pointer's own hover by the time case c is photographed, which is why the
+  # band starts one row past its far edge.
+  local box owner_w owner_h owner_x owner_y owner_bottom
+  box=$(join_bbox "$shot_dir/join-b-rest.png" "$join_desktop_path" $((join_line_row + 1))) || fail \
+    "nothing under the bar differs from the bare desktop in join-b-rest.png: the chevron's second bar never opened"
+  read -r owner_w owner_h owner_x owner_y <<< "$box"
+  owner_bottom=$((owner_y + owner_h - 1))
+
+  local rest_w rest_h rest_x rest_y
+  box=$(join_bbox "$shot_dir/join-c-rest.png" "$shot_dir/join-b-rest.png" $((owner_bottom + 1))) || fail \
+    "nothing under the second bar differs from join-b-rest.png in join-c-rest.png: the child never opened"
+  read -r rest_w rest_h rest_x rest_y <<< "$box"
+  if [ "$rest_w" -lt $((join_card_width - 2)) ] || [ "$rest_w" -gt $((join_card_width + 4)) ]; then
+    fail "the card in join-c-rest.png is ${rest_w}px wide against the $join_card_width it rests at: it never widened out of the bud"
+  fi
+
+  # Everything under the second bar's far edge, on the frames taken before the
+  # card lets go of it. How far out the card is stands in for the pose: the
+  # shape reaches `releaseAt` (0.85) of its resting depth on the tick the
+  # attach clock starts, so a frame under four fifths of that depth is one the
+  # card is still wholly on the edge for. Past it the card widens to its own
+  # rect as it pulls away, which is what the clock is for, and those frames
+  # say nothing about the bud.
+  local band_top frames_attached bw bh bx by right
+  band_top=$((owner_bottom + 1))
+  frames_attached=0
+  for i in $(seq 1 $join_frames); do
+    path="$shot_dir/join-c-$i.png"
+    box=$(join_bbox "$path" "$shot_dir/join-b-rest.png" "$band_top") || continue
+    read -r bw bh bx by <<< "$box"
+    [ $((bh * 100)) -lt $((rest_h * 80)) ] || continue
+    frames_attached=$((frames_attached + 1))
+    right=$((bx + bw - 1))
+    if [ "$bx" -lt "$owner_x" ] || [ "$right" -ge $((owner_x + owner_w)) ]; then
+      fail "$path paints columns $bx-$right under the second bar's own $owner_x-$((owner_x + owner_w - 1)) while the card is still on its edge: the bud is wider than the edge it buds from"
+    fi
+  done
+  [ "$frames_attached" -gt 0 ] || fail \
+    "no attached frame among join-c-1..$join_frames: nothing under row $band_top is shallower than four fifths of the card's own $rest_h rows"
+  echo "SMOKE_JOIN_BUD ok $frames_attached attached frame(s) inside columns $owner_x-$((owner_x + owner_w - 1)), rest ${rest_w}x$rest_h at row $rest_y"
+}

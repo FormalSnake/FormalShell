@@ -340,20 +340,6 @@ PanelWindow {
 
     readonly property real _screenPadding: Theme.space.screenPadding
 
-    // Whether the card has a line to come out of (M54 D6, 2026-09-14): the
-    // frame ring's right side, or the bar's own hairline when the bar is
-    // there. A bare screen with the bar elsewhere has only the output's
-    // edge, and the card comes out from behind that as before.
-    readonly property bool _joined: Theme.frameEnabled || Theme.barPosition === "right"
-
-    // How far past its own rect the card's shape reaches toward that line:
-    // the `screenPadding` the card rests off it by, and the line's own
-    // column on top, so the fillets land ON the line. The frame's rect is
-    // untouched.
-    readonly property real _joinDepth: root._joined
-        ? root._screenPadding + Theme.borderWidth
-        : 0
-
     // Header, the rule under it, then the rows (DESIGN.md §3 "Panel", the
     // same seam every panel header draws): one `panelPadding` either side of
     // the rule.
@@ -362,7 +348,7 @@ PanelWindow {
     // The card's own height, before the cap: the header, its seam, both row
     // sections, and the Card's padding either side.
     readonly property real _contentHeight: header.height + root._headerGap
-        + column.implicitHeight + frame.padding * 2
+        + column.implicitHeight + drawer.padding * 2
 
     // Measured off the output rather than off this window: the window is
     // unmapped while the centre is closed, and a card sized off a window
@@ -390,73 +376,8 @@ PanelWindow {
     // drops isOpen, presence's own Behavior runs its progress to 0, and
     // only then does the window unmap. The window itself is transparent so
     // the fade covers the whole card.
-    visible: presence.shown
+    visible: drawer.presence.shown
     color: "transparent"
-
-    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
-    // M53 addendum): a drawer out of the right edge, since the card's own x
-    // formula (geometry.js's centerFrame) hangs it off the right regardless
-    // of which edge the bar occupies. The extent is the card's width, so a
-    // closed card sits entirely behind the line `clipper` cuts at.
-    Presence {
-        id: presence
-        open: root.isOpen
-        edge: "right"
-        mapped: root.backingWindowVisible
-        mode: "emerge"
-        // The whole shape, not just the card: the fillets reach
-        // `_joinDepth` further toward the line, and a closed card has to
-        // sit behind it with those too.
-        extent: root.cardWidth + root._joinDepth
-    }
-
-    // The join to that line (Components/Joint.qml): the silhouette drawn
-    // from the line rather than travelling with the card, the let-go once
-    // the card is nearly at rest, and the gap published to the ring's or
-    // the bar's line (Core/PanelRegistry.qml).
-    Joint {
-        id: joint
-        owner: root
-        presence: presence
-        edge: "right"
-        joined: root._joined && root._screen !== null
-        depth: root._joinDepth
-        radius: Theme.radiusXl
-        extent: frameHost.width
-        along: frameHost.y
-        length: frameHost.height
-        screen: root._screen ? root._screen.name : ""
-    }
-
-    // The card's actual height (DESIGN.md §1 Motion, M51 D5): `_frame.height`
-    // above is the history's own target, tracked live only while the centre
-    // sits open at rest. close() (which seens every pending row, moving it
-    // into a different section) simply stops re-syncing this, so the next
-    // open snaps straight to that history's real height rather than morphing
-    // from the frame the centre closed on. Declared after `presence` so its
-    // own settled flip, sharing the isOpenChanged signal this ternary
-    // depends on, has already landed by the time this re-evaluates.
-    property real _morphHeight: root.isOpen ? root._frame.height : _morphHeight
-
-    Behavior on _morphHeight {
-        enabled: presence.settled && root.isOpen
-        Anim { id: morphHeight }
-    }
-
-    // The card squashes into the edge it comes out of and springs back
-    // (M54 D7). Sampled off the item carrying its place, not off the card the
-    // matrix goes on: `Deform` reads its target through `mapToItem`, which
-    // would read its own transform back.
-    Deform {
-        id: deform
-        target: frameHost
-        edge: "right"
-        // On the line while the card is joined to it, so the card squashes
-        // into the frame and the shoulders stay on the line under the
-        // matrix; on the card's own edge once it has let go.
-        inset: joint.pivotInset
-        active: !presence.settled || morphHeight.running
-    }
 
     WlrLayershell.namespace: "formalshell:notifications-center"
     WlrLayershell.layer: WlrLayer.Top
@@ -501,352 +422,299 @@ PanelWindow {
         Keys.onPressed: event => keyCatcher.handle(event)
         onClicked: root.close()
 
-        // The drawer's slit (M53 addendum): the line the card comes out
-        // from behind, the frame ring's or the bar's when there is one, the
-        // card's own resting right edge otherwise. The centre hangs off the
-        // right of the output whatever edge the bar is on.
-        Item {
-            id: clipper
-            width: root._frame.x + root.cardWidth + root._joinDepth
-            height: backdrop.height
-            clip: true
+        // Everything from the line to the card's own padding is the drawer's
+        // (Components/Drawer.qml). The line it comes out from behind is the
+        // frame ring's right side, or the bar's own hairline when the bar is
+        // there; a bare screen with the bar elsewhere has neither, and the
+        // card comes out from behind the output's own edge. The centre hangs
+        // off the right of the output whatever edge the bar is on, since its
+        // own x formula (geometry.js's centerFrame) puts it there.
+        Drawer {
+            id: drawer
+            anchors.fill: parent
+            owner: root
+            open: root.isOpen
+            mapped: root.backingWindowVisible
+            edge: "right"
+            screen: root._screen
+            rect: Qt.rect(root._frame.x, root._frame.y, root.cardWidth, root._morphHeight)
+            moving: morphHeight.running
+            // The card rests a `screenPadding` off either end of its line and
+            // has never run out to them (M57 D2).
+            walls: false
 
-            // Where the card is, and nothing drawn: the deform's matrix goes
-            // on the card inside this, so the two are never the same item.
             Item {
-                id: frameHost
-                x: root._frame.x
-                y: root._frame.y
-                width: root.cardWidth
-                height: root._morphHeight
-                // Enter/exit lives in Presence (DESIGN.md §1 Motion, M53
-                // addendum): the drawer. The card sits its own width behind
-                // the line above while closed and travels out from under it,
-                // with no fade and no zoom, so the centre arrives from off the
-                // right edge rather than appearing in place.
-                opacity: presence.opacity
+                id: header
+                // The card arrives before its contents do (Presence's own
+                // `contentOpacity`), so the drawer reads as one card
+                // coming out rather than as a list sliding in.
+                opacity: drawer.presence.contentOpacity
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: Theme.space.controlHeight
 
-                transform: Translate {
-                    x: presence.emergeX
-                    y: presence.emergeY
+                Text {
+                    id: title
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Notifications"
+                    color: Theme.color.foreground
+                    font.family: Theme.fontFamilySans
+                    font.pixelSize: Theme.fontSize.subtitle
+                    font.weight: Theme.weight.semibold
                 }
 
-                // The card's own rect, and nothing drawn: the shape and the
-                // contents sit inside it under the deform's matrix.
-                Item {
-                    id: frame
-                    anchors.fill: parent
-                    transform: Matrix4x4 { matrix: deform.matrix }
-                    readonly property real padding: Theme.space.panelPadding
+                SectionLabel {
+                    anchors.right: dndSwitch.left
+                    anchors.rightMargin: Theme.space.iconGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "DND"
+                }
 
-                    // The card (M54 D6, Components/Shoulders.qml): joined to the line
-                    // it came out of while it is coming out, the plain card `Card`
-                    // draws once it has let go. Pinned to the line rather than to the
-                    // frame: `joint.slide` undoes the frame's own travel and
-                    // `joint.shapeDepth` is what is out from under the line, so mid
-                    // travel it is a shorter shape whose far edge is still the card's.
-                    Shoulders {
-                        id: frameShape
-                        edge: "right"
-                        attach: joint.attach
-                        nearInset: joint.nearInset
-                        x: frame.width + root._joinDepth - joint.slide - joint.shapeDepth
-                        y: -frameShape.overhang
-                        width: joint.shapeDepth
-                        height: frame.height + frameShape.overhang * 2
+                Switch {
+                    id: dndSwitch
+                    anchors.right: clearAllButton.left
+                    anchors.rightMargin: Theme.space.sectionGap
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: NotificationService.dnd
+                    cursor: root.cursorActive && root.cursorSection === 1
+                    onToggled: on => NotificationService.setDnd(on)
+                }
+
+                Button {
+                    id: clearAllButton
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    variant: "ghost"
+                    text: "Clear all"
+                    cursor: root.cursorActive && root.cursorSection === 2
+                    onClicked: root.clearAll()
+                }
+            }
+
+            // The header's seam (DESIGN.md §1's ladder rung 4), full-bleed
+            // to the card's border, which the negative margins buy back out
+            // of the Card's own padding.
+            Separator {
+                id: headerRule
+                opacity: drawer.presence.contentOpacity
+                anchors.top: header.bottom
+                anchors.topMargin: Theme.space.panelPadding
+                anchors.left: parent.left
+                anchors.leftMargin: -drawer.padding
+                anchors.right: parent.right
+                anchors.rightMargin: -drawer.padding
+            }
+
+            // Scrolls only once the card has hit the cap (root._frame.capped):
+            // under it the Flickable is exactly as tall as its own column and
+            // has nowhere to go.
+            Flickable {
+                id: rowsFlickable
+                opacity: drawer.presence.contentOpacity
+                anchors.top: headerRule.bottom
+                anchors.topMargin: Theme.space.panelPadding
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                clip: true
+                contentWidth: width
+                contentHeight: column.implicitHeight
+
+                WheelScroll { flickable: rowsFlickable }
+
+                // Never focused: the backdrop owns the keyboard, exactly as
+                // Panel.qml wires its own.
+                KeyCatcher {
+                    id: keyCatcher
+                    focus: false
+                    width: rowsFlickable.width
+                    height: column.implicitHeight
+                    blocked: !root.isOpen
+
+                    onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
+                    onActivateRequested: root.activateCursor()
+                    onDeleteRequested: root.deleteCursor()
+                    onCloseRequested: root.close()
+                    onTabRequested: direction => root.moveSection(direction)
+                    onTextKey: text => {
+                        if (text === "d")
+                            root.toggleDnd();
                     }
 
-                    // What `Card`'s own default slot did: the contents inside the
-                    // card's padding.
-                    Item {
-                        id: inner
-                        anchors.fill: parent
-                        anchors.margins: frame.padding
+                    // `sectionGap` between the two sections, `rowGap` inside
+                    // one (DESIGN.md §1's ladder, rung 2 carrying rung 3): a
+                    // label and its rows have to sit closer to each other
+                    // than the label sits to whatever came before it, or the
+                    // name floats between two groups instead of heading one.
+                    // Each section is one item so its label cannot outlive
+                    // its rows.
+                    //
+                    // The gap between the two sections is the seen section's
+                    // own top padding rather than this positioner's spacing
+                    // (M53 Task 6): a section collapsing has to take the gap
+                    // above it with it, and a positioner drops the spacing
+                    // around an item in the frame that item stops being
+                    // visible.
+                    Column {
+                        id: column
+                        width: parent.width
+                        spacing: 0
 
-                        // Swallows clicks anywhere inside the frame (its own padding
-                        // included) before they reach the backdrop above: ordinary
-                        // nested-MouseArea priority, no manual event plumbing.
-                        MouseArea {
-                            anchors.fill: parent
-                            anchors.margins: -frame.padding
-                            onClicked: {}
+                        SectionLabel {
+                            // Held back while either section is still on
+                            // screen at all: it would otherwise sit beside a
+                            // fading last row, or over a label still
+                            // collapsing, instead of after both.
+                            visible: root._rows.length === 0
+                                && !root._pendingSlots.some(s => s && s.departing)
+                                && !root._seenSlots.some(s => s && s.departing)
+                                && pendingSection._presence <= 0 && seenSection._presence <= 0
+                            text: "NO NOTIFICATIONS"
                         }
 
-                        Item {
-                            id: header
-                            // The card arrives before its contents do (Presence's own
-                            // `contentOpacity`), so the drawer reads as one card
-                            // coming out rather than as a list sliding in.
-                            opacity: presence.contentOpacity
-                            anchors.top: parent.top
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            height: Theme.space.controlHeight
-
-                            Text {
-                                id: title
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "Notifications"
-                                color: Theme.color.foreground
-                                font.family: Theme.fontFamilySans
-                                font.pixelSize: Theme.fontSize.subtitle
-                                font.weight: Theme.weight.semibold
+                        Column {
+                            id: pendingSection
+                            // 1 while the section has anything to show, 0 once
+                            // its last row has finished collapsing out of it.
+                            // Height and opacity both ride it, so the label
+                            // leaves as part of the same movement its rows
+                            // leave in rather than popping out from over the
+                            // gap they left (M53 D2). Gated exactly like a
+                            // row's own scalar below: the centre's entrance
+                            // covers the first population.
+                            property real _presence: (root._pendingRows.length > 0
+                                || root._pendingSlots.some(s => s && s.departing)) ? 1 : 0
+                            Behavior on _presence {
+                                enabled: drawer.presence.settled && root.isOpen
+                                Anim {}
                             }
+
+                            width: parent.width
+                            height: pendingSection._presence * pendingSection.implicitHeight
+                            opacity: pendingSection._presence
+                            visible: pendingSection._presence > 0
+                            spacing: Theme.space.rowGap
 
                             SectionLabel {
-                                anchors.right: dndSwitch.left
-                                anchors.rightMargin: Theme.space.iconGap
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "DND"
+                                text: "PENDING"
+                                count: NotificationService.pending.length
                             }
 
-                            Switch {
-                                id: dndSwitch
-                                anchors.right: clearAllButton.left
-                                anchors.rightMargin: Theme.space.sectionGap
-                                anchors.verticalCenter: parent.verticalCenter
-                                checked: NotificationService.dnd
-                                cursor: root.cursorActive && root.cursorSection === 1
-                                onToggled: on => NotificationService.setDnd(on)
-                            }
+                            Item {
+                                width: parent.width
+                                height: root._pendingLayout.height
 
-                            Button {
-                                id: clearAllButton
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                variant: "ghost"
-                                text: "Clear all"
-                                cursor: root.cursorActive && root.cursorSection === 2
-                                onClicked: root.clearAll()
-                            }
-                        }
+                                Repeater {
+                                    id: pendingRepeater
+                                    model: root._pendingSlots.length
 
-                        // The header's seam (DESIGN.md §1's ladder rung 4), full-bleed
-                        // to the card's border, which the negative margins buy back out
-                        // of the Card's own padding.
-                        Separator {
-                            id: headerRule
-                            opacity: presence.contentOpacity
-                            anchors.top: header.bottom
-                            anchors.topMargin: Theme.space.panelPadding
-                            anchors.left: parent.left
-                            anchors.leftMargin: -frame.padding
-                            anchors.right: parent.right
-                            anchors.rightMargin: -frame.padding
-                        }
+                                    delegate: NotificationRow {
+                                        id: pendingRow
+                                        required property int index
+                                        readonly property var _slot: root._pendingSlots[pendingRow.index]
+                                        // Gates every Behavior below: the
+                                        // centre's own enter (Presence.qml)
+                                        // covers the initial population, so a
+                                        // row must not also animate until
+                                        // that settles, and stops animating
+                                        // again once the centre starts
+                                        // closing.
+                                        readonly property bool _animated: drawer.presence.settled && root.isOpen
 
-                        // Scrolls only once the card has hit the cap (root._frame.capped):
-                        // under it the Flickable is exactly as tall as its own column and
-                        // has nowhere to go.
-                        Flickable {
-                            id: rowsFlickable
-                            opacity: presence.contentOpacity
-                            anchors.top: headerRule.bottom
-                            anchors.topMargin: Theme.space.panelPadding
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            clip: true
-                            contentWidth: width
-                            contentHeight: column.implicitHeight
+                                        // Headroom slots (Toasts.qml:420 guards the same
+                                        // shape) carry no entry and sit at y 0 under row 0;
+                                        // without this an opacity-0 card there still
+                                        // hit-tests and swallows row 0's clicks.
+                                        visible: pendingRow._slot !== null
+                                        width: parent.width
+                                        y: root._pendingLayout.y[pendingRow.index] || 0
+                                        Behavior on y {
+                                            enabled: pendingRow._animated
+                                            Anim {}
+                                        }
 
-                            WheelScroll { flickable: rowsFlickable }
+                                        entry: pendingRow._slot ? pendingRow._slot.entry : root._emptyEntry
+                                        now: root._now
+                                        unread: true
+                                        ruled: root._pendingLayout.ruled[pendingRow.index] === true
+                                        alive: pendingRow._slot ? !pendingRow._slot.departing : false
+                                        animated: pendingRow._animated
+                                        cursor: root.cursorActive && root.cursorSection === 0
+                                            && pendingRow._slot && pendingRow._slot.key === root._cursorKey
 
-                            // Never focused: the backdrop owns the keyboard, exactly as
-                            // Panel.qml wires its own.
-                            KeyCatcher {
-                                id: keyCatcher
-                                focus: false
-                                width: rowsFlickable.width
-                                height: column.implicitHeight
-                                blocked: !root.isOpen
-
-                                onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
-                                onActivateRequested: root.activateCursor()
-                                onDeleteRequested: root.deleteCursor()
-                                onCloseRequested: root.close()
-                                onTabRequested: direction => root.moveSection(direction)
-                                onTextKey: text => {
-                                    if (text === "d")
-                                        root.toggleDnd();
+                                        onDismissRequested: NotificationService.dismissGroup(pendingRow._slot.entry.memberIds)
+                                        onActivateRequested: root.activateRow(pendingRow._slot.entry)
+                                        onActionRequested: key => NotificationService.invokeAction(pendingRow._slot.entry.id, key)
+                                        onExited: root._clearPendingSlot(pendingRow.index)
+                                    }
                                 }
+                            }
+                        }
 
-                                // `sectionGap` between the two sections, `rowGap` inside
-                                // one (DESIGN.md §1's ladder, rung 2 carrying rung 3): a
-                                // label and its rows have to sit closer to each other
-                                // than the label sits to whatever came before it, or the
-                                // name floats between two groups instead of heading one.
-                                // Each section is one item so its label cannot outlive
-                                // its rows.
-                                //
-                                // The gap between the two sections is the seen section's
-                                // own top padding rather than this positioner's spacing
-                                // (M53 Task 6): a section collapsing has to take the gap
-                                // above it with it, and a positioner drops the spacing
-                                // around an item in the frame that item stops being
-                                // visible.
-                                Column {
-                                    id: column
-                                    width: parent.width
-                                    spacing: 0
+                        Column {
+                            id: seenSection
+                            // Same scalar as the pending section above.
+                            property real _presence: (root._seenRows.length > 0
+                                || root._seenSlots.some(s => s && s.departing)) ? 1 : 0
+                            Behavior on _presence {
+                                enabled: drawer.presence.settled && root.isOpen
+                                Anim {}
+                            }
 
-                                    SectionLabel {
-                                        // Held back while either section is still on
-                                        // screen at all: it would otherwise sit beside a
-                                        // fading last row, or over a label still
-                                        // collapsing, instead of after both.
-                                        visible: root._rows.length === 0
-                                            && !root._pendingSlots.some(s => s && s.departing)
-                                            && !root._seenSlots.some(s => s && s.departing)
-                                            && pendingSection._presence <= 0 && seenSection._presence <= 0
-                                        text: "NO NOTIFICATIONS"
-                                    }
+                            width: parent.width
+                            // The gap between the two sections belongs to
+                            // whichever of them is going: it shrinks with the
+                            // pending section above while that collapses, and
+                            // rides this section's own scale after.
+                            topPadding: Theme.space.sectionGap * pendingSection._presence
+                            height: seenSection._presence * seenSection.implicitHeight
+                            opacity: seenSection._presence
+                            visible: seenSection._presence > 0
+                            spacing: Theme.space.rowGap
 
-                                    Column {
-                                        id: pendingSection
-                                        // 1 while the section has anything to show, 0 once
-                                        // its last row has finished collapsing out of it.
-                                        // Height and opacity both ride it, so the label
-                                        // leaves as part of the same movement its rows
-                                        // leave in rather than popping out from over the
-                                        // gap they left (M53 D2). Gated exactly like a
-                                        // row's own scalar below: the centre's entrance
-                                        // covers the first population.
-                                        property real _presence: (root._pendingRows.length > 0
-                                            || root._pendingSlots.some(s => s && s.departing)) ? 1 : 0
-                                        Behavior on _presence {
-                                            enabled: presence.settled && root.isOpen
+                            SectionLabel {
+                                text: "SEEN"
+                                count: NotificationService.past.length
+                            }
+
+                            Item {
+                                width: parent.width
+                                height: root._seenLayout.height
+
+                                Repeater {
+                                    id: seenRepeater
+                                    model: root._seenSlots.length
+
+                                    delegate: NotificationRow {
+                                        id: seenRow
+                                        required property int index
+                                        readonly property var _slot: root._seenSlots[seenRow.index]
+                                        readonly property bool _animated: drawer.presence.settled && root.isOpen
+
+                                        // Same guard as the pending section above.
+                                        visible: seenRow._slot !== null
+                                        width: parent.width
+                                        y: root._seenLayout.y[seenRow.index] || 0
+                                        Behavior on y {
+                                            enabled: seenRow._animated
                                             Anim {}
                                         }
 
-                                        width: parent.width
-                                        height: pendingSection._presence * pendingSection.implicitHeight
-                                        opacity: pendingSection._presence
-                                        visible: pendingSection._presence > 0
-                                        spacing: Theme.space.rowGap
+                                        entry: seenRow._slot ? seenRow._slot.entry : root._emptyEntry
+                                        now: root._now
+                                        unread: false
+                                        ruled: root._seenLayout.ruled[seenRow.index] === true
+                                        alive: seenRow._slot ? !seenRow._slot.departing : false
+                                        animated: seenRow._animated
+                                        cursor: root.cursorActive && root.cursorSection === 0
+                                            && seenRow._slot && seenRow._slot.key === root._cursorKey
 
-                                        SectionLabel {
-                                            text: "PENDING"
-                                            count: NotificationService.pending.length
-                                        }
-
-                                        Item {
-                                            width: parent.width
-                                            height: root._pendingLayout.height
-
-                                            Repeater {
-                                                id: pendingRepeater
-                                                model: root._pendingSlots.length
-
-                                                delegate: NotificationRow {
-                                                    id: pendingRow
-                                                    required property int index
-                                                    readonly property var _slot: root._pendingSlots[pendingRow.index]
-                                                    // Gates every Behavior below: the
-                                                    // centre's own enter (Presence.qml)
-                                                    // covers the initial population, so a
-                                                    // row must not also animate until
-                                                    // that settles, and stops animating
-                                                    // again once the centre starts
-                                                    // closing.
-                                                    readonly property bool _animated: presence.settled && root.isOpen
-
-                                                    // Headroom slots (Toasts.qml:420 guards the same
-                                                    // shape) carry no entry and sit at y 0 under row 0;
-                                                    // without this an opacity-0 card there still
-                                                    // hit-tests and swallows row 0's clicks.
-                                                    visible: pendingRow._slot !== null
-                                                    width: parent.width
-                                                    y: root._pendingLayout.y[pendingRow.index] || 0
-                                                    Behavior on y {
-                                                        enabled: pendingRow._animated
-                                                        Anim {}
-                                                    }
-
-                                                    entry: pendingRow._slot ? pendingRow._slot.entry : root._emptyEntry
-                                                    now: root._now
-                                                    unread: true
-                                                    ruled: root._pendingLayout.ruled[pendingRow.index] === true
-                                                    alive: pendingRow._slot ? !pendingRow._slot.departing : false
-                                                    animated: pendingRow._animated
-                                                    cursor: root.cursorActive && root.cursorSection === 0
-                                                        && pendingRow._slot && pendingRow._slot.key === root._cursorKey
-
-                                                    onDismissRequested: NotificationService.dismissGroup(pendingRow._slot.entry.memberIds)
-                                                    onActivateRequested: root.activateRow(pendingRow._slot.entry)
-                                                    onActionRequested: key => NotificationService.invokeAction(pendingRow._slot.entry.id, key)
-                                                    onExited: root._clearPendingSlot(pendingRow.index)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Column {
-                                        id: seenSection
-                                        // Same scalar as the pending section above.
-                                        property real _presence: (root._seenRows.length > 0
-                                            || root._seenSlots.some(s => s && s.departing)) ? 1 : 0
-                                        Behavior on _presence {
-                                            enabled: presence.settled && root.isOpen
-                                            Anim {}
-                                        }
-
-                                        width: parent.width
-                                        // The gap between the two sections belongs to
-                                        // whichever of them is going: it shrinks with the
-                                        // pending section above while that collapses, and
-                                        // rides this section's own scale after.
-                                        topPadding: Theme.space.sectionGap * pendingSection._presence
-                                        height: seenSection._presence * seenSection.implicitHeight
-                                        opacity: seenSection._presence
-                                        visible: seenSection._presence > 0
-                                        spacing: Theme.space.rowGap
-
-                                        SectionLabel {
-                                            text: "SEEN"
-                                            count: NotificationService.past.length
-                                        }
-
-                                        Item {
-                                            width: parent.width
-                                            height: root._seenLayout.height
-
-                                            Repeater {
-                                                id: seenRepeater
-                                                model: root._seenSlots.length
-
-                                                delegate: NotificationRow {
-                                                    id: seenRow
-                                                    required property int index
-                                                    readonly property var _slot: root._seenSlots[seenRow.index]
-                                                    readonly property bool _animated: presence.settled && root.isOpen
-
-                                                    // Same guard as the pending section above.
-                                                    visible: seenRow._slot !== null
-                                                    width: parent.width
-                                                    y: root._seenLayout.y[seenRow.index] || 0
-                                                    Behavior on y {
-                                                        enabled: seenRow._animated
-                                                        Anim {}
-                                                    }
-
-                                                    entry: seenRow._slot ? seenRow._slot.entry : root._emptyEntry
-                                                    now: root._now
-                                                    unread: false
-                                                    ruled: root._seenLayout.ruled[seenRow.index] === true
-                                                    alive: seenRow._slot ? !seenRow._slot.departing : false
-                                                    animated: seenRow._animated
-                                                    cursor: root.cursorActive && root.cursorSection === 0
-                                                        && seenRow._slot && seenRow._slot.key === root._cursorKey
-
-                                                    onDismissRequested: NotificationService.dismissGroup(seenRow._slot.entry.memberIds)
-                                                    onActivateRequested: root.activateRow(seenRow._slot.entry)
-                                                    onActionRequested: key => NotificationService.invokeAction(seenRow._slot.entry.id, key)
-                                                    onExited: root._clearSeenSlot(seenRow.index)
-                                                }
-                                            }
-                                        }
+                                        onDismissRequested: NotificationService.dismissGroup(seenRow._slot.entry.memberIds)
+                                        onActivateRequested: root.activateRow(seenRow._slot.entry)
+                                        onActionRequested: key => NotificationService.invokeAction(seenRow._slot.entry.id, key)
+                                        onExited: root._clearSeenSlot(seenRow.index)
                                     }
                                 }
                             }
@@ -855,6 +723,21 @@ PanelWindow {
                 }
             }
         }
+    }
+
+    // The card's actual height (DESIGN.md §1 Motion, M51 D5): `_frame.height`
+    // above is the history's own target, tracked live only while the centre
+    // sits open at rest. close() (which seens every pending row, moving it
+    // into a different section) simply stops re-syncing this, so the next
+    // open snaps straight to that history's real height rather than morphing
+    // from the frame the centre closed on. Declared after the drawer so its
+    // presence's settled flip, sharing the isOpenChanged signal this ternary
+    // depends on, has already landed by the time this re-evaluates.
+    property real _morphHeight: root.isOpen ? root._frame.height : _morphHeight
+
+    Behavior on _morphHeight {
+        enabled: drawer.presence.settled && root.isOpen
+        Anim { id: morphHeight }
     }
 
     // Multi-monitor dismiss (M16 Task 7): a click on another screen closes

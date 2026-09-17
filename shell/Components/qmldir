@@ -11,6 +11,7 @@ CellRow CellRow.qml
 Cover Cover.qml
 Deform Deform.qml
 DismissTwins DismissTwins.qml
+Drawer Drawer.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
 Icon Icon.qml

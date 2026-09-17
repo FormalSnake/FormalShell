@@ -28,8 +28,9 @@ TestCase {
         }
     }
 
-    function make() {
-        var presence = createTemporaryObject(presenceComponent, testCase);
+    function make(edge) {
+        var presence = createTemporaryObject(presenceComponent, testCase,
+            edge === undefined ? {} : { edge: edge });
         var joint = createTemporaryObject(jointComponent, testCase,
             { owner: testCase, presence: presence });
         return { presence: presence, joint: joint };
@@ -90,5 +91,183 @@ TestCase {
         tryCompare(m.presence, "settled", true, 2000);
         compare(m.joint.attach, 0);
         compare(m.joint.nearInset, 7);
+    }
+
+    // --- Walls -----------------------------------------------------------
+    //
+    // A 400 wide card resting 12 off the end of a 1920 line, which is less
+    // than its own 20 radius: the far side is walled.
+    function walled(extra) {
+        var m = make();
+        m.joint.restLength = 400;
+        m.joint.outputAlong = 1920;
+        m.joint.across = 46;
+        m.joint.restAlong = 1508;
+        for (var key in extra)
+            m.joint[key] = extra[key];
+        return m;
+    }
+
+    // With the line ending at the output, the silhouette runs one radius
+    // past it, so nothing the deform does can open a sliver at the edge.
+    // The near end has room for its fillet and is left alone.
+    function test_a_side_with_no_room_for_its_fillet_is_walled() {
+        var j = walled({}).joint;
+        compare(j.wallStart, -1);
+        compare(j.wallEnd, 32);
+    }
+
+    // With a frame ring on that side the silhouette runs out to the ring's
+    // band instead, one border past the ring's own line, so the fill's lip
+    // lands on the row the ring gave up rather than short of it.
+    function test_a_line_ending_in_a_ring_runs_out_to_the_band() {
+        var j = walled({ insetEnd: 10, restAlong: 1498 }).joint;
+        compare(j.wallEnd, 13);
+    }
+
+    // The deform is pinned to the wall rather than to the card's middle, so
+    // the squash cannot pull the run-out off it. Nothing to pin to with no
+    // wall, or with one at either end.
+    function test_the_deform_pivots_on_the_wall_a_walled_card_runs_into() {
+        compare(walled({}).joint.alongPivot, 432);
+        compare(walled({ restAlong: 400 }).joint.alongPivot, null);
+        compare(walled({ restAlong: 12, restLength: 1896 }).joint.alongPivot, null);
+    }
+
+    // Room for the fillet, and a card hanging off another panel, are both
+    // left unwalled: a nested card's span is its owner's, not the screen's.
+    function test_a_card_with_room_or_an_owner_never_walls() {
+        compare(walled({ restAlong: 400 }).joint.wallEnd, -1);
+        compare(walled({ target: testCase }).joint.wallEnd, -1);
+    }
+
+    // On the way out a walled card publishes two joins: its own line's, the
+    // gap widened by the run out to the wall, and the wall's own, running
+    // from the line to the shape's far edge.
+    function test_a_walled_card_publishes_the_walls_own_join() {
+        var m = walled({});
+        m.presence.open = true;
+        tryVerify(function () { return m.joint.shapeDepth > 40; }, 1000);
+        var own = PanelRegistry.joinOn("top", "DP-1");
+        verify(own !== null);
+        compare(Math.round(own.x + own.width), Math.round(m.joint.along + m.joint.length + 32));
+        var wall = PanelRegistry.joinOn("right", "DP-1");
+        verify(wall !== null);
+        // The line is `depth` back from the card's own resting edge, and the
+        // shape runs from there to its far edge.
+        compare(wall.x, 39);
+        compare(Math.round(wall.width), Math.round(m.joint.shapeDepth));
+        compare(wall.reach, m.joint.reach);
+    }
+
+    // Clearing one edge leaves the other standing: the registry keys a join
+    // by owner AND edge, so a side that stops being walled mid-flight takes
+    // only its own entry down.
+    function test_clearing_one_edge_leaves_the_other_standing() {
+        var m = walled({});
+        m.presence.open = true;
+        tryVerify(function () { return PanelRegistry.joinOn("right", "DP-1") !== null; }, 1000);
+        m.joint.outputAlong = 4000;
+        compare(m.joint.wallEnd, -1);
+        compare(PanelRegistry.joinOn("right", "DP-1"), null);
+        verify(PanelRegistry.joinOn("top", "DP-1") !== null);
+    }
+
+    // At rest both go, and every line is whole again.
+    function test_a_walled_card_lets_go_of_both_lines() {
+        var m = walled({});
+        m.presence.open = true;
+        tryCompare(m.joint, "attach", 0, 2000);
+        compare(PanelRegistry.joinOn("top", "DP-1"), null);
+        compare(PanelRegistry.joinOn("right", "DP-1"), null);
+    }
+
+    // --- The nested bud ---------------------------------------------------
+    //
+    // A 400 wide card hanging off a 200 wide strip at 1500, both of them at
+    // radius 20: all the strip's far edge can give is 1520 to 1680, its own
+    // corners off either end.
+    function budded(extra, edge) {
+        var m = make(edge);
+        m.joint.along = 1400;
+        m.joint.target = testCase;
+        m.joint.targetAlong = 1500;
+        m.joint.targetLength = 200;
+        m.joint.targetRadius = 20;
+        for (var key in extra)
+            m.joint[key] = extra[key];
+        return m;
+    }
+
+    // Attached, the card's rect is pulled into that span with room for a
+    // fillet at either end, so the silhouette is the span exactly.
+    function test_a_nested_card_is_clamped_into_its_owners_span() {
+        var j = budded({}).joint;
+        compare(j.attach, 1);
+        compare(j.clampedAlong, 1540);
+        compare(j.clampedLength, 120);
+    }
+
+    // And widens to the card's own rect on the attach clock, the clip going
+    // with it: at rest there is nothing left to hold the contents to.
+    function test_the_bud_widens_to_the_cards_own_rect() {
+        var m = budded({});
+        m.presence.open = true;
+        tryVerify(function () {
+            return m.joint.clampedLength > 120 && m.joint.clampedLength < 400;
+        }, 2000);
+        tryCompare(m.joint, "attach", 0, 2000);
+        compare(m.joint.clampedAlong, 1400);
+        compare(m.joint.clampedLength, 400);
+        compare(m.joint.clip, null);
+    }
+
+    // The gap the owner opens is the clamped rect, not the card's own, so the
+    // two cannot land on different columns. Fillets and all it is the span.
+    function test_the_join_is_published_from_the_clamped_rect() {
+        var m = budded({});
+        m.presence.open = true;
+        tryVerify(function () { return m.joint.shapeDepth > 40; }, 1000);
+        compare(m.joint.attach, 1);
+        var j = PanelRegistry.joinOn("top", "DP-1", testCase);
+        verify(j !== null);
+        compare(j.x, m.joint.clampedAlong);
+        compare(j.width, m.joint.clampedLength);
+        compare(j.x - j.reach, 1520);
+        compare(j.x + j.width + j.reach, 1680);
+        // And the clip is that same range, so the contents come out of the
+        // bud rather than beside it.
+        compare(m.joint.clip.start, 1520);
+        compare(m.joint.clip.length, 160);
+    }
+
+    // A span with room for neither two fillets nor a sliver of card between
+    // them is no line to bud from: nothing is published, the card is never
+    // attached, and it is held to the owner's own span until it is out.
+    function test_a_span_too_short_to_bud_from_does_not_join() {
+        var m = budded({ targetLength: 60 });
+        compare(m.joint.attach, 0);
+        m.presence.open = true;
+        compare(m.joint.join, null);
+        compare(m.joint.clip.start, 1520);
+        compare(m.joint.clip.length, 20);
+        tryCompare(m.presence, "settled", true, 2000);
+        compare(m.joint.attach, 0);
+        compare(m.joint.clip, null);
+        compare(PanelRegistry.joinOn("top", "DP-1", testCase), null);
+    }
+
+    // Beside a vertical bar the span is the owner's y range, read off the
+    // same three numbers.
+    function test_a_bud_beside_a_vertical_bar_takes_the_owners_y_range() {
+        var m = budded({ edge: "left" }, "left");
+        compare(m.joint.clampedAlong, 1540);
+        compare(m.joint.clampedLength, 120);
+        m.presence.open = true;
+        tryVerify(function () { return m.joint.shapeDepth > 40; }, 1000);
+        var j = PanelRegistry.joinOn("left", "DP-1", testCase);
+        verify(j !== null);
+        compare(j.x, 1540);
+        compare(j.width, 120);
     }
 }

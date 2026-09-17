@@ -20,6 +20,18 @@
 // `corner: -radius` with any `near` this is a plain card with four rounded
 // corners, the same rect Card.qml draws.
 //
+// A side of the card resting closer than `radius` to where its line ends is
+// WALLED (M57 D2): there is no room for a fillet, so while the card is
+// attached its silhouette simply runs out to that wall. `walls` carries how
+// far past the card's own rect each end runs to reach it (negative for a
+// side with room), and the attach factor that run rides. A walled side's two
+// corners swap roles: the one on the line is square while the fill flows
+// into the wall and only ever carries the card's own convex rounding, and
+// the one on the far edge takes the signed radius, so the fillet is the near
+// one turned a quarter, centred one radius out from the far edge and one
+// radius in from the wall. That fillet is what the item grows by on its far
+// side, and only while a side is walled (`farOverhang`).
+//
 // The outline is built once in a canonical space and mapped onto the item:
 // `u` runs along the line (0 at the card's near end, `length` at its far
 // one), `v` inward from the line. `bottom` and `left` mirror that space
@@ -41,6 +53,24 @@ function filletRadius(radius, depth) {
     return Math.max(0, Math.min(radius, depth));
 }
 
+// How far the item runs past the card along the line at either end: enough
+// for a fillet, or for the run out to a wall when that is further. One
+// number for both ends, so the consumer still hangs the item at
+// `cardX - overhang` with `cardWidth + overhang * 2`; the room the unwalled
+// end does not use is simply never painted.
+function overhang(radius, wallStart, wallEnd) {
+    var r = radius > 0 ? radius : 0;
+    return Math.max(r, wallStart > 0 ? wallStart : 0, wallEnd > 0 ? wallEnd : 0);
+}
+
+// And how far it runs past the card's FAR edge: one radius while a side is
+// walled, for the concave fillet that corner carries against the wall, and
+// nothing otherwise, which is every consumer that never walls.
+function farOverhang(radius, wallStart, wallEnd) {
+    var r = radius > 0 ? radius : 0;
+    return (wallStart >= 0 || wallEnd >= 0) ? r : 0;
+}
+
 // The eight points of the outline, in the item's own coordinates, for a path
 // drawn `inset` in from the card's rect: 0 for the fill, half a stroke for
 // the border, so a 1px line lands on one pixel row the way a Rectangle's own
@@ -59,18 +89,42 @@ function filletRadius(radius, depth) {
 //   p4  p5  the far free corner
 //   p6  where the far near-corner leaves the card's far side
 //   p7  that corner's end on the near edge
+// On a walled side the same eight points describe the run out to the wall:
+// the side's own edge is the wall rather than the card's rect, the corner on
+// the line collapses to a square one, and the corner on the far edge becomes
+// the concave fillet against the wall. `arcs` is the four corner arcs in
+// path order with the radius and sweep each of them ended up with, so the
+// consumer never has to know which side was walled.
+//
 // `farGap`, `[start, end]` along the item's own bar axis or null, is a gap
 // in the far edge for a card hanging off THIS one (a tray item's menu off
 // the tray's second bar): `g[0]` and `g[1]` are where the far edge's stroke
 // stops and resumes, both on p4 when there is no gap.
-function outline(edge, width, height, radius, inset, near, corner, farGap) {
+//
+// `lip` holds the path off the line's own row, on top of whatever `inset`
+// and `near` already give: the fill takes `borderWidth` while the card is
+// attached, so the line's row carries the line's window alone rather than
+// two translucent fills, and the fill's fillet then shares its centre with
+// the stroke's (same centre, radius `r` against `r + borderWidth / 2`). The
+// stroke passes 0 and keeps its half-stroke inset. A wall that carries a
+// line of its own takes the same lip along its own edge, and the fillet
+// against it stays concentric for the same reason. The radii are capped off
+// the un-lipped depth so the two paths stay concentric on a shape shallower
+// than the radius, which also keeps the gap the line opens one number.
+function outline(edge, width, height, radius, inset, near, corner, farGap, lip, walls) {
     var r = radius > 0 ? radius : 0;
     var i = inset > 0 ? inset : 0;
     var n = near > 0 ? near : 0;
+    var ws = (walls && walls.start >= 0) ? walls.start : -1;
+    var we = (walls && walls.end >= 0) ? walls.end : -1;
+    var at = (walls && walls.attach > 0) ? Math.min(1, walls.attach) : 0;
+    var over = overhang(r, ws, we);
+    var lift = farOverhang(r, ws, we);
     var along = (vertical(edge) ? height : width);
-    var depth = (vertical(edge) ? width : height);
-    var length = Math.max(0, along - r * 2);
+    var depth = (vertical(edge) ? width : height) - lift;
+    var length = Math.max(0, along - over * 2);
     var body = Math.max(0, depth - n);
+    var l = Math.max(0, Math.min(lip > 0 ? lip : 0, body));
     // The three free corners are capped by the card they round. The fillets
     // are capped by the depth alone: a card coming out from under the line
     // is shallower than the join's radius for its first frames, and a
@@ -85,42 +139,51 @@ function outline(edge, width, height, radius, inset, near, corner, farGap) {
         ? (c > 0 ? filletRadius(c, body) + i : 0)
         : Math.max(0, Math.min(-c, Math.min(length, body) / 2) - i);
     var signed = concave ? rn : -rn;
+    // The walled side's corner on the line: square for as long as the near
+    // corners are concave, then rounding out convex with them.
+    var rq = concave ? 0 : rn;
     var far = depth - i;
-    var top = n + i;
-    var runStart = i + rc;
-    var runEnd = length - i - rc;
+    var top = n + i + l;
+    // Where a walled side's own edge is drawn: out on the wall while
+    // attached, back on the card's rect once it has let go, and held off the
+    // wall's own line row by the same inset and lip the near edge takes.
+    var uStart = ws >= 0 ? i - ws * at + l : i;
+    var uEnd = we >= 0 ? length - i + we * at - l : length - i;
+    var runStart = ws >= 0 ? uStart + rn : i + rc;
+    var runEnd = we >= 0 ? uEnd - rn : length - i - rc;
     var ga = runEnd;
     var gb = runEnd;
     if (farGap) {
-        ga = Math.max(runStart, Math.min(runEnd, farGap[0] - r));
-        gb = Math.max(ga, Math.min(runEnd, farGap[1] - r));
+        ga = Math.max(runStart, Math.min(runEnd, farGap[0] - over));
+        gb = Math.max(ga, Math.min(runEnd, farGap[1] - over));
     }
-    var canonical = [
-        [i - signed, top],
-        [i, top + rn],
-        [i, far - rc],
-        [i + rc, far],
-        [length - i - rc, far],
-        [length - i, far - rc],
-        [length - i, top + rn],
-        [length - i + signed, top]
-    ];
+    var canonical = (ws >= 0
+        ? [[uStart + rq, top], [uStart, top + rq], [uStart, far + signed], [runStart, far]]
+        : [[i - signed, top], [i, top + rn], [i, far - rc], [runStart, far]]
+    ).concat(we >= 0
+        ? [[runEnd, far], [uEnd, far + signed], [uEnd, top + rq], [uEnd - rq, top]]
+        : [[runEnd, far], [length - i, far - rc], [length - i, top + rn], [length - i + signed, top]]);
     var p = [];
     for (var k = 0; k < canonical.length; k++)
-        p.push(_map(edge, width, height, r, canonical[k][0], canonical[k][1]));
+        p.push(_map(edge, width, height, over, canonical[k][0], canonical[k][1]));
     return {
         p: p,
-        g: [_map(edge, width, height, r, ga, far), _map(edge, width, height, r, gb, far)],
-        overhang: r,
-        convexRadius: rc,
-        nearRadius: rn,
-        nearConcave: concave,
+        g: [_map(edge, width, height, over, ga, far), _map(edge, width, height, over, gb, far)],
+        arcs: [
+            { r: ws >= 0 ? rq : rn, concave: ws >= 0 ? false : concave },
+            { r: ws >= 0 ? rn : rc, concave: ws >= 0 ? concave : false },
+            { r: we >= 0 ? rn : rc, concave: we >= 0 ? concave : false },
+            { r: we >= 0 ? rq : rn, concave: we >= 0 ? false : concave }
+        ],
+        walled: [ws >= 0, we >= 0],
+        overhang: over,
+        farOverhang: lift,
         mirrored: mirrored(edge)
     };
 }
 
-// Canonical (u, v) onto the item. `over` is the near fillet's room along the
-// line, which is where the card's own near end starts.
+// Canonical (u, v) onto the item. `over` is the item's room along the line
+// outside the card's own rect, which is where the card's near end starts.
 function _map(edge, width, height, over, u, v) {
     if (edge === "bottom")
         return { x: over + u, y: height - v };

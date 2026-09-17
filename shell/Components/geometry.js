@@ -30,12 +30,16 @@ function _vertical(barPosition) {
 // out of the trailing side, so nothing the eye was on moves. The far clamp
 // still wins, since a frame held past the screen's own padding would run off
 // the display.
+//
+// The result is a whole pixel: a cell whose centre falls on a half puts the
+// card's two sides, and with them the two ends of the gap the line opens,
+// half across a pixel, which draws the join's own seam twice over.
 function frameAlong(anchor, screenExtent, frameExtent, insetStart, insetEnd, screenPadding, holdWidth) {
     var near = insetStart + screenPadding;
     var far = screenExtent - insetEnd - frameExtent - screenPadding;
     var centredBy = holdWidth > 0 ? holdWidth : frameExtent;
     var at = anchor >= 0 ? anchor - centredBy / 2 : far;
-    return Math.max(near, Math.min(at, Math.max(near, far)));
+    return Math.round(Math.max(near, Math.min(at, Math.max(near, far))));
 }
 
 // Top or bottom bar: x along the bar, y off its inner edge. A vertical bar
@@ -80,29 +84,4 @@ function maxContentHeight(maxFrame, panelPadding, headerHeight, headerGap) {
 // capped.
 function frameHeight(contentHeight, maxContent, panelPadding, headerHeight, headerGap) {
     return panelPadding * 2 + headerHeight + headerGap + Math.min(contentHeight, maxContent);
-}
-
-// The band a panel's card may paint in (M53 addendum 2026-09-09, the drawer
-// open): from the bar's inner line, the edge every card hangs off, to the far
-// edge of the output. A card displaced behind that line by the emerge is cut
-// at it, so it comes out from under the bar rather than crossing over it. The
-// line is the card's own resting edge, `barMargin` clear of the bar, and
-// `ownerShift` moves it out to the owner's inner edge for a panel hanging off
-// another panel.
-function clipBand(barPosition, screenWidth, screenHeight, insets, barMargin, ownerShift) {
-    var shift = barMargin + ownerShift;
-    if (barPosition === "bottom") {
-        var bottom = Math.max(0, screenHeight - insets.bottom - shift);
-        return { x: 0, y: 0, width: screenWidth, height: bottom };
-    }
-    if (barPosition === "left") {
-        var left = insets.left + shift;
-        return { x: left, y: 0, width: Math.max(0, screenWidth - left), height: screenHeight };
-    }
-    if (barPosition === "right") {
-        var right = Math.max(0, screenWidth - insets.right - shift);
-        return { x: 0, y: 0, width: right, height: screenHeight };
-    }
-    var top = insets.top + shift;
-    return { x: 0, y: top, width: screenWidth, height: Math.max(0, screenHeight - top) };
 }
