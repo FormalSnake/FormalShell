@@ -172,6 +172,16 @@ column as the width morphs (a panel hung off a right-region cell grows to
 the left), the morph holds the column's leading edge still and the pane
 opens out of its trailing side. Cursor sections keep their order.
 
+**P14 Lyrics load in the background** (owner, 2026-09-17: "it would also be
+nice if the lyrics load in the background to prevent jumping on clicking
+the panel"). M55's D3 is reversed: a lookup runs on the track change itself,
+panel open or closed, so the panel opens at its final width with the pane
+already in it. `LyricsService.panelWants` and the panel's `Binding` go. A
+track has to hold for one second before its lookup starts, so skipping
+through a queue costs nothing; the session map and the disk cache make
+every later open free. `media.lyrics` false still stops everything. The
+per-frame position clock stays gated on the panel being open.
+
 ## Verification
 
 - `tests/tst_lyrics_model.qml`: kopuz's own test cases for P5 ported by name
