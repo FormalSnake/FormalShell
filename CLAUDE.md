@@ -192,6 +192,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   frame equal to the audio card's own rest frame over the band under the bar.
 - `panel_keys.sh` `--panel-keys`: row-level keyboard navigation inside a
   panel, driven by real keystrokes rather than the IPC shortcuts.
+- `panel_morph.sh` `--panel-morph`: a card whose content changes size
+  travels to the new one, read off its far edge against the two rests: the
+  Wi-Fi list collapsing under a settled card, the same collapse landing two
+  seconds into a five-second emerge, and the now-playing card growing from
+  NO PLAYER to a real track.
 - `picker.sh` `--picker`: the wallpaper grid, the pick becoming the
   wallpaper, the select token round trip, the Dark/Light variants, and
   ThumbnailService's prerendered cache backing every cell (the cache
