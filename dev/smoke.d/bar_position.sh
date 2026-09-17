@@ -17,6 +17,17 @@
 # off the bar's inner edge for the run's own frame, with `panel state`
 # agreeing it is the open one. This leg owns the `bar` key, so it does not
 # combine with --chevron or --bar-layout, which write the same key.
+#
+# It also RIDES a leg that photographs its own frames on the moved strip
+# (--join, --menu-emerge, --panel-morph), which is the only way those legs
+# reach an edge other than the top without a copy of each of them per
+# position. Riding, this leg pins the edge and nothing else: the layout is
+# the rider's own or the default, the chevron and the panel open (which would
+# land in the middle of somebody else's sampling) are left undriven, and the
+# one claim left is the one the frames cannot make, the strip's own box on
+# the edge it was asked for. A rider carrying its own `bar` key takes the
+# position into it, since two top-level `bar` keys leave only the later one
+# standing.
 leg_bar_position_flag="--bar-position <edge>"
 leg_bar_position_order=185
 leg_bar_position_needs="jq"
@@ -30,6 +41,17 @@ bar_position_collapsed_path="$shot_dir/bar-position-collapsed.png"
 bar_position_expanded_path="$shot_dir/bar-position-expanded.png"
 bar_position_panel_open_path="$shot_dir/bar-position-panel-open.txt"
 bar_position_panel_state_path="$shot_dir/bar-position-panel-state.txt"
+bar_position_dump_path="$shot_dir/bar-position-dump.json"
+
+# A rider owning the `bar` key writes the position itself; every other rider
+# takes it from here and the default layout with it.
+bar_position_layout_owner() {
+  leg_on join
+}
+
+bar_position_rider() {
+  bar_position_layout_owner || leg_on menu_emerge || leg_on panel_morph
+}
 
 leg_bar_position_validate() {
   case "$(leg_arg bar_position)" in
@@ -46,7 +68,14 @@ leg_bar_position_validate() {
 }
 
 leg_bar_position_fixture() {
-    settings_fragment ', "bar": {"position": "'"$(leg_arg bar_position)"'", "layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "monitor", "keyboardLayout", "display", "github", "usage", "tailscale", "systemUpdate", "clock", "chevron", "battery", "audio", "network"]}}'
+  if bar_position_layout_owner; then
+    return 0
+  fi
+  if bar_position_rider; then
+    settings_fragment ', "bar": {"position": "'"$(leg_arg bar_position)"'"}'
+    return 0
+  fi
+  settings_fragment ', "bar": {"position": "'"$(leg_arg bar_position)"'", "layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "monitor", "keyboardLayout", "display", "github", "usage", "tailscale", "systemUpdate", "clock", "chevron", "battery", "audio", "network"]}}'
 }
 
 leg_bar_position_timing() {
@@ -56,7 +85,21 @@ leg_bar_position_timing() {
 }
 
 leg_bar_position_drive() {
-  local script="$shot_dir/bar-position-drive.sh"
+  local script="$shot_dir/bar-position-drive.sh" own=""
+  if ! bar_position_rider; then
+    own=$(cat <<EOS
+"$grim_bin" "$bar_position_collapsed_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_collapsed_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call bar chevron expand > "$bar_position_expand_reply_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_expanded_path" 2>&1
+"$grim_bin" "$bar_position_expanded_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call panel open audio > "$bar_position_panel_open_path" 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call panel state > "$bar_position_panel_state_path" 2>&1
+EOS
+)
+  fi
   write_script "$script" <<EOS
 #!/usr/bin/env bash
 # Waits for the shell to have read settings.json rather than sleeping a
@@ -65,28 +108,21 @@ leg_bar_position_drive() {
 # first map lands somewhere either side of five seconds on this rig, so a
 # bare sleep read either an empty layer list or a top bar depending on how
 # loaded the host was, and the assert below called both a bar on the wrong
-# edge. A bar chevron status answering with the governed names is the
-# config having landed, which is the same edit that moves the strip; the
-# beat after it is the one frame the move takes.
+# edge. The position in a debug dump is that same edit having landed,
+# whatever layout the run carries; the beat after it is the one frame the
+# move takes.
 #
 # No backticks in here: this script is written through an unquoted heredoc,
 # so a quoted identifier in a comment runs as a command.
 for _ in \$(seq 1 40); do
-  "$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_collapsed_path" 2>&1
-  grep -q '"collapses":\[' "$bar_position_status_collapsed_path" && break
+  "$qs_bin" ipc -p "$shell_path" call debug dump > "$bar_position_dump_path" 2>&1
+  grep -q '"barPosition":"$(leg_arg bar_position)"' "$bar_position_dump_path" && break
   sleep 0.5
 done
 sleep 1
 "$hyprctl_bin" -j layers > "$bar_position_layers_path" 2>&1
 "$hyprctl_bin" -j monitors > "$bar_position_monitors_path" 2>&1
-"$grim_bin" "$bar_position_collapsed_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call bar chevron expand > "$bar_position_expand_reply_path" 2>&1
-sleep 2
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_expanded_path" 2>&1
-"$grim_bin" "$bar_position_expanded_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open audio > "$bar_position_panel_open_path" 2>&1
-sleep 2
-"$qs_bin" ipc -p "$shell_path" call panel state > "$bar_position_panel_state_path" 2>&1
+$own
 EOS
   echo "exec-once = bash $script"
 }
@@ -138,6 +174,11 @@ leg_bar_position_assert() {
   case "$edge" in left|right) thickness=$bw ;; framed) thickness=0 ;; esac
   if [ "$thickness" -gt 68 ]; then
     fail "bar strip is $thickness thick, which is not a cell row plus its margin band"
+  fi
+
+  if bar_position_rider; then
+    echo "SMOKE_BAR_POSITION_RIDER the edge alone: the layout, the chevron and the panel belong to the leg being ridden"
+    return 0
   fi
 
   # What the chevron governs, and whether its own second bar is up: since the

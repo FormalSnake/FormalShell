@@ -725,19 +725,18 @@ PanelWindow {
         }
     }
 
-    // The card's actual height (DESIGN.md §1 Motion, M51 D5): `_frame.height`
-    // above is the history's own target, tracked live only while the centre
-    // sits open at rest. close() (which seens every pending row, moving it
-    // into a different section) simply stops re-syncing this, so the next
-    // open snaps straight to that history's real height rather than morphing
-    // from the frame the centre closed on. Declared after the drawer so its
-    // presence's settled flip, sharing the isOpenChanged signal this ternary
-    // depends on, has already landed by the time this re-evaluates.
-    property real _morphHeight: root.isOpen ? root._frame.height : _morphHeight
+    // The card's actual height (Components/SizeMorph.qml, M57 D7):
+    // `_frame.height` above is the history's own target. close() seens every
+    // pending row, moving it into a different section, and the freeze is what
+    // keeps that off the leaving card: the next open lands on that history's
+    // real height rather than morphing from the frame the centre closed on.
+    readonly property real _morphHeight: morphHeight.value
 
-    Behavior on _morphHeight {
-        enabled: drawer.presence.settled && root.isOpen
-        Anim { id: morphHeight }
+    SizeMorph {
+        id: morphHeight
+        target: root._frame.height
+        open: root.isOpen
+        mapped: root.backingWindowVisible
     }
 
     // Multi-monitor dismiss (M16 Task 7): a click on another screen closes

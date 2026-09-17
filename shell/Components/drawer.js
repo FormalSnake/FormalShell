@@ -101,11 +101,11 @@ function clipBand(edge, at, screenWidth, screenHeight) {
     return { x: 0, y: at, width: screenWidth, height: Math.max(0, screenHeight - at) };
 }
 
-// And what a card budding out of another surface's edge may paint on ALONG
-// the line (M57 D3, Components/Joint.qml's `clip`): the band above, narrowed
-// to the silhouette's own range, so a card clamped into its owner's span is
-// revealed by the widening rather than drawn beside it. `range` null, which
-// is every card that is not budding, leaves the band whole.
+// And what a card with no room to bud at all may paint on ALONG the line
+// (M57 D3, Components/Joint.qml's `spanClip`): the band above, narrowed to
+// the owner's own span, so a plain card wider than the edge it comes out from
+// under never appears beside it. `range` null, which is every other card,
+// leaves the band whole.
 function clipAlong(band, edge, range) {
     if (!range)
         return band;
@@ -117,4 +117,23 @@ function clipAlong(band, edge, range) {
     if (down)
         return { x: band.x, y: start, width: band.width, height: extent };
     return { x: start, y: band.y, width: extent, height: band.height };
+}
+
+// And the range a budding card's CONTENTS are held to, in the card's own
+// coordinates (M57 D3, Components/Joint.qml's `budClip`): the bud the
+// silhouette is clamped into, held to the card's rect. This one is applied
+// inside the deform rather than at the line, so it squashes and stretches
+// with the card: a band cut from the undeformed rect outside the matrix is
+// one the deform carries the card past on a fast widening, and the overrun
+// side loses its border for as long as that lasts. `range` null, which is
+// every card that is not budding, is the card's whole rect.
+function budRect(edge, rect, range) {
+    if (!range)
+        return { x: 0, y: 0, width: rect.width, height: rect.height };
+    var lo = alongStart(edge, rect);
+    var start = Math.max(0, range.start - lo);
+    var extent = Math.max(0, Math.min(alongLength(edge, rect), range.start + range.length - lo) - start);
+    if (vertical(edge))
+        return { x: 0, y: start, width: rect.width, height: extent };
+    return { x: start, y: 0, width: extent, height: rect.height };
 }

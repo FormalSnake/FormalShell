@@ -61,8 +61,10 @@ config); the shell itself never blurs outside the lyrics pane's own depth
 of field and sung-chunk glow (owner, 2026-09-17, gated behind
 `media.lyricsBlur`). A translucent card with nothing
 blurred behind it reads as a rendering fault rather than as depth, so the
-two travel together: a surface is either on that list or opaque. Toasts, OSD
-and lock are the opaque ones. The three modal namespaces (`formalshell:menu`,
+two travel together: a surface is either on that list or opaque. Toasts and
+lock are the opaque ones; the OSD joined the blurred list when it started
+budding off the bottom line (M57 D8), since one silhouette across two windows
+cannot be opaque on one side of the seam. The three modal namespaces (`formalshell:menu`,
 `formalshell:polkit`, `formalshell:plugin-overlay`) each cover the whole
 output and carry a plain black 0.5 scrim, so they take `ignore_alpha = 0.6`
 rather than 0.2: the scrim falls under the mark and only darkens the desktop,
@@ -233,7 +235,13 @@ own, since the card's own clocks already carry that rect and a second one
 left the line lagging the shoulders it has to meet. `Shoulders` draws the
 card with that edge left open and a concave quarter fillet outside each of
 its two corners, running out to where the line resumes, so the card grows
-out of the bar rather than parking against it. The surface publishes the
+out of the bar rather than parking against it. Attached, the fill starts a
+border's width in from the line rather than on it (M57 D1): that row belongs
+to the line's own window, which paints it already, and a second translucent
+fill over it read as a seam across the whole gap. The fill's fillet then
+shares its centre with the stroke's, concentric at the join's own radius
+against that radius plus half a border, rather than the two arcs sitting a
+half pixel apart. The surface publishes the
 rect into `PanelRegistry.joins` (the line's edge, the card's x and width
 along it, the reach, the screen) off its frame's live position, so a size
 morph and a handoff carry the gap with them frame by frame; that rect is
@@ -243,9 +251,11 @@ is a plain card against a whole line. The panels take `Shoulders`, and the
 chevron's and the tray's second bars with them, on a framed screen as on a
 bare one: the ring's hairline runs the bar's edge there and opens the same
 gap; the notification centre takes it against the ring's far side or a
-right bar. Everything that meets no line keeps `Card`: the OSD sits a
-`screenPadding` clear of the output's own edge, and the launcher, the
-tooltip and the modals float with nothing for a fillet to run out to.
+right bar. The OSD pill takes it too against the bottom line (M57 D8), a
+`screenPadding` off whatever that edge carries; on a bare bottom edge there
+is no line to join and the pill comes out from behind the output. Everything
+that meets no line keeps `Card`: the toasts, the tooltip and the modals float
+with nothing for a fillet to run out to.
 
 A card that arrives squashes into the edge it came from (`Deform`, amended
 2026-09-09). Its scene position and size are sampled every frame, the
@@ -283,17 +293,43 @@ sharp corners and rounding out the other way, the near edge pulling off the
 line to its resting margin with its border coming up, and the line's gap
 closing in from both ends under the card. At rest a panel is a plain `Card`
 one `barMargin` off a whole line; a close runs the whole thing backwards,
-the card reattaching as it slides back under. A panel takes its line from
-the bar, framed or bare, and a panel hanging off another panel (a tray
-item's menu off the tray's second bar) takes that panel's far edge, which
-opens the same gap in its own border; the notification centre takes the
+the card reattaching as it slides back under.
+
+A side of the card resting closer than the join's own radius to where its
+line ends has no room for a fillet (M57 D2, walls): attached, the silhouette
+simply runs out to that wall instead, taking the corner the wall's own line
+ends in there (a frame ring's own radius; square against the output's bare
+edge) and pulling back off the wall on the same attach clock the near edge
+pulls off the line by. A walled side publishes a second join on the wall's
+own edge, so a frame ring opens its line there too. Which sides are walled
+is decided off the card's resting rect, never its live one, so a card
+mid-emerge or mid-handoff never walls and unwalls itself as it travels.
+
+A panel takes its line from the bar, framed or bare. A panel hanging off
+another panel (a tray item's menu off the tray's second bar) takes that
+panel's far edge instead, which opens the same gap in its own border, and
+buds from what that edge can give it (M57 D3, the nested bud): the
+silhouette's rect along the line is clamped into the edge less its own
+corners at either end, widening to the card's own rect on the attach clock,
+so a card wider than the strip it hangs off never hangs its fillets past
+either end of it. A span too tight for two fillets and a sliver of card
+leaves it joining nothing, coming out plain from under the owner's edge
+instead. The notification centre takes the
 frame ring's far side, or the bar's own hairline when the bar is on the
 right, and comes out from behind the output's edge as before when there is
 neither. A card that floats in the middle of the output does the same thing
 off the top line (M57 D5): the launcher, the polkit request and a plugin's
 overlay all take the top bar's hairline, the frame ring's top line, or the
 output's own top edge with neither, and the depth back to it is hundreds of
-pixels rather than a panel's handful. No fade, no zoom. The card's contents
+pixels rather than a panel's handful. No fade, no zoom. The let-go mark and
+the deform's own squash both scale back by how deep that line lies against
+the card's own size across it, so a card hundreds of pixels down the output
+releases earlier and squashes no harder than a panel a handful off the bar:
+nothing about a deep drawer runs any slower for how far it has to travel.
+Its scrim reads the same drawer's own pose rather than a clock of its own
+(`Components/Scrim.qml`): plain black at 0.5, except over the band the
+card's own line belongs to, whose share rides `1 - attach`, so the card
+buds off a lit bar and the bar dims only as the card lets go of it. The card's contents
 are laid out at its settled size from the first frame and the card's own cut
 is what reveals them, so a level under the launcher's rule is uncovered by
 the far edge rather than pushed into place; that level takes no fade of its
@@ -305,6 +341,15 @@ recipe, opacity on `effects` and scale from 0.97 on `spatialFast` from
 centre. Every one of them waits for its window to be on screen before it
 starts: a compositor can spend most of an enter putting the surface up, and
 an animation that ran behind it would land already at rest.
+
+One component owns this whole recipe (`Components/Drawer.qml`, M57 D4): a
+consumer states only the edge it comes out of and its resting rect, and the
+drawer derives where that edge's line lies, the depth back to it, which
+sides are walled, the span an owner's edge can give and the deform's two
+pivots, assembling `Presence`, `Joint`, `Deform` and `Shoulders` underneath.
+Panel, the notification centre, the launcher, the polkit dialog, a plugin's
+overlay and the OSD all sit on it, so a surface that moves, resizes or
+changes edge at runtime is followed without being told.
 
 Opening a panel while another is open is a handoff, and it runs on one clock
 (amended 2026-09-09). The new card is drawn on the old card's rect, the old
@@ -324,7 +369,12 @@ while it is on screen animates the change: a positioner carries
 container whose size follows animated children rides their clock. Sizes
 follow content live on `spatial`, a panel whose section count changes and the
 launcher's list under a query alike, and a closing surface freezes its size
-first. Bar cells enter and leave through their own presence while the strip's
+first. One component owns that rule wherever a card's own width or height is
+the thing changing (`Components/SizeMorph.qml`, M57 D7): the target tracked
+while open, frozen on close, and armed off the surface being mapped rather
+than its enter having settled, so content landing a tick after the open (a
+Wi-Fi scan, a keyed row sync) retargets the running clock instead of jumping
+through a gate a settled surface would already have closed. Bar cells enter and leave through their own presence while the strip's
 rails carry the neighbours. The launcher's rows keep their identity across a
 query, so a re-rank moves rows instead of rebuilding them; only a level
 change or a diff touching more than 64 rows resets the list.
@@ -411,6 +461,7 @@ thing.
 | `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding`; the surface's own frame, never nested | none |
 | `Shoulders` | the same frame with the anchored edge left open and a concave fillet outside each of its two corners, running out to the line it came out of (§1 Motion), and, at `attach` 0, a plain `Card` again: what every surface coming out of a line draws instead of `Card` | attached, letting go, free |
 | `Joint` | the join controller beside a `Presence` (§1 Motion): the silhouette's depth from the line, the let-go clock, the deform's pivot, and the gap it publishes to the line | attached, released |
+| `Drawer` | one edge-anchored card recipe (§1 Motion, M57 D4): a consumer states its edge and resting rect, this derives the line, the depth, the walls, the nested bud's span and the deform's two pivots, and assembles `Presence`, `Joint`, `Deform` and `Shoulders` underneath; Panel, the notification centre, the launcher, polkit, a plugin's overlay and the OSD all sit on it | attached, letting go, free |
 | `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
 | `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
@@ -425,7 +476,9 @@ thing.
 | `CAnim` | the colour half of it, always `effectsSlow`: every `Behavior on color` and `border.color` | none |
 | `Deform` | the velocity squash (§1 Motion): samples `target` each frame and exposes the `matrix4x4` its consumer hands to a `Matrix4x4` transform, `amount` per surface | running, at rest (identity, frame loop stopped) |
 | `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge travel or its extent (`morph`) to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
-| `Panel` | the popout window: `Shoulders` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
+| `SizeMorph` | one size-morph recipe (§1 Motion, M57 D7): tracks a content size live while open, freezes it on close, arms off the surface being `mapped` rather than `settled`, and sits out under `held` while a surface like a second bar is still measuring its own cells | tracking, frozen, `held` |
+| `Scrim` | the modal backdrop (§1 Motion): plain black at 0.5 on a drawer's own pose, its share over the line's own band riding `1 - attach` so a card buds off a lit bar and dims it only as it lets go | attached, letting go, free |
+| `Panel` | the popout window: a `Drawer` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
 
 ## 3. Surface rules
 
@@ -577,7 +630,8 @@ carry a 6px `primary` dot. Its rows are multi-line, so a `Separator` runs
 between them (§1's ladder, rung 4) and the two tiers stay `SectionLabel`
 sections `sectionGap` apart.
 
-**OSD.** `Card` pill bottom-centre: `Icon`, `Track`, tabular percentage.
+**OSD.** A pill bottom-centre, budding off the bottom line: `Icon`, `Track`,
+tabular percentage.
 
 **Lock, greeter.** Wallpaper, 0.5 scrim, `displayLarge` x3 clock, date as a
 `SectionLabel`, one `Input`. Wrong password: `Input` error state.

@@ -105,7 +105,11 @@ Item {
         id: corner
         required property var seg
         fillColor: "transparent"
-        strokeColor: Theme.color.border
+        // Given up while a joined card's silhouette covers the arc
+        // (Frame/geometry.js's `gone`): the card's own corner draws that
+        // stretch of the cut-out's edge, and this one over it would be a line
+        // across the card's fill.
+        strokeColor: corner.seg.gone ? "transparent" : Theme.color.border
         strokeWidth: Theme.borderWidth
         startX: corner.seg.x1
         startY: corner.seg.y1

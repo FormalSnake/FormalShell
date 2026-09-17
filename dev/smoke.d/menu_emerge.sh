@@ -43,6 +43,13 @@
 # a `popupWidthMenu` card centred on the output with its top at 30% of it is
 # what the tokens and Menu.qml's `_topFraction` say, so a token change has to
 # be a deliberate edit here too (tst_panel_geometry.qml draws the same line).
+#
+# Which row the line itself is on is the one number that is neither pinned nor
+# measured: it comes out of a `debug dump`, so the same probes read a top
+# bar's last row, a frame ring's top band on a run carrying `--frame` or
+# `--bar-position <edge>`, and, on a top edge with neither, nothing at all. A
+# card with no line to bud off has no claim to make here, so that last case
+# prints as skipped and keeps its frames.
 leg_menu_emerge_flag="--menu-emerge"
 leg_menu_emerge_order=21
 leg_menu_emerge_needs="convert jq"
@@ -51,6 +58,7 @@ menu_emerge_scale_path="$shot_dir/menu-emerge-scale.txt"
 menu_emerge_summon_path="$shot_dir/menu-emerge-summon.txt"
 menu_emerge_close_path="$shot_dir/menu-emerge-close.txt"
 menu_emerge_status_path="$shot_dir/menu-emerge-status.json"
+menu_emerge_dump_path="$shot_dir/menu-emerge-dump.json"
 menu_emerge_t0_path="$shot_dir/menu-emerge-t0.txt"
 menu_emerge_stamp_path="$shot_dir/menu-emerge-stamps.txt"
 
@@ -74,23 +82,26 @@ menu_emerge_frame_gap=0.09
 menu_emerge_scale=1000
 
 # The card's own geometry (DESIGN.md §1 Space, Menu.qml's `_topFraction`):
-# `popupWidthMenu` 560 centred on a 1920 output, top at 30% of 1080. The bar is
-# 40 rows on this rig, so the line it buds off is the last of them.
+# `popupWidthMenu` 560 centred on a 1920 output, top at 30% of 1080. Neither
+# term moves with the bar's edge or the frame.
 menu_emerge_card_x=680
 menu_emerge_card_y=324
 menu_emerge_card_w=560
+# Read off the dump in the assert; the top bar's own last row is what it comes
+# to on a default run.
 menu_emerge_line_row=39
 
-# A bar pixel clear of the join: the card spans columns 680-1240 and its
-# fillets reach a `radiusXl` past either end, so the output's own corner is
-# nowhere near it and carries nothing that ticks.
-menu_emerge_bar_box="8x8+2+2"
+# A pixel of the line's own band clear of the join: the card spans columns
+# 680-1240 and its fillets reach a `radiusXl` past either end, so the output's
+# own corner is nowhere near it and carries nothing that ticks. Four rows, so
+# the probe stays inside a frame ring's band as well as a bar's.
+menu_emerge_bar_box="8x4+2+2"
 # And a desktop one, well below the card, for the other half of the same claim.
 menu_emerge_desk_box="8x8+2+1040"
 
 leg_menu_emerge_validate() {
   local other
-  for other in bar_position center clipboard clipssh clipssh_image emoji fullscreen \
+  for other in center clipboard clipssh clipssh_image emoji fullscreen \
     gallery gpu keybinds lock menu monitor notify picker plugins polkit processes \
     screensaver share toggles tray wallpaper; do
     if leg_on "$other"; then
@@ -111,6 +122,7 @@ leg_menu_emerge_drive() {
 call() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
 sleep 4
 call debug motionScale $menu_emerge_scale > "$menu_emerge_scale_path" 2>&1
+call debug dump > "$menu_emerge_dump_path" 2>&1
 sleep 1
 # The same output with the launcher closed: what the bar's band and the
 # desktop under it read as before any scrim is drawn over either.
@@ -239,6 +251,23 @@ leg_menu_emerge_assert() {
   [ "$rest_bottom" -gt $((menu_emerge_card_y + 200)) ] || fail \
     "the rest frame's card reaches only row $rest_bottom down its own centre column: it is not the card the tokens describe"
   echo "SMOKE_MENU_EMERGE_RESTING card ${menu_emerge_card_w}x$((rest_bottom - menu_emerge_card_y))+${menu_emerge_card_x}+${menu_emerge_card_y}"
+
+  # Where the line the card buds off actually is: the last row of whatever
+  # band the top edge carries, a bar's or a frame ring's, off the shell's own
+  # numbers. Nothing there is nothing to bud off, and the claims below have
+  # no subject.
+  local inset
+  inset=$("$jq_bin" -r '.theme.edgeInset.top | floor' "$menu_emerge_dump_path" 2>/dev/null)
+  [ -n "$inset" ] && [ "$inset" != "null" ] || fail \
+    "no top inset in the dump at $menu_emerge_dump_path: $(head -c 400 "$menu_emerge_dump_path" 2>/dev/null)"
+  menu_emerge_line_row=$((inset - 1))
+  echo "SMOKE_MENU_EMERGE_LINE row $menu_emerge_line_row (top inset $inset)"
+  if [ "$inset" -le 0 ]; then
+    for f in BUD LIT_BAR PLAIN; do
+      echo "SMOKE_MENU_EMERGE_$f skipped (layout): this output's top edge carries no bar and no frame ring, so there is no line to bud off"
+    done
+    return 0
+  fi
 
   # The two probes the travel is read with, and the guard that says they
   # measure something: neither may read as covered with the launcher closed.

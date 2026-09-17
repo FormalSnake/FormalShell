@@ -170,6 +170,48 @@ TestCase {
         compare(Drawer.clipAlong(b, "top", null).height, b.height);
     }
 
+    // --- The bud the contents are held to ---------------------------------
+    //
+    // The same range again, in the card's own coordinates: this one is
+    // applied under the deform, where it stretches with the card instead of
+    // cutting the border off a shape the deform has carried past it.
+
+    function test_a_bud_holds_the_contents_to_its_own_range() {
+        var rect = Qt.rect(1400, 46, 400, 300);
+        var bud = Drawer.budRect("top", rect, { start: 1520, length: 160 });
+        compare(bud.x, 120);
+        compare(bud.width, 160);
+        compare(bud.y, 0);
+        compare(bud.height, 300);
+    }
+
+    // A bud reaching past the card is the fillets' own reach, which lies
+    // outside it: the contents stop at the card either way.
+    function test_a_bud_is_held_to_the_cards_own_rect() {
+        var rect = Qt.rect(1400, 46, 400, 300);
+        var bud = Drawer.budRect("top", rect, { start: 1380, length: 500 });
+        compare(bud.x, 0);
+        compare(bud.width, 400);
+    }
+
+    function test_a_bud_beside_a_vertical_bar_runs_down_the_card() {
+        var rect = Qt.rect(46, 200, 360, 400);
+        var bud = Drawer.budRect("left", rect, { start: 260, length: 100 });
+        compare(bud.y, 60);
+        compare(bud.height, 100);
+        compare(bud.x, 0);
+        compare(bud.width, 360);
+    }
+
+    function test_no_bud_is_the_cards_whole_rect() {
+        var rect = Qt.rect(1400, 46, 400, 300);
+        var bud = Drawer.budRect("top", rect, null);
+        compare(bud.x, 0);
+        compare(bud.y, 0);
+        compare(bud.width, 400);
+        compare(bud.height, 300);
+    }
+
     // --- The card's own axes ----------------------------------------------
 
     function test_the_across_and_along_axes_follow_the_edge() {

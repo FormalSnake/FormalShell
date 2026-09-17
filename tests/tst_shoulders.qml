@@ -238,6 +238,44 @@ TestCase {
         compare(at(o, 7), [206, 119]);
     }
 
+    // A wall that carries a line of its own ends in a corner of its own
+    // radius, wider than the card's (a frame ring's 20 against a `radiusXl`
+    // 14), and the silhouette follows it: the corner between the line and the
+    // wall takes the wall's radius instead of squaring off over the band
+    // inside it, and both of its points move off the corner by exactly that.
+    function test_a_walled_end_follows_the_walls_own_corner() {
+        var o = Outline.outline("top", 212, 120, 14, 0, 0, 14, null, 1,
+            { start: -1, end: 26, attach: 1, radius: 20 });
+        compare(o.arcs[3].r, 20);
+        compare(o.arcs[3].concave, false);
+        compare(at(o, 6), [211, 21]);
+        compare(at(o, 7), [191, 1]);
+        // The wall fillet past the card's far edge is untouched by it.
+        compare(at(o, 4), [197, 106]);
+        compare(at(o, 5), [211, 120]);
+    }
+
+    // It relaxes into the card's own convex corner as the card comes off both
+    // lines, and is the card's own once it has let go.
+    function test_the_wall_corner_relaxes_into_the_cards_own() {
+        var half = Outline.outline("top", 212, 120, 14, 0, 3.5, 0, null, 0.5,
+            { start: -1, end: 26, attach: 0.5, radius: 20 });
+        compare(half.arcs[3].r, 17);
+        var free = Outline.outline("top", 212, 120, 14, 0, 7, -14, null, 0,
+            { start: -1, end: 26, attach: 0, radius: 20 });
+        compare(free.arcs[3].r, 14);
+    }
+
+    // A wall with no line of its own is the output's own edge: square while
+    // the fill runs into it, exactly as it was before a ring had a say.
+    function test_a_bare_output_edge_keeps_its_square_corner() {
+        var o = Outline.outline("top", 212, 120, 20, 0, 0, 20, null, 1,
+            { start: -1, end: 26, attach: 1, radius: 0 });
+        compare(o.arcs[3].r, 0);
+        compare(at(o, 6), [211, 1]);
+        compare(at(o, 7), [211, 1]);
+    }
+
     // The gap a card hanging off this one opens is clamped to the far edge's
     // straight run, which a walled end shortens to where its fillet starts.
     function test_a_walled_end_shortens_the_far_edges_run() {

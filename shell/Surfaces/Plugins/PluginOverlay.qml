@@ -80,6 +80,27 @@ PanelWindow {
     readonly property real _cardHeight: (root.loadFailed ? errorLabel.implicitHeight : contentLoader.height)
         + Theme.space.panelPadding * 2
 
+    // And what the card is drawn at (Components/SizeMorph.qml, M57 D7). The
+    // two above are what the plugin's own item measures, which arrives after
+    // the overlay is up and changes again whenever the plugin relays itself
+    // out: the card travels to each of those instead of stepping to it.
+    readonly property real _morphWidth: morphWidth.value
+    readonly property real _morphHeight: morphHeight.value
+
+    SizeMorph {
+        id: morphWidth
+        target: root._cardWidth
+        open: root.isOpen
+        mapped: root.backingWindowVisible
+    }
+
+    SizeMorph {
+        id: morphHeight
+        target: root._cardHeight
+        open: root.isOpen
+        mapped: root.backingWindowVisible
+    }
+
     screen: root._screen
     // Held visible through the exit (DESIGN.md §1 Motion), same as
     // every other summoned surface: close() drops isOpen, the drawer's own
@@ -128,13 +149,19 @@ PanelWindow {
             mapped: root.backingWindowVisible
             edge: "top"
             screen: root._screen
-            rect: Qt.rect(Math.round((root._outputWidth - root._cardWidth) / 2),
-                Math.round((root._outputHeight - root._cardHeight) / 2),
-                root._cardWidth, root._cardHeight)
+            rect: Qt.rect(Math.round((root._outputWidth - root._morphWidth) / 2),
+                Math.round((root._outputHeight - root._morphHeight) / 2),
+                root._morphWidth, root._morphHeight)
+            moving: morphWidth.running || morphHeight.running
 
             Loader {
                 id: contentLoader
                 anchors.centerIn: parent
+                // The card carries every size change inside it (M53 D2), so a
+                // control the plugin drew that would animate its own height
+                // lays out at the target and lets the card travel to it.
+                // cursor.js documents the walk this is read through.
+                property bool ownsSizeMorph: true
                 // Held loaded for as long as the card is on screen, not just
                 // while it is open: the card is as big as what it holds, and
                 // unloading on close() would collapse it to its own padding

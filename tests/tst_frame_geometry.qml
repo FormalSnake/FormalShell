@@ -81,7 +81,38 @@ TestCase {
         compare(l.sides.top[1].x1, l.sides.top[1].x2);
         compare(JSON.stringify(l.sides.left[0]), JSON.stringify({ x1: 10, y1: 60, x2: 10, y2: 1050 }));
         compare(l.corners.length, 4);
-        compare(JSON.stringify(l.corners[3]), JSON.stringify({ x1: 10, y1: 60, x2: 30, y2: 40 }));
+        compare(JSON.stringify(l.corners[3]),
+            JSON.stringify({ x1: 10, y1: 60, x2: 30, y2: 40, gone: false }));
+    }
+
+    // --- The corner a walled card covers (M57 D2)
+    //
+    // A card out of a left bar's line that runs out to the ring's bottom line
+    // draws that corner's own stretch of the cut-out itself, so the ring gives
+    // the arc up: the card's gap covers the last radius of the left line and
+    // its wall's gap the first radius of the bottom one.
+    function test_a_corner_both_gaps_cover_is_given_up() {
+        var l = line("left", { left: [539, 1085], bottom: [26, 426] });
+        compare(l.corners[2].gone, true);
+        compare(l.corners[0].gone, false);
+        compare(l.corners[1].gone, false);
+        compare(l.corners[3].gone, false);
+    }
+
+    // One side alone is not enough: a card resting near the end of a line
+    // without running out to the other one never reaches the arc.
+    function test_one_gap_alone_keeps_the_corner() {
+        var l = line("left", { left: [539, 1085] });
+        compare(l.corners[2].gone, false);
+        var m = line("left", { bottom: [26, 426] });
+        compare(m.corners[2].gone, false);
+    }
+
+    // And a shape still coming out from under the line covers only the first
+    // pixels of the wall, not the arc: the corner stands until it does.
+    function test_a_shallow_run_out_keeps_the_corner() {
+        var l = line("left", { left: [539, 1085], bottom: [26, 45] });
+        compare(l.corners[2].gone, false);
     }
 
     function test_a_gap_on_a_left_bar_splits_its_side_at_the_gap() {

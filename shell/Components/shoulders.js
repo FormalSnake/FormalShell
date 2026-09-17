@@ -24,13 +24,16 @@
 // WALLED (M57 D2): there is no room for a fillet, so while the card is
 // attached its silhouette simply runs out to that wall. `walls` carries how
 // far past the card's own rect each end runs to reach it (negative for a
-// side with room), and the attach factor that run rides. A walled side's two
-// corners swap roles: the one on the line is square while the fill flows
-// into the wall and only ever carries the card's own convex rounding, and
-// the one on the far edge takes the signed radius, so the fillet is the near
-// one turned a quarter, centred one radius out from the far edge and one
-// radius in from the wall. That fillet is what the item grows by on its far
-// side, and only while a side is walled (`farOverhang`).
+// side with room), the attach factor that run rides, and the radius the two
+// lines meet in (`walls.radius`: a frame ring's rounded cut-out, 0 for the
+// output's own square edge). A walled side's two corners swap roles: the one
+// on the line follows that corner while the fill flows into the wall, since a
+// square one paints over the band a ring's corner curves in by, and relaxes
+// into the card's own convex rounding as the card lets go; the one on the far
+// edge takes the signed radius, so the fillet is the near one turned a
+// quarter, centred one radius out from the far edge and one radius in from
+// the wall. That fillet is what the item grows by on its far side, and only
+// while a side is walled (`farOverhang`).
 //
 // The outline is built once in a canonical space and mapped onto the item:
 // `u` runs along the line (0 at the card's near end, `length` at its far
@@ -139,9 +142,18 @@ function outline(edge, width, height, radius, inset, near, corner, farGap, lip, 
         ? (c > 0 ? filletRadius(c, body) + i : 0)
         : Math.max(0, Math.min(-c, Math.min(length, body) / 2) - i);
     var signed = concave ? rn : -rn;
-    // The walled side's corner on the line: square for as long as the near
-    // corners are concave, then rounding out convex with them.
-    var rq = concave ? 0 : rn;
+    // The walled side's corner on the line. A wall that carries a line of its
+    // own ends in a corner of its own radius (a frame ring's cut-out), and the
+    // fill has to follow it: a square corner there covers the wedge of band
+    // the ring's corner curves in by, which on two translucent surfaces reads
+    // as a lighter triangle in the corner. It relaxes into the card's own
+    // convex rounding as the card comes off both lines. A wall that is the
+    // output's own edge has no corner to follow: square for as long as the
+    // near corners are concave, then rounding out convex with them.
+    var wr = (walls && walls.radius > 0) ? walls.radius : 0;
+    var rq = wr > 0
+        ? Math.max(0, Math.min(wr * at + r * (1 - at), Math.min(length, body) / 2) - i)
+        : (concave ? 0 : rn);
     var far = depth - i;
     var top = n + i + l;
     // Where a walled side's own edge is drawn: out on the wall while

@@ -87,7 +87,8 @@ TestCase {
             "formalshell:notifications-center",
             "formalshell:tooltip",
             "formalshell:polkit",
-            "formalshell:plugin-overlay"
+            "formalshell:plugin-overlay",
+            "formalshell:osd"
         ];
         for (var i = 0; i < translucent.length; i++) {
             var rule = _byNamespace(translucent[i]);
@@ -138,9 +139,11 @@ TestCase {
     }
 
     // The other side of the pairing: a surface DESIGN.md calls opaque takes
-    // no blur. Toasts and the OSD paint `Theme.color.card` flat.
+    // no blur. Toasts arrive from off screen as a stack and meet no line, so
+    // they paint `Theme.color.card` flat; the OSD moved to the other list
+    // when it started budding off the bottom line (M57 D8).
     function test_opaque_surfaces_do_not_blur() {
-        var opaque = ["formalshell:notifications", "formalshell:osd"];
+        var opaque = ["formalshell:notifications"];
         for (var i = 0; i < opaque.length; i++) {
             var rule = _byNamespace(opaque[i]);
             verify(rule !== null, opaque[i] + " has no layerrule at all");

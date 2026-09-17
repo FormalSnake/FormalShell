@@ -67,6 +67,7 @@ Panel {
     readonly property bool _vertical: Theme.barVertical
 
     panelWidth: overflowRail.implicitWidth + Theme.space.panelPadding * 2
+    panelWidthMeasured: true
 
     function attach(regionName, entries, delegate, cell) {
         var next = {};

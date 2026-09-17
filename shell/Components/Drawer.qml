@@ -2,13 +2,16 @@ import QtQuick
 import qs.Core
 import "drawer.js" as Geometry
 import "../Bar/layout.js" as BarLayout
+import "../Frame/geometry.js" as FrameGeometry
 
 // The drawer every edge-anchored card is (DESIGN.md §1 "Motion", M57 D4):
 // the `Presence`, the `Joint`, the `Deform`, the slit the card comes out of,
 // the travelled frame, the deformed card and its `Shoulders`, assembled once.
-// A consumer fills a full-output window with one of these, states the edge it
-// comes out of and its resting rect, and puts its contents in the default
-// slot; everything between the line and the card's own padding is here.
+// A consumer fills a window with one of these, states the edge it comes out
+// of and its resting rect, and puts its contents in the default slot;
+// everything between the line and the card's own padding is here. A window
+// that is a band along its own edge rather than the whole output states
+// `origin` with it, and nothing else changes.
 //
 // What follows from those two statements, and so is never stated: where that
 // edge's line is (the bar's hairline, the frame ring's, or the far edge of
@@ -24,10 +27,12 @@ import "../Bar/layout.js" as BarLayout
 // strip. The slit is what hides the rest of it: everything the card paints is
 // cut at the line, and a closed card is displaced behind that line by its
 // whole extent, shoulders included, so it comes out from under the bar rather
-// than passing over it. Along the line the band closes onto the bud a nested
-// card is clamped into, so its contents come out of the owner's own span
-// rather than beside it; the contents themselves are laid out at the card's
-// full width throughout, and what the widening reveals is already drawn.
+// than passing over it. Along the line it is the contents alone that close
+// onto the bud a nested card is clamped into, under the deform rather than at
+// the line, so they come out of the owner's own span rather than beside it
+// while the silhouette the deform stretches keeps its border; the contents
+// themselves are laid out at the card's full width throughout, and what the
+// widening reveals is already drawn.
 //
 // The deform's matrix goes on an item INSIDE the frame rather than on the
 // frame itself: `Deform` samples its target through `mapToItem`, which reads
@@ -45,9 +50,15 @@ Item {
     property bool open: false
     // The card's OWN anchored side, the one that meets the line.
     property string edge: "top"
-    // Where the card is right now, in the output's own coordinates, which
-    // this item shares with it.
+    // Where the card is right now, in the OUTPUT's own coordinates, whatever
+    // window this item sits in.
     property rect rect: Qt.rect(0, 0, 0, 0)
+    // And where this item's own top left sits on that output. A consumer
+    // filling the output leaves it at zero; one filling a band along its own
+    // edge (Surfaces/Osd/Osd.qml) states it, so the line, the slit and the
+    // gap published to the line stay in the output's coordinates while
+    // everything drawn moves into the band's.
+    property point origin: Qt.point(0, 0)
     // And where it rests, which is the rect every derived number is taken
     // from. They part company only while a consumer is drawing its own
     // trajectory (Panel's handoff), where a card mid-travel would otherwise
@@ -93,7 +104,8 @@ Item {
     readonly property alias frameItem: frame
     // And its rect in the output's coordinates, which is what a handoff hands
     // over and what a child buds from.
-    readonly property rect frameRect: Qt.rect(frame.x, frame.y, frame.width, frame.height)
+    readonly property rect frameRect: Qt.rect(frame.x + root.origin.x, frame.y + root.origin.y,
+        frame.width, frame.height)
 
     readonly property bool _vertical: BarLayout.isVertical(root.edge)
     readonly property real _screenWidth: root.screen ? root.screen.width : 0
@@ -143,10 +155,26 @@ Item {
     readonly property var _band: Geometry.clipAlong(
         Geometry.clipBand(root.edge, Geometry.cut(root.edge, root.restRect, root._depth),
             root._screenWidth, root._screenHeight),
-        root.edge, joint.clip)
+        root.edge, joint.spanClip)
+
+    // And the bud the contents are held to inside the card, which is applied
+    // under the deform rather than at the line; see `budRect`.
+    readonly property var _bud: Geometry.budRect(root.edge, root.frameRect, joint.budClip)
 
     // A card coming out of THIS one, for the gap in the far edge's border.
     readonly property var _childJoin: PanelRegistry.joinOn(root.edge, root._screenName, root.owner)
+
+    // The corner a walled side runs into (M57 D2): the frame ring ends the
+    // line this card comes out of and the line it runs into in one rounded
+    // corner, and the silhouette follows it rather than squaring it off over
+    // the band inside it. The ring's own number, off the same geometry the
+    // ring is drawn from, so a `frame.radius` change carries. An output edge
+    // with no ring on it ends square and the run-out goes a radius past the
+    // screen, which is where it has always gone.
+    readonly property real _wallRadius: (Theme.frameEnabled && root.screen)
+        ? FrameGeometry.frameGeometry(root._screenWidth, root._screenHeight,
+            Theme.edgeInset, Theme.frameRadius).radius
+        : 0
 
     // The frame's enter/exit recipe (Presence.qml, DESIGN.md §1 "Motion"): a
     // drawer out of the line's edge. The extent is the whole shape and not
@@ -227,8 +255,8 @@ Item {
 
     Item {
         id: clipper
-        x: root._band.x
-        y: root._band.y
+        x: root._band.x - root.origin.x
+        y: root._band.y - root.origin.y
         width: root._band.width
         height: root._band.height
         clip: true
@@ -248,8 +276,8 @@ Item {
             // against, unsquashed.
             Item {
                 id: frame
-                x: root.rect.x
-                y: root.rect.y
+                x: root.rect.x - root.origin.x
+                y: root.rect.y - root.origin.y
                 width: root.rect.width
                 height: root.rect.height
                 // The card is displaced toward the line by its whole extent
@@ -309,6 +337,7 @@ Item {
                         nearInset: joint.nearInset
                         wallStart: joint.wallStart
                         wallEnd: joint.wallEnd
+                        wallRadius: root._wallRadius
                         // A gap in the far edge's border for the card hanging
                         // off this one, its rect along the line put into this
                         // item's own coordinates.
@@ -349,38 +378,57 @@ Item {
                         readonly property real _length: joint.clampedLength + frameShape.overhang * 2
                     }
 
-                    // Cut at the card's own rect, and the shape left out of
-                    // it: contents size to their own target the instant a
-                    // route changes while the rect trails behind on its
+                    // Cut at the card's own rect, and along the line at the
+                    // bud the silhouette is clamped into while it is attached
+                    // (M57 D3): contents size to their own target the instant
+                    // a route changes while the rect trails behind on its
                     // morph, so without this the taller instant would paint
                     // past an edge still catching up (M51 D5), and the same
                     // cut is what makes a card that grows a reveal. The
                     // silhouette is longer and deeper than the rect by
-                    // construction and is drawn outside it.
+                    // construction and is drawn outside it, uncut: it is
+                    // already the bud's own shape, and a cut taken from the
+                    // undeformed rect is one the deform carries it past on a
+                    // fast widening, taking its border with it.
                     Item {
                         id: contentClip
-                        anchors.fill: parent
+                        x: root._bud.x
+                        y: root._bud.y
+                        width: root._bud.width
+                        height: root._bud.height
                         clip: true
 
-                        // What `Card`'s own default slot does: the contents
-                        // inside the card's padding, reaching back out through
-                        // it by negative margins where they need to.
+                        // The card's own coordinates back, so the contents
+                        // keep their full-width layout inside the bud and the
+                        // widening reveals what is already drawn.
                         Item {
-                            id: inner
-                            anchors.fill: parent
-                            anchors.margins: root.padding
+                            x: -contentClip.x
+                            y: -contentClip.y
+                            width: frame.width
+                            height: frame.height
 
-                            // Swallows clicks anywhere inside the frame (the
-                            // card's own padding included) before they reach
-                            // the backdrop the consumer put this drawer in:
-                            // ordinary nested MouseArea priority, no manual
-                            // event plumbing. Every button, so a right-click
-                            // on the card cannot dismiss it either.
-                            MouseArea {
+                            // What `Card`'s own default slot does: the
+                            // contents inside the card's padding, reaching
+                            // back out through it by negative margins where
+                            // they need to.
+                            Item {
+                                id: inner
                                 anchors.fill: parent
-                                anchors.margins: -root.padding
-                                acceptedButtons: Qt.AllButtons
-                                onClicked: {}
+                                anchors.margins: root.padding
+
+                                // Swallows clicks anywhere inside the frame
+                                // (the card's own padding included) before
+                                // they reach the backdrop the consumer put
+                                // this drawer in: ordinary nested MouseArea
+                                // priority, no manual event plumbing. Every
+                                // button, so a right-click on the card cannot
+                                // dismiss it either.
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -root.padding
+                                    acceptedButtons: Qt.AllButtons
+                                    onClicked: {}
+                                }
                             }
                         }
                     }

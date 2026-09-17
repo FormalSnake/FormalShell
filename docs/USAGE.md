@@ -693,8 +693,8 @@ config and source it: it turns the blur on and points it at the
 `formalshell:bar`, `formalshell:panel` and `formalshell:menu` layer
 namespaces, and it carries the whole default bind set (fill in the
 `<store-path>` at the top of the file first). Under a compositor with blur
-off the same alpha reads as a tint. Toasts, the OSD, the notification
-centre and the lock screen stay opaque either way.
+off the same alpha reads as a tint. Toasts and the lock screen stay opaque
+either way; the OSD pill is drawn at the same alpha as the line it buds off.
 
 The launcher, the polkit request and a plugin's overlay cover the whole
 output and sit over a 0.5 black scrim, so their layer rules leave anything at

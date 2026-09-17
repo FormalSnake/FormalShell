@@ -148,19 +148,20 @@ PanelWindow {
     readonly property real _outputHeight: root.height > 0 ? root.height : (root._screen ? root._screen.height : 0)
 
     // The card's own rect: the field's width carries it, and its height is
-    // the content's, tracked live only while the dialog sits open at rest
-    // (M51 D5), so a wrong-password caption grows the card around its own
-    // centre instead of jumping a row taller and a fresh request finds the
-    // real content height rather than morphing out of the card the last one
-    // closed on.
+    // the content's, on the shared morph (Components/SizeMorph.qml), so a
+    // wrong-password caption grows the card around its own centre instead of
+    // jumping a row taller and a fresh request finds the real content height
+    // rather than morphing out of the card the last one closed on.
     readonly property real _cardWidth: Theme.space.popupWidthNarrow + Theme.space.panelPadding * 2
     readonly property real _cardHeight: column.implicitHeight + Theme.space.panelPadding * 2
 
-    property real _morphHeight: root._active ? root._cardHeight : _morphHeight
+    readonly property real _morphHeight: morphHeight.value
 
-    Behavior on _morphHeight {
-        enabled: drawer.presence.settled && root._active
-        Anim {}
+    SizeMorph {
+        id: morphHeight
+        target: root._cardHeight
+        open: root._active
+        mapped: root.backingWindowVisible
     }
 
     screen: root._screen
@@ -230,6 +231,7 @@ PanelWindow {
             rect: Qt.rect(Math.round((root._outputWidth - root._cardWidth) / 2),
                 Math.round((root._outputHeight - root._morphHeight) / 2),
                 root._cardWidth, root._morphHeight)
+            moving: morphHeight.running
 
             MouseArea {
                 anchors.fill: parent
