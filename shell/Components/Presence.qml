@@ -1,24 +1,23 @@
 import QtQuick
 import qs.Core
 
-// The surface enter/exit recipe, in one place (DESIGN.md §1 "Motion"). Three
+// The surface enter/exit recipe, in one place (DESIGN.md §1 "Motion"). Two
 // modes, and the two clock families of M54 D2 split between them:
 //
 // - `fade` (M51 D2/D4, the default): opacity on `effects` and a scale from
 //   0.97 on `spatialFast`, asymmetric in nothing: one clock each way, since
 //   an overshooting curve reversed part way through is already asymmetric.
-//   No slide. Tooltips, the bar's own reveal, polkit and the plugin overlay.
+//   No slide. Tooltips and the bar's own reveal.
 // - `emerge` (M53 addendum, M54 D8): the drawer. The card starts hidden
 //   behind the edge it hangs off, displaced toward it by its own `extent` on
 //   that axis, and travels to rest on `spatial` both ways. No fade and no
 //   zoom: the card's own opacity stays 1 and the consumer's clip at the edge
 //   is what hides it, so what arrives is a card coming out from under the bar
 //   rather than one materialising in place. Its contents fade in behind the
-//   travel (`contentOpacity`), so the card lands before its text.
-// - `unfold` (M53 addendum, M54 D8): the launcher. The card is there almost
-//   at once (`effectsFast`) at whatever height the consumer seeds it with,
-//   and `morph` carries it to full size on `spatial`, with the contents
-//   revealed under the growing edge.
+//   travel (`contentOpacity`), so the card lands before its text. Every card
+//   that floats in the middle of the output takes it too (M57 D5): the
+//   launcher, the polkit request and a plugin's overlay come out of the top
+//   line the same way a panel comes out of the bar's.
 //
 // The spatial curves overshoot by design (M54 D1): `emergeX`/`emergeY` pass
 // rest by a few pixels and settle back, and `scale` passes 1 the same way.
@@ -48,7 +47,7 @@ QtObject {
     // no emerge.
     property string edge: "center"
 
-    // "fade", "emerge" or "unfold"; see the header.
+    // "fade" or "emerge"; see the header.
     property string mode: "fade"
 
     // `emerge` only: the card's own size on the anchored axis (its height
@@ -95,26 +94,22 @@ QtObject {
     readonly property bool _twoClock: root.mode !== "emerge"
 
     // The pose everything that is not geometry reads: the card's own opacity
-    // in `fade`, the travel in `emerge`, the card's arrival in `unfold`.
+    // in `fade`, the travel in `emerge`.
     property real _progress: (root.open && !root._held) ? 1 : 0
     Behavior on _progress {
         Anim {
             id: _progressAnimation
-            kind: {
-                if (root.mode === "emerge")
-                    return "spatial";
-                return root.mode === "unfold" ? "effectsFast" : "effects";
-            }
+            kind: root.mode === "emerge" ? "spatial" : "effects"
         }
     }
 
-    // The geometry clock: `unfold`'s size morph, and `fade`'s zoom, which is
-    // a scale and so belongs to the spatial family however small it is.
+    // The geometry clock: `fade`'s zoom, which is a scale and so belongs to
+    // the spatial family however small it is.
     property real _morphProgress: (root.open && !root._held) ? 1 : 0
     Behavior on _morphProgress {
         Anim {
             id: _morphAnimation
-            kind: root.mode === "unfold" ? "spatial" : "spatialFast"
+            kind: "spatialFast"
         }
     }
 
@@ -179,9 +174,10 @@ QtObject {
         ? (1 - root._pose) * root.extent * root._direction.y
         : 0
 
-    // How far the size morph has come, for a consumer interpolating its own
-    // geometry between a seed and its target (`unfold`'s card height).
-    readonly property real morph: root.mode === "unfold" ? root._morphPose : root._pose
+    // The pose itself, for a consumer whose own geometry is a function of it
+    // (Components/Joint.qml's let-go mark). It overshoots 1; a consumer that
+    // may not clamps for itself.
+    readonly property real pose: root._pose
 
     // What the card's contents draw at while the card itself arrives: 0 until
     // the surface is a third of the way there, 1 at rest. A function of the
@@ -192,7 +188,6 @@ QtObject {
     readonly property real contentOpacity: {
         if (root.mode === "fade")
             return 1;
-        var p = root.mode === "unfold" ? root._morphPose : root._pose;
-        return Math.max(0, Math.min(1, (p - 0.3) / 0.7));
+        return Math.max(0, Math.min(1, (root._pose - 0.3) / 0.7));
     }
 }

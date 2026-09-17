@@ -6,9 +6,8 @@ import "../shell/Components"
 // Presence's lifecycle (DESIGN.md §1 "Motion", M51 D2/D4, M54 D8): `shown`
 // tracks `open` immediately but lags `close()` until the exit settles, a
 // `fade` zooms from 0.97 and never travels, `emerge` sits a closed card its
-// whole extent behind its edge while `unfold` carries a card's own size
-// instead, and `motion.enabled: false` collapses every mode to an instant
-// swap.
+// whole extent behind its edge, and `motion.enabled: false` collapses both
+// modes to an instant swap.
 TestCase {
     id: testCase
     name: "Presence"
@@ -167,48 +166,19 @@ TestCase {
         compare(presence.emergeY, -300);
     }
 
-    // --- unfold (M53 addendum, the launcher) -----------------------------
-
-    function test_unfold_carries_its_morph_from_the_fold_to_the_card() {
+    // The pose the join reads its let-go mark off (Components/Joint.qml). It
+    // is the travel itself in `emerge` and the opacity in `fade`, so it is
+    // the one read-out that means the same thing in both modes.
+    function test_pose_runs_the_whole_way_and_back() {
         var presence = createTemporaryObject(presenceComponent, testCase,
-            { edge: "center", mode: "unfold" });
-        compare(presence.morph, 0);
+            { edge: "top", mode: "emerge", extent: 300 });
+        compare(presence.pose, 0);
         presence.open = true;
         tryCompare(presence, "settled", true, 2000);
-        compare(presence.morph, 1);
-        compare(presence.scale, 1);
-        compare(presence.emergeX, 0);
-        compare(presence.emergeY, 0);
-    }
-
-    function test_unfold_stays_shown_while_the_card_is_still_folding_back() {
-        var presence = createTemporaryObject(presenceComponent, testCase,
-            { edge: "center", mode: "unfold", open: true });
-        tryCompare(presence, "settled", true, 2000);
+        compare(presence.pose, 1);
         presence.open = false;
-        // The card leaves on `effectsFast` and the fold on `spatial`, so the
-        // window has to stay mapped for the slower of the two.
-        compare(presence.shown, true);
-        verify(presence.morph > 0);
-        tryCompare(presence, "shown", false, 2000);
-        // The fold overshoots below its own seed on the way out and settles
-        // back on it, behind a window that has already gone.
         tryCompare(presence, "settled", true, 2000);
-        compare(presence.morph, 0);
-    }
-
-    function test_unfold_is_instant_with_motion_disabled() {
-        Theme.motionEnabled = false;
-        var presence = createTemporaryObject(presenceComponent, testCase,
-            { edge: "center", mode: "unfold" });
-        presence.open = true;
-        compare(presence.shown, true);
-        compare(presence.morph, 1);
-        compare(presence.opacity, 1);
-        compare(presence.contentOpacity, 1);
-        presence.open = false;
-        compare(presence.shown, false);
-        compare(presence.morph, 0);
+        compare(presence.pose, 0);
     }
 
     function test_motion_disabled_is_instant() {

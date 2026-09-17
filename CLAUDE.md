@@ -155,10 +155,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and the players switcher.
 - `menu.sh` `--menu`: the launcher at root, its fuzzy ranking against the
   live tree, and the select round trip.
-- `menu_unfold.sh` `--menu-unfold`: the launcher unfolding out of its own
-  search row, sampled frame by frame: the card drawn at the field's height
-  with nothing under the rule, then a ladder of probes down its gutter
-  showing the height grow to rest with the field never moving.
+- `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
+  sampled frame by frame under `debug motionScale`: card fill under the line
+  with nothing at its resting floor, the bar's own band undimmed while it is
+  still attached, a plain bordered card over a dimmed band at rest, and the
+  open-to-rest time printed before any of it is asserted.
 - `mic.sh` `--mic`: the opt-in mic cell rendering its honest no-device state
   on a machine with no capture device.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
@@ -199,7 +200,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `plugins.sh` `--plugins`: a plugin directory dropped into the config home
   placing its own bar cell, no `bar` key involved.
 - `polkit.sh` `--polkit`: a real `pkexec` conversation through the shell's
-  agent, the prompt, the error state and pkexec's own exit code.
+  agent, the prompt, the error state and pkexec's own exit code, with the
+  card's own open off the top line sampled at a tenth speed first.
 - `processes.sh` `--processes`: the process table's search, the two-press
   TERM, and `monitor restart` re-running the same argv under a new pid.
 - `record.sh` `--record`: `record` start to finished GIF through a real
@@ -416,13 +418,13 @@ behavior on hosts where a real owner exists.
   through `Components/Icon.qml` with the set picked by `theme.icons`
   (`lucide` default, `nerd`; no raw glyphs in surface files, no SVG icon
   assets). Nothing in the shell blurs or shadows
-  anything: a modal surface sits over a plain 0.5 black scrim (the
-  compositor blurring the desktop behind that scrim, since the polkit
-  layer takes the same blur layerrule its card's translucency implies),
-  every other surface sits over the desktop with its border doing the
-  work. The lyrics pane is the one exception (owner, 2026-09-17, spec P12):
-  depth of field on every line but the lit one and a glow on the chunk
-  being sung, both gated behind `media.lyricsBlur`. Motion is
+  anything: a modal surface sits over a plain 0.5 black scrim that only
+  darkens the desktop (the modal namespaces take `ignore_alpha = 0.6`, so
+  the scrim falls under the compositor's blur and the card over it stays
+  above), every other surface sits over the desktop with its border doing
+  the work. The lyrics pane is the one exception (owner, 2026-09-17, M56
+  spec P12): depth of field on every line but the lit ones, behind
+  `media.lyricsBlur`, and a glow on the chunk being sung. Motion is
   `docs/DESIGN.md` §1 "Motion": the two clock families
   behind `Anim`/`CAnim`, and the joined shape a card hanging off the bar
   draws instead of a `Card`. Never

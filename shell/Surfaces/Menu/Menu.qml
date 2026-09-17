@@ -1695,7 +1695,7 @@ PanelWindow {
         // only ever runs ahead of that, because the bindings feeding _viewKind
         // settle before _enterLevel reaches its last line, and the later
         // restart wins.
-        if (root.isOpen && presence.settled)
+        if (root.isOpen && drawer.presence.settled)
             root._playLevelEnter();
     }
 
@@ -2118,7 +2118,7 @@ PanelWindow {
     // exactly as before, just one exit fade later. The window is
     // transparent so the fade covers the whole card; card paints its own
     // background.
-    visible: presence.shown
+    visible: drawer.presence.shown
     color: "transparent"
 
     // The window spans the whole output (M39 Task 2) so it can carry the
@@ -2134,42 +2134,6 @@ PanelWindow {
     readonly property real _cardHeight: root._chrome + root._headerHeight
         + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + actionBar.height
 
-    // The card's own enter/exit recipe (Presence.qml, DESIGN.md §1 Motion,
-    // M54 D8): the card unfolds out of its own search field. It lands at
-    // `_fieldRowHeight` on `effectsFast`, at full opacity and with no zoom,
-    // and its height carries the rest on `spatial` while the level under the
-    // rule is revealed by the growing edge. A modal surface, so no slide and
-    // no emerge: the field is what it comes out of, not a screen edge.
-    Presence {
-        id: presence
-        open: root.isOpen
-        edge: "center"
-        mapped: root.backingWindowVisible
-        mode: "unfold"
-    }
-
-    // The card squashes as it unfolds and springs back (M54 D7). `top`, not
-    // the launcher's `edge: "center"` above: the card grows downward out of a
-    // search row that never moves, so the top edge is the one it hangs off,
-    // which is both where the matrix is centred and which way `Deform` folds
-    // the height's own growth into the velocity.
-    //
-    // 0.1, caelestia's own launcher figure: the card travels a long way in
-    // one open and a popout's 0.15 would fold the field's text into itself.
-    //
-    // The target is `cardBox`, whose geometry is the bindings, and the matrix
-    // goes on the `Card` inside it: `Deform` samples its target through
-    // `mapToItem`, which reads back any transform on that target, so sampling
-    // and deforming one item would leave the deform driving itself.
-    Deform {
-        id: deform
-        target: cardBox
-        edge: "top"
-        amount: 0.1
-        active: !presence.settled || morphWidth.running || morphHeight.running
-            || morphRowsHeight.running
-    }
-
     // The card's actual width and height (DESIGN.md §1 Motion, M51 D5):
     // _cardWidth/_cardHeight above are the route's own target, tracked live
     // only while the surface sits open at rest. A route that changes width
@@ -2177,21 +2141,22 @@ PanelWindow {
     // instead of jumping; close() simply stops re-syncing these, so whatever
     // open() snaps them to next is the new route's real content size, never
     // a morph from the frame the menu closed on. Armed from the moment the
-    // window is up rather than from `presence.settled`: the rows land a tick
-    // or more after open() (the keyed sync is deferred), so the content
-    // height moves while the unfold is still running, and a Behavior gated
-    // on settled would let that jump straight through the growing edge.
-    // With the gate on `mapped` the edge retargets to wherever the rows put
-    // it, on the same clock, and the close freeze still holds.
+    // window is up rather than from `drawer.presence.settled`: the rows land
+    // a tick or more after open() (the keyed sync is deferred), so the
+    // content height moves while the card is still travelling out of the
+    // line, and a Behavior gated on settled would let that jump straight
+    // through the far edge. With the gate on `mapped` that edge retargets to
+    // wherever the rows put it, on its own clock and under the card's own
+    // cut, and the close freeze still holds.
     property real _morphWidth: root.isOpen ? root._cardWidth : _morphWidth
     property real _morphHeight: root.isOpen ? root._cardHeight : _morphHeight
 
     Behavior on _morphWidth {
-        enabled: root.isOpen && presence.mapped
+        enabled: root.isOpen && drawer.presence.mapped
         Anim { id: morphWidth }
     }
     Behavior on _morphHeight {
-        enabled: root.isOpen && presence.mapped
+        enabled: root.isOpen && drawer.presence.mapped
         Anim { id: morphHeight }
     }
 
@@ -2207,23 +2172,15 @@ PanelWindow {
     property real _morphRowsHeight: root.isOpen ? root._rowsAreaHeight : _morphRowsHeight
 
     Behavior on _morphRowsHeight {
-        enabled: root.isOpen && presence.mapped
+        enabled: root.isOpen && drawer.presence.mapped
         Anim { id: morphRowsHeight }
     }
 
-    // The fold (M53 addendum): the height the card is drawn at the instant it
-    // appears, which is the search field, its own padding and the rule under
-    // it. Nothing below the rule is laid out at this height; the card clips,
-    // so the level is revealed by the edge travelling rather than pushed into
-    // place by it.
+    // The search field's own band: the field, the card's top padding and the
+    // rule under it. What everything below the rule measures its own slot
+    // against, so a level lays out at the card's settled height rather than
+    // riding whatever the far edge is doing.
     readonly property real _fieldRowHeight: root._chrome + searchRow.height + searchRule.height
-
-    // What the card actually draws at: the fold plus however much of the rest
-    // Presence's own morph has handed over. A function of that pose rather
-    // than a Behavior of its own, so a re-toggle mid-unfold reverses from
-    // wherever the edge had got to instead of snapping to either end.
-    readonly property real _unfoldHeight: root._fieldRowHeight
-        + Math.max(0, root._morphHeight - root._fieldRowHeight) * presence.morph
 
     WlrLayershell.namespace: "formalshell:menu"
     WlrLayershell.layer: WlrLayer.Top
@@ -2232,31 +2189,18 @@ PanelWindow {
 
     anchors { top: true; left: true; right: true; bottom: true }
 
-    // The scrim (omarchy parity): plain black at half opacity over the live
-    // desktop, fading with the card so a summon is one motion. It replaced a
-    // dithered freeze of the screen itself, which read beautifully in a still
-    // frame and could not be made to hold still in motion: refreshing it on
-    // an interval meant the capture contained the backdrop it was replacing,
-    // and every term in that loop, the resample, the per-frame palette, the
-    // darkening wash, drifted a little each generation, so the picture
-    // crawled while nothing on screen moved (owner, 2026-08-19). A scrim has
-    // no such loop, costs nothing, and stays out of the way of the card,
-    // which is the whole job. The lock screen still dithers, because its
-    // backdrop is one still wallpaper and never re-reads the screen.
-    Rectangle {
+    // The modal scrim (Components/Scrim.qml): on the drawer's own pose, and
+    // off the band the top line belongs to for as long as the card is still
+    // budding out of it, so the launcher comes out of a lit bar.
+    Scrim {
         anchors.fill: parent
-        color: "black"
-        // Bound straight to presence's own progress, never a Behavior of
-        // its own (M51 D3): a scrim animating on a separate clock from the
-        // card it frames could drift out of step with it.
-        opacity: presence.opacity * 0.5
+        drawer: drawer
     }
-
 
     // Click-to-dismiss on the menu's OWN output. DismissTwins below has
     // always covered every other screen; this output had no backdrop to
     // click at all until the window went full-output, so Escape was the only
-    // way out for a pointer user. Declared before `card`, so the card and
+    // way out for a pointer user. Declared before the drawer, so the card and
     // every cell in it stack above and keep their own clicks.
     MouseArea {
         anchors.fill: parent
@@ -2264,942 +2208,919 @@ PanelWindow {
         onPressed: root.close()
     }
 
-    // Enter/exit lives in Presence (DESIGN.md §1 Motion, M54 D8): the card
-    // unfolds from its own field, so it fades in on `effectsFast` at the
-    // fold's height and grows from there, with no zoom and no slide.
+    // Everything from the top line to the card's own padding is the drawer's
+    // (Components/Drawer.qml, M57 D5): the slit, the emerge, the join, the
+    // deform and the shape. The launcher is a centre-floating card, so the
+    // line it buds off is the top bar's hairline, the frame ring's top line,
+    // or the output's own top edge with neither, and the depth back to it is
+    // hundreds of pixels rather than a panel's seven. What it states is the
+    // edge and the rect; the drawer derives the rest.
     //
-    // The card's rect, and nothing drawn: the `Card` inside it carries the
-    // deform, so what this item holds is the geometry the deform is measured
-    // against, unsquashed. The launcher keeps `Card` rather than taking the
-    // panels' `Shoulders` (M54 D6): it is a modal surface floating over the
-    // scrim with no bar edge to meet.
-    Item {
-        id: cardBox
-        x: Math.round((root._outputWidth - root._morphWidth) / 2)
-        y: root._clampTop(root._preferredTop)
-        width: root._morphWidth
-        height: root._unfoldHeight
+    // 0.1 for the deform, caelestia's own launcher figure: the card travels a
+    // long way in one open and a popout's 0.15 would fold the field's text
+    // into itself.
+    Drawer {
+        id: drawer
+        anchors.fill: parent
+        owner: root
+        open: root.isOpen
+        mapped: root.backingWindowVisible
+        edge: "top"
+        screen: root._screen
+        rect: Qt.rect(Math.round((root._outputWidth - root._morphWidth) / 2),
+            root._clampTop(root._preferredTop), root._morphWidth, root._morphHeight)
+        deformAmount: 0.1
+        moving: morphWidth.running || morphHeight.running || morphRowsHeight.running
 
-        // `Card` paints the translucent `card` fill Hyprland's blur reads
-        // through, the 1px border and the `radiusXl` corners, and insets its
-        // own slot by `panelPadding`, so every child below anchors straight
-        // to that slot's edges.
-        Card {
-            id: card
-            anchors.fill: parent
-            transform: Matrix4x4 { matrix: deform.matrix }
-            // Content sizes to its own target the instant a route changes (the
-            // rows list, the action bar, the split pane), while this card's own
-            // width/height above trail behind on the morph Behaviors: without a
-            // clip the wider/taller instant would paint past whatever edge is
-            // still catching up (M51 D5).
-            // The same clip is what makes the unfold a reveal: the level under
-            // the rule is laid out at its settled place from the first frame and
-            // the growing edge uncovers it.
-            clip: true
-            opacity: presence.opacity
+        // The input row (spec "Launcher"): a search icon, the field, and a
+        // 1px rule underneath. No frame of its own, so the card's own
+        // border is the only one on the surface. Its content takes the
+        // rows' own `controlPaddingX` (DESIGN.md §1 Padding): the rows here
+        // are borderless, so nothing else would line the icon up with the
+        // column of icons under it. The rule below stays full-bleed.
+        Item {
+            id: searchRow
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.leftMargin: root._headerInset
+            anchors.right: parent.right
+            anchors.rightMargin: root._headerInset
+            height: Core.Theme.space.controlHeight
 
-            // Swallows presses that land on the card's own padding gutters
-            // rather than on a row, so a click inside the frame never falls
-            // through to the dismiss area above. Negative margins put it back
-            // over the gutters `Card` insets this slot by; first interactive
-            // child, so every row declared after it still wins its own clicks.
-            MouseArea {
-                anchors.fill: parent
-                anchors.margins: -card.padding
-                acceptedButtons: Qt.AllButtons
+            Icon {
+                id: searchIcon
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                name: "search"
+                size: Core.Theme.fontSize.body
+                color: Core.Theme.color.mutedForeground
             }
 
-            // The input row (spec "Launcher"): a search icon, the field, and a
-            // 1px rule underneath. No frame of its own, so the card's own
-            // border is the only one on the surface. Its content takes the
-            // rows' own `controlPaddingX` (DESIGN.md §1 Padding): the rows here
-            // are borderless, so nothing else would line the icon up with the
-            // column of icons under it. The rule below stays full-bleed.
-            Item {
-                id: searchRow
+            TextInput {
+                id: searchInput
+                anchors.left: searchIcon.right
+                anchors.leftMargin: Core.Theme.space.iconGap
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                color: Core.Theme.color.foreground
+                font.family: Core.Theme.fontFamilySans
+                font.pixelSize: Core.Theme.fontSize.body
+                focus: true
+                selectByMouse: true
+                cursorVisible: true
+
+                Text {
+                    anchors.fill: parent
+                    visible: searchInput.text.length === 0
+                    text: root.placeholder
+                    color: Core.Theme.color.mutedForeground
+                    font: searchInput.font
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                }
+
+                onTextChanged: {
+                    root._cursorIndex = 0;
+                    root._confirmPendingId = "";
+                    // Typing re-ranks the rows under a pointer that hasn't
+                    // moved, the churn the gate exists for.
+                    pointerGate.reset();
+                    // Arm the debounced nix search from the event, never
+                    // from the _displayRows binding (side effect).
+                    if (root._mode === "menu") {
+                        var nixQuery = Providers.nixTriggerQuery(searchInput.text);
+                        if (nixQuery === null && root.currentNodeId === "nix")
+                            nixQuery = searchInput.text;
+                        if (nixQuery !== null) {
+                            root._requestNixWarm();
+                            root._requestNixSearch(nixQuery);
+                        }
+                    }
+                }
+
+                Keys.onPressed: event => {
+                    // An app view with its own cursor gets first refusal
+                    // on every key (root._appViewKey's own note).
+                    if (root._appViewKey(event.key, event.modifiers)) {
+                        event.accepted = true;
+                        return;
+                    }
+                    switch (event.key) {
+                    // An app view has no row cursor, so the same two keys
+                    // scroll its content by a row instead. Claimed
+                    // either way: letting them through would only reach
+                    // the search field's own text cursor.
+                    case Qt.Key_Up:
+                        if (root._isAppView)
+                            root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
+                        else
+                            root._moveCursor(-root.cursorColumns);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Down:
+                        if (root._isAppView)
+                            root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
+                        else
+                            root._moveCursor(root.cursorColumns);
+                        event.accepted = true;
+                        break;
+                    // Left/Right belong to the search field's own text
+                    // cursor everywhere except a grid, so they're
+                    // claimed only there, never accepted otherwise.
+                    case Qt.Key_Left:
+                        if (root._isGrid) {
+                            root._moveCursor(-1);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_Right:
+                        if (root._isGrid) {
+                            root._moveCursor(1);
+                            event.accepted = true;
+                        }
+                        break;
+                    // Page/Home/End are the search field's own text
+                    // navigation everywhere else, so they are claimed
+                    // only where an app view declares something to
+                    // scroll. A page keeps one row of overlap, so the
+                    // reader carries context across the jump.
+                    case Qt.Key_PageUp:
+                    case Qt.Key_PageDown:
+                        if (root._appViewScroll) {
+                            var page = Math.max(Core.Theme.space.popupRowHeight,
+                                root._appViewScroll.height - Core.Theme.space.popupRowHeight);
+                            root._scrollAppViewBy(event.key === Qt.Key_PageUp ? -page : page);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_Home:
+                        if (root._appViewScroll) {
+                            root._scrollAppViewTo(0);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_End:
+                        if (root._appViewScroll) {
+                            root._scrollAppViewTo(root._appViewScroll.contentHeight);
+                            event.accepted = true;
+                        }
+                        break;
+                    case Qt.Key_Return:
+                    case Qt.Key_Enter:
+                        if (root._mode === "input")
+                            root._submitInput();
+                        else if ((event.modifiers & Qt.ShiftModifier) !== 0)
+                            root._activateRowAlternate(root._cursorIndex);
+                        else
+                            root._activateRow(root._cursorIndex);
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Escape:
+                        // select/input have no tree level to pop out of:
+                        // Escape just cancels the request and closes (close()
+                        // writes the {cancelled:true} record via
+                        // _abandonPendingSelect()).
+                        if (root._mode !== "menu")
+                            root.close();
+                        else
+                            root._pop();
+                        event.accepted = true;
+                        break;
+                    case Qt.Key_Backspace:
+                        if (root._mode === "menu" && searchInput.text.length === 0) {
+                            root._pop();
+                            event.accepted = true;
+                        }
+                        break;
+                    // Two variants, so Tab and Shift+Tab are the same
+                    // switch. Claimed only where the switcher is actually
+                    // up, so Tab keeps whatever it does everywhere else.
+                    case Qt.Key_Tab:
+                    case Qt.Key_Backtab:
+                        if (root._isPickerRoute && root._pickerHasVariants) {
+                            root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
+                            event.accepted = true;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            id: searchRule
+            anchors.top: searchRow.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: Core.Theme.borderWidth
+            color: Core.Theme.color.border
+        }
+
+        // The level (M53 Task 6): everything under the rule is one item, so
+        // the entrance below is one arrival. Before it, the row list slid in
+        // while the breadcrumb naming the level, the footer describing it and
+        // the preview beside it were already sitting there.
+        //
+        // A plain Item with no size of its own beyond the slot it fills: the
+        // header's own two bands (breadcrumb, variant switcher) still report
+        // their heights to _headerHeight by id, the views still measure
+        // _viewContentHeight off their own content, and every anchor inside
+        // resolves to the same edges it did as a direct child of the card.
+        Item {
+            id: levelBody
+            anchors.top: searchRule.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            // The card's settled height, not its current one: anchored to the
+            // card's own bottom edge instead, everything in here that hangs
+            // off that edge (the action bar, the preview pane) would ride the
+            // unfold down through the rows rather than being revealed by it.
+            height: Math.max(0, root._morphHeight - root._fieldRowHeight)
+            // The level entrance (M54 D8): plays when the level or the view
+            // that stands in for the row list changes, never on a query
+            // re-rank. No fade against the unfold: the level sits at full
+            // opacity under the card's clip, so the growing edge is what
+            // reveals it. Fading it as well hid the reveal, since the rows
+            // were still transparent for most of the edge's travel.
+            opacity: root._levelEnterOpacity
+
+            // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text
+            // line naming the path down to the level, hidden outright at the
+            // root, where the field is already the whole surface. It states
+            // where the level sits; it is not a control, so nothing in it
+            // answers a click. `_headerInset` puts the first label in the same
+            // column as the search icon above it and the row icons below it,
+            // which a chip could not do: its own `controlPaddingX` pushed the
+            // text a further 12px in and left it floating off every edge on the
+            // surface (owner, live shell, 2026-08-26).
+            //
+            // The gap above is wider than the `rowGap` between two filled bands
+            // because what precedes it is a hairline rule, which bare text lands
+            // on at `rowGap`.
+            Row {
+                id: breadcrumbRow
                 anchors.top: parent.top
+                anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.lg : 0
+                anchors.left: parent.left
+                anchors.leftMargin: root._headerInset
+                spacing: Core.Theme.space.md
+                height: root._breadcrumbVisible ? implicitHeight : 0
+                // Held on screen while the band closes under it, and cut
+                // to the band's own height either way: everything below
+                // hangs off this row's bottom edge, so an uncut path
+                // would have the rows drawn over it for the whole travel.
+                visible: root._breadcrumbVisible || breadcrumbRow.height > 0
+                clip: true
+
+                // The band travels with the card's own edge rather than
+                // snapping under it (M54 D10). Gated like the morphs
+                // above: an open seeds this at the landing level's height
+                // and a close freezes it, so neither is a change to glide.
+                Behavior on height {
+                    enabled: root.isOpen && drawer.presence.mapped
+                    Anim {}
+                }
+
+                Repeater {
+                    model: root.breadcrumb
+
+                    // Separator then label, so the outer row's spacing lands on
+                    // both sides of the chevron and the whole path reads at one
+                    // rhythm. The first crumb's separator is not merely blank:
+                    // a Row skips an invisible child's spacing too.
+                    delegate: Row {
+                        id: crumb
+                        required property string modelData
+                        required property int index
+
+                        spacing: Core.Theme.space.md
+                        height: crumbLabel.implicitHeight
+
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: crumb.index > 0
+                            name: "chevron-right"
+                            size: Core.Theme.fontSize.bodySmall
+                            color: Core.Theme.color.mutedForeground
+                        }
+
+                        Text {
+                            id: crumbLabel
+                            text: crumb.modelData
+                            // The level is the page and everything above it is
+                            // the path to it (shadcn's BreadcrumbPage against
+                            // BreadcrumbLink). Colour is the whole difference:
+                            // neither one is bolder than the other.
+                            color: crumb.index === root.breadcrumb.length - 1
+                                ? Core.Theme.color.foreground
+                                : Core.Theme.color.mutedForeground
+                            font.family: Core.Theme.fontFamilySans
+                            font.pixelSize: Core.Theme.fontSize.bodySmall
+                            // Elided in the middle rather than at the tail: a
+                            // level's head and tail are what tell two of them
+                            // apart, and the path has to stay on one line at any
+                            // depth.
+                            elide: Text.ElideMiddle
+                            width: Math.min(implicitWidth, root._crumbMaxWidth)
+                        }
+                    }
+                }
+            }
+
+            // The wallpaper route's Dark | Light switcher (spec "Picker"): the
+            // `Segmented` primitive. Absent entirely (zero height, no reserved
+            // gutter) for a directory with no Dark/Light pair, and on every
+            // other route.
+            //
+            // Both views below anchor to this rather than to the header, so the
+            // switcher pushes the grid down without either of them knowing
+            // whether it is there. It takes the same gap the breadcrumb takes
+            // above it: at `rowGap` a 32px trough sitting that close to a bare
+            // text line reads as one block with it.
+            Segmented {
+                id: variantRow
+                // The route's own answer, read by the height and the gap
+                // rather than by `visible`, which now outlives it while
+                // the band closes.
+                readonly property bool wanted: root._isPickerRoute && root._pickerHasVariants
+
+                anchors.top: breadcrumbRow.bottom
+                anchors.topMargin: variantRow.wanted ? Core.Theme.space.lg : 0
+                anchors.left: parent.left
+                height: variantRow.wanted ? implicitHeight : 0
+                visible: variantRow.wanted || variantRow.height > 0
+                clip: true
+                options: ["Dark", "Light"]
+                onChanged: i => root.setPickerVariant(i === 1 ? "light" : "dark")
+
+                // The switcher's own gap, on the card's clock (M54 D10),
+                // on the same gate as the morphs: the grids below hang off
+                // its bottom edge and travel with it.
+                Behavior on height {
+                    enabled: root.isOpen && drawer.presence.mapped
+                    Anim {}
+                }
+            }
+
+            // The variant belongs to the route, not to the control: Tab and
+            // `picker variant` over IPC move it too, and Segmented writes its own
+            // `index` on click, which a plain binding would not survive.
+            Binding {
+                target: variantRow
+                property: "index"
+                value: root._pickerVariant === "light" ? 1 : 0
+            }
+
+            ListView {
+                id: rowsView
+                // Delegates recycle rather than being destroyed and rebuilt on
+                // every flick. Safe here because every delegate in this file is
+                // required properties plus bindings off them, with no
+                // Component.onCompleted work that a reused item would skip.
+                reuseItems: true
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                anchors.leftMargin: root._listInset
+                // Split route (M30): the list keeps the left half of
+                // _contentWidth so the preview pane below can own the right
+                // half. Every other route is unchanged, full width.
+                width: root._listWidth
+                height: root._morphRowsHeight
+                visible: !root._isGrid && !root._isAppView
+                clip: true
+                // Unread, not merely hidden, on the grids' and an app view's
+                // routes: an unread model keeps its delegates alive, and
+                // _viewContentHeight above needs the idle view to measure 0.
+                model: (root._isGrid || root._isAppView) ? null : rowsModel
+                currentIndex: root._cursorIndex
+                // ListView tracks the cursor through its (always present, even
+                // with no `highlight` component) highlight item, and the
+                // default `highlightMoveDuration: -1` moves that item at
+                // `highlightMoveVelocity`, 400px/s. Key repeat outruns it, so
+                // the view crawls behind the cursor and the tail of a long list
+                // stays off-screen for seconds after the cursor has already
+                // reached it and wrapped back to the top. 0 makes the follow a
+                // hard jump, the only thing that keeps the cursor row visible
+                // at repeat speed. What the reader sees travelling is
+                // `rowCursor` below, which is not what the view scrolls to.
+                highlightMoveDuration: 0
+
+                // Rows never reset (M53 D6), so they enter, leave and change
+                // places instead. Disarmed for the refill the diff falls back
+                // to, where there is no "instead" to describe.
+                add: AddTransition { enabled: root._rowsAnimate }
+                remove: RemoveTransition { enabled: root._rowsAnimate }
+                displaced: MoveTransition { enabled: root._rowsAnimate }
+                move: MoveTransition { enabled: root._rowsAnimate }
+
+                WheelScroll { flickable: rowsView }
+
+                // The cursor (M53 D4): one fill that travels between rows on an
+                // arrow step, drawn here rather than per row so there is one of
+                // it to travel. A child of the ListView is a child of its
+                // contentItem, so it scrolls with the rows it sits under; `z`
+                // puts it under them, since the row's own ink draws over it.
+                //
+                // Offset by the current row's heading band: a row that opens a
+                // group is taller than its own body by that band, and a fill
+                // covering it would swallow the heading.
+                Rectangle {
+                    id: rowCursor
+                    readonly property var row: rowsView.currentItem
+                    z: -1
+                    visible: rowCursor.row !== null && rowsView.count > 0
+                    width: rowsView.width
+                    y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
+                    height: rowCursor.row ? rowCursor.row._rowHeight : 0
+                    radius: Core.Theme.radiusSm
+                    color: Core.Theme.color.accent
+
+                    Behavior on y {
+                        enabled: root._cursorTravels
+                        Anim { kind: "spatialFast" }
+                    }
+                }
+
+                delegate: MenuRow {
+                    required property string rowId
+                    // The row this delegate is drawing, by id rather than by
+                    // index: a row fading out through the `remove` transition
+                    // above has left the model but not the screen, and its
+                    // index now belongs to whatever slid up into it.
+                    readonly property var entry: root._rowsById[rowId] || root._rowsPrev[rowId] || null
+
+                    // A delegate is pooled after its exit fade as well as after
+                    // scrolling out of view, so its opacity is put back before
+                    // it can be handed to a row that is not entering (M53 D6:
+                    // an exit that leaves a recycled row invisible is worse
+                    // than no exit at all).
+                    ListView.onPooled: opacity = 1
+
+                    modelData: entry ? entry.row : root._blankRow
+                    current: root._cursorIndex === index
+                    checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
+                    confirming: root._confirmPendingId === node.id
+                    // A heading rides the row that opens its group, so a row
+                    // whose section matches the one above it carries none.
+                    section: entry ? entry.section : ""
+                    sectionFirst: entry ? entry.sectionFirst : false
+
+                    onActivate: root._activateFromPointer(index)
+                    onHoverMoved: (source, x, y) => {
+                        if (pointerGate.moved(source, x, y))
+                            root._setCursor(index);
+                    }
+                }
+            }
+
+            // shadcn's `CommandEmpty` (M48 D6). Drawn in the row area rather
+            // than as a row of the list: it answers nothing, and a cursor
+            // sitting on it would offer a verb the footer would then have to
+            // take back.
+            Text {
+                id: emptyState
+                anchors.top: rowsView.top
+                anchors.left: rowsView.left
+                anchors.right: rowsView.right
+                height: root._morphRowsHeight
+                // Against the list rather than after it (M53 D3): the rows
+                // this replaces are leaving through their own remove
+                // transition, so the line rises over them instead of landing
+                // on the frame they used to fill. Hidden at 0 so it never
+                // hit-tests over a list that has come back.
+                opacity: root._showEmpty ? 1 : 0
+                visible: emptyState.opacity > 0
+                Behavior on opacity {
+                    Anim { kind: "effects" }
+                }
+                text: "No results found."
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                color: Core.Theme.color.mutedForeground
+                font.family: Core.Theme.fontFamilySans
+                font.pixelSize: Core.Theme.fontSize.body
+            }
+
+            // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
+            // of image cells sharing hairline rules", spec §11), the picker's
+            // own surface, now one of the menu's two views over the same
+            // _displayRows/_cursorIndex state rather than a panel of its own.
+            // Shares rowsView's geometry exactly, so the action bar below can
+            // anchor to whichever of the two is live without knowing which.
+            GridView {
+                id: gridView
+                // Delegates recycle rather than being destroyed and rebuilt on
+                // every flick. Safe here because every delegate in this file is
+                // required properties plus bindings off them, with no
+                // Component.onCompleted work that a reused item would skip.
+                reuseItems: true
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isPickerRoute
+                clip: true
+                model: root._isPickerRoute ? root._displayRows : []
+                cellWidth: root._contentWidth / root.pickerColumns
+                cellHeight: gridView.cellWidth
+                currentIndex: root._cursorIndex
+                // Same hard-jump follow as rowsView, for the same reason: held
+                // arrow keys outrun the default animated highlight move and the
+                // cursor cell ends up off-viewport.
+                highlightMoveDuration: 0
+
+                // A row here is a row of thumbnails, not a text line.
+                WheelScroll {
+                    flickable: gridView
+                    step: gridView.cellHeight
+                }
+
+                // The wrapper carries the GridView's own cell, so the `Cell`
+                // inside it can hold the gutter between thumbnails in its
+                // margins and every gap comes out the same width, the edges of
+                // the grid included.
+                delegate: Item {
+                    id: imageSlot
+                    required property int index
+                    required property var modelData
+
+                    width: gridView.cellWidth
+                    height: gridView.cellHeight
+
+                    Cell {
+                        id: imageCell
+                        anchors.fill: parent
+                        anchors.margins: Core.Theme.space.xs
+                        radius: Core.Theme.radiusMd
+                        // A grid cursor is the ring (spec "Launcher"): the
+                        // thumbnail covers the cell, so a fill would sit under
+                        // the picture and never be seen.
+                        cursor: imageSlot.index === root._cursorIndex
+
+                        // The thumbnail is inset far enough that its square corners
+                        // sit inside the cell's rounded ones, which is what lets an
+                        // image live in a `radiusMd` frame with no mask: at `sm` the
+                        // corner of the inset square is 5.7px from the arc's centre
+                        // against a radius of 8.
+                        //
+                        // Decode capped at the cell's own on-screen size (M16 Task
+                        // 12): without this, a 6000×4000 source decodes at full
+                        // resolution into a ~130px cell, ~96MB of resident RGBA
+                        // per thumbnail, times every file in the directory.
+                        //
+                        // The 2x factor matters on the fallback path: sourceSize with
+                        // both dimensions set decodes to FIT INSIDE that box (Qt's
+                        // KeepAspectRatio), not to cover it, so a non-square source
+                        // into this square cell would decode short on one axis and
+                        // PreserveAspectCrop would upscale it back out, visibly
+                        // blurrier than an uncapped decode. A box 2x the cell's side
+                        // keeps the fit-inside decode covering the cell for any
+                        // source up to 2:1 either way, comfortably past 16:9, while
+                        // still capping memory to a small multiple of the cell. A
+                        // cached thumbnail is already a square crop, so the same box
+                        // is simply generous for it.
+                        // Sized off the GridView's own cell rather than off
+                        // `imageCell`: a `Cell` measures its content to publish
+                        // an implicit size, so a child measured back off the
+                        // cell closes a loop Qt then reports and breaks (its
+                        // own anchors already decide its size, but the detector
+                        // sees the cycle first).
+                        Image {
+                            id: thumb
+                            anchors.centerIn: parent
+                            width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                            height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                            // ThumbnailService's prerendered square crop when
+                            // there is one, the wallpaper itself otherwise. The
+                            // fallback is not a degraded mode, it is exactly
+                            // what this cell did before the cache existed: a
+                            // cold cache, an install with no ffmpeg, and a
+                            // format ffmpeg cannot decode all land on it.
+                            readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path, "cover")
+                            source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
+                            fillMode: Image.PreserveAspectCrop
+                            // PreserveAspectCrop paints past its own bounds
+                            // without this, over the cells beside it.
+                            clip: true
+                            asynchronous: true
+                            cache: false
+                            sourceSize.width: thumb.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                            sourceSize.height: thumb.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
+                        }
+
+                        interactive: true
+                        // Same gate as the row list: filtering re-renders cells
+                        // under a parked pointer, and Qt delivers that as a
+                        // hover move indistinguishable from a real one.
+                        onPointerMoved: (x, y) => {
+                            if (pointerGate.moved(imageCell, x, y))
+                                root._setCursor(imageSlot.index);
+                        }
+                        onClicked: root._activateFromPointer(imageSlot.index)
+                    }
+                }
+            }
+
+            // The emoji route's grid (M48 D5). A second GridView rather than a
+            // kind-branching delegate inside the one above: the two share their
+            // geometry and their cursor, and nothing else. One holds a decoded
+            // image with a capped source size and its own cropping rules, the
+            // other holds a glyph.
+            GridView {
+                id: emojiGrid
+                // Delegates recycle rather than being destroyed and rebuilt on
+                // every flick. Safe here because every delegate in this file is
+                // required properties plus bindings off them, with no
+                // Component.onCompleted work that a reused item would skip.
+                reuseItems: true
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isEmojiGrid
+                clip: true
+                model: root._isEmojiGrid ? root._displayRows : []
+                cellWidth: root._contentWidth / root.emojiColumns
+                cellHeight: emojiGrid.cellWidth
+                currentIndex: root._cursorIndex
+                // Same hard-jump follow as the two views above, for the same
+                // reason: held arrow keys outrun the default animated highlight
+                // move and the cursor cell ends up off-viewport.
+                highlightMoveDuration: 0
+
+                WheelScroll {
+                    flickable: emojiGrid
+                    step: emojiGrid.cellHeight
+                }
+
+                // The wrapper carries the GridView's own cell so the `Cell`
+                // inside it can hold the gutter between glyphs in its margins,
+                // exactly as the wallpaper grid does.
+                delegate: Item {
+                    id: emojiSlot
+                    required property int index
+                    required property var modelData
+
+                    width: emojiGrid.cellWidth
+                    height: emojiGrid.cellHeight
+
+                    Cell {
+                        id: emojiCell
+                        anchors.fill: parent
+                        anchors.margins: Core.Theme.space.xs
+                        radius: Core.Theme.radiusSm
+                        // Ghost, so a grid of 40 glyphs is 40 glyphs rather than
+                        // 40 boxes; hover fills `accent` and the cursor is the
+                        // ring, the same two states every other cell draws.
+                        ghost: true
+                        cursor: emojiSlot.index === root._cursorIndex
+                        interactive: true
+                        // Same gate as the row list: filtering re-renders cells
+                        // under a parked pointer, and Qt delivers that as a
+                        // hover move indistinguishable from a real one.
+                        onPointerMoved: (x, y) => {
+                            if (pointerGate.moved(emojiCell, x, y))
+                                root._setCursor(emojiSlot.index);
+                        }
+                        onClicked: root._activateFromPointer(emojiSlot.index)
+
+                        // The glyph IS the row's icon (providers.js's emojiRows),
+                        // carried in the mono font that renders it. At `display`
+                        // rather than `heading`: a cell eight columns into
+                        // `popupWidthMenu` is wide enough that a heading-sized
+                        // glyph read as a scatter of dots rather than as a
+                        // picture to pick from (read off menu-emoji.png).
+                        Text {
+                            anchors.centerIn: parent
+                            text: emojiSlot.modelData.icon
+                            color: Core.Theme.color.foreground
+                            font.family: Core.Theme.fontFamilyMono
+                            font.pixelSize: Core.Theme.fontSize.display
+                        }
+                    }
+                }
+            }
+
+            // The third view (M38, D1): a whole component in place of the row
+            // list, for any route Menu/appviews.js registers. Shares rowsView's
+            // geometry exactly, like gridView above, so the action bar anchors
+            // to whichever of the three is live without knowing which.
+            //
+            // `source` empties off the route rather than the loader merely
+            // hiding: an app view holds a live subscription to whatever service
+            // it renders, and a hidden-but-loaded one would keep that service
+            // polling for a launcher nobody is looking at.
+            //
+            // It empties on the window going away too, not just on leaving the
+            // route. close() deliberately leaves currentNodeId where it was (so
+            // a resummon lands back on the same level), which would otherwise
+            // hold the subscription open for as long as the shell runs. Keyed
+            // off the window's own `visible` rather than `isOpen` so the view
+            // survives the exit fade instead of blanking the card mid-animation.
+            Loader {
+                id: appView
+                anchors.top: variantRow.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                width: root._contentWidth
+                height: root._morphRowsHeight
+                visible: root._isAppView
+                source: (root._isAppView && root.visible) ? Qt.resolvedUrl(root._appViewSource) : ""
+            }
+
+            // The seam that makes the registry reusable: a view that wants the
+            // search field declares `property string query` and gets the live
+            // text; one that declares none (MonitorView) leaves the field inert
+            // rather than pretending to filter something.
+            Binding {
+                target: appView.item
+                property: "query"
+                value: searchInput.text
+                when: appView.item !== null && appView.item.query !== undefined
+            }
+
+            // The split route's right half (M30, M43 D4): the cursor row's full
+            // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
+            // list. Positioned by anchoring off rowsView itself (whichever width
+            // it currently has) rather than an independent x/width pair, so the
+            // two views can never drift apart.
+            //
+            // This is the launcher spending its one card (DESIGN.md §1's ladder,
+            // rung 5, owner 2026-08-26): the surface's own frame, and inside it
+            // exactly one block that outranks the rest. The left half is flat
+            // `MenuRow`s and this half is the card, so the pane reads as the
+            // thing the list is pointing at. What the rule rules out is a second
+            // frame INSIDE this one, which is what an image row used to get.
+            Card {
+                id: previewPane
+                visible: root._isSplitRoute
+                anchors.top: rowsView.top
+                anchors.left: rowsView.right
+                anchors.leftMargin: Core.Theme.space.sm
+                anchors.right: parent.right
+                height: rowsView.height
+                radius: Core.Theme.radiusMd
+
+                Row {
+                    id: previewHeader
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    spacing: Core.Theme.space.sm
+
+                    SectionLabel {
+                        id: previewMeta
+                        visible: root._previewKind !== ""
+                        text: root._previewKind
+                    }
+
+                    Text {
+                        visible: root._previewTime !== ""
+                        text: root._previewTime
+                        color: Core.Theme.color.mutedForeground
+                        font.family: Core.Theme.fontFamilyMono
+                        font.pixelSize: Core.Theme.fontSize.caption
+                    }
+                }
+
+                Text {
+                    id: previewText
+                    anchors.top: previewHeader.bottom
+                    anchors.topMargin: Core.Theme.space.rowGap
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    // The two slots share one frame, so the cursor stepping
+                    // from a text capture to an image one is a content swap
+                    // and crossfades (M53 D3).
+                    opacity: root._previewIsText ? 1 : 0
+                    visible: previewText.opacity > 0
+                    Behavior on opacity {
+                        Anim { kind: "effects" }
+                    }
+                    clip: true
+                    text: root._previewText
+                    // A clipboard capture reaches this pane raw, so the preview
+                    // has to show the bytes that will be pasted rather than let
+                    // AutoText parse copied markup as a rich-text document.
+                    textFormat: Text.PlainText
+                    wrapMode: Text.WrapAnywhere
+                    color: Core.Theme.color.foreground
+                    font.family: Core.Theme.fontFamilyMono
+                    font.pixelSize: Core.Theme.fontSize.body
+                }
+
+                // True-color (menu thumbnails are never dithered) full preview of
+                // the cursor row's capture, decode capped at the slot's own size
+                // for the picker grid's reason. Bare: no well, no frame, no
+                // outline. The pane around it is already the one card this
+                // surface gets, and a border inside that is the nesting the rule
+                // forbids. It fits rather than fills, so the pane's own ground
+                // shows around it, which is what a letterboxed capture is
+                // supposed to sit on.
+                Image {
+                    id: previewImage
+                    anchors.top: previewHeader.bottom
+                    anchors.topMargin: Core.Theme.space.rowGap
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    // The other half of the swap above.
+                    opacity: root._previewIsImage ? 1 : 0
+                    visible: previewImage.opacity > 0
+                    Behavior on opacity {
+                        Anim { kind: "effects" }
+                    }
+                    source: root._previewImageSource
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                    sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
+                    sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
+                }
+            }
+
+            // What the cursor cell is (M48 D5). A grid cell is a picture with no
+            // room for a name, so the name goes here, under the grid and above
+            // the footer, where it changes as the cursor moves rather than
+            // waiting for a pointer to hover something. Absent entirely (zero
+            // height, no reserved gutter) on every other route.
+            SectionLabel {
+                id: emojiCaption
+                // The route's own answer, read by the height and the gap
+                // rather than by `visible`, which now outlives it while
+                // the band closes.
+                readonly property bool wanted: root._isEmojiGrid && root._cursorNode !== null
+
+                anchors.top: rowsView.bottom
+                anchors.topMargin: emojiCaption.wanted ? Core.Theme.space.rowGap : 0
                 anchors.left: parent.left
                 anchors.leftMargin: root._headerInset
                 anchors.right: parent.right
                 anchors.rightMargin: root._headerInset
-                height: Core.Theme.space.controlHeight
+                height: emojiCaption.wanted ? implicitHeight : 0
+                visible: emojiCaption.wanted || emojiCaption.height > 0
+                clip: true
+                elide: Text.ElideRight
+                text: root._cursorNode ? root._cursorNode.label : ""
 
-                Icon {
-                    id: searchIcon
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: "search"
-                    size: Core.Theme.fontSize.body
-                    color: Core.Theme.color.mutedForeground
-                }
-
-                TextInput {
-                    id: searchInput
-                    anchors.left: searchIcon.right
-                    anchors.leftMargin: Core.Theme.space.iconGap
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: Core.Theme.color.foreground
-                    font.family: Core.Theme.fontFamilySans
-                    font.pixelSize: Core.Theme.fontSize.body
-                    focus: true
-                    selectByMouse: true
-                    cursorVisible: true
-
-                    Text {
-                        anchors.fill: parent
-                        visible: searchInput.text.length === 0
-                        text: root.placeholder
-                        color: Core.Theme.color.mutedForeground
-                        font: searchInput.font
-                        verticalAlignment: Text.AlignVCenter
-                        elide: Text.ElideRight
-                    }
-
-                    onTextChanged: {
-                        root._cursorIndex = 0;
-                        root._confirmPendingId = "";
-                        // Typing re-ranks the rows under a pointer that hasn't
-                        // moved, the churn the gate exists for.
-                        pointerGate.reset();
-                        // Arm the debounced nix search from the event, never
-                        // from the _displayRows binding (side effect).
-                        if (root._mode === "menu") {
-                            var nixQuery = Providers.nixTriggerQuery(searchInput.text);
-                            if (nixQuery === null && root.currentNodeId === "nix")
-                                nixQuery = searchInput.text;
-                            if (nixQuery !== null) {
-                                root._requestNixWarm();
-                                root._requestNixSearch(nixQuery);
-                            }
-                        }
-                    }
-
-                    Keys.onPressed: event => {
-                        // An app view with its own cursor gets first refusal
-                        // on every key (root._appViewKey's own note).
-                        if (root._appViewKey(event.key, event.modifiers)) {
-                            event.accepted = true;
-                            return;
-                        }
-                        switch (event.key) {
-                        // An app view has no row cursor, so the same two keys
-                        // scroll its content by a row instead. Claimed
-                        // either way: letting them through would only reach
-                        // the search field's own text cursor.
-                        case Qt.Key_Up:
-                            if (root._isAppView)
-                                root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
-                            else
-                                root._moveCursor(-root.cursorColumns);
-                            event.accepted = true;
-                            break;
-                        case Qt.Key_Down:
-                            if (root._isAppView)
-                                root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
-                            else
-                                root._moveCursor(root.cursorColumns);
-                            event.accepted = true;
-                            break;
-                        // Left/Right belong to the search field's own text
-                        // cursor everywhere except a grid, so they're
-                        // claimed only there, never accepted otherwise.
-                        case Qt.Key_Left:
-                            if (root._isGrid) {
-                                root._moveCursor(-1);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_Right:
-                            if (root._isGrid) {
-                                root._moveCursor(1);
-                                event.accepted = true;
-                            }
-                            break;
-                        // Page/Home/End are the search field's own text
-                        // navigation everywhere else, so they are claimed
-                        // only where an app view declares something to
-                        // scroll. A page keeps one row of overlap, so the
-                        // reader carries context across the jump.
-                        case Qt.Key_PageUp:
-                        case Qt.Key_PageDown:
-                            if (root._appViewScroll) {
-                                var page = Math.max(Core.Theme.space.popupRowHeight,
-                                    root._appViewScroll.height - Core.Theme.space.popupRowHeight);
-                                root._scrollAppViewBy(event.key === Qt.Key_PageUp ? -page : page);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_Home:
-                            if (root._appViewScroll) {
-                                root._scrollAppViewTo(0);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_End:
-                            if (root._appViewScroll) {
-                                root._scrollAppViewTo(root._appViewScroll.contentHeight);
-                                event.accepted = true;
-                            }
-                            break;
-                        case Qt.Key_Return:
-                        case Qt.Key_Enter:
-                            if (root._mode === "input")
-                                root._submitInput();
-                            else if ((event.modifiers & Qt.ShiftModifier) !== 0)
-                                root._activateRowAlternate(root._cursorIndex);
-                            else
-                                root._activateRow(root._cursorIndex);
-                            event.accepted = true;
-                            break;
-                        case Qt.Key_Escape:
-                            // select/input have no tree level to pop out of:
-                            // Escape just cancels the request and closes (close()
-                            // writes the {cancelled:true} record via
-                            // _abandonPendingSelect()).
-                            if (root._mode !== "menu")
-                                root.close();
-                            else
-                                root._pop();
-                            event.accepted = true;
-                            break;
-                        case Qt.Key_Backspace:
-                            if (root._mode === "menu" && searchInput.text.length === 0) {
-                                root._pop();
-                                event.accepted = true;
-                            }
-                            break;
-                        // Two variants, so Tab and Shift+Tab are the same
-                        // switch. Claimed only where the switcher is actually
-                        // up, so Tab keeps whatever it does everywhere else.
-                        case Qt.Key_Tab:
-                        case Qt.Key_Backtab:
-                            if (root._isPickerRoute && root._pickerHasVariants) {
-                                root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
-                                event.accepted = true;
-                            }
-                            break;
-                        }
-                    }
+                // The caption's band on the card's clock (M54 D10), on the
+                // same gate as the morphs: `_captionBand` reads this
+                // height straight into `_cardHeight`, so the card's own
+                // edge and the band travel together.
+                Behavior on height {
+                    enabled: root.isOpen && drawer.presence.mapped
+                    Anim {}
                 }
             }
 
-            Rectangle {
-                id: searchRule
-                anchors.top: searchRow.bottom
+            // The footer hint line (spec "Launcher"): what Enter does to the
+            // row under the cursor, plus the keys that always apply.
+            // Menu/actions.js owns the wording.
+            MenuActionBar {
+                id: actionBar
+                anchors.top: emojiCaption.bottom
+                anchors.topMargin: Core.Theme.space.rowGap
+                // Same inset the rows and the input row take, so the legend
+                // starts under the column of labels rather than under the card's
+                // edge (DESIGN.md §1 Padding).
                 anchors.left: parent.left
+                anchors.leftMargin: root._headerInset
                 anchors.right: parent.right
-                height: Core.Theme.borderWidth
-                color: Core.Theme.color.border
+                anchors.rightMargin: root._headerInset
+                primary: root._actionBar.primary
+                hints: root._actionBar.hints
+
+                // Clicking the primary verb is the pointer acting, exactly like
+                // clicking the row itself: same path, same gate re-arm. On an
+                // app view it presses that view's own primary instead, at
+                // whatever its cursor already is (index -1).
+                onPrimaryActivated: {
+                    if (root._isAppView) {
+                        if (appView.item && appView.item.viewActivate)
+                            appView.item.viewActivate(-1);
+                        return;
+                    }
+                    root._activateFromPointer(root._cursorIndex);
+                }
             }
 
-            // The level (M53 Task 6): everything under the rule is one item, so
-            // the entrance below is one arrival. Before it, the row list slid in
-            // while the breadcrumb naming the level, the footer describing it and
-            // the preview beside it were already sitting there.
-            //
-            // A plain Item with no size of its own beyond the slot it fills: the
-            // header's own two bands (breadcrumb, variant switcher) still report
-            // their heights to _headerHeight by id, the views still measure
-            // _viewContentHeight off their own content, and every anchor inside
-            // resolves to the same edges it did as a direct child of the card.
-            Item {
-                id: levelBody
-                anchors.top: searchRule.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                // The card's settled height, not its current one: anchored to the
-                // card's own bottom edge instead, everything in here that hangs
-                // off that edge (the action bar, the preview pane) would ride the
-                // unfold down through the rows rather than being revealed by it.
-                height: Math.max(0, root._morphHeight - root._fieldRowHeight)
-                // The level entrance (M54 D8): plays when the level or the view
-                // that stands in for the row list changes, never on a query
-                // re-rank. No fade against the unfold: the level sits at full
-                // opacity under the card's clip, so the growing edge is what
-                // reveals it. Fading it as well hid the reveal, since the rows
-                // were still transparent for most of the edge's travel.
-                opacity: root._levelEnterOpacity
-
-                // The breadcrumb (spec "Launcher"): shadcn's Breadcrumb, one text
-                // line naming the path down to the level, hidden outright at the
-                // root, where the field is already the whole surface. It states
-                // where the level sits; it is not a control, so nothing in it
-                // answers a click. `_headerInset` puts the first label in the same
-                // column as the search icon above it and the row icons below it,
-                // which a chip could not do: its own `controlPaddingX` pushed the
-                // text a further 12px in and left it floating off every edge on the
-                // surface (owner, live shell, 2026-08-26).
-                //
-                // The gap above is wider than the `rowGap` between two filled bands
-                // because what precedes it is a hairline rule, which bare text lands
-                // on at `rowGap`.
-                Row {
-                    id: breadcrumbRow
-                    anchors.top: parent.top
-                    anchors.topMargin: root._breadcrumbVisible ? Core.Theme.space.lg : 0
-                    anchors.left: parent.left
-                    anchors.leftMargin: root._headerInset
-                    spacing: Core.Theme.space.md
-                    height: root._breadcrumbVisible ? implicitHeight : 0
-                    // Held on screen while the band closes under it, and cut
-                    // to the band's own height either way: everything below
-                    // hangs off this row's bottom edge, so an uncut path
-                    // would have the rows drawn over it for the whole travel.
-                    visible: root._breadcrumbVisible || breadcrumbRow.height > 0
-                    clip: true
-
-                    // The band travels with the card's own edge rather than
-                    // snapping under it (M54 D10). Gated like the morphs
-                    // above: an open seeds this at the landing level's height
-                    // and a close freezes it, so neither is a change to glide.
-                    Behavior on height {
-                        enabled: root.isOpen && presence.mapped
-                        Anim {}
-                    }
-
-                    Repeater {
-                        model: root.breadcrumb
-
-                        // Separator then label, so the outer row's spacing lands on
-                        // both sides of the chevron and the whole path reads at one
-                        // rhythm. The first crumb's separator is not merely blank:
-                        // a Row skips an invisible child's spacing too.
-                        delegate: Row {
-                            id: crumb
-                            required property string modelData
-                            required property int index
-
-                            spacing: Core.Theme.space.md
-                            height: crumbLabel.implicitHeight
-
-                            Icon {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: crumb.index > 0
-                                name: "chevron-right"
-                                size: Core.Theme.fontSize.bodySmall
-                                color: Core.Theme.color.mutedForeground
-                            }
-
-                            Text {
-                                id: crumbLabel
-                                text: crumb.modelData
-                                // The level is the page and everything above it is
-                                // the path to it (shadcn's BreadcrumbPage against
-                                // BreadcrumbLink). Colour is the whole difference:
-                                // neither one is bolder than the other.
-                                color: crumb.index === root.breadcrumb.length - 1
-                                    ? Core.Theme.color.foreground
-                                    : Core.Theme.color.mutedForeground
-                                font.family: Core.Theme.fontFamilySans
-                                font.pixelSize: Core.Theme.fontSize.bodySmall
-                                // Elided in the middle rather than at the tail: a
-                                // level's head and tail are what tell two of them
-                                // apart, and the path has to stay on one line at any
-                                // depth.
-                                elide: Text.ElideMiddle
-                                width: Math.min(implicitWidth, root._crumbMaxWidth)
-                            }
-                        }
-                    }
-                }
-
-                // The wallpaper route's Dark | Light switcher (spec "Picker"): the
-                // `Segmented` primitive. Absent entirely (zero height, no reserved
-                // gutter) for a directory with no Dark/Light pair, and on every
-                // other route.
-                //
-                // Both views below anchor to this rather than to the header, so the
-                // switcher pushes the grid down without either of them knowing
-                // whether it is there. It takes the same gap the breadcrumb takes
-                // above it: at `rowGap` a 32px trough sitting that close to a bare
-                // text line reads as one block with it.
-                Segmented {
-                    id: variantRow
-                    // The route's own answer, read by the height and the gap
-                    // rather than by `visible`, which now outlives it while
-                    // the band closes.
-                    readonly property bool wanted: root._isPickerRoute && root._pickerHasVariants
-
-                    anchors.top: breadcrumbRow.bottom
-                    anchors.topMargin: variantRow.wanted ? Core.Theme.space.lg : 0
-                    anchors.left: parent.left
-                    height: variantRow.wanted ? implicitHeight : 0
-                    visible: variantRow.wanted || variantRow.height > 0
-                    clip: true
-                    options: ["Dark", "Light"]
-                    onChanged: i => root.setPickerVariant(i === 1 ? "light" : "dark")
-
-                    // The switcher's own gap, on the card's clock (M54 D10),
-                    // on the same gate as the morphs: the grids below hang off
-                    // its bottom edge and travel with it.
-                    Behavior on height {
-                        enabled: root.isOpen && presence.mapped
-                        Anim {}
-                    }
-                }
-
-                // The variant belongs to the route, not to the control: Tab and
-                // `picker variant` over IPC move it too, and Segmented writes its own
-                // `index` on click, which a plain binding would not survive.
-                Binding {
-                    target: variantRow
-                    property: "index"
-                    value: root._pickerVariant === "light" ? 1 : 0
-                }
-
-                ListView {
-                    id: rowsView
-                    // Delegates recycle rather than being destroyed and rebuilt on
-                    // every flick. Safe here because every delegate in this file is
-                    // required properties plus bindings off them, with no
-                    // Component.onCompleted work that a reused item would skip.
-                    reuseItems: true
-                    anchors.top: variantRow.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    anchors.left: parent.left
-                    anchors.leftMargin: root._listInset
-                    // Split route (M30): the list keeps the left half of
-                    // _contentWidth so the preview pane below can own the right
-                    // half. Every other route is unchanged, full width.
-                    width: root._listWidth
-                    height: root._morphRowsHeight
-                    visible: !root._isGrid && !root._isAppView
-                    clip: true
-                    // Unread, not merely hidden, on the grids' and an app view's
-                    // routes: an unread model keeps its delegates alive, and
-                    // _viewContentHeight above needs the idle view to measure 0.
-                    model: (root._isGrid || root._isAppView) ? null : rowsModel
-                    currentIndex: root._cursorIndex
-                    // ListView tracks the cursor through its (always present, even
-                    // with no `highlight` component) highlight item, and the
-                    // default `highlightMoveDuration: -1` moves that item at
-                    // `highlightMoveVelocity`, 400px/s. Key repeat outruns it, so
-                    // the view crawls behind the cursor and the tail of a long list
-                    // stays off-screen for seconds after the cursor has already
-                    // reached it and wrapped back to the top. 0 makes the follow a
-                    // hard jump, the only thing that keeps the cursor row visible
-                    // at repeat speed. What the reader sees travelling is
-                    // `rowCursor` below, which is not what the view scrolls to.
-                    highlightMoveDuration: 0
-
-                    // Rows never reset (M53 D6), so they enter, leave and change
-                    // places instead. Disarmed for the refill the diff falls back
-                    // to, where there is no "instead" to describe.
-                    add: AddTransition { enabled: root._rowsAnimate }
-                    remove: RemoveTransition { enabled: root._rowsAnimate }
-                    displaced: MoveTransition { enabled: root._rowsAnimate }
-                    move: MoveTransition { enabled: root._rowsAnimate }
-
-                    WheelScroll { flickable: rowsView }
-
-                    // The cursor (M53 D4): one fill that travels between rows on an
-                    // arrow step, drawn here rather than per row so there is one of
-                    // it to travel. A child of the ListView is a child of its
-                    // contentItem, so it scrolls with the rows it sits under; `z`
-                    // puts it under them, since the row's own ink draws over it.
-                    //
-                    // Offset by the current row's heading band: a row that opens a
-                    // group is taller than its own body by that band, and a fill
-                    // covering it would swallow the heading.
-                    Rectangle {
-                        id: rowCursor
-                        readonly property var row: rowsView.currentItem
-                        z: -1
-                        visible: rowCursor.row !== null && rowsView.count > 0
-                        width: rowsView.width
-                        y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
-                        height: rowCursor.row ? rowCursor.row._rowHeight : 0
-                        radius: Core.Theme.radiusSm
-                        color: Core.Theme.color.accent
-
-                        Behavior on y {
-                            enabled: root._cursorTravels
-                            Anim { kind: "spatialFast" }
-                        }
-                    }
-
-                    delegate: MenuRow {
-                        required property string rowId
-                        // The row this delegate is drawing, by id rather than by
-                        // index: a row fading out through the `remove` transition
-                        // above has left the model but not the screen, and its
-                        // index now belongs to whatever slid up into it.
-                        readonly property var entry: root._rowsById[rowId] || root._rowsPrev[rowId] || null
-
-                        // A delegate is pooled after its exit fade as well as after
-                        // scrolling out of view, so its opacity is put back before
-                        // it can be handed to a row that is not entering (M53 D6:
-                        // an exit that leaves a recycled row invisible is worse
-                        // than no exit at all).
-                        ListView.onPooled: opacity = 1
-
-                        modelData: entry ? entry.row : root._blankRow
-                        current: root._cursorIndex === index
-                        checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
-                        confirming: root._confirmPendingId === node.id
-                        // A heading rides the row that opens its group, so a row
-                        // whose section matches the one above it carries none.
-                        section: entry ? entry.section : ""
-                        sectionFirst: entry ? entry.sectionFirst : false
-
-                        onActivate: root._activateFromPointer(index)
-                        onHoverMoved: (source, x, y) => {
-                            if (pointerGate.moved(source, x, y))
-                                root._setCursor(index);
-                        }
-                    }
-                }
-
-                // shadcn's `CommandEmpty` (M48 D6). Drawn in the row area rather
-                // than as a row of the list: it answers nothing, and a cursor
-                // sitting on it would offer a verb the footer would then have to
-                // take back.
-                Text {
-                    id: emptyState
-                    anchors.top: rowsView.top
-                    anchors.left: rowsView.left
-                    anchors.right: rowsView.right
-                    height: root._morphRowsHeight
-                    // Against the list rather than after it (M53 D3): the rows
-                    // this replaces are leaving through their own remove
-                    // transition, so the line rises over them instead of landing
-                    // on the frame they used to fill. Hidden at 0 so it never
-                    // hit-tests over a list that has come back.
-                    opacity: root._showEmpty ? 1 : 0
-                    visible: emptyState.opacity > 0
-                    Behavior on opacity {
-                        Anim { kind: "effects" }
-                    }
-                    text: "No results found."
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    color: Core.Theme.color.mutedForeground
-                    font.family: Core.Theme.fontFamilySans
-                    font.pixelSize: Core.Theme.fontSize.body
-                }
-
-                // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
-                // of image cells sharing hairline rules", spec §11), the picker's
-                // own surface, now one of the menu's two views over the same
-                // _displayRows/_cursorIndex state rather than a panel of its own.
-                // Shares rowsView's geometry exactly, so the action bar below can
-                // anchor to whichever of the two is live without knowing which.
-                GridView {
-                    id: gridView
-                    // Delegates recycle rather than being destroyed and rebuilt on
-                    // every flick. Safe here because every delegate in this file is
-                    // required properties plus bindings off them, with no
-                    // Component.onCompleted work that a reused item would skip.
-                    reuseItems: true
-                    anchors.top: variantRow.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    anchors.left: parent.left
-                    width: root._contentWidth
-                    height: root._morphRowsHeight
-                    visible: root._isPickerRoute
-                    clip: true
-                    model: root._isPickerRoute ? root._displayRows : []
-                    cellWidth: root._contentWidth / root.pickerColumns
-                    cellHeight: gridView.cellWidth
-                    currentIndex: root._cursorIndex
-                    // Same hard-jump follow as rowsView, for the same reason: held
-                    // arrow keys outrun the default animated highlight move and the
-                    // cursor cell ends up off-viewport.
-                    highlightMoveDuration: 0
-
-                    // A row here is a row of thumbnails, not a text line.
-                    WheelScroll {
-                        flickable: gridView
-                        step: gridView.cellHeight
-                    }
-
-                    // The wrapper carries the GridView's own cell, so the `Cell`
-                    // inside it can hold the gutter between thumbnails in its
-                    // margins and every gap comes out the same width, the edges of
-                    // the grid included.
-                    delegate: Item {
-                        id: imageSlot
-                        required property int index
-                        required property var modelData
-
-                        width: gridView.cellWidth
-                        height: gridView.cellHeight
-
-                        Cell {
-                            id: imageCell
-                            anchors.fill: parent
-                            anchors.margins: Core.Theme.space.xs
-                            radius: Core.Theme.radiusMd
-                            // A grid cursor is the ring (spec "Launcher"): the
-                            // thumbnail covers the cell, so a fill would sit under
-                            // the picture and never be seen.
-                            cursor: imageSlot.index === root._cursorIndex
-
-                            // The thumbnail is inset far enough that its square corners
-                            // sit inside the cell's rounded ones, which is what lets an
-                            // image live in a `radiusMd` frame with no mask: at `sm` the
-                            // corner of the inset square is 5.7px from the arc's centre
-                            // against a radius of 8.
-                            //
-                            // Decode capped at the cell's own on-screen size (M16 Task
-                            // 12): without this, a 6000×4000 source decodes at full
-                            // resolution into a ~130px cell, ~96MB of resident RGBA
-                            // per thumbnail, times every file in the directory.
-                            //
-                            // The 2x factor matters on the fallback path: sourceSize with
-                            // both dimensions set decodes to FIT INSIDE that box (Qt's
-                            // KeepAspectRatio), not to cover it, so a non-square source
-                            // into this square cell would decode short on one axis and
-                            // PreserveAspectCrop would upscale it back out, visibly
-                            // blurrier than an uncapped decode. A box 2x the cell's side
-                            // keeps the fit-inside decode covering the cell for any
-                            // source up to 2:1 either way, comfortably past 16:9, while
-                            // still capping memory to a small multiple of the cell. A
-                            // cached thumbnail is already a square crop, so the same box
-                            // is simply generous for it.
-                            // Sized off the GridView's own cell rather than off
-                            // `imageCell`: a `Cell` measures its content to publish
-                            // an implicit size, so a child measured back off the
-                            // cell closes a loop Qt then reports and breaks (its
-                            // own anchors already decide its size, but the detector
-                            // sees the cycle first).
-                            Image {
-                                id: thumb
-                                anchors.centerIn: parent
-                                width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                                height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                                // ThumbnailService's prerendered square crop when
-                                // there is one, the wallpaper itself otherwise. The
-                                // fallback is not a degraded mode, it is exactly
-                                // what this cell did before the cache existed: a
-                                // cold cache, an install with no ffmpeg, and a
-                                // format ffmpeg cannot decode all land on it.
-                                readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path, "cover")
-                                source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
-                                fillMode: Image.PreserveAspectCrop
-                                // PreserveAspectCrop paints past its own bounds
-                                // without this, over the cells beside it.
-                                clip: true
-                                asynchronous: true
-                                cache: false
-                                sourceSize.width: thumb.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                                sourceSize.height: thumb.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                            }
-
-                            interactive: true
-                            // Same gate as the row list: filtering re-renders cells
-                            // under a parked pointer, and Qt delivers that as a
-                            // hover move indistinguishable from a real one.
-                            onPointerMoved: (x, y) => {
-                                if (pointerGate.moved(imageCell, x, y))
-                                    root._setCursor(imageSlot.index);
-                            }
-                            onClicked: root._activateFromPointer(imageSlot.index)
-                        }
-                    }
-                }
-
-                // The emoji route's grid (M48 D5). A second GridView rather than a
-                // kind-branching delegate inside the one above: the two share their
-                // geometry and their cursor, and nothing else. One holds a decoded
-                // image with a capped source size and its own cropping rules, the
-                // other holds a glyph.
-                GridView {
-                    id: emojiGrid
-                    // Delegates recycle rather than being destroyed and rebuilt on
-                    // every flick. Safe here because every delegate in this file is
-                    // required properties plus bindings off them, with no
-                    // Component.onCompleted work that a reused item would skip.
-                    reuseItems: true
-                    anchors.top: variantRow.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    anchors.left: parent.left
-                    width: root._contentWidth
-                    height: root._morphRowsHeight
-                    visible: root._isEmojiGrid
-                    clip: true
-                    model: root._isEmojiGrid ? root._displayRows : []
-                    cellWidth: root._contentWidth / root.emojiColumns
-                    cellHeight: emojiGrid.cellWidth
-                    currentIndex: root._cursorIndex
-                    // Same hard-jump follow as the two views above, for the same
-                    // reason: held arrow keys outrun the default animated highlight
-                    // move and the cursor cell ends up off-viewport.
-                    highlightMoveDuration: 0
-
-                    WheelScroll {
-                        flickable: emojiGrid
-                        step: emojiGrid.cellHeight
-                    }
-
-                    // The wrapper carries the GridView's own cell so the `Cell`
-                    // inside it can hold the gutter between glyphs in its margins,
-                    // exactly as the wallpaper grid does.
-                    delegate: Item {
-                        id: emojiSlot
-                        required property int index
-                        required property var modelData
-
-                        width: emojiGrid.cellWidth
-                        height: emojiGrid.cellHeight
-
-                        Cell {
-                            id: emojiCell
-                            anchors.fill: parent
-                            anchors.margins: Core.Theme.space.xs
-                            radius: Core.Theme.radiusSm
-                            // Ghost, so a grid of 40 glyphs is 40 glyphs rather than
-                            // 40 boxes; hover fills `accent` and the cursor is the
-                            // ring, the same two states every other cell draws.
-                            ghost: true
-                            cursor: emojiSlot.index === root._cursorIndex
-                            interactive: true
-                            // Same gate as the row list: filtering re-renders cells
-                            // under a parked pointer, and Qt delivers that as a
-                            // hover move indistinguishable from a real one.
-                            onPointerMoved: (x, y) => {
-                                if (pointerGate.moved(emojiCell, x, y))
-                                    root._setCursor(emojiSlot.index);
-                            }
-                            onClicked: root._activateFromPointer(emojiSlot.index)
-
-                            // The glyph IS the row's icon (providers.js's emojiRows),
-                            // carried in the mono font that renders it. At `display`
-                            // rather than `heading`: a cell eight columns into
-                            // `popupWidthMenu` is wide enough that a heading-sized
-                            // glyph read as a scatter of dots rather than as a
-                            // picture to pick from (read off menu-emoji.png).
-                            Text {
-                                anchors.centerIn: parent
-                                text: emojiSlot.modelData.icon
-                                color: Core.Theme.color.foreground
-                                font.family: Core.Theme.fontFamilyMono
-                                font.pixelSize: Core.Theme.fontSize.display
-                            }
-                        }
-                    }
-                }
-
-                // The third view (M38, D1): a whole component in place of the row
-                // list, for any route Menu/appviews.js registers. Shares rowsView's
-                // geometry exactly, like gridView above, so the action bar anchors
-                // to whichever of the three is live without knowing which.
-                //
-                // `source` empties off the route rather than the loader merely
-                // hiding: an app view holds a live subscription to whatever service
-                // it renders, and a hidden-but-loaded one would keep that service
-                // polling for a launcher nobody is looking at.
-                //
-                // It empties on the window going away too, not just on leaving the
-                // route. close() deliberately leaves currentNodeId where it was (so
-                // a resummon lands back on the same level), which would otherwise
-                // hold the subscription open for as long as the shell runs. Keyed
-                // off the window's own `visible` rather than `isOpen` so the view
-                // survives the exit fade instead of blanking the card mid-animation.
-                Loader {
-                    id: appView
-                    anchors.top: variantRow.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    anchors.left: parent.left
-                    width: root._contentWidth
-                    height: root._morphRowsHeight
-                    visible: root._isAppView
-                    source: (root._isAppView && root.visible) ? Qt.resolvedUrl(root._appViewSource) : ""
-                }
-
-                // The seam that makes the registry reusable: a view that wants the
-                // search field declares `property string query` and gets the live
-                // text; one that declares none (MonitorView) leaves the field inert
-                // rather than pretending to filter something.
-                Binding {
-                    target: appView.item
-                    property: "query"
-                    value: searchInput.text
-                    when: appView.item !== null && appView.item.query !== undefined
-                }
-
-                // The split route's right half (M30, M43 D4): the cursor row's full
-                // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
-                // list. Positioned by anchoring off rowsView itself (whichever width
-                // it currently has) rather than an independent x/width pair, so the
-                // two views can never drift apart.
-                //
-                // This is the launcher spending its one card (DESIGN.md §1's ladder,
-                // rung 5, owner 2026-08-26): the surface's own frame, and inside it
-                // exactly one block that outranks the rest. The left half is flat
-                // `MenuRow`s and this half is the card, so the pane reads as the
-                // thing the list is pointing at. What the rule rules out is a second
-                // frame INSIDE this one, which is what an image row used to get.
-                Card {
-                    id: previewPane
-                    visible: root._isSplitRoute
-                    anchors.top: rowsView.top
-                    anchors.left: rowsView.right
-                    anchors.leftMargin: Core.Theme.space.sm
-                    anchors.right: parent.right
-                    height: rowsView.height
-                    radius: Core.Theme.radiusMd
-
-                    Row {
-                        id: previewHeader
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        spacing: Core.Theme.space.sm
-
-                        SectionLabel {
-                            id: previewMeta
-                            visible: root._previewKind !== ""
-                            text: root._previewKind
-                        }
-
-                        Text {
-                            visible: root._previewTime !== ""
-                            text: root._previewTime
-                            color: Core.Theme.color.mutedForeground
-                            font.family: Core.Theme.fontFamilyMono
-                            font.pixelSize: Core.Theme.fontSize.caption
-                        }
-                    }
-
-                    Text {
-                        id: previewText
-                        anchors.top: previewHeader.bottom
-                        anchors.topMargin: Core.Theme.space.rowGap
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        // The two slots share one frame, so the cursor stepping
-                        // from a text capture to an image one is a content swap
-                        // and crossfades (M53 D3).
-                        opacity: root._previewIsText ? 1 : 0
-                        visible: previewText.opacity > 0
-                        Behavior on opacity {
-                            Anim { kind: "effects" }
-                        }
-                        clip: true
-                        text: root._previewText
-                        // A clipboard capture reaches this pane raw, so the preview
-                        // has to show the bytes that will be pasted rather than let
-                        // AutoText parse copied markup as a rich-text document.
-                        textFormat: Text.PlainText
-                        wrapMode: Text.WrapAnywhere
-                        color: Core.Theme.color.foreground
-                        font.family: Core.Theme.fontFamilyMono
-                        font.pixelSize: Core.Theme.fontSize.body
-                    }
-
-                    // True-color (menu thumbnails are never dithered) full preview of
-                    // the cursor row's capture, decode capped at the slot's own size
-                    // for the picker grid's reason. Bare: no well, no frame, no
-                    // outline. The pane around it is already the one card this
-                    // surface gets, and a border inside that is the nesting the rule
-                    // forbids. It fits rather than fills, so the pane's own ground
-                    // shows around it, which is what a letterboxed capture is
-                    // supposed to sit on.
-                    Image {
-                        id: previewImage
-                        anchors.top: previewHeader.bottom
-                        anchors.topMargin: Core.Theme.space.rowGap
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        // The other half of the swap above.
-                        opacity: root._previewIsImage ? 1 : 0
-                        visible: previewImage.opacity > 0
-                        Behavior on opacity {
-                            Anim { kind: "effects" }
-                        }
-                        source: root._previewImageSource
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: true
-                        cache: false
-                        sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
-                        sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
-                    }
-                }
-
-                // What the cursor cell is (M48 D5). A grid cell is a picture with no
-                // room for a name, so the name goes here, under the grid and above
-                // the footer, where it changes as the cursor moves rather than
-                // waiting for a pointer to hover something. Absent entirely (zero
-                // height, no reserved gutter) on every other route.
-                SectionLabel {
-                    id: emojiCaption
-                    // The route's own answer, read by the height and the gap
-                    // rather than by `visible`, which now outlives it while
-                    // the band closes.
-                    readonly property bool wanted: root._isEmojiGrid && root._cursorNode !== null
-
-                    anchors.top: rowsView.bottom
-                    anchors.topMargin: emojiCaption.wanted ? Core.Theme.space.rowGap : 0
-                    anchors.left: parent.left
-                    anchors.leftMargin: root._headerInset
-                    anchors.right: parent.right
-                    anchors.rightMargin: root._headerInset
-                    height: emojiCaption.wanted ? implicitHeight : 0
-                    visible: emojiCaption.wanted || emojiCaption.height > 0
-                    clip: true
-                    elide: Text.ElideRight
-                    text: root._cursorNode ? root._cursorNode.label : ""
-
-                    // The caption's band on the card's clock (M54 D10), on the
-                    // same gate as the morphs: `_captionBand` reads this
-                    // height straight into `_cardHeight`, so the card's own
-                    // edge and the band travel together.
-                    Behavior on height {
-                        enabled: root.isOpen && presence.mapped
-                        Anim {}
-                    }
-                }
-
-                // The footer hint line (spec "Launcher"): what Enter does to the
-                // row under the cursor, plus the keys that always apply.
-                // Menu/actions.js owns the wording.
-                MenuActionBar {
-                    id: actionBar
-                    anchors.top: emojiCaption.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    // Same inset the rows and the input row take, so the legend
-                    // starts under the column of labels rather than under the card's
-                    // edge (DESIGN.md §1 Padding).
-                    anchors.left: parent.left
-                    anchors.leftMargin: root._headerInset
-                    anchors.right: parent.right
-                    anchors.rightMargin: root._headerInset
-                    primary: root._actionBar.primary
-                    hints: root._actionBar.hints
-
-                    // Clicking the primary verb is the pointer acting, exactly like
-                    // clicking the row itself: same path, same gate re-arm. On an
-                    // app view it presses that view's own primary instead, at
-                    // whatever its cursor already is (index -1).
-                    onPrimaryActivated: {
-                        if (root._isAppView) {
-                            if (appView.item && appView.item.viewActivate)
-                                appView.item.viewActivate(-1);
-                            return;
-                        }
-                        root._activateFromPointer(root._cursorIndex);
-                    }
-                }
-
-                // The app view's overflow hint, at the footer's right end, where the
-                // hint line cannot reach it. In the footer rather than over the view
-                // because a hint sitting on the content it announces hides the rows
-                // the reader is reaching for.
-                Text {
-                    anchors.right: actionBar.right
-                    anchors.verticalCenter: actionBar.verticalCenter
-                    visible: root._appViewScrollHint !== ""
-                    text: root._appViewScrollHint
-                    color: Core.Theme.color.mutedForeground
-                    font.family: Core.Theme.fontFamilySans
-                    font.pixelSize: Core.Theme.fontSize.caption
-                    font.capitalization: Font.AllLowercase
-                }
+            // The app view's overflow hint, at the footer's right end, where the
+            // hint line cannot reach it. In the footer rather than over the view
+            // because a hint sitting on the content it announces hides the rows
+            // the reader is reaching for.
+            Text {
+                anchors.right: actionBar.right
+                anchors.verticalCenter: actionBar.verticalCenter
+                visible: root._appViewScrollHint !== ""
+                text: root._appViewScrollHint
+                color: Core.Theme.color.mutedForeground
+                font.family: Core.Theme.fontFamilySans
+                font.pixelSize: Core.Theme.fontSize.caption
+                font.capitalization: Font.AllLowercase
             }
         }
     }

@@ -104,7 +104,7 @@ QtObject {
     // presence is bypassed for a handoff (its pose then sits at 1), floats,
     // and so does one whose owner's edge is too short to bud from.
     property real attach: (root._joinable
-        && !(root.presence.open && root.presence.morph >= root.releaseAt)) ? 1 : 0
+        && !(root.presence.open && root.presence.pose >= root.releaseAt)) ? 1 : 0
 
     Behavior on attach {
         enabled: root.presence.shown
