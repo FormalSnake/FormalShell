@@ -91,4 +91,83 @@ TestCase {
         compare(m.joint.attach, 0);
         compare(m.joint.nearInset, 7);
     }
+
+    // --- Walls -----------------------------------------------------------
+    //
+    // A 400 wide card resting 12 off the end of a 1920 line, which is less
+    // than its own 20 radius: the far side is walled.
+    function walled(extra) {
+        var m = make();
+        m.joint.restLength = 400;
+        m.joint.outputAlong = 1920;
+        m.joint.across = 46;
+        m.joint.restAlong = 1508;
+        for (var key in extra)
+            m.joint[key] = extra[key];
+        return m;
+    }
+
+    // With the line ending at the output, the silhouette runs one radius
+    // past it, so nothing the deform does can open a sliver at the edge.
+    // The near end has room for its fillet and is left alone.
+    function test_a_side_with_no_room_for_its_fillet_is_walled() {
+        var j = walled({}).joint;
+        compare(j.wallStart, -1);
+        compare(j.wallEnd, 32);
+    }
+
+    // With a frame ring on that side the silhouette stops on the ring's own
+    // line instead, the way the near edge stops on the bar's.
+    function test_a_line_ending_in_a_ring_stops_on_the_rings_line() {
+        var j = walled({ insetEnd: 10, restAlong: 1498 }).joint;
+        compare(j.wallEnd, 12);
+    }
+
+    // Room for the fillet, and a card hanging off another panel, are both
+    // left unwalled: a nested card's span is its owner's, not the screen's.
+    function test_a_card_with_room_or_an_owner_never_walls() {
+        compare(walled({ restAlong: 400 }).joint.wallEnd, -1);
+        compare(walled({ target: testCase }).joint.wallEnd, -1);
+    }
+
+    // On the way out a walled card publishes two joins: its own line's, the
+    // gap widened by the run out to the wall, and the wall's own, running
+    // from the line to the shape's far edge.
+    function test_a_walled_card_publishes_the_walls_own_join() {
+        var m = walled({});
+        m.presence.open = true;
+        tryVerify(function () { return m.joint.shapeDepth > 40; }, 1000);
+        var own = PanelRegistry.joinOn("top", "DP-1");
+        verify(own !== null);
+        compare(Math.round(own.x + own.width), Math.round(m.joint.along + m.joint.length + 32));
+        var wall = PanelRegistry.joinOn("right", "DP-1");
+        verify(wall !== null);
+        // The line is `depth` back from the card's own resting edge, and the
+        // shape runs from there to its far edge.
+        compare(wall.x, 39);
+        compare(Math.round(wall.width), Math.round(m.joint.shapeDepth));
+        compare(wall.reach, m.joint.reach);
+    }
+
+    // Clearing one edge leaves the other standing: the registry keys a join
+    // by owner AND edge, so a side that stops being walled mid-flight takes
+    // only its own entry down.
+    function test_clearing_one_edge_leaves_the_other_standing() {
+        var m = walled({});
+        m.presence.open = true;
+        tryVerify(function () { return PanelRegistry.joinOn("right", "DP-1") !== null; }, 1000);
+        m.joint.outputAlong = 4000;
+        compare(m.joint.wallEnd, -1);
+        compare(PanelRegistry.joinOn("right", "DP-1"), null);
+        verify(PanelRegistry.joinOn("top", "DP-1") !== null);
+    }
+
+    // At rest both go, and every line is whole again.
+    function test_a_walled_card_lets_go_of_both_lines() {
+        var m = walled({});
+        m.presence.open = true;
+        tryCompare(m.joint, "attach", 0, 2000);
+        compare(PanelRegistry.joinOn("top", "DP-1"), null);
+        compare(PanelRegistry.joinOn("right", "DP-1"), null);
+    }
 }

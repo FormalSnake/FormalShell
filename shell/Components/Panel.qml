@@ -384,6 +384,15 @@ PanelWindow {
         along: Theme.barVertical ? frame.y : frame.x
         length: Theme.barVertical ? frame.height : frame.width
         screen: root._screen ? root._screen.name : ""
+        // The resting rect and the room the line has at either end, for the
+        // wall decision (M57 D2). Resting, never live: a card mid-emerge or
+        // mid-handoff would otherwise wall and unwall itself as it travels.
+        restAlong: Theme.barVertical ? root._frameY : root._frameX
+        restLength: Theme.barVertical ? root._morphHeight : root._morphWidth
+        across: Theme.barVertical ? root._frameX : root._frameY
+        outputAlong: root._screen ? (Theme.barVertical ? root._screen.height : root._screen.width) : 0
+        insetStart: Theme.barVertical ? Theme.edgeInset.top : Theme.edgeInset.left
+        insetEnd: Theme.barVertical ? Theme.edgeInset.bottom : Theme.edgeInset.right
     }
 
     readonly property real _contentWidth: root.panelWidth - Theme.space.panelPadding * 2
@@ -974,6 +983,8 @@ PanelWindow {
                             color: root.frameColor
                             attach: joint.attach
                             nearInset: joint.nearInset
+                            wallStart: joint.wallStart
+                            wallEnd: joint.wallEnd
                             farGap: {
                                 var j = root._childJoin;
                                 if (!j)
@@ -984,15 +995,22 @@ PanelWindow {
                             x: Theme.barVertical
                                 ? (Theme.barPosition === "left"
                                     ? joint.slide - root._joinDepth
-                                    : frame.width + root._joinDepth - joint.slide - joint.shapeDepth)
+                                    : frame.width + root._joinDepth - joint.slide - frameShape._span)
                                 : -frameShape.overhang
                             y: Theme.barVertical
                                 ? -frameShape.overhang
                                 : (Theme.barPosition === "top"
                                     ? joint.slide - root._joinDepth
-                                    : frame.height + root._joinDepth - joint.slide - joint.shapeDepth)
-                            width: Theme.barVertical ? joint.shapeDepth : frame.width + frameShape.overhang * 2
-                            height: Theme.barVertical ? frame.height + frameShape.overhang * 2 : joint.shapeDepth
+                                    : frame.height + root._joinDepth - joint.slide - frameShape._span)
+                            width: Theme.barVertical ? frameShape._span : frame.width + frameShape.overhang * 2
+                            height: Theme.barVertical ? frame.height + frameShape.overhang * 2 : frameShape._span
+
+                            // What the item spans across the line: from the
+                            // line to the card's far edge, and one more
+                            // fillet past it while a side is walled, for the
+                            // concave corner that side carries against the
+                            // wall.
+                            readonly property real _span: joint.shapeDepth + frameShape.farOverhang
                         }
 
                         // What `Card`'s own default slot did: everything below is

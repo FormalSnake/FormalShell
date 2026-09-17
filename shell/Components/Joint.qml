@@ -45,6 +45,20 @@ QtObject {
     property real along: 0
     property real length: 0
     property string screen: ""
+    // The card's RESTING rect along the line, the output's own extent along
+    // it, and what the line gives up at either end (Theme.edgeInset on the
+    // two sides it runs between): what decides whether a side is walled
+    // (M57 D2). The live rect is the wrong one to ask: a card mid-emerge or
+    // mid-handoff would wall and unwall itself as it travels. Left at 0 by a
+    // consumer that never walls (Surfaces/Notifications/Center.qml).
+    property real restAlong: 0
+    property real restLength: 0
+    property real outputAlong: 0
+    property real insetStart: 0
+    property real insetEnd: 0
+    // And the card's resting coordinate ACROSS the line, which is what puts
+    // a walled side's own join on the wall in output coordinates.
+    property real across: 0
     // Whose line: null for the screen's own (the bar's hairline, the frame
     // ring's), or the surface this card hangs off, which opens the gap in
     // its own far edge (Panel.qml's `owner`).
@@ -95,29 +109,118 @@ QtObject {
     readonly property real reach: Outline.filletRadius(root.radius * (2 * root._attach - 1),
         root.shapeDepth - root.nearInset)
 
+    // --- Walls (M57 D2) --------------------------------------------------
+    //
+    // A side of the card resting closer than `radius` to where its line ends
+    // has no room for its fillet, so while the card is attached the
+    // silhouette runs out to that wall instead and pulls back off it on the
+    // attach clock, exactly as the near edge pulls off the line by `neck`. A
+    // card hanging off another panel is never walled: the span it may join
+    // on is its owner's, not the screen's.
+    readonly property bool _canWall: root.joined && !root.target && root.radius > 0
+        && root.outputAlong > 0 && root.restLength > 0
+
+    readonly property real _roomStart: root.restAlong - root.insetStart
+    readonly property real _roomEnd: root.outputAlong - root.insetEnd - root.restAlong - root.restLength
+
+    // How far past its own rect the silhouette runs to reach the wall, or -1
+    // for a side with room for its fillet. A line that ends in a frame ring
+    // stops ON the ring's line, the way the near edge stops on the bar's; a
+    // line that ends at the output runs one radius past it, so the deform's
+    // squash can never open a sliver of desktop at the screen edge.
+    readonly property real wallStart: (root._canWall && root._roomStart < root.radius)
+        ? Math.max(0, root._roomStart) + (root.insetStart > 0 ? 0 : root.radius)
+        : -1
+    readonly property real wallEnd: (root._canWall && root._roomEnd < root.radius)
+        ? Math.max(0, root._roomEnd) + (root.insetEnd > 0 ? 0 : root.radius)
+        : -1
+
+    // The two edges the line runs between, which is where a walled side's
+    // own join goes.
+    readonly property string _startEdge: BarLayout.isVertical(root.edge) ? "top" : "left"
+    readonly property string _endEdge: BarLayout.isVertical(root.edge) ? "bottom" : "right"
+
+    // Which way the line lies from the card, and with it the card's own edge
+    // on the line and the line's coordinate across it. `across` is the
+    // card's near side on a top or left bar and its far one on a bottom or
+    // right bar, since the rect is always given from its smaller corner.
+    readonly property real _toLine: root._direction.x + root._direction.y
+    readonly property real _nearEdge: root.across + (root._toLine > 0 ? root.extent : 0)
+    readonly property real _lineAt: root._nearEdge + root._toLine * root.depth
+
+    // The live extension on either side: the whole run out to the wall while
+    // attached, nothing once the card has let go.
+    readonly property real _outStart: root.wallStart >= 0 ? root.wallStart * root._attach : 0
+    readonly property real _outEnd: root.wallEnd >= 0 ? root.wallEnd * root._attach : 0
+
     // Where the deform's pivot sits past the card's own edge: on the line
     // while attached, so the card squashes into the bar and the shoulders
     // stay on the line under the matrix, and on the card's edge once free.
     readonly property real pivotInset: (root.depth - root.slide) * root._attach
 
-    // What the line opens: the card's rect along it, closing in from both
-    // ends toward the centre as the card lets go, plus the fillets' reach.
-    // Null once the card floats, which is the line whole again.
+    // What the line opens: the silhouette's own rect along it, which is the
+    // card's rect widened by whatever a walled side runs out by, closing in
+    // from both ends toward the centre as the card lets go, plus the
+    // fillets' reach. Null once the card floats, which is the line whole
+    // again. A reach running past a wall is simply clamped by whoever draws
+    // the line (Surfaces/Bar/Bar.qml, Frame/geometry.js's `ringLine`).
+    readonly property real _joinStart: root.along - root._outStart
+    readonly property real _joinLength: root.length + root._outStart + root._outEnd
+
     readonly property var join: (root.joined && root.presence.shown && root._attach > 0)
         ? ({
             edge: root.edge,
-            x: root.along + root.length * (1 - root._attach) / 2,
-            width: root.length * root._attach,
+            x: root._joinStart + root._joinLength * (1 - root._attach) / 2,
+            width: root._joinLength * root._attach,
             reach: root.reach,
             screen: root.screen,
             target: root.target
         })
         : null
 
-    onJoinChanged: {
-        if (root.join)
-            PanelRegistry.setJoin(root.owner, root.join);
-        else
-            PanelRegistry.clearJoin(root.owner);
+    // And what a wall opens in its own line: the stretch of it the
+    // silhouette covers, from the line the card came out of to the shape's
+    // far edge, with the wall fillet's reach past that end. So a frame ring
+    // gives way on the side the card runs into the way the bar gives way on
+    // the side it comes out of.
+    readonly property var wallJoins: {
+        var out = [];
+        if (!root.join)
+            return out;
+        var end = root._lineAt - root._toLine * root.shapeDepth;
+        var start = Math.min(root._lineAt, end);
+        for (var k = 0; k < 2; k++) {
+            if ((k === 0 ? root.wallStart : root.wallEnd) < 0)
+                continue;
+            out.push({
+                edge: k === 0 ? root._startEdge : root._endEdge,
+                x: start,
+                width: Math.abs(root.shapeDepth),
+                reach: root.reach,
+                screen: root.screen,
+                target: null
+            });
+        }
+        return out;
+    }
+
+    // Every join this drawer has open, published together: the registry
+    // keys them by owner AND edge, so a side that stops being walled takes
+    // its own entry down and leaves the others standing.
+    readonly property var joins: root.join ? [root.join].concat(root.wallJoins) : []
+
+    property var _published: []
+
+    onJoinsChanged: {
+        var live = [];
+        var list = root.joins;
+        for (var i = 0; i < list.length; i++) {
+            PanelRegistry.setJoin(root.owner, list[i]);
+            live.push(list[i].edge);
+        }
+        for (var k = 0; k < root._published.length; k++)
+            if (live.indexOf(root._published[k]) < 0)
+                PanelRegistry.clearJoin(root.owner, root._published[k]);
+        root._published = live;
     }
 }

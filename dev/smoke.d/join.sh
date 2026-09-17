@@ -9,24 +9,39 @@
 #   b  the chevron's second bar
 #   c  a panel opened by a click on a cell inside that second bar
 #
-# Every frame is saved for reading by eye; the one claim asserted here is the
-# seam (M57 D1). On an attached frame of case a the line's own row inside the
-# gap must be byte-equal to the bar's fill two rows above it: the bar paints
-# that row, and a card whose fill starts on it too leaves a line across the
-# whole gap wherever the surfaces are translucent.
+# Every frame is saved for reading by eye; two claims are asserted, both on
+# an attached frame of case a:
+#
+#   the seam (M57 D1)   the line's own row inside the gap must be byte-equal
+#                       to the bar's fill two rows above it: the bar paints
+#                       that row, and a card whose fill starts on it too
+#                       leaves a line across the whole gap wherever the
+#                       surfaces are translucent.
+#   the wall (M57 D2)   case a rests a screenPadding off the output and its
+#                       fillet wants radiusXl, so there is no room for one:
+#                       the attached silhouette runs out to the screen's own
+#                       edge instead, and the output's last column carries
+#                       card fill from under the line down to the shape's far
+#                       edge. At rest that column is bare desktop again.
+#
+# Both probes are pinned to the unframed rig's own numbers, so `--join
+# --frame` photographs the ring case and leaves them out; that combination is
+# read by eye.
 leg_join_flag="--join"
 leg_join_order=182
 leg_join_needs="wlrctl convert"
 
 join_region="1380,0 540x600"
+join_crop_width=540
 join_frames=10
 join_reply_path="$shot_dir/join-replies.txt"
 join_desktop_path="$shot_dir/join-desktop.png"
 
 # Case a's card in the crop's own coordinates: `panel open network` with no
 # cell is `Theme.space.n` (380) wide and rests one screenPadding (12) off the
-# 1920 output's right edge, and the crop starts at x = 1380. The bar is 40
-# rows, so its inward line is the last of them.
+# 1920 output's right edge, and the crop starts at x = 1380, so it ends on
+# the output's own last column. The bar is 40 rows, so its inward line is the
+# last of them.
 join_card_x=148
 join_card_width=380
 join_line_row=39
@@ -104,6 +119,28 @@ join_pixel() {
   printf '%02X%02X%02X' $rgb
 }
 
+# One whole column of a frame, as six hex digits per row, top to bottom: the
+# wall runs the length of the card, and one read beats a probe per row.
+join_column() {
+  $convert_bin "$1" -crop "1x4096+$2+0" +repage -depth 8 txt:- 2>/dev/null \
+    | awk 'NR > 1 { print toupper(substr($3, 2, 6)) }'
+}
+
+# How far under the line the shape reaches at column $2 of frame $1: the last
+# row that is not the bare desktop's own. The card comes out from under the
+# line, so this is what says how much of the wall there is to read.
+join_shape_depth() {
+  local i last=$join_line_row
+  local -a shot desk
+  mapfile -t shot < <(join_column "$1" "$2")
+  mapfile -t desk < <(join_column "$join_desktop_path" "$2")
+  for ((i = join_line_row + 1; i < ${#shot[@]} && i < ${#desk[@]}; i++)); do
+    [ "${shot[i]}" = "${desk[i]}" ] && break
+    last=$i
+  done
+  echo "$last"
+}
+
 # The first frame of case a with the card attached: its fill both a few rows
 # under the line and on the very first row under it, that first row the same
 # ink as the one below it. A card that has begun to let go pulls its near
@@ -145,6 +182,11 @@ leg_join_assert() {
   [ -f "$join_desktop_path" ] || fail "no bare desktop frame at $join_desktop_path"
   echo "SMOKE_JOIN_DESKTOP $join_desktop_path"
 
+  if leg_on frame; then
+    echo "SMOKE_JOIN_FRAMED read by eye: the probes below are pinned to the unframed rig's own numbers"
+    return 0
+  fi
+
   local col attached seam bar
   col=$((join_card_x + join_card_width / 2))
   attached=$(join_attached_frame "$col") || fail \
@@ -155,4 +197,24 @@ leg_join_assert() {
     fail "the line's row at ($col,$join_line_row) reads $seam against the bar's own $bar two rows up in $attached: the card's fill covers it a second time"
   fi
   echo "SMOKE_JOIN_SEAM ok $seam $attached"
+
+  local edge ink far top bottom row
+  edge=$((join_crop_width - 1))
+  ink=$(join_pixel "$attached" "$col" $((join_line_row + 5)))
+  far=$(join_shape_depth "$attached" "$col")
+  top=$((join_line_row + 2))
+  bottom=$((far - 3))
+  [ "$bottom" -gt "$top" ] || fail \
+    "the shape reaches only row $far at column $col of $attached: too shallow to read the wall against"
+  local -a wall rest desk
+  mapfile -t wall < <(join_column "$attached" "$edge")
+  mapfile -t rest < <(join_column "$shot_dir/join-a-rest.png" "$edge")
+  mapfile -t desk < <(join_column "$join_desktop_path" "$edge")
+  for ((row = top; row <= bottom; row++)); do
+    [ "${wall[row]}" = "$ink" ] || fail \
+      "the output's last column reads ${wall[row]} at row $row of $attached against the card's own $ink: the walled silhouette stops short of the screen's edge"
+    [ "${rest[row]}" = "${desk[row]}" ] || fail \
+      "the output's last column still reads ${rest[row]} at row $row of join-a-rest.png against the bare desktop's ${desk[row]}: the card has let go and the edge should be desktop again"
+  done
+  echo "SMOKE_JOIN_WALL ok $ink rows $top-$bottom at column $edge $attached"
 }

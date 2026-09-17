@@ -79,12 +79,19 @@ Singleton {
     // ever clear its own join: a panel handing its card over to another one
     // closes after the card it gave up has already been republished, and a
     // clear that ignored the owner would take the new one down with it.
+    //
+    // Keyed by owner AND edge (M57 D2): a card resting against the end of
+    // its line runs its silhouette out to that wall and opens the wall's own
+    // line there too, so one surface can hold two or three entries at once
+    // and letting go of one must leave the rest standing.
     property var joins: []
 
     function setJoin(owner, join) {
         if (!owner || !join)
             return;
-        root.joins = root.joins.filter(function (j) { return j.owner !== owner; }).concat([{
+        root.joins = root.joins.filter(function (j) {
+            return j.owner !== owner || j.edge !== join.edge;
+        }).concat([{
             owner: owner,
             edge: join.edge,
             x: join.x,
@@ -95,9 +102,12 @@ Singleton {
         }]);
     }
 
-    function clearJoin(owner) {
-        if (root.joins.some(function (j) { return j.owner === owner; }))
-            root.joins = root.joins.filter(function (j) { return j.owner !== owner; });
+    // One edge of one owner's, or, with no edge named, everything it holds.
+    function clearJoin(owner, edge) {
+        var all = edge === undefined || edge === null;
+        function mine(j) { return j.owner === owner && (all || j.edge === edge); }
+        if (root.joins.some(mine))
+            root.joins = root.joins.filter(function (j) { return !mine(j); });
     }
 
     // The join on one edge of one output against one line (the screen's
