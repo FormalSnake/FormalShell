@@ -541,6 +541,18 @@ fs theme mode toggle          # dark <-> light
 fs theme status               # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
 ```
 
+Every mode change also writes `org.gnome.desktop.interface/color-scheme` and
+`gtk-theme` over `dconf`, so GTK4/libadwaita, GTK3 (via the settings portal)
+and anything reading the appearance portal follow along. `gtk.theme` (default
+`"adw-gtk3"`) and `gtk.themeDark` (default `"adw-gtk3-dark"`) name the theme
+written for light and dark mode; leaving either `""` keeps its default,
+which is how you point GTK apps at a matugen-generated theme pair instead:
+
+```nix
+programs.formalshell.settings.gtk.theme = "elementary-matugen-light";
+programs.formalshell.settings.gtk.themeDark = "elementary-matugen-dark";
+```
+
 `theme.json` is the entire contract: shadcn's own role names, each with a
 static fallback, merged per key, so an older file missing newer roles still
 works:
