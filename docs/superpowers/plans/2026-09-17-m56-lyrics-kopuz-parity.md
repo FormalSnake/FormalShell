@@ -88,3 +88,32 @@ hashes and any deviation. Run `humanizer` over the prose. Then merge to
 main, push, and rebuild g815 and e1504g per `CLAUDE.md`.
 
 ## Evidence
+
+Task 2, by hand, in the VM (2026-09-17): a real mpv MPRIS player tagged
+"Blinding Lights" / "The Weeknd" / "After Hours", 200s of generated silence
+(iTunes lists the real track at 200.046s), no cache seeded, no `.lrc` beside
+the fixture file. `panel open media` then `media lyrics` polled until the
+provider race left `loading`:
+
+```
+{
+  "state": "synced",
+  "source": "apple",
+  "quality": 2,
+  "words": true,
+  "blur": true,
+  "lineCount": 41,
+  "firstLineWordCount": 4,
+  "hasBackground": true
+}
+```
+
+paxsenix Apple Music won the race outright on its own quality-2 hit
+(word-level timing throughout, a background line at index 28 with
+`parent`/`background` set, interludes spliced into the display set,
+`active: 0` on the opening one). YouTube and lrclib were never inspected
+past that point (the early-decided path spec P2 asks for), so this run
+doesn't independently prove their own parsing; Task 1's fixture-based tests
+cover `bestYoutubeResult`/`fromPaxsenixApple`/lrclib's chain directly. The
+probe leg (`dev/smoke.d/probe.sh`, temporary) and its artifacts were deleted
+after the run; nothing from it is committed.

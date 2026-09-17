@@ -29,7 +29,14 @@ import QtQuick
 // media.animatedBarCover (bool, default true, whether the bar's mini cover
 // animates too; off, the animated cover decode exists only while the media
 // panel is open). media.lyrics (bool, default true, LyricsService's gate:
-// off, no lrclib lookup ever runs). media.visualizer (bool, default true,
+// off, no provider lookup ever runs). media.lyricsBlur (bool, default true,
+// the lyrics pane's depth-of-field blur on every line but the lit one; off
+// leaves the M55 opacity ramp doing the depth alone, M56). media.
+// lyricsBlurStrength (number, default 100, clamped 0-200, a percent scale
+// on the blur ramp's own px cap, M56). media.lyricsOffsetMs (number,
+// default 0, clamped -5000..5000, shifts the position LyricsService's lit-
+// line math reads against MediaService.position; positive holds the
+// lyrics back, M56). media.visualizer (bool, default true,
 // the media panel's spectrum band; the bar's own visualizer cell stays
 // governed by bar.layout alone, M55).
 // lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank

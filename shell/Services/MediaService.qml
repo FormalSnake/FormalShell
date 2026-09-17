@@ -56,6 +56,10 @@ Singleton {
     readonly property string artist: root.activePlayer ? root.activePlayer.trackArtist : ""
     readonly property string album: root.activePlayer ? root.activePlayer.trackAlbum : ""
     readonly property string artUrl: root.activePlayer ? root.activePlayer.trackArtUrl : ""
+    // `xesam:url` has no dedicated MprisPlayer property (only trackArtUrl
+    // does); it comes straight out of the raw metadata map (LyricsService's
+    // sibling-.lrc lookup, spec P2.1).
+    readonly property string url: root.activePlayer && root.activePlayer.metadata ? (root.activePlayer.metadata["xesam:url"] || "") : ""
     readonly property string identity: root.activePlayer ? root.activePlayer.identity : ""
     readonly property bool isPlaying: root.activePlayer ? root.activePlayer.isPlaying : false
     readonly property bool canGoNext: root.activePlayer ? root.activePlayer.canGoNext : false

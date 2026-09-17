@@ -124,17 +124,29 @@ IpcHandler {
         });
     }
 
-    // D9: the panel's own read of LyricsService, over IPC for headless
-    // smoke verification. `index` is worked out here rather than cached on
-    // the service, so it's always current as of the call rather than the
-    // last time some binding happened to re-evaluate it.
+    // The panel's own read of LyricsService, over IPC for headless
+    // verification (spec P11). `lines` is the DISPLAY set (interludes
+    // spliced in, `parent` remapped), so `active`/`secondary` index the same
+    // array the caller gets back rather than LyricsService's raw one;
+    // both are worked out here, against the offset position, rather than
+    // cached on the service, so they're always current as of the call.
+    // `follow` is the panel's own wheel-takeover state, added once the panel
+    // owns one (Task 3).
     function lyrics(): string {
+        const lines = Lyrics.displayLines(LyricsService.lines);
+        const main = Lyrics.mainLineIndices(lines);
+        const t = MediaService.position - LyricsService.offsetSeconds;
+        const active = Lyrics.activeMainLineIndex(lines, main, t);
+        const secondary = Lyrics.activeSecondaryLines(lines, main, t, active);
         return JSON.stringify({
             state: LyricsService.state,
             source: LyricsService.source,
-            lines: LyricsService.lines,
+            quality: LyricsService.quality,
             words: LyricsService.hasWords,
-            index: Lyrics.indexForTime(LyricsService.lines, MediaService.position),
+            blur: LyricsService.blurEnabled,
+            lines: lines,
+            active: active,
+            secondary: secondary,
             position: MediaService.position
         });
     }
