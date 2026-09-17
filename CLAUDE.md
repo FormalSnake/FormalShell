@@ -138,10 +138,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Hyprland's own expanded bind table.
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
   unlocked, typed by a real virtual-keyboard client.
-- `lyrics.sh` `--lyrics`: a word-timed LRC seeded into the cache for one
-  real MPRIS track reaching `synced` with its index moving, a second
-  track's empty `.none` marker reaching `none`, and the panel visibly
-  shorter with no LYRICS block to draw.
+- `lyrics.sh` `--lyrics`: three cached tracks, the lit set on a duet and
+  background overlap, quality and estimated timing, the estimated wipe read
+  off pixels, a real wheel notch taking follow over and a track change
+  re-arming it, the none track's panel narrower, the now-playing column's
+  left edge held through a lyrics arrival, and lyrics synced before the
+  panel ever opens with the first open landing on the split width.
+- `lyrics_blur.sh` `--lyrics-blur`: one real MPRIS player, `media.lyricsBlur`'s
+  default true against a settings retarget to false, a crop over a far
+  unlit row read by edge energy and lower with the blur on, the active
+  line never blurred.
 - `media.sh` `--media`: the media panel read off a real MPRIS player, both
   marquee states, shuffle/loop/volume set over IPC and read back out of mpv,
   and the players switcher.
@@ -412,7 +418,10 @@ behavior on hosts where a real owner exists.
   compositor blurring the desktop behind that scrim, since the polkit
   layer takes the same blur layerrule its card's translucency implies),
   every other surface sits over the desktop with its border doing the
-  work. Motion is `docs/DESIGN.md` §1 "Motion": the two clock families
+  work. The lyrics pane is the one exception (owner, 2026-09-17, spec P12):
+  depth of field on every line but the lit one and a glow on the chunk
+  being sung, both gated behind `media.lyricsBlur`. Motion is
+  `docs/DESIGN.md` §1 "Motion": the two clock families
   behind `Anim`/`CAnim`, and the joined shape a card hanging off the bar
   draws instead of a `Card`. Never
   reintroduce a `ScreencopyView`-based capture anywhere (see

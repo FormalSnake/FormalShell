@@ -1,7 +1,39 @@
 # M56: the lyrics pane at parity with kopuz
 
 **Date:** 2026-09-17
-**Status:** in progress on `m56-lyrics-parity` (worktree `../FormalShell-m56`).
+**Status:** implemented 2026-09-17 on `m56-lyrics-parity` (worktree
+`../FormalShell-m56`), oldest first: 66114ef (this plan and the spec),
+a42dce5 (docs, the pane moved to the panel's trailing side), 9196c11 (the
+line model at kopuz's shape, paxsenix rows, the lit set, estimated
+chunks), 7f0c9fd (apple music and youtube through paxsenix beside
+lrclib, ranked by timing, the json cache), 76908ad (the pane itself: soft
+wipe and glow, depth of field, several lines lit, the trailing side),
+7a881f8 (docs, lyrics load on the track change rather than on open),
+7b1d175 (lyrics load on the track change itself, not on open), b0b1cdb
+(the legs for the lit set, the estimated wipe, the blur key and the held
+column). Task 5 is the docs commit carrying this line.
+
+Where the shipped code deviates from the task text, on purpose:
+
+- Task 2: the by-hand provider run only exercised Apple Music, since its
+  quality-2 answer wins the race outright and nothing waits for YouTube or
+  lrclib to finish behind it. `follow` lives on `LyricsService` rather than
+  the pane so IPC can read it, and a panel reopen re-arms it too, not only
+  a wheel takeover's own listed triggers.
+- Task 3: `MultiEffect`'s mask thresholds alpha rather than multiplying it,
+  so the unsung line's 0.45 lives in the `mutedForeground` copy under the
+  mask and the mask itself carries only the soft band. The arrival fade
+  runs on `effectsSlow` (300ms) rather than a value the surface picks,
+  since `docs/DESIGN.md` forbids a surface writing its own duration. The
+  leading-edge hold gives way to the screen's far padding, so an
+  anchorless `panel open media` near the screen edge still slides; the leg
+  uses `panel toggle media` instead. The pane is its own file,
+  `shell/Surfaces/Panels/LyricsPane.qml`, rather than nested under a
+  `Media/` directory.
+- Task 4: fixed an out-of-range read in the model's lit-set functions,
+  found when the panel's two bindings disagreed for one evaluation. P13's
+  hold check lives inside `lyrics.sh` rather than a leg of its own. The
+  blur leg's margin is `off > on * 1.10` against a measured 1.15 to 1.24.
 **Spec:** `docs/superpowers/specs/2026-09-17-m56-lyrics-kopuz-parity.md`
 (wins on conflict), over the M55 spec.
 
