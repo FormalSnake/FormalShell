@@ -649,6 +649,12 @@ no compositor blur, and dithered imagery. Any key you write explicitly
 wins over the preset, so `retro` with `"radius": 4` is the retro look on
 slightly rounded corners.
 
+Under the hood a preset is a table file, `shell/Theme/themes/<name>.js`,
+plus the scalar keys in the table below; `retro`'s file re-exports
+`metamorphosis`'s table rather than carrying its own, since the two share
+every fill, border and radius and differ only in those scalars. No new
+user-facing key landed with that table, so the columns below are unchanged.
+
 | key | `shadcn` | `retro` |
 | --- | --- | --- |
 | `theme.radius` | 10 | 0 |

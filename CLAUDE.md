@@ -34,6 +34,12 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   wrong password then the real one over `wtype`) and pulls
   `artifacts/greeter/`. It fails unless the session log shows a real
   `pam_authenticate: AUTH_ERR` on the wrong attempt.
+- `dev/parity.sh <flags>`: runs one leg combination through `just vm-smoke`
+  from this worktree and from a sibling worktree at `origin/main`
+  (`../FormalShell-main`), then `compare -metric AE`s every frame pair into
+  `artifacts/parity/diff/`. The one acceptance test for a theme table
+  migration: a non-zero diff outside the bar clock, a caret or a toast
+  timestamp is a defect, never a pixel to wave off.
 
 How a run works:
 
@@ -445,7 +451,9 @@ behavior on hosts where a real owner exists.
 - The shell only ever **reads** `~/.config/formalshell/settings.json`; it
   never writes it. Runtime-mutable state goes to
   `$XDG_STATE_HOME/formalshell/state.json`.
-- Chrome defaults (2026-08-25): radius `Theme.radius` (10, `theme.radius`
+- Chrome defaults (2026-08-25): every number below is the `metamorphosis`
+  table (`shell/Theme/themes/metamorphosis.js`), read through `Theme.box()`;
+  see `docs/DESIGN.md` §1 "Themes" for the schema. Radius `Theme.radius` (10, `theme.radius`
   in settings.json), 1px `border`, no shadow, no gradient, no blur drawn by
   the shell (Hyprland blurs behind the translucent bar/panel/launcher cards
   via layerrules; `theme.surfaceOpacity`, default 0.85), dither only behind

@@ -1,10 +1,49 @@
 # M59: themes as tables
 
 **Date:** 2026-09-17
-**Status:** in progress on `m59-theme-tables` (worktree `../FormalShell-m59`).
+**Status:** implemented 2026-09-17 on `m59-theme-tables` (worktree
+`../FormalShell-m59`), oldest first: b73a9bd (the table and the renderer),
+185bd82 (the floating surfaces), 01b4bae (the controls and the cursor ring),
+cfdabc2 (parity), and this commit (the record).
 **Spec:** `docs/superpowers/specs/2026-09-17-pantheon-mode-declarative-themes.md`,
 Part 1. The 2026-08-25 spec and `docs/DESIGN.md` win where it is silent.
 Part 2 (the pantheon table and its habits) is M60, planned once this lands.
+
+Where the shipped work deviates from the spec and this plan's own T2/T3:
+
+- The box schema carries a `wash` field the spec's shape did not: a
+  translucent role's hover and press are a colour laid over the fill rather
+  than blended into it (`Theme.hoverFill`/`pressFill`), which `tint` cannot
+  express since it blends toward opaque. `WASH_KEYS` in `style.js` keeps it
+  beside the roles rather than inside each one, since every role that takes
+  a pointer takes the same four.
+- Four roles beyond T3's list: `notification` (a toast's own frame, `flat`/
+  `flatCritical` states for a row inside the centre that already carries a
+  card), `cell.mark` (the open-panel line a bar cell draws), `track.notch`
+  (the one mark a `Track` can carry) and `input.selection` (a dragged
+  selection's fill). `card` gained an `opaque` state for a surface the
+  compositor does not blur (the capture picker, over a frozen screenshot).
+- Box.qml's rings are FILLED rounded rectangles at a negative margin under
+  the fill, not the bordered rectangles T4 describes: the fill above a ring
+  is translucent, so a stroked band would leave the box's own alpha showing
+  the desktop between the ring and the border.
+- Box.qml's default content slot and its `silhouette` slot are separate by
+  necessity, not by choice: an object declared inside a document whose root
+  is a Box lands in whichever slot Box declares default, so the default slot
+  has to be the one actually drawn, or it would swallow a primitive's own
+  children instead of casting a shadow.
+- `Theme.ringAlpha` is gone; `Theme.ringWidth` now derives from the
+  `cursor` role's own ring spread (`root.cursorRing.spread`) rather than
+  standing as a literal beside it, so the table is the one place that
+  number lives.
+- `Scrim.amount` (a literal 0.5 the item multiplied in) is gone: the
+  `scrim` role's own `fillAlpha` carries that number now.
+- `Cell._borderless` is gone: a ghost cell with no cursor now reads a table
+  state (`ghost`) with no border in it, rather than a boolean the cell
+  computed to zero the border width itself.
+- `Panel.frameColor`/`frameRadius` (two literals a caller set) became one
+  `frameRole` string (`"card"` or `"menu"`); `frameRadius` derives from
+  `Theme.box(frameRole).radius` instead of being handed in.
 
 ## Owner's ask (2026-09-17)
 

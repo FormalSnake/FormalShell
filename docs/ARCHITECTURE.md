@@ -72,6 +72,12 @@ shell/
   Theme/
     matugen.js                 pure JS, .pragma library: merged matugen TOML config builder
     palette.js                 pure JS, .pragma library: theme.json validate() + shadcn zinc fallback()
+    style.js                   pure JS, .pragma library: resolve() turns a theme table's role+state
+                                into the colours/radius/layers Components/Box.qml draws (M59)
+    themes/
+      metamorphosis.js           the shipped shadcn-on-Omarchy chrome table (M59)
+      retro.js                   re-exports metamorphosis.js's table; retro differs only in the
+                                  scalars presets.js already owns
     ThemeEngine.qml             singleton: serialized matugen Process queue
     templates/
       theme.json.tmpl           matugen template rendering theme.json
@@ -95,7 +101,10 @@ shell/
                                  negative-id special:* overlays the quake console parks on
       HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
   Components/
-    Cell.qml                    the shared cell: card fill, 1px border, radiusMd, with the
+    Box.qml                     the one chrome renderer (M59): draws Theme.style's role+state as
+                                 casts, rings, fill+border, face, hairlines and the pointer's wash,
+                                 in that order, over a default-property content slot
+    Cell.qml                    the shared cell: the `cell` role at radiusMd, with the
                                  active/selected/destructive/warning/cursor states and
                                  default-property content
     Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,

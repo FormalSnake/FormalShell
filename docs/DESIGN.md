@@ -71,6 +71,28 @@ rather than 0.2: the scrim falls under the mark and only darkens the desktop,
 while the card over it stays above and keeps its blur (owner, 2026-09-17:
 "make the overlay just darken instead of blur").
 
+**Themes**: the chrome every primitive draws comes out of one table,
+`shell/Theme/themes/<name>.js`, one file per theme (`metamorphosis` is the
+look above; `retro` re-exports it, since retro differs from it only by the
+scalars `theme.preset` already resolves). A table is keyed by role, and
+each role is one box: `fill` (a `Theme.color` role or a literal), `fillAlpha`
+(a number or `"surface"`), `radius` (a step off the ladder or a literal),
+`border` (`{ color, alpha, width }` or none), `face` (the one top-to-bottom
+gradient a material has, or none), `layers` (CSS `box-shadow` order, a
+hairline, a ring or a cast depending on its own blur and spread), `tint`
+(a colour blended into an opaque fill under the pointer, never its alpha
+dropped), `wash` (a translucent surface's own hover and press, a colour
+laid over the fill rather than blended into it) and `edge` (a hairline
+drawn outside the box, the bar strip's line against the desktop). Any alpha
+may instead be `{ light, dark }`, resolved by the live palette's mode. A
+role's states merge over its base state key by key. `habits` in the same
+table are the same idea for shape rather than chrome: which surface a bar,
+an emerging card or a notification takes where a theme differs from
+metamorphosis in more than colour. A primitive renders its role and state
+and never names a theme; a theme never reaches into a primitive.
+`Theme.box(role, state)` is the only way chrome reaches one, drawn by
+`Components/Box.qml`.
+
 **Type** (`Theme.fontFamilySans`, `Theme.fontFamilyMono`,
 `Theme.fontSize.*`, `Theme.weight.*`): sans for words (titles, labels,
 buttons, section labels, descriptions, hints), mono for values (numbers,
@@ -455,29 +477,30 @@ thing.
 
 | primitive | is | states |
 | --- | --- | --- |
-| `Cell` | a bordered `radiusMd` item: bar cell, list row, chip; fill, border and ink crossfade on `effects`, and a cell under a list that owns the cursor or the selection fill draws neither itself | rest (`card`, `border`), `ghost` rest (nothing, for the bar's own cells), hover (`hoverFill`), cursor (ring), selected (`accent` fill), active (`primary` fill, `primaryForeground` ink), destructive (`destructive` border and ink) |
-| `Button` | shadcn button, `variant`: `default` (`primary` fill), `outline` (`border`, transparent), `ghost` (no border), `selected` (`background` fill behind a border), `destructive` | hover and pressed (a fill blends toward `background`, everything else takes the wash), cursor, disabled (opacity 0.5) |
+| `Box` | the one chrome renderer: draws its role's box from `Theme.style`, in order the casts (blurred layers, under everything), the rings (filled bands at a negative margin, under the fill), the fill with its border, the face gradient, the inset hairlines, the pointer's wash, then its content; fill and border cross on `CAnim`; a box with no layers and no face costs one `Rectangle` | whatever states its role declares; an unknown state reads as the role's base |
+| `Cell` | the `cell` role at `radiusMd`: bar cell, list row, chip; a cell under a list that owns the cursor or the selection fill draws neither itself | `rest`, `ghost` (the bar's own cells), `hover`, `active`, `selected`, `destructive`, `warning`, cursor (the `cursor` role composed over it) |
+| `Button` | the `button.<variant>` role, `variant` one of `default`, `outline`, `ghost`, `selected`, `destructive` | `rest`, `hover`, `press`, cursor, disabled (opacity 0.5, off the table) |
 | `IconButton` | a `ghost` Button that is `controlHeight` square, one `Icon` | as Button |
-| `Card` | `card` fill, 1px `border`, `radiusXl`, `panelPadding`; the surface's own frame, never nested | none |
-| `Shoulders` | the same frame with the anchored edge left open and a concave fillet outside each of its two corners, running out to the line it came out of (§1 Motion), and, at `attach` 0, a plain `Card` again: what every surface coming out of a line draws instead of `Card` | attached, letting go, free |
+| `Card` | the `card` role at `panelPadding`, `opaque` on a surface the compositor does not blur; the surface's own frame, never nested | `rest`, `opaque` |
+| `Shoulders` | the `card` role with the anchored edge left open and a concave fillet outside each of its two corners, running out to the line it came out of (§1 Motion), and, at `attach` 0, a plain `Card` again: what every surface coming out of a line draws instead of `Card` | attached, letting go, free |
 | `Joint` | the join controller beside a `Presence` (§1 Motion): the silhouette's depth from the line, the let-go clock, the deform's pivot, and the gap it publishes to the line | attached, released |
 | `Drawer` | one edge-anchored card recipe (§1 Motion, M57 D4): a consumer states its edge and resting rect, this derives the line, the depth, the walls, the nested bud's span and the deform's two pivots, and assembles `Presence`, `Joint`, `Deform` and `Shoulders` underneath; Panel, the notification centre, the launcher, polkit, a plugin's overlay and the OSD all sit on it | attached, letting go, free |
 | `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
 | `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
-| `Input` | `input` border, `radiusMd`, `controlHeight`, placeholder `mutedForeground` | focus (ring), error (`destructive` border, caption below) |
-| `Switch` | 32x18 track, `muted` off, `primary` on, `background` knob | cursor (ring) |
-| `ButtonGroup` | a `muted` trough at `radiusMd` holding one ghost `Button` per option, `xs` inside: a choice among several (power profiles, the audio device pick) when `exclusive`, a set of actions (the media transport) when not | selected (`background` with a 1px `border`), active option (`primary` fill), cursor (ring on one button) |
-| `Segmented` | `muted` group, `radiusMd`, one `background` fill with a 1px `border` that travels to the active segment on `spatial` | hover on an unchosen segment (the wash, ink lifted off `mutedForeground`), cursor (ring) |
-| `Track` | a `trackThickness` progress or slider: `muted` track, `primary` fill, `radiusSm` | cursor (ring), for a surface that addresses the track as a row |
-| `Tooltip` | `popover`, `radiusSm`, `caption`, 6px off the anchor; one surface per output, driven through `TooltipRegistry` | delayed (400ms), travelling (within 500ms of the last hide) |
+| `Input` | the `input` role at `radiusMd`, `controlHeight`, placeholder `mutedForeground`; a dragged selection paints the `input.selection` role behind the text | `rest`, `focus` (ring), `error` (caption below) |
+| `Switch` | a 32x18 `switch.track` (`off`/`on`) holding a `switch.knob` | cursor (ring) |
+| `ButtonGroup` | a `trough` role at `radiusMd` holding one ghost `Button` per option, `xs` inside: a choice among several (power profiles, the audio device pick) when `exclusive`, a set of actions (the media transport) when not | selected (`button.selected`), active option (`primary` fill), cursor (ring on one button) |
+| `Segmented` | a `trough` role, `radiusMd`, its `segmented.chip` fill travelling to the active segment on `spatial` | hover on an unchosen segment (the wash, ink lifted off `mutedForeground`), cursor (ring) |
+| `Track` | a `trackThickness` progress or slider: `track.groove`, `track.fill`, `track.notch` for the one mark it can carry | cursor (ring), for a surface that addresses the track as a row |
+| `Tooltip` | the `popover` role at `radiusSm`, `caption`, 6px off the anchor; one surface per output, driven through `TooltipRegistry` | delayed (400ms), travelling (within 500ms of the last hide) |
 | `KeyCatcher` | key dispatcher for keyboard-driven surfaces (Escape, Tab, arrows and hjkl, Enter, Space, x, printable) | `blocked` while an inline editor has focus |
 | `Anim` | the one `NumberAnimation` in the shell: `kind` resolves a duration and a bezier out of `Theme.motion` (§1 Motion), `spatial` by default | none |
 | `CAnim` | the colour half of it, always `effectsSlow`: every `Behavior on color` and `border.color` | none |
 | `Deform` | the velocity squash (§1 Motion): samples `target` each frame and exposes the `matrix4x4` its consumer hands to a `Matrix4x4` transform, `amount` per surface | running, at rest (identity, frame loop stopped) |
 | `Presence` | the enter/exit motion controller (§1 Motion) a summonable surface binds `opacity`, `scale` and its edge travel or its extent (`morph`) to, gating the window's `visible` on `shown` | open, exiting, settled, `bypass` (the pose lands at once, for a handoff) |
 | `SizeMorph` | one size-morph recipe (§1 Motion, M57 D7): tracks a content size live while open, freezes it on close, arms off the surface being `mapped` rather than `settled`, and sits out under `held` while a surface like a second bar is still measuring its own cells | tracking, frozen, `held` |
-| `Scrim` | the modal backdrop (§1 Motion): plain black at 0.5 on a drawer's own pose, its share over the line's own band riding `1 - attach` so a card buds off a lit bar and dims it only as it lets go | attached, letting go, free |
+| `Scrim` | the modal backdrop (§1 Motion): the `scrim` role's own colour on a drawer's own pose, its share over the line's own band riding `1 - attach` so a card buds off a lit bar and dims it only as it lets go | attached, letting go, free |
 | `Panel` | the popout window: a `Drawer` under a bar cell, header row (icon, title, `IconButton`s), `KeyCatcher` around the content, one travelling cursor ring and the scroll that follows it, the frame's size and position morphs | open, closed, handing over |
 
 ## 3. Surface rules
@@ -653,7 +676,12 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 
 ## 5. Never
 
-- A literal colour, radius, duration or pixel size in a surface file.
+- A literal colour, radius, duration or pixel size in a surface file or a
+  primitive.
+- A `Theme.color.*`, `Theme.surface()` or `Theme.radius*` read for chrome
+  anywhere but a theme table (`shell/Theme/themes/`). A primitive reads its
+  role and state through `Theme.box()`; ink stays a token, since it is
+  content rather than chrome.
 - A duration or a curve outside `Anim` and `CAnim`. The workspace pill's
   trailing edge, which doubles the `emphasized` token on the primitive, is
   the one carve-out: the relation between its two edges is the effect, and a
@@ -682,3 +710,8 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 token or primitive re-runs base, `--menu`, `--notify` and `--panel network`
 at minimum; a change to one surface re-runs that surface's leg. Contrast:
 `mutedForeground` on `card` stays at or above 4.5:1 in both fallback modes.
+A theme table change runs `dev/parity.sh <flags>` against `origin/main`
+before anything else: it accepts every pixel that lies inside the bar
+clock's own rect, a caret or a toast's timestamp, or a burst frame's own
+motion sample taken at a fixed wall-clock offset, and treats anything else
+that differs as a defect in the migration.
