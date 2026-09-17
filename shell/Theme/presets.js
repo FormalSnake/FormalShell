@@ -1,4 +1,6 @@
 .pragma library
+.import "themes/metamorphosis.js" as Metamorphosis
+.import "themes/retro.js" as Retro
 
 // theme.preset (M49 D1): a table of chrome defaults, not a mode. Every knob
 // a preset sets is a settings key the user can still write, and an explicit
@@ -9,12 +11,18 @@
 // `shadcn` is the shipped design language (2026-08-25 redesign). `retro` is
 // the one it replaced, square corners, one mono face, opaque surfaces with
 // no compositor blur, and the dither pass over content imagery.
+//
+// Since M59 a preset also names one chrome table, `shell/Theme/themes/`'s
+// own file per theme: the scalars above are what the user can still
+// override key by key, the table is not overridable at all.
 
 var NAMES = ["shadcn", "retro"];
 
 var _TABLE = {
-    shadcn: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false },
-    retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true }
+    shadcn: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
+        style: Metamorphosis.STYLE },
+    retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true,
+        style: Retro.STYLE }
 };
 
 // Anything that is not one of NAMES resolves to shadcn, the same
@@ -37,7 +45,10 @@ function _bool(value, fallback) {
 }
 
 // A fresh object per call, so the table above stays the only copy of the
-// numbers and a caller can hold what it gets back.
+// numbers and a caller can hold what it gets back. `style` is the one
+// exception and is handed out by reference: it is a theme's whole chrome
+// table, nothing writes to it, and copying it per call would copy every
+// box on every palette change.
 function defaults(name) {
     var d = _TABLE[_name(name)];
     return {
@@ -46,7 +57,8 @@ function defaults(name) {
         fonts: d.fonts,
         surfaceOpacity: d.surfaceOpacity,
         blur: d.blur,
-        dither: d.dither
+        dither: d.dither,
+        style: d.style
     };
 }
 
@@ -70,6 +82,7 @@ function resolve(name, get) {
 
     return {
         preset: preset,
+        style: d.style,
         radius: get("theme.radius", d.radius),
         icons: get("theme.icons", d.icons),
         fonts: fonts,

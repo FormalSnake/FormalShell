@@ -1,6 +1,8 @@
 pragma Singleton
 import QtQuick
 import "../../../../shell/Theme/palette.js" as Palette
+import "../../../../shell/Theme/style.js" as Style
+import "../../../../shell/Theme/themes/metamorphosis.js" as Metamorphosis
 import "../../../../shell/Theme/tokens.js" as Tokens
 
 // Test-only stand-in for shell/Core/Theme.qml, which is a Quickshell
@@ -69,6 +71,12 @@ QtObject {
     readonly property bool lockDither: false
     readonly property bool blurBehind: true
 
+    // The shadcn preset's chrome table, straight off the theme file rather
+    // than through presets.js, which resolves against a Config this stub
+    // cannot import.
+    readonly property var style: Metamorphosis.STYLE
+    readonly property var habit: root.style.habits
+
     readonly property int borderWidth: 1
     readonly property int radius: 10
     readonly property var _radiusTokens: Tokens.radiusTokens(radius)
@@ -121,16 +129,30 @@ QtObject {
         return Qt.alpha(c, root.surfaceOpacity);
     }
 
-    readonly property var _stateAlpha: Tokens.stateAlpha(root.color.mode)
-    readonly property color hoverFill: Qt.alpha(root.color.foreground, root._stateAlpha.hover)
-    readonly property color pressFill: Qt.alpha(root.color.foreground, root._stateAlpha.press)
+    function _styleCtx() {
+        return {
+            mode: root.color.mode,
+            surfaceOpacity: root.surfaceOpacity,
+            radius: root._radiusTokens,
+            color: name => root.color[name],
+            alpha: (c, a) => Qt.alpha(c, a),
+            tint: (c, over) => Qt.tint(c, over)
+        };
+    }
+
+    function box(role, state) {
+        return Style.resolve(root.style, role, state, root._styleCtx());
+    }
+
+    readonly property color hoverFill: Style.wash(root.style, "hover", root._styleCtx())
+    readonly property color pressFill: Style.wash(root.style, "press", root._styleCtx())
 
     function hoverFilled(c) {
-        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledHover));
+        return Qt.tint(c, Style.wash(root.style, "filledHover", root._styleCtx()));
     }
 
     function pressFilled(c) {
-        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledPress));
+        return Qt.tint(c, Style.wash(root.style, "filledPress", root._styleCtx()));
     }
 
     // Not readonly: tst_presence.qml overrides this per-test to prove the

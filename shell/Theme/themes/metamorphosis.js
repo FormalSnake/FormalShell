@@ -1,0 +1,212 @@
+.pragma library
+
+// The shipped look as a table (M59 T1): shadcn chrome on Omarchy habits,
+// the 2026-08-25 redesign. Every number here was read off the primitive
+// that drew it before this file existed, so the primitives that now render
+// `Theme.box(role, state)` paint the frames they painted then.
+//
+// What the table does NOT carry: ink (text and icon colour, which is
+// content rather than chrome), geometry (a control's padding, its height,
+// the concentric radius a nested box takes from its owner) and motion. The
+// scalars a preset already owns stay in presets.js: radius base, icons,
+// fonts, surface alpha, blur, dither.
+//
+// Colours are role names resolved at draw time, so matugen keeps driving
+// the palette; alphas are literals here, which is what makes a theme
+// readable as one file. `shell/Theme/style.js` documents the schema and
+// resolves it.
+
+// The keyboard cursor's halo (T6): shadcn's `ring-[3px] ring-ring/50`, one
+// ring layer rather than a rectangle each primitive drew for itself.
+var CURSOR_LAYERS = [{ spread: 3, color: "ring", alpha: 0.5 }];
+
+// What the pointer paints. `hover` and `press` are a wash of the surface's
+// own ink, never an opaque `accent` chip: every surface that takes a hover
+// is drawn at the surface alpha, so an opaque fill on top of it lands at a
+// delta the wallpaper behind the blur decides, and a bright wallpaper
+// cancels the lift outright. A wash of the ink stacks on whatever resolved
+// there instead, so the lift keeps its size and its direction over every
+// wallpaper. That is what `accent` already is on an opaque page: zinc's
+// `#27272a` is `card` under white at 0.07, `#f4f4f5` is `card` under black
+// at 0.043. `hover` steps past both, since a bar cell sits on `card` rather
+// than on `background` and has that much less room to read against;
+// `press` is the same wash one step further on.
+//
+// `filledHover`/`filledPress` are shadcn's `hover:bg-primary/90` for a
+// control that already carries a colour: the fill blended toward
+// `background` and left opaque. Dropping the fill's own alpha instead is
+// what `/90` means on an opaque page and something else here, a primary
+// button on a translucent panel goes see-through and the wallpaper reads
+// straight through its label.
+var WASH = {
+    hover: { color: "foreground", alpha: { dark: 0.1, light: 0.06 } },
+    press: { color: "foreground", alpha: { dark: 0.16, light: 0.1 } },
+    filledHover: { color: "background", alpha: 0.1 },
+    filledPress: { color: "background", alpha: 0.18 }
+};
+
+var STYLE = {
+    roles: {
+        // The strip (DESIGN.md §3 Bar): the card fill with no border at all,
+        // and one hairline along the edge facing the desktop. `edge` rather
+        // than `border` because three of the four sides are the screen's own
+        // edges, and the line is drawn in two segments around the gap a
+        // joined card opens in it, which is Bar's own geometry.
+        "bar": {
+            fill: "card",
+            fillAlpha: "surface",
+            radius: 0,
+            edge: { color: "border", width: 1 }
+        },
+
+        // The screen frame's ring. Its corner is `frame.radius`, a settings
+        // key rather than a step off the ladder, so the radius here is the
+        // band's own square outer edge and FrameRing keeps deciding the cut
+        // out it leaves for the desktop.
+        "frame": {
+            fill: "card",
+            fillAlpha: "surface",
+            radius: 0,
+            border: { color: "border", width: 1 }
+        },
+
+        "card": {
+            fill: "card",
+            fillAlpha: "surface",
+            radius: "xl",
+            border: { color: "border", width: 1 }
+        },
+
+        // The tooltip's own frame, and the menu frame the tray menu and the
+        // second bar take: the same box one step down the radius ladder.
+        "popover": {
+            fill: "popover",
+            fillAlpha: "surface",
+            radius: "sm",
+            border: { color: "border", width: 1 }
+        },
+
+        "menu": {
+            fill: "popover",
+            fillAlpha: "surface",
+            radius: "md",
+            border: { color: "border", width: 1 }
+        },
+
+        // Every bar cell, list row and chip. `ghost` is the bar's own cells:
+        // the strip behind them already carries the fill and the line, so a
+        // resting ghost paints neither and the bar reads as one surface.
+        // The filled states are opaque on purpose, a fill IS the statement;
+        // `destructive` and `warning` put their colour on the border alone
+        // (DESIGN.md §5, no full-bleed rows).
+        "cell": {
+            rest: {
+                fill: "card",
+                fillAlpha: "surface",
+                radius: "md",
+                border: { color: "border", width: 1 }
+            },
+            ghost: { fill: "transparent", border: null },
+            hover: { wash: WASH.hover },
+            active: { fill: "primary", fillAlpha: 1 },
+            selected: { fill: "accent", fillAlpha: 1 },
+            destructive: { border: { color: "destructive", width: 1 } },
+            warning: { border: { color: "warning", width: 1 } }
+        },
+
+        // shadcn's button variants. The two that carry a colour of their own
+        // blend toward `background` under the pointer; the three that do not
+        // take the ink wash, `selected` included, which is what keeps a
+        // chosen option in a `ButtonGroup` reading as chosen while the
+        // pointer sits on it.
+        "button.default": {
+            rest: { fill: "primary", radius: "md" },
+            hover: { tint: [WASH.filledHover.color, WASH.filledHover.alpha] },
+            press: { tint: [WASH.filledPress.color, WASH.filledPress.alpha] }
+        },
+
+        "button.destructive": {
+            rest: { fill: "destructive", radius: "md" },
+            hover: { tint: [WASH.filledHover.color, WASH.filledHover.alpha] },
+            press: { tint: [WASH.filledPress.color, WASH.filledPress.alpha] }
+        },
+
+        "button.outline": {
+            rest: { fill: "transparent", radius: "md", border: { color: "border", width: 1 } },
+            hover: { wash: WASH.hover },
+            press: { wash: WASH.press }
+        },
+
+        "button.ghost": {
+            rest: { fill: "transparent", radius: "md" },
+            hover: { wash: WASH.hover },
+            press: { wash: WASH.press }
+        },
+
+        "button.selected": {
+            rest: { fill: "background", radius: "md", border: { color: "border", width: 1 } },
+            hover: { wash: WASH.hover },
+            press: { wash: WASH.press }
+        },
+
+        // The text field: no fill of its own, the `input` border at rest,
+        // the ring and its halo while it holds focus, `destructive` on an
+        // error (the caption under it is the primitive's).
+        "input": {
+            rest: { fill: "transparent", radius: "md", border: { color: "input", width: 1 } },
+            focus: { border: { color: "ring", width: 1 }, layers: CURSOR_LAYERS },
+            error: { border: { color: "destructive", width: 1 } }
+        },
+
+        "switch.track": {
+            off: { fill: "muted", radius: "pill" },
+            on: { fill: "primary" }
+        },
+
+        "switch.knob": { fill: "background", radius: "pill" },
+
+        // The groove is shadcn's own `primary/20` rather than `muted`:
+        // `muted` and `accent` resolve to the same zinc step in the dark
+        // fallback, so a groove painted `muted` vanishes on a row carrying a
+        // `selected` or `active` fill.
+        "track.groove": { fill: "primary", fillAlpha: 0.2, radius: "sm" },
+        "track.fill": { fill: "primary", radius: "sm" },
+
+        // The well a `ButtonGroup`'s row of ghost buttons and a `Segmented`'s
+        // segments sit in, and the chip that marks the chosen one. The chip's
+        // radius is the concentric step its owner passes it, this is the
+        // free-standing value.
+        "trough": { fill: "muted", radius: "md" },
+        "segmented.chip": {
+            fill: "background",
+            radius: "md",
+            border: { color: "border", width: 1 }
+        },
+
+        // The keyboard cursor, composed over whatever box carries it: the
+        // ring on the border and its halo outside. Radius comes from the box
+        // it lands on, which is why there is none here.
+        "cursor": {
+            border: { color: "ring", width: 1 },
+            layers: CURSOR_LAYERS
+        },
+
+        // The modal backdrop: plain black over the live desktop, the
+        // compositor's `ignore_alpha` for the modal namespaces keeping the
+        // blur behind the card above it.
+        "scrim": { fill: "black", fillAlpha: 0.5, radius: 0 }
+    },
+
+    wash: WASH,
+
+    // Omarchy's own habits (T7): the strip along one edge, a card that buds
+    // off the line it came out of, one notification row per card, a list
+    // launcher, and no window switcher.
+    habits: {
+        bar: "strip",
+        emerge: "join",
+        notification: "row",
+        launcher: "list",
+        switcher: false
+    }
+};

@@ -7,6 +7,7 @@ import QtQuick
 import qs.Core
 import "../Theme/palette.js" as Palette
 import "../Theme/presets.js" as Presets
+import "../Theme/style.js" as Style
 import "../Theme/tokens.js" as Tokens
 import "../Bar/layout.js" as BarLayout
 
@@ -124,6 +125,39 @@ Singleton {
     readonly property var _preset: Presets.resolve(Config.get("theme.preset", "shadcn"), Config.get)
     readonly property var _presetDefaults: Presets.defaults(root._preset.preset)
     readonly property string preset: root._preset.preset
+
+    // The preset's chrome table (M59 T1) and its habits, the two things a
+    // surface reads instead of ever learning which theme is live: `style`
+    // is one box description per role (shell/Theme/style.js documents the
+    // schema, shell/Theme/themes/ holds a file per theme) and `habit` says
+    // which shape a surface takes where themes differ in more than chrome.
+    readonly property var style: root._preset.style
+    readonly property var habit: root.style.habits
+
+    // What style.js resolves a box against: the live palette and the
+    // arithmetic a `.pragma library` has no access to. Built per call
+    // rather than held, so a binding that calls `box()` registers its
+    // dependency on every palette key the resolution reads.
+    function _styleCtx() {
+        return {
+            mode: root.color.mode,
+            surfaceOpacity: root.surfaceOpacity,
+            radius: root._radiusTokens,
+            color: name => root.color[name],
+            alpha: (c, a) => Qt.alpha(c, a),
+            tint: (c, over) => Qt.tint(c, over)
+        };
+    }
+
+    // One role's box, drawable: colours resolved, alphas taken per mode,
+    // the radius off the step ladder. `state` falls back to the role's base
+    // state, so a primitive passes its own state string through without
+    // knowing which states a table bothers to describe, and `"pill"`
+    // survives as itself because it needs the extent of the item being
+    // drawn (Components/Box.qml resolves it).
+    function box(role, state) {
+        return Style.resolve(root.style, role, state, root._styleCtx());
+    }
 
     // shadcn's border/ring pair (spec "Depth", 2026-08-25): a 1px border
     // everywhere, plus a 3px ring halo at 0.5 alpha on focus. `radius` is
@@ -250,25 +284,22 @@ Singleton {
 
     // --- Interaction states -------------------------------------------------
     // Hover and press, as a wash of the surface's own ink rather than an
-    // opaque `accent` chip. Every surface that takes a hover is drawn at
-    // `surfaceOpacity`, so an opaque fill on top of it lands at a delta the
-    // wallpaper behind the blur decides, and a bright wallpaper cancels the
-    // lift outright. `Tokens.stateAlpha`'s header carries the arithmetic.
-    // `accent` keeps the states that are not the pointer's: selected, and a
-    // list's own cursor row.
-    readonly property var _stateAlpha: Tokens.stateAlpha(root.color.mode)
-    readonly property color hoverFill: Qt.alpha(root.color.foreground, root._stateAlpha.hover)
-    readonly property color pressFill: Qt.alpha(root.color.foreground, root._stateAlpha.press)
+    // opaque `accent` chip; and, for a control that already carries a fill,
+    // the same two states as a blend toward `background` (shadcn's
+    // `hover:bg-primary/90`), since a wash over a colour reads as the fill
+    // going muddy. The table's own `wash` entry carries the four numbers
+    // and the arithmetic behind them; these names are what every caller
+    // already reads. `accent` keeps the states that are not the pointer's:
+    // selected, and a list's own cursor row.
+    readonly property color hoverFill: Style.wash(root.style, "hover", root._styleCtx())
+    readonly property color pressFill: Style.wash(root.style, "press", root._styleCtx())
 
-    // The same two states for a control that already carries a fill, where a
-    // wash of the ink would read as the fill going muddy: shadcn's
-    // `hover:bg-primary/90`, blended toward `background` and left opaque.
     function hoverFilled(c) {
-        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledHover));
+        return Qt.tint(c, Style.wash(root.style, "filledHover", root._styleCtx()));
     }
 
     function pressFilled(c) {
-        return Qt.tint(c, Qt.alpha(root.color.background, root._stateAlpha.filledPress));
+        return Qt.tint(c, Style.wash(root.style, "filledPress", root._styleCtx()));
     }
 
     // --- DESIGN.md §1 motion tokens -----------------------------------------

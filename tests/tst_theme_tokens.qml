@@ -333,45 +333,6 @@ TestCase {
     // XHR-file-read pattern tst_menu_emoji.qml uses, and asserts the
     // property declaration is gone rather than merely unused — so it can't
     // silently return.
-    // Interaction states
-
-    // The wash is a lift on a dark theme and a knock-down on a light one,
-    // which is what makes it read the same over any wallpaper: the ink is
-    // always the far end from the surface it sits on.
-    function test_state_alpha_has_a_step_per_mode() {
-        var dark = Tokens.stateAlpha("dark");
-        var light = Tokens.stateAlpha("light");
-        verify(dark.press > dark.hover);
-        verify(light.press > light.hover);
-        // Dark ink is white over a near-black card, light ink is black over
-        // white; white needs the larger alpha to move the same distance.
-        verify(dark.hover > light.hover);
-    }
-
-    // The bar strip is `card`, not `background`, so the hover has that much
-    // less room to read against than a shadcn ghost button does: zinc's own
-    // accent-over-card is white at 0.07, and the wash steps past it.
-    function test_state_alpha_hover_clears_zinc_accent_over_card() {
-        verify(Tokens.stateAlpha("dark").hover > 0.07);
-        verify(Tokens.stateAlpha("light").hover > 0.043);
-    }
-
-    // shadcn's `/90` on a control that already carries a colour, the same
-    // either way round: a fill blends toward `background` rather than
-    // washing toward the ink.
-    function test_state_alpha_filled_steps_match_across_modes() {
-        compare(Tokens.stateAlpha("dark").filledHover, Tokens.stateAlpha("light").filledHover);
-        compare(Tokens.stateAlpha("dark").filledPress, Tokens.stateAlpha("light").filledPress);
-        verify(Tokens.stateAlpha("dark").filledPress > Tokens.stateAlpha("dark").filledHover);
-    }
-
-    // Anything that is not the light theme is the dark one, the same default
-    // Palette.fallback() takes for a theme.json with no `mode`.
-    function test_state_alpha_defaults_to_dark() {
-        compare(Tokens.stateAlpha(undefined).hover, Tokens.stateAlpha("dark").hover);
-        compare(Tokens.stateAlpha("").hover, Tokens.stateAlpha("dark").hover);
-    }
-
     function test_legacy_theme_spacing_property_is_deleted() {
         var done = false;
         var xhr = new XMLHttpRequest();
