@@ -68,6 +68,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `bar_position.sh` `--bar-position <edge>`: the strip on a bottom, left or
   right edge, read off the compositor's own layer geometry, with a chevron
   collapsing and expanding along it and a panel hanging off its inner edge.
+  Ridden by a leg that photographs its own frames (`--join`,
+  `--menu-emerge`, `--panel-morph`) it pins the edge alone: the layout, the
+  chevron and the panel are then the rider's business.
 - `bar_room.sh` `--bar-room`: a strip crowded past its own length, `bar
   room` reporting a hidden cell in the right region and a now-playing
   budget under 220, the frame read for a whole cell at the region's own
@@ -79,7 +82,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   reaching a real editor with the capture's own path on argv.
 - `center.sh` `--center`: the notification centre listing the pending tier,
   with the toast stack suppressed for as long as it is open, content-tall on
-  a short history and capped and scrolling on thirty rows.
+  a short history and capped and scrolling on thirty rows, then one open at
+  a tenth speed over a band down the trailing edge, for the card coming out
+  of the line there.
 - `chevron.sh` `--chevron`: a right-region chevron holding the five cells
   before it off the strip entirely, and `bar chevron expand` opening them in
   the second bar under it, the two frames asserted to differ.
@@ -134,6 +139,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   fires again only after a leave plus the 400ms cooldown.
 - `instance.sh` `--instance`: a second daemon taking the lock, exactly one
   survivor, and the survivor being the new pid.
+- `join.sh` `--join`: the join itself mid-flight under `debug motionScale`,
+  four opens sampled frame by frame: a panel against the far end of the
+  line, the chevron's second bar, a panel clicked out of a cell inside that
+  second bar, and one hanging off the line's own start. Asserts the line's
+  row painted once, the walled run-out to the screen's edge, a bud held
+  inside its owner's span and bordered on both sides while it widens. It
+  rides `--bar-position <edge>` and `--frame`, which put the same four cases
+  on a vertical hairline or against a ring's line; every probe is cut for the
+  top bar, so those runs print each claim as skipped and are read by eye.
 - `keybinds.sh` `--keybinds`: the launcher's binds route rendering rows off
   Hyprland's own expanded bind table.
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
@@ -159,7 +173,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   sampled frame by frame under `debug motionScale`: card fill under the line
   with nothing at its resting floor, the bar's own band undimmed while it is
   still attached, a plain bordered card over a dimmed band at rest, and the
-  open-to-rest time printed before any of it is asserted.
+  open-to-rest time printed before any of it is asserted. Which row that
+  line is on comes out of a `debug dump`, so the same probes hold on a frame
+  ring's top band; a top edge carrying neither prints them as skipped.
 - `mic.sh` `--mic`: the opt-in mic cell rendering its honest no-device state
   on a machine with no capture device.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
@@ -196,7 +212,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   travels to the new one, read off its far edge against the two rests: the
   Wi-Fi list collapsing under a settled card, the same collapse landing two
   seconds into a five-second emerge, and the now-playing card growing from
-  NO PLAYER to a real track.
+  NO PLAYER to a real track. The band is cut for a top bar with no frame, so
+  a run on another edge drives the same three cases, prints each claim as
+  skipped and is read by eye.
 - `picker.sh` `--picker`: the wallpaper grid, the pick becoming the
   wallpaper, the select token round trip, the Dark/Light variants, and
   ThumbnailService's prerendered cache backing every cell (the cache

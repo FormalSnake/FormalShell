@@ -26,9 +26,25 @@
 # `notifications status` rather than measured in the frame, since the
 # surface behind it is the whole output either way and a short card and a
 # clipped one photograph the same.
+#
+# Last, one open at a tenth of its speed (`debug motionScale`, the instrument
+# --join and --menu-emerge sample with) over a band down the output's trailing
+# side: the centre comes out of the line on that edge, a frame ring's when one
+# is on and the output's own bare edge when none is, and this is the only
+# place that travel is photographed at all. Frames only, read by eye: on a
+# bare edge there is no line there to join, so no claim here would hold
+# whatever the run carries.
 leg_center_flag="--center"
 leg_center_order=40
-leg_center_needs="notify-send jq wlrctl"
+leg_center_needs="notify-send jq wlrctl convert"
+
+# The band the entrance is read in: the output's trailing 560 columns, whole
+# height, so a `popupWidthWide` (480) card a `screenPadding` in from the edge
+# sits inside it with both of its ends in the frame.
+center_region="1360,0 560x1080"
+center_frames=10
+center_emerge_desktop_path="$shot_dir/center-emerge-desktop.png"
+center_emerge_rest_path="$shot_dir/center-emerge-rest.png"
 
 center_path="$shot_dir/center.png"
 center_long_path="$shot_dir/center-long.png"
@@ -46,8 +62,8 @@ leg_center_timing() {
   # margin is deliberately wide: an earlier 48 put the last leg past the
   # session's own teardown. This run's generic smoke.png is taken after all
   # of it, showing the session with the centre closed again and the front
-  # toast gone.
-  leg_timing 56 130
+  # toast gone. The slow-motion entrance at the end costs another ~13s.
+  leg_timing 70 150
 }
 
 leg_center_drive() {
@@ -102,6 +118,20 @@ sleep 1
 echo "scroll exit \$?" >> "$center_scroll_path"
 sleep 2
 "$grim_bin" "$center_scrolled_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+sleep 2
+# And the same open again at a tenth speed, over the band alone: the card
+# coming out of the line on the output's trailing edge.
+"$qs_bin" ipc -p "$shell_path" call debug motionScale 1000 > /dev/null 2>&1
+"$grim_bin" -g "$center_region" "$center_emerge_desktop_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+for i in \$(seq 1 $center_frames); do
+  sleep 0.3
+  "$grim_bin" -g "$center_region" "$shot_dir/center-emerge-\$i.png" > /dev/null 2>&1
+done
+sleep 5
+"$grim_bin" -g "$center_region" "$center_emerge_rest_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug motionScale 100 > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
 EOF
   echo "exec-once = bash $script"
@@ -196,4 +226,16 @@ leg_center_assert() {
   echo "SMOKE_CENTER $center_path"
   echo "SMOKE_CENTER_LONG $center_long_path"
   echo "SMOKE_CENTER_SCROLLED $center_scrolled_path"
+
+  local i path
+  for f in "$center_emerge_desktop_path" "$center_emerge_rest_path"; do
+    [ -f "$f" ] || fail "no centre entrance frame at $f"
+  done
+  echo "SMOKE_CENTER_EMERGE_DESKTOP $center_emerge_desktop_path"
+  echo "SMOKE_CENTER_EMERGE_REST $center_emerge_rest_path"
+  for i in $(seq 1 $center_frames); do
+    path="$shot_dir/center-emerge-$i.png"
+    [ -f "$path" ] || fail "no centre entrance frame at $path"
+    echo "SMOKE_CENTER_EMERGE_$i $path"
+  done
 }

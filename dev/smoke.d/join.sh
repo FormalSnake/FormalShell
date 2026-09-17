@@ -8,6 +8,18 @@
 #      the bar, a `screenPadding` off the screen's own edge
 #   b  the chevron's second bar
 #   c  a panel opened by a click on a cell inside that second bar
+#   d  `panel toggle usage`, which hangs off the one cell in the left region
+#      and so rests against the START of the line: the other wall, and the
+#      only case here that is not at the line's far end
+#
+# It rides `--bar-position <edge>` and `--frame`, which is what puts every
+# case above on a vertical hairline or against a frame ring's line without a
+# copy of this leg per layout. Riding a position, this leg carries it into its
+# own `bar` key (two top-level keys leave only the later one standing) and
+# --bar-position stands its own drive down. Nothing in the drive knows which
+# edge it is on: the strip's thickness and its position come out of `debug
+# dump`, and the cell case c clicks is found by diffing the second bar out of
+# the output past that thickness.
 #
 # Every frame is saved for reading by eye; four claims are asserted, the
 # first two on an attached frame of case a and the last two on case c:
@@ -40,18 +52,26 @@
 #                       border off whichever side the deform, or the last of
 #                       the attach clock, has carried past it.
 #
-# Every probe is pinned to the unframed rig's own numbers, so `--join
-# --frame` photographs the ring case and leaves them out; that combination is
-# read by eye.
+# Every probe is pinned to the top bar's own numbers, so a run on another
+# edge or with the frame on photographs the same cases over the whole output
+# and prints each claim as skipped instead; those layouts are read by eye.
 leg_join_flag="--join"
 leg_join_order=182
-leg_join_needs="wlrctl convert"
+leg_join_needs="wlrctl convert jq"
 
 join_region="1380,0 540x600"
+join_region_x=1380
 join_crop_width=540
 join_frames=10
 join_reply_path="$shot_dir/join-replies.txt"
 join_desktop_path="$shot_dir/join-desktop.png"
+join_dump_path="$shot_dir/join-dump.json"
+# Two whole-output frames, either side of the chevron's expand: what the
+# second bar's own box is diffed out of, in the output's coordinates whatever
+# region the cases themselves are cropped to.
+join_bare_path="$shot_dir/join-bare.png"
+join_owner_path="$shot_dir/join-owner.png"
+join_click_path="$shot_dir/join-click.txt"
 
 # Case a's card in the crop's own coordinates: `panel open network` with no
 # cell is `Theme.space.n` (380) wide and rests one screenPadding (12) off the
@@ -62,9 +82,16 @@ join_card_x=148
 join_card_width=380
 join_line_row=39
 
+# Whether the cases are read off the whole output rather than through the
+# crop above: any layout but the pinned one, where the probes mean nothing and
+# what is left is the frames.
+join_whole_output() {
+  leg_on bar_position || leg_on frame
+}
+
 leg_join_validate() {
   local other
-  for other in bar_layout bar_position chevron chevron_quiet panel_handoff tray_overflow; do
+  for other in bar_layout chevron chevron_quiet panel_handoff tray_overflow; do
     if leg_on "$other"; then
       echo "usage: --join carries its own bar.layout and cannot combine with --${other//_/-}" >&2
       exit 1
@@ -73,15 +100,30 @@ leg_join_validate() {
 }
 
 leg_join_fixture() {
-  settings_fragment ', "bar": {"layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "chevron", "battery", "audio", "network"]}}'
+  local position=""
+  if leg_on bar_position; then
+    position='"position": "'"$(leg_arg bar_position)"'", '
+  fi
+  # One cell in the left region, which on any edge is the START of the line:
+  # case d hangs off it and rests against that end the way case a rests
+  # against the far one.
+  settings_fragment ', "bar": {'"$position"'"layout": {"left": ["usage"], "right": ["bluetooth", "weather", "tray", "bell", "indicators", "chevron", "battery", "audio", "network"]}}'
 }
 
 leg_join_timing() {
-  leg_timing 75 140
+  leg_timing 110 180
 }
 
 leg_join_drive() {
   local script="$shot_dir/join-drive.sh"
+  if join_whole_output; then
+    # The output dev/smoke.sh pins for every session. A crop cut for the top
+    # bar's right end holds nothing at all on a left bar, and with the probes
+    # skipped anyway the whole output is what there is to read.
+    join_region="0,0 1920x1080"
+    join_region_x=0
+    join_crop_width=1920
+  fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 call() { "$qs_bin" ipc -p "$shell_path" call "\$@" >> "$join_reply_path" 2>&1; }
@@ -92,9 +134,37 @@ sample() {
     "$grim_bin" -g "$join_region" "$shot_dir/join-\$name-\$i.png" > /dev/null 2>&1
   done
 }
+# Where the group's first cell is, in the output's own coordinates: the
+# strip's edge and thickness out of the dump, the second bar whatever differs
+# past that thickness between the two whole-output frames, and the cell a
+# little in from the card's own start along the strip. Derived rather than
+# pinned, so the click lands on a cell on any edge.
+cell() {
+  local edge inset crop ox=0 oy=0 box bw bh bx by
+  edge=\$("$jq_bin" -r '.theme.barPosition' "$join_dump_path")
+  inset=\$("$jq_bin" -r --arg e "\$edge" '.theme.edgeInset[\$e] | floor' "$join_dump_path")
+  case \$edge in
+    top) crop="1920x\$((1080 - inset))+0+\$inset"; oy=\$inset ;;
+    bottom) crop="1920x\$((1080 - inset))+0+0" ;;
+    left) crop="\$((1920 - inset))x1080+\$inset+0"; ox=\$inset ;;
+    right) crop="\$((1920 - inset))x1080+0+0" ;;
+  esac
+  box=\$($convert_bin "$join_owner_path" "$join_bare_path" -compose difference -composite \
+    -colorspace Gray -crop "\$crop" +repage -threshold 2% -format '%@' info: 2>/dev/null)
+  echo "edge=\$edge inset=\$inset crop=\$crop box=\$box" >> "$join_click_path"
+  IFS='x+' read -r bw bh bx by <<< "\$box"
+  [ -n "\$by" ] || return 1
+  if [ "\$bw" -lt "\$bh" ]; then
+    echo "\$((ox + bx + bw / 2)) \$((oy + by + 24))"
+  else
+    echo "\$((ox + bx + 24)) \$((oy + by + bh / 2))"
+  fi
+}
 sleep 5
 call debug motionScale 1000
+call debug dump > "$join_dump_path" 2>&1
 "$grim_bin" -g "$join_region" "$join_desktop_path" > /dev/null 2>&1
+"$grim_bin" "$join_bare_path" > /dev/null 2>&1
 call panel open network
 sample a
 sleep 3
@@ -106,11 +176,16 @@ call bar chevron expand
 sample b
 sleep 3
 "$grim_bin" -g "$join_region" "$shot_dir/join-b-rest.png" > /dev/null 2>&1
+"$grim_bin" "$join_owner_path" > /dev/null 2>&1
+at=\$(cell) || at=""
+echo "click \$at" >> "$join_click_path"
 "$wlrctl_bin" pointer move -4000 -4000 >> "$join_reply_path" 2>&1
 sleep 0.5
-"$wlrctl_bin" pointer move 1813 72 >> "$join_reply_path" 2>&1
-sleep 0.2
-"$wlrctl_bin" pointer click left >> "$join_reply_path" 2>&1
+if [ -n "\$at" ]; then
+  "$wlrctl_bin" pointer move \$at >> "$join_reply_path" 2>&1
+  sleep 0.2
+  "$wlrctl_bin" pointer click left >> "$join_reply_path" 2>&1
+fi
 "$wlrctl_bin" pointer move -4000 -4000 >> "$join_reply_path" 2>&1
 sample c
 sleep 3
@@ -120,6 +195,13 @@ sample c-close
 sleep 2
 call bar chevron collapse
 sample b-close
+sleep 2
+call panel toggle usage
+sample d
+sleep 3
+"$grim_bin" -g "$join_region" "$shot_dir/join-d-rest.png" > /dev/null 2>&1
+call panel close
+sample d-close
 call debug motionScale 100
 EOF
   echo "exec-once = bash $script"
@@ -252,23 +334,39 @@ join_attached_frame() {
 
 leg_join_assert() {
   local name i path
-  for name in a a-close b c c-close b-close; do
+  for name in a a-close b c c-close b-close d d-close; do
     for i in $(seq 1 $join_frames); do
       path="$shot_dir/join-$name-$i.png"
       [ -f "$path" ] || fail "no join frame $path"
       echo "SMOKE_JOIN_$(echo "$name" | tr 'a-z-' 'A-Z_')_$i $path"
     done
   done
-  for name in a b c; do
+  for name in a b c d; do
     path="$shot_dir/join-$name-rest.png"
     [ -f "$path" ] || fail "no join frame $path"
     echo "SMOKE_JOIN_$(echo "$name" | tr 'a-z' 'A-Z')_REST $path"
   done
   [ -f "$join_desktop_path" ] || fail "no bare desktop frame at $join_desktop_path"
   echo "SMOKE_JOIN_DESKTOP $join_desktop_path"
+  for path in "$join_bare_path" "$join_owner_path"; do
+    [ -f "$path" ] || fail "no whole-output frame at $path"
+  done
+  echo "SMOKE_JOIN_OWNER $join_owner_path"
+  cat "$join_click_path" 2>/dev/null || true
 
-  if leg_on frame; then
-    echo "SMOKE_JOIN_FRAMED read by eye: the probes below are pinned to the unframed rig's own numbers"
+  # The edge every case above was photographed on, off the shell's own
+  # numbers: a position that landed late would otherwise photograph a top bar
+  # and read as a pass on the frames alone.
+  local want=top
+  leg_on bar_position && want=$(leg_arg bar_position)
+  grep -q "\"barPosition\":\"$want\"" "$join_dump_path" 2>/dev/null || fail \
+    "the shell reports a bar on another edge than the $want this run asked for: $(head -c 400 "$join_dump_path" 2>/dev/null)"
+  echo "SMOKE_JOIN_EDGE ok $want"
+
+  if join_whole_output; then
+    for name in SEAM WALL BUD BUD_BORDER; do
+      echo "SMOKE_JOIN_$name skipped (layout): the probes are pinned to the top bar's own crop; the frames above carry this case"
+    done
     return 0
   fi
 

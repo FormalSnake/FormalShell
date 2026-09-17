@@ -66,12 +66,17 @@ IpcHandler {
             // The chrome numbers a leg would otherwise have to restate: the
             // bar's gap is the joined card's rect plus a `radiusXl` fillet at
             // either end, and a leg that hardcoded 14 would go quietly wrong
-            // under `theme.radius` or the retro preset.
+            // under `theme.radius` or the retro preset. `edgeInset` is the
+            // band each edge carries, the strip's thickness on the bar's own
+            // and the frame ring's on the other three: where a card's line is
+            // on any edge, which is what lets one leg photograph the same
+            // join under `bar.position` and `frame.thickness` alike.
             theme: {
                 radius: Core.Theme.radius,
                 radiusXl: Core.Theme.radiusXl,
                 borderWidth: Core.Theme.borderWidth,
-                barPosition: Core.Theme.barPosition
+                barPosition: Core.Theme.barPosition,
+                edgeInset: Core.Theme.edgeInset
             }
         });
     }

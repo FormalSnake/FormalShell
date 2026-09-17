@@ -35,6 +35,12 @@
 # card along its travel on top of that (M54 D7), so the edge legitimately
 # passes a rest by a few pixels. What it may not do is land on a size nobody
 # is travelling to, which is tens of pixels away in every case here.
+#
+# That band is the top bar's own: on another edge the card's size runs across
+# a column rather than down a row, and against a frame ring both ends of it
+# move. A run carrying `--bar-position <edge>` or `--frame` keeps every frame
+# and the two rests, prints each claim as skipped and is read by eye; the
+# cases themselves are driven identically.
 leg_panel_morph_flag="--panel-morph"
 leg_panel_morph_order=76
 leg_panel_morph_needs="convert mpv ffmpeg"
@@ -87,7 +93,7 @@ panel_morph_media_sleeps=(0.3 0.6 0.9 1.2 1.6 2.0 2.5 3.0 3.8 4.8 6.0)
 
 leg_panel_morph_validate() {
   local other
-  for other in bar_layout bar_position center chevron config_reload frame fullscreen \
+  for other in bar_layout center chevron config_reload fullscreen \
     gallery join lock lyrics media menu notify panel panel_anchor panel_at panel_emerge \
     panel_handoff panel_keys screensaver speedtest spectrum toggles tray_overflow \
     visualizer wallpaper wifi; do
@@ -303,6 +309,21 @@ leg_panel_morph_assert() {
   echo "SMOKE_PANEL_MORPH_REST_END $panel_morph_rest_end_path"
   echo "SMOKE_PANEL_MORPH_REST_QUIET $panel_morph_rest_quiet_path"
   echo "SMOKE_PANEL_MORPH_REST_PLAYING $panel_morph_rest_playing_path"
+
+  if leg_on bar_position || leg_on frame; then
+    local name count i
+    for name in "settled ${#panel_morph_settled_sleeps[@]}" \
+      "emerging ${#panel_morph_emerging_sleeps[@]}" "media ${#panel_morph_media_sleeps[@]}"; do
+      read -r name count <<< "$name"
+      for ((i = 1; i <= count; i++)); do
+        path="$shot_dir/panel-morph-$name-$i.png"
+        [ -f "$path" ] || fail "no $name sample at $path"
+        echo "SMOKE_PANEL_MORPH_$(echo "$name" | tr 'a-z' 'A-Z')_$i $path"
+      done
+      echo "SMOKE_PANEL_MORPH_$(echo "$name" | tr 'a-z' 'A-Z') skipped (layout): the band is cut for a top bar with no frame; the frames above carry this case"
+    done
+    return 0
+  fi
 
   rest_full=$(panel_morph_far_edge "$panel_morph_rest_full_path")
   [ -n "$rest_full" ] || fail \
