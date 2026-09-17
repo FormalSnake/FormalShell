@@ -136,3 +136,54 @@ spike's `--override-input`), delete the `pantheon-depth` branch.
 ## Evidence
 
 Filled per task: the commands run, the numbers read.
+
+**T8, parity.** `dev/parity.sh` added: for a leg set, it runs
+`dev/vm-lock.sh just vm-smoke <flags>` once from `../FormalShell-main` and
+once from this worktree, collects every frame each run pulled back (parsed
+off `dev/vm.sh smoke`'s own "pulled screenshot:" lines), and diffs each
+pair with `compare -metric AE`. Seven tags run, 129 frame pairs total:
+
+- `gallery` (1 frame, 1 non-zero): `primary` AE 1068.98, entirely the dev
+  gallery's AUTHPROMPT/IDLE clock swatch rolling 23:21 to 23:22 between the
+  two runs. Confirmed: the static CELL-role "Hovered" swatch a few rows
+  below it, drawn through the same table with no live timer, is pixel exact.
+- `panel network --notify --tooltip` (3 frames): a first run showed 3
+  non-zero (`panel-tooltip` 26.01, `primary` 25.48, `toasts-expanded`
+  40.41), all confined to the panel header's close button, hovered by
+  `dev/smoke.d/tooltip.sh`'s pointer park. Pixel sampling found the rest
+  fill identical both sides (`#2C2C2F`) but the hover wash not
+  (`#26262C` main, `#2A2A30` branch), i.e. a fade-in caught mid-settle
+  rather than a table difference. An immediate rerun of the same tag landed
+  at 0.22-0.40 AE (clock rounding only), confirming a one-off VM scheduling
+  gap, not a defect.
+- `menu` (4 frames, 1 non-zero): `menu-root` AE 14.47, the search field's
+  blinking caret plus the bar clock. The keybind label glyphs `compare`
+  also flagged are pixel-identical on inspection.
+- `osd` (17 frames, 15 non-zero): `osd-desktop` and `osd-rest` are exact.
+  `osd-brightness`/`osd-manual`/`primary` (AE 14.36 each) are the clock.
+  The 12 `osd-emerge-*` burst frames (AE 4.12 to 96.30, `osd-emerge-4`
+  highest) are the pill's own resize tween sampled at a fixed wall-clock
+  offset: a direct crop of `osd-emerge-4` shows the identical 30% pill,
+  same colours and radius, the whole outline lit up by roughly a 1px
+  position difference at that sample tick.
+- `center` (16 frames, 15 non-zero, `center-emerge-desktop` exact): spans
+  the clock, the tray's unread badge digit, and the leg's own
+  `for i in $(seq 1 30); do notify-send ... & done` fixture
+  (`dev/smoke.d/center.sh:93`), whose 30 parallel sends land in a different
+  D-Bus arrival order each run and reshuffle every "History row N" label.
+  Confirmed by sampling the card header and row borders (identical both
+  sides) while only the row digits differ. `center-emerge-6` (7550.46, the
+  highest) is this same shuffle plus mid-tween sampling, not a chrome
+  change.
+- `join` (87 frames, 49 non-zero): all 21 `join-d-*` frames (the top-bar-cut
+  case) are exact. The `join-a/b/c-*` open and close bursts (up to
+  `join-a-4` at 4298.58) are the join's own resize tween sampled frame by
+  frame; a direct crop of `join-a-4` shows the identical card, content and
+  colours, offset about 8px vertically at that sample tick. `join-owner`/
+  `primary` (AE 30.36/24.57) are the clock.
+- `retro --gallery` (1 frame, 1 non-zero): `primary` AE 0.36, clock
+  rounding.
+
+No pixel outside a clock, a caret or toast timestamp, a live badge count,
+or a tween's own timing sample was found to differ in chrome (fill,
+border, radius, spacing) across any tag. No fix commits.
