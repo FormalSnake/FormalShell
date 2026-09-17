@@ -684,6 +684,13 @@ namespaces, and it carries the whole default bind set (fill in the
 off the same alpha reads as a tint. Toasts, the OSD, the notification
 centre and the lock screen stay opaque either way.
 
+The launcher, the polkit request and a plugin's overlay cover the whole
+output and sit over a 0.5 black scrim, so their layer rules leave anything at
+or below 0.6 unblurred: the scrim darkens the desktop and the card over it
+keeps its blur. A `surfaceOpacity` under 0.6 puts the card under that mark
+too and it loses its blur on those three surfaces; lower the scrim's own
+namespaces' `ignore_alpha` to match if you want it back.
+
 ```conf
 # ~/.config/hypr/hyprland.conf
 source = ~/.config/hypr/formalshell.conf

@@ -60,10 +60,12 @@ at `theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
 config); the shell itself never blurs. A translucent card with nothing
 blurred behind it reads as a rendering fault rather than as depth, so the
 two travel together: a surface is either on that list or opaque. Toasts, OSD
-and lock are the opaque ones. The polkit layer covers the whole output and
-its scrim is well above `ignore_alpha`, so the desktop blurs behind the
-scrim too, which is the modal's depth cue; the scrim itself is still plain
-black at 0.5.
+and lock are the opaque ones. The three modal namespaces (`formalshell:menu`,
+`formalshell:polkit`, `formalshell:plugin-overlay`) each cover the whole
+output and carry a plain black 0.5 scrim, so they take `ignore_alpha = 0.6`
+rather than 0.2: the scrim falls under the mark and only darkens the desktop,
+while the card over it stays above and keeps its blur (owner, 2026-09-17:
+"make the overlay just darken instead of blur").
 
 **Type** (`Theme.fontFamilySans`, `Theme.fontFamilyMono`,
 `Theme.fontSize.*`, `Theme.weight.*`): sans for words (titles, labels,

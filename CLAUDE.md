@@ -408,11 +408,11 @@ behavior on hosts where a real owner exists.
   through `Components/Icon.qml` with the set picked by `theme.icons`
   (`lucide` default, `nerd`; no raw glyphs in surface files, no SVG icon
   assets). Nothing in the shell blurs or shadows
-  anything: a modal surface sits over a plain 0.5 black scrim (the
-  compositor blurring the desktop behind that scrim, since the polkit
-  layer takes the same blur layerrule its card's translucency implies),
-  every other surface sits over the desktop with its border doing the
-  work. Motion is `docs/DESIGN.md` §1 "Motion": the two clock families
+  anything: a modal surface sits over a plain 0.5 black scrim that only
+  darkens the desktop (the modal namespaces take `ignore_alpha = 0.6`, so
+  the scrim falls under the compositor's blur and the card over it stays
+  above), every other surface sits over the desktop with its border doing
+  the work. Motion is `docs/DESIGN.md` §1 "Motion": the two clock families
   behind `Anim`/`CAnim`, and the joined shape a card hanging off the bar
   draws instead of a `Card`. Never
   reintroduce a `ScreencopyView`-based capture anywhere (see

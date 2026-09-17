@@ -86,12 +86,30 @@ TestCase {
             "formalshell:menu",
             "formalshell:notifications-center",
             "formalshell:tooltip",
-            "formalshell:polkit"
+            "formalshell:polkit",
+            "formalshell:plugin-overlay"
         ];
         for (var i = 0; i < translucent.length; i++) {
             var rule = _byNamespace(translucent[i]);
             verify(rule !== null, translucent[i] + " has no layerrule at all");
             compare(rule.blur, "$blur", translucent[i] + " does not take the theme's blur");
+        }
+    }
+
+    // The modal surfaces (M57 D6): each covers the whole output and carries a
+    // 0.5 black scrim over the live desktop. At 0.2 that scrim is well above
+    // the mark and the compositor blurs the desktop through it, which is the
+    // one thing the owner asked for the overlay not to do; at 0.6 the scrim
+    // falls under it and only darkens, and the 0.85 card stays over it and
+    // keeps its blur. Every other surface stays at 0.2, where the mark's job
+    // is the bar strip's empty band between its cells.
+    function test_modal_surfaces_darken_rather_than_blur() {
+        var modal = ["formalshell:menu", "formalshell:polkit", "formalshell:plugin-overlay"];
+        for (var i = 0; i < modal.length; i++) {
+            var rule = _byNamespace(modal[i]);
+            verify(rule !== null, modal[i] + " has no layerrule at all");
+            compare(rule.ignoreAlpha, "0.6",
+                modal[i] + " blurs the desktop behind its own scrim");
         }
     }
 
