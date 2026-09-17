@@ -59,8 +59,10 @@ at `theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
 `formalshell:menu`, `formalshell:polkit`, and the rest, in the example
 config); the shell itself never blurs. A translucent card with nothing
 blurred behind it reads as a rendering fault rather than as depth, so the
-two travel together: a surface is either on that list or opaque. Toasts, OSD
-and lock are the opaque ones. The three modal namespaces (`formalshell:menu`,
+two travel together: a surface is either on that list or opaque. Toasts and
+lock are the opaque ones; the OSD joined the blurred list when it started
+budding off the bottom line (M57 D8), since one silhouette across two windows
+cannot be opaque on one side of the seam. The three modal namespaces (`formalshell:menu`,
 `formalshell:polkit`, `formalshell:plugin-overlay`) each cover the whole
 output and carry a plain black 0.5 scrim, so they take `ignore_alpha = 0.6`
 rather than 0.2: the scrim falls under the mark and only darkens the desktop,
@@ -241,9 +243,11 @@ is a plain card against a whole line. The panels take `Shoulders`, and the
 chevron's and the tray's second bars with them, on a framed screen as on a
 bare one: the ring's hairline runs the bar's edge there and opens the same
 gap; the notification centre takes it against the ring's far side or a
-right bar. Everything that meets no line keeps `Card`: the OSD sits a
-`screenPadding` clear of the output's own edge, and the launcher, the
-tooltip and the modals float with nothing for a fillet to run out to.
+right bar. The OSD pill takes it too against the bottom line (M57 D8), a
+`screenPadding` off whatever that edge carries; on a bare bottom edge there
+is no line to join and the pill comes out from behind the output. Everything
+that meets no line keeps `Card`: the toasts, the tooltip and the modals float
+with nothing for a fillet to run out to.
 
 A card that arrives squashes into the edge it came from (`Deform`, amended
 2026-09-09). Its scene position and size are sampled every frame, the
@@ -568,7 +572,8 @@ carry a 6px `primary` dot. Its rows are multi-line, so a `Separator` runs
 between them (§1's ladder, rung 4) and the two tiers stay `SectionLabel`
 sections `sectionGap` apart.
 
-**OSD.** `Card` pill bottom-centre: `Icon`, `Track`, tabular percentage.
+**OSD.** A pill bottom-centre, budding off the bottom line: `Icon`, `Track`,
+tabular percentage.
 
 **Lock, greeter.** Wallpaper, 0.5 scrim, `displayLarge` x3 clock, date as a
 `SectionLabel`, one `Input`. Wrong password: `Input` error state.

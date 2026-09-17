@@ -8,8 +8,9 @@ import qs.Services
 import "icon.js" as OsdIcon
 
 // Bottom-centred volume/brightness/media pill (DESIGN.md §3 "OSD", spec
-// "OSD"): a `Card` holding one `Icon`, a `Track` and the percentage, no
-// keyboard focus, auto-hiding `_hideDelay` after the last trigger.
+// "OSD"): one `Icon`, a `Track` and the percentage in a `Drawer` out of the
+// bottom edge, no keyboard focus, no pointer input at all, auto-hiding
+// `_hideDelay` after the last trigger.
 //
 // The card is exactly `popupWidthNarrow` wide whatever it is showing, and
 // the readout column is measured off "100%" rather than the live value, so
@@ -84,51 +85,48 @@ PanelWindow {
         : Math.round(AudioService.volume * 100)
 
     screen: root._screen
-    // Held visible through the exit fade (DESIGN.md §1 "Motion"): the timer
-    // clears `kind`, presence's own Behavior runs its progress to 0, then
-    // the window unmaps. No input concerns: this surface never takes any.
-    visible: presence.shown
+    // Held visible through the exit (DESIGN.md §1 "Motion"): the timer clears
+    // `kind`, the drawer's presence runs its travel back behind the line,
+    // then the window unmaps. No input concerns: this surface never takes
+    // any.
+    visible: drawer.presence.shown
     color: "transparent"
+    // An empty Region resolves to an empty QRegion, which QsWindow.mask turns
+    // into WindowTransparentForInput (Tooltip.qml's own precedent): the pill
+    // reports what a key just did and is never something to click, and the
+    // band it now sits in covers a stretch of desktop the pointer has to keep
+    // reaching.
+    mask: Region {}
 
     WlrLayershell.namespace: "formalshell:osd"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-    // A drawer out of the bottom edge (Presence.qml, DESIGN.md §1 Motion,
-    // M53 addendum). This window is exactly the card, one `screenPadding`
-    // off the bottom of the output, so the window's own bounds are the slit:
-    // a pill displaced its own height downward is outside them and draws
-    // nothing, and no clipping item of its own is needed.
-    Presence {
-        id: presence
-        open: root.kind !== ""
-        edge: "bottom"
-        mapped: root.backingWindowVisible
-        mode: "emerge"
-        extent: frameHost.height
-    }
+    readonly property real _screenWidth: root._screen ? root._screen.width : 0
+    readonly property real _screenHeight: root._screen ? root._screen.height : 0
 
-    // The pill squashes into the edge it rises out of and springs back
-    // (M54 D7), harder than a panel does: it is small, it travels its whole
-    // height, and 0.25 is what caelestia gives an OSD. Sampled off the item
-    // carrying its place rather than off the card the matrix goes on, which
-    // would read its own transform back through `mapToItem`.
-    Deform {
-        id: deform
-        target: frameHost
-        edge: "bottom"
-        amount: 0.25
-        active: !presence.settled
-    }
+    // The pill's own rect: `popupWidthNarrow` wide, its content tall, centred
+    // on the output and one `screenPadding` off whatever the bottom edge
+    // carries, which is the bar's strip on a bottom bar, the frame ring's
+    // band with a frame, and nothing at all on a bare edge (DESIGN.md §1:
+    // toasts, the OSD pill, the centre and the tooltip all take those same
+    // numbers).
+    readonly property real _cardWidth: Theme.space.popupWidthNarrow
+    readonly property real _cardHeight: row.height + Theme.space.panelPadding * 2
+    readonly property real _rest: Theme.edgeInset.bottom + Theme.space.screenPadding
 
-    readonly property real _screenPadding: Theme.space.screenPadding
+    // The window is a band along that edge rather than the whole output: it
+    // has to reach the line the pill buds off and cover the silhouette, which
+    // is the pill, the room it rests off the line and a fillet either side
+    // along it, and nothing above that. The pill's own height again on top is
+    // room for the travel's overshoot and the deform's stretch, both of which
+    // are a fraction of it.
+    readonly property real _bandHeight: Math.min(root._screenHeight,
+        root._rest + root._cardHeight * 2)
 
-    anchors.bottom: true
-    margins.bottom: root._screenPadding
-
-    implicitWidth: frameHost.width
-    implicitHeight: frameHost.height
+    anchors { left: true; right: true; bottom: true }
+    implicitHeight: root._bandHeight
 
     // Off-screen calibration: the widest readout this card can ever show,
     // rendered at the live font so the column is real metrics rather than a
@@ -144,91 +142,86 @@ PanelWindow {
         }
     }
 
-    // Where the pill is, and nothing drawn: the deform's matrix goes on the
-    // card inside this, so the sampled item and the transformed one are never
-    // the same.
+    // Everything from the bottom line to the pill's own padding is the
+    // drawer's (Components/Drawer.qml, M57 D8): the pill buds off a bottom
+    // bar's hairline or the frame ring's bottom line the way a panel buds off
+    // the bar's, comes out on the same clock and is a plain card once it has
+    // let go. A bare bottom edge has no line to join and the pill simply
+    // comes out from behind the output.
     //
-    // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M53 addendum): the
-    // pill rises out of the bottom edge and retreats behind it, with no fade
-    // and no zoom, on one shared clock so a retrigger mid-exit reverses in
-    // place. Kind-to-kind swaps while already showing (volume -> brightness)
-    // stay instant: `open` never leaves true.
-    //
-    // A `Card` rather than the joined shape a panel takes (M54 D6): the
-    // window sits one `screenPadding` off the bottom of the output, so this
-    // pill meets no line and has nothing for a fillet to run out to.
-    Item {
-        id: frameHost
-        width: frame.implicitWidth
-        height: frame.implicitHeight
-        opacity: presence.opacity
-        transform: Translate { y: presence.emergeY }
+    // Kind-to-kind swaps while already showing (volume -> brightness) stay
+    // instant: `open` never leaves true.
+    Drawer {
+        id: drawer
+        anchors.fill: parent
+        owner: root
+        open: root.kind !== ""
+        mapped: root.backingWindowVisible
+        edge: "bottom"
+        screen: root._screen
+        origin: Qt.point(0, root._screenHeight - root._bandHeight)
+        rect: Qt.rect(Math.round((root._screenWidth - root._cardWidth) / 2),
+            root._screenHeight - root._rest - root._cardHeight,
+            root._cardWidth, root._cardHeight)
+        // Harder than a panel: the pill is small, it travels its whole
+        // height, and 0.25 is what caelestia gives an OSD.
+        deformAmount: 0.25
 
-        Card {
-            id: frame
-            // Opaque, unlike the panels and the bar: the OSD is not one of the
-            // three surfaces Hyprland blurs behind (spec "Depth").
-            color: Theme.color.card
-            width: frameHost.width
-            height: frameHost.height
-            transform: Matrix4x4 { matrix: deform.matrix }
+        Item {
+            id: row
+            // The pill lands before its readout does (Presence's own
+            // `contentOpacity`).
+            opacity: drawer.presence.contentOpacity
+            width: parent.width
+            height: Math.max(kindIcon.height, readout.implicitHeight, mediaLabel.implicitHeight,
+                Theme.space.trackThickness)
 
-            Item {
-                id: row
-                // The pill lands before its readout does (Presence's own
-                // `contentOpacity`).
-                opacity: presence.contentOpacity
-                width: Theme.space.popupWidthNarrow - frame.padding * 2
-                height: Math.max(kindIcon.height, readout.implicitHeight, mediaLabel.implicitHeight,
-                    Theme.space.trackThickness)
+            Icon {
+                id: kindIcon
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                name: OsdIcon.iconName(root.kind, AudioService.volume, AudioService.muted)
+                size: Theme.fontSize.title
+                color: Theme.color.foreground
+            }
 
-                Icon {
-                    id: kindIcon
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: OsdIcon.iconName(root.kind, AudioService.volume, AudioService.muted)
-                    size: Theme.fontSize.title
-                    color: Theme.color.foreground
-                }
+            Text {
+                id: readout
+                visible: root._hasValue
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: percentMetric.implicitWidth
+                horizontalAlignment: Text.AlignRight
+                text: root._percent + "%"
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilyMono
+                font.pixelSize: Theme.fontSize.bodySmall
+            }
 
-                Text {
-                    id: readout
-                    visible: root._hasValue
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: percentMetric.implicitWidth
-                    horizontalAlignment: Text.AlignRight
-                    text: root._percent + "%"
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamilyMono
-                    font.pixelSize: Theme.fontSize.bodySmall
-                }
+            Track {
+                visible: root._hasValue
+                anchors.left: kindIcon.right
+                anchors.leftMargin: Theme.space.iconGap
+                anchors.right: readout.left
+                anchors.rightMargin: Theme.space.iconGap
+                anchors.verticalCenter: parent.verticalCenter
+                value: root._fraction
+            }
 
-                Track {
-                    visible: root._hasValue
-                    anchors.left: kindIcon.right
-                    anchors.leftMargin: Theme.space.iconGap
-                    anchors.right: readout.left
-                    anchors.rightMargin: Theme.space.iconGap
-                    anchors.verticalCenter: parent.verticalCenter
-                    value: root._fraction
-                }
-
-                // The media kind has no scalar to put in a track, so the title
-                // takes the whole run of the pill instead and elides.
-                Text {
-                    id: mediaLabel
-                    visible: root.kind === "media"
-                    anchors.left: kindIcon.right
-                    anchors.leftMargin: Theme.space.iconGap
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    elide: Text.ElideRight
-                    text: root.mediaText
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.body
-                }
+            // The media kind has no scalar to put in a track, so the title
+            // takes the whole run of the pill instead and elides.
+            Text {
+                id: mediaLabel
+                visible: root.kind === "media"
+                anchors.left: kindIcon.right
+                anchors.leftMargin: Theme.space.iconGap
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: root.mediaText
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.body
             }
         }
     }

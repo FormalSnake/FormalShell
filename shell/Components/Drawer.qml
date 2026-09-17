@@ -6,9 +6,11 @@ import "../Bar/layout.js" as BarLayout
 // The drawer every edge-anchored card is (DESIGN.md §1 "Motion", M57 D4):
 // the `Presence`, the `Joint`, the `Deform`, the slit the card comes out of,
 // the travelled frame, the deformed card and its `Shoulders`, assembled once.
-// A consumer fills a full-output window with one of these, states the edge it
-// comes out of and its resting rect, and puts its contents in the default
-// slot; everything between the line and the card's own padding is here.
+// A consumer fills a window with one of these, states the edge it comes out
+// of and its resting rect, and puts its contents in the default slot;
+// everything between the line and the card's own padding is here. A window
+// that is a band along its own edge rather than the whole output states
+// `origin` with it, and nothing else changes.
 //
 // What follows from those two statements, and so is never stated: where that
 // edge's line is (the bar's hairline, the frame ring's, or the far edge of
@@ -45,9 +47,15 @@ Item {
     property bool open: false
     // The card's OWN anchored side, the one that meets the line.
     property string edge: "top"
-    // Where the card is right now, in the output's own coordinates, which
-    // this item shares with it.
+    // Where the card is right now, in the OUTPUT's own coordinates, whatever
+    // window this item sits in.
     property rect rect: Qt.rect(0, 0, 0, 0)
+    // And where this item's own top left sits on that output. A consumer
+    // filling the output leaves it at zero; one filling a band along its own
+    // edge (Surfaces/Osd/Osd.qml) states it, so the line, the slit and the
+    // gap published to the line stay in the output's coordinates while
+    // everything drawn moves into the band's.
+    property point origin: Qt.point(0, 0)
     // And where it rests, which is the rect every derived number is taken
     // from. They part company only while a consumer is drawing its own
     // trajectory (Panel's handoff), where a card mid-travel would otherwise
@@ -93,7 +101,8 @@ Item {
     readonly property alias frameItem: frame
     // And its rect in the output's coordinates, which is what a handoff hands
     // over and what a child buds from.
-    readonly property rect frameRect: Qt.rect(frame.x, frame.y, frame.width, frame.height)
+    readonly property rect frameRect: Qt.rect(frame.x + root.origin.x, frame.y + root.origin.y,
+        frame.width, frame.height)
 
     readonly property bool _vertical: BarLayout.isVertical(root.edge)
     readonly property real _screenWidth: root.screen ? root.screen.width : 0
@@ -227,8 +236,8 @@ Item {
 
     Item {
         id: clipper
-        x: root._band.x
-        y: root._band.y
+        x: root._band.x - root.origin.x
+        y: root._band.y - root.origin.y
         width: root._band.width
         height: root._band.height
         clip: true
@@ -248,8 +257,8 @@ Item {
             // against, unsquashed.
             Item {
                 id: frame
-                x: root.rect.x
-                y: root.rect.y
+                x: root.rect.x - root.origin.x
+                y: root.rect.y - root.origin.y
                 width: root.rect.width
                 height: root.rect.height
                 // The card is displaced toward the line by its whole extent
