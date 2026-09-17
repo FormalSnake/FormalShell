@@ -45,8 +45,8 @@
 //
 // The lit-set functions (`mainLineIndices` through `lineEndEstimate`,
 // `displayLines`) are kopuz's own, ported under camelCase names with their
-// tests; they take the playback position `t` as a plain argument, the
-// caller subtracts `media.lyricsOffsetMs` before calling in. `blurFor` and
+// tests; they take the playback position `t` as a plain argument, and every
+// caller passes what `ledPosition` made of the player's clock. `blurFor` and
 // `comfortY` are the depth-of-field ramp and the 42% comfort anchor (spec
 // P7/P9). `depthOpacity` and `edgeFraction` are not superseded by the blur:
 // the opacity ramp keeps running alongside it (spec P7), just no longer
@@ -67,6 +67,15 @@ var WIPE_MAX_SECONDS = 1.2;
 // once a frame.
 var GLOW_DECAY_SECONDS = 0.6;
 var GLOW_QUANTUM = 0.05;
+// How far ahead of the player's own clock every lyrics reader works. An
+// MPRIS position is a single sample stamped when the player's D-Bus reply
+// arrived and extrapolated from there, and the frame drawn off it reaches
+// the display a refresh or two later, so a lit line and a wipe that land on
+// the beat have to be drawn against a position read ahead of the number the
+// player gives. kopuz needs none of this: it reads the audio clock it is
+// decoding from.
+var POSITION_LEAD_SECONDS = 0.1;
+
 // A main line ending and the next one starting within this long reads as
 // one continuous phrase rather than a gap; the earlier line (or its
 // background) stays lit across it (kopuz's LYRIC_SEAMLESS_GAP_SECONDS).
@@ -721,6 +730,16 @@ function synthesiseWords(lines) {
         out[idx] = next;
     }
     return out;
+}
+
+// The one position the lit set, the wipe and the interlude ramp are all read
+// against: the player's clock led by POSITION_LEAD_SECONDS, then
+// `media.lyricsOffsetMs` on top of the lead, positive holding the lyrics
+// back. Every caller goes through here, so the pane and `media lyrics` can
+// never disagree about which line is lit.
+function ledPosition(position, offsetSeconds) {
+    var offset = Number(offsetSeconds);
+    return position + POSITION_LEAD_SECONDS - (isFinite(offset) ? offset : 0);
 }
 
 // The foreground lines (main_line_indices): every non-background line, or

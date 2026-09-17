@@ -128,14 +128,15 @@ IpcHandler {
     // verification (spec P11). `lines` is the DISPLAY set (interludes
     // spliced in, `parent` remapped), so `active`/`secondary` index the same
     // array the caller gets back rather than LyricsService's raw one;
-    // both are worked out here, against the offset position, rather than
-    // cached on the service, so they're always current as of the call.
+    // both are worked out here, against the same led position the pane
+    // draws against, rather than cached on the service, so they're always
+    // current as of the call.
     // `follow` is the pane's own wheel-takeover state, which lives on
     // LyricsService because this handler can reach no panel.
     function lyrics(): string {
         const lines = Lyrics.displayLines(LyricsService.lines);
         const main = Lyrics.mainLineIndices(lines);
-        const t = MediaService.position - LyricsService.offsetSeconds;
+        const t = LyricsService.positionSeconds;
         const active = Lyrics.activeMainLineIndex(lines, main, t);
         const secondary = Lyrics.activeSecondaryLines(lines, main, t, active);
         return JSON.stringify({
