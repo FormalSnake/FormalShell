@@ -124,16 +124,33 @@ QtObject {
     readonly property real _roomEnd: root.outputAlong - root.insetEnd - root.restAlong - root.restLength
 
     // How far past its own rect the silhouette runs to reach the wall, or -1
-    // for a side with room for its fillet. A line that ends in a frame ring
-    // stops ON the ring's line, the way the near edge stops on the bar's; a
-    // line that ends at the output runs one radius past it, so the deform's
-    // squash can never open a sliver of desktop at the screen edge.
+    // for a side with room for its fillet.
+    //
+    // A line that ends at the output runs one radius past it, which is off
+    // screen. A line that ends in a frame ring runs out to the ring's BAND,
+    // one border past the ring's line: that line lies inside the cut-out,
+    // over the desktop, where the bar's hairline lies over the strip's own
+    // fill, so the row it gives up under a joined card is one nothing else
+    // paints. The fill's lip then lands on exactly that row (M57 D1) instead
+    // of stopping short of it and leaving a column of desktop between the
+    // card and the band.
     readonly property real wallStart: (root._canWall && root._roomStart < root.radius)
-        ? Math.max(0, root._roomStart) + (root.insetStart > 0 ? 0 : root.radius)
+        ? Math.max(0, root._roomStart) + (root.insetStart > 0 ? Theme.borderWidth : root.radius)
         : -1
     readonly property real wallEnd: (root._canWall && root._roomEnd < root.radius)
-        ? Math.max(0, root._roomEnd) + (root.insetEnd > 0 ? 0 : root.radius)
+        ? Math.max(0, root._roomEnd) + (root.insetEnd > 0 ? Theme.borderWidth : root.radius)
         : -1
+
+    // Where the deform's pivot sits along the line, in the card's own
+    // coordinates: the wall a walled card runs into, so the run out to it
+    // stays ON it under the matrix, the way `pivotInset` keeps the anchored
+    // edge on the line. Without it the squash compresses the whole
+    // silhouette about the card's middle and pulls the run-out off the wall,
+    // which against a ring is a column of bare desktop. Null with no wall,
+    // and with one at either end, where there is no single side to pin to.
+    readonly property var alongPivot: (root.wallStart >= 0) === (root.wallEnd >= 0)
+        ? null
+        : (root.wallStart >= 0 ? -root.wallStart : root.length + root.wallEnd)
 
     // The two edges the line runs between, which is where a walled side's
     // own join goes.

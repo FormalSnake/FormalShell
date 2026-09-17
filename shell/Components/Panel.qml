@@ -746,6 +746,9 @@ PanelWindow {
         // into the bar, and the shoulders, pinned to the line, stay on it
         // under the matrix. Back on the card's edge once it has let go.
         inset: joint.pivotInset
+        // And pinned along the line to the wall a walled card runs into, so
+        // the squash cannot pull the run-out off it.
+        alongPivot: joint.alongPivot
         active: !presence.settled || root._handoff || frameX.running || frameY.running
             || morphHeight.running || morphWidth.running
     }

@@ -116,11 +116,21 @@ TestCase {
         compare(j.wallEnd, 32);
     }
 
-    // With a frame ring on that side the silhouette stops on the ring's own
-    // line instead, the way the near edge stops on the bar's.
-    function test_a_line_ending_in_a_ring_stops_on_the_rings_line() {
+    // With a frame ring on that side the silhouette runs out to the ring's
+    // band instead, one border past the ring's own line, so the fill's lip
+    // lands on the row the ring gave up rather than short of it.
+    function test_a_line_ending_in_a_ring_runs_out_to_the_band() {
         var j = walled({ insetEnd: 10, restAlong: 1498 }).joint;
-        compare(j.wallEnd, 12);
+        compare(j.wallEnd, 13);
+    }
+
+    // The deform is pinned to the wall rather than to the card's middle, so
+    // the squash cannot pull the run-out off it. Nothing to pin to with no
+    // wall, or with one at either end.
+    function test_the_deform_pivots_on_the_wall_a_walled_card_runs_into() {
+        compare(walled({}).joint.alongPivot, 432);
+        compare(walled({ restAlong: 400 }).joint.alongPivot, null);
+        compare(walled({ restAlong: 12, restLength: 1896 }).joint.alongPivot, null);
     }
 
     // Room for the fillet, and a card hanging off another panel, are both

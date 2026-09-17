@@ -53,6 +53,13 @@ QtObject {
     // about an edge nobody can see. Negative moves it inside the target.
     property real inset: 0
 
+    // And where it sits ALONG that edge, in the target's own coordinates:
+    // the target's middle by default, or the wall a card with no room for
+    // its fillet runs into (M57 D2, Components/Joint.qml's `alongPivot`), so
+    // the run out to that wall stays on it under the matrix for the same
+    // reason `inset` keeps the anchored edge on its line.
+    property var alongPivot: null
+
     readonly property matrix4x4 matrix: {
         const item = root.target;
         if (!Theme.motionEnabled || item === null || root._atRest)
@@ -60,8 +67,10 @@ QtObject {
 
         const w = item.width;
         const h = item.height;
-        const cx = root.edge === "left" ? -root.inset : root.edge === "right" ? w + root.inset : w / 2;
-        const cy = root.edge === "top" ? -root.inset : root.edge === "bottom" ? h + root.inset : h / 2;
+        const alongX = root.alongPivot === null ? w / 2 : root.alongPivot;
+        const alongY = root.alongPivot === null ? h / 2 : root.alongPivot;
+        const cx = root.edge === "left" ? -root.inset : root.edge === "right" ? w + root.inset : alongX;
+        const cy = root.edge === "top" ? -root.inset : root.edge === "bottom" ? h + root.inset : alongY;
         const s = root._spring;
         const m = Qt.matrix4x4(s.m00, s.m01, 0, 0, s.m01, s.m11, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
         return Qt.matrix4x4(1, 0, 0, cx, 0, 1, 0, cy, 0, 0, 1, 0, 0, 0, 0, 1)
