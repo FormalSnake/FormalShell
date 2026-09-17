@@ -93,3 +93,24 @@ a rung, this plan's Status and deviations. Then merge to main, push, turn
 `menu.appGrid` on in the owner's nix config, rebuild the hosts.
 
 ## Evidence
+
+**B1, the progress that stalls.** Reproduced by `--media-progress`
+(`dev/smoke.d/media_progress.sh`): the panel opened once over a real mpv and
+never touched again, the drawn fill measured off the frame and compared with
+the position `media status` reports. `media status` was never wrong, which is
+why IPC alone could not see this: the panel knew the position and drew a
+different one.
+
+The cause is `Track.qml`'s `Behavior on width` on the fill, whose own header
+says it is for a level set in steps. The media panel's progress is swept, and
+with the lyrics pane up `MediaPanel.qml`'s per-frame `positionChanged` moves
+the target again before the animation has been ticked, so it restarts from
+zero every frame and the fill stops where it stood. Any moment the per-frame
+clock stops (a pause, the panel closing) the fill snaps forward, which is the
+reopen the owner was doing.
+
+Before, with lyrics synced and the panel held open: position 29.2 -> 213.5
+over 50s, drawn fill frozen at 0.0660 of the track the whole way (the seek to
+203s wanted 0.5076). Without lyrics the 1s clock left it within 0.006.
+After (`swept: true` on the progress track): drawn tracks want within 0.006
+at all eighteen samples, 0.5031 against a wanted 0.5077 after the seek.

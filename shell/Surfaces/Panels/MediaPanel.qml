@@ -561,6 +561,10 @@ Panel {
                     anchors.rightMargin: Theme.space.iconGap
                     anchors.verticalCenter: parent.verticalCenter
                     value: MediaService.length > 0 ? MediaService.position / MediaService.length : 0
+                    // Playback sweeps this rather than stepping it, and the
+                    // clock above re-emits `positionChanged` every frame
+                    // while the lyrics pane is up.
+                    swept: true
                     cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
                     interactive: true
                     onContainsPointerChanged: if (progressTrack.containsPointer) root._pointAt(1, root._trackIndex("progress"))
