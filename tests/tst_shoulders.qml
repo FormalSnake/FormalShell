@@ -78,6 +78,50 @@ TestCase {
         compare(Math.round(wide.g[1].x), 160);
     }
 
+    // The near fillet's centre, for a top edge: the corner of the box its
+    // quarter arc sweeps, which is p0's column and p1's row.
+    function nearCentre(p) { return [p.p[0].x, p.p[1].y]; }
+
+    // Attached, the fill starts one border in from the line: that row is the
+    // line's own window's, and two translucent fills over it read as a seam.
+    function test_an_attached_fill_starts_one_border_in_from_the_line() {
+        var o = Outline.outline("top", 200, 100, 20, 0, 0, 20, null, 1);
+        compare(at(o, 0), [0, 1]);
+        compare(at(o, 1), [20, 21]);
+        compare(o.nearRadius, 20);
+        // The far corners and the card's far edge are where they were.
+        compare(at(o, 3), [40, 100]);
+        compare(o.convexRadius, 20);
+    }
+
+    // And the two fillets are then concentric: one centre, the stroke's
+    // radius half a border the larger, so the line hugs the fill it outlines
+    // instead of running outside it along the arc.
+    function test_the_attached_fillets_share_one_centre() {
+        var fill = Outline.outline("top", 200, 100, 20, 0, 0, 20, null, 1);
+        var line = Outline.outline("top", 200, 100, 20, 0.5, 0, 20, null, 0);
+        compare(nearCentre(fill), nearCentre(line));
+        compare(line.nearRadius - fill.nearRadius, 0.5);
+        // The same on a shape shallower than the radius, where both are
+        // capped off the one depth.
+        var shallowFill = Outline.outline("top", 200, 8, 20, 0, 0, 20, null, 1);
+        var shallowLine = Outline.outline("top", 200, 8, 20, 0.5, 0, 20, null, 0);
+        compare(nearCentre(shallowFill), nearCentre(shallowLine));
+        compare(shallowLine.nearRadius - shallowFill.nearRadius, 0.5);
+    }
+
+    // Let go, the lip goes with the attach clock, so the fill is the card's
+    // own rect: the same outline as a call that never learned about a line.
+    function test_a_let_go_fill_is_the_plain_card_outline() {
+        var free = Outline.outline("top", 200, 100, 20, 0, 7, -20, null, 0);
+        var plain = Outline.outline("top", 200, 100, 20, 0, 7, -20);
+        for (var k = 0; k < plain.p.length; k++) {
+            compare(free.p[k].x, plain.p[k].x);
+            compare(free.p[k].y, plain.p[k].y);
+        }
+        compare(free.nearRadius, plain.nearRadius);
+    }
+
     // A left bar mirrors the space: the fillets sit on x = 0 and run down
     // the item, and the sweep flag flips with it.
     function test_a_left_bar_maps_the_line_onto_x_zero() {

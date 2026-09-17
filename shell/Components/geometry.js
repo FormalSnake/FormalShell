@@ -24,11 +24,15 @@ function _vertical(barPosition) {
 // already give up (`insetStart`/`insetEnd`, the screen frame's band when
 // there is one); a panel longer than the room between gives up the far
 // clamp rather than being pushed off the near edge.
+//
+// The result is a whole pixel: a cell whose centre falls on a half puts the
+// card's two sides, and with them the two ends of the gap the line opens,
+// half across a pixel, which draws the join's own seam twice over.
 function frameAlong(anchor, screenExtent, frameExtent, insetStart, insetEnd, screenPadding) {
     var near = insetStart + screenPadding;
     var far = screenExtent - insetEnd - frameExtent - screenPadding;
     var at = anchor >= 0 ? anchor - frameExtent / 2 : far;
-    return Math.max(near, Math.min(at, Math.max(near, far)));
+    return Math.round(Math.max(near, Math.min(at, Math.max(near, far))));
 }
 
 // Top or bottom bar: x along the bar, y off its inner edge.

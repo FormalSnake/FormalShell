@@ -65,10 +65,16 @@ Shape {
     // stroke half a border in from it so a 1px line lands on one pixel row
     // rather than straddling two (Frame/geometry.js's strokeRect makes the
     // same half-stroke concession for the screen frame's ring).
+    //
+    // While the card is attached the fill also starts one border in from the
+    // item's line edge: that row belongs to the line's own window, which
+    // paints it already, and a second translucent fill over it reads as a
+    // seam across the whole gap. The lip goes with the attach clock, so a
+    // card that has let go is its own rect again.
     readonly property var _fill: Outline.outline(root.edge, root.width, root.height, root.radius, 0,
-        root.nearInset, root._corner, null)
+        root.nearInset, root._corner, null, root.borderWidth * root._attach)
     readonly property var _line: Outline.outline(root.edge, root.width, root.height, root.radius,
-        root.borderWidth / 2, root.nearInset, root._corner, root.farGap)
+        root.borderWidth / 2, root.nearInset, root._corner, root.farGap, 0)
 
     preferredRendererType: Shape.CurveRenderer
 

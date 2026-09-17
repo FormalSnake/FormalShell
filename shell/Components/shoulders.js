@@ -63,7 +63,16 @@ function filletRadius(radius, depth) {
 // in the far edge for a card hanging off THIS one (a tray item's menu off
 // the tray's second bar): `g[0]` and `g[1]` are where the far edge's stroke
 // stops and resumes, both on p4 when there is no gap.
-function outline(edge, width, height, radius, inset, near, corner, farGap) {
+//
+// `lip` holds the path off the line's own row, on top of whatever `inset`
+// and `near` already give: the fill takes `borderWidth` while the card is
+// attached, so the line's row carries the line's window alone rather than
+// two translucent fills, and the fill's fillet then shares its centre with
+// the stroke's (same centre, radius `r` against `r + borderWidth / 2`). The
+// stroke passes 0 and keeps its half-stroke inset. The radii are capped off
+// the un-lipped depth so the two paths stay concentric on a shape shallower
+// than the radius, which also keeps the gap the line opens one number.
+function outline(edge, width, height, radius, inset, near, corner, farGap, lip) {
     var r = radius > 0 ? radius : 0;
     var i = inset > 0 ? inset : 0;
     var n = near > 0 ? near : 0;
@@ -71,6 +80,7 @@ function outline(edge, width, height, radius, inset, near, corner, farGap) {
     var depth = (vertical(edge) ? width : height);
     var length = Math.max(0, along - r * 2);
     var body = Math.max(0, depth - n);
+    var l = Math.max(0, Math.min(lip > 0 ? lip : 0, body));
     // The three free corners are capped by the card they round. The fillets
     // are capped by the depth alone: a card coming out from under the line
     // is shallower than the join's radius for its first frames, and a
@@ -86,7 +96,7 @@ function outline(edge, width, height, radius, inset, near, corner, farGap) {
         : Math.max(0, Math.min(-c, Math.min(length, body) / 2) - i);
     var signed = concave ? rn : -rn;
     var far = depth - i;
-    var top = n + i;
+    var top = n + i + l;
     var runStart = i + rc;
     var runEnd = length - i - rc;
     var ga = runEnd;
