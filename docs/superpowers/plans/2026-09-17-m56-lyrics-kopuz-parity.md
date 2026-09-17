@@ -108,6 +108,32 @@ provider race left `loading`:
 }
 ```
 
+Task 3, P13, in the VM (2026-09-17), measured by hand with a temporary probe
+leg: two mpv players, a `<key>.json` seeded for one and a `<key>.miss` for
+the other, `panel toggle media` opened under the bar's own `nowPlaying` cell
+on the untimed track, then `media select` onto the cached one, with six
+frames armed 0.1s to 1.6s into the arrival. The card's left edge and the
+now-playing title's own leading edge in each frame, in output pixels:
+
+```
+p13-narrow  left=766 text=767 right=1220
+p13-frame0  left=766 text=767 right=1220
+p13-frame1  left=766 text=767 right=1220
+p13-frame2  left=766 text=767 right=1220
+p13-frame3  left=766 text=767 right=1403
+p13-frame4  left=766 text=767 right=1570
+p13-frame5  left=766 text=767 right=1568
+p13-wide    left=766 text=767 right=1568
+```
+
+The panel grew out of its trailing side over frames 3 to 5 and neither the
+card's leading edge nor the column's title moved a pixel. The probe leg and
+its artifacts were deleted after the run; the permanent leg is Task 4's.
+A panel whose cell sits close enough to the screen's trailing edge cannot
+hold that edge at all (the `--lyrics` leg's own anchorless open is one: 840
+wide against a 1920 output, its left edge lands at 1068 against the narrow
+panel's 1428), and `frameAlong`'s far clamp is what wins there.
+
 paxsenix Apple Music won the race outright on its own quality-2 hit
 (word-level timing throughout, a background line at index 28 with
 `parent`/`background` set, interludes spliced into the display set,

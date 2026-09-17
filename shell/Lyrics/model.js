@@ -38,7 +38,8 @@
 // groups a run of chunks joined by no whitespace (`joinsNext`) into the
 // word the panel draws as one `Row`; `chunkEnd`/`chunkProgress` are the
 // wipe's own span and its 0..1 fraction at a given position, capped at
-// `WIPE_MAX_SECONDS`. `synthesiseWords` fabricates chunks, proportioned by
+// `WIPE_MAX_SECONDS`, and `chunkGlow` is the sung chunk's own 0..1 glow.
+// `synthesiseWords` fabricates chunks, proportioned by
 // character count, for a line a provider left untimed, so the wipe always
 // has something to draw (spec P4).
 //
@@ -47,19 +48,11 @@
 // tests; they take the playback position `t` as a plain argument, the
 // caller subtracts `media.lyricsOffsetMs` before calling in. `blurFor` and
 // `comfortY` are the depth-of-field ramp and the 42% comfort anchor (spec
-// P7/P9).
-//
-// `indexForTime` is the old M55 line lookup, kept only because
-// `shell/Ipc/MediaIpc.qml` and `shell/Surfaces/Panels/MediaPanel.qml` still
-// call it; `activeMainLineIndex` replaces it as the panel's source of truth
-// once those two files are rewritten (M56 Tasks 2/3). `depthOpacity` and
-// `edgeFraction` are not superseded: the opacity ramp keeps running
-// alongside the blur (spec P7), just no longer alone.
+// P7/P9). `depthOpacity` and `edgeFraction` are not superseded by the blur:
+// the opacity ramp keeps running alongside it (spec P7), just no longer
+// alone.
 
 var INTERLUDE_MIN_SECONDS = 5;
-// Kept only for `indexForTime`'s legacy callers; the P5 activation
-// functions below take no fudge (kopuz has none).
-var FUDGE_SECONDS = 0.1;
 var MISS_TTL_DAYS = 7;
 var LINE_ASSUMED_SECONDS = 7;
 var WORD_FALLBACK_SECONDS = 0.35;
@@ -68,6 +61,12 @@ var WORD_FALLBACK_SECONDS = 0.35;
 // so it lands on the beat and holds instead of creeping through the
 // silence (kopuz's MAX_WIPE_SECONDS).
 var WIPE_MAX_SECONDS = 1.2;
+// How long the glow on a chunk takes to fade once the chunk's own span is
+// over (kopuz's GLOW_DECAY_SECONDS), and the step it is reported in, so a
+// decaying glow rewrites the effect's properties twenty times rather than
+// once a frame.
+var GLOW_DECAY_SECONDS = 0.6;
+var GLOW_QUANTUM = 0.05;
 // A main line ending and the next one starting within this long reads as
 // one continuous phrase rather than a gap; the earlier line (or its
 // background) stays lit across it (kopuz's LYRIC_SEAMLESS_GAP_SECONDS).
@@ -655,6 +654,19 @@ function chunkProgress(words, index, lineEnd, t) {
     return Math.max(0, Math.min(1, (t - start) / (end - start)));
 }
 
+// The 0..1 glow on chunk `index` at `t`: full while the chunk is the one
+// being sung, then linear to 0 over GLOW_DECAY_SECONDS. Off its raw span
+// rather than the capped wipe (kopuz's own reading): a chunk held over a
+// pause keeps its glow for as long as it is the chunk being sung.
+function chunkGlow(words, index, lineEnd, t) {
+    var chunk = words[index];
+    if (!chunk || t < chunk.time)
+        return 0;
+    var end = chunkEnd(words, index, lineEnd);
+    var glow = t <= end ? 1 : 1 - (t - end) / GLOW_DECAY_SECONDS;
+    return Math.round(Math.max(0, Math.min(1, glow)) / GLOW_QUANTUM) * GLOW_QUANTUM;
+}
+
 // A line's own words if it has any (not synthesised), the whole main-line
 // run's span otherwise: from `line.time` to `line.end` when the provider
 // gave one, else to the smaller of the next main line's own start and
@@ -877,20 +889,6 @@ function displayLines(lines) {
     }
 
     return display;
-}
-
-// The last index whose time is at or before t plus the fudge, -1 before
-// the first entry. Legacy: `activeMainLineIndex` is the P5 replacement,
-// this stays only for MediaIpc/MediaPanel until they're rewritten onto it.
-function indexForTime(lines, t) {
-    if (!lines)
-        return -1;
-    var result = -1;
-    for (var i = 0; i < lines.length; i++) {
-        if (lines[i].time <= t + FUDGE_SECONDS)
-            result = i;
-    }
-    return result;
 }
 
 function depthOpacity(distance) {

@@ -130,8 +130,8 @@ IpcHandler {
     // array the caller gets back rather than LyricsService's raw one;
     // both are worked out here, against the offset position, rather than
     // cached on the service, so they're always current as of the call.
-    // `follow` is the panel's own wheel-takeover state, added once the panel
-    // owns one (Task 3).
+    // `follow` is the pane's own wheel-takeover state, which lives on
+    // LyricsService because this handler can reach no panel.
     function lyrics(): string {
         const lines = Lyrics.displayLines(LyricsService.lines);
         const main = Lyrics.mainLineIndices(lines);
@@ -144,6 +144,7 @@ IpcHandler {
             quality: LyricsService.quality,
             words: LyricsService.hasWords,
             blur: LyricsService.blurEnabled,
+            follow: LyricsService.follow,
             lines: lines,
             active: active,
             secondary: secondary,

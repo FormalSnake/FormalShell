@@ -70,6 +70,26 @@ TestCase {
         compare(frameX("top", 960, 380) + 380 / 2, 960);
     }
 
+    // M56 P13: a panel growing a second column holds the place its narrow
+    // width gave it, so the column that was already on screen stays put and
+    // the new half opens out of the trailing side.
+    function test_a_held_frame_keeps_the_narrow_width_s_own_place() {
+        var narrow = Geometry.frameX("top", 600, 1920, 480, insets("top"), testCase.barMargin,
+            testCase.screenPadding, 480);
+        var wide = Geometry.frameX("top", 600, 1920, 840, insets("top"), testCase.barMargin,
+            testCase.screenPadding, 480);
+        compare(narrow, 600 - 240);
+        compare(wide, narrow);
+    }
+
+    // The screen still wins: there is no placement where an 840-wide frame
+    // keeps a 480-wide one's left edge next to the right edge of a 1920
+    // output.
+    function test_a_held_frame_still_gives_way_to_the_far_padding() {
+        compare(Geometry.frameX("top", 1800, 1920, 840, insets("top"), testCase.barMargin,
+            testCase.screenPadding, 480), 1920 - 840 - 12);
+    }
+
     function test_a_frame_wider_than_the_screen_gives_up_the_right_clamp() {
         compare(Geometry.frameX("top", -1, 300, 380, insets("top"), testCase.barMargin,
             testCase.screenPadding), 12);

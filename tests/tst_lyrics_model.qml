@@ -524,32 +524,26 @@ TestCase {
         compare(Lyrics.pickBest(results), null);
     }
 
-    // indexForTime (legacy: MediaIpc/MediaPanel still call this directly)
+    // chunkGlow
 
-    function test_index_for_time_before_the_first_line_is_negative_one() {
-        var lines = [{ time: 5, text: "A" }, { time: 10, text: "B" }];
-        compare(Lyrics.indexForTime(lines, 0), -1);
+    function test_chunk_glow_is_full_while_the_chunk_is_being_sung() {
+        var words = [
+            { time: 1, text: "Hel", joinsNext: true },
+            { time: 2, text: "lo", joinsNext: false }
+        ];
+        compare(Lyrics.chunkGlow(words, 0, 3, 0.5), 0);
+        compare(Lyrics.chunkGlow(words, 0, 3, 1.5), 1);
+        compare(Lyrics.chunkGlow(words, 0, 3, 2), 1);
     }
 
-    function test_index_for_time_on_a_line_is_its_index() {
-        var lines = [{ time: 5, text: "A" }, { time: 10, text: "B" }];
-        compare(Lyrics.indexForTime(lines, 10), 1);
-    }
-
-    function test_index_for_time_between_lines_is_the_earlier_one() {
-        var lines = [{ time: 5, text: "A" }, { time: 10, text: "B" }];
-        compare(Lyrics.indexForTime(lines, 7), 0);
-    }
-
-    function test_index_for_time_honors_the_fudge() {
-        var lines = [{ time: 10, text: "A" }];
-        compare(Lyrics.indexForTime(lines, 10 - Lyrics.FUDGE_SECONDS), 0);
-        compare(Lyrics.indexForTime(lines, 10 - Lyrics.FUDGE_SECONDS - 0.01), -1);
-    }
-
-    function test_index_for_time_after_the_last_line_is_the_last_index() {
-        var lines = [{ time: 5, text: "A" }, { time: 10, text: "B" }];
-        compare(Lyrics.indexForTime(lines, 999), 1);
+    function test_chunk_glow_decays_linearly_once_the_chunk_is_over() {
+        var words = [
+            { time: 1, text: "Hel", joinsNext: true },
+            { time: 2, text: "lo", joinsNext: false }
+        ];
+        compare(Lyrics.chunkGlow(words, 0, 3, 2 + Lyrics.GLOW_DECAY_SECONDS / 2), 0.5);
+        compare(Lyrics.chunkGlow(words, 0, 3, 2 + Lyrics.GLOW_DECAY_SECONDS), 0);
+        compare(Lyrics.chunkGlow(words, 0, 3, 10), 0);
     }
 
     // chunkWords

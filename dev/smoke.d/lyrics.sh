@@ -6,21 +6,27 @@
 # each track is worked out in shell the same way Lyrics.cacheKey does it
 # (shell/Lyrics/model.js), off the tags the leg itself set and the duration
 # `media status` reports back for that player, so a mismatch there is the
-# assert failing rather than a silent miss. A word-timed LRC is seeded under
-# the first track's key BEFORE the panel opens (D2: a cache hit costs one
-# `cat`, never a real lrclib request), and an empty `.none` marker under the
-# second's, reproducing the seven-day-fresh miss path with no network at
-# all.
+# assert failing rather than a silent miss. A `<key>.json` cache file (M56
+# P3: `{source, lines}` in the P1 line shape) is seeded under the first
+# track's key BEFORE the panel opens, so no provider is ever asked, and an
+# empty `<key>.miss` marker under the second's, reproducing the seven-day
+# fresh miss path with no network at all.
+#
+# The seeded fixture is invented words on a timeline built around the frame
+# this leg takes (~37s into the track): syllable-split chunks 1.2s apart
+# through the line that is lit then, so the frame always lands mid-wipe; a
+# background line whose own end outlasts its parent and runs past the next
+# main line's start; one duet turn; and an 8s hole early on, which is the
+# interlude row `displayLines` splices in.
 #
 # The claim: `media lyrics` reaches `synced`, `source: "cache"`, `words:
-# true` (the fixture LRC carries inline word stamps) and its own `index`
-# moves with playback; switching the active player to the untimed track
-# reaches `none`; the panel itself is visibly narrower with no lyrics pane
-# to draw beside the now-playing column (M55 A1: `popupWidthMenuSplit`
-# synced, `popupWidthWide` once it drops to `none`), measured as a
-# pixel-diff rect against a bare frame taken before either open
-# (panel_emerge.sh's own trick), since neither `panel state` nor `debug
-# dump` carries panel geometry.
+# true` and its own `active` line moves with playback; switching the active
+# player to the untimed track reaches `none`; the panel itself is visibly
+# narrower with no lyrics pane to draw beside the now-playing column (M55
+# A1: `popupWidthMenuSplit` synced, `popupWidthWide` once it drops to
+# `none`), measured as a pixel-diff rect against a bare frame taken before
+# either open (panel_emerge.sh's own trick), since neither `panel state` nor
+# `debug dump` carries panel geometry.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
 leg_lyrics_needs="mpv ffmpeg convert jq"
@@ -103,11 +109,14 @@ echo \$\$ > "$lyrics_pid1_path"
 exec "$mpv_bin" --no-video --really-quiet "$lyrics_track1_path"
 EOF
 
-  # A word-timed LRC over the first 25s (spec D5/D9, plan Task 6): a leading
-  # [ar:...] metadata line (skipped, not a stamp), a first cue at 6s so the
-  # panel opens on an interlude row, three word-stamped lines and one line
-  # with two leading time stamps (a shared refrain repeated at 15s and 23s,
-  # kopuz's merge case), nine timed entries in total.
+  # The seeded cache file (spec P3), eight lines over the first 54s: the
+  # line at 33s carries eight chunks 1.2s apart, so whatever second the
+  # frame below lands on inside its span, one of them is partway through its
+  # own wipe. The background line at 34s belongs to it (`parent: 4`, the raw
+  # index the service stores; `displayLines` remaps it) and its end at 43.5s
+  # runs past the next main line's start at 42.5s, so the two are lit
+  # together. That next line is the duet turn. The hole from 6s to 14s is
+  # the interlude.
   write_script "$key1_script" <<EOF
 #!/usr/bin/env bash
 . "$lyrics_lib_path"
@@ -122,17 +131,40 @@ duration=\$("$jq_bin" -r '.length // 0' "$lyrics_status1_path" 2>/dev/null)
 key1=\$(lyrics_cache_key "$lyrics_track1_artist" "$lyrics_track1_title" "$lyrics_track1_album" "\${duration:-0}")
 echo "\$key1" > "$lyrics_key1_path"
 mkdir -p "$cache_dir"
-cat > "$cache_dir/\$key1.lrc" <<'LRC'
-[ar:FormalShell Lyrics Artist]
-[00:06.00]<00:06.00>Interlude <00:06.30>ends <00:06.60>here
-[00:09.00]<00:09.00>Second <00:09.35>line <00:09.70>begins
-[00:12.00]Third line plain text
-[00:15.00][00:23.00]Shared refrain returns
-[00:16.50]Fifth line continues
-[00:18.50]<00:18.50>Sixth <00:18.80>line <00:19.10>word <00:19.40>by <00:19.70>word
-[00:21.00]Seventh line here
-[00:24.50]Eighth line closes it out
-LRC
+cat > "$cache_dir/\$key1.json" <<'JSON'
+{"source": "apple", "lines": [
+{"time": 2.0, "end": 6.0, "text": "Paper lantern morning", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 2.0, "text": "Pa", "joinsNext": true}, {"time": 2.6, "text": "per", "joinsNext": false},
+  {"time": 3.2, "text": "lan", "joinsNext": true}, {"time": 3.8, "text": "tern", "joinsNext": false},
+  {"time": 4.4, "text": "morn", "joinsNext": true}, {"time": 5.0, "text": "ing", "joinsNext": false}]},
+{"time": 14.0, "end": 20.0, "text": "Sundial over the harbour", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 14.0, "text": "Sun", "joinsNext": true}, {"time": 14.8, "text": "dial", "joinsNext": false},
+  {"time": 15.8, "text": "over", "joinsNext": false}, {"time": 16.8, "text": "the", "joinsNext": false},
+  {"time": 17.6, "text": "harbour", "joinsNext": false}]},
+{"time": 20.5, "end": 26.0, "text": "Copper kettle whistle", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 20.5, "text": "Cop", "joinsNext": true}, {"time": 21.1, "text": "per", "joinsNext": false},
+  {"time": 22.0, "text": "kettle", "joinsNext": false}, {"time": 23.5, "text": "whistle", "joinsNext": false}]},
+{"time": 26.5, "end": 32.0, "text": "Every window counts the rain", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 26.5, "text": "Every", "joinsNext": false}, {"time": 27.5, "text": "window", "joinsNext": false},
+  {"time": 28.5, "text": "counts", "joinsNext": false}, {"time": 29.5, "text": "the", "joinsNext": false},
+  {"time": 30.5, "text": "rain", "joinsNext": false}]},
+{"time": 33.0, "end": 42.0, "text": "Hold the marble river steady now until morning", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 33.0, "text": "Hold", "joinsNext": false}, {"time": 34.2, "text": "the", "joinsNext": false},
+  {"time": 35.4, "text": "marble", "joinsNext": false}, {"time": 36.6, "text": "river", "joinsNext": false},
+  {"time": 37.8, "text": "steady", "joinsNext": false}, {"time": 39.0, "text": "now", "joinsNext": false},
+  {"time": 40.2, "text": "until", "joinsNext": false}, {"time": 41.4, "text": "morning", "joinsNext": false}]},
+{"time": 34.0, "end": 43.5, "text": "steady now", "parent": 4, "background": true, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 34.0, "text": "stea", "joinsNext": true}, {"time": 34.8, "text": "dy", "joinsNext": false},
+  {"time": 35.6, "text": "now", "joinsNext": false}]},
+{"time": 42.5, "end": 48.0, "text": "Answer from the other shore", "parent": null, "background": false, "oppositeTurn": true, "estimated": false, "words": [
+  {"time": 42.5, "text": "Answer", "joinsNext": false}, {"time": 43.7, "text": "from", "joinsNext": false},
+  {"time": 44.7, "text": "the", "joinsNext": false}, {"time": 45.7, "text": "other", "joinsNext": false},
+  {"time": 46.7, "text": "shore", "joinsNext": false}]},
+{"time": 48.5, "end": 54.0, "text": "Paper lantern evening", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
+  {"time": 48.5, "text": "Pa", "joinsNext": true}, {"time": 49.1, "text": "per", "joinsNext": false},
+  {"time": 49.9, "text": "lantern", "joinsNext": false}, {"time": 51.0, "text": "evening", "joinsNext": false}]}
+]}
+JSON
 EOF
 
   write_script "$play2_script" <<EOF
@@ -145,8 +177,8 @@ EOF
   # The second track's own key, read the same way: selected explicitly
   # (media.sh's "other" pattern) so its tags and duration are the real
   # player answering rather than the fixture's own ffmpeg -t. An empty
-  # ".none" marker is a fresh miss (LyricsService.qml's find -mtime -7),
-  # never asked of lrclib at all. Track1 is reselected before the panel
+  # ".miss" marker is a fresh miss (LyricsService.qml's find -mtime -7),
+  # never asked of a provider at all. Track1 is reselected before the panel
   # opens so the open below lands on the synced half first.
   write_script "$key2_script" <<EOF
 #!/usr/bin/env bash
@@ -173,7 +205,7 @@ duration=\$("$jq_bin" -r '.length // 0' "$lyrics_status2_path" 2>/dev/null)
 key2=\$(lyrics_cache_key "$lyrics_track2_artist" "$lyrics_track2_title" "$lyrics_track2_album" "\${duration:-0}")
 echo "\$key2" > "$lyrics_key2_path"
 mkdir -p "$cache_dir"
-: > "$cache_dir/\$key2.none"
+: > "$cache_dir/\$key2.miss"
 "$qs_bin" ipc -p "$shell_path" call media select "\$id1" > /dev/null 2>&1
 EOF
 
@@ -282,8 +314,8 @@ leg_lyrics_assert() {
   fi
   cat "$lyrics_status_later_path"; echo
   echo "SMOKE_LYRICS_STATUS_LATER $lyrics_status_later_path"
-  index_synced=$("$jq_bin" -r '.index' "$lyrics_status_synced_path" 2>/dev/null)
-  index_later=$("$jq_bin" -r '.index' "$lyrics_status_later_path" 2>/dev/null)
+  index_synced=$("$jq_bin" -r '.active' "$lyrics_status_synced_path" 2>/dev/null)
+  index_later=$("$jq_bin" -r '.active' "$lyrics_status_later_path" 2>/dev/null)
   pos_synced=$("$jq_bin" -r '.position' "$lyrics_status_synced_path" 2>/dev/null)
   pos_later=$("$jq_bin" -r '.position' "$lyrics_status_later_path" 2>/dev/null)
   if ! awk -v a="${index_later:--1}" -v b="${index_synced:--1}" -v pl="${pos_later:-0}" -v ps="${pos_synced:-0}" \

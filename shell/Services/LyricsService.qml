@@ -61,6 +61,13 @@ Singleton {
     readonly property int offsetMs: Core.Config.loaded ? root._clampedConfigInt("media.lyricsOffsetMs", 0, -5000, 5000) : 0
     readonly property real offsetSeconds: root.offsetMs / 1000
 
+    // Whether the lyrics column still follows the song (spec P9/P11). The
+    // panel writes it (a wheel takes it off, its resync button and the
+    // keyboard cursor entering the section put it back) and `media lyrics`
+    // reads it: the panel owns no state the IPC handler can reach, and this
+    // is the one fact about the pane a caller asks for.
+    property bool follow: true
+
     function _clampedConfigInt(path, fallback, min, max) {
         var n = Number(Core.Config.get(path, fallback));
         if (!isFinite(n))
@@ -119,6 +126,9 @@ Singleton {
     function _resolve() {
         root._serial++;
         const serial = root._serial;
+        // A new track parks the column back on the song, and so does the
+        // panel opening on one, since both arrive here.
+        root.follow = true;
         if (!root.enabled) {
             root._apply("off", [], "");
             return;
