@@ -106,14 +106,6 @@ Panel {
         value: root.isOpen
     }
 
-    // LyricsService's own hidden-work gate (spec D3): a lookup only ever
-    // runs while this panel is open.
-    Binding {
-        target: LyricsService
-        property: "panelWants"
-        value: root.isOpen
-    }
-
     // media.visualizer (spec D8): the panel's own opt-out for the spectrum
     // band, independent of the bar cell's bar.layout opt-in.
     readonly property bool _spectrumEnabled: Config.loaded && Config.get("media.visualizer", true)

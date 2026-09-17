@@ -7,10 +7,11 @@ import qs.Services
 import "../Lyrics/model.js" as Lyrics
 
 // Auto-fetched lyrics for the media panel's karaoke-like block (M56 Task 2,
-// spec P2/P3/P10/P11, replacing M55's lrclib-only chain). Isolated behind
-// `media.lyrics` and hidden-work-gated on `panelWants` (MediaPanel sets it
-// while open): nothing runs while the panel is closed even with a track
-// playing. Every network step goes over `curl` in a `Process`
+// spec P2/P3/P10/P11/P14, replacing M55's lrclib-only chain). Isolated
+// behind `media.lyrics`; a lookup otherwise runs on the track change
+// itself, panel open or closed (spec P14), so the panel opens onto its
+// final width with the pane already filled rather than morphing into it
+// after the fact. Every network step goes over `curl` in a `Process`
 // (AppleMusicArtService's idiom: `--fail`, a per-step `--max-time`, stdout
 // captured), never QML's XMLHttpRequest, so the whole chain (disk test,
 // curl, disk write) is one uniform exit-code/stdout contract. Every URL,
@@ -50,10 +51,6 @@ Singleton {
     // as a real disable, same guard AppleMusicArtService uses.
     readonly property bool enabled: Core.Config.loaded && Core.Config.get("media.lyrics", true)
 
-    // MediaPanel sets this while it is open; nothing else does, so a closed
-    // panel never starts a lookup even with a track playing.
-    property bool panelWants: false
-
     // spec P10, all Config.loaded gated the same way: the hard default reads
     // back until settings.json has actually resolved.
     readonly property bool blurEnabled: Core.Config.loaded && Core.Config.get("media.lyricsBlur", true)
@@ -84,9 +81,10 @@ Singleton {
         ? Lyrics.cacheKey(MediaService.artist, MediaService.title, MediaService.album, MediaService.length) : ""
 
     // key -> {state, lines, source}, P1-shaped lines pre-synthesis. A track
-    // already resolved this session is served straight from here on
-    // reopen, no process spawned. "error" is deliberately never stored, so
-    // a failed lookup is retried the next time the panel wants it.
+    // already resolved this session is served straight from here on the
+    // next `_resolve()`, no process spawned. "error" is deliberately never
+    // stored, so a failed lookup is retried the next time this key comes
+    // up (selecting the track again, or a fresh session).
     property var _resolved: ({})
     // Bumped on every key change so a lookup in flight for a track the user
     // has since left can never land (AppleMusicArtService's pattern); every
@@ -110,8 +108,23 @@ Singleton {
     }
 
     onEnabledChanged: root._resolve()
-    onPanelWantsChanged: root._resolve()
     onKeyChanged: root._resolve()
+
+    // spec P14: a lookup starts one second after the key settles, panel
+    // open or closed, rather than waiting on the panel to be opened at
+    // all. Long enough that skipping through several tracks in a row
+    // (next/previous, or a queue playing out) starts a lookup for none of
+    // them; short enough that an ordinary dwell on a track has it ready
+    // well before anyone opens the panel. Restarted on every key change,
+    // so only the track that is still current when it fires ever starts
+    // one; a key already resolved this session applies at once instead,
+    // in `_resolve()` below, with no wait at all.
+    Timer {
+        id: lookupHold
+        interval: 1000
+        onTriggered: root._lookup(root.key, root._serial)
+    }
+
     // The bootstrap mkdir and the one-time sweep of M55's `.lrc`/`.none`
     // files run before anything else touches the cache dir; `_resolve()`
     // only fires afterwards so a lookup never races a write against a
@@ -125,10 +138,9 @@ Singleton {
 
     function _resolve() {
         root._serial++;
-        const serial = root._serial;
-        // A new track parks the column back on the song, and so does the
-        // panel opening on one, since both arrive here.
+        // A new track parks the column back on the song.
         root.follow = true;
+        lookupHold.stop();
         if (!root.enabled) {
             root._apply("off", [], "");
             return;
@@ -143,10 +155,10 @@ Singleton {
             return;
         }
         // A new key with nothing resolved yet: clear the previous track's
-        // lines before either sitting idle or starting a fresh lookup.
-        root._apply(root.panelWants ? "loading" : "idle", [], "");
-        if (root.panelWants)
-            root._lookup(root.key, serial);
+        // lines, and hold for spec P14's one second before a lookup for
+        // this one starts.
+        root._apply("loading", [], "");
+        lookupHold.restart();
     }
 
     function _apply(state, lines, source) {
