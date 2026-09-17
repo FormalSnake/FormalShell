@@ -187,8 +187,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   three cards, and the layer surface the same size either way.
 - `ocr.sh` `--ocr`: the `capture` target's text and colour verbs against a
   window carrying known text on a known background.
-- `osd.sh` `--osd`: the OSD pill on a manual call, on a real `wpctl` change,
-  and on a machine with no backlight.
+- `osd.sh` `--osd`: the pill's own entrance off the bottom line sampled frame
+  by frame under `debug motionScale`, ink on the output's very last row early
+  and a plain pill a `screenPadding` clear of it at rest, then at full speed a
+  manual call, a real `wpctl` change, and a machine with no backlight.
 - `panel.sh` `--panel <name>`: one popout opened over the `panel` route, with
   `panel state` agreeing it is the only open one.
 - `panel_anchor.sh` `--panel-anchor`: `panel toggle` hanging its card under

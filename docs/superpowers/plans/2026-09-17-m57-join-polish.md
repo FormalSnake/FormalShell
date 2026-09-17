@@ -1,7 +1,55 @@
 # M57: the join, polished: the seam, the walls, the nested bud, the modal bud, one size morph
 
 **Date:** 2026-09-17
-**Status:** in progress on `main`.
+**Status:** implemented 2026-09-17 on `main`, oldest first:
+abfd4dd (motionScale and the `--join` leg), 84e854b (the seam painted once,
+D1), cd9fdd1 (plan addendum, the osd as a drawer), 98ceea1 (walls, D2),
+1f99cc4 (the wall's own row and pivot), 87a2987 (the nested bud, D3),
+e825de0 (one drawer, D4), bbf7dca (the modal bud off the top line, D5),
+58fe164 (darken not blur, D6), d16c89c (`--menu-emerge`, `--polkit`'s own
+sample), d7f108b (the osd as a drawer, D8), 74fad90 (the nested bud's border
+under the deform), db8d973 (one size morph, D7), 3859fdc (`--panel-morph`),
+5ac0bbd (`--join`/`--menu-emerge`/`--panel-morph` on any layout), 694a67e
+(`--join` reads its own dump), 94520b9 (the frame follows the size morph),
+8ec46ea (the walled corner takes the ring's own radius), 89bc200 (the docs
+for it). This commit is Task 8, the record.
+
+Where the shipped code deviates from the task text, on purpose:
+
+- Task 5 (D4): the size morph (D7) ended up in its own component,
+  `Components/SizeMorph.qml`, rather than folded into the drawer itself;
+  Panel, Center, Menu, Polkit and PluginOverlay each carry a `SizeMorph`
+  beside their `Drawer` rather than one object doing both jobs.
+- Task 5: the extraction carried `depth()`'s existing `+ borderWidth` row
+  (M57 D1's own seam fix) into `drawer.js` unchanged; there was no spare
+  pixel in the ring's own band to give back by shrinking it.
+- D2: the walled corner's own radius follows the frame ring's
+  (`Theme.frameRadius`, read live off `FrameGeometry.frameGeometry`) rather
+  than being squared off, an owner-layout finding made after the first cut
+  landed square (8ec46ea, 89bc200): squaring it off covered the wedge of
+  band the ring's own corner curves in by, which two translucent surfaces
+  turned into a visibly lighter triangle in the corner.
+- D4/D5: `releaseAt` and the deform's own squash both scale down by how
+  deep the line lies against the card's own size across it
+  (`Drawer.qml`'s `_releaseAt` and `deformAmount` scaling), so a
+  centre-floating card releases earlier and squashes less than a panel a
+  `barMargin` off the bar rather than carrying the same figures regardless
+  of depth.
+- D8: the OSD's window became a band along the bottom edge rather than the
+  whole output, and its fill went from opaque to the same translucent
+  `card` fill every other drawer uses, with its own `ignore_alpha = 0.2`
+  blur rule in the example config, since one silhouette across two windows
+  cannot be opaque on one side of the seam.
+- `--frame` in the rig pins `frame.thickness` to 10 for a wider band to
+  read pixels off, rather than the 6 the owner runs on a real host.
+- A shallow-shape ghost of the ring's own corner arc is visible for the
+  first frame or two of a walled emerge before the run-out reaches full
+  depth; a known leftover of `filletRadius`'s own depth cap, not chased
+  down here.
+- `--menu-emerge`'s own settle figure: open-to-rest measured 525ms before
+  this branch (the unfold) and 539ms after (the emerge), inside the "don't
+  make the animation any slower" the owner asked for.
+
 **Spec:** the 2026-08-25 spec and DESIGN.md §1 "Motion" / §2 (M54 D6, the
 2026-09-14 metamorphosis). This plan amends both; Task 8 writes the
 amendment into DESIGN.md.

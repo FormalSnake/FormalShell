@@ -491,6 +491,11 @@ way to confirm a backend is wired correctly without reading a screenshot.
 (`Menu.qml#query()` → `search.js#rank()`) and returns the JSON result array,
 verifying the model/provider/scorer pipeline without keyboard injection
 (nested test sessions can't inject keystrokes into the surface itself).
+`function motionScale(percent: int): string` (M57) sets `Core.Theme.motionScale`,
+which every `Anim`/`CAnim` duration multiplies by: 1000 stretches a card's
+whole travel to roughly the length of a screencopy, so the join legs
+(`--join`, `--menu-emerge`, `--panel-morph`) can land a frame mid-flight
+instead of racing a real-speed animation. 100 is the unscaled default.
 
 ## Theme engine data flow
 
