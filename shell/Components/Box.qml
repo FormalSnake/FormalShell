@@ -10,12 +10,12 @@ import qs.Core
 // theme.
 //
 // Draw order, outermost first: the casts under everything (`z: -1`), the
-// rings around the box, the fill with its border, the face gradient and the
-// inset hairlines inside it, and the pointer's wash over the lot. The
-// border rides on the fill's own Rectangle rather than being a seventh
-// layer, which is what keeps a box with no layers and no face costing one
-// Rectangle: the face and the hairlines sit a border in from the edge so
-// they never paint over it.
+// rings under the fill, the fill with its border, the face gradient and the
+// inset hairlines inside it, the pointer's wash over the lot, and the
+// content over that. The border rides on the fill's own Rectangle rather
+// than being a layer of its own, which is what keeps a box with no layers
+// and no face costing one Rectangle: the face and the hairlines sit a
+// border in from the edge so they never paint over it.
 //
 // Fill and border colours cross on `CAnim`, the way `Cell` and `Button`
 // crossed their own ternaries before this file existed: a state change on a
@@ -47,13 +47,21 @@ Item {
     // whoever knows that padding.
     property int radius: -1
 
+    // What the box carries, over everything it draws, inset by `padding`.
+    // The DEFAULT slot, and it has to be the drawn one: an object declared
+    // inside a document whose root is a Box lands in the slot BOX declares
+    // default, whatever that document declares for its own consumers, so a
+    // default slot that was not drawn would swallow a primitive's own
+    // children.
+    default property alias content: contentSlot.data
+    readonly property alias contentItem: contentSlot
+    property real padding: 0
+
     // The shape a cast is cast from, for a box that is not a rounded
-    // rectangle (`Shoulders`' own outline). ⚠️ This is the DEFAULT slot and
-    // it is never drawn: what lands in it is the source and the inverted
-    // mask of every cast, nothing more. Content goes in the consumer's own
-    // slot (`Card`'s `content`), and an empty slot here falls back to a
-    // rounded rectangle of this box's radius.
-    default property alias silhouette: silhouetteSlot.data
+    // rectangle (`Shoulders`' own outline). Never drawn: what lands here is
+    // the source and the inverted mask of every cast, nothing more, and an
+    // empty slot falls back to a rounded rectangle of this box's radius.
+    property alias silhouette: silhouetteSlot.data
 
     // `pill` needs the extent of the thing being drawn, so it survives
     // resolution as itself and lands here.
@@ -155,9 +163,15 @@ Item {
         }
     }
 
-    // One ring per spread layer: a bordered rectangle at a negative margin
-    // of its own spread, so only the band outside the box's edge is ever
-    // painted. The keyboard cursor's halo is one of these.
+    // One ring per spread layer: a FILLED rounded rectangle at a negative
+    // margin of its own spread, under the fill, which is what CSS draws for
+    // a spread with no blur and what the keyboard cursor's halo has always
+    // been. Filled rather than stroked because the fill over it is
+    // translucent: a stroked band would leave the box's own alpha showing
+    // the desktop between the ring and the border, and a band whose inner
+    // edge is a rounded rectangle of a different radius cannot follow the
+    // border's arc anyway. Declared before the fill, which is what puts it
+    // under it; the casts carry a negative z and so stay under both.
     Repeater {
         model: root.box.rings
 
@@ -168,9 +182,7 @@ Item {
             anchors.fill: parent
             anchors.margins: -ring.modelData.spread
             radius: root._radius + ring.modelData.spread
-            color: "transparent"
-            border.width: ring.modelData.spread
-            border.color: ring.modelData.color
+            color: ring.modelData.color
         }
     }
 
@@ -254,5 +266,13 @@ Item {
         Behavior on opacity {
             Anim { kind: "effects" }
         }
+    }
+
+    // The content, last and so over every layer above, including the wash:
+    // a row's own ink keeps its contrast while the pointer sits on it.
+    Item {
+        id: contentSlot
+        anchors.fill: parent
+        anchors.margins: root.padding
     }
 }

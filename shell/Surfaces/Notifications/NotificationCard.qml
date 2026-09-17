@@ -59,12 +59,15 @@ Card {
     // picture and one that fell back to the bell.
     readonly property real _iconSlot: Theme.fontSize.heading
 
-    color: root.flat ? "transparent" : Theme.color.card
-    // The only border a flat card draws is the one urgency asked for
-    // (Cell.qml's `_borderless`, same rule): critical is a `destructive`
-    // border and icon, so the border has to survive the flattening.
-    border.width: root.flat && !root._critical ? 0 : Theme.borderWidth
-    border.color: root._critical ? Theme.color.destructive : Theme.color.border
+    // The `notification` box rather than a panel's `card`: a toast has
+    // nothing blurred behind it, so its fill is opaque. A flat card paints
+    // neither fill nor border, except the one urgency asked for (Cell.qml's
+    // `_borderless`, same rule): critical is a `destructive` border and
+    // icon, so the border has to survive the flattening.
+    role: "notification"
+    state: root.flat
+        ? (root._critical ? "flatCritical" : "flat")
+        : (root._critical ? "critical" : "rest")
 
     implicitWidth: Theme.space.popupWidthNarrow
     implicitHeight: column.implicitHeight + root.padding * 2

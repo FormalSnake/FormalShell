@@ -20,7 +20,8 @@
 var ROLES = {
     "bar": [],
     "frame": [],
-    "card": [],
+    "card": ["rest", "opaque"],
+    "notification": ["rest", "critical", "flat", "flatCritical"],
     "popover": [],
     "menu": [],
     "cell": ["rest", "ghost", "hover", "active", "selected", "destructive", "warning"],

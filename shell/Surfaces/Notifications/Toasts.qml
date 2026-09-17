@@ -601,9 +601,10 @@ PanelWindow {
                         Behavior on opacity {
                             Anim { kind: "effects" }
                         }
-                        color: card.color
-                        radius: card.radius
-                        border.color: card.border.color
+                        // The same box the card above is drawing, so the two
+                        // cannot fall out of step over a theme change.
+                        role: card.role
+                        state: card.state
                     }
                 }
             }

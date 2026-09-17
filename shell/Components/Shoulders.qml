@@ -3,10 +3,10 @@ import QtQuick.Shapes
 import qs.Core
 import "shoulders.js" as Outline
 
-// The edge-anchored card's frame (DESIGN.md §2, M54 D6): `Card`'s fill,
-// border and `radiusXl` corners on the three edges that face the desktop,
-// the fourth edge open where it meets a line, and outside each of that
-// edge's two corners a concave quarter fillet running out to the line. The
+// The edge-anchored card's frame (DESIGN.md §2, M54 D6): its role's fill,
+// border and corners on the three edges that face the desktop, the fourth
+// edge open where it meets a line, and outside each of that edge's two
+// corners a concave quarter fillet running out to the line. The
 // line opens a gap of the card's length plus two fillets between its two
 // segments (Surfaces/Bar/Bar.qml, Surfaces/Frame/FrameRing.qml), the
 // fillets land in it, and the two windows read as one silhouette with the
@@ -40,19 +40,26 @@ import "shoulders.js" as Outline
 // the wall. Neither reads the item's size, so binding the size to them is
 // safe.
 //
-// The fill takes whatever opacity its colour carries, the way `Card` does:
-// the caller passes `Theme.surface(...)` through, this file never applies an
-// opacity of its own. `radius` 0 (the retro preset) draws square corners and
-// no fillets at all, which is a plain card against a whole line.
+// The chrome is a role in the theme's table, the consumer naming which box
+// this is a shape of (`card` for a panel, `menu` for the tray's menu): the
+// fill takes whatever opacity that box carries and this file never applies
+// an opacity of its own. `radius` 0 (the retro preset) draws square corners
+// and no fillets at all, which is a plain card against a whole line.
 Shape {
     id: root
 
     // "top" | "bottom" | "left" | "right"
     property string edge: "top"
-    property real radius: Theme.radiusXl
-    property color color: Theme.surface(Theme.color.card)
-    property color borderColor: Theme.color.border
-    property real borderWidth: Theme.borderWidth
+    // Which box in the theme's table this shape paints.
+    property string role: "card"
+    readonly property var _box: Theme.box(root.role)
+
+    // The corner is the consumer's to override, since the concentric rule is
+    // geometry; the colours are the table's alone.
+    property real radius: root._box.radius
+    readonly property color color: root._box.fill
+    readonly property color borderColor: root._box.border ? root._box.border.color : "transparent"
+    readonly property real borderWidth: root._box.border ? root._box.border.width : 0
 
     // 1 on the line, 0 floating free; see the header.
     property real attach: 1

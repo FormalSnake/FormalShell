@@ -88,11 +88,13 @@ PanelWindow {
     // dev/smoke.d/chevron_quiet.sh). Once the card is up and standing still
     // a new width is data, like every other panel's, and travels.
     property bool panelWidthMeasured: false
-    // The frame's own fill and corner. A panel is a `card` at `radiusXl`
+    // Which box in the theme's table the frame paints. A panel is a `card`
     // (DESIGN.md §3); the tray menu is the one popout that is a menu rather
-    // than a panel and takes the `popover` fill at `radiusMd` instead.
-    property color frameColor: Theme.surface(Theme.color.card)
-    property int frameRadius: Theme.radiusXl
+    // than a panel and names `menu` instead. The corner comes out of that
+    // box: a card budding off this one reads it off the panel it hangs from
+    // (Components/Drawer.qml's `targetRadius`).
+    property string frameRole: "card"
+    readonly property int frameRadius: Theme.box(root.frameRole).radius
     // Screen-relative centre of the bar cell that opened this panel, mapped
     // within that cell's OWN window (openFrom below). Wayland gives clients
     // no cross-window global coordinates, so mapping the cell into this
@@ -788,7 +790,7 @@ PanelWindow {
             // otherwise wall and unwall itself as it travels.
             restRect: Qt.rect(root._frameX, root._frameY, root._morphWidth, root._morphHeight)
             radius: root.frameRadius
-            color: root.frameColor
+            role: root.frameRole
             // A handed-over card is cut outright (see the handoff block
             // above) rather than faded, which is what this term is for.
             frameOpacity: root._handedOver ? 0 : 1

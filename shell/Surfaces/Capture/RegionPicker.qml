@@ -856,7 +856,7 @@ Scope {
                 // is not one of the three namespaces Hyprland blurs behind, and
                 // a translucent card over the frozen screenshot would be
                 // unreadable (spec "Depth").
-                color: Core.Theme.color.card
+                state: "opaque"
                 width: Core.Theme.space.popupWidthWide
                 height: listColumn.height + nameList.padding * 2
                 x: Math.round((parent.width - width) / 2)
@@ -1001,7 +1001,7 @@ Scope {
                 visible: !root._capturing
 
                 // Opaque, for the same reason nameList above is.
-                color: Core.Theme.color.card
+                state: "opaque"
                 width: toolbarRow.width + toolbar.padding * 2
                 height: toolbarRow.height + toolbar.padding * 2
                 x: Math.round((parent.width - width) / 2)

@@ -70,15 +70,43 @@ var STYLE = {
             border: { color: "border", width: 1 }
         },
 
+        // Every floating surface's frame. `opaque` is the same box on a
+        // namespace the compositor does not blur (the capture picker's, over
+        // a frozen screenshot): a translucent card with nothing blurred
+        // behind it reads as a rendering fault rather than as depth, so a
+        // surface is either on Hyprland's blur list or opaque
+        // (DESIGN.md §1 "Translucency and blur").
         "card": {
-            fill: "card",
-            fillAlpha: "surface",
-            radius: "xl",
-            border: { color: "border", width: 1 }
+            rest: {
+                fill: "card",
+                fillAlpha: "surface",
+                radius: "xl",
+                border: { color: "border", width: 1 }
+            },
+            opaque: { fillAlpha: 1 }
         },
 
-        // The tooltip's own frame, and the menu frame the tray menu and the
-        // second bar take: the same box one step down the radius ladder.
+        // A notification card, on the same unblurred footing as the capture
+        // picker: a toast has nothing behind it. `flat` is a row inside the
+        // notification centre, which already carries a card of its own, so
+        // the row paints neither fill nor border and the list reads as rows
+        // rather than as tiles. Critical keeps its border through the
+        // flattening, since that border is what urgency asked for
+        // (DESIGN.md §5, no full-bleed rows).
+        "notification": {
+            rest: {
+                fill: "card",
+                fillAlpha: 1,
+                radius: "xl",
+                border: { color: "border", width: 1 }
+            },
+            critical: { border: { color: "destructive", width: 1 } },
+            flat: { fill: "transparent", border: null },
+            flatCritical: { fill: "transparent", border: { color: "destructive", width: 1 } }
+        },
+
+        // The tooltip's own frame, and the tray menu's, one step down the
+        // radius ladder: a menu, not a panel (M43 D6).
         "popover": {
             fill: "popover",
             fillAlpha: "surface",

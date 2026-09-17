@@ -4,12 +4,12 @@ import qs.Core
 import "../../Frame/geometry.js" as Geometry
 
 // The screen frame's ring (`frame.thickness` / `frame.radius`, off by
-// default): the bar's `card` fill carried round the other three edges of
-// the output as a band, with a rounded rectangle cut out of the whole for
-// the desktop, so the bar reads as the thick side of one frame that wraps
-// the screen and windows sit inside rounded corners. The look is
-// Caelestia's border (modules/drawers, its BorderConfig), read as a
-// reference; the drawing here is a Shape path with an even-odd fill, no
+// default): the `frame` role's fill, the strip's own, carried round the
+// other three edges of the output as a band, with a rounded rectangle cut
+// out of the whole for the desktop, so the bar reads as the thick side of
+// one frame that wraps the screen and windows sit inside rounded corners.
+// The look is Caelestia's border (modules/drawers, its BorderConfig), read
+// as a reference; the drawing here is a Shape path with an even-odd fill, no
 // shader and no C++. Bar.qml hosts one, filling its window while that
 // window is the whole output; the ring paints the strip too, and the bar's
 // cells draw over it.
@@ -19,9 +19,14 @@ Item {
     // The output this ring is on, for the joins it opens its line under.
     property string screenName: ""
 
+    // The ring's own box in the theme's table: the band's fill, and the
+    // hairline along the cut-out as its border.
+    readonly property var _box: Theme.box("frame")
+
     readonly property var _g: Geometry.frameGeometry(ring.width, ring.height,
         Theme.edgeInset, Theme.frameRadius)
-    readonly property var _line: Geometry.strokeRect(ring._g.inner, ring._g.radius, Theme.borderWidth)
+    readonly property var _line: Geometry.strokeRect(ring._g.inner, ring._g.radius,
+        ring._box.border.width)
 
     // The span of the hairline a joined card's shoulders draw into, on any
     // side (PanelRegistry.joins, the card's rect plus its fillets' reach):
@@ -53,7 +58,7 @@ Item {
             readonly property var i: ring._g.inner
             readonly property real r: ring._g.radius
             fillRule: ShapePath.OddEvenFill
-            fillColor: Theme.surface(Theme.color.card)
+            fillColor: ring._box.fill
             strokeWidth: -1
             startX: band.o.x
             startY: band.o.y
@@ -94,8 +99,8 @@ Item {
         id: run
         required property var seg
         fillColor: "transparent"
-        strokeColor: Theme.color.border
-        strokeWidth: Theme.borderWidth
+        strokeColor: ring._box.border.color
+        strokeWidth: ring._box.border.width
         startX: run.seg.x1
         startY: run.seg.y1
         PathLine { x: run.seg.x2; y: run.seg.y2 }
@@ -109,8 +114,8 @@ Item {
         // (Frame/geometry.js's `gone`): the card's own corner draws that
         // stretch of the cut-out's edge, and this one over it would be a line
         // across the card's fill.
-        strokeColor: corner.seg.gone ? "transparent" : Theme.color.border
-        strokeWidth: Theme.borderWidth
+        strokeColor: corner.seg.gone ? "transparent" : ring._box.border.color
+        strokeWidth: ring._box.border.width
         startX: corner.seg.x1
         startY: corner.seg.y1
         PathArc { x: corner.seg.x2; y: corner.seg.y2; radiusX: ring._line.radius; radiusY: ring._line.radius }

@@ -106,6 +106,25 @@ TestCase {
         return out;
     }
 
+    // The two containers read by their own shape rather than by their index
+    // among the children, since the box appends its content slot after them:
+    // the hairlines live in the one clipped item, the face in the one Loader.
+    function hairlineBox(box) {
+        for (var i = 0; i < box.children.length; i++) {
+            if (box.children[i].clip === true)
+                return box.children[i];
+        }
+        return null;
+    }
+
+    function faceLoader(box) {
+        for (var i = 0; i < box.children.length; i++) {
+            if (box.children[i].sourceComponent !== undefined)
+                return box.children[i];
+        }
+        return null;
+    }
+
     // A container's own rectangles, for the face and the hairlines.
     function childRects(item) {
         var out = [];
@@ -197,8 +216,11 @@ TestCase {
 
     // --- The layers ------------------------------------------------------
 
-    // The keyboard cursor's halo: a bordered rectangle at a negative margin
-    // of its own spread, so only the band outside the box's edge is painted.
+    // The keyboard cursor's halo: a filled rounded rectangle at a negative
+    // margin of its own spread, drawn before the fill and so under it, which
+    // is what CSS paints for a spread with no blur. Filled and not stroked,
+    // because the fill over it is translucent and a stroked band would show
+    // the desktop between itself and the border.
     function test_a_ring_layer_draws_a_band_outside_the_box() {
         var box = make({ role: "cursor", radius: 8 });
         var drawn = visibleRects(box);
@@ -207,9 +229,7 @@ TestCase {
         compare(ring.anchors.margins, -Theme.ringWidth);
         compare(ring.width, box.width + Theme.ringWidth * 2);
         compare(ring.radius, 8 + Theme.ringWidth);
-        compare(ring.border.width, Theme.ringWidth);
-        verify(Qt.colorEqual(ring.border.color, Qt.alpha(Theme.color.ring, Theme.ringAlpha)));
-        verify(Qt.colorEqual(ring.color, "transparent"));
+        verify(Qt.colorEqual(ring.color, Qt.alpha(Theme.color.ring, Theme.ringAlpha)));
         verify(Qt.colorEqual(drawn[1].border.color, Theme.color.ring));
     }
 
@@ -219,8 +239,8 @@ TestCase {
             border: { color: "#444444", width: 1 },
             hairlines: [{ edge: "right", thickness: 1, inset: true, color: "#00ccff" }]
         }) });
-        var container = box.children[box.children.length - 2];
-        verify(container.clip);
+        var container = hairlineBox(box);
+        verify(container);
         var lines = childRects(container);
         compare(lines.length, 1);
         verify(Qt.colorEqual(lines[0].color, "#00ccff"));
@@ -234,20 +254,19 @@ TestCase {
 
     function test_a_box_with_no_hairlines_draws_none() {
         var box = make({ role: "card" });
-        compare(childRects(box.children[box.children.length - 2]).length, 0);
+        compare(childRects(hairlineBox(box)).length, 0);
     }
 
     function test_a_face_draws_a_gradient_only_when_the_table_sets_one() {
         var plain = make({ role: "card" });
-        var faceless = plain.children[plain.children.length - 3];
-        compare(faceless.item, null);
+        compare(faceLoader(plain).item, null);
 
         var box = make({ box: resolved({
             fill: "#151515",
             border: { color: "#444444", width: 1 },
             face: { from: "#ffffff", to: "#00000000" }
         }) });
-        var loader = box.children[box.children.length - 3];
+        var loader = faceLoader(box);
         verify(loader.item);
         verify(loader.item.gradient);
         compare(loader.item.radius, 8 - 1);

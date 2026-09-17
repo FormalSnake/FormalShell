@@ -4,9 +4,9 @@ import Quickshell.Wayland
 import qs.Core
 import "tooltip.js" as Placement
 
-// The hover tooltip (DESIGN.md §2): a `popover` card at `radiusSm` with a
-// 1px `border`, `Theme.space.md` off the item that owns it, carrying one
-// caption line that names what that item is and what it currently reads. It
+// The hover tooltip (DESIGN.md §2): the `popover` role's frame,
+// `Theme.space.md` off the item that owns it, carrying one caption line that
+// names what that item is and what it currently reads. It
 // enters through the same Presence recipe the panels and the OSD use,
 // zoomed from the side facing its anchor rather than a transition of its
 // own.
@@ -63,6 +63,10 @@ PanelWindow {
     readonly property real _maxTextWidth: 360 * Theme.fontScale
 
     readonly property bool _visible: group.shown && group.text !== ""
+
+    // The frame's own chrome, off the theme's table: a tooltip is a
+    // `popover`, the smallest of the floating frames.
+    readonly property var _box: Theme.box("popover")
 
     // Captured on the group's commit, not bound: mapToItem is not reactive
     // (quickshell documents that of the whole map* family), and the pointer
@@ -215,10 +219,10 @@ PanelWindow {
         // No Behavior: every card is one elided caption line, so the height
         // only ever changes with the type scale.
         height: frame.implicitHeight
-        radius: Theme.radiusSm
-        color: Theme.surface(Theme.color.popover)
-        border.width: Theme.borderWidth
-        border.color: Theme.color.border
+        radius: root._box.radius
+        color: root._box.fill
+        border.width: root._box.border.width
+        border.color: root._box.border.color
 
         // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51 D2/D4):
         // fade plus a zoom from the side facing the anchor item, no slide

@@ -34,11 +34,10 @@ Panel {
 
     panelTitle: root._title
     panelWidth: Theme.space.popupWidthDefault
-    // A menu, not a panel (M43 D6): the `popover` fill at `radiusMd`, the
-    // same frame the tooltip takes, rather than the `card` at `radiusXl`
-    // every widget popout wears.
-    frameColor: Theme.surface(Theme.color.popover)
-    frameRadius: Theme.radiusMd
+    // A menu, not a panel (M43 D6): the `menu` box, the popover frame one
+    // step up the radius ladder, rather than the `card` every widget popout
+    // wears.
+    frameRole: "menu"
 
     // The tray item's own DBusMenuHandle (SNI item.menu), null while
     // closed, so QsMenuOpener drops every ref'd DBusMenuItem the instant

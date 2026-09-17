@@ -218,6 +218,12 @@ PanelWindow {
     readonly property bool _vertical: Theme.barVertical
     readonly property var _strip: Layout.stripGeometry(Theme.space, bar._position)
 
+    // The strip's own box in the theme's table: its fill, and the one line it
+    // draws along the edge facing the desktop rather than a border round all
+    // four sides (see the fill below).
+    readonly property var _box: Theme.box("bar")
+    readonly property var _edge: bar._box.edge
+
     // The strip's own length: what the regions share out, and what a
     // cell's width cap is a fraction of.
     readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
@@ -840,7 +846,7 @@ PanelWindow {
         Rectangle {
             anchors.fill: parent
             visible: !bar._framed
-            color: Theme.surface(Theme.color.card)
+            color: bar._box.fill
 
             // The hairline that separates the strip from the desktop, and the
             // only edge the bar draws: the one facing inward. A `border` on the
@@ -858,20 +864,20 @@ PanelWindow {
             // which is what leaves an ordinary session's line whole and still.
             Rectangle {
                 id: hairlineStart
-                width: bar._vertical ? Theme.borderWidth : bar._gapStart
-                height: bar._vertical ? bar._gapStart : Theme.borderWidth
+                width: bar._vertical ? bar._edge.width : bar._gapStart
+                height: bar._vertical ? bar._gapStart : bar._edge.width
                 x: bar._position === "left" ? parent.width - hairlineStart.width : 0
-                y: bar._position === "top" ? parent.height - Theme.borderWidth : 0
-                color: Theme.color.border
+                y: bar._position === "top" ? parent.height - bar._edge.width : 0
+                color: bar._edge.color
             }
 
             Rectangle {
                 id: hairlineEnd
-                width: bar._vertical ? Theme.borderWidth : Math.max(0, parent.width - bar._gapEnd)
-                height: bar._vertical ? Math.max(0, parent.height - bar._gapEnd) : Theme.borderWidth
+                width: bar._vertical ? bar._edge.width : Math.max(0, parent.width - bar._gapEnd)
+                height: bar._vertical ? Math.max(0, parent.height - bar._gapEnd) : bar._edge.width
                 x: bar._position === "left" ? parent.width - hairlineEnd.width : (bar._vertical ? 0 : bar._gapEnd)
-                y: bar._position === "top" ? parent.height - Theme.borderWidth : (bar._vertical ? bar._gapEnd : 0)
-                color: Theme.color.border
+                y: bar._position === "top" ? parent.height - bar._edge.width : (bar._vertical ? bar._gapEnd : 0)
+                color: bar._edge.color
             }
         }
 

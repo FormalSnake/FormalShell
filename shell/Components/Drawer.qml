@@ -78,8 +78,11 @@ Item {
     // which rests a `screenPadding` off either end of its line and has never
     // run out to them.
     property bool walls: true
-    property real radius: Theme.radiusXl
-    property color color: Theme.surface(Theme.color.card)
+    // Which box in the theme's table the card is a shape of, and its corner:
+    // the chrome is the table's, the radius the consumer's, since every
+    // number derived from it here is geometry.
+    property string role: "card"
+    property real radius: Theme.box(root.role).radius
     property real padding: Theme.space.panelPadding
     property bool bypass: false
     property bool mapped: true
@@ -129,6 +132,11 @@ Item {
     // closed card sits and what the depth back to the line is weighed against.
     readonly property real _restExtent: Geometry.across(root.edge, root.restRect)
 
+    readonly property real _borderWidth: {
+        var box = Theme.box(root.role);
+        return box.border ? box.border.width : 0;
+    }
+
     readonly property real _lineAt: Geometry.lineAt(root.edge, root._screenWidth,
         root._screenHeight, Theme.edgeInset, root._targetRect)
     // The reach back to that line, which a card takes whether or not there is
@@ -136,9 +144,12 @@ Item {
     // the output's own, and a card resting hundreds of pixels in from it has
     // to come out from behind it rather than wipe out of an empty row at its
     // own edge. With no line to join, `Joint` pins `attach` at 0 and the
-    // shape is the card's own rect drawn inside a taller item.
+    // shape is the card's own rect drawn inside a taller item. The reach
+    // goes one border past the line, the row the line itself paints, and
+    // that thickness is the card's own: it is the border `Shoulders` holds
+    // the fill in from while the card is attached.
     readonly property real _depth: root.screen
-        ? Geometry.depth(root.edge, root.restRect, root._lineAt, Theme.borderWidth)
+        ? Geometry.depth(root.edge, root.restRect, root._lineAt, root._borderWidth)
         : 0
 
     // Where on the travel the card lets go of the line. The let-go is a clock
@@ -332,7 +343,7 @@ Item {
                         id: frameShape
                         edge: root.edge
                         radius: root.radius
-                        color: root.color
+                        role: root.role
                         attach: joint.attach
                         nearInset: joint.nearInset
                         wallStart: joint.wallStart
