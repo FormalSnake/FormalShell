@@ -219,7 +219,7 @@ TestCase {
         tryCompare(m.joint, "attach", 0, 2000);
         compare(m.joint.clampedAlong, 1400);
         compare(m.joint.clampedLength, 400);
-        compare(m.joint.clip, null);
+        compare(m.joint.budClip, null);
     }
 
     // The gap the owner opens is the clamped rect, not the card's own, so the
@@ -235,10 +235,10 @@ TestCase {
         compare(j.width, m.joint.clampedLength);
         compare(j.x - j.reach, 1520);
         compare(j.x + j.width + j.reach, 1680);
-        // And the clip is that same range, so the contents come out of the
-        // bud rather than beside it.
-        compare(m.joint.clip.start, 1520);
-        compare(m.joint.clip.length, 160);
+        // And the contents' own clip is that same range, so they come out of
+        // the bud rather than beside it.
+        compare(m.joint.budClip.start, 1520);
+        compare(m.joint.budClip.length, 160);
     }
 
     // A span with room for neither two fillets nor a sliver of card between
@@ -249,11 +249,11 @@ TestCase {
         compare(m.joint.attach, 0);
         m.presence.open = true;
         compare(m.joint.join, null);
-        compare(m.joint.clip.start, 1520);
-        compare(m.joint.clip.length, 20);
+        compare(m.joint.spanClip.start, 1520);
+        compare(m.joint.spanClip.length, 20);
         tryCompare(m.presence, "settled", true, 2000);
         compare(m.joint.attach, 0);
-        compare(m.joint.clip, null);
+        compare(m.joint.spanClip, null);
         compare(PanelRegistry.joinOn("top", "DP-1", testCase), null);
     }
 

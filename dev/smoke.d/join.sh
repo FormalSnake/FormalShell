@@ -9,8 +9,8 @@
 #   b  the chevron's second bar
 #   c  a panel opened by a click on a cell inside that second bar
 #
-# Every frame is saved for reading by eye; three claims are asserted, the
-# first two on an attached frame of case a and the third on case c:
+# Every frame is saved for reading by eye; four claims are asserted, the
+# first two on an attached frame of case a and the last two on case c:
 #
 #   the seam (M57 D1)   the line's own row inside the gap must be byte-equal
 #                       to the bar's fill two rows above it: the bar paints
@@ -32,6 +32,13 @@
 #                       rect, is read off the rig's own pixels: the strip is
 #                       as wide as its cells measured themselves at, which is
 #                       no number to pin.
+#   the border (M57)    and on a frame where that same card is far enough out
+#                       to read its sides and still widening, no row
+#                       well inside it carries the card's own fill at its
+#                       outermost painted column on either side. A clip taken
+#                       along the line from the undeformed rect cuts the
+#                       border off whichever side the deform, or the last of
+#                       the attach clock, has carried past it.
 #
 # Every probe is pinned to the unframed rig's own numbers, so `--join
 # --frame` photographs the ring case and leaves them out; that combination is
@@ -140,6 +147,54 @@ join_column() {
 join_row() {
   $convert_bin "$1" -crop "4096x1+$2+$3" +repage -depth 8 txt:- 2>/dev/null \
     | awk 'NR > 1 { print toupper(substr($3, 2, 6)) }'
+}
+
+# The card's own fill, as the ink column $2 of frame $1 carries on most of the
+# rows between $3 and $4: one number read off the rig's own pixels, since a
+# theme colour spelled out here would be a second copy of the palette. Four
+# columns in from the card's own side is its padding, which is plain fill on
+# every row but the few a rule or a hovered row runs the full width of.
+join_fill() {
+  join_column "$1" "$2" \
+    | awk -v t="$3" -v b="$4" 'NR - 1 >= t && NR - 1 <= b { n[$1]++ }
+        END { for (k in n) if (n[k] > m) { m = n[k]; v = k } print v }'
+}
+
+# Every row of frame $1, from row $2 down for $3 rows, whose outermost painted
+# column on either side carries the card's own fill ($4) instead of its
+# border: the silhouette running into the desktop with no edge on it, one
+# "<side> <row> <column>" per line. What counts as painted is a channel sum
+# more than 6 off the second bar's own resting frame, which has the pointer's
+# hover on the strip in it already. A row carrying fewer than 40 painted
+# columns is no card at all and is skipped.
+join_borderless() {
+  $convert_bin "$shot_dir/join-b-rest.png" -crop "${join_crop_width}x$3+0+$2" +repage \
+    -depth 8 txt:- 2>/dev/null > "$shot_dir/join-base.txt"
+  $convert_bin "$1" -crop "${join_crop_width}x$3+0+$2" +repage -depth 8 txt:- 2>/dev/null \
+    | awk -v top="$2" -v fill="$4" '
+      function delta(a, b,   x, y, i, s) {
+        split(a, x, ","); split(b, y, ",");
+        s = 0;
+        for (i = 1; i <= 3; i++) s += (x[i] > y[i] ? x[i] - y[i] : y[i] - x[i]);
+        return s
+      }
+      FNR == 1 { next }
+      { split($1, c, ","); sub(":", "", c[2]); gsub(/[()]/, "", $2);
+        x = c[1] + 0; y = c[2] + 0 }
+      NR == FNR { base[x "," y] = $2; next }
+      { hex[x "," y] = toupper(substr($3, 2, 6))
+        if (delta($2, base[x "," y]) > 6) {
+          if (!(y in first)) first[y] = x;
+          last[y] = x
+        } }
+      END {
+        for (y in first) {
+          a = first[y]; b = last[y];
+          if (b - a < 40) continue;
+          if (hex[a "," y] == fill) print "L", y + top, a;
+          if (hex[b "," y] == fill) print "R", y + top, b
+        }
+      }' "$shot_dir/join-base.txt" -
 }
 
 # How far under the line the shape reaches at column $2 of frame $1: the last
@@ -312,4 +367,36 @@ leg_join_assert() {
   [ "$frames_attached" -gt 0 ] || fail \
     "no attached frame among join-c-1..$join_frames: nothing under row $band_top is shallower than four fifths of the card's own $rest_h rows"
   echo "SMOKE_JOIN_BUD ok $frames_attached attached frame(s) inside columns $owner_x-$((owner_x + owner_w - 1)), rest ${rest_w}x$rest_h at row $rest_y"
+
+  # And the bud's own border while it widens. The card is far enough out of
+  # the owner's edge to read its two sides and still narrower than its own
+  # resting rect; on every row well inside it,
+  # the outermost painted column on either side has to be the border's ink
+  # rather than the fill's. A clip taken along the line from the undeformed
+  # rect cuts exactly that column off whichever side the deform's stretch has
+  # carried past the band, and the silhouette runs into the desktop with no
+  # edge there for as long as that lasts. The card's own two ends are left out
+  # of the scan by `inset`: inside a corner's radius the outermost pixel is
+  # the arc's own antialiased tip, which is not the border's flat ink and
+  # never was.
+  local mid=0 inset=32 bare fill seen=""
+  fill=$(join_fill "$shot_dir/join-c-rest.png" $((rest_x + 4)) \
+    $((rest_y + inset)) $((rest_y + rest_h - inset)))
+  [ -n "$fill" ] || fail "could not read the card's own fill out of join-c-rest.png"
+  for i in $(seq 1 $join_frames); do
+    path="$shot_dir/join-c-$i.png"
+    box=$(join_bbox "$path" "$shot_dir/join-b-rest.png" "$band_top") || continue
+    read -r bw bh bx by <<< "$box"
+    seen="$seen ${bw}x$bh"
+    [ $((bh * 100)) -ge $((rest_h * 60)) ] || continue
+    [ "$bw" -lt $((rest_w - 6)) ] || continue
+    [ "$bh" -gt $((inset * 3)) ] || continue
+    bare=$(join_borderless "$path" $((by + inset)) $((bh - inset * 2)) "$fill")
+    [ -z "$bare" ] || fail \
+      "$path runs into the desktop with the card's own fill $fill at its outermost column, at side/row/column:$(echo "$bare" | tr '\n' ';') while the bud widens"
+    mid=$((mid + 1))
+  done
+  [ "$mid" -gt 0 ] || fail \
+    "no widening frame among join-c-1..$join_frames: no box under row $band_top is both three fifths of the card's own $rest_h rows deep and still narrower than its $rest_w columns (saw$seen)"
+  echo "SMOKE_JOIN_BUD_BORDER ok $mid widening frame(s) bordered on every row of both sides against the fill $fill"
 }

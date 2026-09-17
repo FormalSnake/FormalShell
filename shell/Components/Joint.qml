@@ -24,8 +24,9 @@ import "../Bar/layout.js" as BarLayout
 // A card hanging off another panel rather than off the screen's own line
 // (`target`) buds from what that panel's far edge can give: the silhouette's
 // rect along the line is the card's clamped into the owner's span, widening
-// to the card's own rect on the attach clock, and `clip` is the range the
-// consumer holds the card to meanwhile.
+// to the card's own rect on the attach clock, and `budClip` is the range the
+// consumer holds its contents to meanwhile. An owner's edge with no room to
+// bud from at all gives `spanClip` instead, which holds the whole surface.
 //
 // Every read-out is a plain function of the presence's pose and the one
 // attach clock, so a re-toggle mid-flight turns the whole join around from
@@ -208,25 +209,29 @@ QtObject {
     readonly property real clampedLength: Math.max(0, root.along + root.length
         + (root._budEnd - root.along - root.length) * root._attach - root.clampedAlong)
 
-    // What the card may paint on along the line: the silhouette's own range,
-    // fillets included, so the contents are revealed by the widening rather
-    // than drawn outside the bud. They keep their full-width layout inside
-    // it: clipped, never squeezed. Null once the rect is the card's own,
-    // which is every card that is not budding.
-    readonly property var clip: {
-        if (!root.presence.shown)
-            return null;
-        if (root._spanTight)
-            return root.slide > 0
-                ? ({ start: root._spanStart, length: root._spanLength })
-                : null;
-        if (root._attach <= 0 || !root._clamped)
-            return null;
-        return ({
+    // What a card with no room to bud may paint on along the line: its
+    // owner's span, the whole surface held to it, since what comes out is a
+    // plain card wider than the edge it comes out from under and the
+    // silhouette itself has to be cut to stay behind it.
+    readonly property var spanClip: (root.presence.shown && root._spanTight && root.slide > 0)
+        ? ({ start: root._spanStart, length: root._spanLength })
+        : null
+
+    // And what a card clamped INTO its bud may paint on: the silhouette's own
+    // range, fillets included, so the contents are revealed by the widening
+    // rather than drawn outside the bud. They keep their full-width layout
+    // inside it: clipped, never squeezed. The silhouette is already drawn at
+    // exactly this range and is never cut by it, which is what leaves its
+    // border whole while the deform carries it past its own undeformed rect.
+    // Null once the rect is the card's own, which is every card that is not
+    // budding.
+    readonly property var budClip: (root.presence.shown && !root._spanTight
+        && root._attach > 0 && root._clamped)
+        ? ({
             start: root.clampedAlong - root.reach,
             length: root.clampedLength + root.reach * 2
-        });
-    }
+        })
+        : null
 
     // Where the deform's pivot sits along the line, in the card's own
     // coordinates. A clamped bud takes its own middle: the matrix is centred

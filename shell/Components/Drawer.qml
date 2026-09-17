@@ -26,10 +26,12 @@ import "../Bar/layout.js" as BarLayout
 // strip. The slit is what hides the rest of it: everything the card paints is
 // cut at the line, and a closed card is displaced behind that line by its
 // whole extent, shoulders included, so it comes out from under the bar rather
-// than passing over it. Along the line the band closes onto the bud a nested
-// card is clamped into, so its contents come out of the owner's own span
-// rather than beside it; the contents themselves are laid out at the card's
-// full width throughout, and what the widening reveals is already drawn.
+// than passing over it. Along the line it is the contents alone that close
+// onto the bud a nested card is clamped into, under the deform rather than at
+// the line, so they come out of the owner's own span rather than beside it
+// while the silhouette the deform stretches keeps its border; the contents
+// themselves are laid out at the card's full width throughout, and what the
+// widening reveals is already drawn.
 //
 // The deform's matrix goes on an item INSIDE the frame rather than on the
 // frame itself: `Deform` samples its target through `mapToItem`, which reads
@@ -152,7 +154,11 @@ Item {
     readonly property var _band: Geometry.clipAlong(
         Geometry.clipBand(root.edge, Geometry.cut(root.edge, root.restRect, root._depth),
             root._screenWidth, root._screenHeight),
-        root.edge, joint.clip)
+        root.edge, joint.spanClip)
+
+    // And the bud the contents are held to inside the card, which is applied
+    // under the deform rather than at the line; see `budRect`.
+    readonly property var _bud: Geometry.budRect(root.edge, root.frameRect, joint.budClip)
 
     // A card coming out of THIS one, for the gap in the far edge's border.
     readonly property var _childJoin: PanelRegistry.joinOn(root.edge, root._screenName, root.owner)
@@ -358,38 +364,57 @@ Item {
                         readonly property real _length: joint.clampedLength + frameShape.overhang * 2
                     }
 
-                    // Cut at the card's own rect, and the shape left out of
-                    // it: contents size to their own target the instant a
-                    // route changes while the rect trails behind on its
+                    // Cut at the card's own rect, and along the line at the
+                    // bud the silhouette is clamped into while it is attached
+                    // (M57 D3): contents size to their own target the instant
+                    // a route changes while the rect trails behind on its
                     // morph, so without this the taller instant would paint
                     // past an edge still catching up (M51 D5), and the same
                     // cut is what makes a card that grows a reveal. The
                     // silhouette is longer and deeper than the rect by
-                    // construction and is drawn outside it.
+                    // construction and is drawn outside it, uncut: it is
+                    // already the bud's own shape, and a cut taken from the
+                    // undeformed rect is one the deform carries it past on a
+                    // fast widening, taking its border with it.
                     Item {
                         id: contentClip
-                        anchors.fill: parent
+                        x: root._bud.x
+                        y: root._bud.y
+                        width: root._bud.width
+                        height: root._bud.height
                         clip: true
 
-                        // What `Card`'s own default slot does: the contents
-                        // inside the card's padding, reaching back out through
-                        // it by negative margins where they need to.
+                        // The card's own coordinates back, so the contents
+                        // keep their full-width layout inside the bud and the
+                        // widening reveals what is already drawn.
                         Item {
-                            id: inner
-                            anchors.fill: parent
-                            anchors.margins: root.padding
+                            x: -contentClip.x
+                            y: -contentClip.y
+                            width: frame.width
+                            height: frame.height
 
-                            // Swallows clicks anywhere inside the frame (the
-                            // card's own padding included) before they reach
-                            // the backdrop the consumer put this drawer in:
-                            // ordinary nested MouseArea priority, no manual
-                            // event plumbing. Every button, so a right-click
-                            // on the card cannot dismiss it either.
-                            MouseArea {
+                            // What `Card`'s own default slot does: the
+                            // contents inside the card's padding, reaching
+                            // back out through it by negative margins where
+                            // they need to.
+                            Item {
+                                id: inner
                                 anchors.fill: parent
-                                anchors.margins: -root.padding
-                                acceptedButtons: Qt.AllButtons
-                                onClicked: {}
+                                anchors.margins: root.padding
+
+                                // Swallows clicks anywhere inside the frame
+                                // (the card's own padding included) before
+                                // they reach the backdrop the consumer put
+                                // this drawer in: ordinary nested MouseArea
+                                // priority, no manual event plumbing. Every
+                                // button, so a right-click on the card cannot
+                                // dismiss it either.
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -root.padding
+                                    acceptedButtons: Qt.AllButtons
+                                    onClicked: {}
+                                }
                             }
                         }
                     }
