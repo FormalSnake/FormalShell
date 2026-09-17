@@ -24,24 +24,33 @@ function _vertical(barPosition) {
 // already give up (`insetStart`/`insetEnd`, the screen frame's band when
 // there is one); a panel longer than the room between gives up the far
 // clamp rather than being pushed off the near edge.
+// `holdWidth`, when given, is the width the frame is CENTRED by while its
+// own width morphs past it (M56 P13, the media panel growing a lyrics pane):
+// the frame stays where the narrow panel put it and the extra width opens
+// out of the trailing side, so nothing the eye was on moves. The far clamp
+// still wins, since a frame held past the screen's own padding would run off
+// the display.
 //
 // The result is a whole pixel: a cell whose centre falls on a half puts the
 // card's two sides, and with them the two ends of the gap the line opens,
 // half across a pixel, which draws the join's own seam twice over.
-function frameAlong(anchor, screenExtent, frameExtent, insetStart, insetEnd, screenPadding) {
+function frameAlong(anchor, screenExtent, frameExtent, insetStart, insetEnd, screenPadding, holdWidth) {
     var near = insetStart + screenPadding;
     var far = screenExtent - insetEnd - frameExtent - screenPadding;
-    var at = anchor >= 0 ? anchor - frameExtent / 2 : far;
+    var centredBy = holdWidth > 0 ? holdWidth : frameExtent;
+    var at = anchor >= 0 ? anchor - centredBy / 2 : far;
     return Math.round(Math.max(near, Math.min(at, Math.max(near, far))));
 }
 
-// Top or bottom bar: x along the bar, y off its inner edge.
-function frameX(barPosition, anchorX, screenWidth, panelWidth, insets, barMargin, screenPadding) {
+// Top or bottom bar: x along the bar, y off its inner edge. A vertical bar
+// pins the frame to its own inner edge, so `holdWidth` has nowhere to hold
+// the leading edge from and the width morph moves it on a right bar.
+function frameX(barPosition, anchorX, screenWidth, panelWidth, insets, barMargin, screenPadding, holdWidth) {
     if (barPosition === "left")
         return insets.left + barMargin;
     if (barPosition === "right")
         return screenWidth - insets.right - barMargin - panelWidth;
-    return frameAlong(anchorX, screenWidth, panelWidth, insets.left, insets.right, screenPadding);
+    return frameAlong(anchorX, screenWidth, panelWidth, insets.left, insets.right, screenPadding, holdWidth);
 }
 
 // Left or right bar: y along the bar, x off its inner edge.

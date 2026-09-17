@@ -10,6 +10,7 @@ import QtQuick
 // with a throwaway probe script). Core.State disambiguates it.
 import qs.Core as Core
 import "chrome.js" as Chrome
+import "gtk.js" as Gtk
 import "matugen.js" as Matugen
 import "palette.js" as Palette
 
@@ -357,6 +358,9 @@ Singleton {
     // forget, the matugen pipeline must not gate on it.
     function _syncSystemScheme() {
         var dark = Core.State.mode !== "light";
+        var themeName = Gtk.gtkThemeName(dark,
+            Core.Config.get("gtk.theme", ""),
+            Core.Config.get("gtk.themeDark", ""));
         var proc = writeFileProcComponent.createObject(root, {
             _onDone: function (exitCode) {
                 if (exitCode !== 0)
@@ -367,7 +371,7 @@ Singleton {
             'dconf write /org/gnome/desktop/interface/color-scheme "$1" && dconf write /org/gnome/desktop/interface/gtk-theme "$2"',
             "sh",
             dark ? "'prefer-dark'" : "'prefer-light'",
-            dark ? "'adw-gtk3-dark'" : "'adw-gtk3'"];
+            "'" + themeName + "'"];
         proc.running = true;
     }
 

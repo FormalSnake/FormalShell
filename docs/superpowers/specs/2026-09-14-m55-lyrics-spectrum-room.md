@@ -1,5 +1,8 @@
 # M55: synced lyrics and the spectrum in the media panel, room on the bar
 
+**Superseded in part** by `2026-09-17-m56-lyrics-kopuz-parity.md`, which
+replaces D1, D2, D3, D5, D9, A1 (the pane's side), A3 and A3b.
+
 **Date:** 2026-09-14
 **Status:** approved as an addendum to
 `2026-08-25-shadcn-omarchy-redesign.md` (owner brief, 2026-09-14). That spec

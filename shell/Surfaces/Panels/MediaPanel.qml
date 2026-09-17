@@ -5,14 +5,22 @@ import qs.Services
 import "../../Lyrics/model.js" as Lyrics
 import "../../Visualizer/model.js" as Visualizer
 
-// MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels", M55 A1-A5).
-// Two columns while lrclib has synced timing for the track: a `LYRICS` pane
-// on the left, the panel's one card (DESIGN.md §1's ladder, rung 5, the
-// launcher's own preview-pane exception), and the now-playing column on the
-// right, the two sharing the content width equally; one column, full width,
-// otherwise. `panelWidth` follows which of those it is
+// MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels", M55 A1-A5,
+// M56 P13). Two columns while a provider has synced timing for the track:
+// the now-playing column leads and a `LYRICS` pane trails it, the panel's
+// one card (DESIGN.md §1's ladder, rung 5, the launcher's own preview-pane
+// exception), the two sharing the content width equally; one column, full
+// width, otherwise. `panelWidth` follows which of those it is
 // (`popupWidthMenuSplit`/`popupWidthWide`) and morphs on `spatial` like any
 // other panel resize.
+//
+// The pane trails so that lyrics arriving mid-track add width away from
+// what the eye is already on (owner, 2026-09-17), and `panelHoldWidth` is
+// the other half of that: the frame keeps the place its narrow width gave
+// it rather than sliding left to stay centred on its bar cell, so the
+// column's leading edge does not move while the width morphs. A cell close
+// enough to the screen's trailing edge still gives the hold up, since an
+// 840-wide card has to stay on the display.
 //
 // The now-playing column runs horizontal (M55 A2): the cover beside the
 // source, title, artist and album, with a twelve-column spectrum inline at
@@ -41,50 +49,32 @@ import "../../Visualizer/model.js" as Visualizer
 // cover slot out rather than showing an empty 96px square. The lyrics pane
 // carries the same honesty: gone whenever `LyricsService.state` is anything
 // but `synced` (off, no track, loading, a known miss, a failed lookup), so a
-// track lrclib has nothing timed for never flashes a placeholder.
+// track no provider has timing for never flashes a placeholder.
 //
-// The pane's active line wipes a chunk at a time rather than a word at a
-// time (M55 A3b, kopuz's `parse_enhanced_words`/`paintChunks`): a run of
-// chunks joined by no whitespace (`Lyrics.chunkWords`) draws as one word, a
-// `Row` of `Text`s with a clipped `foreground` copy over each one, its clip
-// width the chunk's own 0..1 progress (`Lyrics.chunkProgress`, capped at
-// 1.2s so a pause holds the wipe rather than creeping through it). A
-// syllable-stamped source reads as a sweep through the letters of each word,
-// a word-stamped one as a sweep word by word, with no colour crossfade
-// anywhere in it: the clip's own width is the only thing that moves. An
-// instrumental gap draws a `music` icon the same way, a foreground copy
-// clipped left to right over the gap (M55 A4); the three dots are gone.
-//
-// Every line, active or not, renders at ONE font size (`Theme.fontSize.title`,
-// `medium` weight) so a line's own layout box never changes shape when it
-// takes or loses the cursor (the choppiness the owner reported on a 240Hz
-// screen, 2026-09-15): what tells an inactive line apart is `scale: 0.85`
-// from its own left edge, a paint-only transform under `Behavior on scale`,
-// never `font.pixelSize`. With every row's height therefore constant, the
-// column's own `y` is exact rather than chased: computed straight off the
-// anchored row's `y` and `height`, re-evaluated whenever the column's own
-// height changes too so a track change's row count settles before the next
-// travel starts. Per-frame reads of `MediaService.position` are confined to
-// the active row; every other row's progress is a static 0 or 1 (already
-// sung or not yet reached), so a delegate holds no per-frame dependency at
-// all until the position actually reaches it.
+// Everything the pane itself draws (the lit set, the soft wipe and its
+// glow, the depth of field, the duet layout, the comfort anchor and the
+// wheel takeover) lives in LyricsPane.qml beside this file. What stays here
+// is the display set the cursor counts and the seek a row activation makes.
 //
 // Keyboard (spec "Keyboard model"): Tab cycles whatever sections are
 // present. Transport first, where Left/Right walk the buttons and Enter
 // presses one; the two tracks next, where Left/Right seek five seconds or
 // step the volume five percent and Enter plays/pauses; lyrics next, when
 // synced, where Up/Down walk the lines, Enter seeks, and the column follows
-// the cursor instead of the song for as long as it sits here; the player
-// chips last, where Enter pins the shell to that player. The pointer never
-// drives the lyrics cursor (M55 A5): hovering a line draws the row's own
-// hover wash and nothing else, the ring and the follow-the-cursor anchor
-// staying the keyboard's alone.
+// the cursor instead of the song for as long as it sits here, with the
+// pane's resync control the entry after the last line while a wheel has
+// the column; the player chips last, where Enter pins the shell to that
+// player. The pointer never drives the lyrics cursor (M55 A5): hovering a
+// line draws the row's own hover wash and lifts it clear of the blur, and
+// nothing else, the ring and the follow-the-cursor anchor staying the
+// keyboard's alone.
 Panel {
     id: root
 
     panelIcon: "music"
     panelTitle: "Media"
     panelWidth: LyricsService.state === "synced" ? Theme.space.popupWidthMenuSplit : Theme.space.popupWidthWide
+    panelHoldWidth: Theme.space.popupWidthWide
 
     // MPRIS Raise: bring the player's own window up, the one transport verb
     // that isn't about the track. Absent entirely on a player that doesn't
@@ -112,14 +102,6 @@ Panel {
     keepMapped: AnimatedCoverFrameSource.barEnabled && AnimatedCoverFrameSource.playing
     Binding {
         target: AnimatedCoverFrameSource
-        property: "panelWants"
-        value: root.isOpen
-    }
-
-    // LyricsService's own hidden-work gate (spec D3): a lookup only ever
-    // runs while this panel is open.
-    Binding {
-        target: LyricsService
         property: "panelWants"
         value: root.isOpen
     }
@@ -179,25 +161,6 @@ Panel {
         return h > 0 ? h + ":" + pad(m) + ":" + pad(s) : pad(m) + ":" + pad(s);
     }
 
-    // Chunks in `chunkWords`' own grouping, each annotated with its own
-    // absolute index into the line's `words` so a delegate can hand itself
-    // straight to `Lyrics.chunkProgress` rather than searching for its own
-    // place in the array every frame.
-    function _chunkGroups(words) {
-        var groups = Lyrics.chunkWords(words);
-        var out = [];
-        var index = 0;
-        for (var g = 0; g < groups.length; g++) {
-            var word = [];
-            for (var c = 0; c < groups[g].length; c++) {
-                word.push({ text: groups[g][c].text, chunkIndex: index });
-                index++;
-            }
-            out.push(word);
-        }
-        return out;
-    }
-
     // ---- Cursor ---------------------------------------------------------
 
     // Section 0. Shuffle and loop only exist for a player that implements
@@ -224,24 +187,15 @@ Panel {
         return out;
     }
 
-    // Section 2, when lrclib has synced timing (spec D4/D5): interludes
-    // spliced in beside the lines themselves, both carrying `time`, so
-    // `Lyrics.indexForTime` addresses the two alike.
+    // Section 2, when a provider has synced timing (spec D4/P5): the display
+    // set, interludes spliced in beside the lines themselves and `parent`
+    // remapped onto it, which is the array both the pane and `media lyrics`
+    // index into. The resync control is the entry after the last line for as
+    // long as the pane shows it.
     readonly property bool _lyricsPresent: LyricsService.state === "synced"
     readonly property var _lyricsLines: root._lyricsPresent ? Lyrics.displayLines(LyricsService.lines) : []
     readonly property int _lyricsSection: root._lyricsPresent ? 2 : -1
-
-    // The song's own place in `_lyricsLines`, -1 before the first entry.
-    // The one per-frame read the panel itself does; every delegate below
-    // reads this rather than `MediaService.position` directly.
-    readonly property int _lyricsActiveIndex: Lyrics.indexForTime(root._lyricsLines, MediaService.position)
-
-    // What the column centres: the keyboard cursor's row while it sits in
-    // this section, the song's own row otherwise (spec D5), clamped to the
-    // first entry before anything has started.
-    readonly property int _lyricsAnchorIndex: (root.cursorActive && root.cursorSection === root._lyricsSection)
-        ? root.cursorIndex
-        : Math.max(0, root._lyricsActiveIndex)
+    readonly property int _lyricsRows: root._lyricsLines.length + (LyricsService.follow ? 0 : 1)
 
     function _seekLyricLine(time) {
         if (!MediaService.canSeek || MediaService.length <= 0)
@@ -333,7 +287,7 @@ Panel {
         : root.cursorSection === 1
             ? root._tracks.length
             : root.cursorSection === root._lyricsSection
-                ? root._lyricsLines.length
+                ? root._lyricsRows
                 : root._playerRows.length
 
     // Left/Right belongs to the track under the cursor in section 1, and to
@@ -342,7 +296,14 @@ Panel {
 
     // Tab lands on the first row of the section it reached, never on
     // whatever index the previous section's cursor happened to hold.
-    onCursorSectionChanged: root.cursorIndex = 0
+    // Reaching the lyrics parks the column back on the song (spec P9): the
+    // cursor is about to drive it, and a column still sitting where a wheel
+    // left it would answer the first Up with a jump.
+    onCursorSectionChanged: {
+        root.cursorIndex = 0;
+        if (root.cursorSection === root._lyricsSection)
+            LyricsService.follow = true;
+    }
 
     onCursorActivated: index => {
         if (root.cursorSection === 0) {
@@ -356,6 +317,8 @@ Panel {
             var entry = root._lyricsLines[index];
             if (entry)
                 root._seekLyricLine(entry.time);
+            else
+                LyricsService.follow = true;
         } else {
             var player = root._playerRows[index];
             if (player)
@@ -378,276 +341,16 @@ Panel {
         root.cursorIndex = 0;
     }
 
-    // The two-column layout (M55 A1): the lyrics pane on the left when
-    // synced, the now-playing column on the right, sharing the content
-    // width equally; the column alone, full width, otherwise. `Row` skips
-    // the spacing gap around an invisible child, so the column's own width
-    // binding is the only place that needs to know which case it is.
+    // The two-column layout (M55 A1, reversed by M56 P13): the
+    // now-playing column leads and the lyrics pane trails it when a
+    // provider has synced timing, the two sharing the content width
+    // equally; the column alone, full width, otherwise.
     Row {
         id: contentRow
         width: parent.width
         spacing: Theme.space.sm
 
         readonly property real _paneWidth: (contentRow.width - contentRow.spacing) / 2
-
-        // The pane is the one card this panel spends inside its own frame
-        // (DESIGN.md §1's ladder, rung 5): the launcher preview pane's own
-        // chrome, `radiusMd` over `Card`'s usual `radiusXl`, nothing drawn
-        // inside it beyond the label and the viewport.
-        Card {
-            id: lyricsPane
-            visible: root._lyricsPresent
-            width: contentRow._paneWidth
-            height: Math.max(nowPlayingColumn.implicitHeight, Theme.space.controlHeight * 6)
-            radius: Theme.radiusMd
-
-            SectionLabel {
-                id: lyricsPaneLabel
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                text: "LYRICS"
-            }
-
-            Item {
-                id: lyricsViewport
-                anchors.top: lyricsPaneLabel.bottom
-                anchors.topMargin: Theme.space.rowGap
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                clip: true
-
-                // The width of one space in the line font, shared by every
-                // row's `Flow` rather than measured per delegate.
-                TextMetrics {
-                    id: spaceMetrics
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.title
-                    font.weight: Theme.weight.medium
-                    text: " "
-                }
-
-                Column {
-                    id: lyricsColumn
-                    width: parent.width
-                    spacing: 0
-                    // The anchored item's vertical centre on the viewport's
-                    // own centre; before the first entry that is the first
-                    // item, `_lyricsAnchorIndex`'s own floor. Every row
-                    // renders at one font size (see the header comment), so
-                    // `item.y`/`height` never move on activation alone;
-                    // `lyricsColumn.height` is read too, purely so this
-                    // re-evaluates once a track change's row count has
-                    // settled rather than mid-repopulation.
-                    y: {
-                        var item = lyricsRepeater.itemAt(root._lyricsAnchorIndex);
-                        var centre = lyricsViewport.height / 2;
-                        var _settled = lyricsColumn.height;
-                        return item ? centre - item.y - item.height / 2 : centre;
-                    }
-
-                    Behavior on y {
-                        Anim {}
-                    }
-
-                    Repeater {
-                        id: lyricsRepeater
-                        model: root._lyricsLines
-
-                        delegate: Cell {
-                            id: lineCell
-                            required property int index
-                            required property var modelData
-
-                            width: parent.width
-                            ghost: true
-                            interactive: true
-                            cursor: root.cursorActive && root.cursorSection === root._lyricsSection
-                                && root.cursorIndex === lineCell.index
-                            onClicked: root._seekLyricLine(lineCell.modelData.time)
-
-                            readonly property bool _interlude: lineCell.modelData.interlude === true
-                            readonly property bool _active: !lineCell._interlude
-                                && lineCell.index === root._lyricsActiveIndex
-                            readonly property bool _hasChunks: lineCell._active
-                                && lineCell.modelData.words && lineCell.modelData.words.length > 0
-                            readonly property var _wordGroups: lineCell._hasChunks
-                                ? root._chunkGroups(lineCell.modelData.words) : []
-                            // The next entry's own time (spec: a line's end
-                            // is the next line's time when there is one),
-                            // undefined for the last entry so chunkEnd/
-                            // chunkProgress fall back to their own fudge.
-                            readonly property var _lineEnd: {
-                                var next = root._lyricsLines[lineCell.index + 1];
-                                return next ? next.time : undefined;
-                            }
-                            // A past interlude sits fully lit, a future one
-                            // fully dark, no clock needed for either; only
-                            // the active one reads the position, per frame.
-                            readonly property real _interludeProgress: !lineCell._interlude
-                                ? 0
-                                : lineCell._active
-                                    ? (lineCell.modelData.end > lineCell.modelData.time
-                                        ? Math.max(0, Math.min(1, (MediaService.position - lineCell.modelData.time)
-                                            / (lineCell.modelData.end - lineCell.modelData.time)))
-                                        : (MediaService.position >= lineCell.modelData.time ? 1 : 0))
-                                    : (lineCell.index < root._lyricsActiveIndex ? 1 : 0)
-
-                            Item {
-                                id: lineItem
-                                width: parent.width
-                                height: lineCell._interlude
-                                    ? interludeRow.implicitHeight
-                                    : (lineCell._hasChunks ? wordFlow.implicitHeight : lineText.implicitHeight)
-                                // Depth carries the ramp (spec D5): 1 at the
-                                // active line, then 0.7, 0.45, 0.25 and no
-                                // lower, an interlude ranked exactly like a
-                                // line. `edgeFraction` fades a row the
-                                // viewport's own top or bottom edge slices,
-                                // caelestia's mask done with opacity rather
-                                // than a shader, so a cut-off line reads as
-                                // fading out under the LYRICS label instead
-                                // of a hard clip (owner, 2026-09-15): `top`
-                                // is the row's own position after the
-                                // column's travel, so the fade tracks it
-                                // frame by frame during that Behavior.
-                                opacity: Lyrics.depthOpacity(lineCell.index - root._lyricsActiveIndex)
-                                    * Lyrics.edgeFraction(lyricsColumn.y + lineCell.y, lineCell.height, lyricsViewport.height)
-                                // The active/inactive tell (owner,
-                                // 2026-09-15): a transform, never a relayout,
-                                // so a line's box never changes shape on
-                                // activation. Left-anchored so the row reads
-                                // as growing from where it already starts.
-                                scale: lineCell._active ? 1 : 0.85
-                                transformOrigin: Item.Left
-
-                                Behavior on opacity {
-                                    Anim { kind: "effects" }
-                                }
-                                Behavior on scale {
-                                    Anim { kind: "spatialFast" }
-                                }
-
-                                // M55 A4: an instrumental stretch is a
-                                // `music` icon wiping left to right over the
-                                // gap instead of the three dots it replaces.
-                                Item {
-                                    id: interludeRow
-                                    visible: lineCell._interlude
-                                    implicitWidth: noteIcon.implicitWidth
-                                    implicitHeight: noteIcon.implicitHeight
-
-                                    Icon {
-                                        id: noteIcon
-                                        name: "music"
-                                        size: Theme.fontSize.title
-                                        color: Theme.color.mutedForeground
-                                    }
-
-                                    Item {
-                                        anchors.left: noteIcon.left
-                                        anchors.top: noteIcon.top
-                                        width: lineCell._interludeProgress * noteIcon.width
-                                        height: noteIcon.height
-                                        clip: true
-
-                                        Icon {
-                                            name: "music"
-                                            size: Theme.fontSize.title
-                                            color: Theme.color.foreground
-                                        }
-                                    }
-                                }
-
-                                // M55 A3/A3b: the active line's chunk wipe.
-                                // A word is a `Row` of the chunks
-                                // `chunkWords` grouped for it, no spacing
-                                // between them; every other line, word
-                                // timing or not, paints as plain text below,
-                                // since the wipe only means something as it
-                                // happens.
-                                Flow {
-                                    id: wordFlow
-                                    visible: lineCell._hasChunks
-                                    width: parent.width
-                                    spacing: spaceMetrics.advanceWidth
-
-                                    Repeater {
-                                        model: wordFlow.visible ? lineCell._wordGroups : []
-
-                                        delegate: Row {
-                                            id: wordRow
-                                            required property var modelData
-                                            spacing: 0
-
-                                            Repeater {
-                                                model: wordRow.modelData
-
-                                                delegate: Item {
-                                                    id: chunkItem
-                                                    required property var modelData
-
-                                                    readonly property real _progress: lineCell._active
-                                                        ? Lyrics.chunkProgress(lineCell.modelData.words,
-                                                            chunkItem.modelData.chunkIndex, lineCell._lineEnd, MediaService.position)
-                                                        : 0
-
-                                                    width: chunkBase.implicitWidth
-                                                    height: chunkBase.implicitHeight
-
-                                                    Text {
-                                                        id: chunkBase
-                                                        text: chunkItem.modelData.text
-                                                        font.family: Theme.fontFamilySans
-                                                        font.pixelSize: Theme.fontSize.title
-                                                        font.weight: Theme.weight.medium
-                                                        color: Theme.color.mutedForeground
-                                                    }
-
-                                                    // The sung copy, clipped to the chunk's
-                                                    // own progress: no colour crossfade
-                                                    // anywhere in the wipe, only this width.
-                                                    Item {
-                                                        anchors.left: chunkBase.left
-                                                        anchors.top: chunkBase.top
-                                                        width: chunkItem._progress * chunkBase.width
-                                                        height: chunkBase.height
-                                                        clip: true
-
-                                                        Text {
-                                                            text: chunkBase.text
-                                                            font: chunkBase.font
-                                                            color: Theme.color.foreground
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Text {
-                                    id: lineText
-                                    visible: !lineCell._interlude && !lineCell._hasChunks
-                                    width: parent.width
-                                    wrapMode: Text.Wrap
-                                    text: lineCell.modelData.text || ""
-                                    font.family: Theme.fontFamilySans
-                                    font.pixelSize: Theme.fontSize.title
-                                    font.weight: Theme.weight.medium
-                                    color: lineCell._active ? Theme.color.foreground : Theme.color.mutedForeground
-
-                                    Behavior on color {
-                                        CAnim {}
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // The now-playing column (M55 A2): the identity row, the position
         // row, the transport/volume row and the player chips, in that
@@ -858,6 +561,10 @@ Panel {
                     anchors.rightMargin: Theme.space.iconGap
                     anchors.verticalCenter: parent.verticalCenter
                     value: MediaService.length > 0 ? MediaService.position / MediaService.length : 0
+                    // Playback sweeps this rather than stepping it, and the
+                    // clock above re-emits `positionChanged` every frame
+                    // while the lyrics pane is up.
+                    swept: true
                     cursor: root.cursorActive && root.cursorSection === 1 && root.cursorIndex === root._trackIndex("progress")
                     interactive: true
                     onContainsPointerChanged: if (progressTrack.containsPointer) root._pointAt(1, root._trackIndex("progress"))
@@ -1019,6 +726,23 @@ Panel {
                     }
                 }
             }
+        }
+
+        // The lyrics pane (M56 P13, LyricsPane.qml): the panel's one card,
+        // trailing the column so a lyrics arrival grows the panel away from
+        // what is already on screen. Gone whenever `LyricsService.state` is
+        // anything but `synced`, so a track nothing has timing for never
+        // flashes a placeholder; `Row` skips the spacing gap around an
+        // invisible child, so the column's own width binding is the only
+        // place that needs to know which case it is.
+        LyricsPane {
+            visible: root._lyricsPresent
+            width: contentRow._paneWidth
+            height: Math.max(nowPlayingColumn.implicitHeight, Theme.space.controlHeight * 6)
+            lines: root._lyricsLines
+            cursorOn: root.cursorActive && root.cursorSection === root._lyricsSection
+            cursorIndex: root.cursorIndex
+            onSeekRequested: time => root._seekLyricLine(time)
         }
     }
 }

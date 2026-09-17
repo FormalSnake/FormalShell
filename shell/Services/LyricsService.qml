@@ -6,29 +6,44 @@ import qs.Core as Core
 import qs.Services
 import "../Lyrics/model.js" as Lyrics
 
-// Auto-fetched synced lyrics for the media panel's karaoke-like block (M55
-// Task 2, spec D1-D4/D9). Isolated behind `media.lyrics` in settings.json
-// and hidden-work-gated on `panelWants` (MediaPanel sets it while open,
-// Task 3): nothing runs while the panel is closed even with a track
-// playing, and a cache hit costs one `cat`. Every step goes over `curl` in
-// a `Process` (AppleMusicArtService's idiom: `--fail`, an 8s `--max-time`,
-// stdout captured), never QML's XMLHttpRequest, so the whole chain (disk
-// test, curl, disk write) is one uniform exit-code/stdout contract.
-//
-// lrclib.net alone (D1): `/api/get` by tag and duration, falling back to
-// `/api/search` by tag alone, is the one open provider both caelestia and
-// kopuz share; `plainLyrics` is never read, only synced. Every URL, the
-// cache key and every bit of LRC parsing lives in Lyrics/model.js (M55); this
+// Auto-fetched lyrics for the media panel's karaoke-like block (M56 Task 2,
+// spec P2/P3/P10/P11/P14, replacing M55's lrclib-only chain). Isolated
+// behind `media.lyrics`; a lookup otherwise runs on the track change
+// itself, panel open or closed (spec P14), so the panel opens onto its
+// final width with the pane already filled rather than morphing into it
+// after the fact. Every network step goes over `curl` in a `Process`
+// (AppleMusicArtService's idiom: `--fail`, a per-step `--max-time`, stdout
+// captured), never QML's XMLHttpRequest, so the whole chain (disk test,
+// curl, disk write) is one uniform exit-code/stdout contract. Every URL,
+// every body parser and the line model itself live in Lyrics/model.js; this
 // file is pure side-effect orchestration plus the in-memory record of what
 // has already resolved this session.
 //
-// Disk cache (D2): a hit is `<key>.lrc`, kept forever; a known miss is an
-// empty `<key>.none` marker, re-asked once it is seven days old rather than
-// on every open, so a track lrclib genuinely has nothing timed for doesn't
-// cost a request every time the panel opens. Writes go through a temp name
-// and `mv`, never `FileView.setText` (ThemeEngine.qml's own documented
-// hazard: it silently skips both the write and its `saved()` signal when
-// the new text is byte-identical to what's already on disk).
+// The chain, in order (spec P2):
+// 1. A sibling `.lrc` next to the MPRIS `xesam:url` (local tracks only). A
+//    hit ends the chain with source "local" and is never written to the
+//    disk cache: the file can change under a path this service has no way
+//    to invalidate on, so caching it would risk a stale read surviving past
+//    the file it came from.
+// 2. The disk cache: `<key>.json` (a hit, kept forever) or `<key>.miss` (an
+//    empty seven-day marker), both from a past run of step 3.
+// 3. Three providers race concurrently: paxsenix Apple Music (iTunes search
+//    then paxsenix's lyrics endpoint), paxsenix YouTube (its own search then
+//    lyrics endpoint) and lrclib (get then search, M55's own chain). The
+//    first to answer with quality 2 (real word or syllable timing) wins
+//    outright and every later arrival is ignored; otherwise the chain waits
+//    for all three and takes `Lyrics.pickBest`'s highest quality, ties
+//    broken by the list order above. A result reaches disk only once every
+//    provider that started has answered hit or miss with no network error
+//    among them; a run where one erred is kept for the session only (in
+//    `_resolved`), so a track that got lrclib's line timing during a
+//    paxsenix outage asks again next session rather than freezing on the
+//    weaker answer forever.
+//
+// `lines` is published already through `Lyrics.synthesiseWords`, so the
+// panel's wipe always has chunks to draw; `quality` and `hasWords` are
+// worked out from the PRE-synthesis lines, so a line whose chunks were
+// fabricated here never claims real word timing.
 Singleton {
     id: root
 
@@ -36,9 +51,26 @@ Singleton {
     // as a real disable, same guard AppleMusicArtService uses.
     readonly property bool enabled: Core.Config.loaded && Core.Config.get("media.lyrics", true)
 
-    // MediaPanel sets this while it is open (Task 3); nothing else does,
-    // so a closed panel never starts a lookup even with a track playing.
-    property bool panelWants: false
+    // spec P10, all Config.loaded gated the same way: the hard default reads
+    // back until settings.json has actually resolved.
+    readonly property bool blurEnabled: Core.Config.loaded && Core.Config.get("media.lyricsBlur", true)
+    readonly property int blurStrength: Core.Config.loaded ? root._clampedConfigInt("media.lyricsBlurStrength", 100, 0, 200) : 100
+    readonly property int offsetMs: Core.Config.loaded ? root._clampedConfigInt("media.lyricsOffsetMs", 0, -5000, 5000) : 0
+    readonly property real offsetSeconds: root.offsetMs / 1000
+
+    // Whether the lyrics column still follows the song (spec P9/P11). The
+    // panel writes it (a wheel takes it off, its resync button and the
+    // keyboard cursor entering the section put it back) and `media lyrics`
+    // reads it: the panel owns no state the IPC handler can reach, and this
+    // is the one fact about the pane a caller asks for.
+    property bool follow: true
+
+    function _clampedConfigInt(path, fallback, min, max) {
+        var n = Number(Core.Config.get(path, fallback));
+        if (!isFinite(n))
+            n = fallback;
+        return Math.max(min, Math.min(max, Math.round(n)));
+    }
 
     readonly property string _cacheDir: {
         const xdgCache = Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache");
@@ -48,90 +80,103 @@ Singleton {
     readonly property string key: root.enabled && MediaService.title !== "" && MediaService.artist !== ""
         ? Lyrics.cacheKey(MediaService.artist, MediaService.title, MediaService.album, MediaService.length) : ""
 
-    // key -> {state: "synced"|"none", lrc, source}. A track already
-    // resolved this session is served straight from here on reopen,
-    // no process spawned. "error" is deliberately never stored, so a
-    // failed lookup is retried the next time the panel wants it.
+    // key -> {state, lines, source}, P1-shaped lines pre-synthesis. A track
+    // already resolved this session is served straight from here on the
+    // next `_resolve()`, no process spawned. "error" is deliberately never
+    // stored, so a failed lookup is retried the next time this key comes
+    // up (selecting the track again, or a fresh session).
     property var _resolved: ({})
-    // Bumped on every key change so a lookup in flight for a track the
-    // user has since left can never land (AppleMusicArtService's pattern).
+    // Bumped on every key change so a lookup in flight for a track the user
+    // has since left can never land (AppleMusicArtService's pattern); every
+    // step of every provider chain below checks it before acting on its own
+    // curl result.
     property int _serial: 0
 
     property string state: "off"
     property string source: ""
-    property var lines: []
+    // Pre-synthesis lines, the source of truth for `quality`/`hasWords`;
+    // `lines` below is what the panel actually draws.
+    property var _rawLines: []
+    readonly property var lines: Lyrics.synthesiseWords(root._rawLines)
+    readonly property int quality: Lyrics.quality(root._rawLines)
     readonly property bool hasWords: {
-        for (var i = 0; i < root.lines.length; i++) {
-            if (root.lines[i].words && root.lines[i].words.length > 0)
+        for (var i = 0; i < root._rawLines.length; i++) {
+            if (root._rawLines[i].words && root._rawLines[i].words.length > 0)
                 return true;
         }
         return false;
     }
 
     onEnabledChanged: root._resolve()
-    onPanelWantsChanged: root._resolve()
     onKeyChanged: root._resolve()
-    // The bootstrap mkdir runs once, before anything else touches the
-    // cache dir; _resolve() only fires afterwards so a lookup never races
-    // a write against a directory that isn't there yet.
+
+    // spec P14: a lookup starts one second after the key settles, panel
+    // open or closed, rather than waiting on the panel to be opened at
+    // all. Long enough that skipping through several tracks in a row
+    // (next/previous, or a queue playing out) starts a lookup for none of
+    // them; short enough that an ordinary dwell on a track has it ready
+    // well before anyone opens the panel. Restarted on every key change,
+    // so only the track that is still current when it fires ever starts
+    // one; a key already resolved this session applies at once instead,
+    // in `_resolve()` below, with no wait at all.
+    Timer {
+        id: lookupHold
+        interval: 1000
+        onTriggered: root._lookup(root.key, root._serial)
+    }
+
+    // The bootstrap mkdir and the one-time sweep of M55's `.lrc`/`.none`
+    // files run before anything else touches the cache dir; `_resolve()`
+    // only fires afterwards so a lookup never races a write against a
+    // directory that isn't there yet, or reads a marker the new `.json`/
+    // `.miss` scheme doesn't know about.
     Component.onCompleted: root._run(["mkdir", "-p", root._cacheDir], function () {
-        root._resolve();
-    })
+        root._run(["find", root._cacheDir, "-maxdepth", "1", "(", "-name", "*.lrc", "-o", "-name", "*.none", ")", "-delete"], function () {
+            root._resolve();
+        });
+    });
 
     function _resolve() {
         root._serial++;
-        const serial = root._serial;
+        // A new track parks the column back on the song.
+        root.follow = true;
+        lookupHold.stop();
         if (!root.enabled) {
-            root.state = "off";
-            root.source = "";
-            root.lines = [];
+            root._apply("off", [], "");
             return;
         }
         if (root.key === "") {
-            root.state = "idle";
-            root.source = "";
-            root.lines = [];
+            root._apply("idle", [], "");
             return;
         }
         const cached = root._resolved[root.key];
         if (cached) {
-            root._apply(cached.state, cached.lrc, cached.source);
+            root._apply(cached.state, cached.lines, cached.source);
             return;
         }
         // A new key with nothing resolved yet: clear the previous track's
-        // lines before either sitting idle or starting a fresh lookup.
-        root.lines = [];
-        root.source = "";
-        if (!root.panelWants) {
-            root.state = "idle";
-            return;
-        }
-        root.state = "loading";
-        root._lookup(root.key, serial);
+        // lines, and hold for spec P14's one second before a lookup for
+        // this one starts.
+        root._apply("loading", [], "");
+        lookupHold.restart();
     }
 
-    function _apply(state, lrc, source) {
+    function _apply(state, lines, source) {
         root.state = state;
         root.source = source;
-        root.lines = state === "synced" ? Lyrics.parseLrc(lrc) : [];
+        root._rawLines = lines || [];
     }
 
-    // Stored only for "synced" and "none": a real answer worth remembering
-    // for the rest of the session. "error" is never cached here, see
-    // _resolved's own comment.
-    function _store(key, serial, state, lrc, source) {
-        if (state === "synced" || state === "none")
-            root._resolved[key] = { state: state, lrc: lrc, source: source };
+    function _storeSession(key, serial, state, lines, source) {
+        root._resolved[key] = { state: state, lines: lines, source: source };
         if (serial === root._serial)
-            root._apply(state, lrc, source);
+            root._apply(state, lines, source);
     }
 
     function _fail(serial) {
         if (serial !== root._serial)
             return;
-        root.state = "error";
-        root.source = "";
-        root.lines = [];
+        root._apply("error", [], "");
     }
 
     // One-shot child process -> (exitCode, stdoutText) callback. A fresh
@@ -178,104 +223,295 @@ Singleton {
         proc.exec({ command: command });
     }
 
-    function _curl(args, onDone) {
-        root._run(["curl", "-sS", "--fail", "--max-time", "8", "-H", "User-Agent: FormalShell (https://github.com/FormalSnake/FormalShell)"].concat(args), onDone);
+    function _curl(args, timeoutSeconds, onDone) {
+        root._run(["curl", "-sS", "--fail", "--max-time", String(timeoutSeconds), "-H", "User-Agent: FormalShell (https://github.com/FormalSnake/FormalShell)"].concat(args), onDone);
     }
 
-    // Exit 0 with nothing usable in the body and exit 22 (--fail's HTTP
-    // 404) both read as a plain miss, worth trying the next step of the
-    // chain; anything else (no network, a timeout, a 5xx) is a real
-    // failure, not a miss lrclib is entitled to report.
-    function _curlOutcome(exitCode, body) {
-        if (exitCode === 0) {
-            const picked = Lyrics.pickSynced(body);
-            return picked !== "" ? { kind: "synced", lrc: picked } : { kind: "miss" };
-        }
+    // Transport-level read on a curl exit code, ahead of any parsing of the
+    // body it carried: exit 0 with nothing usable in the body and exit 22
+    // (--fail's HTTP 404) both belong to the caller's own miss handling,
+    // "error" is a network failure no provider is entitled to report as a
+    // plain absence.
+    function _stepOutcome(exitCode) {
+        if (exitCode === 0)
+            return "ok";
         if (exitCode === 22)
-            return { kind: "miss" };
-        return { kind: "error" };
+            return "miss";
+        return "error";
+    }
+
+    function _linesFromLrclibBody(body) {
+        const text = Lyrics.pickSynced(body);
+        return text !== "" ? Lyrics.parseLrc(text) : [];
+    }
+
+    function _linesFromLrcText(text) {
+        const lines = Lyrics.parseLrc(text);
+        return Lyrics.hasUsableTiming(lines) ? lines : [];
+    }
+
+    // The sibling `.lrc` step (spec P2.1): same basename as the playing
+    // file, one extension swapped for another. `cb(lines)` gets null for no
+    // file, an unreadable one, or one with nothing usably timed.
+    function _localFetch(serial, cb) {
+        const fileUrl = MediaService.url;
+        if (fileUrl.indexOf("file://") !== 0) {
+            cb(null);
+            return;
+        }
+        const path = decodeURIComponent(fileUrl.slice("file://".length));
+        const lrcPath = path.replace(/\.[^/.]+$/, "") + ".lrc";
+        root._run(["cat", lrcPath], (exitCode, text) => {
+            if (serial !== root._serial)
+                return;
+            if (exitCode !== 0) {
+                cb(null);
+                return;
+            }
+            const lines = Lyrics.parseLrc(text);
+            cb(Lyrics.hasUsableTiming(lines) ? lines : null);
+        });
     }
 
     function _lookup(key, serial) {
-        const lrcPath = root._cacheDir + "/" + key + ".lrc";
-        const nonePath = root._cacheDir + "/" + key + ".none";
-        root._run(["test", "-s", lrcPath], exitCode => {
+        root._localFetch(serial, function (lines) {
+            if (serial !== root._serial)
+                return;
+            if (lines) {
+                root._storeSession(key, serial, "synced", lines, "local");
+                return;
+            }
+            root._checkDiskCache(key, serial);
+        });
+    }
+
+    function _checkDiskCache(key, serial) {
+        const jsonPath = root._cacheDir + "/" + key + ".json";
+        root._run(["cat", jsonPath], (exitCode, text) => {
             if (serial !== root._serial)
                 return;
             if (exitCode === 0) {
-                root._run(["cat", lrcPath], (catExit, text) => {
-                    if (serial !== root._serial)
-                        return;
-                    if (catExit === 0) {
-                        root._store(key, serial, "synced", text, "cache");
-                        return;
-                    }
-                    root._checkNoneMarker(key, serial, lrcPath, nonePath);
-                });
-                return;
+                var parsed = null;
+                try {
+                    parsed = JSON.parse(text);
+                } catch (e) {
+                    parsed = null;
+                }
+                // A corrupt `.json` reads as a cache miss, not an error: it
+                // falls straight through to the miss marker check below,
+                // same as no file at all.
+                if (parsed && Array.isArray(parsed.lines) && parsed.lines.length > 0) {
+                    root._storeSession(key, serial, "synced", parsed.lines, "cache");
+                    return;
+                }
             }
-            root._checkNoneMarker(key, serial, lrcPath, nonePath);
+            root._checkMissMarker(key, serial);
         });
     }
 
     // `find -mtime -7` is the portable "modified less than 7 days ago"
     // check on a Linux-only shell; the `grep -q .` turns "one line came
     // back" into a plain exit code.
-    function _checkNoneMarker(key, serial, lrcPath, nonePath) {
-        root._run(["sh", "-c", 'find "$1" -maxdepth 1 -name "$2" -mtime -7 | grep -q .', "sh", root._cacheDir, key + ".none"], exitCode => {
+    function _checkMissMarker(key, serial) {
+        root._run(["sh", "-c", 'find "$1" -maxdepth 1 -name "$2" -mtime -7 | grep -q .', "sh", root._cacheDir, key + ".miss"], exitCode => {
             if (serial !== root._serial)
                 return;
             if (exitCode === 0) {
-                root._store(key, serial, "none", "", "cache");
+                root._storeSession(key, serial, "none", [], "");
                 return;
             }
-            root._fetchGet(key, serial, lrcPath, nonePath);
+            root._race(key, serial);
         });
     }
 
-    function _fetchGet(key, serial, lrcPath, nonePath) {
-        const url = Lyrics.getUrl(MediaService.artist, MediaService.title, MediaService.album, MediaService.length);
-        root._curl([url], (exitCode, body) => {
+    // paxsenix Apple Music (spec P2.2): iTunes search at 5s, its own lyrics
+    // endpoint at 10s. A search with no candidate clearing kopuz's match
+    // floor/duration window is a miss, not an error; a malformed body reads
+    // as no candidates rather than throwing.
+    function _appleFetch(serial, cb) {
+        const query = ((MediaService.title || "") + " " + (MediaService.artist || "")).trim();
+        root._curl([Lyrics.itunesSearchUrl(MediaService.artist, MediaService.title)], 5, (exitCode, body) => {
             if (serial !== root._serial)
                 return;
-            const outcome = root._curlOutcome(exitCode, body);
-            if (outcome.kind === "synced")
-                root._writeLrc(key, serial, lrcPath, outcome.lrc);
-            else if (outcome.kind === "miss")
-                root._fetchSearch(key, serial, lrcPath, nonePath);
-            else
-                root._fail(serial);
+            const step = root._stepOutcome(exitCode);
+            if (step === "error") {
+                cb({ kind: "error" });
+                return;
+            }
+            var songs = [];
+            if (step === "ok") {
+                try {
+                    const data = JSON.parse(body);
+                    songs = (data && Array.isArray(data.results)) ? data.results : [];
+                } catch (e) {
+                    songs = [];
+                }
+            }
+            const best = Lyrics.bestItunesSong(songs, query, MediaService.length);
+            if (!best) {
+                cb({ kind: "miss" });
+                return;
+            }
+            root._curl([Lyrics.paxsenixAppleLyricsUrl(best.trackId)], 10, (exitCode2, body2) => {
+                if (serial !== root._serial)
+                    return;
+                const step2 = root._stepOutcome(exitCode2);
+                if (step2 === "error") {
+                    cb({ kind: "error" });
+                    return;
+                }
+                const lines = step2 === "ok" ? Lyrics.fromPaxsenixApple(body2) : [];
+                cb(lines.length > 0 ? { kind: "hit", lines: lines } : { kind: "miss" });
+            });
         });
     }
 
-    function _fetchSearch(key, serial, lrcPath, nonePath) {
-        const url = Lyrics.searchUrl(MediaService.artist, MediaService.title);
-        root._curl([url], (exitCode, body) => {
+    // paxsenix YouTube (spec P2.3): its own search at 5s, its lyrics
+    // endpoint at 3s. The search response is a bare array, not an object.
+    function _youtubeFetch(serial, cb) {
+        const query = ((MediaService.title || "") + " " + (MediaService.artist || "")).trim();
+        root._curl([Lyrics.paxsenixYoutubeSearchUrl(MediaService.artist, MediaService.title)], 5, (exitCode, body) => {
             if (serial !== root._serial)
                 return;
-            const outcome = root._curlOutcome(exitCode, body);
-            if (outcome.kind === "synced")
-                root._writeLrc(key, serial, lrcPath, outcome.lrc);
-            else if (outcome.kind === "miss")
-                root._writeNoneMarker(key, serial, nonePath);
-            else
-                root._fail(serial);
+            const step = root._stepOutcome(exitCode);
+            if (step === "error") {
+                cb({ kind: "error" });
+                return;
+            }
+            var results = [];
+            if (step === "ok") {
+                try {
+                    const data = JSON.parse(body);
+                    results = Array.isArray(data) ? data : [];
+                } catch (e) {
+                    results = [];
+                }
+            }
+            const best = Lyrics.bestYoutubeResult(results, query, MediaService.length);
+            if (!best) {
+                cb({ kind: "miss" });
+                return;
+            }
+            root._curl([Lyrics.paxsenixYoutubeLyricsUrl(best.videoId)], 3, (exitCode2, body2) => {
+                if (serial !== root._serial)
+                    return;
+                const step2 = root._stepOutcome(exitCode2);
+                if (step2 === "error") {
+                    cb({ kind: "error" });
+                    return;
+                }
+                const lines = step2 === "ok" ? root._linesFromLrcText(body2) : [];
+                cb(lines.length > 0 ? { kind: "hit", lines: lines } : { kind: "miss" });
+            });
         });
     }
 
-    function _writeLrc(key, serial, lrcPath, lrcText) {
-        root._run(["sh", "-c", 'printf %s "$2" > "$1.tmp" && mv "$1.tmp" "$1"', "sh", lrcPath, lrcText], exitCode => {
+    // lrclib (spec P2.4, M55's own chain): get by tag and duration at 5s,
+    // falling back to search by tag alone at 5s.
+    function _lrclibFetch(serial, cb) {
+        const getUrl = Lyrics.getUrl(MediaService.artist, MediaService.title, MediaService.album, MediaService.length);
+        root._curl([getUrl], 5, (exitCode, body) => {
+            if (serial !== root._serial)
+                return;
+            const step = root._stepOutcome(exitCode);
+            if (step === "error") {
+                cb({ kind: "error" });
+                return;
+            }
+            if (step === "ok") {
+                const lines = root._linesFromLrclibBody(body);
+                if (lines.length > 0) {
+                    cb({ kind: "hit", lines: lines });
+                    return;
+                }
+            }
+            const searchUrl = Lyrics.searchUrl(MediaService.artist, MediaService.title);
+            root._curl([searchUrl], 5, (exitCode2, body2) => {
+                if (serial !== root._serial)
+                    return;
+                const step2 = root._stepOutcome(exitCode2);
+                if (step2 === "error") {
+                    cb({ kind: "error" });
+                    return;
+                }
+                const lines2 = step2 === "ok" ? root._linesFromLrclibBody(body2) : [];
+                cb(lines2.length > 0 ? { kind: "hit", lines: lines2 } : { kind: "miss" });
+            });
+        });
+    }
+
+    // The three-way race (spec P2): first quality-2 hit wins outright and
+    // publishes immediately, `decided` then keeps every later arrival from
+    // touching state again. Either way `finalize` waits for the third
+    // outcome before deciding what, if anything, reaches disk: a network
+    // error anywhere in the three means session-only, no error at all means
+    // the winner (the early one, or `pickBest`'s pick once every provider
+    // is in) is worth remembering past this run.
+    function _race(key, serial) {
+        var outcomes = {};
+        var decided = null;
+        var settledCount = 0;
+        const providers = ["apple", "youtube", "lrclib"];
+
+        function finalize() {
+            if (settledCount < providers.length || serial !== root._serial)
+                return;
+            var hasError = false;
+            for (var i = 0; i < providers.length; i++) {
+                if (outcomes[providers[i]].kind === "error")
+                    hasError = true;
+            }
+            const winner = decided || Lyrics.pickBest(providers.map(function (name) {
+                return { source: name, lines: (outcomes[name].lines || []) };
+            }));
+            if (!winner) {
+                if (hasError) {
+                    root._fail(serial);
+                    return;
+                }
+                root._writeMissMarker(key, serial);
+                return;
+            }
+            if (hasError) {
+                root._storeSession(key, serial, "synced", winner.lines, winner.source);
+                return;
+            }
+            root._writeJsonCache(key, serial, winner.source, winner.lines);
+        }
+
+        function onSettled(name, outcome) {
+            if (serial !== root._serial)
+                return;
+            outcomes[name] = outcome;
+            settledCount++;
+            if (!decided && outcome.kind === "hit" && Lyrics.isDefinitive(outcome.lines)) {
+                decided = { source: name, lines: outcome.lines };
+                root._apply("synced", outcome.lines, name);
+            }
+            finalize();
+        }
+
+        root._appleFetch(serial, function (outcome) { onSettled("apple", outcome); });
+        root._youtubeFetch(serial, function (outcome) { onSettled("youtube", outcome); });
+        root._lrclibFetch(serial, function (outcome) { onSettled("lrclib", outcome); });
+    }
+
+    function _writeJsonCache(key, serial, source, lines) {
+        const jsonPath = root._cacheDir + "/" + key + ".json";
+        const payload = JSON.stringify({ source: source, lines: lines });
+        root._run(["sh", "-c", 'printf %s "$2" > "$1.tmp" && mv "$1.tmp" "$1"', "sh", jsonPath, payload], exitCode => {
             if (exitCode !== 0)
                 console.warn("LyricsService: could not write lyrics cache for", key);
-            root._store(key, serial, "synced", lrcText, "lrclib");
+            root._storeSession(key, serial, "synced", lines, source);
         });
     }
 
-    function _writeNoneMarker(key, serial, nonePath) {
-        root._run(["sh", "-c", ': > "$1"', "sh", nonePath], exitCode => {
+    function _writeMissMarker(key, serial) {
+        const missPath = root._cacheDir + "/" + key + ".miss";
+        root._run(["sh", "-c", ': > "$1"', "sh", missPath], exitCode => {
             if (exitCode !== 0)
                 console.warn("LyricsService: could not write miss marker for", key);
-            root._store(key, serial, "none", "", "lrclib");
+            root._storeSession(key, serial, "none", [], "");
         });
     }
 }

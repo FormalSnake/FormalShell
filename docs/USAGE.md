@@ -541,6 +541,18 @@ fs theme mode toggle          # dark <-> light
 fs theme status               # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
 ```
 
+Every mode change also writes `org.gnome.desktop.interface/color-scheme` and
+`gtk-theme` over `dconf`, so GTK4/libadwaita, GTK3 (via the settings portal)
+and anything reading the appearance portal follow along. `gtk.theme` (default
+`"adw-gtk3"`) and `gtk.themeDark` (default `"adw-gtk3-dark"`) name the theme
+written for light and dark mode; leaving either `""` keeps its default,
+which is how you point GTK apps at a matugen-generated theme pair instead:
+
+```nix
+programs.formalshell.settings.gtk.theme = "elementary-matugen-light";
+programs.formalshell.settings.gtk.themeDark = "elementary-matugen-dark";
+```
+
 `theme.json` is the entire contract: shadcn's own role names, each with a
 static fallback, merged per key, so an older file missing newer roles still
 works:
@@ -2222,7 +2234,8 @@ of the transport cluster, `RAISE` sits in the title band, and a row per
 player appears at the bottom once more than one is on the bus. Clicking one
 pins the bar cell, the panel and the IPC routes to it until that player
 quits. With synced lyrics the panel widens and the lyrics take their own
-pane on the left (see Synced lyrics below).
+pane trailing the now-playing column, already loaded by the time the panel
+opens (see Synced lyrics below).
 
 Every control is gated on the player's own capability flag, so a player that
 implements none of them renders the panel it always did. A toggle that is on
@@ -2265,30 +2278,42 @@ as music plays.
 { "media": { "animatedBarCover": false } }
 ```
 
-**Synced lyrics** are opt-in through `media.lyrics` (default true) and run
-only while the panel is open and the active player publishes a title and an
-artist. The one source is [lrclib.net](https://lrclib.net): a lookup by tag
-and duration, falling back to a search by tag alone, cached forever at
-`~/.cache/formalshell/lyrics/<key>.lrc`. A track lrclib has nothing timed
-for gets an empty `.none` marker instead, re-asked once it is seven days
-old rather than on every open. Only synced lyrics are ever shown,
-`plainLyrics` is never read, so a track with nothing timed for it draws no
-lyrics pane at all rather than a placeholder. The pane sits on the left of
-the widened panel: the current line at the pane's centre, full size and
-bright, the lines around it smaller and dimmer the further they are, the
-column sliding so the next line lands in the centre. A line with chunk
-timing (enhanced LRC `<mm:ss.xx>` stamps) wipes through as it plays, word
-by word when the stamps sit on words and letter by letter when a file
-stamps inside them, the way Apple Music and kopuz draw theirs; a line with
-only its own timestamp lights whole. An instrumental stretch of five
-seconds or more is a note that fills as the gap elapses. Clicking a line
-seeks there; Up and Down walk the lines from the keyboard and Enter seeks.
-Hovering never moves the column. A paused track keeps its animated cover
-on the frame it stopped at rather than dropping back to the static art.
+**Synced lyrics** are opt-in through `media.lyrics` (default true) and start
+looking a second after the active player's title or artist changes, panel
+open or closed, so the pane is already there once you open it. Four
+sources, in kopuz's order: a sibling `.lrc` beside the track file when the
+player exposes one, Apple Music and YouTube through paxsenix (word-level
+timing when either hits, run together), then
+[lrclib.net](https://lrclib.net) by tag and duration. The first hit with
+word timing wins outright; otherwise the highest-quality answer across all
+of them does, line timing beating none. A result is cached forever at
+`~/.cache/formalshell/lyrics/<key>.json` once every source has answered; a
+track nothing has timing for gets an empty `.miss` marker, re-asked once it
+is seven days old. Only synced lyrics are ever shown, so a track with
+nothing timed for it draws no lyrics pane at all. The pane trails the
+now-playing column in the widened panel: the active line rests 42% down
+rather than at centre, and a duet turn or a background vocal can light more
+than one line at once. Every lit line's chunks wipe through with a soft
+glow whether or not the source gave word timing (an untimed line gets its
+own words split evenly across its line's span), and every other line dims
+and, with `media.lyricsBlur` on (default true), blurs by its distance from
+the lit one; `media.lyricsBlurStrength` (0 to 200, default 100) scales that
+blur and `media.lyricsOffsetMs` (-5000 to 5000, default 0) nudges the whole
+pane early or late against playback. Clicking a line seeks there; Up and
+Down walk the lines from the keyboard and Enter seeks. Hovering never moves
+the column, but a wheel over the pane scrolls it instead of the song,
+clamped to its own ends, until a resync button, a new track, or the
+keyboard cursor hands it back. A paused track keeps its animated cover on
+the frame it stopped at rather than dropping back to the static art.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
 { "media": { "lyrics": false } }
+```
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "media": { "lyricsBlur": false, "lyricsBlurStrength": 60, "lyricsOffsetMs": -150 } }
 ```
 
 **The spectrum** is opt-in through `media.visualizer` (default true):
@@ -2313,7 +2338,7 @@ fs media raise
 fs media players          # [{"id":…,"identity":…,"label":…,"isPlaying":…}]
 fs media select org.mpris.MediaPlayer2.mpv
 fs media status
-fs media lyrics           # {state, source, lines, words, index, position}
+fs media lyrics           # {state, source, quality, active, secondary, blur, follow, lines, position}
 ```
 
 A route acting on something the player doesn't implement answers with an

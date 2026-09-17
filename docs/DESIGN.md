@@ -57,7 +57,9 @@ polkit consent card paint `Theme.surface(Theme.color.card)`, the card colour
 at `theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
 (`layerrule = blur` + `ignore_alpha` on `formalshell:bar`, `formalshell:panel`,
 `formalshell:menu`, `formalshell:polkit`, and the rest, in the example
-config); the shell itself never blurs. A translucent card with nothing
+config); the shell itself never blurs outside the lyrics pane's own depth
+of field and sung-chunk glow (owner, 2026-09-17, gated behind
+`media.lyricsBlur`). A translucent card with nothing
 blurred behind it reads as a rendering fault rather than as depth, so the
 two travel together: a surface is either on that list or opaque. Toasts and
 lock are the opaque ones; the OSD joined the blurred list when it started
@@ -142,7 +144,7 @@ does this boundary have to go".
    route spends it on the preview pane: flat `MenuRow`s down one side and the
    card down the other, so the pane reads as the thing the list is pointing
    at. A panel spends it on nothing, save the media panel, which spends its
-   one card on the `LYRICS` pane beside the now-playing column (M55 A1),
+   one card on the `LYRICS` pane beside the now-playing column (M56 P13),
    the launcher's own preview-pane grammar reused rather than a second
    shape: otherwise the header's rule and `sectionGap` already rank the
    hero over the sections under it, and the border the hero used to draw
@@ -526,19 +528,26 @@ own type doing the ranking the border used to do: a `subtitle` title over a
 `Track` under them. Footer: `outline` Button left, `display`
 number right. Width `Default`; `Wide` for media, monitor, calendar. Nothing
 in a panel scrolls except a row list longer than the screen. The media
-panel spends its one card (§1's ladder, rung 5) on a `LYRICS` pane beside
-the now-playing column rather than under it (M55 A1), `radiusMd` and a
-`card` fill with nothing else drawn inside it: the pane's viewport anchors
-the active line at its own centre and travels to meet it, ranks every
-other line by a four-step opacity ramp on its distance from that line, and
-is never shorter than six rows, following the now-playing column's own
-height above that. A chunk-stamped line wipes a `foreground` copy clipped
-over its `mutedForeground` chunks rather than a whole word at a time (M55
-A3b): a syllable-stamped source reads as a sweep through a word's own
-letters and a word-stamped one as a sweep word by word, with no colour
-crossfade anywhere in it, only the clip's own width moving. A silence
-draws a `music` icon the same way, its lit copy clipped left to right over
-the gap (M55 A4); none of it carries a glow, a blur or a shadow. The
+panel spends its one card (§1's ladder, rung 5) on a `LYRICS` pane
+trailing the now-playing column on the same gutter and split M55 set
+(M56 P13), `radiusMd` and a `card` fill with nothing else drawn inside it:
+the pane's viewport rests its anchor line 42% down rather than at centre
+(kopuz's comfort offset, M56 P9) and travels to meet it, and a duet turn
+or a background vocal overlapping its parent can light more than one line
+at once (M56 P5). Every other line still carries M55's opacity ramp on
+its distance from the anchor, and, with `media.lyricsBlur` on, a blur
+growing with that same distance and capped at 6px, the one exception to
+this file's no-blur rule above (M56 P7). The pane is never shorter than
+six rows, following the now-playing column's own height above that. A lit
+line's chunks wipe with a soft band sliding across a `mutedForeground`
+copy under a `foreground` one, the chunk being sung carrying a glow that
+decays once it ends, whether or not the source gave word timing: an
+untimed line gets its own chunks synthesised so the wipe never fails to
+show (M56 P4/P6, replacing M55 A3b's hard clip). A silence draws a `music`
+icon the same way, its lit copy clipped left to right over the gap (M55
+A4). A wheel over the pane takes the scroll over from the song, clamped to
+its own ends, until a `refresh-cw` ghost control at the pane's bottom
+right, a new track, or the keyboard cursor hands it back (M56 P9). The
 now-playing column itself runs horizontal (M55 A2): the elapsed time, the
 track and the total sit on one line, and the transport and the player's
 own volume share another, transport leading. Its spectrum sits inline at
@@ -603,7 +612,8 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 - A hardcoded font family, a Nerd Font glyph, an SVG icon asset.
 - Words in mono or values in sans.
 - A shadow, a gradient, or a blur drawn by the shell (blur is the
-  compositor's, behind a translucent card). Dither only behind
+  compositor's, behind a translucent card), save the lyrics pane's depth
+  of field and its sung-chunk glow (owner, 2026-09-17). Dither only behind
   `wallpaper.dither` or `lock.dither`, both off by default. The bar's own
   mini cover stops animating behind `media.animatedBarCover: false`; the
   media panel's own cover animates unconditionally.

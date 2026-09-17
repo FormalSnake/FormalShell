@@ -37,6 +37,14 @@ Rectangle {
     // addresses the track as a row of its own.
     property bool cursor: false
 
+    // A value that moves on a clock of its own rather than in steps (the
+    // media panel's position, which is re-emitted every frame while the
+    // lyrics pane is up). The fill's Behavior below animates one edge to a
+    // new place, and a target that moves again before that animation has
+    // been ticked restarts it from zero every time, so the fill stops where
+    // it stood. A swept track writes its width straight instead.
+    property bool swept: false
+
     // Hover tracking, for a surface that moves its cursor under the pointer.
     // The area answers no button, so a caller's own press/drag area sits on
     // top and keeps every event it has today. That caller area must leave
@@ -94,6 +102,7 @@ Rectangle {
         // swept continuously, so every change is one on-screen edge
         // travelling to a new place rather than a constant rate.
         Behavior on width {
+            enabled: !root.swept
             Anim { kind: "spatialFast" }
         }
     }
