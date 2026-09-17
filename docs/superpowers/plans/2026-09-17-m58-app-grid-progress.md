@@ -15,6 +15,10 @@ Where the shipped work deviates from the task order above, on purpose:
   progress stall was live on the owner's own host, the fix touched no
   `Menu.qml` or other Task 2 file, and there was no reason to make the
   owner wait on the grid for it.
+- The lyrics clock's lead (B3 below) is a fourth piece of work on this
+  branch, outside the task list: the owner reported the pane landing after
+  the sung audio while the grid was in flight, and the fix is one constant
+  and one property away from the progress work Task 1 already touched.
 - Task 2 started after pulling M57 Task 6's Drawer-based `Menu.qml` in from
   local main, rather than against the `Menu.qml` this branch forked from,
   since that rewrite was already merged and the grid would otherwise have
@@ -167,3 +171,33 @@ over 50s, drawn fill frozen at 0.0660 of the track the whole way (the seek to
 203s wanted 0.5076). Without lyrics the 1s clock left it within 0.006.
 After (`swept: true` on the progress track): drawn tracks want within 0.006
 at all eighteen samples, 0.5031 against a wanted 0.5077 after the seek.
+
+**B3, the lyrics that land behind the beat.** Measured in the VM with a
+throwaway leg: mpv started with `--input-ipc-server`, then pairs of
+`get_property time-pos` and `media status`, back to back in one process with
+the order alternated and each value projected onto the other's read instant.
+mpv's clock minus the shell's, 32 pairs a run.
+
+With the media panel closed, so nothing re-emits `positionChanged`: steady
+median 517ms, 95 to 910ms, a clean 1s sawtooth, since a QML binding over
+`MprisPlayer.position` only re-evaluates when the player signals and
+`MediaService`'s own re-emit runs at 1Hz. Its mean sits half a tick above the
+floor, which puts the MPRIS sample's own trailing near 16ms. With the panel
+open on a synced track, which is the only way the pane is ever on screen and
+`MediaPanel.qml`'s per-frame clock with it: steady median -90ms (n=16, -157
+to -62, the shell reading AHEAD, mpv losing real time to a one-core llvmpipe
+session), -37ms a second after a seek (n=8, -51 to -21), +7ms after a resume
+(n=8, -67 to +35), that last phase being the one sampled closest to a fresh
+MPRIS reply.
+
+So the sample alone trails by well under 50ms and the shipped lead stays at
+M55's 0.1s, in `Lyrics.POSITION_LEAD_SECONDS` with `ledPosition` applying it
+and `media.lyricsOffsetMs` on top. The VM's own numbers are a sanity check of
+the mechanism, not a constant worth shipping.
+
+Two suspects ruled out rather than fixed. The wipe's `MultiEffect` mask does
+not shift the edge: with `maskThresholdMin` 0.5 and `maskSpreadAtMin` 1,
+`QQuickMultiEffectPrivate::updateMaskThresholdSpread` hands the shader
+`smoothstep(0.0001, 1.0002, alpha)`, symmetric about alpha 0.5, so the
+visible half-way point sits exactly on the gradient band's own centre. The
+arrival fade runs 0.68 to 1 over 300ms and hides no syllable.

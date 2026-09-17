@@ -12,8 +12,9 @@ import "../../Lyrics/model.js" as Lyrics
 //
 // Several lines are lit at once (spec P5): the active main line, plus every
 // background or duet line whose own timing still covers the position. The
-// position they all read is the player's clock less `media.lyricsOffsetMs`,
-// and the model answers the set; nothing here decides what is lit.
+// position they all read is `LyricsService.positionSeconds`, the player's
+// clock led by the model's own lead with `media.lyricsOffsetMs` on top, and
+// the model answers the set; nothing here decides what is lit.
 //
 // A lit line draws its chunks, every other line plain text (spec P6). A
 // chunk is the `mutedForeground` word under a `foreground` copy masked by a
@@ -64,7 +65,7 @@ Card {
 
     // The one per-frame read in the pane (spec P5): every lit-set function
     // and every chunk takes its time from here.
-    readonly property real _position: MediaService.position - LyricsService.offsetSeconds
+    readonly property real _position: LyricsService.positionSeconds
 
     readonly property var _mainIndices: Lyrics.mainLineIndices(root.lines)
     readonly property int _activeIndex: Lyrics.activeMainLineIndex(root.lines, root._mainIndices, root._position)

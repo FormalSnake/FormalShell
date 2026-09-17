@@ -711,6 +711,40 @@ TestCase {
         compare(Lyrics.lineEndEstimate(_line(1)), 1 + Lyrics.LINE_ASSUMED_SECONDS);
     }
 
+    // ledPosition
+
+    function test_led_position_reads_ahead_of_the_player() {
+        fuzzyCompare(Lyrics.ledPosition(10, 0), 10 + Lyrics.POSITION_LEAD_SECONDS, 1e-9);
+    }
+
+    function test_led_position_stacks_the_offset_on_the_lead() {
+        fuzzyCompare(Lyrics.ledPosition(10, 0.25), 10 + Lyrics.POSITION_LEAD_SECONDS - 0.25, 1e-9);
+        fuzzyCompare(Lyrics.ledPosition(10, -0.25), 10 + Lyrics.POSITION_LEAD_SECONDS + 0.25, 1e-9);
+    }
+
+    function test_led_position_without_an_offset_is_the_lead_alone() {
+        fuzzyCompare(Lyrics.ledPosition(10, undefined), 10 + Lyrics.POSITION_LEAD_SECONDS, 1e-9);
+    }
+
+    function test_a_line_lights_a_lead_before_its_own_stamp() {
+        var lines = [_line(10, 14), _line(14, 18)];
+        var main = Lyrics.mainLineIndices(lines);
+
+        compare(Lyrics.activeMainLineIndex(lines, main, Lyrics.ledPosition(9.95, 0)), 0);
+        compare(Lyrics.activeMainLineIndex(lines, main, Lyrics.ledPosition(9.85, 0)), -1);
+    }
+
+    function test_a_chunk_is_already_wiping_at_its_own_stamp() {
+        var words = [{ time: 5, text: "A" }, { time: 6, text: "B" }];
+        fuzzyCompare(Lyrics.chunkProgress(words, 0, undefined, Lyrics.ledPosition(5, 0)),
+            Lyrics.POSITION_LEAD_SECONDS, 1e-9);
+    }
+
+    function test_the_offset_key_can_hold_a_chunk_back_past_its_stamp() {
+        var words = [{ time: 5, text: "A" }, { time: 6, text: "B" }];
+        compare(Lyrics.chunkProgress(words, 0, undefined, Lyrics.ledPosition(5, 0.3)), 0);
+    }
+
     // lineActiveAt / activeMainLineIndex / backgroundLineBound / activeSecondaryLines
     // (kopuz's own test cases, ported by name)
 

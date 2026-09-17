@@ -58,6 +58,13 @@ Singleton {
     readonly property int offsetMs: Core.Config.loaded ? root._clampedConfigInt("media.lyricsOffsetMs", 0, -5000, 5000) : 0
     readonly property real offsetSeconds: root.offsetMs / 1000
 
+    // The position the pane draws against and `media lyrics` answers from,
+    // both off this one property so the lit line one reports is the lit line
+    // the other draws. `Lyrics.ledPosition` owns the lead and the offset's
+    // sign; MediaService.position is refreshed per frame by the media
+    // panel's own clock while a synced track plays.
+    readonly property real positionSeconds: Lyrics.ledPosition(MediaService.position, root.offsetSeconds)
+
     // Whether the lyrics column still follows the song (spec P9/P11). The
     // panel writes it (a wheel takes it off, its resync button and the
     // keyboard cursor entering the section put it back) and `media lyrics`
