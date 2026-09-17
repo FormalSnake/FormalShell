@@ -2291,9 +2291,12 @@ glow whether or not the source gave word timing (an untimed line gets its
 own words split evenly across its line's span), and every other line dims
 and, with `media.lyricsBlur` on (default true), blurs by its distance from
 the lit one; `media.lyricsBlurStrength` (0 to 200, default 100) scales that
-blur and `media.lyricsOffsetMs` (-5000 to 5000, default 0) nudges the whole
-pane early or late against playback. Clicking a line seeks there; Up and
-Down walk the lines from the keyboard and Enter seeks. Hovering never moves
+blur. The pane reads 100ms ahead of the position the player reports, since
+that position is a sample the shell extrapolates and the frame drawn from it
+lands a refresh or two later; `media.lyricsOffsetMs` (-5000 to 5000, default
+0) adjusts the whole pane from there, positive holding the lyrics back.
+Clicking a line seeks there; Up and Down walk the lines from the keyboard
+and Enter seeks. Hovering never moves
 the column, but a wheel over the pane scrolls it instead of the song,
 clamped to its own ends, until a resync button, a new track, or the
 keyboard cursor hands it back. A paused track keeps its animated cover on
