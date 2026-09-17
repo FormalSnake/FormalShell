@@ -155,6 +155,14 @@ sleep 2
 "$grim_bin" "$app_grid_mixed_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_mixed_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug query app > "$app_grid_mixed_query_path" 2>&1
+# Down onto the row under the grid queues its reveal for the next tick, and a
+# new query inside that tick rebuilds the rows it was queued from. Verify reads
+# the shell's own log for what a reveal evaluated after its row was gone says.
+"$wtype_bin" -k Down
+"$qs_bin" ipc -p "$shell_path" call menu filter ap > /dev/null 2>&1
+"$wtype_bin" -k Down
+"$qs_bin" ipc -p "$shell_path" call menu filter zzzz > /dev/null 2>&1
+sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 # The key deleted underneath the running shell. Written back through the same
 # inode rather than moved over, so the config watch sees a write and not a
@@ -262,6 +270,9 @@ leg_app_grid_assert() {
   # Mixed: the apps take the grid, everything else the query ranked draws as
   # rows under it.
   cat "$app_grid_mixed_path"; echo
+  if grep -E 'AppGridView\.qml.*(ReferenceError|TypeError)' "$shell_log_path" > /dev/null 2>&1; then
+    fail "the grid view threw in the shell's log: $(grep -E 'AppGridView\.qml.*(ReferenceError|TypeError)' "$shell_log_path" | head -2)"
+  fi
   if [ "$(app_grid_field "$app_grid_mixed_path" view)" != "appGrid" ]; then
     fail "a root query ranking apps did not draw the grid, got: $(cat "$app_grid_mixed_path")"
   fi

@@ -269,10 +269,12 @@ Item {
                         height: tailRow.height
 
                         // A tick late: the row's own height and place are
-                        // still settling on the frame the cursor arrives.
-                        onIsCursorChanged: if (tailSlot.isCursor) Qt.callLater(function () {
-                            root.revealTailRow(tailSlot);
-                        })
+                        // still settling on the frame the cursor arrives. The
+                        // function is handed over by reference, never as a
+                        // closure: a query can rebuild these rows inside that
+                        // tick, and a closure evaluated after its delegate's
+                        // context is gone has no `root` to look up.
+                        onIsCursorChanged: if (tailSlot.isCursor) Qt.callLater(root.revealTailRow, tailSlot)
 
                         // The cursor fill the row list draws under its rows,
                         // drawn per row here: the footer is one item and its
