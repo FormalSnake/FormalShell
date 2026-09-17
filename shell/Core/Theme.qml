@@ -307,18 +307,24 @@ Singleton {
     // `motionEnabled` directly rather than this object zeroing the rate
     // to 0.
     readonly property bool motionEnabled: Config.get("motion.enabled", true) === true
+    // Every clock stretched by this factor, for the rig alone (`debug
+    // motionScale`, Ipc/DebugIpc.qml): a screencopy costs about as much as a
+    // whole entrance, so a mid-flight pose can only be photographed slowed
+    // down. Never read from settings.json.
+    property real motionScale: 1
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
         var c = Tokens.MOTION_CURVES;
+        var s = root.motionScale;
         return {
-            spatialFast: m.spatialFast,
-            spatial: m.spatial,
-            spatialSlow: m.spatialSlow,
-            effectsFast: m.effectsFast,
-            effects: m.effects,
-            effectsSlow: m.effectsSlow,
-            emphasized: m.emphasized,
-            reveal: m.reveal,
+            spatialFast: m.spatialFast * s,
+            spatial: m.spatial * s,
+            spatialSlow: m.spatialSlow * s,
+            effectsFast: m.effectsFast * s,
+            effects: m.effects * s,
+            effectsSlow: m.effectsSlow * s,
+            emphasized: m.emphasized * s,
+            reveal: m.reveal * s,
             curves: {
                 spatialFast: c.spatialFast,
                 spatial: c.spatial,
