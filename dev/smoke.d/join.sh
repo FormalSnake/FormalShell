@@ -162,7 +162,9 @@ cell() {
 }
 sleep 5
 call debug motionScale 1000
-call debug dump > "$join_dump_path" 2>&1
+# Not through call(), whose own redirect would swallow the dump into the
+# reply log.
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$join_dump_path" 2>&1
 "$grim_bin" -g "$join_region" "$join_desktop_path" > /dev/null 2>&1
 "$grim_bin" "$join_bare_path" > /dev/null 2>&1
 call panel open network
@@ -353,6 +355,8 @@ leg_join_assert() {
   done
   echo "SMOKE_JOIN_OWNER $join_owner_path"
   cat "$join_click_path" 2>/dev/null || true
+  grep -qE '^click [0-9]+ [0-9]+$' "$join_click_path" 2>/dev/null || fail \
+    "no cell was found inside the chevron's second bar, so case c clicked nothing: $(cat "$join_click_path" 2>/dev/null)"
 
   # The edge every case above was photographed on, off the shell's own
   # numbers: a position that landed late would otherwise photograph a top bar
