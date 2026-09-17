@@ -318,6 +318,13 @@ PanelWindow {
         ? (Theme.space.barMargin + (Theme.barVertical ? root.owner._morphWidth : root.owner._morphHeight))
         : 0
 
+    // The owner's own live rect, for the span this card may bud from (M57
+    // D3, Joint's clamp). Live rather than resting: a second bar goes on
+    // measuring its cells after the open, and a bud pinned to where the
+    // owner was would come away from the gap it budded out of.
+    readonly property var _ownerRect: (root.owner && root.owner.isOpen
+        && root.owner.frameRect !== undefined) ? root.owner.frameRect : null
+
     readonly property real _frameX: root._screen
         ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root._morphWidth,
             Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding) - root._edge.x * root._ownerShift
@@ -339,9 +346,16 @@ PanelWindow {
     // bar's edge plus whatever it is handed, so handing it `barMargin` less
     // the reach moves the cut back onto the line itself, on all four edges,
     // with the owner shift untouched.
+    //
+    // Along the line the band closes onto the bud a nested card is clamped
+    // into (M57 D3, `joint.clip`), so its contents come out of the owner's
+    // own span rather than beside it. The contents themselves are laid out at
+    // the card's full width throughout: what the widening reveals is already
+    // drawn.
     readonly property var _clipBand: root._screen
-        ? Geometry.clipBand(Theme.barPosition, root._screen.width, root._screen.height,
-            Theme.edgeInset, Theme.space.barMargin - root._joinDepth, root._ownerShift)
+        ? Geometry.clipAlong(Geometry.clipBand(Theme.barPosition, root._screen.width,
+            root._screen.height, Theme.edgeInset, Theme.space.barMargin - root._joinDepth,
+            root._ownerShift), Theme.barVertical, joint.clip)
         : ({ x: 0, y: 0, width: 0, height: 0 })
 
     // How far past its own rect the card's shape reaches toward the line it
@@ -378,6 +392,12 @@ PanelWindow {
         edge: Theme.barPosition
         joined: root._screen !== null && !root.handingOver
         target: root.owner
+        // The owner's far edge less the corners it ends in, which is all a
+        // nested card has to bud from.
+        targetAlong: root._ownerRect ? (Theme.barVertical ? root._ownerRect.y : root._ownerRect.x) : 0
+        targetLength: root._ownerRect
+            ? (Theme.barVertical ? root._ownerRect.height : root._ownerRect.width) : 0
+        targetRadius: root.owner ? root.owner.frameRadius : 0
         depth: root._joinDepth
         radius: root.frameRadius
         extent: Theme.barVertical ? frame.width : frame.height
@@ -970,8 +990,11 @@ PanelWindow {
                         // facing the bar open, and a concave fillet outside
                         // each of that edge's corners running out to the line
                         // the strip opened a gap in; let go, the plain card
-                        // `Card` draws. Longer than the card by a fillet at
-                        // either end, and pinned to the line rather than to
+                        // `Card` draws. Longer by a fillet at either end than
+                        // the rect it is drawn on, which is the card's own
+                        // once it has let go and the bud its owner's edge can
+                        // give while it is attached (`joint.clampedAlong`,
+                        // M57 D3), and pinned to the line rather than to
                         // the frame: `joint.slide` undoes the frame's own
                         // travel on the anchored axis and `joint.shapeDepth`
                         // is what is out from under the line, so at rest it is
@@ -992,21 +1015,21 @@ PanelWindow {
                                 var j = root._childJoin;
                                 if (!j)
                                     return null;
-                                var origin = (Theme.barVertical ? frame.y : frame.x) - frameShape.overhang;
-                                return [j.x - j.reach - origin, j.x + j.width + j.reach - origin];
+                                return [j.x - j.reach - frameShape._origin,
+                                    j.x + j.width + j.reach - frameShape._origin];
                             }
                             x: Theme.barVertical
                                 ? (Theme.barPosition === "left"
                                     ? joint.slide - root._joinDepth
                                     : frame.width + root._joinDepth - joint.slide - frameShape._span)
-                                : -frameShape.overhang
+                                : frameShape._along
                             y: Theme.barVertical
-                                ? -frameShape.overhang
+                                ? frameShape._along
                                 : (Theme.barPosition === "top"
                                     ? joint.slide - root._joinDepth
                                     : frame.height + root._joinDepth - joint.slide - frameShape._span)
-                            width: Theme.barVertical ? frameShape._span : frame.width + frameShape.overhang * 2
-                            height: Theme.barVertical ? frame.height + frameShape.overhang * 2 : frameShape._span
+                            width: Theme.barVertical ? frameShape._span : frameShape._length
+                            height: Theme.barVertical ? frameShape._length : frameShape._span
 
                             // What the item spans across the line: from the
                             // line to the card's far edge, and one more
@@ -1014,6 +1037,17 @@ PanelWindow {
                             // concave corner that side carries against the
                             // wall.
                             readonly property real _span: joint.shapeDepth + frameShape.farOverhang
+
+                            // And along it: the card's own rect at rest, the
+                            // bud its owner's edge can give while it is
+                            // attached (M57 D3), a fillet past either end
+                            // either way. `_origin` is where that starts in
+                            // the output's own coordinates, which is what a
+                            // gap published against this card is measured in.
+                            readonly property real _origin: joint.clampedAlong - frameShape.overhang
+                            readonly property real _along: frameShape._origin
+                                - (Theme.barVertical ? frame.y : frame.x)
+                            readonly property real _length: joint.clampedLength + frameShape.overhang * 2
                         }
 
                         // What `Card`'s own default slot did: everything below is

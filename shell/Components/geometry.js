@@ -101,3 +101,20 @@ function clipBand(barPosition, screenWidth, screenHeight, insets, barMargin, own
     var top = insets.top + shift;
     return { x: 0, y: top, width: screenWidth, height: Math.max(0, screenHeight - top) };
 }
+
+// And what a card budding out of another panel's edge may paint on ALONG the
+// line (M57 D3, Components/Joint.qml's `clip`): the band above, narrowed to
+// the silhouette's own range, so a card clamped into its owner's span is
+// revealed by the widening rather than drawn beside it. `range` null, which
+// is every card that is not budding, leaves the band whole.
+function clipAlong(band, vertical, range) {
+    if (!range)
+        return band;
+    var lo = vertical ? band.y : band.x;
+    var hi = lo + (vertical ? band.height : band.width);
+    var start = Math.max(lo, range.start);
+    var extent = Math.max(0, Math.min(hi, range.start + range.length) - start);
+    if (vertical)
+        return { x: band.x, y: start, width: band.width, height: extent };
+    return { x: start, y: band.y, width: extent, height: band.height };
+}

@@ -21,6 +21,12 @@ import "../Bar/layout.js" as BarLayout
 // the line is whole. Closing runs it all backwards: the card reattaches as
 // it slides back under the line.
 //
+// A card hanging off another panel rather than off the screen's own line
+// (`target`) buds from what that panel's far edge can give: the silhouette's
+// rect along the line is the card's clamped into the owner's span, widening
+// to the card's own rect on the attach clock, and `clip` is the range the
+// consumer holds the card to meanwhile.
+//
 // Every read-out is a plain function of the presence's pose and the one
 // attach clock, so a re-toggle mid-flight turns the whole join around from
 // wherever it is.
@@ -63,6 +69,13 @@ QtObject {
     // ring's), or the surface this card hangs off, which opens the gap in
     // its own far edge (Panel.qml's `owner`).
     property var target: null
+    // And that surface's own rect along the line, live, with the corner
+    // radius its far edge ends in: the span this card may bud from (M57 D3).
+    // Live rather than resting, since a second bar goes on measuring its
+    // cells after the open and the bud has to follow it frame by frame.
+    property real targetAlong: 0
+    property real targetLength: 0
+    property real targetRadius: 0
     // The pose past which the card lets go of the line.
     property real releaseAt: 0.85
 
@@ -88,8 +101,9 @@ QtObject {
     // `spatialFast` so the let-go overlaps the overshoot's return; a close
     // takes the pose back under the mark and the card reattaches on the
     // same clock as it slides in. A card with no line, or one whose
-    // presence is bypassed for a handoff (its pose then sits at 1), floats.
-    property real attach: (root.joined
+    // presence is bypassed for a handoff (its pose then sits at 1), floats,
+    // and so does one whose owner's edge is too short to bud from.
+    property real attach: (root._joinable
         && !(root.presence.open && root.presence.morph >= root.releaseAt)) ? 1 : 0
 
     Behavior on attach {
@@ -117,7 +131,7 @@ QtObject {
     // attach clock, exactly as the near edge pulls off the line by `neck`. A
     // card hanging off another panel is never walled: the span it may join
     // on is its owner's, not the screen's.
-    readonly property bool _canWall: root.joined && !root.target && root.radius > 0
+    readonly property bool _canWall: root._joinable && !root.target && root.radius > 0
         && root.outputAlong > 0 && root.restLength > 0
 
     readonly property real _roomStart: root.restAlong - root.insetStart
@@ -141,16 +155,94 @@ QtObject {
         ? Math.max(0, root._roomEnd) + (root.insetEnd > 0 ? Theme.borderWidth : root.radius)
         : -1
 
+    // --- The nested bud (M57 D3) -----------------------------------------
+    //
+    // The span a card may join on: its owner's own far edge less the corner
+    // radius that edge ends in, since the line stops where those corners
+    // start, or, with no owner, the stretch of the screen's line between the
+    // two insets. A card wider than its span joined with its whole rect, and
+    // the card and both fillets hung out past either end of the strip they
+    // were meant to bud from.
+    //
+    // A walled side is left alone: running out past its own rect to reach the
+    // wall is exactly what D2 asks of it, and a card with an owner is never
+    // walled, so the two rules never meet on one side.
+    readonly property bool _spanned: root.target !== null && root.targetLength > 0
+    readonly property bool _clampable: root._joinable
+        && (root._spanned || root.outputAlong > 0)
+
+    readonly property real _spanStart: root._spanned
+        ? root.targetAlong + root.targetRadius
+        : root.insetStart
+    readonly property real _spanEnd: root._spanned
+        ? root.targetAlong + root.targetLength - root.targetRadius
+        : root.outputAlong - root.insetEnd
+    readonly property real _spanLength: Math.max(0, root._spanEnd - root._spanStart)
+
+    // A span with room for neither two fillets nor a sliver of card between
+    // them is no line to bud from at all: the card comes out plain from under
+    // the owner's edge instead, and `clip` holds it to the owner's span until
+    // it is out, so nothing appears beside the owner either.
+    readonly property bool _spanTight: root._spanned && root._spanLength < 4 * root.radius
+    readonly property bool _joinable: root.joined && !root._spanTight
+
+    // The card's rect along the line at full attach: pulled into the span
+    // with room for a fillet at either end, so the silhouette, fillets and
+    // all, is exactly the span.
+    readonly property real _budStart: (root._clampable && root.wallStart < 0)
+        ? Math.min(root.along + root.length, Math.max(root.along, root._spanStart + root.radius))
+        : root.along
+    readonly property real _budEnd: (root._clampable && root.wallEnd < 0)
+        ? Math.max(root._budStart, Math.min(root.along + root.length, root._spanEnd - root.radius))
+        : root.along + root.length
+
+    readonly property bool _clamped: root._budStart > root.along
+        || root._budEnd < root.along + root.length
+
+    // And where it is right now: the bud attached, the card's own rect once
+    // it has let go, widening between the two on the attach clock. What the
+    // silhouette is drawn on, what the gap in the line is published from, and
+    // what the consumer clips to, so the three cannot disagree.
+    readonly property real clampedAlong: root.along
+        + (root._budStart - root.along) * root._attach
+    readonly property real clampedLength: Math.max(0, root.along + root.length
+        + (root._budEnd - root.along - root.length) * root._attach - root.clampedAlong)
+
+    // What the card may paint on along the line: the silhouette's own range,
+    // fillets included, so the contents are revealed by the widening rather
+    // than drawn outside the bud. They keep their full-width layout inside
+    // it: clipped, never squeezed. Null once the rect is the card's own,
+    // which is every card that is not budding.
+    readonly property var clip: {
+        if (!root.presence.shown)
+            return null;
+        if (root._spanTight)
+            return root.slide > 0
+                ? ({ start: root._spanStart, length: root._spanLength })
+                : null;
+        if (root._attach <= 0 || !root._clamped)
+            return null;
+        return ({
+            start: root.clampedAlong - root.reach,
+            length: root.clampedLength + root.reach * 2
+        });
+    }
+
     // Where the deform's pivot sits along the line, in the card's own
-    // coordinates: the wall a walled card runs into, so the run out to it
-    // stays ON it under the matrix, the way `pivotInset` keeps the anchored
-    // edge on the line. Without it the squash compresses the whole
-    // silhouette about the card's middle and pulls the run-out off the wall,
-    // which against a ring is a column of bare desktop. Null with no wall,
-    // and with one at either end, where there is no single side to pin to.
-    readonly property var alongPivot: (root.wallStart >= 0) === (root.wallEnd >= 0)
-        ? null
-        : (root.wallStart >= 0 ? -root.wallStart : root.length + root.wallEnd)
+    // coordinates. A clamped bud takes its own middle: the matrix is centred
+    // on the card's otherwise, which for a bud a fraction of the card's width
+    // is far off to one side, and the squash then slides the whole bud along
+    // the owner's gap. A walled card takes the wall it runs into, so the run
+    // out to it stays ON it under the matrix, the way `pivotInset` keeps the
+    // anchored edge on the line; without it the squash pulls the run-out off
+    // the wall, which against a ring is a column of bare desktop. Null with
+    // neither, and with a wall at either end, where there is no single side
+    // to pin to.
+    readonly property var alongPivot: (root._clamped && root._attach > 0)
+        ? root.clampedAlong + root.clampedLength / 2 - root.along
+        : ((root.wallStart >= 0) === (root.wallEnd >= 0)
+            ? null
+            : (root.wallStart >= 0 ? -root.wallStart : root.length + root.wallEnd))
 
     // The two edges the line runs between, which is where a walled side's
     // own join goes.
@@ -176,15 +268,17 @@ QtObject {
     readonly property real pivotInset: (root.depth - root.slide) * root._attach
 
     // What the line opens: the silhouette's own rect along it, which is the
-    // card's rect widened by whatever a walled side runs out by, closing in
+    // clamped rect widened by whatever a walled side runs out by, closing in
     // from both ends toward the centre as the card lets go, plus the
-    // fillets' reach. Null once the card floats, which is the line whole
-    // again. A reach running past a wall is simply clamped by whoever draws
-    // the line (Surfaces/Bar/Bar.qml, Frame/geometry.js's `ringLine`).
-    readonly property real _joinStart: root.along - root._outStart
-    readonly property real _joinLength: root.length + root._outStart + root._outEnd
+    // fillets' reach. The clamped rect and not the card's own, so an owner's
+    // gap and the bud budding out of it land on the same two columns. Null
+    // once the card floats, which is the line whole again. A reach running
+    // past a wall is simply clamped by whoever draws the line
+    // (Surfaces/Bar/Bar.qml, Frame/geometry.js's `ringLine`).
+    readonly property real _joinStart: root.clampedAlong - root._outStart
+    readonly property real _joinLength: root.clampedLength + root._outStart + root._outEnd
 
-    readonly property var join: (root.joined && root.presence.shown && root._attach > 0)
+    readonly property var join: (root._joinable && root.presence.shown && root._attach > 0)
         ? ({
             edge: root.edge,
             x: root._joinStart + root._joinLength * (1 - root._attach) / 2,

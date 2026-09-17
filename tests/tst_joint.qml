@@ -28,8 +28,9 @@ TestCase {
         }
     }
 
-    function make() {
-        var presence = createTemporaryObject(presenceComponent, testCase);
+    function make(edge) {
+        var presence = createTemporaryObject(presenceComponent, testCase,
+            edge === undefined ? {} : { edge: edge });
         var joint = createTemporaryObject(jointComponent, testCase,
             { owner: testCase, presence: presence });
         return { presence: presence, joint: joint };
@@ -179,5 +180,94 @@ TestCase {
         tryCompare(m.joint, "attach", 0, 2000);
         compare(PanelRegistry.joinOn("top", "DP-1"), null);
         compare(PanelRegistry.joinOn("right", "DP-1"), null);
+    }
+
+    // --- The nested bud ---------------------------------------------------
+    //
+    // A 400 wide card hanging off a 200 wide strip at 1500, both of them at
+    // radius 20: all the strip's far edge can give is 1520 to 1680, its own
+    // corners off either end.
+    function budded(extra, edge) {
+        var m = make(edge);
+        m.joint.along = 1400;
+        m.joint.target = testCase;
+        m.joint.targetAlong = 1500;
+        m.joint.targetLength = 200;
+        m.joint.targetRadius = 20;
+        for (var key in extra)
+            m.joint[key] = extra[key];
+        return m;
+    }
+
+    // Attached, the card's rect is pulled into that span with room for a
+    // fillet at either end, so the silhouette is the span exactly.
+    function test_a_nested_card_is_clamped_into_its_owners_span() {
+        var j = budded({}).joint;
+        compare(j.attach, 1);
+        compare(j.clampedAlong, 1540);
+        compare(j.clampedLength, 120);
+    }
+
+    // And widens to the card's own rect on the attach clock, the clip going
+    // with it: at rest there is nothing left to hold the contents to.
+    function test_the_bud_widens_to_the_cards_own_rect() {
+        var m = budded({});
+        m.presence.open = true;
+        tryVerify(function () {
+            return m.joint.clampedLength > 120 && m.joint.clampedLength < 400;
+        }, 2000);
+        tryCompare(m.joint, "attach", 0, 2000);
+        compare(m.joint.clampedAlong, 1400);
+        compare(m.joint.clampedLength, 400);
+        compare(m.joint.clip, null);
+    }
+
+    // The gap the owner opens is the clamped rect, not the card's own, so the
+    // two cannot land on different columns. Fillets and all it is the span.
+    function test_the_join_is_published_from_the_clamped_rect() {
+        var m = budded({});
+        m.presence.open = true;
+        tryVerify(function () { return m.joint.shapeDepth > 40; }, 1000);
+        compare(m.joint.attach, 1);
+        var j = PanelRegistry.joinOn("top", "DP-1", testCase);
+        verify(j !== null);
+        compare(j.x, m.joint.clampedAlong);
+        compare(j.width, m.joint.clampedLength);
+        compare(j.x - j.reach, 1520);
+        compare(j.x + j.width + j.reach, 1680);
+        // And the clip is that same range, so the contents come out of the
+        // bud rather than beside it.
+        compare(m.joint.clip.start, 1520);
+        compare(m.joint.clip.length, 160);
+    }
+
+    // A span with room for neither two fillets nor a sliver of card between
+    // them is no line to bud from: nothing is published, the card is never
+    // attached, and it is held to the owner's own span until it is out.
+    function test_a_span_too_short_to_bud_from_does_not_join() {
+        var m = budded({ targetLength: 60 });
+        compare(m.joint.attach, 0);
+        m.presence.open = true;
+        compare(m.joint.join, null);
+        compare(m.joint.clip.start, 1520);
+        compare(m.joint.clip.length, 20);
+        tryCompare(m.presence, "settled", true, 2000);
+        compare(m.joint.attach, 0);
+        compare(m.joint.clip, null);
+        compare(PanelRegistry.joinOn("top", "DP-1", testCase), null);
+    }
+
+    // Beside a vertical bar the span is the owner's y range, read off the
+    // same three numbers.
+    function test_a_bud_beside_a_vertical_bar_takes_the_owners_y_range() {
+        var m = budded({ edge: "left" }, "left");
+        compare(m.joint.clampedAlong, 1540);
+        compare(m.joint.clampedLength, 120);
+        m.presence.open = true;
+        tryVerify(function () { return m.joint.shapeDepth > 40; }, 1000);
+        var j = PanelRegistry.joinOn("left", "DP-1", testCase);
+        verify(j !== null);
+        compare(j.x, 1540);
+        compare(j.width, 120);
     }
 }
