@@ -788,7 +788,12 @@ PanelWindow {
             // which drops presence.settled in the same pass, well before
             // either coordinate re-evaluates. Off through a handoff, which
             // draws its own trajectory: one clock over the frame, never two.
+            // Off while a size morph runs: the place is already a function of
+            // the animated size then, and a second clock chasing it trails
+            // the width, which puts a card held against the screen's far
+            // padding past the display's edge until it catches up.
             travel: !root._handoff && drawer.presence.settled && root.isOpen
+                && !morphWidth.running && !morphHeight.running
             moving: root._handoff || morphHeight.running || morphWidth.running
 
             // The pointer leaving the card takes the cursor with it. A row

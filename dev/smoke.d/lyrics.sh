@@ -72,6 +72,7 @@ lyrics_panel_none_json_path="$shot_dir/lyrics-panel-none.json"
 lyrics_wheel_dispatch_path="$shot_dir/lyrics-wheel-dispatch.txt"
 lyrics_wheel_target_path="$shot_dir/lyrics-wheel-target.txt"
 lyrics_return_rects_path="$shot_dir/lyrics-return-rects.txt"
+lyrics_edge_rects_path="$shot_dir/lyrics-edge-rects.txt"
 lyrics_lib_path="$shot_dir/lyrics-lib.sh"
 lyrics_marker_seeded="$shot_dir/lyrics-marker-seeded"
 lyrics_marker_open1="$shot_dir/lyrics-marker-open1"
@@ -388,12 +389,25 @@ EOF
 lyrics_wait_marker "$lyrics_marker_track1" 70
 id2=\$(cat "$lyrics_id2_path" 2>/dev/null)
 "$qs_bin" ipc -p "$shell_path" call media select "\$id2" > /dev/null 2>&1
+# The anchorless open rests against the screen's far padding, so this track
+# change is the one where the width (the pane leaving while the new key
+# loads, then coming back) has to carry the card's leading edge with it.
+# Eight frames straight through it, read in verify: the far edge on the
+# padding in every one, which a place animated on a clock of its own misses
+# by hundreds of pixels for most of the burst.
+for n in 1 2 3 4 5 6 7 8; do
+  "$grim_bin" "$shot_dir/lyrics-edge-\${n}.png" > /dev/null 2>&1
+done
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
   "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_estimated_path" 2>&1
   grep -qF '"state":"synced"' "$lyrics_status_estimated_path" && break
   sleep 1
 done
+# The pane arrives on the panel's own width morph. The position window below
+# can already be open the moment the state flips, so without this the frame
+# lands mid-morph and the pinned fractions read a card that is still moving.
+sleep 1
 
 SECONDS=0
 while [ "\$SECONDS" -lt 30 ]; do
@@ -504,6 +518,7 @@ leg_lyrics_assert() {
   [ -s "$lyrics_id2_path" ] || fail "no player id resolved for the estimated track, seed log: $(cat "$lyrics_seed_log_path" 2>/dev/null)"
   [ -s "$lyrics_id3_path" ] || fail "no player id resolved for the miss track, seed log: $(cat "$lyrics_seed_log_path" 2>/dev/null)"
   [ -f "$lyrics_bare_path" ] || fail "no bare (panel closed) screenshot produced"
+  echo "SMOKE_LYRICS_BARE $lyrics_bare_path"
 
   # spec P14: the lookup ran on the track change itself, not on the panel
   # opening, so this reaches synced before "panel open media" is ever
@@ -652,6 +667,23 @@ leg_lyrics_assert() {
   if ! awk -v l="${left_mean:-0}" -v r="${right_mean:-0}" 'BEGIN { exit !(l > r + 0.03) }'; then
     fail "the estimated track's wipe did not read brighter on its sung (left) half than its unsung (right) half: left=$left_mean right=$right_mean"
   fi
+
+  # Measured here rather than in the session: eight diffs cost more time
+  # than the run has left once the burst itself is done.
+  local edge_n edge_x edge_w edge_y edge_h edge_far=$((1920 - 12)) edge_off
+  : > "$lyrics_edge_rects_path"
+  for edge_n in 1 2 3 4 5 6 7 8; do
+    [ -f "$shot_dir/lyrics-edge-${edge_n}.png" ] || fail "edge-burst frame $edge_n was never taken"
+    read -r edge_x edge_y edge_w edge_h _ < <(lyrics_pane_rect "$lyrics_bare_path" "$shot_dir/lyrics-edge-${edge_n}.png" "$convert_bin")
+    echo "$edge_n $edge_x $edge_w" >> "$lyrics_edge_rects_path"
+  done
+  while read -r edge_n edge_x edge_w; do
+    edge_off=$((edge_x + edge_w - edge_far))
+    if [ "${edge_off#-}" -gt 4 ]; then
+      fail "the card left the screen's far padding while its width morphed: frame $edge_n x=$edge_x w=$edge_w, far edge $((edge_x + edge_w)) against $edge_far"
+    fi
+  done < "$lyrics_edge_rects_path"
+  echo "SMOKE_LYRICS_EDGE $(tr '\n' ';' < "$lyrics_edge_rects_path")"
 
   if [ ! -s "$lyrics_status_none_path" ]; then
     fail "no media lyrics status produced after switching to the untimed track"
