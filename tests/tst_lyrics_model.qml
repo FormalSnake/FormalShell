@@ -674,6 +674,29 @@ TestCase {
         compare(Lyrics.nextMainLineStart(lines, Lyrics.mainLineIndices(lines), 1), undefined);
     }
 
+    // A track switch republishes `lines` while a caller still holds a
+    // `mainIndices` built from the longer, previous array (LyricsPane's
+    // `_mainIndices` and `_activeIndex` are separate property bindings on
+    // the same `lines`, observed going out of step for one evaluation
+    // against a real MPRIS player in the VM rig). An index past the
+    // current array is a stale read, not a corrupt one, so every one of
+    // these skips it rather than indexing into `undefined`.
+    function test_active_main_line_index_ignores_a_mainIndices_entry_past_the_current_lines() {
+        var lines = [_line(1), _line(2)];
+        var staleMain = [0, 1, 2, 5];
+        compare(Lyrics.activeMainLineIndex(lines, staleMain, 2.5), 1);
+    }
+
+    function test_next_main_line_start_of_a_mainIndices_entry_past_the_current_lines_is_undefined() {
+        var lines = [_line(1), _line(2)];
+        compare(Lyrics.nextMainLineStart(lines, [0, 5], 0), undefined);
+    }
+
+    function test_background_line_bound_ignores_a_mainIndices_entry_past_the_current_lines() {
+        var lines = [_line(1), _backgroundLine(1.5, null, 0)];
+        compare(Lyrics.backgroundLineBound(lines, [0, 5], lines[1]), undefined);
+    }
+
     function test_line_end_estimate_prefers_its_own_end() {
         compare(Lyrics.lineEndEstimate(_line(1, 4)), 4);
     }

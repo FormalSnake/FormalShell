@@ -747,7 +747,7 @@ function nextMainLineStart(lines, mainIndices, lineIndex) {
     if (position === -1)
         return undefined;
     var next = mainIndices[position + 1];
-    return next === undefined ? undefined : lines[next].time;
+    return (next === undefined || next >= lines.length) ? undefined : lines[next].time;
 }
 
 // Whether `line` is lit at `t`: not yet started is never active; no end
@@ -773,6 +773,15 @@ function activeMainLineIndex(lines, mainIndices, t) {
     var result = -1;
     for (var i = 0; i < mainIndices.length; i++) {
         var index = mainIndices[i];
+        // `mainIndices` can be one property binding behind `lines` for a
+        // single evaluation (LyricsPane's `_mainIndices` and `_activeIndex`
+        // are separate bindings on the same `lines`, and QML settles a
+        // whole batch of property changes before either is read again), so
+        // an index past the current array shows up here as a real
+        // transient rather than a bug in the caller: skip it instead of
+        // indexing into `undefined`.
+        if (index >= lines.length)
+            continue;
         if (lines[index].time > t)
             break;
         if (lineActiveAt(lines[index], t, nextMainLineStart(lines, mainIndices, index)))
@@ -790,6 +799,8 @@ function backgroundLineBound(lines, mainIndices, line) {
     if (typeof line.end === "number" && isFinite(line.end))
         return undefined;
     for (var i = 0; i < mainIndices.length; i++) {
+        if (mainIndices[i] >= lines.length)
+            continue;
         var start = lines[mainIndices[i]].time;
         if (start > line.time)
             return start;
