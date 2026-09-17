@@ -195,6 +195,9 @@ while [ "\$SECONDS" -lt 15 ]; do
   grep -qF '"blur":false' "$lyrics_blur_status_off_path" && break
   sleep 1
 done
+# IPC flips with the key; the rows leave their blur on the effects clock after
+# it, and a frame taken in between is the blurred one again.
+sleep 1
 "$grim_bin" "$lyrics_blur_off_png_path" > /dev/null 2>&1
 EOF
   echo "exec-once = bash $script"
