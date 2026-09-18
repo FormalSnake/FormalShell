@@ -65,6 +65,29 @@ TestCase {
         }
     }
 
+    // The states a habit brings with it (T3): a table that takes the habit
+    // has to describe every one of them, and a table that does not is not
+    // asked for any. Which is what lets `Theme.hasState` be the question a
+    // surface asks before naming one.
+    function test_every_table_carries_the_states_its_habits_ask_for() {
+        var names = tableNames();
+        for (var t = 0; t < names.length; t++) {
+            var style = tables[names[t]];
+            var required = Style.habitStates(style);
+            for (var role in required) {
+                for (var s = 0; s < required[role].length; s++) {
+                    var state = required[role][s];
+                    verify(Style.hasState(style, role, state),
+                        names[t] + " takes a habit that needs " + role + "." + state);
+                }
+            }
+        }
+        // The strip habit asks for none of them, and metamorphosis carries
+        // none: a table cannot pick up another theme's chrome by accident.
+        verify(!Style.hasState(Metamorphosis.STYLE, "bar", "translucentDark"));
+        verify(!Style.hasState(Metamorphosis.STYLE, "cell", "ghostOpen"));
+    }
+
     function test_every_colour_a_table_names_is_a_palette_role_or_a_literal() {
         var names = tableNames();
         for (var t = 0; t < names.length; t++) {
@@ -384,6 +407,60 @@ TestCase {
     function test_the_pantheon_scrim_is_gala_s_dim() {
         var scrim = Style.resolve(Pantheon.STYLE, "scrim", null, ctx("dark"));
         compare(scrim.fill, Style.LITERAL_COLORS.black + "@" + (125 / 255));
+    }
+
+    // wingpanel's band, one paint per answer its sampling gives (T3): the
+    // two bare paints differ in ink alone, the two translucent ones add a
+    // fill, and a window covering the output takes it solid. The cast
+    // wingpanel hangs under its translucent-dark panel is deliberately not
+    // in the table: the bar's window is the band's own thickness.
+    function test_the_pantheon_band_has_a_paint_per_reading() {
+        var style = Pantheon.STYLE;
+        var white = Style.LITERAL_COLORS.white;
+        var black = Style.LITERAL_COLORS.black;
+
+        var light = Style.resolve(style, "bar", "light", ctx("dark"));
+        compare(light.fill, Style.LITERAL_COLORS.transparent);
+        compare(light.ink, white);
+        compare(light.inkShadow, black + "@0.6");
+        compare(light.casts.length, 0);
+
+        var dark = Style.resolve(style, "bar", "dark", ctx("dark"));
+        compare(dark.fill, Style.LITERAL_COLORS.transparent);
+        compare(dark.ink, black + "@0.65");
+        compare(dark.inkShadow, white + "@0.25");
+
+        var translucentDark = Style.resolve(style, "bar", "translucentDark", ctx("dark"));
+        compare(translucentDark.fill, black + "@0.3");
+        compare(translucentDark.ink, white);
+
+        var translucentLight = Style.resolve(style, "bar", "translucentLight", ctx("dark"));
+        compare(translucentLight.fill, white + "@0.5");
+        compare(translucentLight.ink, black + "@0.65");
+        compare(translucentLight.hairlines.length, 2);
+        compare(translucentLight.hairlines[0].color, white + "@0.15");
+        compare(translucentLight.hairlines[1].edge, "bottom");
+        compare(translucentLight.hairlines[1].color, white + "@0.03");
+
+        var maximized = Style.resolve(style, "bar", "maximized", ctx("dark"));
+        compare(maximized.fill, black);
+        compare(maximized.ink, white);
+
+        // Every band draws its own edge at width 0: wingpanel has no line
+        // facing the desktop, and Bar reads the width either way.
+        compare(Style.resolve(style, "bar", null, ctx("dark")).edge.width, 0);
+    }
+
+    // An open indicator fills instead of carrying a line along the band
+    // (`cell.mark`, which nothing under this habit reaches), and the fill is
+    // the highlight at 0.6: white in light, the GTK product in dark.
+    function test_the_pantheon_open_indicator_fills_its_cell() {
+        var open = Style.resolve(Pantheon.STYLE, "cell", "ghostOpen", ctx("light"));
+        compare(open.fill, Style.LITERAL_COLORS.white + "@0.6");
+        compare(open.border, null);
+        compare(open.radius, 3);
+        compare(Style.resolve(Pantheon.STYLE, "cell", "ghostOpen", ctx("dark")).fill,
+            Style.LITERAL_COLORS.white + "@0.12");
     }
 
     // The habits Part 2 names, which the surfaces read from M60 T2 on.

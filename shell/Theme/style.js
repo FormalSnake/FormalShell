@@ -18,7 +18,7 @@
 // `button` disabled is not here: it is opacity 0.5 on the whole control
 // rather than a box of its own, and it stays in the primitive.
 var ROLES = {
-    "bar": [],
+    "bar": ["rest"],
     "frame": [],
     "card": ["rest", "opaque"],
     "notification": ["rest", "critical", "flat", "flatCritical"],
@@ -56,6 +56,44 @@ var HABITS = {
     switcher: [true, false]
 };
 
+// The states a habit brings with it, over and above `ROLES` (T3):
+// wingpanel's band carries one paint per answer its own sampling gives
+// (barpaint.js), and marks an open indicator by filling its cell rather
+// than by drawing a line along it, so a table whose `bar` habit is the
+// strip declares none of them. Required of the tables that take the habit
+// and of no others, which is what `habitStates` below answers for the
+// validation test; a surface asks `hasState` before naming one, so a table
+// without it falls back to the state under it instead of to the role's
+// base.
+var HABIT_STATES = {
+    bar: {
+        wingpanel: {
+            "bar": ["light", "dark", "translucentLight", "translucentDark", "maximized"],
+            "cell": ["ghostOpen"]
+        }
+    }
+};
+
+function habitStates(style) {
+    var out = {};
+    var habits = style && style.habits ? style.habits : {};
+    for (var key in HABIT_STATES) {
+        var declared = HABIT_STATES[key][habits[key]];
+        if (!declared)
+            continue;
+        for (var role in declared)
+            out[role] = (out[role] || []).concat(declared[role]);
+    }
+    return out;
+}
+
+// Whether a table describes a state at all. Only the states above need
+// asking: everything in `ROLES` is validated present in every table.
+function hasState(style, role, state) {
+    var declared = style && style.roles ? style.roles[role] : null;
+    return !!(declared && declared[state]);
+}
+
 // The clocks a habit brings with it (M60 T2), one entry per key: a
 // duration and a curve, each either a number (a curve is the control
 // points `easing.bezierCurve` wants) or the name of one of the shell's own
@@ -89,6 +127,13 @@ function _defaults() {
         face: null,
         wash: null,
         edge: null,
+        // The ink the material decides rather than the palette, and the
+        // shadow that lifts it off what it sits on: wingpanel's band paints
+        // white words on a wallpaper, so the colour belongs beside the fill
+        // under them. Transparent is "the material says nothing", which
+        // leaves every consumer's own ink standing.
+        ink: LITERAL_COLORS.transparent,
+        inkShadow: LITERAL_COLORS.transparent,
         hairlines: [],
         rings: [],
         casts: []
@@ -104,6 +149,13 @@ function roleNames() {
 
 function statesFor(role) {
     return ROLES[role] || [];
+}
+
+// Every state of a role a given table actually describes, its habit's own
+// included, for the walkers that validate a whole table.
+function declaredStates(style, role) {
+    var extra = habitStates(style)[role] || [];
+    return statesFor(role).concat(extra);
 }
 
 // The raw entry for a role and a state, states merged key by key over the
@@ -250,6 +302,10 @@ function resolve(style, role, state, ctx) {
         out.wash = paint(raw.wash.color, raw.wash.alpha, ctx);
     if (raw.edge)
         out.edge = { color: paint(raw.edge.color, raw.edge.alpha, ctx), width: raw.edge.width };
+    if (raw.ink)
+        out.ink = paint(raw.ink[0], raw.ink[1], ctx);
+    if (raw.inkShadow)
+        out.inkShadow = paint(raw.inkShadow[0], raw.inkShadow[1], ctx);
 
     var split = layers(raw.layers);
     for (var h = 0; h < split.hairlines.length; h++) {
@@ -353,6 +409,10 @@ function colorNames(style) {
             take(box.edge.color);
         if (box.tint)
             take(box.tint[0]);
+        if (box.ink)
+            take(box.ink[0]);
+        if (box.inkShadow)
+            take(box.inkShadow[0]);
         for (var i = 0; box.layers && i < box.layers.length; i++)
             take(box.layers[i].color);
     }
@@ -361,7 +421,7 @@ function colorNames(style) {
         var declared = style.roles[role];
         if (!declared)
             continue;
-        var states = statesFor(role);
+        var states = declaredStates(style, role);
         if (states.length === 0) {
             takeBox(declared);
             continue;
@@ -411,7 +471,7 @@ function alphaValues(style) {
         var declared = style.roles[role];
         if (!declared)
             continue;
-        var states = statesFor(role);
+        var states = declaredStates(style, role);
         if (states.length === 0) {
             takeBox(role, declared);
             continue;

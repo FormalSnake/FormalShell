@@ -96,6 +96,8 @@ Rail {
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
     property bool ghost: false
     property string barEdge: ""
+    property color barInk: "transparent"
+    property color barInkShadow: "transparent"
 
     // The rail follows the bar: a column on a left or right bar, where
     // Bar.qml's region delegate sizes it across the strip by width rather
@@ -232,6 +234,8 @@ Rail {
             menu: root.menu
             ghost: root.ghost
             barEdge: root.barEdge
+            barInk: root.barInk
+            barInkShadow: root.barInkShadow
             visible: itemCell.index < root._inline
 
             // Bar.qml's region delegate stretches this rail to the bar's
@@ -255,6 +259,8 @@ Rail {
         id: overflowCell
         ghost: root.ghost
         barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
         visible: root._hidden > 0
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height

@@ -51,6 +51,11 @@ IpcHandler {
             focusedWindowId: CompositorService.focusedWindowId,
             heldFocusedWindowId: CompositorService.heldFocusedWindowId,
             focusedWorkspaceId: CompositorService.focusedWorkspaceId,
+            // The outputs a focused fullscreen window covers, which decides
+            // both the chrome auto-hide and the wingpanel band's solid paint
+            // (Surfaces/Bar/BarWingpanel.qml), so a leg reading either can
+            // see the set behind it.
+            fullscreenOutputs: CompositorService.fullscreenOutputs,
             configLoaded: Core.Config.settings,
             audio: {
                 volume: AudioService.volume,
@@ -83,7 +88,10 @@ IpcHandler {
 
     // Every mapped strip and the two segments of its inward line (M54 D6):
     // the gap a joined card opens is the shell's own number, so a rig leg
-    // asserts on it instead of measuring pixels through a screenshot.
+    // asserts on it instead of measuring pixels through a screenshot. Under
+    // the wingpanel habit there is no line and a `paint` instead (M60 T3):
+    // which of the band's paints the wallpaper under it asked for, and the
+    // three numbers that decided it.
     function _bars() {
         var bars = Core.PanelRegistry.bars;
         var out = [];
@@ -92,7 +100,8 @@ IpcHandler {
             out.push({
                 screen: bar.modelData ? bar.modelData.name : "",
                 edge: bar._position,
-                line: bar.lineRects()
+                line: bar.lineRects(),
+                paint: bar.paintState()
             });
         }
         return out;

@@ -50,9 +50,19 @@ Text {
     color: root.cell
         ? (root.meta ? root.cell.dimForeground : root.cell.foreground)
         : Theme.color.foreground
+
+    // Ink drawn straight onto a wallpaper (Components/Cell.qml's `barInk`,
+    // wingpanel's band) carries the shadow and the weight that hold it
+    // together over whatever is under it. `Text.Raised` is the 1px offset of
+    // elementary's two-layer text shadow; the 2px blur above it is not
+    // something a Text can draw, and the offset is what does the work.
+    readonly property bool _band: !!root.cell && root.cell.bandInk
+    style: root._band ? Text.Raised : Text.Normal
+    styleColor: root.cell ? root.cell.barInkShadow : "transparent"
+
     font.family: root.meta ? Theme.fontFamilySans : Theme.fontFamilyMono
     font.pixelSize: root.meta ? Theme.fontSize.caption : Theme.fontSize.body
-    font.weight: Theme.weight.medium
+    font.weight: root._band ? Theme.weight.semibold : Theme.weight.medium
     font.capitalization: root.meta ? Font.AllUppercase : Font.MixedCase
     font.letterSpacing: root.meta ? Theme.letterSpacing.meta : 0
 }

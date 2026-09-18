@@ -159,6 +159,14 @@ Singleton {
         return Style.resolve(root.style, role, state, root._styleCtx());
     }
 
+    // Whether the live table describes a state at all, for a state only one
+    // habit's surfaces draw (M60 T3): a bar cell marking an open panel by
+    // filling itself under wingpanel still has to fall back to the ghost's
+    // own box under a table that leaves that mark to a line along the edge.
+    function hasState(role, state) {
+        return Style.hasState(root.style, role, state);
+    }
+
     // The keyboard cursor composed over the box a control already carries
     // (M59 T6): one table entry decides what a cursor looks like wherever it
     // lands. `halo` is a second answer from `on`, because a list draws one

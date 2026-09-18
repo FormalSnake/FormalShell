@@ -82,8 +82,21 @@ Box {
     // reads as one surface. Every state that is not "resting" still draws
     // exactly as it does anywhere else: the hover fill, the active and
     // selected fills, the cursor ring, the destructive and warning borders,
-    // and the open-panel mark. Bar.qml sets this on every cell it hosts.
+    // and the open-panel mark, unless the table paints that one on the cell
+    // itself (`_ghostOpenState` below). Bar.qml sets this on every cell it
+    // hosts.
     property bool ghost: false
+
+    // The ink the band under this cell decides, and the shadow that lifts it
+    // off what it is drawn onto (M60 T3, Surfaces/Bar/BarWingpanel.qml):
+    // white over a dark band, dark over a light one. Handed down by the bar
+    // beside `ghost`, and transparent everywhere else, which leaves every
+    // state's own ink standing. The band's ink comes with the band's weight
+    // too, which is what `bandInk` below says to a label.
+    property color barInk: "transparent"
+    property color barInkShadow: "transparent"
+
+    readonly property bool bandInk: root.barInk.a > 0
 
     // The output edge the bar this cell sits on occupies (`bar.position`),
     // or empty for a cell anywhere else. Bar.qml sets it on every cell it
@@ -116,7 +129,15 @@ Box {
         ? "active"
         : (root.selected && !root._selectionOwned)
             ? "selected"
-            : root.ghost ? "ghost" : "rest"
+            : root.ghost ? (root._ghostOpenState || "ghost") : "rest"
+
+    // The open-panel look where the theme paints it on the cell rather than
+    // as a line along the bar's edge: wingpanel fills an open indicator, so
+    // the table carries a `ghostOpen` state and the mark below stands down.
+    // Empty for a table that describes none, which is the ghost's own box
+    // and the mark.
+    readonly property string _ghostOpenState: root.ghost && root.panelOpen
+        && Theme.hasState(root.role, "ghostOpen") ? "ghostOpen" : ""
 
     readonly property string _borderState: root.destructive
         ? "destructive"
@@ -199,7 +220,7 @@ Box {
                 ? Theme.color.warning
                 : root.selected
                     ? Theme.color.accentForeground
-                    : Theme.color.foreground
+                    : root.bandInk ? root.barInk : Theme.color.foreground
 
     // Not readonly, so the Behavior has a property to intercept: the ink a
     // cell's labels bind to crosses on the same clock its fill does, or the
@@ -215,8 +236,9 @@ Box {
     // under 1.1:1 contrast, so a fill promotes it to the same ink
     // `foreground` resolves for content. A destructive or warning cell is not
     // filled (its colour is on the border and the label), so its captions
-    // stay dim.
-    property color dimForeground: (root.active || root.selected)
+    // stay dim. A cell on a band takes the band's ink for both: a dim
+    // caption over a wallpaper is not a caption.
+    property color dimForeground: (root.active || root.selected || root.bandInk)
         ? root._ink
         : Theme.color.mutedForeground
 
@@ -371,7 +393,7 @@ Box {
         // and never overshoots.
         property real _presence: root.panelOpen ? 1 : 0
         property real _fade: root.panelOpen ? 1 : 0
-        visible: panelMark.opacity > 0
+        visible: panelMark.opacity > 0 && root._ghostOpenState === ""
         opacity: panelMark._fade
         readonly property bool _sideways: root.vertical
         // Inside whatever border the cell actually draws, so the line sits

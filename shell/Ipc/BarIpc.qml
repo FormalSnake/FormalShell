@@ -129,4 +129,21 @@ IpcHandler {
             out.push(bars[i].roomState());
         return JSON.stringify(out);
     }
+
+    // `qs ipc call bar paint` (M60 T3): each mapped band's own paint and the
+    // three numbers behind it (`Surfaces/Bar/BarWingpanel.qml`), one array
+    // entry per screen, the same fan-out `room` above takes. A bar drawing
+    // the strip has nothing under it to read and answers with a null paint,
+    // never an invented one.
+    function paint(): string {
+        var bars = PanelRegistry.bars;
+        var out = [];
+        for (var i = 0; i < bars.length; i++) {
+            out.push({
+                screen: bars[i].modelData ? bars[i].modelData.name : "",
+                paint: bars[i].paintState()
+            });
+        }
+        return JSON.stringify(out);
+    }
 }

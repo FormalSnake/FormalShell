@@ -51,12 +51,16 @@ var STYLE = {
         // and one hairline along the edge facing the desktop. `edge` rather
         // than `border` because three of the four sides are the screen's own
         // edges, and the line is drawn in two segments around the gap a
-        // joined card opens in it, which is Bar's own geometry.
+        // joined card opens in it, which is Bar's own geometry. One state,
+        // since the strip habit has one paint; the five a sampled band
+        // takes are wingpanel's (style.js's HABIT_STATES).
         "bar": {
-            fill: "card",
-            fillAlpha: "surface",
-            radius: 0,
-            edge: { color: "border", width: 1 }
+            rest: {
+                fill: "card",
+                fillAlpha: "surface",
+                radius: 0,
+                edge: { color: "border", width: 1 }
+            }
         },
 
         // The screen frame's ring. Its corner is `frame.radius`, a settings

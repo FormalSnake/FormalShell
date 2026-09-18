@@ -75,6 +75,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   launching through the row path, apps and a ranked route sharing the card,
   and the key deleted underneath the running shell putting the row list
   back.
+- `bar_adaptive.sh` `--bar-adaptive`: the wingpanel band reading its own
+  paint off the wallpaper under it, four wallpapers in one session (a flat
+  bright field, a flat dark one, a half-and-half field, and the dark one
+  under a fullscreen window), each read twice: the paint and the three
+  numbers `bar paint` reports, and the fill the band actually drew, off a
+  patch of the frame above the cells. Pins `theme.preset` and
+  `fullscreen.hideChrome` itself.
 - `bar_layout.sh` `--bar-layout`: user `bar.modules` and a reordered layout
   resolved from settings.json alone, every `CommandModule` failure path in
   the one frame.

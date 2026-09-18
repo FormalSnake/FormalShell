@@ -39,14 +39,15 @@ import "../../Components/tooltip.js" as Placement
 // its configuration. Which side it governs is the side away from the region's
 // own anchored edge (M25, layout.js's governsBefore), so the chevron itself
 // keeps its x whatever it is holding.
-// The strip is one continuous surface (DESIGN.md §3 Bar, M47 D1): a
-// full-length `card` fill at `theme.surfaceOpacity` with a 1px `border`
-// along its inner edge, and nothing else. The cells inside are ghosts,
-// so this is the only fill and the only border the bar draws; the owner
-// ran the floating-pill version on both boxes and asked for the shadcn
-// navbar instead (2026-08-25). Its thickness is the cell row plus a
-// `barMargin` band either side, and that whole thickness is the exclusive
-// zone, so a tiled window stops under the border rather than behind it.
+// What the strip is PAINTED with is the theme's own `bar` habit and one
+// file each (M60 T3): `BarStrip.qml` is the shipped surface (DESIGN.md §3
+// Bar, M47 D1, a full-length `card` fill with a 1px line along its inner
+// edge and nothing else, the cells inside it ghosts) and
+// `BarWingpanel.qml` is elementary's band, whose paint is read off the
+// wallpaper under it. Everything else here is the bar's own either way: its
+// thickness is the cell row plus a `barMargin` band either side, and that
+// whole thickness is the exclusive zone, so a tiled window stops under the
+// bar's own edge rather than behind it.
 // Which output edge it runs along is `bar.position` (Theme.barPosition):
 // top by default, or bottom, left, right. On a left or right bar the same
 // three regions run top to bottom (`left` at the top, `right` at the
@@ -218,60 +219,39 @@ PanelWindow {
     readonly property bool _vertical: Theme.barVertical
     readonly property var _strip: Layout.stripGeometry(Theme.space, bar._position)
 
-    // The strip's own box in the theme's table: its fill, and the one line it
-    // draws along the edge facing the desktop rather than a border round all
-    // four sides (see the fill below).
-    readonly property var _box: Theme.box("bar")
-    readonly property var _edge: bar._box.edge
-
-    // The strip as drawn, less any cast the table hangs under the band: this
-    // window is exactly the strip's thickness and `ExclusionMode.Auto`
-    // reserves that same thickness, so the room to blur one into would have
-    // to come out of the reservation.
-    readonly property var _stripBox: {
-        var out = {};
-        for (var key in bar._box)
-            out[key] = bar._box[key];
-        out.casts = [];
-        return out;
-    }
+    // Which paint the strip wears, by the theme's own bar habit (M60 T3):
+    // the metamorphosis strip (BarStrip.qml, the card fill and the one line
+    // along the edge facing the desktop) or wingpanel's band
+    // (BarWingpanel.qml, a paint read off the wallpaper under it). The paint
+    // alone rides the habit: the window, its reservation, the three regions
+    // and every cell below are the bar's own either way.
+    readonly property bool _wingpanel: Theme.habit.bar === "wingpanel"
 
     // The strip's own length: what the regions share out, and what a
     // cell's width cap is a fraction of.
     readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
 
-    // The card joined to THIS strip, if any (M54 D6, PanelRegistry.joins): a
-    // join on another output or against another edge is somebody else's.
-    readonly property var _join: PanelRegistry.joinOn(bar._position, bar.modelData ? bar.modelData.name : "")
-
-    // The gap itself: one card's rect plus the fillets' `reach` at either
-    // end, which is exactly the span Components/Shoulders.qml draws into. A
-    // pure function of the join, with no clock of its own: the join is read
-    // off the card's live rect, which the card's own clocks already carry,
-    // and a second clock here left the line lagging the shoulders it has to
-    // meet. Closed, the two segments meet at the start and the line is
-    // whole.
-    readonly property real _gapStart: bar._join
-        ? Math.max(0, Math.min(bar._along, bar._join.x - bar._join.reach))
-        : 0
-    readonly property real _gapEnd: bar._join
-        ? Math.max(bar._gapStart, Math.min(bar._along, bar._join.x + bar._join.width + bar._join.reach))
-        : 0
+    // What the paint hands the cells on it, and the only thing it does: a
+    // band whose colour is decided by the wallpaper decides the ink over it
+    // with the same reading (Components/Cell.qml's `barInk`). A strip hands
+    // down nothing and every cell resolves its own ink from its state.
+    readonly property color _cellInk: stripPaint.item ? stripPaint.item.ink : "transparent"
+    readonly property color _cellInkShadow: stripPaint.item ? stripPaint.item.inkShadow : "transparent"
 
     // The inward line's two segments in this window's own coordinates, for
     // `debug dump` (Ipc/DebugIpc.qml): a rig leg reads the gap a joined card
     // opened off the shell's own numbers instead of hunting for it in
     // pixels. A framed bar draws no hairline at all (FrameRing carries that
-    // edge), so this is empty there rather than reporting a hidden rect.
+    // edge), so this is empty there rather than reporting a hidden rect, and
+    // so is a band that has no line to break.
     function lineRects() {
-        if (bar._framed)
-            return [];
-        return [bar._rectOf(hairlineStart), bar._rectOf(hairlineEnd)];
+        return stripPaint.item ? stripPaint.item.lineRects() : [];
     }
 
-    function _rectOf(item) {
-        var origin = item.mapToItem(null, 0, 0);
-        return { x: origin.x, y: origin.y, width: item.width, height: item.height };
+    // What paint the band settled on and the numbers behind it, or null
+    // under a habit with nothing to read (Ipc/BarIpc.qml's `paint`).
+    function paintState() {
+        return stripPaint.item ? stripPaint.item.paintState() : null;
     }
 
     // What the strip has left over once all three regions have taken their
@@ -781,6 +761,13 @@ PanelWindow {
                     // Set here rather than in the 25 registry Components above,
                     // so a new widget joins the strip by being listed.
                     entryLoader.item.ghost = true;
+                    // The band's own ink, for the one habit whose paint
+                    // decides it (M60 T3): a binding rather than a value,
+                    // since the paint is re-read whenever the wallpaper
+                    // under the band changes. Transparent under the strip
+                    // habit, where a cell's own state resolves its ink.
+                    entryLoader.item.barInk = Qt.binding(function () { return bar._cellInk; });
+                    entryLoader.item.barInkShadow = Qt.binding(function () { return bar._cellInkShadow; });
                     // A binding, not a value: settings.json lands after the
                     // first cells exist, and whether this Repeater resets
                     // before or after Theme.barPosition moves is not ordered,
@@ -807,6 +794,22 @@ PanelWindow {
                     }
                 }
             }
+        }
+    }
+
+    Component {
+        id: stripRecipe
+
+        BarStrip {
+            owner: bar
+        }
+    }
+
+    Component {
+        id: wingpanelRecipe
+
+        BarWingpanel {
+            owner: bar
         }
     }
 
@@ -852,45 +855,16 @@ PanelWindow {
 
         opacity: presence.opacity
 
-        // Declared before the regions, so it stacks behind every cell. With the
-        // screen frame on, the ring below already paints the strip as part of
-        // itself, so this fill is off and only the cells draw here.
-        Box {
+        // Declared before the regions, so it stacks behind every cell. With
+        // the screen frame on, the ring below already paints the strip as
+        // part of itself, so the paint is off and only the cells draw here;
+        // the loaded item still answers `paint`, since what the band would
+        // be painted with is the same question either way.
+        Loader {
+            id: stripPaint
             anchors.fill: parent
             visible: !bar._framed
-            box: bar._stripBox
-
-            // The hairline that separates the strip from the desktop, and the
-            // only edge the bar draws: the one facing inward. A `border` on the
-            // fill above would ring all four sides, three of which are the
-            // screen's own edges. With the screen frame on, the frame's own
-            // stroke runs this side too, round the corners into its band, and
-            // this whole fill is off.
-            //
-            // Two segments rather than one (M54 D6): a card joined to the bar
-            // opens a gap between them, its own rect plus a fillet's radius at
-            // either end, and Components/Shoulders.qml draws the card's
-            // concave shoulders into exactly that span, so the line runs into
-            // the card instead of under it. The gap follows the join frame by
-            // frame (see `_gapStart`) and is simply gone when none exists,
-            // which is what leaves an ordinary session's line whole and still.
-            Rectangle {
-                id: hairlineStart
-                width: bar._vertical ? bar._edge.width : bar._gapStart
-                height: bar._vertical ? bar._gapStart : bar._edge.width
-                x: bar._position === "left" ? parent.width - hairlineStart.width : 0
-                y: bar._position === "top" ? parent.height - bar._edge.width : 0
-                color: bar._edge.color
-            }
-
-            Rectangle {
-                id: hairlineEnd
-                width: bar._vertical ? bar._edge.width : Math.max(0, parent.width - bar._gapEnd)
-                height: bar._vertical ? Math.max(0, parent.height - bar._gapEnd) : bar._edge.width
-                x: bar._position === "left" ? parent.width - hairlineEnd.width : (bar._vertical ? 0 : bar._gapEnd)
-                y: bar._position === "top" ? parent.height - bar._edge.width : (bar._vertical ? bar._gapEnd : 0)
-                color: bar._edge.color
-            }
+            sourceComponent: bar._wingpanel ? wingpanelRecipe : stripRecipe
         }
 
         // The three regions, each a Rail (a Row that stands up with the bar).

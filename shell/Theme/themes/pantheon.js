@@ -104,24 +104,51 @@ var WASH = {
 
 var STYLE = {
     roles: {
-        // wingpanel's translucent-dark band (`wingpanel-interface`'s
-        // BackgroundManager): black at 0.3 over whatever is under it, with
-        // its own cast along the lower edge. The strip is a Box, but its
-        // window is exactly the strip's thickness and reserves that same
-        // thickness, so the cast is dropped there (Bar.qml's `_stripBox`)
-        // and waits for the wingpanel bar (M60 T3). The line facing the
-        // desktop stays Bar's own, since it is one-sided and breaks around
-        // a joined card, so the edge stands at width 0 rather than absent,
-        // which is what Bar reads for it.
+        // wingpanel's band (`data/styles/Application.css`, one paint per
+        // answer `wingpanel-interface/BackgroundManager.vala` gives for what
+        // is under the panel; shell/Theme/barpaint.js carries the decision
+        // and Surfaces/Bar/BarWingpanel.qml draws it). `rest` is the base
+        // the five merge over: no fill, no line facing the desktop (the
+        // edge stands at width 0, which is what Bar reads for it), and the
+        // white ink the two dark bands and the light-wallpaper band all
+        // take.
+        //
+        // The names say which INK a paint carries, not how dark its band
+        // is, which is the spec's own reading of wingpanel's classes:
+        // `dark` is dark ink over a bright wallpaper, `light` light ink
+        // over a dark one, and the two translucent paints are named after
+        // the fill they add.
+        //
+        // The cast wingpanel hangs under its translucent-dark panel
+        // (`0 1px 3px black 0.15, 0 1px 1px black 0.3`) is not here: the
+        // bar's window is exactly the band's thickness and reserves that
+        // same thickness, so there is no row under the band to blur into.
         "bar": {
-            fill: "black",
-            fillAlpha: 0.3,
-            radius: 0,
-            edge: { color: "black", alpha: 0.3, width: 0 },
-            layers: [
-                { y: 1, blur: 3, color: "black", alpha: 0.15 },
-                { y: 1, blur: 1, color: "black", alpha: 0.3 }
-            ]
+            rest: {
+                fill: "transparent",
+                radius: 0,
+                edge: { color: "black", alpha: 0.3, width: 0 },
+                ink: ["white", 1],
+                inkShadow: ["black", 0.6]
+            },
+            // A calm dark wallpaper: the base as it stands, white ink
+            // straight onto the desktop with no band drawn at all.
+            light: {},
+            // A calm bright one: the same bare band, dark ink, and the
+            // shadow turns white with it.
+            dark: { ink: ["black", 0.65], inkShadow: ["white", 0.25] },
+            translucentLight: {
+                fill: "white",
+                fillAlpha: 0.5,
+                ink: ["black", 0.65],
+                inkShadow: ["white", 0.25],
+                layers: [
+                    { inset: true, y: 1, color: "white", alpha: 0.15 },
+                    { inset: true, y: -1, color: "white", alpha: 0.03 }
+                ]
+            },
+            translucentDark: { fill: "black", fillAlpha: 0.3 },
+            maximized: { fill: "black", fillAlpha: 1 }
         },
 
         // No elementary counterpart: a screen frame is ours. It is the bar's
@@ -224,6 +251,19 @@ var STYLE = {
                 border: { color: "black", alpha: CONTROL_BORDER, width: 1 }
             },
             ghost: { fill: "transparent", border: null },
+            // An open wingpanel indicator (`data/styles/Application.css`):
+            // the cell fills with `highlight` at 0.6 rather than carrying a
+            // line along the band's edge, which is why `cell.mark` below
+            // never draws under this habit. White at 0.6 in light and at
+            // 0.12 in dark, the GTK product described in the header.
+            // wingpanel's own white 0.3 for the maximized band is dropped:
+            // the cell is handed the band's ink, not which paint it is
+            // under, and one fill reads on all five.
+            ghostOpen: {
+                fill: "white",
+                fillAlpha: { light: 0.6, dark: 0.12 },
+                border: null
+            },
             hover: { wash: WASH.hover },
             active: { fill: "primary", fillAlpha: 1 },
             selected: { fill: "accent", fillAlpha: 1 },
@@ -231,10 +271,9 @@ var STYLE = {
             warning: { border: { color: "warning", width: 1 } }
         },
 
-        // No elementary counterpart: wingpanel marks an open indicator by
-        // filling it rather than by drawing a line under it, and that fill
-        // is the wingpanel bar's business (M60 T3). Until then the mark
-        // keeps its shape and takes the accent.
+        // No elementary counterpart: wingpanel marks an open indicator with
+        // the `ghostOpen` fill above and draws no line, so this is what a
+        // cell outside a band would take, and nothing on the bar reaches it.
         "cell.mark": { fill: "primary", radius: "sm" },
 
         // The suggested action (`widgets/button.scss`, `.suggested-action`):

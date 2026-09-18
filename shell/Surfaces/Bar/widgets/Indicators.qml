@@ -60,6 +60,8 @@ Rail {
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
     property bool ghost: false
     property string barEdge: ""
+    property color barInk: "transparent"
+    property color barInkShadow: "transparent"
 
     // A column on a left or right bar (Tray.qml's rail does the same).
     vertical: root.barEdge === "left" || root.barEdge === "right"
@@ -70,6 +72,8 @@ Rail {
         id: recordingCell
         ghost: root.ghost
         barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height
         visible: root._recordingActive
@@ -96,6 +100,8 @@ Rail {
         id: clipsshCell
         ghost: root.ghost
         barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height
         visible: root._clipsshSending
@@ -115,6 +121,8 @@ Rail {
         id: reminderCell
         ghost: root.ghost
         barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height
         visible: root._reminderPending
@@ -150,6 +158,8 @@ Rail {
         id: stayAwakeCell
         ghost: root.ghost
         barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
         // A positioner manages position, never size, so each glyph cell
         // binds its extent across the strip to `root`, which IS the rail
         // Bar.qml's regionDelegate stretches to the bar's shared cell
@@ -180,6 +190,8 @@ Rail {
         id: nightLightCell
         ghost: root.ghost
         barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height
         visible: root._nightLightActive
