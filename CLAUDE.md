@@ -15,6 +15,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   behaviour, shadcn chrome, wallpaper palette, keyboard everywhere, Hyprland
   only). The 2026-07-27 spec still holds for architecture, IPC and config;
   the 08-25 spec wins where the two disagree.
+- Since 2026-09-18 `docs/superpowers/specs/2026-09-18-theme-boundary.md`
+  decides what a theme owns (styling, bar position, motion) and what is
+  global (layout, behaviour, spacing, casing, palette source). It wins
+  over both specs above.
 
 ## Verification loop
 
