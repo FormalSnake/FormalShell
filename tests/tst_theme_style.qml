@@ -182,6 +182,14 @@ TestCase {
         }
     }
 
+    // The band's paint policy is the table's (M62, owner 2026-09-18):
+    // pantheon never fills it, the strip habit keeps wingpanel's rule as a
+    // value nothing reads.
+    function test_the_paint_policy_is_the_tables() {
+        compare(Pantheon.STYLE.habits.paint, "transparent");
+        compare(Metamorphosis.STYLE.habits.paint, "auto");
+    }
+
     function test_every_table_declares_the_habits_and_the_washes() {
         var names = tableNames();
         for (var t = 0; t < names.length; t++) {

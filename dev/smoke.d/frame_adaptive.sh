@@ -79,7 +79,10 @@ leg_frame_adaptive_fixture() {
   # The owner's own layout: the ring all round the output with the bar's band
   # down the left edge of it.
   settings_fragment ', "frame": {"thickness": 24, "radius": 20}'
-  settings_fragment ', "bar": {"position": "left"}'
+  # The rule itself is the claim, and pantheon's own table pins the band
+  # transparent, so the key puts the rule back; the pinned case sets it
+  # again on its own.
+  settings_fragment ', "bar": {"position": "left", "paint": "auto"}'
   settings_fragment ', "fullscreen": {"hideChrome": false}'
   $convert_bin -size 1920x1080 xc:'#e6e6e6' "$frame_adaptive_bright_wp"
   $convert_bin -size 1920x1080 xc:'#1e1e1e' "$frame_adaptive_dark_wp"

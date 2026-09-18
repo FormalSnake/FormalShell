@@ -309,6 +309,7 @@ var STYLE = {
         emerge: "join",
         notification: "row",
         launcher: "list",
-        switcher: false
+        switcher: false,
+        paint: "auto"
     }
 };

@@ -69,7 +69,11 @@ var HABITS = {
     emerge: ["join", "popover"],
     notification: ["row", "bubble"],
     launcher: ["list", "grid"],
-    switcher: [true, false]
+    switcher: [true, false],
+    // The band's paint policy under the wingpanel habit (M62, owner
+    // 2026-09-18: "make it part of our theme"): what `bar.paint` falls back
+    // to when settings.json says nothing, barpaint.js's own PINS.
+    paint: ["auto", "transparent", "light", "dark", "translucentLight", "translucentDark", "maximized"]
 };
 
 // The states a habit brings with it, over and above `ROLES` (T3):

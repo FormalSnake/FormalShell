@@ -73,11 +73,12 @@ Item {
             ? Qt.size(root.owner.screen.width, root.owner.screen.height)
             : Qt.size(0, 0)
         mode: Core.Theme.color.mode
-        // `bar.paint`: the rule by default, and the one thing on this
-        // surface a user can overrule. Read here rather than in Theme.qml
-        // because it decides a paint rather than a token, and the band is
-        // the only thing that resolves one.
-        pin: Paint.pin(Core.Config.get("bar.paint", "auto"))
+        // `bar.paint`: the theme's own policy by default (pantheon says
+        // transparent), and the one thing on this surface a user can
+        // overrule. Read here rather than in Theme.qml because it decides
+        // a paint rather than a token, and the band is the only thing that
+        // resolves one.
+        pin: Paint.pin(Core.Config.get("bar.paint", Core.Theme.habit.paint))
         // The raw set, not `outputCoveredByFullscreen`: whether the chrome
         // hides is the auto-hide's business, and the band's paint is the
         // same question either way.

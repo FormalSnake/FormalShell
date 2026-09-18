@@ -193,7 +193,9 @@ readable. A window covering the output takes the band solid black. With
 `frame.thickness` set the screen frame's ring is that same band carried
 round the output, so it wears the same paint.
 
-`bar.paint` overrules the reading. `"auto"` (the default) is the rule above.
+`bar.paint` overrules the reading, and the theme decides the default:
+`pantheon` says `"transparent"`, so the rule below is what you get by
+setting `"auto"`.
 `"transparent"` keeps the rule for the ink and drops the wash: a busy
 wallpaper then gets dark words over a bright band and light words over a
 dark one, with no fill anywhere, which is what you want if your wallpaper

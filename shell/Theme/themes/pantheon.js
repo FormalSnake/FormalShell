@@ -560,6 +560,10 @@ var STYLE = {
         emerge: "popover",
         notification: "bubble",
         launcher: "grid",
-        switcher: true
+        switcher: true,
+        // The panel elementary shows over a calm sky, on every wallpaper: the
+        // owner's busy band tripped wingpanel's own rule into a black wash
+        // and that is not the picture they were after.
+        paint: "transparent"
     }
 };

@@ -61,6 +61,9 @@ leg_bar_adaptive_fixture() {
   # would be one object silently winning over the other.
   if ! leg_on pantheon; then
     settings_fragment ', "theme": {"preset": "pantheon"}'
+  # The rule itself is the claim, and pantheon's own table pins the band
+  # transparent, so the key puts the rule back.
+  settings_fragment ', "bar": {"paint": "auto"}'
   fi
   settings_fragment ', "fullscreen": {"hideChrome": false}'
   $convert_bin -size 1920x1080 xc:'#e6e6e6' "$bar_adaptive_bright_wp"
