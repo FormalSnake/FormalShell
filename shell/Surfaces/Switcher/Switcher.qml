@@ -99,7 +99,12 @@ PanelWindow {
     function step(direction) {
         if (!root.isOpen) {
             root._openHistory = root._history;
-            root._openWorkspaceId = CompositorService.focusedWorkspaceId;
+            // Every workspace unless `switcher.currentWorkspace` asks for
+            // Gala's list: a desk that keeps one app per workspace has one
+            // window on the focused one, and a switcher offering that alone
+            // switches nothing (owner, 2026-09-18).
+            root._openWorkspaceId = Config.get("switcher.currentWorkspace", false)
+                ? CompositorService.focusedWorkspaceId : "";
             root.index = Model.advance(0, root.count, direction);
             root._focusPrimed = false;
             root.isOpen = true;

@@ -67,6 +67,9 @@ leg_switcher_fixture() {
   if ! leg_on pantheon; then
     settings_fragment ', "theme": {"preset": "pantheon"}'
   fi
+  # The fourth window on workspace 2 is only held out of the card under
+  # Gala's list, which is opt-in.
+  settings_fragment ', "switcher": {"currentWorkspace": true}'
 }
 
 leg_switcher_validate() {

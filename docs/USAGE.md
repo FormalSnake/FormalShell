@@ -1556,8 +1556,9 @@ One card in the middle of the output: a row of 64px app icons, one per
 mapped window across every workspace, the most recently focused first, the
 selected one on an accent fill with its title under the row. A window on a
 special workspace (the quake console) is not offered, since it is an overlay
-rather than a place. A session with nothing to switch between says
-`NO WINDOWS`. More windows than fit one row wrap onto balanced rows.
+rather than a place. `switcher.currentWorkspace` (default false) narrows the
+row to the focused workspace's windows, which is Gala's own list. A session
+with nothing to switch between says `NO WINDOWS`. More windows than fit one row wrap onto balanced rows.
 
 It only exists under a preset whose `switcher` habit is on, which today is
 `pantheon`; on every other preset the target below answers

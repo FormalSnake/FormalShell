@@ -298,7 +298,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the network panel.
 - `switcher.sh` `--switcher`: Gala's Alt+Tab under the pantheon habit, three
   windows of the fixture's own app id on the focused workspace and a fourth
-  on workspace 2 that must not be offered, `switcher next` twice and `prev`
+  on workspace 2 that must not be offered (the leg pins
+  `switcher.currentWorkspace`, off by default), `switcher next` twice and `prev`
   once over IPC against `switcher state`, the frame read for the fixture icon
   at three cell centres and for the accent fill travelling from the third
   cell to the second, then a commit landing focus on the window the card
