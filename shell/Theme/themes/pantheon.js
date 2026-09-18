@@ -451,8 +451,19 @@ var STYLE = {
     // Qt's `easing.bezierCurve` wants. It never overshoots, which is what a
     // popover dropping out of its cell asks for: the card arrives and stops
     // rather than settling back onto the bar.
+    //
+    // The bubble's two clocks (`notifications/data/application.css`'s
+    // `bubble` keyframes, M60 T4) ride the same curve: 400ms for the flip a
+    // bubble arrives on, and 200ms for the pile closing up behind it, spread
+    // over a 150ms window so N bubbles move one after another rather than
+    // together. The restack takes `emphasizedDecel` instead of the curve
+    // above because it is the one clock here that is a card travelling
+    // rather than appearing, and it must not pass the place it is going to:
+    // a bubble overshooting into its neighbour reads as the pile bouncing.
     motion: {
-        emerge: { duration: 150, curve: [0.4, 0, 0.2, 1, 1, 1] }
+        emerge: { duration: 150, curve: [0.4, 0, 0.2, 1, 1, 1] },
+        arrive: { duration: 400, curve: [0.4, 0, 0.2, 1, 1, 1] },
+        restack: { duration: 200, curve: "emphasizedDecel", stagger: 150 }
     },
 
     // Pantheon's habits, the shapes that differ from Omarchy in more than

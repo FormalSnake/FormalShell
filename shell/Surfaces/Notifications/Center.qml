@@ -97,7 +97,7 @@ PanelWindow {
     // genuinely new row landing on a slot that already existed a frame
     // earlier gets the ordinary false->true `alive` change its own enter
     // Behavior fires on, rather than a slot's first-ever value, which a
-    // Behavior never animates (NotificationRow's `_presence` below).
+    // Behavior never animates (HistoryRow's `_presence` below).
     readonly property int _slotHeadroom: 3
 
     function _withHeadroom(slots) {
@@ -610,7 +610,7 @@ PanelWindow {
                                     id: pendingRepeater
                                     model: root._pendingSlots.length
 
-                                    delegate: NotificationRow {
+                                    delegate: HistoryRow {
                                         id: pendingRow
                                         required property int index
                                         readonly property var _slot: root._pendingSlots[pendingRow.index]
@@ -687,7 +687,7 @@ PanelWindow {
                                     id: seenRepeater
                                     model: root._seenSlots.length
 
-                                    delegate: NotificationRow {
+                                    delegate: HistoryRow {
                                         id: seenRow
                                         required property int index
                                         readonly property var _slot: root._seenSlots[seenRow.index]
@@ -749,7 +749,10 @@ PanelWindow {
 
     // One history row: the shared NotificationCard, plus the three marks this
     // surface owns rather than the card. All three are drawn here on purpose.
-    // Toasts.qml shows the same card with none of them.
+    // Toasts.qml shows the same card with none of them. Named for what it is
+    // here rather than after the card's own `row` habit
+    // (Notifications/NotificationRow.qml), which is a file in this same
+    // directory and so a type in scope.
     //
     // The card goes flat here and nowhere else: the frame above already draws
     // the fill and the border, so a card per row would tile N of them inside
@@ -766,7 +769,7 @@ PanelWindow {
     // Reports out by signal rather than calling root's own verbs: an inline
     // component is its own type, so ids declared outside it are not in scope
     // here.
-    component NotificationRow: Item {
+    component HistoryRow: Item {
         id: row
 
         required property var entry

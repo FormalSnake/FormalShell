@@ -101,7 +101,12 @@ function hasState(style, role, state) {
 // emerge rides the shipped clock says so instead of transcribing it.
 // `emerge` paces a drawer's entrance and its exit: the metamorphosis card
 // budding off the line, the pantheon popover dropping out of its cell.
-var MOTION_KEYS = ["emerge"];
+// `arrive` and `restack` pace the toast stack (M60 T4): one notification
+// coming in and the pile closing up behind it. An entry may carry a third
+// key, `stagger`, the whole window a restack is spread across before each
+// card takes its share of it; absent reads as no stagger at all, which is
+// the metamorphosis pile moving as one.
+var MOTION_KEYS = ["emerge", "arrive", "restack"];
 
 // The washes a pointer paints, one entry per state (T3). Kept beside the
 // roles rather than inside them: every role that takes a pointer takes the
@@ -345,11 +350,13 @@ function motion(style, key, m, c) {
     var raw = style && style.motion ? style.motion[key] : null;
     var duration = raw ? raw.duration : null;
     var curve = raw ? raw.curve : null;
+    var stagger = raw ? raw.stagger : null;
     return {
         duration: typeof duration === "number" ? duration
             : (m[duration] !== undefined ? m[duration] : m.spatial),
         curve: (curve && curve.length !== undefined && typeof curve !== "string") ? curve
-            : (c[curve] !== undefined ? c[curve] : c.spatial)
+            : (c[curve] !== undefined ? c[curve] : c.spatial),
+        stagger: typeof stagger === "number" ? stagger : 0
     };
 }
 

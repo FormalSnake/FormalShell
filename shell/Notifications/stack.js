@@ -17,6 +17,11 @@
 // Keys are opaque (Toasts.qml passes pool indices). A null key means an
 // entry with no slot of its own: it draws nothing, but it still consumes
 // its rank, so the cards around it keep the level they would have had.
+//
+// Each geometry carries its own `rank`, its place in the order it was laid
+// out in, which is what a staggered restack shares its window out by (M60
+// T4): the position has to come off the same pass that decided where the
+// card is going, or a card could wait on a rank it no longer holds.
 function layout(params) {
     var frameWidth = params.frameWidth;
     var peekInset = params.peekInset;
@@ -48,6 +53,7 @@ function layout(params) {
             // can only sit further from it.
             y: top ? level * peekOffset : (maxPeekLevels - level) * peekOffset,
             z: collapsed.length - r,
+            rank: r,
             contentVisible: r === 0
         };
     }
@@ -73,6 +79,7 @@ function layout(params) {
             width: frameWidth,
             y: y,
             z: slot.collapsed ? slot.collapsed.z : expanded.length - i,
+            rank: i,
             contentVisible: true
         };
         y += (heights[key] || 0) + gap;

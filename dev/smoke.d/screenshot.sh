@@ -43,7 +43,7 @@ leg_screenshot_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call screenshot region > "$screenshot_region_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot region "" > "$screenshot_region_reply_path" 2>&1
 sleep 1
 pgrep -x slurp > "$screenshot_slurp_before_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call screenshot status > "$screenshot_region_status_path" 2>&1
@@ -51,7 +51,7 @@ pgrep -x slurp > "$screenshot_slurp_before_path" 2>&1
 sleep 1
 pgrep -x slurp > "$screenshot_slurp_after_path" 2>&1 || true
 "$qs_bin" ipc -p "$shell_path" call screenshot status > "$screenshot_cancelled_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call screenshot full > "$screenshot_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot full "" > "$screenshot_reply_path" 2>&1
 for _ in \$(seq 1 20); do
   "$qs_bin" ipc -p "$shell_path" call screenshot status > "$screenshot_status_path" 2>&1
   if grep -q '"capturing":false' "$screenshot_status_path"; then

@@ -1347,6 +1347,28 @@ everything outside the cards clicks through to what is under it.
 The history center keeps its own right-anchored placement and full-size
 cards wherever the toasts are.
 
+`notifications.sound` is off by default. Turn it on and each toast plays the
+freedesktop sound its urgency and category ask for as it appears:
+`dialog-warning` for a critical notification, `message-new-instant` for the
+`im.received` category, `dialog-information` for everything else. A
+notification Do Not Disturb puts straight into the pending tier makes no
+sound.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "notifications": { "sound": true } }
+```
+
+```nix
+# home-manager
+programs.formalshell.settings.notifications.sound = true;
+```
+
+The sound goes out through `canberra-gtk-play`, which the shell does not
+ship: install `libcanberra` and a sound theme (`sound-theme-freedesktop`)
+alongside it. Without them the session stays silent and says so once in the
+shell's log at startup.
+
 ### History center
 
 The center hangs off the right edge, one screen padding in, the same padding

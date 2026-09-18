@@ -226,6 +226,15 @@ import QtQuick
 // screenPadding) and sits screenPadding off the screen edge otherwise. The newest toast always sits nearest the
 // anchored corner and the enter/exit slide comes from the anchored side
 // edge, M34 Task 1.
+// notifications.sound (bool, default false): plays the freedesktop sound a
+// notification's urgency and category ask for as its toast is admitted
+// (`dialog-warning` for critical, `message-new-instant` for the
+// `im.received` category, `dialog-information` otherwise;
+// shell/Notifications/model.js's soundName()). Nothing plays for a
+// notification DND put straight into the pending tier. The sound goes out
+// through `canberra-gtk-play`, which is NOT on the shell's own PATH: it
+// arrives with the sound theme the dotfiles install when this key is on, and
+// a session without it stays silent with one warning at startup, M60 T4.
 // console.command (array of strings, default ["ghostty",
 // "--class=dev.formalshell.console"]): argv for the quake console's
 // terminal, spawned once and then kept, with no shell interpolation. It has

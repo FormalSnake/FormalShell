@@ -76,6 +76,10 @@ var SPACING_BASE = {
 // two ledger columns of labelled numbers, both carrying their own values,
 // where the split route's right half is a single preview that can take
 // whatever room is left over.
+// `popupWidthBubble` is elementary's own notification width
+// (`notifications/data/application.css`, M60 T4). It is beside the snap
+// points rather than on the ladder: a transcribed number that happens to
+// sit between `Narrow` and `Default`, and only the bubble takes it.
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
     controlHeight: 32, barCellHeight: 28, barCellWidth: 44, barMargin: 6,
@@ -83,7 +87,8 @@ var SEMANTIC_SPACING_BASE = {
     panelPadding: 12, sectionGap: 16, screenPadding: 12,
     trackThickness: 6,
     popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
-    popupWidthMenuSplit: 840, popupWidthMenuApp: 900
+    popupWidthMenuSplit: 840, popupWidthMenuApp: 900,
+    popupWidthBubble: 332
 };
 
 function spacingTokens(scale) {

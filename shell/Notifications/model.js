@@ -447,3 +447,22 @@ function positionSpec(name) {
         slideSign: right ? 1 : -1
     };
 }
+
+// Which freedesktop sound a notification asks for, under
+// `notifications.sound` (M60 T4, elementary's own map in
+// `notifications/src/Notification.vala`). Urgency outranks the category: a
+// critical notification is a warning whatever it is about, and an instant
+// message is the one category with a sound of its own. Everything else,
+// including a notification carrying no category hint at all, is the plain
+// information sound.
+//
+// A name, never a path: `canberra-gtk-play -i` resolves it against the
+// installed sound theme, so a session with none plays nothing and says so
+// rather than this file guessing at a file name.
+function soundName(urgency, category) {
+    if (urgency === 2)
+        return "dialog-warning";
+    if (String(category || "") === "im.received")
+        return "message-new-instant";
+    return "dialog-information";
+}

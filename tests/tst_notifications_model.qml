@@ -740,4 +740,37 @@ TestCase {
         M.stackOrder(input);
         compare(JSON.stringify(input), before);
     }
+
+    // --- notifications.sound (M60 T4) --------------------------------------
+    //
+    // elementary's map, and urgency outranking the category in it: a critical
+    // notification is a warning whatever it is about.
+
+    function test_a_plain_notification_takes_the_information_sound() {
+        compare(M.soundName(1, ""), "dialog-information");
+        compare(M.soundName(0, ""), "dialog-information");
+    }
+
+    function test_an_instant_message_has_a_sound_of_its_own() {
+        compare(M.soundName(1, "im.received"), "message-new-instant");
+        compare(M.soundName(0, "im.received"), "message-new-instant");
+    }
+
+    function test_critical_is_a_warning_whatever_its_category_says() {
+        compare(M.soundName(2, ""), "dialog-warning");
+        compare(M.soundName(2, "im.received"), "dialog-warning");
+    }
+
+    // A sender that sent no category hint at all, which is most of them.
+    function test_a_missing_category_reads_as_no_category() {
+        compare(M.soundName(1, undefined), "dialog-information");
+        compare(M.soundName(1, null), "dialog-information");
+    }
+
+    // Every category but the one elementary names is the plain sound: the map
+    // is deliberately three answers, not a table to grow by guessing.
+    function test_every_other_category_is_the_information_sound() {
+        compare(M.soundName(1, "email.arrived"), "dialog-information");
+        compare(M.soundName(1, "device.added"), "dialog-information");
+    }
 }

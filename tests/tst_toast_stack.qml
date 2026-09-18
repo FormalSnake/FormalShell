@@ -197,4 +197,27 @@ TestCase {
         compare(out.byKey["a"].expanded.width, tokens.frameWidth);
         compare(out.expandedHeight, 90);
     }
+
+    // The rank each geometry carries, its place in the pass that laid it out:
+    // what a staggered restack shares its window out by (M60 T4). A slotless
+    // entry consumes a rank the way it consumes a level, so the card behind
+    // it waits its own turn rather than the missing one's.
+    function test_every_geometry_carries_its_place_in_the_pile() {
+        var out = layout({
+            collapsed: ["c", "b", "a"],
+            expanded: ["a", "b", "c"],
+            heights: { a: 90, b: 80, c: 70 }
+        });
+        compare(out.byKey["c"].collapsed.rank, 0);
+        compare(out.byKey["b"].collapsed.rank, 1);
+        compare(out.byKey["a"].collapsed.rank, 2);
+        compare(out.byKey["a"].expanded.rank, 0);
+        compare(out.byKey["c"].expanded.rank, 2);
+    }
+
+    function test_a_missing_slot_consumes_a_rank_too() {
+        var out = layout({ collapsed: ["a", null, "c"] });
+        compare(out.byKey["a"].collapsed.rank, 0);
+        compare(out.byKey["c"].collapsed.rank, 2);
+    }
 }

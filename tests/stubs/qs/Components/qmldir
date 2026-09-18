@@ -1,11 +1,17 @@
 module qs.Components
 AddTransition 1.0 ../../../../shell/Components/AddTransition.qml
 Anim 1.0 ../../../../shell/Components/Anim.qml
+Box 1.0 ../../../../shell/Components/Box.qml
+Button 1.0 ../../../../shell/Components/Button.qml
 CAnim 1.0 ../../../../shell/Components/CAnim.qml
+Card 1.0 ../../../../shell/Components/Card.qml
 Cell 1.0 ../../../../shell/Components/Cell.qml
 CellLabel 1.0 ../../../../shell/Components/CellLabel.qml
 CellRow 1.0 ../../../../shell/Components/CellRow.qml
+Cover 1.0 ../../../../shell/Components/Cover.qml
 Icon 1.0 ../../../../shell/Components/Icon.qml
+IconButton 1.0 ../../../../shell/Components/IconButton.qml
 MoveTransition 1.0 ../../../../shell/Components/MoveTransition.qml
-RemoveTransition 1.0 ../../../../shell/Components/RemoveTransition.qml
 Rail 1.0 ../../../../shell/Components/Rail.qml
+RemoveTransition 1.0 ../../../../shell/Components/RemoveTransition.qml
+SectionLabel 1.0 ../../../../shell/Components/SectionLabel.qml

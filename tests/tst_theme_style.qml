@@ -168,6 +168,16 @@ TestCase {
                     compare(curve[curve.length - 1], 1);
                     compare(curve[curve.length - 2], 1);
                 }
+                // The optional third key: the window a staggered clock is
+                // spread over, in milliseconds like the duration beside it.
+                // Absent reads as no stagger at all.
+                var stagger = entry.stagger;
+                if (stagger !== undefined) {
+                    verify(typeof stagger === "number" && stagger > 0,
+                        names[t] + " " + key + " has the stagger " + stagger);
+                }
+                compare(Style.motion(style, key, families, curves).stagger,
+                    stagger === undefined ? 0 : stagger);
             }
         }
     }

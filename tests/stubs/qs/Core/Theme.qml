@@ -196,10 +196,14 @@ QtObject {
 
     // The real singleton's `motion` object, key for key (M54 D5): the two
     // families and the curves per kind.
-    // The one clock the live table names for itself (M60 T2), resolved
+    // The clocks the live table names for itself (M60 T2, T4), resolved
     // against the unzeroed tokens: the reduced-motion switch is applied
     // below with every other duration.
     readonly property var _emerge: Style.motion(root.style, "emerge",
+        Tokens.motionTokens(true), Tokens.MOTION_CURVES)
+    readonly property var _arrive: Style.motion(root.style, "arrive",
+        Tokens.motionTokens(true), Tokens.MOTION_CURVES)
+    readonly property var _restack: Style.motion(root.style, "restack",
         Tokens.motionTokens(true), Tokens.MOTION_CURVES)
 
     readonly property var motion: {
@@ -207,6 +211,9 @@ QtObject {
         var c = Tokens.MOTION_CURVES;
         return {
             emerge: root.motionEnabled ? root._emerge.duration : 0,
+            arrive: root.motionEnabled ? root._arrive.duration : 0,
+            restack: root.motionEnabled ? root._restack.duration : 0,
+            restackStagger: root.motionEnabled ? root._restack.stagger : 0,
             spatialFast: m.spatialFast,
             spatial: m.spatial,
             spatialSlow: m.spatialSlow,
@@ -225,7 +232,9 @@ QtObject {
                 emphasized: c.emphasized,
                 emphasizedDecel: c.emphasizedDecel,
                 reveal: c.effectsSlow,
-                emerge: root._emerge.curve
+                emerge: root._emerge.curve,
+                arrive: root._arrive.curve,
+                restack: root._restack.curve
             },
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,

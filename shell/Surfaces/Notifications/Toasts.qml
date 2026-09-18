@@ -40,6 +40,14 @@ import "../../Notifications/stack.js" as Stack
 // it's expanded (the existing per-card `setPopupHovered`, applied
 // stack-wide), "hover shows all of the ones that appeared at once".
 //
+// The cards in the pile are NotificationCard.qml, the facade over the
+// theme's own `notification` habit (M60 T4). Two things here ride that
+// habit and nothing else does: the card's width, and how one arrives. A
+// toast slides in from past the anchored screen edge and squashes into it;
+// a bubble unfolds off its own top edge where it lands, with no slide and
+// no deform. The pile's geometry, its slots and its collapse are sonner's
+// under both.
+//
 // Anchor corner is configurable (settings.json's `notifications.position`,
 // M34 Task 1, default bottom-right) via Model.positionSpec, see
 // `_positionSpec` below for how a single resolved object drives the pile's
@@ -146,6 +154,27 @@ PanelWindow {
 
     mask: Region { item: stack }
 
+    // --- the notification habit -----------------------------------------
+
+    // Which shape the cards in this pile take, by the live theme's own habit
+    // (M60 T4): the shadcn toast card, or elementary's bubble
+    // (NotificationCard.qml is the facade over the two). The pile itself is
+    // sonner's either way, and so is every other thing in this file: what
+    // the habit decides here is the card's width and how it arrives, since a
+    // bubble unfolds off its own top edge where a toast slides in from past
+    // the screen's side and squashes into it.
+    readonly property bool _bubble: Theme.habit.notification === "bubble"
+
+    // The whole window a staggered restack is spread over, shared out across
+    // the cards that are actually moving, so the pile closes up one card
+    // after another rather than all at once. Zero under a table that names
+    // no stagger, which is the pile moving as one, as it always has.
+    readonly property int _liveCount: root._slots.filter(function (s) {
+        return s && !s.departing;
+    }).length
+    readonly property int _stagger: Math.round(Theme.motion.restackStagger
+        / Math.max(1, root._liveCount))
+
     // --- the depth-stack pool -------------------------------------------
 
     // The inner NotificationCard is ALWAYS this width, never bound to
@@ -158,7 +187,8 @@ PanelWindow {
     // content in it, and which takes its height from the fixed-width card
     // it stands in for. Only a rank whose card is actually readable
     // (`contentVisible`) paints the card itself.
-    readonly property real _cardWidth: Theme.space.popupWidthNarrow
+    readonly property real _cardWidth: root._bubble
+        ? Theme.space.popupWidthBubble : Theme.space.popupWidthNarrow
     // The frame is the card, front/expanded alike: the Card primitive
     // draws its border inside its own bounds, so nothing outside it needs
     // reserving.
@@ -182,7 +212,7 @@ PanelWindow {
 
     readonly property bool _hasDepartingSlots: root._slots.some(function (s) { return s && s.departing; })
 
-    readonly property var _fallbackGeom: ({ x: 0, y: 0, width: root._frameWidth, z: 0, contentVisible: false })
+    readonly property var _fallbackGeom: ({ x: 0, y: 0, width: root._frameWidth, z: 0, rank: 0, contentVisible: false })
 
     readonly property var _emptyEntry: ({
         id: "", appName: "", appIcon: "", desktopEntry: "", summary: "",
@@ -386,7 +416,10 @@ PanelWindow {
         anchors.right: root._positionSpec.right ? parent.right : undefined
         // Every edge clears the bar's own inset, so the pile sits
         // `screenPadding` off the bar on whichever edge it takes and off
-        // the screen edge on the other three.
+        // the screen edge on the other three. elementary holds its bubbles
+        // 16px off the corner and this is 12: one padding rule for every
+        // floating surface (DESIGN.md §1) outranks a 4px transcription, and
+        // the gap between cards stays `panelPadding` for the same reason.
         anchors.topMargin: root._edgeInset.top + root._screenPadding
         anchors.bottomMargin: root._edgeInset.bottom + root._screenPadding
         anchors.leftMargin: root._edgeInset.left + root._screenPadding
@@ -397,10 +430,18 @@ PanelWindow {
         // bottom edge (top-anchored) is where a card that just left used to
         // be, so this has to move with them rather than snap.
         // The stack frame growing and shrinking is part of the same morph as
-        // the cards inside it, so it rides the same kind rather than
+        // the cards inside it, so it rides the same clock rather than
         // decelerating on a different one underneath them.
+        //
+        // And only between sizes the pile has actually had: a pile arriving
+        // from nothing is `maxPeekLevels * peekOffset` tall until its first
+        // card has been laid out and measured once, and the window maps in
+        // that same frame, so those two steps land rather than travel. A
+        // card riding them rises into place behind its own entrance, which
+        // the bubble's unfold showed up for what it always was (M60 T4).
         Behavior on height {
-            Anim {}
+            enabled: stack.height > root._maxPeekLevels * root._peekOffset
+            Anim { kind: "restack" }
         }
 
         // Hover anywhere on the stack expands it (DESIGN.md §Notifications):
@@ -430,22 +471,37 @@ PanelWindow {
                 implicitHeight: card.height
                 height: implicitHeight
 
-                // The expand/collapse morph: x, y and width are one movement
-                // of something already on screen, so all three take the one
-                // spatial kind, and the card's own content fade below joins
-                // them. `width` had no Behavior at all, which is half of the
-                // "it clips for a moment" the owner reported: a peek card is
-                // inset, an expanded card is full width, and that step landed
-                // on the frame the pointer arrived while x and y were still
-                // gliding.
+                // Where this card waits before it closes up with the rest of
+                // the pile: its own rank's share of the stagger window. The
+                // rank comes off the same layout pass that decided where the
+                // card is going (Notifications/stack.js), so a card cannot
+                // wait on a place it no longer holds.
+                readonly property int _restackDelay: root._stagger
+                    * Math.max(0, cardFrame._geom.rank)
+
+                // The expand/collapse morph and the restack: x, y and width
+                // are one movement of something already on screen, so all
+                // three take the table's own `restack` clock, and the card's
+                // own content fade below joins them. `width` had no Behavior
+                // at all, which is half of the "it clips for a moment" the
+                // owner reported: a peek card is inset, an expanded card is
+                // full width, and that step landed on the frame the pointer
+                // arrived while x and y were still gliding.
+                //
+                // The stagger is on `y` alone: closing up is what the pile
+                // does along its own axis, and staggering the width of a
+                // collapse would fan the cards' edges out of line.
                 Behavior on x {
-                    Anim { id: frameX }
+                    Anim { id: frameX; kind: "restack" }
                 }
                 Behavior on y {
-                    Anim { id: frameY }
+                    SequentialAnimation {
+                        PauseAnimation { duration: cardFrame._restackDelay }
+                        Anim { id: frameY; kind: "restack" }
+                    }
                 }
                 Behavior on width {
-                    Anim { id: frameWidth }
+                    Anim { id: frameWidth; kind: "restack" }
                 }
 
                 // The card's own content height (a group gaining a member,
@@ -455,7 +511,7 @@ PanelWindow {
                 // measured in, so nothing grows and slides at once.
                 Behavior on height {
                     enabled: cardFrame.presence >= 1
-                    Anim { id: frameHeight }
+                    Anim { id: frameHeight; kind: "restack" }
                 }
 
                 // presence: 0 = off-stack, 1 = fully shown, one scalar
@@ -468,31 +524,81 @@ PanelWindow {
                 // simply starts its 0->1 climb from nothing, at its
                 // already-correct target x/y.
                 property real presence: (cardFrame._slot && !cardFrame._slot.departing) ? 1 : 0
-                // The two halves take different curves (M54 D2): a toast
+                // The two halves take different clocks (M54 D2): a toast
                 // arriving travels its own width in from off screen and
                 // decelerates into place without passing it, a toast leaving
                 // is the same card moving again and overshoots like anything
-                // else spatial. The direction comes off `targetValue`, which
-                // the Behavior sets before it starts the animation; `presence`
-                // itself carries the animated value in here, not the target.
+                // else spatial. Both are the table's now (M60 T4), which is
+                // how the bubble's own 400ms arrival and 200ms departure
+                // reach here without this file naming either. The direction
+                // comes off `targetValue`, which the Behavior sets before it
+                // starts the animation; `presence` itself carries the
+                // animated value in here, not the target.
                 Behavior on presence {
                     id: presenceBehavior
                     Anim {
                         id: presenceAnim
-                        kind: presenceBehavior.targetValue > 0.5 ? "emphasizedDecel" : "spatial"
+                        kind: presenceBehavior.targetValue > 0.5 ? "arrive" : "restack"
                     }
                 }
                 opacity: cardFrame.presence
+
+                // The bubble's own entrance (elementary's `bubble`
+                // keyframes): it unfolds off its own top edge, from face
+                // down through a few degrees past upright and back. One
+                // clock in two segments, the dip at 60% of it, so the card
+                // arrives, overshoots by a hair and settles. Qt rotates about
+                // a real axis with no projection behind it, so what this
+                // draws is the card's height opening out rather than a
+                // perspective flip, which is the cue either way.
+                property real flipAngle: 0
+                readonly property bool _arriving: cardFrame._slot !== null
+                    && !cardFrame._slot.departing
+                on_ArrivingChanged: if (root._bubble && cardFrame._arriving) flipIn.restart();
+
+                SequentialAnimation {
+                    id: flipIn
+
+                    Anim {
+                        target: cardFrame
+                        property: "flipAngle"
+                        kind: "arrive"
+                        duration: Theme.motion.arrive * 0.6
+                        from: 90
+                        to: -10
+                    }
+
+                    Anim {
+                        target: cardFrame
+                        property: "flipAngle"
+                        kind: "arrive"
+                        duration: Theme.motion.arrive * 0.4
+                        to: 0
+                    }
+                }
+
                 // Enter/exit slide: the card comes in from past the anchored
                 // side edge and leaves the same way, which is what makes the
                 // dismiss direction obvious. Chrome appearing in place barely
                 // moves; a toast is a surface arriving from off screen, so it
-                // travels its own width plus the gap it will sit in.
-                transform: Translate {
-                    x: (1 - cardFrame.presence)
-                        * (cardFrame.width + Theme.space.screenPadding)
-                        * root._positionSpec.slideSign
-                }
+                // travels its own width plus the gap it will sit in. A bubble
+                // does neither: it unfolds where it lands, so the slide is
+                // held at nothing and the rotation above is the whole of it.
+                transform: [
+                    Translate {
+                        x: root._bubble ? 0 : (1 - cardFrame.presence)
+                            * (cardFrame.width + Theme.space.screenPadding)
+                            * root._positionSpec.slideSign
+                    },
+                    Rotation {
+                        axis.x: 1
+                        axis.y: 0
+                        axis.z: 0
+                        origin.x: cardFrame.width / 2
+                        origin.y: 0
+                        angle: root._bubble ? cardFrame.flipAngle : 0
+                    }
+                ]
 
                 onPresenceChanged: {
                     if (cardFrame.presence === 0 && cardFrame._slot && cardFrame._slot.departing)
@@ -505,12 +611,16 @@ PanelWindow {
                 // target through `mapToItem`, which reads back any transform
                 // on that target, so sampling and deforming the same item
                 // would leave the deform driving itself.
+                //
+                // Off under the bubble habit: a bubble never arrives at a
+                // surface to squash into, and a velocity deform on top of
+                // the unfold would be two entrances at once.
                 Deform {
                     id: deform
                     target: cardFrame
                     edge: root._positionSpec.right ? "right" : "left"
-                    active: presenceAnim.running || frameX.running || frameY.running
-                        || frameWidth.running || frameHeight.running
+                    active: !root._bubble && (presenceAnim.running || frameX.running
+                        || frameY.running || frameWidth.running || frameHeight.running)
                 }
 
                 // Everything drawn, under the deform's matrix: the card and

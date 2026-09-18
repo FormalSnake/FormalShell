@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Notifications
 import qs.Compositor
 // `qs.Core as Core`, not a bare import: QtQuick already exports a type named
@@ -105,6 +106,45 @@ Singleton {
     readonly property var past: root._state.past
     readonly property bool dnd: root._state.dnd
 
+    // --- notifications.sound (M60 T4) ------------------------------------
+    //
+    // Off by default. On, a toast the user actually gets to see plays the
+    // freedesktop sound its urgency and category ask for (model.js's
+    // soundName) through libcanberra's own CLI, which resolves the name
+    // against the installed sound theme. Nothing plays for an entry DND put
+    // straight into the pending tier: that is the tier for what the session
+    // is not being told about.
+    //
+    // `canberra-gtk-play` is not on the shell's wrapper PATH: it arrives
+    // with the sound theme, which the dotfiles install when this key is on
+    // (M60 Task 7). Absent, the probe below says so once at startup and
+    // every notification after that is silent, which is the honest state
+    // rather than a missing-binary error per toast.
+    readonly property bool _soundEnabled: Core.Config.get("notifications.sound", false) === true
+    property bool _canberraReady: false
+
+    Process {
+        running: root._soundEnabled
+        command: ["sh", "-c", "command -v canberra-gtk-play >/dev/null 2>&1"]
+        onExited: exitCode => {
+            root._canberraReady = exitCode === 0;
+            if (exitCode !== 0)
+                console.warn("notifications.sound is on but canberra-gtk-play is not on PATH; notifications stay silent");
+        }
+    }
+
+    Process {
+        id: soundProc
+    }
+
+    function _playSound(urgency, category) {
+        if (!root._soundEnabled || !root._canberraReady)
+            return;
+        soundProc.running = false;
+        soundProc.command = ["canberra-gtk-play", "-i", Model.soundName(urgency, category)];
+        soundProc.running = true;
+    }
+
     function _findEntry(id) {
         return root.popups.find(e => e.id === id)
             ?? root.pending.find(e => e.id === id)
@@ -201,6 +241,12 @@ Singleton {
             }, Date.now(), {
                 timeoutMs: root._timeoutMsFor(notification.urgency, notification.expireTimeout)
             });
+
+            // Read back rather than assumed: Model.add drops a DND-suppressed
+            // notification into pending instead, and a notification nobody
+            // is shown makes no sound.
+            if (root._state.popups.some(p => p.id === id))
+                root._playSound(notification.urgency, (notification.hints ?? {})["category"]);
         }
     }
 
@@ -398,6 +444,12 @@ Singleton {
             senderIsNotifySend: false,
             local: true
         }, Date.now(), {});
+
+        // A shell-authored notification is a toast like any other, and it
+        // carries no category hint, so it lands on the plain information
+        // sound unless it is critical.
+        if (root._state.popups.some(p => p.id === id))
+            root._playSound(urgency, "");
     }
 
     // Callbacks outlive the reducer entry otherwise: a long session firing

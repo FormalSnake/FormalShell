@@ -247,12 +247,16 @@ var STYLE = {
 
     wash: WASH,
 
-    // The drawer rides the shared spatial family (DESIGN.md §1 "Motion"):
-    // the card budding off the line travels on the clock everything else
-    // with a position or a size travels on, overshoot included, so it is
-    // named here rather than transcribed.
+    // Every clock here names one of the shell's own families rather than a
+    // number (DESIGN.md §1 "Motion"): the drawer's card buds off the line on
+    // the clock everything else with a position or a size travels on,
+    // overshoot included, a toast arrives from off screen on the decelerating
+    // curve M3 defines for exactly that, and the pile closes up behind it on
+    // the spatial family again, as one, with no stagger.
     motion: {
-        emerge: { duration: "spatial", curve: "spatial" }
+        emerge: { duration: "spatial", curve: "spatial" },
+        arrive: { duration: "spatial", curve: "emphasizedDecel" },
+        restack: { duration: "spatial", curve: "spatial" }
     },
 
     // Omarchy's own habits (T7): the strip along one edge, a card that buds

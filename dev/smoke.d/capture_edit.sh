@@ -66,7 +66,7 @@ EOF
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call screenshot full > "$capture_edit_reply_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call screenshot full "" > "$capture_edit_reply_path" 2>&1
 for _ in \$(seq 1 20); do
   "$qs_bin" ipc -p "$shell_path" call screenshot status > "$capture_edit_status_path" 2>&1
   if grep -q '"capturing":false' "$capture_edit_status_path"; then

@@ -210,6 +210,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `notify.sh` `--notify`: the toast stack collapsed and expanded, critical
   holding the front slot over a newer normal, the icon resolution order over
   three cards, and the layer surface the same size either way.
+- `notify_emerge.sh` `--notify-emerge`: rides `--pantheon` and needs it; one
+  sticky notification arriving at a tenth speed, read as a ladder down the
+  card's own centre column: the bubble unfolds off its top edge, so the
+  covered rungs are always the shallow ones and at least one frame carries a
+  fraction of the card. The row habit's arrival is `--notify`'s frame and
+  `--deform`'s burst instead.
 - `ocr.sh` `--ocr`: the `capture` target's text and colour verbs against a
   window carrying known text on a known background.
 - `osd.sh` `--osd`: the pill's own entrance off the bottom line sampled frame
