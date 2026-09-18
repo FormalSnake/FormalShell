@@ -5,6 +5,7 @@ import "../shell/Theme/presets.js" as Presets
 import "../shell/Theme/style.js" as Style
 import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
 import "../shell/Theme/themes/retro.js" as Retro
+import "../shell/Theme/themes/pantheon.js" as Pantheon
 
 // M59 T1 to T3: the chrome tables and the resolver behind `Theme.style`.
 // Two halves, and the first is the one that keeps a theme honest: every
@@ -17,7 +18,11 @@ import "../shell/Theme/themes/retro.js" as Retro
 TestCase {
     name: "ThemeStyle"
 
-    readonly property var tables: ({ metamorphosis: Metamorphosis.STYLE, retro: Retro.STYLE })
+    readonly property var tables: ({
+        metamorphosis: Metamorphosis.STYLE,
+        retro: Retro.STYLE,
+        pantheon: Pantheon.STYLE
+    })
 
     // A palette whose every role answers with its own name, so a resolved
     // colour says which role it came from.
@@ -233,7 +238,129 @@ TestCase {
         function get(path, fallback) { return fallback; }
         compare(Presets.resolve("shadcn", get).style, Metamorphosis.STYLE);
         compare(Presets.resolve("retro", get).style, Retro.STYLE);
+        compare(Presets.resolve("pantheon", get).style, Pantheon.STYLE);
         compare(Presets.defaults("shadcn").style, Metamorphosis.STYLE);
+    }
+
+    // --- Pantheon (M60 T1) ------------------------------------------------
+    //
+    // The numbers that carry elementary's material, so a table edit that
+    // flattened one of them has to say so here.
+
+    // A raised control: the face gradient over the fill, the lit top line
+    // inside it, the control rim and outset-shadow(2) under it.
+    function test_the_pantheon_button_is_raised() {
+        var button = Style.resolve(Pantheon.STYLE, "button.outline", "rest", ctx("light"));
+        compare(button.fill, "role:secondary");
+        compare(button.radius, 3);
+        compare(button.face.from, "#ffffff@0.2");
+        compare(button.face.to, "#ffffff@0");
+        compare(button.border.color, "#000000@0.2");
+        compare(button.hairlines.length, 4);
+        compare(button.hairlines[0].edge, "top");
+        compare(button.hairlines[0].color, "#ffffff@0.3");
+        compare(button.casts.length, 2);
+        compare(button.casts[1].blur, 2);
+        compare(button.casts[1].color, "#000000@0.08");
+
+        // Pressed, it sinks: no gradient, no lift, one dark line along the
+        // top edge instead.
+        var press = Style.resolve(Pantheon.STYLE, "button.outline", "press", ctx("light"));
+        compare(press.face, null);
+        compare(press.casts.length, 0);
+        compare(press.hairlines.length, 1);
+        compare(press.hairlines[0].color, "#000000@0.1");
+    }
+
+    // The card, layer for layer: the four highlight lines inside it, the 1px
+    // black line round it (a border rather than elementary's outside ring,
+    // since a Shoulders shape and a Drawer frame draw one and not the
+    // other), and shadow(2)'s two casts under it.
+    function test_the_pantheon_card_carries_every_layer_kind() {
+        var card = Style.resolve(Pantheon.STYLE, "card", null, ctx("dark"));
+        compare(card.fill, "role:card@0.85");
+        compare(card.radius, 9);
+        compare(card.border.color, "#000000@0.75");
+        compare(card.border.width, 1);
+        compare(card.hairlines.length, 4);
+        compare(card.rings.length, 0);
+        compare(card.casts.length, 2);
+        compare(card.casts[0].y, 3);
+        compare(card.casts[0].blur, 4);
+        compare(card.casts[0].color, "#000000@0.25");
+        compare(card.casts[1].spread, -3);
+        compare(card.casts[1].color, "#000000@0.45");
+        compare(Style.resolve(Pantheon.STYLE, "card", "opaque", ctx("dark")).fill, "role:card");
+    }
+
+    // GTK's alpha() multiplies and the dark highlight base is white at 0.2,
+    // so every dark highlight alpha here is that product: a line elementary
+    // writes as alpha(highlight, 0.3) is white at 0.06, not at 0.3.
+    function test_the_pantheon_highlight_is_the_product_in_dark() {
+        var light = Style.resolve(Pantheon.STYLE, "card", null, ctx("light"));
+        var dark = Style.resolve(Pantheon.STYLE, "card", null, ctx("dark"));
+        compare(light.hairlines[0].color, "#ffffff@0.3");
+        compare(dark.hairlines[0].color, "#ffffff@0.06");
+        compare(light.hairlines[1].color, "#ffffff@0.2");
+        compare(dark.hairlines[1].color, "#ffffff@0.04");
+        compare(dark.hairlines[2].color, "#ffffff@0.014");
+        compare(Style.resolve(Pantheon.STYLE, "button.outline", "rest", ctx("dark")).face.from,
+            "#ffffff@0.04");
+    }
+
+    // elementary's focus is the accent on the border plus a 2px halo at
+    // 0.3, where shadcn's is 3px at 0.5; `Theme.ringWidth` follows the
+    // spread, so the room a clipping list reserves follows the table.
+    function test_the_pantheon_cursor_is_a_two_pixel_halo() {
+        var cursor = Style.resolve(Pantheon.STYLE, "cursor", null, ctx("dark"));
+        compare(cursor.border.color, "role:ring");
+        compare(cursor.rings.length, 1);
+        compare(cursor.rings[0].spread, 2);
+        compare(cursor.rings[0].color, "role:ring@0.3");
+
+        // The field hangs the same halo on its focus state, over the sunken
+        // line it keeps at rest.
+        var focus = Style.resolve(Pantheon.STYLE, "input", "focus", ctx("dark"));
+        compare(focus.rings.length, 1);
+        compare(focus.rings[0].spread, 2);
+        compare(focus.hairlines.length, 1);
+    }
+
+    // The bubble (elementary's notification): the view at 0.8 on two casts,
+    // and a row inside the centre drops every one of them.
+    function test_the_pantheon_bubble_flattens_inside_the_centre() {
+        var bubble = Style.resolve(Pantheon.STYLE, "notification", "rest", ctx("dark"));
+        compare(bubble.fill, "role:card@0.8");
+        compare(bubble.radius, 9);
+        compare(bubble.casts.length, 2);
+        compare(bubble.casts[1].blur, 9);
+        compare(bubble.border.color, "#000000@0.75");
+        compare(Style.resolve(Pantheon.STYLE, "notification", "critical", ctx("dark")).border.color,
+            "role:destructive");
+
+        var flat = Style.resolve(Pantheon.STYLE, "notification", "flat", ctx("dark"));
+        compare(flat.fill, Style.LITERAL_COLORS.transparent);
+        compare(flat.border, null);
+        compare(flat.casts.length, 0);
+        compare(flat.hairlines.length, 0);
+        compare(Style.resolve(Pantheon.STYLE, "notification", "flatCritical", ctx("dark")).border.color,
+            "role:destructive");
+    }
+
+    // Gala dims a modal group at 125 of 255, a touch under shadcn's half.
+    function test_the_pantheon_scrim_is_gala_s_dim() {
+        var scrim = Style.resolve(Pantheon.STYLE, "scrim", null, ctx("dark"));
+        compare(scrim.fill, Style.LITERAL_COLORS.black + "@" + (125 / 255));
+    }
+
+    // The habits Part 2 names, which the surfaces read from M60 T2 on.
+    function test_pantheon_declares_pantheon_habits() {
+        var habits = Pantheon.STYLE.habits;
+        compare(habits.bar, "wingpanel");
+        compare(habits.emerge, "popover");
+        compare(habits.notification, "bubble");
+        compare(habits.launcher, "grid");
+        compare(habits.switcher, true);
     }
 
     // --- The resolver ----------------------------------------------------

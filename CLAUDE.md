@@ -235,6 +235,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   NO PLAYER to a real track. The band is cut for a top bar with no frame, so
   a run on another edge drives the same three cases, prints each claim as
   skipped and is read by eye.
+- `pantheon.sh` `--pantheon`: pins `theme.preset` to `pantheon` in the
+  settings fixture and rides any other leg, so `--pantheon --gallery` is the
+  sheet in elementary's material: raised buttons and chips over sunken
+  troughs and fields, cards and toasts on a cast under a lit rim.
 - `picker.sh` `--picker`: the wallpaper grid, the pick becoming the
   wallpaper, the select token round trip, the Dark/Light variants, and
   ThumbnailService's prerendered cache backing every cell (the cache

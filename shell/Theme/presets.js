@@ -1,6 +1,7 @@
 .pragma library
 .import "themes/metamorphosis.js" as Metamorphosis
 .import "themes/retro.js" as Retro
+.import "themes/pantheon.js" as Pantheon
 
 // theme.preset (M49 D1): a table of chrome defaults, not a mode. Every knob
 // a preset sets is a settings key the user can still write, and an explicit
@@ -10,19 +11,23 @@
 //
 // `shadcn` is the shipped design language (2026-08-25 redesign). `retro` is
 // the one it replaced, square corners, one mono face, opaque surfaces with
-// no compositor blur, and the dither pass over content imagery.
+// no compositor blur, and the dither pass over content imagery. `pantheon`
+// is elementary OS 8's material and its habits (M60), raised controls over
+// sunken troughs on a 6px corner.
 //
 // Since M59 a preset also names one chrome table, `shell/Theme/themes/`'s
 // own file per theme: the scalars above are what the user can still
 // override key by key, the table is not overridable at all.
 
-var NAMES = ["shadcn", "retro"];
+var NAMES = ["shadcn", "retro", "pantheon"];
 
 var _TABLE = {
     shadcn: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
         style: Metamorphosis.STYLE },
     retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true,
-        style: Retro.STYLE }
+        style: Retro.STYLE },
+    pantheon: { radius: 6, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
+        style: Pantheon.STYLE }
 };
 
 // Anything that is not one of NAMES resolves to shadcn, the same

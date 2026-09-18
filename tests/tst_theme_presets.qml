@@ -22,10 +22,11 @@ TestCase {
         };
     }
 
-    function test_names_are_the_two_presets() {
-        compare(Presets.NAMES.length, 2);
+    function test_names_are_the_three_presets() {
+        compare(Presets.NAMES.length, 3);
         compare(Presets.NAMES[0], "shadcn");
         compare(Presets.NAMES[1], "retro");
+        compare(Presets.NAMES[2], "pantheon");
     }
 
     function test_unknown_name_resolves_to_the_shadcn_table() {
@@ -58,6 +59,21 @@ TestCase {
         compare(t.dither, true);
         compare(t.wallpaperDither, true);
         compare(t.lockDither, true);
+    }
+
+    // elementary's own corner is 6, and the rest of the chrome knobs are
+    // shadcn's: pantheon differs from it in the table, not in the scalars.
+    function test_pantheon_defaults_match_the_table() {
+        var t = Presets.resolve("pantheon", makeGet({}));
+        compare(t.preset, "pantheon");
+        compare(t.radius, 6);
+        compare(t.icons, "lucide");
+        compare(t.fonts, "pair");
+        compare(t.surfaceOpacity, 0.85);
+        compare(t.blur, true);
+        compare(t.dither, false);
+        compare(t.wallpaperDither, false);
+        compare(t.lockDither, false);
     }
 
     // The point of D1: a preset is a table of defaults, so one explicit key

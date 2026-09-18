@@ -645,24 +645,28 @@ when `HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed
 fall back to. `shadcn` (the default) is the look documented here. `retro`
 is the shell's earlier language as a setting of this one: everything
 square, every word in the mono face, Nerd Font glyphs, opaque surfaces,
-no compositor blur, and dithered imagery. Any key you write explicitly
-wins over the preset, so `retro` with `"radius": 4` is the retro look on
-slightly rounded corners.
+no compositor blur, and dithered imagery. `pantheon` is elementary OS 8's
+material on the same palette: raised buttons and chips with a lit top line
+and a gradient face, sunken fields and troughs, cards and toasts on a soft
+cast, and elementary's own corners (3 on a control, 6 on a popover, 9 on a
+card). Any key you write explicitly wins over the preset, so `retro` with
+`"radius": 4` is the retro look on slightly rounded corners.
 
 Under the hood a preset is a table file, `shell/Theme/themes/<name>.js`,
 plus the scalar keys in the table below; `retro`'s file re-exports
 `metamorphosis`'s table rather than carrying its own, since the two share
-every fill, border and radius and differ only in those scalars. No new
-user-facing key landed with that table, so the columns below are unchanged.
+every fill, border and radius and differ only in those scalars, while
+`pantheon` carries a table of its own. No new user-facing key landed with
+any of them, so the columns below are the whole of it.
 
-| key | `shadcn` | `retro` |
-| --- | --- | --- |
-| `theme.radius` | 10 | 0 |
-| `theme.icons` | `lucide` | `nerd` |
-| `theme.fonts` | `pair` | `mono` |
-| `theme.surfaceOpacity` | 0.85 | 1 |
-| `theme.blur` | true | false |
-| `theme.dither` | false | true |
+| key | `shadcn` | `retro` | `pantheon` |
+| --- | --- | --- | --- |
+| `theme.radius` | 10 | 0 | 6 |
+| `theme.icons` | `lucide` | `nerd` | `lucide` |
+| `theme.fonts` | `pair` | `mono` | `pair` |
+| `theme.surfaceOpacity` | 0.85 | 1 | 0.85 |
+| `theme.blur` | true | false | true |
+| `theme.dither` | false | true | false |
 
 ```jsonc
 // ~/.config/formalshell/settings.json
