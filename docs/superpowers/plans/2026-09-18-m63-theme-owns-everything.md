@@ -65,7 +65,13 @@ as today.
 scale. Pantheon sets `barMargin: 8` (0.5rem), `panelPadding: 6` (their
 popover's `0.25rem 0` plus the row padding, read off the CSS), the toast
 inset `screenPadding: 16`, and leaves the rest. A key a user sets
-(`bar.*`, `menu.*`) still wins.
+(`bar.*`, `menu.*`) still wins. The same entry carries the layout defaults
+a theme owns: `barPosition` (pantheon `top`, wingpanel is a top panel;
+metamorphosis `top`, the shipped default) and `notificationPosition`
+(pantheon `top-right`, elementary's corner; metamorphosis `bottom-right`),
+read where `bar.position` and `notifications.position` take their
+defaults today. The owner moved their own `bar.position` key to `top` on
+2026-09-18 for pantheon; a config without the key gets the theme's.
 
 **O5 Paint policy in the table.** `STYLE.bar.paint` (`"auto"` or
 `"transparent"` or a paint name) is the default M62's `bar.paint` key
