@@ -82,7 +82,6 @@ var HABITS = {
     bar: ["strip", "wingpanel"],
     emerge: ["join", "popover"],
     notification: ["row", "bubble"],
-    launcher: ["list", "grid"],
     // Whether the theme wears a screen frame at all (owner, 2026-09-18).
     // A table that says no reads `frame.thickness` as 0, ring and
     // reservation both (Core/Theme.qml's `frameHabit`): pantheon's ring is

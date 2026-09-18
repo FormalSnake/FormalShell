@@ -77,8 +77,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   covering a 64px cell rather than a row's glyph, with real arrow keys
   moving the cursor one cell across and a column count down, a real Enter
   launching through the row path, apps and a ranked route sharing the card,
-  and the key deleted underneath the running shell putting the launcher
-  habit's own route back: the row list, or the grid under `--pantheon`.
+  and the key deleted underneath the running shell putting the grid back
+  under every theme, `--pantheon` included.
   Then typing on real keys: `cursorId` agreeing with the view's own
   `viewCursor` after a re-rank and a Backspace, a query no app matches
   keeping the grid with no rows in it, Escape clearing the query and

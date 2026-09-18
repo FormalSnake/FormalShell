@@ -317,13 +317,11 @@ var STYLE = {
     },
 
     // Omarchy's own habits (T7): the strip along one edge, a card that buds
-    // off the line it came out of, one notification row per card, and a list
-    // launcher.
+    // off the line it came out of, and one notification row per card.
     habits: {
         bar: "strip",
         emerge: "join",
         notification: "row",
-        launcher: "list",
         frame: true,
         paint: "auto"
     }

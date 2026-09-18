@@ -620,13 +620,11 @@ var STYLE = {
 
     // Pantheon's habits, the shapes that differ from Omarchy in more than
     // chrome: wingpanel's band, a popover that drops out of its cell rather
-    // than budding off the line, elementary's notification bubble, and
-    // Slingshot's grid as the launcher's default route.
+    // than budding off the line, and elementary's notification bubble.
     habits: {
         bar: "wingpanel",
         emerge: "popover",
         notification: "bubble",
-        launcher: "grid",
         // No ring. elementary frames nothing, and under the band the ring
         // is transparent anyway (M62), so all `frame.thickness` bought was
         // a reserved band of nothing between every window and the screen

@@ -1,8 +1,6 @@
 import QtQuick
 import QtTest
 import "../shell/Menu/appgrid.js" as AppGrid
-import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
-import "../shell/Theme/themes/pantheon.js" as Pantheon
 
 // The launcher's app grid (M58): the column maths and the split, the two
 // things the view cannot state for itself. What a cell draws is the rig's
@@ -53,16 +51,6 @@ TestCase {
     function test_an_empty_level_partitions_to_nothing() {
         compare(AppGrid.partition([]).appCount, 0);
         compare(AppGrid.partition(null).rows.length, 0);
-    }
-
-    // M60 P6: the route the launcher opens on follows the theme table's
-    // launcher habit, which is what Menu.qml passes as the default of its
-    // `menu.appGrid` read, so an explicit key in settings.json still wins
-    // over both.
-    function test_the_grid_is_the_default_the_launcher_habit_asks_for() {
-        compare(AppGrid.defaultFor(Pantheon.STYLE.habits.launcher), true);
-        compare(AppGrid.defaultFor(Metamorphosis.STYLE.habits.launcher), false);
-        compare(AppGrid.defaultFor(undefined), false);
     }
 
     // A few hundred installed apps is the real case, and the split runs on

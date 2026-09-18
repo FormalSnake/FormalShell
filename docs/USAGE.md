@@ -1061,8 +1061,8 @@ all that is actually known: a slow cold start, a second instance handing its
 argv to an existing window, and an `Exec` line that died instantly look
 identical from outside. Success is never claimed, and neither is failure.
 
-`menu.appGrid` (bool, default false, `true` under `pantheon`) swaps the app
-rows for a grid of icons, the app's name centred underneath each one, macOS
+`menu.appGrid` (bool, default true under every theme) swaps the app rows for
+a grid of icons, the app's name centred underneath each one, macOS
 Launchpad's reading. It only touches app results: root's frecency-ordered list and an
 app search draw as the grid, with anything else the same query ranked
 still drawing as rows underneath. Arrows move the cursor by cell instead of
@@ -1071,7 +1071,7 @@ for the row list.
 
 ```jsonc
 {
-  "menu": { "appGrid": true }
+  "menu": { "appGrid": false }
 }
 ```
 

@@ -7,9 +7,8 @@ import "../../../Menu/appgrid.js" as AppGrid
 import "../../../Menu/toggles.js" as Toggles
 
 // The launcher's app grid (M58, behind `menu.appGrid`): Launchpad's reading
-// of an app list, an icon large with its name centred under it, in place of
-// the row per app the launcher draws by default. The key is off by default,
-// so nothing here is on a stock install.
+// of an app list, an icon large with its name centred under it. The key is
+// on by default under every theme (M72 T2).
 //
 // The grid owns the app rows only. Whatever else the ranking returned draws
 // as ordinary `MenuRow`s in the view's footer, under a rule, which is why

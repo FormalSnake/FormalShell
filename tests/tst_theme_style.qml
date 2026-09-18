@@ -631,13 +631,20 @@ TestCase {
         compare(Pantheon.STYLE.habits.switcher, undefined);
     }
 
+    // The app grid is `menu.appGrid` in settings.json, on under every theme
+    // (M72 T2), and no table can turn it off.
+    function test_no_table_carries_the_launcher() {
+        compare(Style.HABITS.launcher, undefined);
+        compare(Metamorphosis.STYLE.habits.launcher, undefined);
+        compare(Pantheon.STYLE.habits.launcher, undefined);
+    }
+
     // The habits Part 2 names, which the surfaces read from M60 T2 on.
     function test_pantheon_declares_pantheon_habits() {
         var habits = Pantheon.STYLE.habits;
         compare(habits.bar, "wingpanel");
         compare(habits.emerge, "popover");
         compare(habits.notification, "bubble");
-        compare(habits.launcher, "grid");
     }
 
     // The screen frame is a habit, not a settings key alone (M66): under a

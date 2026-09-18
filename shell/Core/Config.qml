@@ -277,10 +277,9 @@ import QtQuick
 // match tier only, never across one: a better name match still leads.
 // False browses in Unicode's own file order. The ledger
 // (state.json's `emojiUses`) records either way.
-// menu.appGrid (bool, default false under metamorphosis and retro, true under
-// pantheon, whose launcher habit is Slingshot's grid): the launcher draws
-// its app results as a grid of icons with the app's name under each one
-// instead of a row per app, macOS Launchpad's reading. The apps take the
+// menu.appGrid (bool, default true under every theme, M72 T2): the launcher
+// draws its app results as a grid of icons with the app's name under each
+// one instead of a row per app, macOS Launchpad's reading. The apps take the
 // grid and whatever else the same query ranked draws as rows under it; the
 // ranking, the frecency order and the launch path are the ones the row list
 // already used. Off leaves every level the row list it has always been.

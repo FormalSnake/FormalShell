@@ -18,17 +18,15 @@
 # compositor proves the grid answers the arrows at all (the same reason
 # --panel-keys exists). `cursor` on `menu status` is what reads the answer.
 #
-# The key's default is the other half of the leg, and it is the theme's
-# rather than a constant (M60 P6): the row list under Omarchy's launcher
-# habit, Slingshot's grid under pantheon's. Config.qml re-reads settings.json
-# on a write, so the key is deleted underneath the running shell, the
-# launcher resummoned, and the level has to come back as the habit's own
-# route; then it is put back, which leaves the grid up for the run's own
-# frame. Ridden by --pantheon it is the grid the deletion lands on, which is
-# where that default is read, and where the grid is read for sitting inside
-# its own card: the popover emerge cuts nothing at the card's edge, so a view
-# scrolled to a negative offset paints its cells up the output instead of
-# being clipped away.
+# The key's default is the other half of the leg: the grid, under every
+# theme (M72 T2). Config.qml re-reads settings.json on a write, so the key
+# is deleted underneath the running shell, the launcher resummoned, and the
+# level has to come back as the grid with no key set at all; then it is put
+# back, which leaves the grid up for the run's own frame. Ridden by
+# --pantheon the grid is also read for sitting inside its own card: the
+# popover emerge cuts nothing at the card's edge, so a view scrolled to a
+# negative offset paints its cells up the output instead of being clipped
+# away.
 #
 # The typing half (M72 T1), on real keys where it can be: after a re-rank
 # and a real Backspace the cursor's row and the row the view holds its
@@ -383,40 +381,31 @@ leg_app_grid_assert() {
   fi
   echo "SMOKE_APP_GRID_KEYS empty query kept the grid, Escape cleared, a held Backspace climbed one level"
 
-  # The default: with the key gone the route is the one the live theme's
-  # launcher habit asks for, and every entry the grid had is still on it.
+  # The default: with the key gone the route is still the grid, under every
+  # theme, and every entry the grid had is still on it.
   cat "$app_grid_off_path"; echo
   if [ "$(app_grid_field "$app_grid_off_path" rows)" != "$rows" ]; then
     fail "the default route lost entries the grid had, got: $(cat "$app_grid_off_path")"
   fi
   marked=$(app_grid_mark_pixels "$app_grid_rows_png")
+  if [ "$(app_grid_field "$app_grid_off_path" view)" != "appGrid" ] \
+    || [ "$(app_grid_field "$app_grid_off_path" columns)" -le 1 ]; then
+    fail "the apps route did not default to the grid, got: $(cat "$app_grid_off_path")"
+  fi
+  if [ -z "$marked" ] || [ "$marked" -lt 2500 ]; then
+    fail "the default grid drew the probe icon over ${marked:-0} pixels, too few to be a 64px cell icon"
+  fi
   if leg_on pantheon; then
-    if [ "$(app_grid_field "$app_grid_off_path" view)" != "appGrid" ] \
-      || [ "$(app_grid_field "$app_grid_off_path" columns)" -le 1 ]; then
-      fail "the apps route did not default to the grid under pantheon, got: $(cat "$app_grid_off_path")"
-    fi
-    if [ -z "$marked" ] || [ "$marked" -lt 2500 ]; then
-      fail "the habit's own grid drew the probe icon over ${marked:-0} pixels, too few to be a 64px cell icon"
-    fi
-    # And it drew inside its own card. The popover cuts nothing at the
-    # card's edge, so a grid scrolled to a negative offset paints its cells
-    # up the output rather than being clipped away: the band above the
-    # card's top row is where they land, and the probe's own colour is what
-    # would be in it.
+    # It drew inside its own card. The popover cuts nothing at the card's
+    # edge, so a grid scrolled to a negative offset paints its cells up the
+    # output rather than being clipped away: the band above the card's top
+    # row is where they land, and the probe's own colour is what would be
+    # in it.
     local above
     above=$(app_grid_mark_pixels "$app_grid_rows_png" "$app_grid_above_card")
     if [ -z "$above" ] || [ "$above" -gt 0 ]; then
       fail "${above:-0} pixels of the grid's own icon sit above the card's top row ($app_grid_above_card)"
     fi
-    echo "SMOKE_APP_GRID_DEFAULT $(app_grid_field "$app_grid_off_path" columns) columns by the launcher habit, no key set (${marked}px of the probe icon, none above the card)"
-  else
-    if [ "$(app_grid_field "$app_grid_off_path" view)" != "rows" ] \
-      || [ "$(app_grid_field "$app_grid_off_path" columns)" != "1" ]; then
-      fail "the apps route still drew a grid with menu.appGrid deleted, got: $(cat "$app_grid_off_path")"
-    fi
-    if [ -z "$marked" ] || [ "$marked" -gt 1000 ]; then
-      fail "the row list drew the probe icon over ${marked:-0} pixels, which is still cell-sized"
-    fi
-    echo "SMOKE_APP_GRID_ROWS $app_grid_rows_png (${marked}px of the probe icon, a row's worth)"
   fi
+  echo "SMOKE_APP_GRID_DEFAULT $(app_grid_field "$app_grid_off_path" columns) columns with no key set (${marked}px of the probe icon)"
 }

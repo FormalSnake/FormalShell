@@ -7,17 +7,7 @@
 //
 // Nothing here knows about Theme or the row objects beyond their `kind`, so
 // the column count and the split are testable head-on, the same
-// arrangement search.js and frecency.js already have; the launcher habit
-// arrives as the plain string the theme table carries.
-
-// Whether the grid is what a level opens on with nothing set (M60 P6).
-// `menu.appGrid` is read through Config with this as its default, so an
-// explicit false in settings.json still wins on a table that asks for the
-// grid: elementary's launcher is Slingshot's pages of icons, Omarchy's is a
-// list of rows.
-function defaultFor(launcherHabit) {
-    return launcherHabit === "grid";
-}
+// arrangement search.js and frecency.js already have.
 
 // How many cells fit across `width` at `minCell`, at least one: a card
 // narrower than a single cell still draws a column rather than none. The

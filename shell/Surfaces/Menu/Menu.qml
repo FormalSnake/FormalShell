@@ -641,9 +641,9 @@ PanelWindow {
     // clipboard split, nix, keybinds, calc) never produce an app row and
     // keep the row list.
     //
-    // What the key defaults to is the launcher habit's (M60 P6).
-    readonly property bool _appGridWanted: Core.Config.get("menu.appGrid",
-            AppGrid.defaultFor(Core.Theme.habit.launcher))
+    // The grid is on by default under every theme (M72 T2); `menu.appGrid`
+    // stays a user key, an explicit false in settings.json still wins.
+    readonly property bool _appGridWanted: Core.Config.get("menu.appGrid", true)
 
     // Which of the five views draws the level: `rows`, `picker`, `emoji`,
     // `appGrid` or `app`. Committed by `_syncRows` with the rows it draws,
