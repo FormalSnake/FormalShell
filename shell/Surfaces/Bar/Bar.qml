@@ -781,7 +781,7 @@ PanelWindow {
                         return entrySlot._onBand ? bar._cellInk : "transparent";
                     });
                     entryLoader.item.barInkShadow = Qt.binding(function () {
-                        return entrySlot._onBand ? bar._cellInkShadow : "transparent";
+                        return entrySlot._onBand ? bar._cellInkShadow : [];
                     });
                     // A binding, not a value: settings.json lands after the
                     // first cells exist, and whether this Repeater resets
