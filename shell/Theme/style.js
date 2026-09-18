@@ -31,6 +31,11 @@
 // `cell` for the same reason the card is not `card`: the two live in
 // different material.
 //
+// `separator` is Components/Separator.qml's rule: its `fill` is the line
+// and its `edge`, when there is one, a second line of the edge's own width
+// drawn past it, which is how an etched rule (a dark line over a lit one)
+// keeps the one-line footprint every layout was cut for.
+//
 // `window` is the one role nothing in the shell draws. Hyprland does, off
 // the variables ThemeEngine publishes into formalshell-chrome.conf
 // (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
@@ -63,6 +68,7 @@ var ROLES = {
     "segmented.chip": [],
     "cursor": [],
     "scrim": [],
+    "separator": [],
     "switcher": [],
     "switcher.cell": ["rest", "selected"],
     "window": ["rest", "inactive"]
@@ -305,10 +311,9 @@ function hairline(layer) {
 // spread as a band of that thickness along the INSIDE of the box, which is
 // a border rather than a plate under the fill.
 //
-// A cast is drawn outside the silhouette alone: MultiEffect casts a shadow
-// of what it is given and masks the silhouette back out, so an INSET cast
-// (elementary's `inset-shadow()`) is not rendered yet. No table carries one
-// while metamorphosis is the only one on this mechanism.
+// A cast is drawn outside the box alone: Box draws it with RectangularShadow
+// and masks the box's own shape back out, so an INSET cast (elementary's
+// `inset-shadow()`) is not rendered yet.
 function layers(list) {
     var out = { hairlines: [], rings: [], casts: [] };
     if (!list)

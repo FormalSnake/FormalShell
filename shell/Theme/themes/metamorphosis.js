@@ -261,6 +261,9 @@ var STYLE = {
         // blur behind the card above it.
         "scrim": { fill: "black", fillAlpha: 0.5, radius: 0 },
 
+        // shadcn's `<Separator>`: one `border` line and nothing under it.
+        "separator": { fill: "border" },
+
         // The window switcher's card (M60 T6). This table's `switcher` habit
         // is off, so nothing instantiates that surface here and the entry is
         // the plain card: the role list is one list, and a preset that turned

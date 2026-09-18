@@ -57,12 +57,6 @@ Item {
     readonly property alias contentItem: contentSlot
     property real padding: 0
 
-    // The shape a cast is cast from, for a box that is not a rounded
-    // rectangle (`Shoulders`' own outline). Never drawn: what lands here is
-    // the source and the inverted mask of every cast, nothing more, and an
-    // empty slot falls back to a rounded rectangle of this box's radius.
-    property alias silhouette: silhouetteSlot.data
-
     // `pill` needs the extent of the thing being drawn, so it survives
     // resolution as itself and lands here.
     readonly property real _radius: root.radius >= 0
@@ -75,17 +69,21 @@ Item {
     readonly property color _borderColor: root.box.border ? root.box.border.color : "transparent"
 
     // How far outside its own rect the widest cast reaches, which is the
-    // room the silhouette needs around the box for the blur not to be
-    // clipped, and the kernel `shadowBlur` is a fraction of.
+    // room the cast layer and its mask need around the box.
     readonly property int _castPad: {
         var pad = 0;
         for (var i = 0; i < root.box.casts.length; i++) {
             var cast = root.box.casts[i];
-            pad = Math.max(pad, Math.ceil(cast.blur + Math.abs(cast.spread)
+            pad = Math.max(pad, Math.ceil(cast.blur + Math.max(0, cast.spread)
                 + Math.max(Math.abs(cast.x), Math.abs(cast.y))));
         }
         return pad;
     }
+
+    // The radius inside the border, clamped to what the box's own extent
+    // can hold: the face, the hairlines and the inset rings all draw there.
+    readonly property real _innerRadius: Math.max(0, Math.min(root._radius - root._borderWidth,
+        (root.width - root._borderWidth * 2) / 2, (root.height - root._borderWidth * 2) / 2))
 
     // The wash the current state asks for, or null.
     readonly property var washTone: root.box.wash || null
@@ -97,69 +95,67 @@ Item {
 
     onWashToneChanged: if (root.washTone) root._heldWash = root.washTone;
 
-    // The shape every cast is cast from, padded for the blur and never
-    // drawn: `visible: false` with a layer of its own is what makes it a
-    // texture rather than a picture (the same pairing LyricsPane's sung-word
-    // mask uses). The white is mask alpha, not a colour.
+    // The box's own shape, padded for the casts and never drawn: the mask
+    // the cast layer below cuts itself out with. The white is mask alpha,
+    // not a colour.
     Item {
-        id: silhouetteLayer
+        id: castMask
         anchors.fill: parent
         anchors.margins: -root._castPad
         visible: false
         layer.enabled: root.box.casts.length > 0
 
-        Loader {
+        Rectangle {
             anchors.fill: parent
             anchors.margins: root._castPad
-            active: root.box.casts.length > 0 && silhouetteSlot.children.length === 0
-            sourceComponent: Rectangle {
-                color: "white"
-                radius: root._radius
-            }
-        }
-
-        Item {
-            id: silhouetteSlot
-            anchors.fill: parent
-            anchors.margins: root._castPad
+            radius: root._radius
+            color: "white"
         }
     }
 
-    // One cast per blurred layer. The shadow is cast from the silhouette
-    // and the silhouette is then masked back out of it (`maskInverted`), so
-    // a translucent card keeps the blurred desktop it shows instead of its
-    // own cast darkening through the fill. `autoPaddingEnabled` is off
-    // because the padding is the silhouette's, sized off what this box
-    // actually asks for rather than off `blurMax`.
-    //
-    // MultiEffect's blur is a kernel fraction and CSS's is a radius, so a
-    // cast is a close reading of its layer rather than an exact one; the
-    // spread scales the shadow about its own centre, taken against the
-    // box's shorter side, which is as near as one scalar gets to CSS's
-    // outward grow.
-    Repeater {
-        model: root.box.casts
-
-        delegate: MultiEffect {
-            id: cast
-            required property var modelData
-
-            readonly property real _extent: Math.max(1, Math.min(root.width, root.height))
-
-            anchors.fill: silhouetteLayer
-            z: -1
-            source: silhouetteLayer
-            autoPaddingEnabled: false
+    // Every cast, drawn analytically by RectangularShadow (CSS's own blur
+    // radius, offset and outward spread) and then masked out of the box as
+    // one layer, so a translucent card keeps the blurred desktop it shows
+    // instead of its own cast darkening through the fill. The mask has to be
+    // soft: MultiEffect's default mask is a step at alpha 0, which cuts the
+    // shadow on the whole antialiased rim and leaves the corner arcs as a
+    // staircase with the desktop showing through it. A threshold of 0.5
+    // with a spread of 1 is the one pair its smoothstep reads as 0 to 1
+    // over the mask's alpha (`updateMaskThresholdSpread` in Qt's
+    // qquickmultieffect.cpp). A negative spread shrinks the rect instead,
+    // which is what RectangularShadow asks for rather than taking one.
+    Item {
+        objectName: "casts"
+        anchors.fill: parent
+        anchors.margins: -root._castPad
+        z: -1
+        visible: root.box.casts.length > 0
+        layer.enabled: root.box.casts.length > 0
+        layer.effect: MultiEffect {
             maskEnabled: true
-            maskSource: silhouetteLayer
             maskInverted: true
-            blurMax: Math.max(1, root._castPad)
-            shadowEnabled: true
-            shadowColor: cast.modelData.color
-            shadowBlur: Math.min(1, cast.modelData.blur / cast.blurMax)
-            shadowHorizontalOffset: cast.modelData.x
-            shadowVerticalOffset: cast.modelData.y
-            shadowScale: Math.max(0, (cast._extent + cast.modelData.spread * 2) / cast._extent)
+            maskSource: castMask
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 1
+        }
+
+        Repeater {
+            model: root.box.casts
+
+            delegate: RectangularShadow {
+                id: cast
+                required property var modelData
+
+                readonly property real _shrink: Math.max(0, -cast.modelData.spread)
+
+                anchors.fill: parent
+                anchors.margins: root._castPad + cast._shrink
+                radius: Math.max(0, root._radius - cast._shrink)
+                blur: cast.modelData.blur
+                spread: Math.max(0, cast.modelData.spread)
+                offset: Qt.vector2d(cast.modelData.x, cast.modelData.y)
+                color: cast.modelData.color
+            }
         }
     }
 
@@ -210,7 +206,7 @@ Item {
         anchors.margins: root._borderWidth
         active: !!root.box.face
         sourceComponent: Rectangle {
-            radius: Math.max(0, root._radius - root._borderWidth)
+            radius: root._innerRadius
             gradient: Gradient {
                 GradientStop { position: 0; color: root.box.face.from }
                 GradientStop { position: 1; color: root.box.face.to }
@@ -218,34 +214,49 @@ Item {
         }
     }
 
-    // The inset hairlines, one line per layer along the edge its own offset
-    // names. Clipped, so a line thicker than the box it is lit against
-    // cannot run out of it; the clip is rectangular, so a line still runs
-    // the full length of its edge rather than stopping where the corner arc
-    // starts. A layer marked `inset: false` (a lit lower lip outside the
+    // The inset hairlines, one lit line per layer along the edge its own
+    // offset names. Each is the inner outline stroked at the line's
+    // thickness and clipped to a band as deep as the corner, so the line
+    // runs along its edge and round both arcs into the sides the way a CSS
+    // inset shadow follows the radius. A straight line clipped to the box's
+    // rect instead ran square into the corners and poked past the rounded
+    // border. A layer marked `inset: false` (a lit lower lip outside the
     // box) belongs outside this container and is not drawn: no table
     // carries one yet.
     Item {
+        id: hairlineLayer
+        objectName: "hairlines"
         anchors.fill: parent
         anchors.margins: root._borderWidth
-        clip: true
 
         Repeater {
             model: root.box.hairlines
 
-            delegate: Rectangle {
+            delegate: Item {
                 id: hairline
                 required property var modelData
 
                 readonly property bool _sideways: hairline.modelData.edge === "left"
                     || hairline.modelData.edge === "right"
+                readonly property real _depth: Math.max(hairline.modelData.thickness, root._innerRadius)
 
                 visible: hairline.modelData.inset
-                x: hairline.modelData.edge === "right" ? parent.width - hairline.width : 0
-                y: hairline.modelData.edge === "bottom" ? parent.height - hairline.height : 0
-                width: hairline._sideways ? hairline.modelData.thickness : parent.width
-                height: hairline._sideways ? parent.height : hairline.modelData.thickness
-                color: hairline.modelData.color
+                clip: true
+                x: hairline.modelData.edge === "right" ? hairlineLayer.width - hairline.width : 0
+                y: hairline.modelData.edge === "bottom" ? hairlineLayer.height - hairline.height : 0
+                width: hairline._sideways ? hairline._depth : hairlineLayer.width
+                height: hairline._sideways ? hairlineLayer.height : hairline._depth
+
+                Rectangle {
+                    x: -hairline.x
+                    y: -hairline.y
+                    width: hairlineLayer.width
+                    height: hairlineLayer.height
+                    radius: root._innerRadius
+                    color: "transparent"
+                    border.width: hairline.modelData.thickness
+                    border.color: hairline.modelData.color
+                }
             }
         }
     }

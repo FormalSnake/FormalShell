@@ -17,6 +17,10 @@ import qs.Core
 // inset to the row text reads as a division of the rows. Full-bleed is the
 // default because that is the commoner case (a footer, a header, the
 // ledger's own split).
+//
+// What the rule looks like is the `separator` role's: a table that etches
+// it (pantheon) adds an `edge`, a lit line drawn just past this one and
+// outside the item, so the footprint stays one line on every theme.
 Rectangle {
     id: root
 
@@ -34,5 +38,16 @@ Rectangle {
     anchors.topMargin: root.vertical ? root.inset : 0
     anchors.bottomMargin: root.vertical ? root.inset : 0
 
-    color: Theme.color.border
+    readonly property var _box: Theme.box("separator")
+
+    color: root._box.fill
+
+    Rectangle {
+        visible: !!root._box.edge
+        x: root.vertical ? root.width : 0
+        y: root.vertical ? 0 : root.height
+        width: root.vertical ? (root._box.edge ? root._box.edge.width : 0) : root.width
+        height: root.vertical ? root.height : (root._box.edge ? root._box.edge.width : 0)
+        color: root._box.edge ? root._box.edge.color : "transparent"
+    }
 }

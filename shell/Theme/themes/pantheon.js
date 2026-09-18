@@ -502,6 +502,18 @@ var STYLE = {
         // under the half shadcn takes.
         "scrim": { fill: "black", fillAlpha: 125 / 255, radius: 0 },
 
+        // The etched rule (`widgets/_separators.scss`): `menu_separator` on
+        // top and `menu_separator_shadow` under it, the lower line hung past
+        // the widget by elementary's own `margin-bottom: -1px`
+        // (`_exported.scss` for both colours). The dark line is deepened
+        // from elementary's 0.35 for the reason in the header, and the lit
+        // one from 0.05, which over zinc is no line at all.
+        "separator": {
+            fill: "black",
+            fillAlpha: { light: 0.15, dark: 0.5 },
+            edge: { color: "white", alpha: { light: 0.8, dark: 0.07 }, width: 1 }
+        },
+
         // Gala's window switcher (`lib/Widgets/AbstractSwitcher.vala`'s own
         // `draw()`, M60 T6/M64): the background level at 0.6 over the
         // compositor's blur, a toplevel rim, and one lit stroke a pixel and

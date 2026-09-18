@@ -102,24 +102,40 @@ TestCase {
         return out;
     }
 
-    function effects(box) {
-        var out = [];
+    function named(box, name) {
         for (var i = 0; i < box.children.length; i++) {
-            if (box.children[i].shadowEnabled !== undefined)
-                out.push(box.children[i]);
+            if (box.children[i].objectName === name)
+                return box.children[i];
+        }
+        return null;
+    }
+
+    function shadows(box) {
+        var out = [];
+        var layer = named(box, "casts");
+        for (var i = 0; i < layer.children.length; i++) {
+            if (layer.children[i].blur !== undefined)
+                out.push(layer.children[i]);
         }
         return out;
     }
 
     // The two containers read by their own shape rather than by their index
     // among the children, since the box appends its content slot after them:
-    // the hairlines live in the one clipped item, the face in the one Loader.
+    // the hairlines live in their own named item, the face in the one Loader.
     function hairlineBox(box) {
-        for (var i = 0; i < box.children.length; i++) {
-            if (box.children[i].clip === true)
-                return box.children[i];
+        return named(box, "hairlines");
+    }
+
+    // The bands inside it, one per drawn hairline, past the Repeater.
+    function bands(box) {
+        var out = [];
+        var container = hairlineBox(box);
+        for (var i = 0; i < container.children.length; i++) {
+            if (container.children[i].clip === true)
+                out.push(container.children[i]);
         }
-        return null;
+        return out;
     }
 
     function faceLoader(box) {
@@ -161,7 +177,7 @@ TestCase {
         verify(Qt.colorEqual(drawn[0].border.color, Theme.color.border));
         compare(drawn[0].border.width, Theme.borderWidth);
         compare(drawn[0].radius, Theme.radiusXl);
-        compare(effects(box).length, 0);
+        compare(shadows(box).length, 0);
     }
 
     function test_a_role_with_no_border_draws_none() {
@@ -246,12 +262,21 @@ TestCase {
         }) });
         var container = hairlineBox(box);
         verify(container);
-        var lines = childRects(container);
-        compare(lines.length, 1);
-        verify(Qt.colorEqual(lines[0].color, "#00ccff"));
-        compare(lines[0].width, 1);
-        compare(lines[0].height, container.height);
-        compare(lines[0].x, container.width - 1);
+        compare(bands(box).length, 1);
+        // One band down the right edge, as deep as the inner corner, holding
+        // the inner outline stroked at the line's thickness, so the line
+        // follows both arcs rather than running square into them.
+        var band = bands(box)[0];
+        verify(band.clip);
+        compare(band.width, 8 - 1);
+        compare(band.height, container.height);
+        compare(band.x, container.width - band.width);
+        var stroke = band.children[0];
+        verify(Qt.colorEqual(stroke.border.color, "#00ccff"));
+        compare(stroke.border.width, 1);
+        compare(stroke.radius, 8 - 1);
+        compare(stroke.x, -band.x);
+        compare(stroke.width, container.width);
         // A border of its own sits outside the line, so the two never
         // paint over one another.
         compare(container.anchors.margins, 1);
@@ -259,7 +284,7 @@ TestCase {
 
     function test_a_box_with_no_hairlines_draws_none() {
         var box = make({ role: "card" });
-        compare(childRects(hairlineBox(box)).length, 0);
+        compare(bands(box).length, 0);
     }
 
     function test_a_face_draws_a_gradient_only_when_the_table_sets_one() {
@@ -277,29 +302,33 @@ TestCase {
         compare(loader.item.radius, 8 - 1);
     }
 
-    // A cast is the one layer that costs a shader, so nothing instantiates
-    // one until a table asks for a blurred layer.
-    function test_a_cast_instantiates_an_effect_only_when_a_layer_blurs() {
-        compare(effects(make({ role: "card" })).length, 0);
-        compare(effects(make({ role: "cursor" })).length, 0);
+    // A cast is the one layer that costs a shader, so nothing is layered
+    // until a table asks for a blurred layer.
+    function test_a_cast_layers_an_effect_only_when_a_layer_blurs() {
+        verify(!named(make({ role: "card" }), "casts").layer.enabled);
+        verify(!named(make({ role: "cursor" }), "casts").layer.enabled);
 
         var box = make({ box: resolved({
             fill: "#151515",
-            casts: [{ x: 0, y: 3, blur: 4, spread: 0, color: "#00000026" }]
+            casts: [
+                { x: 0, y: 3, blur: 4, spread: 0, color: "#00000026" },
+                { x: 0, y: 3, blur: 3, spread: -3, color: "#00000059" }
+            ]
         }) });
-        var cast = effects(box);
-        compare(cast.length, 1);
-        verify(cast[0].shadowEnabled);
-        verify(cast[0].maskEnabled);
-        verify(cast[0].maskInverted);
-        verify(!cast[0].autoPaddingEnabled);
-        compare(cast[0].shadowVerticalOffset, 3);
-        verify(Qt.colorEqual(cast[0].shadowColor, "#00000026"));
-        // The silhouette is padded by what the cast reaches, and it is the
-        // source and the mask both.
-        compare(cast[0].source, box.children[0]);
-        compare(cast[0].maskSource, box.children[0]);
-        compare(box.children[0].width, box.width + (4 + 3) * 2);
+        var layer = named(box, "casts");
+        verify(layer.layer.enabled);
+        compare(layer.width, box.width + (4 + 3) * 2);
+        var cast = shadows(box);
+        compare(cast.length, 2);
+        compare(cast[0].blur, 4);
+        compare(cast[0].offset.y, 3);
+        verify(Qt.colorEqual(cast[0].color, "#00000026"));
+        compare(cast[0].width, box.width);
+        compare(cast[0].radius, 8);
+        // A negative spread shrinks the rect and its radius with it.
+        compare(cast[1].spread, 0);
+        compare(cast[1].width, box.width - 6);
+        compare(cast[1].radius, 8 - 3);
     }
 
     // --- The wash --------------------------------------------------------
