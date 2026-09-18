@@ -2,6 +2,7 @@ import QtQuick
 import qs.Core as Core
 import qs.Components
 import ".." as MenuParts
+import "../../../Components/cursor.js" as Cursor
 import "../../../Menu/appgrid.js" as AppGrid
 import "../../../Menu/toggles.js" as Toggles
 
@@ -92,21 +93,6 @@ Item {
         - root._cellGutter * 2 - Core.Theme.space.sm * 2)
     readonly property real _contentHeight: root.iconExtent
         + Core.Theme.space.rowGap + nameMetrics.height
-
-    // Brings a footer row into view when the cursor lands on it. The grid's
-    // own `currentIndex` does this for the cells; the footer is one item to
-    // the view and its rows differ in height, so each one reports its own
-    // rect through the scene rather than being computed from a row count.
-    function revealTailRow(item) {
-        if (!item || !grid.contentItem)
-            return;
-        var top = item.mapToItem(grid.contentItem, 0, 0).y;
-        var bottom = top + item.height;
-        if (top < grid.contentY)
-            grid.contentY = top;
-        else if (bottom > grid.contentY + grid.height)
-            grid.contentY = bottom - grid.height;
-    }
 
     GridView {
         id: grid
@@ -231,11 +217,37 @@ Item {
         // one surface that differ in kind, with no name to give the second
         // one that its rows do not already carry.
         footer: Item {
+            id: tailFooter
             width: grid.width
             height: root.tailRows.length > 0
                 ? tailColumn.y + tailColumn.height + Core.Theme.space.rowGap
                 : 0
             visible: root.tailRows.length > 0
+
+            // Brings the footer row the cursor has landed on into view. The
+            // grid's own `currentIndex` does this for the cells; the footer
+            // is one item to the view and its rows differ in height, so the
+            // row reports its own rect through the scene rather than being
+            // computed from a row count.
+            //
+            // Which row that is gets resolved here rather than handed in
+            // when the reveal was queued a tick earlier: a query can rebuild
+            // these rows inside that tick, and a delegate that has left the
+            // view still answers `mapToItem` as though it sat at the scene's
+            // own origin, a whole card above the grid. The scroll is
+            // Panel's (Components/cursor.js): the smallest one that puts the
+            // row inside the viewport, and never past either end of what
+            // the view has to scroll.
+            function revealCursorRow() {
+                var index = root.cursor - root.appCount;
+                if (!grid.contentItem || index < 0 || index >= root.tailRows.length)
+                    return;
+                var row = tailRepeater.itemAt(index);
+                if (!row)
+                    return;
+                grid.contentY = Cursor.follow(row.mapToItem(grid.contentItem, 0, 0).y,
+                    row.height, grid.contentY, grid.height, grid.contentHeight, 0);
+            }
 
             Separator {
                 id: tailRule
@@ -255,6 +267,7 @@ Item {
                 anchors.rightMargin: root._cellGutter
 
                 Repeater {
+                    id: tailRepeater
                     model: root.tailRows
 
                     delegate: Item {
@@ -269,12 +282,10 @@ Item {
                         height: tailRow.height
 
                         // A tick late: the row's own height and place are
-                        // still settling on the frame the cursor arrives. The
-                        // function is handed over by reference, never as a
-                        // closure: a query can rebuild these rows inside that
-                        // tick, and a closure evaluated after its delegate's
-                        // context is gone has no `root` to look up.
-                        onIsCursorChanged: if (tailSlot.isCursor) Qt.callLater(root.revealTailRow, tailSlot)
+                        // still settling on the frame the cursor arrives.
+                        // Nothing is handed over with it, so the reveal
+                        // reads the cursor and the rows as they are by then.
+                        onIsCursorChanged: if (tailSlot.isCursor) Qt.callLater(tailFooter.revealCursorRow)
 
                         // The cursor fill the row list draws under its rows,
                         // drawn per row here: the footer is one item and its

@@ -25,7 +25,10 @@
 # launcher resummoned, and the level has to come back as the habit's own
 # route; then it is put back, which leaves the grid up for the run's own
 # frame. Ridden by --pantheon it is the grid the deletion lands on, which is
-# where that default is read.
+# where that default is read, and where the grid is read for sitting inside
+# its own card: the popover emerge cuts nothing at the card's edge, so a view
+# scrolled to a negative offset paints its cells up the output instead of
+# being clipped away.
 leg_app_grid_flag="--app-grid"
 leg_app_grid_order=26
 leg_app_grid_needs="convert wtype jq"
@@ -59,6 +62,11 @@ app_grid_mixed_query_path="$shot_dir/app-grid-mixed-query.json"
 # green count is one cell's worth and not five.
 app_grid_mark="#2F9E44"
 app_grid_other="#2A6FAE"
+
+# Everything above the card's own top row (Menu.qml's `_topFraction` 0.3 of a
+# 1080 output, the same number --menu-emerge states). Nothing the launcher
+# draws reaches it.
+app_grid_above_card="1920x324+0+0"
 
 app_grid_entry() {
   local file="$1" name="$2" icon="$3" exec_line="$4"
@@ -186,12 +194,13 @@ EOF
   echo "exec-once = bash $script"
 }
 
-# How many pixels of the probe entry's own colour the frame carries. Two
-# passes rather than one: everything off that colour goes black first, so a
-# palette that is already near-white somewhere else cannot be counted as a
-# match by the second.
+# How many pixels of the probe entry's own colour one box of the frame
+# carries, the whole frame with no box named. Two passes rather than one:
+# everything off that colour goes black first, so a palette that is already
+# near-white somewhere else cannot be counted as a match by the second.
 app_grid_mark_pixels() {
-  $convert_bin "$1" -fuzz 12% -fill black +opaque "$app_grid_mark" \
+  $convert_bin "$1" -crop "${2:-100%x100%+0+0}" +repage \
+    -fuzz 12% -fill black +opaque "$app_grid_mark" \
     -fuzz 12% -fill white -opaque "$app_grid_mark" \
     -colorspace Gray -format '%[fx:int(mean*w*h+0.5)]' info: 2>/dev/null
 }
@@ -253,6 +262,18 @@ leg_app_grid_assert() {
     fail "Down moved the grid cursor to ${cursor:-none}, not one row of $columns cells on from 1"
   fi
 
+  # Six cells over two rows already fit the card, so there is nothing for
+  # either arrow to scroll and the view has to stay where it was. A reveal
+  # queued for a footer row that a query rebuilt inside the same tick used
+  # to write the card's own offset into the grid here instead.
+  local scroll
+  for f in "$app_grid_open_path" "$app_grid_right_path" "$app_grid_down_path"; do
+    scroll=$(app_grid_field "$f" scrollTop)
+    if [ "$scroll" != "0" ]; then
+      fail "the grid sat at scrollTop ${scroll:-none} with nothing to scroll, from $f"
+    fi
+  done
+
   # A typed query narrows the grid to the one entry that carries the token,
   # and the level is still a grid rather than falling back to rows.
   cat "$app_grid_narrow_path"; echo
@@ -297,15 +318,24 @@ leg_app_grid_assert() {
   fi
   marked=$(app_grid_mark_pixels "$app_grid_rows_png")
   if leg_on pantheon; then
-    # `menu status` alone here, no pixel read: a launcher reopened under the
-    # popover emerge comes back with the grid scrolled off its own card
-    # (`scrollTop` -391 against a two-row grid), so the frame says nothing
-    # about which view drew it until that is fixed.
     if [ "$(app_grid_field "$app_grid_off_path" view)" != "appGrid" ] \
       || [ "$(app_grid_field "$app_grid_off_path" columns)" -le 1 ]; then
       fail "the apps route did not default to the grid under pantheon, got: $(cat "$app_grid_off_path")"
     fi
-    echo "SMOKE_APP_GRID_DEFAULT $(app_grid_field "$app_grid_off_path" columns) columns by the launcher habit, no key set"
+    if [ -z "$marked" ] || [ "$marked" -lt 2500 ]; then
+      fail "the habit's own grid drew the probe icon over ${marked:-0} pixels, too few to be a 64px cell icon"
+    fi
+    # And it drew inside its own card. The popover cuts nothing at the
+    # card's edge, so a grid scrolled to a negative offset paints its cells
+    # up the output rather than being clipped away: the band above the
+    # card's top row is where they land, and the probe's own colour is what
+    # would be in it.
+    local above
+    above=$(app_grid_mark_pixels "$app_grid_rows_png" "$app_grid_above_card")
+    if [ -z "$above" ] || [ "$above" -gt 0 ]; then
+      fail "${above:-0} pixels of the grid's own icon sit above the card's top row ($app_grid_above_card)"
+    fi
+    echo "SMOKE_APP_GRID_DEFAULT $(app_grid_field "$app_grid_off_path" columns) columns by the launcher habit, no key set (${marked}px of the probe icon, none above the card)"
   else
     if [ "$(app_grid_field "$app_grid_off_path" view)" != "rows" ] \
       || [ "$(app_grid_field "$app_grid_off_path" columns)" != "1" ]; then
