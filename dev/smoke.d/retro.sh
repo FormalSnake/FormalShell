@@ -8,6 +8,9 @@
 # why there is nothing to assert here beyond the frame the other leg takes.
 leg_retro_flag="--retro"
 leg_retro_order=5
+# See pantheon.sh: a rider with no drive or assert of its own must never
+# vote the base fixture window off through fixture_window_mode's AND.
+leg_retro_fixture_window=keep
 
 leg_retro_fixture() {
   settings_fragment ', "theme": {"preset": "retro"}'
