@@ -5,8 +5,8 @@ import "../shell/Menu/toggles.js" as Toggles
 
 // Covers shell/Menu/toggles.js plus two drift guards that read shipped files
 // rather than fixtures: the "@state:" allow-list only means anything if
-// Menu.qml's snapshot literal spells the same four paths and the shipped
-// toggle subtree names paths that exist. Reading a file outside the test's
+// ConditionEvaluator.qml's snapshot literal spells the same four paths and
+// the shipped toggle subtree names paths that exist. Reading a file outside the test's
 // own directory needs QML_XHR_ALLOW_FILE_READ=1, set by the qmltestrunner
 // invocations in justfile and flake.nix's qml-tests derivation.
 TestCase {
@@ -119,10 +119,11 @@ TestCase {
         verify(!Toggles.isKnownPath("bluetooth.powered"));
     }
 
-    // Drift guard: a typo in Menu.qml's _stateSnapshot object literal is
-    // invisible to qmllint and would render a permanently-off checkmark.
+    // Drift guard: a typo in ConditionEvaluator.qml's stateSnapshot object
+    // literal is invisible to qmllint and would render a permanently-off
+    // checkmark.
     function test_menu_qml_snapshot_names_every_allow_listed_path() {
-        var text = _read("../shell/Surfaces/Menu/Menu.qml");
+        var text = _read("../shell/Surfaces/Menu/ConditionEvaluator.qml");
         verify(text.length > 0);
         for (var i = 0; i < Toggles.PATHS.length; i++)
             verify(text.indexOf("\"" + Toggles.PATHS[i] + "\"") >= 0);

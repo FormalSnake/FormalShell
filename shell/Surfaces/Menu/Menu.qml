@@ -83,8 +83,6 @@ PanelWindow {
     // finds from any cell inside the card.
     property bool _cursorFromKeys: false
     property string _confirmPendingId: ""
-    property var _condResults: ({})
-    property var _checkedResults: ({})
 
     // "menu" (tree navigation) | "select" | "input", the dmenu-replacement
     // modes summoned via MenuIpc's select()/input(). Both repurpose the same
@@ -120,181 +118,26 @@ PanelWindow {
         // (and a very early `menu summon`, Task 7) can call open() before
         // it lands, evaluating conditions against an empty tree with
         // nothing left to ever re-check them. Re-running the batch here,
-        // once the real tree exists, closes that gap; _evalConditions()'s
+        // once the real tree exists, closes that gap; conditions.evaluate()'s
         // per-node `undefined` guard makes it a cheap no-op otherwise.
         onLoaded: {
             root._defaultMenuText = defaultMenuFile.text();
-            root._evalConditions();
+            conditions.evaluate(root._nodes);
         }
         onLoadFailed: error => console.warn("Menu: failed to load default-menu.jsonc:", error)
     }
 
-    // Vendored emoji dataset (M12 Task 6), ships inside the package like
-    // default-menu.jsonc, parsed with Model.parseHeaderedJson (native
-    // JSON.parse past the provenance header dev/gen-emoji.sh writes, with
-    // parseJsonc as its own fallback). Load failure degrades to an empty
-    // list (the emoji route and ":e" trigger simply return no rows), one
-    // console.warn.
-    //
-    // path starts empty, the same pathless-until-needed FileView pattern
-    // LauncherWidget.qml's osReleaseFile uses: a session that never types
-    // ":e" or opens the emoji route never pays for reading or parsing the
-    // 458KB file. _ensureEmojiLoaded() sets the real path on first genuine
-    // need. blockLoading forces that one transition (path only ever moves
-    // from "" to the real path once) to finish synchronously rather than
-    // leaving the first grid, or `debug query ':e …'`, racing an async
-    // read: the file is small and the fast path above is cheap, and every
-    // access after the first is already-loaded property reads.
-    property string _emojiText: ""
-
-    FileView {
-        id: emojiFile
-        path: ""
-        blockLoading: true
-        onLoaded: root._emojiText = emojiFile.text()
-        onLoadFailed: error => console.warn("Menu: failed to load emoji.json:", error)
+    // Vendored emoji dataset (M12 Task 6): load-on-first-need and the
+    // usage-sort ledger both live in EmojiProvider.
+    EmojiProvider {
+        id: emojiProvider
     }
 
-    function _ensureEmojiLoaded() {
-        if (emojiFile.path === "")
-            emojiFile.path = Quickshell.shellPath("Menu/emoji.json");
-        root._emojiText = emojiFile.text();
-    }
-
-    readonly property var _emojiList: {
-        if (!root._emojiText) return [];
-        try {
-            return Model.parseHeaderedJson(root._emojiText);
-        } catch (e) {
-            console.warn("Menu: failed to parse emoji.json:", e.message);
-            return [];
-        }
-    }
-
-    // The copy ledger the emoji route ranks by (state.json's `emojiUses`),
-    // or an empty list when menu.emoji.sortByUsage is off, which is what
-    // makes providers.js leave Unicode's own order alone. The key gates the
-    // ranking only: the ledger keeps recording either way, so switching it
-    // on later ranks by real history instead of starting blank.
-    readonly property var _emojiUses: Core.Config.get("menu.emoji.sortByUsage", true)
-        ? Core.State.emojiUses
-        : []
-
-    // Nix package runner state (M12 Task 7; M13b Task 4 added the honest
-    // end states). `nix search` is seconds-slow and network-bound, so
-    // unlike calc/emoji the rows can't be computed in the _displayRows
-    // binding: keystrokes arm a 500ms debounce (_requestNixSearch, called
-    // from onTextChanged/query(), never from a binding), one Process runs
-    // at a time, and a result is only cached when it still answers the
-    // latest requested query, anything else is dropped and the search
-    // re-runs (_startNixSearch from onExited). Each cached answer carries
-    // its outcome (Providers.nixSearchOutcome) so _nixRowsFor renders NO
-    // RESULTS and SEARCH FAILED distinctly instead of one ambiguous
-    // nothing. `nix` missing from PATH (the sh wrapper's `command -v`
-    // guard, exit 127) latches _nixAvailable false: every nix surface then
-    // renders the single dim NO NIX row and no further processes spawn.
-    property string _nixQuery: ""       // the query _nixResults answers
-    property var _nixResults: []
-    property string _nixOutcome: "results"  // how _nixQuery ended: results|empty|failed
-    property string _nixWantQuery: ""   // latest requested query
-    property bool _nixAvailable: true
-    property bool _nixWarmed: false     // the eval cache has been paid for
-    property bool _nixWarming: false
-
-    function _requestNixSearch(q) {
-        q = String(q || "").trim();
-        if (q === "" || !root._nixAvailable || q === root._nixQuery) return;
-        root._nixWantQuery = q;
-        nixDebounce.restart();
-    }
-
-    // Entering a nix surface pays the eval cache off before the reader has
-    // typed anything. `nix search` walks the whole nixpkgs attrset the first
-    // time it sees a revision (~20s on a real host, measured on nixpkgs
-    // 2026-08-31) and answers in about a second afterwards, so the cost lands
-    // on the route opening, where a dim INDEXING NIXPKGS row states it,
-    // rather than on the first query, where it read as a search that never
-    // returned. The query is a token nothing matches: what costs the time is
-    // the evaluation, not the term. Doubles as the availability probe, so
-    // NO NIX now shows on entry instead of after a first query.
-    function _requestNixWarm() {
-        if (!root._nixAvailable || root._nixWarmed || root._nixWarming) return;
-        if (nixSearchProc.running) return;
-        root._nixWarming = true;
-        nixSearchProc._warming = true;
-        nixSearchProc._query = "";
-        nixSearchProc.command = root._nixSearchCommand("__formalshell_warm__");
-        nixSearchProc.running = true;
-    }
-
-    function _nixSearchCommand(q) {
-        return ["sh", "-c", 'command -v nix >/dev/null 2>&1 || exit 127; exec nix search nixpkgs "$1" --json', "sh", q];
-    }
-
-    function _startNixSearch() {
-        if (nixSearchProc.running || root._nixWantQuery === "" || !root._nixAvailable) return;
-        nixSearchProc._warming = false;
-        nixSearchProc._query = root._nixWantQuery;
-        nixSearchProc.command = root._nixSearchCommand(root._nixWantQuery);
-        nixSearchProc.running = true;
-    }
-
-    // The rows a nix surface (route level or ":nix" trigger) shows for `q`
-    // right now: the honest NO NIX row, a dim SEARCHING note while the
-    // cached answer doesn't cover this exact query yet (the debounce +
-    // Process round trip runs tens of seconds on a cold real-host eval
-    // cache), or the cached end state, result rows, NO RESULTS, SEARCH
-    // FAILED. Stale rows for a previous query never linger.
-    function _nixRowsFor(q) {
-        if (!root._nixAvailable) return [Providers.nixUnavailableRow()];
-        q = String(q || "").trim();
-        if (q === "") return root._nixWarming ? [Providers.nixIndexingRow()] : [];
-        if (q !== root._nixQuery) return [Providers.nixSearchingRow()];
-        if (root._nixOutcome === "failed") return [Providers.nixFailedRow()];
-        if (root._nixOutcome === "empty") return [Providers.nixNoResultsRow()];
-        return Providers.nixRows(root._nixResults);
-    }
-
-    Timer {
-        id: nixDebounce
-        interval: 500
-        onTriggered: root._startNixSearch()
-    }
-
-    Process {
-        id: nixSearchProc
-
-        property string _query: ""
-        property bool _warming: false
-
-        stdout: StdioCollector {
-            id: nixSearchCollector
-        }
-        onExited: exitCode => {
-            var outcome = Providers.nixSearchOutcome(exitCode, nixSearchCollector.text);
-            if (outcome.state === "unavailable") {
-                root._nixAvailable = false;
-                root._nixWarming = false;
-                console.warn("Menu: nix not found on PATH, nix runner disabled");
-                return;
-            }
-            // A warm run answers nothing: it exists to have evaluated. Any
-            // query typed while it ran is still pending, so start it here.
-            if (nixSearchProc._warming) {
-                nixSearchProc._warming = false;
-                root._nixWarming = false;
-                root._nixWarmed = true;
-                root._startNixSearch();
-                return;
-            }
-            if (_query !== root._nixWantQuery) {
-                root._startNixSearch();
-                return;
-            }
-            root._nixQuery = _query;
-            root._nixOutcome = outcome.state;
-            root._nixResults = outcome.results;
-        }
+    // Nix package runner (M12 Task 7; M13b Task 4 added the honest end
+    // states): debounce, warm and the search Process all live in
+    // NixSearchProvider.
+    NixSearchProvider {
+        id: nixProvider
     }
 
     // ~/.config/formalshell/menu.jsonc, the per-key user overlay (plan-wide
@@ -337,7 +180,7 @@ PanelWindow {
             if (text === root._userMenuText)
                 return;
             root._userMenuText = text;
-            root._evalConditions();
+            conditions.evaluate(root._nodes);
         }
         onLoadFailed: error => {
             root._userMenuText = "";
@@ -354,44 +197,11 @@ PanelWindow {
         }
     }
 
-    // Compositor keybinds for the menu's keybinds route: `hyprctl binds`,
-    // already expanded across submaps and sourced files, so nothing here
-    // reads a config file or walks a lookup chain. The plain table, not `-j`:
-    // see parseHyprlandBinds for what Hyprland 0.56.0's JSON encoder does to
-    // that reply.
-    property string _keybindsText: ""
-    property bool _keybindsResolved: false
-    property bool _keybindsFailed: false
-
-    Process {
-        id: hyprBindsProc
-        command: ["hyprctl", "binds"]
-
-        stdout: StdioCollector {
-            id: hyprBindsCollector
-        }
-        onExited: exitCode => {
-            root._keybindsFailed = exitCode !== 0;
-            root._keybindsText = exitCode === 0 ? hyprBindsCollector.text : "";
-            root._keybindsResolved = true;
-        }
-    }
-
-    function _refreshKeybinds() {
-        if (!hyprBindsProc.running)
-            hyprBindsProc.running = true;
-    }
-
-    // Every end state of the keybinds route resolves here, the same
-    // one-function shape _nixRowsFor above uses. No SEARCHING equivalent:
-    // the load is a sub-100ms hyprctl, so the one empty frame before it lands
-    // has nothing to explain.
-    function _keybindRowsFor(q) {
-        if (!root._keybindsResolved) return [];
-        if (root._keybindsFailed) return [Keybinds.failedRow()];
-        var binds = Keybinds.parseHyprlandBinds(root._keybindsText);
-        if (binds.length === 0) return [Keybinds.noBindsRow()];
-        return Keybinds.rows(binds, q);
+    // Compositor keybinds for the menu's keybinds route (`hyprctl binds`):
+    // the refresh Process and the row resolution both live in
+    // KeybindsProvider.
+    KeybindsProvider {
+        id: keybindsProvider
     }
 
     // --- Wallpaper / image picker (M23) ---------------------------------
@@ -428,119 +238,54 @@ PanelWindow {
     // and shows no switcher, so nothing changes for a setup that doesn't use
     // them. The variant a route entry lands on is the theme's own current
     // mode, which is the one the owner is looking at.
-    readonly property string _pickerRouteId: "wallpaper"
-    readonly property bool _isPickerRoute: root._mode === "menu" && root.currentNodeId === root._pickerRouteId
-    readonly property int pickerColumns: 4
-
-    property string _pickerMode: "wallpaper"   // "wallpaper" | "select"
-    property string _pickerDir: ""
-    property string _pickerToken: ""
-    // Everything the scan found, both variant subdirectories and the root
-    // directory in one listing; the split below is what the grid reads.
-    property var _pickerScanned: []
-    property string _pickerVariant: "dark"     // "dark" | "light"
-    readonly property var _pickerVariants: Providers.wallpaperVariants(root._pickerScanned, root._pickerDir)
-    readonly property bool _pickerHasVariants: root._pickerVariants.hasVariants
-    readonly property var _pickerImages: Providers.wallpaperListing(root._pickerVariants, root._pickerVariant)
-    // Set by openImageSelect() so the level entry it triggers keeps that
-    // caller's directory and token, every other way of reaching this level
-    // (the menu row, `menu summon wallpaper`, `picker summon`) is a plain
-    // wallpaper-mode open and resets both.
-    property bool _pickerRequestPending: false
-
-    // Re-scanned on every entry into the route, so a directory edited
-    // between opens is picked up. The command itself is
-    // Providers.pickerScanCommand: ThumbnailService runs the identical scan
-    // at startup to prerender the grid's thumbnails, and the two must never
-    // disagree about what the listing is.
-    function _scanPickerDir() {
-        if (root._pickerDir === "") {
-            root._pickerScanned = [];
-            return;
-        }
-        pickerScanProc.command = Providers.pickerScanCommand(root._pickerDir);
-        pickerScanProc.running = true;
+    //
+    // The scan, the variants and the route's own mode/dir/token state live
+    // in WallpaperPickerProvider; SelectionChannel is the generic
+    // selection-file writer it shares with root's own select()/input() modes
+    // below.
+    SelectionChannel {
+        id: selectionChannel
     }
 
-    Process {
-        id: pickerScanProc
-
-        stdout: StdioCollector {
-            onStreamFinished: root._pickerScanned = text.split("\n").filter(function (l) { return l.length > 0; })
-        }
+    WallpaperPickerProvider {
+        id: pickerProvider
+        selectionChannel: selectionChannel
     }
 
-    // Whatever the scan just found gets a thumbnail built for it if it has
-    // none yet: the startup warm covers the configured picker directory, and
-    // this covers a wallpaper added since as well as every directory
-    // `picker select` is pointed at. Already-cached paths cost the warm a
-    // `test` apiece, so re-warming on every entry is close to free.
-    on_PickerScannedChanged: ThumbnailService.warm(root._pickerScanned, "cover")
-
-    function _enterPickerRoute() {
-        if (!root._pickerRequestPending) {
-            root._abandonPendingPicker();
-            root._pickerMode = "wallpaper";
-            root._pickerDir = Core.Config.get("picker.directory", "");
-            root._pickerToken = "";
-        }
-        root._pickerRequestPending = false;
-        // The variant the theme is currently in, every entry, a switch is a
-        // deliberate act of browsing the other set, not a preference the
-        // route carries over from last time.
-        root._pickerVariant = Core.State.mode === "light" ? "light" : "dark";
-        root._scanPickerDir();
-    }
-
-    // Dropping the listing destroys every decoded thumbnail with the grid
-    // delegates that held them, the whole point of the old panel's close()
-    // override (M16 Task 12), kept. Re-entering re-scans and re-decodes off
-    // ThumbnailService's 512px cache rather than off the wallpapers
-    // themselves, which is what makes re-entry cheap at all.
-    function _leavePickerRoute() {
-        root._abandonPendingPicker();
-        root._pickerScanned = [];
-    }
+    readonly property bool _isPickerRoute: root._mode === "menu" && root.currentNodeId === pickerProvider.routeId
 
     // The Dark | Light switcher's one entry point: the segments, Tab, and
     // `picker variant` over IPC all land here. Same-variant calls are a
     // no-op rather than a failure, a caller asking for the variant already
     // showing got what it asked for.
     function setPickerVariant(variant) {
-        if (!root.isOpen || !root._isPickerRoute || !root._pickerHasVariants)
+        if (!root.isOpen || !root._isPickerRoute || !pickerProvider.hasVariants)
             return false;
         var next = variant === "light" ? "light" : "dark";
-        if (root._pickerVariant !== next) {
+        if (pickerProvider.variant !== next) {
             // The other variant is a different listing, so it is a fresh one
             // for the cursor too: the variant is part of `_cursorKey`.
-            root._pickerVariant = next;
+            pickerProvider.variant = next;
             root._cursorFromKeys = true;
             pointerGate.reset();
         }
         return true;
     }
 
-    function _abandonPendingPicker() {
-        if (root._pickerMode === "select" && root._pickerToken !== "") {
-            root._writeSelectionFile(root._pickerSelectionPath, JSON.stringify({ token: root._pickerToken, cancelled: true }));
-            root._pickerToken = "";
-        }
-    }
-
     // PickerIpc's summon(), the wallpaper-mode open. Everything it needs to
-    // reset happens in _enterPickerRoute() off the level entry, so a menu row
-    // and this call reach an identical state by construction.
+    // reset happens in pickerProvider.enterRoute() off the level entry, so a
+    // menu row and this call reach an identical state by construction.
     function openWallpaperPicker() {
-        root.open(root._pickerRouteId);
+        root.open(pickerProvider.routeId);
     }
 
     function openImageSelect(directory, token) {
-        root._abandonPendingPicker();
-        root._pickerMode = "select";
-        root._pickerDir = (directory && directory.length > 0) ? directory : Core.Config.get("picker.directory", "");
-        root._pickerToken = token;
-        root._pickerRequestPending = true;
-        root.open(root._pickerRouteId);
+        pickerProvider.abandonPending();
+        pickerProvider.mode = "select";
+        pickerProvider.dir = (directory && directory.length > 0) ? directory : Core.Config.get("picker.directory", "");
+        pickerProvider.token = token;
+        pickerProvider.requestPending = true;
+        root.open(pickerProvider.routeId);
     }
 
     // Callable over IPC (PickerIpc's choose()) as well as from Enter/click
@@ -548,13 +293,13 @@ PanelWindow {
     // in sync by construction. Refuses a path outside the current listing
     // rather than trusting an arbitrary caller-supplied one.
     function chooseImage(path) {
-        if (!root.isOpen || !root._isPickerRoute || root._pickerImages.indexOf(path) < 0)
+        if (!root.isOpen || !root._isPickerRoute || pickerProvider.images.indexOf(path) < 0)
             return false;
-        if (root._pickerMode === "select") {
-            root._writeSelectionFile(root._pickerSelectionPath, JSON.stringify({ token: root._pickerToken, value: path }));
-            root._pickerToken = "";
+        if (pickerProvider.mode === "select") {
+            selectionChannel.writeFile(selectionChannel.pickerSelectionPath, JSON.stringify({ token: pickerProvider.token, value: path }));
+            pickerProvider.token = "";
         } else {
-            Core.State.setWallpaper(path, Providers.wallpaperPickMode(root._pickerVariants, root._pickerVariant));
+            Core.State.setWallpaper(path, Providers.wallpaperPickMode(pickerProvider.variants, pickerProvider.variant));
         }
         root.close();
         return true;
@@ -563,19 +308,19 @@ PanelWindow {
     function pickerStatus() {
         return {
             open: root.isOpen && root._isPickerRoute,
-            mode: root._pickerMode,
-            directory: root._pickerDir,
+            mode: pickerProvider.mode,
+            directory: pickerProvider.dir,
             // The listing actually on screen, so this tracks the variant.
-            count: root._pickerImages.length,
-            variant: root._pickerHasVariants ? root._pickerVariant : "none",
-            hasVariants: root._pickerHasVariants,
+            count: pickerProvider.images.length,
+            variant: pickerProvider.hasVariants ? pickerProvider.variant : "none",
+            hasVariants: pickerProvider.hasVariants,
             // Prerendered thumbnails backing the listing on screen. Cold on
             // a first run and equal to `count` once the warm has caught up;
             // the only way the rig can see the cache at all, since a warm
             // and a fallback draw the same picture.
-            cachedThumbnails: ThumbnailService.cachedCount(root._pickerImages, "cover"),
-            darkCount: root._pickerVariants.dark.length,
-            lightCount: root._pickerVariants.light.length,
+            cachedThumbnails: ThumbnailService.cachedCount(pickerProvider.images, "cover"),
+            darkCount: pickerProvider.variants.dark.length,
+            lightCount: pickerProvider.variants.light.length,
             cursor: root._cursorIndex
         };
     }
@@ -618,8 +363,8 @@ PanelWindow {
     // the same grid from any level, because it lists the same rows; the
     // route-local surfaces that are checked ahead of it (the picker's own
     // grid, the clipboard split, an app view) keep their rows, which is the
-    // order `_resolve` checks them in.
-    readonly property int emojiColumns: 8
+    // order `_resolve` checks them in. Column count is EmojiGridView's own,
+    // the same seam appGrid's `columns` already is.
 
     // --- App grid (M58 G1-G4) --------------------------------------------
     //
@@ -670,84 +415,23 @@ PanelWindow {
     // status` because a grid and a list are otherwise indistinguishable in a
     // JSON dump.
     readonly property int cursorColumns: root._isPickerGrid
-        ? root.pickerColumns
+        ? pickerGridView.columns
         : (root._isEmojiGrid
-            ? root.emojiColumns
+            ? emojiGridView.columns
             : (root._isAppGrid ? appGrid.columns : 1))
 
-    // Mirrors ClipboardService.items ONLY while the menu is actually open
-    // (M17 review finding, M-polish batch item G, owner: low-end laptop),
-    // the ternary's closed branch never reads ClipboardService.items, so
-    // QML's binding dependency tracker doesn't subscribe to it while
-    // closed: a clipboard capture landing while the menu is closed no
-    // longer touches this property at all, which is what keeps
-    // _defaultObj/_tree below from rebuilding the ENTIRE tree (every app,
-    // every provider) on every single capture. The moment isOpen flips
-    // true this re-reads the live list and resubscribes, so content is
-    // exactly as fresh as before for as long as the menu stays open.
-    readonly property var _liveClipboardItems: root.isOpen ? ClipboardService.items : []
-
-    // Prerender the ledger's image captures the moment the live list
-    // resolves, `fit` rather than the picker's `cover` (MenuRow's own thumb
-    // slot letterboxes). Gated behind isOpen by construction, since
-    // _liveClipboardItems is empty while closed, so a capture landing on a
-    // closed launcher warms nothing. A ledger of text entries warms nothing
-    // either: the filter is what decides there is work at all.
-    // `kind`/`path` are the service's own field names; `thumbSource` is what
-    // clipboardProvider renames `path` to on the row it builds, and this
-    // reads the service rather than the rows so it does not wait on a tree
-    // rebuild to notice a new capture.
-    on_LiveClipboardItemsChanged: {
-        var images = (root._liveClipboardItems || []).filter(function (item) {
-            return item && item.kind === "image" && (item.path || "") !== "";
-        }).map(function (item) { return item.path; });
-        ThumbnailService.warm(images, "fit");
-    }
-
-    // The same gate, for the same reason, on the compositor's window list.
-    // The apps provider decorates each app row with its running windows, and
-    // it reads this inside _tree's binding, so an ungated read subscribed the
-    // whole tree to every window open, close AND TITLE CHANGE: a browser tab
-    // switch rebuilt the JSONC merge, every provider, the frecency sort and a
-    // Quickshell.iconPath call per installed app, with the launcher closed
-    // and nobody looking. Closed, the app rows carry no window matches, which
-    // is exactly as observable as the clipboard being empty up there.
-    //
-    // Even while open, `_liveWindowsLive` below is kept apart from a raw
-    // CompositorService.windows binding: appmatch.js only ever compares
-    // `id` and `appId` (never title), so it is republished only when that
-    // pair changes for some window, and a title-only tick (a browser tab
-    // switch, again) leaves the array's identity alone instead of rebuilding
-    // the tree under whoever is typing in the launcher.
-    readonly property var _liveWindows: root.isOpen ? root._liveWindowsLive : []
-
-    property var _liveWindowsLive: []
-    property string _liveWindowsKey: ""
-
-    function _updateLiveWindows() {
-        var windows = CompositorService.windows || [];
-        var pairs = [];
-        for (var i = 0; i < windows.length; i++) {
-            var w = windows[i] || {};
-            pairs.push((w.id || "") + "\0" + (w.appId || ""));
-        }
-        var key = JSON.stringify(pairs);
-        if (key === root._liveWindowsKey)
-            return;
-        root._liveWindowsKey = key;
-        root._liveWindowsLive = windows;
-    }
-
-    onIsOpenChanged: if (root.isOpen) root._updateLiveWindows()
-
-    // Enabled only while open, mirroring the ternary above: a windows tick
-    // while closed must cost nothing, the same guarantee the raw-binding
-    // form gave for free by simply not reading CompositorService.windows in
-    // the branch that isn't taken.
-    Connections {
-        target: CompositorService
-        enabled: root.isOpen
-        function onWindowsChanged() { root._updateLiveWindows(); }
+    // Mirrors ClipboardService.items and CompositorService.windows ONLY
+    // while the menu is actually open (M17 review finding, M-polish batch
+    // item G, owner: low-end laptop): LiveMenuSources' own ternaries never
+    // read either service while closed, so QML's binding dependency tracker
+    // doesn't subscribe to them, which is what keeps _defaultObj/_tree
+    // below from rebuilding the ENTIRE tree (every app, every provider) on
+    // every single capture or window event. The moment `active` flips true
+    // both re-read the live state and resubscribe, so content is exactly as
+    // fresh as before for as long as the menu stays open.
+    LiveMenuSources {
+        id: liveSources
+        active: root.isOpen
     }
 
     readonly property var _defaultObj: {
@@ -766,13 +450,13 @@ PanelWindow {
         var gpuMode = Providers.gpuModeEntry(Quickshell.shellDir, GpuService.gfxMode);
         // Live-while-open, unlike wallpaper/buttons above: its action
         // depends on the current newest clipboard entry, so
-        // _liveClipboardItems rides this same binding for _defaultObj (and
-        // _tree below) to recompute whenever it changes, but only while
-        // that dependency is actually subscribed (see _liveClipboardItems'
-        // own comment). Merged as a plain overwrite of the
+        // liveSources.clipboardItems rides this same binding for
+        // _defaultObj (and _tree below) to recompute whenever it changes,
+        // but only while that dependency is actually subscribed (see
+        // LiveMenuSources' own comment). Merged as a plain overwrite of the
         // "share.clipboard" key default-menu.jsonc already declares, so the
         // row keeps that declared position instead of jumping to the end.
-        var shareClipboard = Providers.shareClipboardEntry(root._liveClipboardItems);
+        var shareClipboard = Providers.shareClipboardEntry(liveSources.clipboardItems);
         var merged = {};
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
         Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
@@ -799,15 +483,15 @@ PanelWindow {
         // Core.State.appLaunches rides this binding deliberately: recording
         // a launch (_activateRow below) rebuilds the tree, which is what
         // re-orders the rows for the next summon. It lands as the menu is
-        // closing, where _liveClipboardItems' own isOpen flip already pays
-        // for a rebuild. Date.now() is read at rebuild time, so the recency
-        // decay is as fresh as the tree itself.
+        // closing, where liveSources' own `active` flip already pays for a
+        // rebuild. Date.now() is read at rebuild time, so the recency decay
+        // is as fresh as the tree itself.
         apps: function () {
             return AppMatch.decorateAppRows(Providers.appsProvider(DesktopEntries.applications.values,
-                root._resolveAppIcon, Core.State.appLaunches, Date.now()), root._liveWindows);
+                root._resolveAppIcon, Core.State.appLaunches, Date.now()), liveSources.windows);
         },
-        clipboard: function () { return Providers.clipboardProvider(root._liveClipboardItems, "copy", Core.Config.get("clipboard.paste", true)); },
-        shareHistory: function () { return Providers.clipboardProvider(root._liveClipboardItems, "share"); },
+        clipboard: function () { return Providers.clipboardProvider(liveSources.clipboardItems, "copy", Core.Config.get("clipboard.paste", true)); },
+        shareHistory: function () { return Providers.clipboardProvider(liveSources.clipboardItems, "share"); },
         // ~/.clipssh/aliases lives on ClipsshService, which reads it for the
         // Shift+Enter accelerator and the auto-send too; open() below still
         // reloads it every summon, so an alias added mid-session (even before
@@ -838,7 +522,7 @@ PanelWindow {
     function _levelGated(level) {
         if (level === null) return false;
         var node = root._nodes[level];
-        return node ? !Model.isWhenVisible(node, root._condResults) : false;
+        return node ? !Model.isWhenVisible(node, conditions.condResults) : false;
     }
 
     // What the level resolves to, in one pass over the field, the mode and
@@ -852,7 +536,7 @@ PanelWindow {
 
     function _resolve(q, mode, level) {
         var menu = mode === "menu";
-        var picker = menu && level === root._pickerRouteId;
+        var picker = menu && level === pickerProvider.routeId;
         var split = menu && (level === "clipboard" || level === "share.history");
         var appView = menu && AppViews.viewFor(level) !== "";
         var emojiQuery = menu ? Providers.emojiTriggerQuery(q) : null;
@@ -872,7 +556,7 @@ PanelWindow {
             appCount = parts.appCount;
         }
         return {
-            key: [mode, level === null ? "" : level, q, picker ? root._pickerVariant : ""].join("\u0001"),
+            key: [mode, level === null ? "" : level, q, picker ? pickerProvider.variant : ""].join("\u0001"),
             mode: mode,
             level: level,
             kind: kind,
@@ -904,7 +588,7 @@ PanelWindow {
         // whole-tree ranking, a wallpapers directory would drown a root
         // query exactly the way the emoji dataset would.
         if (picker)
-            return Providers.imageRows(root._pickerImages, q);
+            return Providers.imageRows(pickerProvider.images, q);
         // The clipboard/share-history route is route-local too (M30), for
         // the same reason the picker route above is: typing here narrows
         // history, it never falls through to whole-tree Search.rank or to
@@ -912,7 +596,7 @@ PanelWindow {
         // purpose, a ":e"/":nix"/":k"-prefixed clipboard entry is filter
         // text on this level, not a trigger).
         if (split) {
-            var historyRows = Model.visibleChildren(root._nodes, level, root._condResults);
+            var historyRows = Model.visibleChildren(root._nodes, level, conditions.condResults);
             if (historyRows.length === 0)
                 return [Providers.clipboardEmptyRow()];
             var matchedRows = Providers.clipboardSearch(historyRows, q);
@@ -925,21 +609,21 @@ PanelWindow {
         // emoji in the tree would drown every root search.
         var emojiPaste = Core.Config.get("clipboard.paste", true);
         if (level === "emoji" || emojiQuery !== null)
-            root._ensureEmojiLoaded();
+            emojiProvider.ensureLoaded();
         if (level === "emoji")
-            return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q, emojiPaste, root._emojiUses, Date.now());
+            return Providers.emojiRows(emojiProvider.list, emojiQuery !== null ? emojiQuery : q, emojiPaste, emojiProvider.uses, Date.now());
         if (emojiQuery !== null)
-            return Providers.emojiRows(root._emojiList, emojiQuery, emojiPaste, root._emojiUses, Date.now());
+            return Providers.emojiRows(emojiProvider.list, emojiQuery, emojiPaste, emojiProvider.uses, Date.now());
         // The nix route/":nix" trigger works the same way, except the rows
         // come from the debounced-Process cache (see the state block above)
         // rather than a pure function over local data.
         if (level === "nix" || nixQuery !== null)
-            return root._nixRowsFor(nixQuery !== null ? nixQuery : q);
+            return nixProvider.rowsFor(nixQuery !== null ? nixQuery : q);
         // The keybinds route is route-local for the same reason: its own
         // tiered search, never Search.rank, so a hundred-odd chords cannot
         // drown a root query.
         if (level === "keybinds" || keysQuery !== null)
-            return root._keybindRowsFor(keysQuery !== null ? keysQuery : q);
+            return keybindsProvider.rowsFor(keysQuery !== null ? keysQuery : q);
         if (q.length === 0) {
             // Route-summon when-gate guard (M17 review finding, item F):
             // `open(route)` resolves a node by id directly, bypassing the
@@ -948,13 +632,13 @@ PanelWindow {
             // a row in the first place, without this, landing on that
             // level here would still list its children as if the gate
             // never existed. `_levelGated` covers "not yet
-            // resolved" the same as "resolved false": _condResults starts
-            // empty every open()/_enterLevel(), so a level entered before
+            // resolved" the same as "resolved false": conditions.condResults
+            // starts empty every open()/_enterLevel(), so a level entered before
             // its own condition Process has exited must not flash
             // actionable rows it may end up refusing a moment later.
             if (root._levelGated(level))
                 return [Model.gatedNoteRow(root._nodes[level])];
-            return Model.visibleChildren(root._nodes, level, root._condResults);
+            return Model.visibleChildren(root._nodes, level, conditions.condResults);
         }
         // A query that parses as an expression leads with the CALC result row
         // (M12 Task 5). At the dedicated calc level the result row is the
@@ -963,7 +647,7 @@ PanelWindow {
         var calcRow = Calc.resultNode(q);
         if (level === "calc")
             return calcRow ? [calcRow] : [];
-        var ranked = Search.rank(root._nodes, q, root._condResults, level);
+        var ranked = Search.rank(root._nodes, q, conditions.condResults, level);
         return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
@@ -1169,9 +853,9 @@ PanelWindow {
     // bound, so the model a view holds and the rows in it change in the
     // one step that also places the cursor on them.
     function _attachViews(kind) {
-        rowsView.model = kind === "rows" ? rowsModel : null;
-        gridView.model = kind === "picker" ? rowsModel : null;
-        emojiGrid.model = kind === "emoji" ? rowsModel : null;
+        rowListView.model = kind === "rows" ? rowsModel : null;
+        pickerGridView.model = kind === "picker" ? rowsModel : null;
+        emojiGridView.model = kind === "emoji" ? rowsModel : null;
         appGrid.cellsModel = kind === "appGrid" ? rowsModel : null;
         appGrid.tailModel = kind === "appGrid" ? tailModel : null;
     }
@@ -1190,28 +874,25 @@ PanelWindow {
         root._cursorIndex = valid ? index : 0;
         root._cursorId = valid ? String(rows[index].id) : "";
         root._cursorNode = valid ? rows[index] : null;
-        rowsView.currentIndex = k === "rows" && valid ? index : -1;
-        gridView.currentIndex = k === "picker" && valid ? index : -1;
-        emojiGrid.currentIndex = k === "emoji" && valid ? index : -1;
+        rowListView.placeCursor(k === "rows" && valid ? index : -1);
+        pickerGridView.placeCursor(k === "picker" && valid ? index : -1);
+        emojiGridView.placeCursor(k === "emoji" && valid ? index : -1);
         appGrid.placeCursor(k === "appGrid" && valid ? index : -1);
     }
 
     function _scrollViewsHome() {
-        if (rowsView.model)
-            rowsView.positionViewAtBeginning();
-        if (gridView.model)
-            gridView.positionViewAtBeginning();
-        if (emojiGrid.model)
-            emojiGrid.positionViewAtBeginning();
+        rowListView.scrollHome();
+        pickerGridView.scrollHome();
+        emojiGridView.scrollHome();
         appGrid.scrollHome();
     }
 
     // A wheel glide still running writes contentY on every frame, over the
     // position a keyboard move just scrolled its view to.
     function _cancelGlides() {
-        rowsWheel.cancel();
-        gridWheel.cancel();
-        emojiWheel.cancel();
+        rowListView.cancelGlide();
+        pickerGridView.cancelGlide();
+        emojiGridView.cancelGlide();
         appGrid.cancelGlide();
     }
 
@@ -1220,17 +901,13 @@ PanelWindow {
     // view draws the cursor on is the row Enter acts on.
     function viewCursor() {
         var k = root.viewKind;
-        var view = k === "rows" ? rowsView : (k === "picker" ? gridView : (k === "emoji" ? emojiGrid : null));
-        if (view) {
-            var i = view.currentIndex;
-            var id = (view.model === rowsModel && i >= 0 && i < rowsModel.count) ? rowsModel.get(i).rowId : "";
-            return { view: k, index: i, id: id };
-        }
-        if (k === "appGrid") {
-            var cell = appGrid.cursorReport();
-            return { view: k, index: cell.index, id: cell.id };
-        }
-        return { view: k, index: -1, id: "" };
+        var cell = k === "rows" ? rowListView.cursorReport()
+            : (k === "picker" ? pickerGridView.cursorReport()
+                : (k === "emoji" ? emojiGridView.cursorReport()
+                    : (k === "appGrid" ? appGrid.cursorReport() : null)));
+        if (!cell)
+            return { view: k, index: -1, id: "" };
+        return { view: k, index: cell.index, id: cell.id };
     }
 
     // shadcn's `CommandEmpty`. Never in input mode, whose row list is empty
@@ -1286,10 +963,10 @@ PanelWindow {
         node: root._cursorNode,
         atRoot: root.currentNodeId === null,
         grid: root._gridCursor,
-        pickerSelect: root._pickerMode === "select",
+        pickerSelect: pickerProvider.mode === "select",
         // The variant Tab would switch TO, null wherever Tab does nothing.
-        variantSwitch: root._isPickerRoute && root._pickerHasVariants
-            ? (root._pickerVariant === "dark" ? "light" : "dark")
+        variantSwitch: root._isPickerRoute && pickerProvider.hasVariants
+            ? (pickerProvider.variant === "dark" ? "light" : "dark")
             : null,
         confirming: root._confirmPendingId !== "" && !!root._cursorNode
             && root._cursorNode.id === root._confirmPendingId,
@@ -1406,12 +1083,12 @@ PanelWindow {
     // view's content wants before this caps it, and the view scrolls
     // inside whatever it gets.
     readonly property real _viewContentHeight: root._isPickerGrid
-        ? gridView.contentHeight
+        ? pickerGridView.contentHeight
         : (root._isEmojiGrid
-            ? emojiGrid.contentHeight
+            ? emojiGridView.contentHeight
             : (root._isAppGrid
                 ? appGrid.contentHeight
-                : (root._isAppView ? appView.implicitHeight : rowsView.contentHeight)))
+                : (root._isAppView ? appView.implicitHeight : rowListView.contentHeight)))
     // The empty state is a row of its own: with no floor the card would
     // collapse onto the input line and say nothing at all.
     readonly property real _emptyHeight: root._showEmpty ? Core.Theme.space.controlHeight : 0
@@ -1420,7 +1097,7 @@ PanelWindow {
         ? Core.Theme.space.rowGap + emojiCaption.height
         : 0
     readonly property real _rowsAreaCap: Math.max(0, root._maxTotalHeight - root._chrome - root._headerHeight
-        - Core.Theme.space.rowGap * 2 - root._captionBand - actionBar.height)
+        - Core.Theme.space.rowGap * 2 - root._captionBand - menuFooter.height)
     // Fixed height on the split route (M30, omarchy parity): the preview
     // pane needs to be genuinely useful, not sized to whatever row count a
     // filter happens to leave, so this route always takes the full cap
@@ -1434,14 +1111,14 @@ PanelWindow {
     // unobservable from the rig: a screenshot shows different rows, but
     // nothing says the cursor stayed put rather than moved with them.
     readonly property real scrollTop: root._isPickerGrid
-        ? gridView.contentY
+        ? pickerGridView.contentY
         : (root._isEmojiGrid
-            ? emojiGrid.contentY
+            ? emojiGridView.contentY
             : (root._isAppGrid
                 ? appGrid.contentY
                 : (root._isAppView
                     ? (root._appViewScroll ? root._appViewScroll.contentY : 0)
-                    : rowsView.contentY)))
+                    : rowListView.contentY)))
 
     // The card's top edge sits at 30% of the output height (spec
     // "Launcher"), which is where the eye already is and which leaves the
@@ -1468,53 +1145,13 @@ PanelWindow {
         return Math.round(Math.max(root._topInset, Math.min(top, maxTop)));
     }
 
-    readonly property string _stateDir: {
-        const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
-        return xdgState + "/formalshell";
-    }
-
-    readonly property string _selectionPath: root._stateDir + "/menu-selection.txt"
-    readonly property string _pickerSelectionPath: root._stateDir + "/picker-selection.txt"
-
-    // Write-only: select()/input() answers land here as `{token, value}` /
-    // `{token, cancelled: true}` JSON. Every write goes through a Process
-    // (`printf '%s' "$content" > "$path"`), never FileView.setText(),
-    // ThemeEngine.qml documents FileView silently skipping the write *and*
-    // the saved() signal when the new text is byte-identical to what it has
-    // cached, which a repeated identical answer hits every time, and which a
-    // caller-side truncate can't work around either (FileView compares
-    // against its own cached text, not what's actually on disk). Callers
+    // select()/input() answers go through `selectionChannel` (declared
+    // above, beside the picker's own use of it) as `{token, value}` /
+    // `{token, cancelled: true}` JSON at menuSelectionPath. Callers
     // poll/read the file themselves, see MenuIpc.qml's header comment for
     // the full contract.
-    function _writeSelectionFile(path, content) {
-        var proc = _selectionFileProcComponent.createObject(root, {});
-        proc.command = ["sh", "-c", 'printf \'%s\' "$2" > "$1"', "sh", path, content];
-        proc.running = true;
-    }
-
-    // Deletes whatever's currently on disk. Used to invalidate the channel
-    // before a brand-new select()/input() request's UI opens (see
-    // _beginSelectionRequest below).
-    function _clearSelectionFile() {
-        var proc = _selectionFileProcComponent.createObject(root, {});
-        proc.command = ["rm", "-f", root._selectionPath];
-        proc.running = true;
-    }
-
-    Component {
-        id: _selectionFileProcComponent
-
-        Process {
-            onExited: exitCode => {
-                if (exitCode !== 0)
-                    console.warn("Menu: selection-file write failed, code", exitCode);
-                destroy();
-            }
-        }
-    }
-
     function _writeSelection(payload) {
-        root._writeSelectionFile(root._selectionPath, JSON.stringify(payload));
+        selectionChannel.writeFile(selectionChannel.menuSelectionPath, JSON.stringify(payload));
         root.selectionResolved(payload.token, payload.value !== undefined ? payload.value : null, !!payload.cancelled);
     }
 
@@ -1548,7 +1185,7 @@ PanelWindow {
         var hadPending = root._mode !== "menu";
         root._abandonPendingSelect();
         if (!hadPending)
-            root._clearSelectionFile();
+            selectionChannel.clearFile(selectionChannel.menuSelectionPath);
     }
 
     function open(route) {
@@ -1557,13 +1194,12 @@ PanelWindow {
         // Fresh session: last session's condition results must not leak
         // into this one (a `when`/`checked` shell command can change
         // between opens, bluetooth power, mode toggle, device presence).
-        root._condResults = {};
-        root._checkedResults = {};
+        conditions.reset();
         // "@state:" `checked` conditions are deliberately NOT cleared here:
-        // they are never cached, resolving from _stateSnapshot on every
-        // evaluation.
+        // they are never cached, resolving from conditions.stateSnapshot on
+        // every evaluation.
         ClipsshService.reloadAliases();
-        root._refreshKeybinds();
+        keybindsProvider.refresh();
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
         // (onTextChanged side effects included, so the debounced search
@@ -1626,13 +1262,13 @@ PanelWindow {
 
     function close() {
         root._abandonPendingSelect();
-        // isOpen drops before _leavePickerRoute clears the picker's own
-        // listing (M51 D5): the card's own height/width freeze below reads
-        // isOpen at the instant it flips, and a route that empties its
-        // content on the way out must not do so while that freeze still
-        // thinks the surface is open.
+        // isOpen drops before pickerProvider.leaveRoute() clears the
+        // picker's own listing (M51 D5): the card's own height/width freeze
+        // below reads isOpen at the instant it flips, and a route that
+        // empties its content on the way out must not do so while that
+        // freeze still thinks the surface is open.
         root.isOpen = false;
-        root._leavePickerRoute();
+        pickerProvider.leaveRoute();
         root._confirmPendingId = "";
         // The next summon maps the card wherever it centers, possibly under a
         // pointer that never moved: a sample left over from this session would
@@ -1647,7 +1283,7 @@ PanelWindow {
     function refresh() {
         defaultMenuFile.reload();
         userMenuFile.reload();
-        root._evalConditions();
+        conditions.evaluate(root._nodes);
     }
 
     function _completeSelect(value) {
@@ -1660,120 +1296,13 @@ PanelWindow {
         root._completeSelect(searchInput.text);
     }
 
-    // Instant paste: an activated row carrying `pasteAfter` (the clipboard
-    // route's rows and the emoji route's, both gated on `clipboard.paste`)
-    // closes the menu like any action, then synthesizes the configured paste
-    // chord into whatever window focus returns to, on top of the copy that
-    // already ran. One wtype spawn, gated on the window's actual visible flip
-    // plus a short settle: synthesizing input while this keyboard-exclusive
-    // surface still holds focus would land it in the menu's own search field.
-    // That settle doubles as the write barrier, since the copy is exec'd at
-    // Enter, a close animation ahead of the keystroke.
-    //
-    // wtype missing from PATH (the sh wrapper's exit 127) or a compositor
-    // without the virtual-keyboard protocol degrade to the copy that already
-    // ran: one warning, no error surface. Re-opening before the settle fires
-    // drops whatever was pending (onVisibleChanged below), better nothing
-    // than typed at the menu.
-    property bool _pendingPaste: false
-
-    onVisibleChanged: {
-        if (visible) {
-            typeSettleTimer.stop();
-            root._pendingPaste = false;
-        } else if (root._pendingPaste) {
-            typeSettleTimer.restart();
-        }
-    }
-
-    Timer {
-        id: typeSettleTimer
-        interval: 150
-        onTriggered: {
-            var paste = root._pendingPaste;
-            root._pendingPaste = false;
-            if (!paste)
-                return;
-            var chord = Core.Config.get("clipboard.pasteChord", "ctrl+v");
-            var argv = Providers.pasteArgv(chord);
-            if (!argv) {
-                console.warn("Menu: clipboard.pasteChord is not a wtype chord:", chord, "- copied but not pasted");
-                return;
-            }
-            typeProc.command = ["sh", "-c", 'command -v wtype >/dev/null 2>&1 || exit 127; exec wtype "$@"', "sh"].concat(argv);
-            typeProc.running = true;
-        }
-    }
-
-    Process {
-        id: typeProc
-        onExited: exitCode => {
-            if (exitCode === 127)
-                console.warn("Menu: wtype not on PATH, copied but not pasted");
-            else if (exitCode !== 0)
-                console.warn("Menu: wtype failed (exit " + exitCode + "), copied but not pasted");
-        }
-    }
-
-    // Launch feedback for app rows. DesktopEntry.execute() is
-    // fire-and-forget, it hands the entry's Exec line off and reports
-    // nothing back, so the only truthful confirmation a launch can ever
-    // get is the app's own window turning up. CompositorService.windows is
-    // the live toplevel list, so this watches instead of
-    // claiming: baseline the window count (and the focused window id) the
-    // moment Enter lands, and if something new arrives within
-    // `_launchGraceMs`, THE WINDOW is the feedback and no toast fires at
-    // all. omarchy's AppLibrary.qml (launchSerial/launchToplevelCount/
-    // launchActiveToplevel, and its note about the OSD outliving the launch
-    // that opened it) takes the same position for the same reason. Only a
-    // grace period that passes with nothing new gets a toast, and it says
-    // exactly what is known: LAUNCHING, this app, nothing on screen yet.
-    //
-    // Success is never claimed, and neither is failure: a slow cold start,
-    // a second instance handing its argv to an already-open window, and an
-    // Exec line that died immediately are indistinguishable from out here,
-    // so one honest in-progress wording covers all three. The one case that
-    // fires immediately is a backend that isn't connected
-    // (CompositorService.available false, e.g. a session that is not
-    // Hyprland):
-    // there is nothing to observe at any point, so waiting out the grace
-    // period would only delay the same sentence.
-    //
-    // One watch at a time, a second launch inside the grace period
-    // supersedes the first, so a burst of Enters can't stack up toasts.
-    readonly property int _launchGraceMs: 2000
-    property string _launchWatchLabel: ""
-    property int _launchBaselineWindows: 0
-    property string _launchBaselineFocusedId: ""
-
-    function _beginLaunchWatch(label) {
-        if (!CompositorService.available) {
-            NotificationService.notify("LAUNCHING", label);
-            return;
-        }
-        root._launchWatchLabel = label;
-        root._launchBaselineWindows = (CompositorService.windows || []).length;
-        root._launchBaselineFocusedId = CompositorService.focusedWindowId;
-        launchGraceTimer.restart();
-    }
-
-    Timer {
-        id: launchGraceTimer
-        interval: root._launchGraceMs
-        onTriggered: {
-            var label = root._launchWatchLabel;
-            root._launchWatchLabel = "";
-            if (label === "")
-                return;
-            // A focus move is evidence alongside the count: an app that
-            // raised an already-open window of its own never changes the
-            // total. Either reading can also be the user's own doing, which
-            // costs at worst one toast NOT shown, never a false claim.
-            if ((CompositorService.windows || []).length > root._launchBaselineWindows
-                || CompositorService.focusedWindowId !== root._launchBaselineFocusedId)
-                return;
-            NotificationService.notify("LAUNCHING", label);
-        }
+    // Instant paste (an activated row carrying `pasteAfter`) and launch
+    // feedback for app rows both live in PostActivation: the wtype spawn
+    // gated on the window's own visible flip, and the toast that fires only
+    // once a launch's grace period passes with nothing new on screen.
+    PostActivation {
+        id: postActivation
+        windowVisible: root.visible
     }
 
     // The smoke rig's stand-in for Enter on the row at `index`
@@ -1828,8 +1357,8 @@ PanelWindow {
         // without keyboard input; icon carries the emoji char itself.
         var emojiQuery = Providers.emojiTriggerQuery(q);
         if (emojiQuery !== null) {
-            root._ensureEmojiLoaded();
-            return Providers.emojiRows(root._emojiList, emojiQuery, true, root._emojiUses, Date.now()).map(function (n) {
+            emojiProvider.ensureLoaded();
+            return Providers.emojiRows(emojiProvider.list, emojiQuery, true, emojiProvider.uses, Date.now()).map(function (n) {
                 return { id: n.id, label: n.label, icon: n.icon, kind: n.kind };
             });
         }
@@ -1839,9 +1368,9 @@ PanelWindow {
         // NO RESULTS, SEARCH FAILED) on the second pass.
         var nixQuery = Providers.nixTriggerQuery(q);
         if (nixQuery !== null) {
-            root._requestNixWarm();
-            root._requestNixSearch(nixQuery);
-            return root._nixRowsFor(nixQuery).map(function (n) {
+            nixProvider.requestWarm();
+            nixProvider.requestSearch(nixQuery);
+            return nixProvider.rowsFor(nixQuery).map(function (n) {
                 return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
             });
         }
@@ -1849,18 +1378,18 @@ PanelWindow {
         // zero keyboard delivery: `debug query ':k spawn'`.
         var keysQuery = Keybinds.triggerQuery(q);
         if (keysQuery !== null) {
-            root._refreshKeybinds();
-            return root._keybindRowsFor(keysQuery).map(function (n) {
+            keybindsProvider.refresh();
+            return keybindsProvider.rowsFor(keysQuery).map(function (n) {
                 return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
             });
         }
-        root._evalConditions();
+        conditions.evaluate(root._nodes);
         // iconSource rides along so the smoke rig can assert an app row's
         // themed icon resolved (or honestly didn't) without a screenshot,
         // and `section` so it can assert the rows came out one block per
         // heading, which `menu status`'s deduplicated list cannot say.
-        var rows = Search.rank(root._nodes, q, root._condResults, root.currentNodeId).map(function (n) {
-            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "", checked: Toggles.checkedFor(n, root._stateSnapshot, root._checkedResults), section: Model.searchSectionOf(root._nodes, n) };
+        var rows = Search.rank(root._nodes, q, conditions.condResults, root.currentNodeId).map(function (n) {
+            return { id: n.id, label: n.label, kind: n.kind, iconSource: n.iconSource || "", checked: Toggles.checkedFor(n, conditions.stateSnapshot, conditions.checkedResults), section: Model.searchSectionOf(root._nodes, n) };
         });
         // Same CALC prepend as _displayRows' ranked branch, so the smoke
         // rig's `debug query "2+2*3"` proves the row without keyboard input.
@@ -1882,7 +1411,7 @@ PanelWindow {
 
     function _enterLevel(id) {
         var changingLevel = id !== root.currentNodeId;
-        var leavingPicker = root.currentNodeId === root._pickerRouteId && id !== root._pickerRouteId;
+        var leavingPicker = root.currentNodeId === pickerProvider.routeId && id !== pickerProvider.routeId;
         root.currentNodeId = id;
         root._confirmPendingId = "";
         root._cursorFromKeys = true;
@@ -1890,10 +1419,10 @@ PanelWindow {
         // A whole new row set arrives under an unmoved pointer, in or out.
         pointerGate.reset();
         if (leavingPicker)
-            root._leavePickerRoute();
-        if (id === root._pickerRouteId)
-            root._enterPickerRoute();
-        root._evalConditions();
+            pickerProvider.leaveRoute();
+        if (id === pickerProvider.routeId)
+            pickerProvider.enterRoute();
+        conditions.evaluate(root._nodes);
         // Query filtering never reaches this function, so a keystroke's
         // re-rank can't retrigger the entrance: only an actual level change
         // does, and only once per change.
@@ -2023,7 +1552,7 @@ PanelWindow {
             root.close();
             break;
         case "variant":
-            root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
+            root.setPickerVariant(pickerProvider.variant === "dark" ? "light" : "dark");
             break;
         }
     }
@@ -2033,9 +1562,9 @@ PanelWindow {
     function _pageStep() {
         var h = root._rowsAreaHeight;
         if (root._isPickerGrid)
-            return Math.max(1, Math.floor(h / gridView.cellHeight)) * root.pickerColumns;
+            return Math.max(1, Math.floor(h / pickerGridView.cellHeight)) * pickerGridView.columns;
         if (root._isEmojiGrid)
-            return Math.max(1, Math.floor(h / emojiGrid.cellHeight)) * root.emojiColumns;
+            return Math.max(1, Math.floor(h / emojiGridView.cellHeight)) * emojiGridView.columns;
         if (root._isAppGrid && root._cursorIndex < root._appGridCount)
             return Math.max(1, Math.floor(h / appGrid.cellHeight)) * appGrid.columns;
         return Math.max(1, Math.floor(h / Core.Theme.space.controlHeight));
@@ -2154,7 +1683,7 @@ PanelWindow {
             if (node.notifySummary)
                 NotificationService.notify(node.notifySummary, node.notifyBody || "");
             if (node.pasteAfter === true)
-                root._pendingPaste = true;
+                postActivation.armPaste();
             // Toggle rows (default-menu.jsonc's "toggles" subtree) stay on
             // screen so the row's own checkmark visibly flips under the
             // cursor; every other action still closes.
@@ -2183,12 +1712,12 @@ PanelWindow {
                 return;
             }
             // Baseline first: nothing can map a window inside this same JS
-            // block, so the count _beginLaunchWatch reads is genuinely the
-            // "before". execute() stays exactly as it was, the entry's own
-            // Exec field codes and quoting only survive that path (see
-            // providers.js's header), so the feedback wraps it rather than
-            // routing around it.
-            root._beginLaunchWatch(node.label);
+            // block, so the count postActivation.beginLaunchWatch reads is
+            // genuinely the "before". execute() stays exactly as it was,
+            // the entry's own Exec field codes and quoting only survive
+            // that path (see providers.js's header), so the feedback wraps
+            // it rather than routing around it.
+            postActivation.beginLaunchWatch(node.label);
             node._entry.execute();
             Core.State.setAppLaunches(Frecency.record(Core.State.appLaunches, node._entry.id, Date.now()));
             root.close();
@@ -2329,75 +1858,11 @@ PanelWindow {
         }
     }
 
-    // Live source for "@state:" `checked` conditions (toggles.js). Every read
-    // here is a plain property read, so this binding re-evaluates the instant
-    // any of the four flips and hands a fresh object to the delegate binding
-    // below, the same var-change-detection contract the _condResults merge
-    // already depends on. Not gated on isOpen the way _liveClipboardItems is:
-    // four scalars cost nothing, and the NightLightService read is a second
-    // construction site for that lazy singleton, which Indicators.qml wants.
-    readonly property var _stateSnapshot: Toggles.snapshot({
-        "nightlight.active": NightLightService.active,
-        "screensaver.stayAwake": IdleService.stayAwake,
-        "notifications.dnd": NotificationService.dnd,
-        "theme.dark": Core.State.mode === "dark"
-    })
-
-    // Shell-condition batch: `when`/`checked` for EVERY node in the tree,
-    // not just the current level, whole-tree search (see _displayRows) can
-    // surface a node whose level the user hasn't descended into yet, and a
-    // submenu with an unevaluated-when child self-prunes to invisible
-    // (Model.visibleChildren), which would make that child undescendable and
-    // its own condition permanently unevaluated. Runs once per open()
-    // (open() clears both result caches first) and again on every
-    // _enterLevel(), where the `undefined` guards make repeat calls within
-    // the same session cheap no-ops. Never per-keystroke, search filters
-    // purely against whatever's already cached. Results are merged into
-    // fresh objects so QML's var-property change detection fires.
-    function _evalConditions() {
-        Object.keys(root._nodes).forEach(function (id) {
-            var n = root._nodes[id];
-            if (n.when !== undefined && root._condResults[n.id] === undefined) {
-                if (Toggles.isStateCondition(n.when)) {
-                    // "@state:" is a `checked` prefix only: a live `when` would
-                    // mean re-running visibleChildren over every node (apps
-                    // included) on each toggle flip, exactly the churn
-                    // _liveClipboardItems exists to avoid.
-                    console.warn("Menu: \"@state:\" is not a `when` condition, hiding", n.id);
-                    root._condResults = Toggles.withResult(root._condResults, n.id, false);
-                } else {
-                    root._runCondition(n.id, n.when, "when");
-                }
-            }
-            if (n.checked !== undefined && !Toggles.isStateCondition(n.checked)
-                && root._checkedResults[n.id] === undefined)
-                root._runCondition(n.id, n.checked, "checked");
-        });
-    }
-
-    function _runCondition(nodeId, cond, kind) {
-        var proc = _condProcComponent.createObject(root, { _nodeId: nodeId, _kind: kind });
-        proc.command = ["sh", "-c", cond];
-        proc.running = true;
-    }
-
-    Component {
-        id: _condProcComponent
-
-        Process {
-            property string _nodeId
-            property string _kind
-            onExited: exitCode => {
-                var id = _nodeId;
-                var ok = exitCode === 0;
-                var isWhen = _kind === "when";
-                destroy();
-                var source = isWhen ? root._condResults : root._checkedResults;
-                var merged = Toggles.withResult(source, id, ok);
-                if (isWhen) root._condResults = merged;
-                else root._checkedResults = merged;
-            }
-        }
+    // Shell-condition batch (`when`/`checked` for every node in the tree)
+    // and the toggle snapshot ("@state:" `checked` conditions) both live in
+    // ConditionEvaluator.
+    ConditionEvaluator {
+        id: conditions
     }
 
     Component.onCompleted: {
@@ -2428,7 +1893,7 @@ PanelWindow {
         ? Core.Theme.space.popupWidthMenuApp
         : (root._isSplitRoute ? Core.Theme.space.popupWidthMenuSplit : Core.Theme.space.popupWidthMenu)
     readonly property real _cardHeight: root._chrome + root._headerHeight
-        + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + actionBar.height
+        + Core.Theme.space.rowGap * 2 + root._rowsAreaHeight + root._captionBand + menuFooter.height
 
     // The card's actual width and height (Components/SizeMorph.qml, M57 D7):
     // _cardWidth/_cardHeight above are the route's own target, and a route
@@ -2586,8 +2051,8 @@ PanelWindow {
                         if (nixQuery === null && root.currentNodeId === "nix")
                             nixQuery = searchInput.text;
                         if (nixQuery !== null) {
-                            root._requestNixWarm();
-                            root._requestNixSearch(nixQuery);
+                            nixProvider.requestWarm();
+                            nixProvider.requestSearch(nixQuery);
                         }
                     }
                 }
@@ -2609,7 +2074,7 @@ PanelWindow {
                         grid: root._isGrid,
                         appView: root._isAppView,
                         scrollable: root._appViewScroll !== null,
-                        variants: root._isPickerRoute && root._pickerHasVariants
+                        variants: root._isPickerRoute && pickerProvider.hasVariants
                     });
                     if (action === "pass")
                         return;
@@ -2754,7 +2219,7 @@ PanelWindow {
                 // The route's own answer, read by the height and the gap
                 // rather than by `visible`, which now outlives it while
                 // the band closes.
-                readonly property bool wanted: root._isPickerRoute && root._pickerHasVariants
+                readonly property bool wanted: root._isPickerRoute && pickerProvider.hasVariants
 
                 anchors.top: breadcrumbRow.bottom
                 anchors.topMargin: variantRow.wanted ? Core.Theme.space.lg : 0
@@ -2780,16 +2245,14 @@ PanelWindow {
             Binding {
                 target: variantRow
                 property: "index"
-                value: root._pickerVariant === "light" ? 1 : 0
+                value: pickerProvider.variant === "light" ? 1 : 0
             }
 
-            ListView {
-                id: rowsView
-                // Delegates recycle rather than being destroyed and rebuilt on
-                // every flick. Safe here because every delegate in this file is
-                // required properties plus bindings off them, with no
-                // Component.onCompleted work that a reused item would skip.
-                reuseItems: true
+            // The row list (M53 D4, M53 D6): the default view, one cursor
+            // fill travelling between rows and a keyed model so a row
+            // survives a re-rank.
+            RowListView {
+                id: rowListView
                 anchors.top: variantRow.bottom
                 anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
@@ -2800,93 +2263,18 @@ PanelWindow {
                 width: root._listWidth
                 height: root._morphRowsHeight
                 visible: root.viewKind === "rows"
-                clip: true
-                // `model` and `currentIndex` are `_syncRows`' to set: null
-                // off this view's levels, since an attached model keeps its
-                // delegates alive and _viewContentHeight above needs the
-                // idle view to measure 0.
-                // ListView tracks the cursor through its (always present, even
-                // with no `highlight` component) highlight item, and the
-                // default `highlightMoveDuration: -1` moves that item at
-                // `highlightMoveVelocity`, 400px/s. Key repeat outruns it, so
-                // the view crawls behind the cursor and the tail of a long list
-                // stays off-screen for seconds after the cursor has already
-                // reached it and wrapped back to the top. 0 makes the follow a
-                // hard jump, the only thing that keeps the cursor row visible
-                // at repeat speed. What the reader sees travelling is
-                // `rowCursor` below, which is not what the view scrolls to.
-                highlightMoveDuration: 0
-
-                // Rows never reset (M53 D6), so they enter, leave and change
-                // places instead. Disarmed for the refill the diff falls back
-                // to, where there is no "instead" to describe.
-                add: AddTransition { enabled: root._rowsAnimate }
-                remove: RemoveTransition { enabled: root._rowsAnimate }
-                displaced: MoveTransition { enabled: root._rowsAnimate }
-                move: MoveTransition { enabled: root._rowsAnimate }
-
-                WheelScroll {
-                    id: rowsWheel
-                    flickable: rowsView
-                }
-
-                // The cursor (M53 D4): one fill that travels between rows on an
-                // arrow step, drawn here rather than per row so there is one of
-                // it to travel. A child of the ListView is a child of its
-                // contentItem, so it scrolls with the rows it sits under; `z`
-                // puts it under them, since the row's own ink draws over it.
-                //
-                // Offset by the current row's heading band: a row that opens a
-                // group is taller than its own body by that band, and a fill
-                // covering it would swallow the heading.
-                Rectangle {
-                    id: rowCursor
-                    readonly property var row: rowsView.currentItem
-                    z: -1
-                    visible: rowCursor.row !== null && rowsView.count > 0
-                    width: rowsView.width
-                    y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
-                    height: rowCursor.row ? rowCursor.row._rowHeight : 0
-                    radius: Core.Theme.radiusSm
-                    color: Core.Theme.color.accent
-
-                    Behavior on y {
-                        enabled: root._cursorTravels
-                        Anim { kind: "spatialFast" }
-                    }
-                }
-
-                delegate: MenuRow {
-                    required property string rowId
-                    // The row this delegate is drawing, by id rather than by
-                    // index: a row fading out through the `remove` transition
-                    // above has left the model but not the screen, and its
-                    // index now belongs to whatever slid up into it.
-                    readonly property var entry: root._rowsById[rowId] || root._rowsPrev[rowId] || null
-
-                    // A delegate is pooled after its exit fade as well as after
-                    // scrolling out of view, so its opacity is put back before
-                    // it can be handed to a row that is not entering (M53 D6:
-                    // an exit that leaves a recycled row invisible is worse
-                    // than no exit at all).
-                    ListView.onPooled: opacity = 1
-
-                    modelData: entry ? entry.row : root._blankRow
-                    current: root._cursorIndex === index
-                    hoverLive: pointerGate.live
-                    checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
-                    confirming: root._confirmPendingId === node.id
-                    // A heading rides the row that opens its group, so a row
-                    // whose section matches the one above it carries none.
-                    section: entry ? entry.section : ""
-                    sectionFirst: entry ? entry.sectionFirst : false
-
-                    onActivate: root._activateFromPointer(index)
-                    onHoverMoved: (source, x, y) => {
-                        if (pointerGate.moved(source, x, y))
-                            root._setCursor(index);
-                    }
-                }
+                rowsById: root._rowsById
+                rowsPrev: root._rowsPrev
+                blankRow: root._blankRow
+                cursorIndex: root._cursorIndex
+                cursorTravels: root._cursorTravels
+                rowsAnimate: root._rowsAnimate
+                hoverGate: pointerGate
+                stateSnapshot: conditions.stateSnapshot
+                checkedResults: conditions.checkedResults
+                confirmPendingId: root._confirmPendingId
+                onActivated: index => root._activateFromPointer(index)
+                onCursorRequested: index => root._setCursor(index)
             }
 
             // shadcn's `CommandEmpty` (M48 D6). Drawn in the row area rather
@@ -2895,9 +2283,9 @@ PanelWindow {
             // take back.
             Text {
                 id: emptyState
-                anchors.top: rowsView.top
-                anchors.left: rowsView.left
-                anchors.right: rowsView.right
+                anchors.top: rowListView.top
+                anchors.left: rowListView.left
+                anchors.right: rowListView.right
                 height: root._morphRowsHeight
                 // Against the list rather than after it (M53 D3): the rows
                 // this replaces are leaving through their own remove
@@ -2919,213 +2307,52 @@ PanelWindow {
 
             // The wallpaper route's grid (DESIGN.md §Concrete translations' "grid
             // of image cells sharing hairline rules", spec §11), the picker's
-            // own surface, now one of the menu's two views over the same
+            // own surface, now one of the menu's views over the same
             // _displayRows/_cursorIndex state rather than a panel of its own.
-            // Shares rowsView's geometry exactly, so the action bar below can
-            // anchor to whichever of the two is live without knowing which.
-            GridView {
-                id: gridView
-                // Delegates recycle rather than being destroyed and rebuilt on
-                // every flick. Safe here because every delegate in this file is
-                // required properties plus bindings off them, with no
-                // Component.onCompleted work that a reused item would skip.
-                reuseItems: true
+            // Shares rowListView's geometry exactly, so the footer below can
+            // anchor to whichever view is live without knowing which.
+            PickerGridView {
+                id: pickerGridView
                 anchors.top: variantRow.bottom
                 anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
                 width: root._contentWidth
                 height: root._morphRowsHeight
                 visible: root._isPickerGrid
-                clip: true
-                cellWidth: root._contentWidth / root.pickerColumns
-                cellHeight: gridView.cellWidth
-                // Same hard-jump follow as rowsView, for the same reason: held
-                // arrow keys outrun the default animated highlight move and the
-                // cursor cell ends up off-viewport.
-                highlightMoveDuration: 0
-
-                // A row here is a row of thumbnails, not a text line.
-                WheelScroll {
-                    id: gridWheel
-                    flickable: gridView
-                    step: gridView.cellHeight
-                }
-
-                // The wrapper carries the GridView's own cell, so the `Cell`
-                // inside it can hold the gutter between thumbnails in its
-                // margins and every gap comes out the same width, the edges of
-                // the grid included.
-                delegate: Item {
-                    id: imageSlot
-                    required property int index
-                    required property string rowId
-                    readonly property var entry: root._rowsById[imageSlot.rowId] || root._rowsPrev[imageSlot.rowId] || null
-                    readonly property string path: imageSlot.entry ? (imageSlot.entry.row.path || "") : ""
-
-                    width: gridView.cellWidth
-                    height: gridView.cellHeight
-
-                    Cell {
-                        id: imageCell
-                        anchors.fill: parent
-                        anchors.margins: Core.Theme.space.xs
-                        radius: Core.Theme.radiusMd
-                        // A grid cursor is the ring (spec "Launcher"): the
-                        // thumbnail covers the cell, so a fill would sit under
-                        // the picture and never be seen.
-                        cursor: imageSlot.index === root._cursorIndex
-                        hovered: imageCell.containsPointer && pointerGate.live
-
-                        // The thumbnail is inset far enough that its square corners
-                        // sit inside the cell's rounded ones, which is what lets an
-                        // image live in a `radiusMd` frame with no mask: at `sm` the
-                        // corner of the inset square is 5.7px from the arc's centre
-                        // against a radius of 8.
-                        //
-                        // Decode capped at the cell's own on-screen size (M16 Task
-                        // 12): without this, a 6000×4000 source decodes at full
-                        // resolution into a ~130px cell, ~96MB of resident RGBA
-                        // per thumbnail, times every file in the directory.
-                        //
-                        // The 2x factor matters on the fallback path: sourceSize with
-                        // both dimensions set decodes to FIT INSIDE that box (Qt's
-                        // KeepAspectRatio), not to cover it, so a non-square source
-                        // into this square cell would decode short on one axis and
-                        // PreserveAspectCrop would upscale it back out, visibly
-                        // blurrier than an uncapped decode. A box 2x the cell's side
-                        // keeps the fit-inside decode covering the cell for any
-                        // source up to 2:1 either way, comfortably past 16:9, while
-                        // still capping memory to a small multiple of the cell. A
-                        // cached thumbnail is already a square crop, so the same box
-                        // is simply generous for it.
-                        // Sized off the GridView's own cell rather than off
-                        // `imageCell`: a `Cell` measures its content to publish
-                        // an implicit size, so a child measured back off the
-                        // cell closes a loop Qt then reports and breaks (its
-                        // own anchors already decide its size, but the detector
-                        // sees the cycle first).
-                        Image {
-                            id: thumb
-                            anchors.centerIn: parent
-                            width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                            height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                            // ThumbnailService's prerendered square crop when
-                            // there is one, the wallpaper itself otherwise. The
-                            // fallback is not a degraded mode, it is exactly
-                            // what this cell did before the cache existed: a
-                            // cold cache, an install with no ffmpeg, and a
-                            // format ffmpeg cannot decode all land on it.
-                            readonly property string cachedUrl: imageSlot.path !== "" ? ThumbnailService.urlFor(imageSlot.path, "cover") : ""
-                            source: thumb.cachedUrl !== "" ? thumb.cachedUrl : (imageSlot.path !== "" ? "file://" + imageSlot.path : "")
-                            fillMode: Image.PreserveAspectCrop
-                            // PreserveAspectCrop paints past its own bounds
-                            // without this, over the cells beside it.
-                            clip: true
-                            asynchronous: true
-                            cache: false
-                            sourceSize.width: thumb.width * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                            sourceSize.height: thumb.height * 2 * (root.screen ? root.screen.devicePixelRatio : 1)
-                        }
-
-                        interactive: true
-                        // Same gate as the row list: filtering re-renders cells
-                        // under a parked pointer, and Qt delivers that as a
-                        // hover move indistinguishable from a real one.
-                        onPointerMoved: (x, y) => {
-                            if (pointerGate.moved(imageCell, x, y))
-                                root._setCursor(imageSlot.index);
-                        }
-                        onClicked: root._activateFromPointer(imageSlot.index)
-                    }
-                }
+                rowsById: root._rowsById
+                rowsPrev: root._rowsPrev
+                cursorIndex: root._cursorIndex
+                hoverGate: pointerGate
+                pixelRatio: root.screen ? root.screen.devicePixelRatio : 1
+                onActivated: index => root._activateFromPointer(index)
+                onCursorRequested: index => root._setCursor(index)
             }
 
-            // The emoji route's grid (M48 D5). A second GridView rather than a
-            // kind-branching delegate inside the one above: the two share their
-            // geometry and their cursor, and nothing else. One holds a decoded
-            // image with a capped source size and its own cropping rules, the
-            // other holds a glyph.
-            GridView {
-                id: emojiGrid
-                // Delegates recycle rather than being destroyed and rebuilt on
-                // every flick. Safe here because every delegate in this file is
-                // required properties plus bindings off them, with no
-                // Component.onCompleted work that a reused item would skip.
-                reuseItems: true
+            // The emoji route's grid (M48 D5). A second grid rather than a
+            // kind-branching delegate inside the one above: the two share
+            // their geometry and their cursor, and nothing else. One holds a
+            // decoded image with a capped source size and its own cropping
+            // rules, the other holds a glyph.
+            EmojiGridView {
+                id: emojiGridView
                 anchors.top: variantRow.bottom
                 anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
                 width: root._contentWidth
                 height: root._morphRowsHeight
                 visible: root._isEmojiGrid
-                clip: true
-                cellWidth: root._contentWidth / root.emojiColumns
-                cellHeight: emojiGrid.cellWidth
-                // Same hard-jump follow as the two views above, for the same
-                // reason: held arrow keys outrun the default animated highlight
-                // move and the cursor cell ends up off-viewport.
-                highlightMoveDuration: 0
-
-                WheelScroll {
-                    id: emojiWheel
-                    flickable: emojiGrid
-                    step: emojiGrid.cellHeight
-                }
-
-                // The wrapper carries the GridView's own cell so the `Cell`
-                // inside it can hold the gutter between glyphs in its margins,
-                // exactly as the wallpaper grid does.
-                delegate: Item {
-                    id: emojiSlot
-                    required property int index
-                    required property string rowId
-                    readonly property var entry: root._rowsById[emojiSlot.rowId] || root._rowsPrev[emojiSlot.rowId] || null
-
-                    width: emojiGrid.cellWidth
-                    height: emojiGrid.cellHeight
-
-                    Cell {
-                        id: emojiCell
-                        anchors.fill: parent
-                        anchors.margins: Core.Theme.space.xs
-                        radius: Core.Theme.radiusSm
-                        // Ghost, so a grid of 40 glyphs is 40 glyphs rather than
-                        // 40 boxes; hover fills `accent` and the cursor is the
-                        // ring, the same two states every other cell draws.
-                        ghost: true
-                        cursor: emojiSlot.index === root._cursorIndex
-                        hovered: emojiCell.containsPointer && pointerGate.live
-                        interactive: true
-                        // Same gate as the row list: filtering re-renders cells
-                        // under a parked pointer, and Qt delivers that as a
-                        // hover move indistinguishable from a real one.
-                        onPointerMoved: (x, y) => {
-                            if (pointerGate.moved(emojiCell, x, y))
-                                root._setCursor(emojiSlot.index);
-                        }
-                        onClicked: root._activateFromPointer(emojiSlot.index)
-
-                        // The glyph IS the row's icon (providers.js's emojiRows),
-                        // carried in the mono font that renders it. At `display`
-                        // rather than `heading`: a cell eight columns into
-                        // `popupWidthMenu` is wide enough that a heading-sized
-                        // glyph read as a scatter of dots rather than as a
-                        // picture to pick from (read off menu-emoji.png).
-                        Text {
-                            anchors.centerIn: parent
-                            text: emojiSlot.entry ? emojiSlot.entry.row.icon : ""
-                            color: Core.Theme.color.foreground
-                            font.family: Core.Theme.fontFamilyMono
-                            font.pixelSize: Core.Theme.fontSize.display
-                        }
-                    }
-                }
+                rowsById: root._rowsById
+                rowsPrev: root._rowsPrev
+                cursorIndex: root._cursorIndex
+                hoverGate: pointerGate
+                onActivated: index => root._activateFromPointer(index)
+                onCursorRequested: index => root._setCursor(index)
             }
 
             // The app grid (M58): the level's own app rows drawn as icons
             // with their names under them, with everything else the ranking
-            // returned as rows under the grid. Shares rowsView's geometry
-            // exactly, like the two grids above, so the action bar anchors to
+            // returned as rows under the grid. Shares rowListView's geometry
+            // exactly, like the two grids above, so the footer anchors to
             // whichever view is live without knowing which.
             //
             // Emptied off the route rather than merely hidden, the same
@@ -3145,8 +2372,8 @@ PanelWindow {
                 blankRow: root._blankRow
                 appCount: root._appGridCount
                 hoverGate: pointerGate
-                stateSnapshot: root._stateSnapshot
-                checkedResults: root._checkedResults
+                stateSnapshot: conditions.stateSnapshot
+                checkedResults: conditions.checkedResults
                 confirmPendingId: root._confirmPendingId
                 pixelRatio: root.screen ? root.screen.devicePixelRatio : 1
                 onActivated: index => root._activateFromPointer(index)
@@ -3154,9 +2381,10 @@ PanelWindow {
             }
 
             // The fourth view (M38, D1): a whole component in place of the row
-            // list, for any route Menu/appviews.js registers. Shares rowsView's
-            // geometry exactly, like gridView above, so the action bar anchors
-            // to whichever of the five is live without knowing which.
+            // list, for any route Menu/appviews.js registers. Shares
+            // rowListView's geometry exactly, like the grids above, so the
+            // footer anchors to whichever of the five is live without
+            // knowing which.
             //
             // `source` empties off the route rather than the loader merely
             // hiding: an app view holds a live subscription to whatever service
@@ -3192,104 +2420,25 @@ PanelWindow {
             }
 
             // The split route's right half (M30, M43 D4): the cursor row's full
-            // content in an inner `Card` at `radiusMd`, a `sm` gutter off the
-            // list. Positioned by anchoring off rowsView itself (whichever width
-            // it currently has) rather than an independent x/width pair, so the
-            // two views can never drift apart.
-            //
-            // This is the launcher spending its one card (DESIGN.md §1's ladder,
-            // rung 5, owner 2026-08-26): the surface's own frame, and inside it
-            // exactly one block that outranks the rest. The left half is flat
-            // `MenuRow`s and this half is the card, so the pane reads as the
-            // thing the list is pointing at. What the rule rules out is a second
-            // frame INSIDE this one, which is what an image row used to get.
-            Card {
+            // content in an inner `Card`, a `sm` gutter off the list.
+            // Positioned by anchoring off rowListView itself (whichever
+            // width it currently has) rather than an independent x/width
+            // pair, so the two views can never drift apart.
+            SplitPreview {
                 id: previewPane
                 visible: root._isSplitRoute
-                anchors.top: rowsView.top
-                anchors.left: rowsView.right
+                anchors.top: rowListView.top
+                anchors.left: rowListView.right
                 anchors.leftMargin: Core.Theme.space.sm
                 anchors.right: parent.right
-                height: rowsView.height
-                radius: Core.Theme.radiusMd
-
-                Row {
-                    id: previewHeader
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: Core.Theme.space.sm
-
-                    SectionLabel {
-                        id: previewMeta
-                        visible: root._previewKind !== ""
-                        text: root._previewKind
-                    }
-
-                    Text {
-                        visible: root._previewTime !== ""
-                        text: root._previewTime
-                        color: Core.Theme.color.mutedForeground
-                        font.family: Core.Theme.fontFamilyMono
-                        font.pixelSize: Core.Theme.fontSize.caption
-                    }
-                }
-
-                Text {
-                    id: previewText
-                    anchors.top: previewHeader.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    // The two slots share one frame, so the cursor stepping
-                    // from a text capture to an image one is a content swap
-                    // and crossfades (M53 D3).
-                    opacity: root._previewIsText ? 1 : 0
-                    visible: previewText.opacity > 0
-                    Behavior on opacity {
-                        Anim { kind: "effects" }
-                    }
-                    clip: true
-                    text: root._previewText
-                    // A clipboard capture reaches this pane raw, so the preview
-                    // has to show the bytes that will be pasted rather than let
-                    // AutoText parse copied markup as a rich-text document.
-                    textFormat: Text.PlainText
-                    wrapMode: Text.WrapAnywhere
-                    color: Core.Theme.color.foreground
-                    font.family: Core.Theme.fontFamilyMono
-                    font.pixelSize: Core.Theme.fontSize.body
-                }
-
-                // True-color (menu thumbnails are never dithered) full preview of
-                // the cursor row's capture, decode capped at the slot's own size
-                // for the picker grid's reason. Bare: no well, no frame, no
-                // outline. The pane around it is already the one card this
-                // surface gets, and a border inside that is the nesting the rule
-                // forbids. It fits rather than fills, so the pane's own ground
-                // shows around it, which is what a letterboxed capture is
-                // supposed to sit on.
-                Image {
-                    id: previewImage
-                    anchors.top: previewHeader.bottom
-                    anchors.topMargin: Core.Theme.space.rowGap
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    // The other half of the swap above.
-                    opacity: root._previewIsImage ? 1 : 0
-                    visible: previewImage.opacity > 0
-                    Behavior on opacity {
-                        Anim { kind: "effects" }
-                    }
-                    source: root._previewImageSource
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    cache: false
-                    sourceSize.width: previewImage.width * (root.screen ? root.screen.devicePixelRatio : 1)
-                    sourceSize.height: previewImage.height * (root.screen ? root.screen.devicePixelRatio : 1)
-                }
+                height: rowListView.height
+                previewKind: root._previewKind
+                previewTime: root._previewTime
+                isText: root._previewIsText
+                text: root._previewText
+                isImage: root._previewIsImage
+                imageSource: root._previewImageSource
+                pixelRatio: root.screen ? root.screen.devicePixelRatio : 1
             }
 
             // What the cursor cell is (M48 D5). A grid cell is a picture with no
@@ -3297,40 +2446,30 @@ PanelWindow {
             // the footer, where it changes as the cursor moves rather than
             // waiting for a pointer to hover something. Absent entirely (zero
             // height, no reserved gutter) on every other route.
-            SectionLabel {
+            EmojiCaption {
                 id: emojiCaption
-                // The route's own answer, read by the height and the gap
-                // rather than by `visible`, which now outlives it while
-                // the band closes.
-                readonly property bool wanted: root._isEmojiGrid && root._cursorNode !== null
+                wanted: root._isEmojiGrid && root._cursorNode !== null
+                // The caption's band on the card's clock (M54 D10), on the
+                // same gate as the morphs: `_captionBand` reads this height
+                // straight into `_cardHeight`, so the card's own edge and
+                // the band travel together.
+                animGate: root.isOpen && drawer.presence.mapped
 
-                anchors.top: rowsView.bottom
+                anchors.top: rowListView.bottom
                 anchors.topMargin: emojiCaption.wanted ? Core.Theme.space.rowGap : 0
                 anchors.left: parent.left
                 anchors.leftMargin: root._headerInset
                 anchors.right: parent.right
                 anchors.rightMargin: root._headerInset
-                height: emojiCaption.wanted ? implicitHeight : 0
-                visible: emojiCaption.wanted || emojiCaption.height > 0
-                clip: true
-                elide: Text.ElideRight
                 text: root._cursorNode ? root._cursorNode.label : ""
-
-                // The caption's band on the card's clock (M54 D10), on the
-                // same gate as the morphs: `_captionBand` reads this
-                // height straight into `_cardHeight`, so the card's own
-                // edge and the band travel together.
-                Behavior on height {
-                    enabled: root.isOpen && drawer.presence.mapped
-                    Anim {}
-                }
             }
 
-            // The footer hint line (spec "Launcher"): what Enter does to the
-            // row under the cursor, plus the keys that always apply.
-            // Menu/actions.js owns the wording.
-            MenuActionBar {
-                id: actionBar
+            // The footer band (spec "Launcher"): the action bar's hint line
+            // (what Enter does to the row under the cursor, plus the keys
+            // that always apply, Menu/actions.js owns the wording) and the
+            // app view's own overflow hint.
+            MenuFooter {
+                id: menuFooter
                 anchors.top: emojiCaption.bottom
                 anchors.topMargin: Core.Theme.space.rowGap
                 // Same inset the rows and the input row take, so the legend
@@ -3342,6 +2481,7 @@ PanelWindow {
                 anchors.rightMargin: root._headerInset
                 primary: root._actionBar.primary
                 hints: root._actionBar.hints
+                scrollHint: root._appViewScrollHint
 
                 // Clicking the primary verb is the pointer acting, exactly like
                 // clicking the row itself: same path, same gate re-arm. On an
@@ -3355,21 +2495,6 @@ PanelWindow {
                     }
                     root._activateFromPointer(root._cursorIndex);
                 }
-            }
-
-            // The app view's overflow hint, at the footer's right end, where the
-            // hint line cannot reach it. In the footer rather than over the view
-            // because a hint sitting on the content it announces hides the rows
-            // the reader is reaching for.
-            Text {
-                anchors.right: actionBar.right
-                anchors.verticalCenter: actionBar.verticalCenter
-                visible: root._appViewScrollHint !== ""
-                text: root._appViewScrollHint
-                color: Core.Theme.color.mutedForeground
-                font.family: Core.Theme.fontFamilySans
-                font.pixelSize: Core.Theme.fontSize.caption
-                font.capitalization: Font.AllLowercase
             }
         }
     }
