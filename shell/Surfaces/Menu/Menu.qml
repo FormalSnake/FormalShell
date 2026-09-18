@@ -55,6 +55,14 @@ PanelWindow {
     property bool isOpen: false
     property var currentNodeId: null
     property int _cursorIndex: 0
+    // Whether the ring draws on the cell the cursor is on (DESIGN.md §1
+    // "Ring", §4): it is the keyboard's mark, so a cell the pointer named
+    // keeps its hover wash alone. The row list marks its cursor with the
+    // `accent` fill and never sees this; the three grids (the picker, emoji
+    // and the app cells) are the surfaces here that draw a ring at all.
+    // Published over them on the drawer, which cursor.js's `ringOwner` walk
+    // finds from any cell inside the card.
+    property bool _cursorFromKeys: false
     property string _confirmPendingId: ""
     property var _condResults: ({})
     property var _checkedResults: ({})
@@ -488,6 +496,7 @@ PanelWindow {
             // The other variant is a different listing of a different length:
             // the old index would land on an unrelated image, or past the end.
             root._cursorIndex = 0;
+            root._cursorFromKeys = true;
             pointerGate.reset();
         }
         return true;
@@ -1707,6 +1716,7 @@ PanelWindow {
         root.currentNodeId = id;
         root._cursorIndex = 0;
         root._confirmPendingId = "";
+        root._cursorFromKeys = true;
         searchInput.text = "";
         // A whole new row set arrives under an unmoved pointer, in or out.
         pointerGate.reset();
@@ -1816,6 +1826,7 @@ PanelWindow {
         var next = raw % n;
         root._cursorIndex = next < 0 ? next + n : next;
         root._confirmPendingId = "";
+        root._cursorFromKeys = true;
         pointerGate.reset();
     }
 
@@ -1826,6 +1837,7 @@ PanelWindow {
         root._cursorTravels = false;
         root._cursorIndex = index;
         root._confirmPendingId = "";
+        root._cursorFromKeys = false;
     }
 
     // The app view's scroll seam, sibling of the `query` one below (D1): a
@@ -2290,6 +2302,9 @@ PanelWindow {
     Drawer {
         id: drawer
         anchors.fill: parent
+        // What every cell in the card reads for whether its ring draws
+        // (cursor.js's `ringOwner` walk).
+        property bool cursorFromKeys: root._cursorFromKeys
         owner: root
         open: root.isOpen
         mapped: root.backingWindowVisible

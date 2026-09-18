@@ -62,7 +62,9 @@ Box {
 
     // The keyboard cursor: the ring, and nothing else. The only place the
     // wallpaper colour reaches chrome that is neither selected nor active,
-    // which is what makes the cursor findable at a glance.
+    // which is what makes the cursor findable at a glance. On while the row
+    // holds the cursor however it got there; whether the ring draws is
+    // `_ringOwner`'s answer below.
     property bool cursor: false
 
     // `radius` is Box's, and the table's own corner stands unless a consumer
@@ -164,7 +166,7 @@ Box {
         var line = Theme.box(root.role, root._borderState).border;
         composed.border = line || { color: root._restBorderColor, width: 0 };
         composed.wash = root._hoverFillActive ? Theme.box(root.role, "hover").wash : null;
-        return Theme.withCursor(composed, root.cursor, !root._haloOwned);
+        return Theme.withCursor(composed, root._cursorRing, !root._haloOwned);
     }
 
     readonly property color _restBorderColor: {
@@ -359,7 +361,18 @@ Box {
     // runs when the row takes the cursor rather than when it is built.
     property bool _haloOwned: false
 
-    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+    // Whether the ring draws for this cell at all (DESIGN.md §1 "Ring"): the
+    // list above it hands the ring to the keyboard and the wash to the
+    // pointer, and a cell with no such list above it draws both. cursor.js
+    // carries the walk, resolved on the same hop `_haloOwned` is.
+    property Item _ringOwner: null
+    readonly property bool _cursorRing: root.cursor
+        && (!root._ringOwner || root._ringOwner.cursorFromKeys)
+
+    onCursorChanged: if (root.cursor) {
+        root._haloOwned = Cursor.haloOwned(root);
+        root._ringOwner = Cursor.ringOwner(root);
+    }
 
     // The same walk for the selection fill: a group drawing one fill that
     // travels between its cells (RegionPicker's toolbar) needs there to be

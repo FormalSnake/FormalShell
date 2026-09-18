@@ -144,6 +144,15 @@ PanelWindow {
     // Left/Right stop at the ends of their own week.
     property int cursorColumns: 1
 
+    // Whether the ring draws on whatever row the cursor is on (DESIGN.md §1
+    // "Ring", §4): it is the keyboard's mark, so a cursor the pointer put
+    // there keeps the row's hover wash and nothing else. Claimed by
+    // moveCursor and moveSection below and handed back by every other write
+    // to the cursor, which is a panel's own `_pointAt`; cursor.js carries
+    // the rule. Published over the rows on the KeyCatcher, where each of
+    // them reads it.
+    property bool cursorFromKeys: false
+
     signal cursorActivated(int index)
     // `x` on a row that has a destructive action (Bluetooth's forget).
     signal cursorDeleted(int index)
@@ -165,6 +174,7 @@ PanelWindow {
     function moveCursor(dx, dy) {
         if (Cursor.isStep(dx, dy, root.cursorStepsHorizontally, root.cursorActive)) {
             root.cursorStepped(root.cursorIndex, dx > 0 ? 1 : -1);
+            root.cursorFromKeys = Cursor.ringAfter(root.cursorFromKeys, true, root.cursorActive);
             return;
         }
         var next = Cursor.move(root.cursorIndex, root.cursorCount, root.cursorActive, dx, dy, root.cursorColumns);
@@ -174,6 +184,10 @@ PanelWindow {
         root._cursorTravels = root.cursorActive && next.index !== root.cursorIndex;
         root.cursorIndex = next.index;
         root.cursorActive = next.active;
+        // Claimed after the writes above rather than before them: each of
+        // those hands the ring to the pointer on its own, and this is the
+        // one call path a key reaches the cursor by.
+        root.cursorFromKeys = Cursor.ringAfter(root.cursorFromKeys, true, root.cursorActive);
         // Deferred so the row's own `cursor` binding, and any reflow the
         // move caused, have both landed before the row is measured.
         Qt.callLater(root._followCursor);
@@ -254,9 +268,18 @@ PanelWindow {
     // moves: whatever changed the cursor has to have reflowed first.
     property bool _cursorTravels: false
 
-    onCursorIndexChanged: Qt.callLater(root._syncCursorHalo)
-    onCursorActiveChanged: Qt.callLater(root._syncCursorHalo)
-    onCursorSectionChanged: Qt.callLater(root._syncCursorHalo)
+    onCursorIndexChanged: {
+        root.cursorFromKeys = Cursor.ringAfter(root.cursorFromKeys, false, root.cursorActive);
+        Qt.callLater(root._syncCursorHalo);
+    }
+    onCursorActiveChanged: {
+        root.cursorFromKeys = Cursor.ringAfter(root.cursorFromKeys, false, root.cursorActive);
+        Qt.callLater(root._syncCursorHalo);
+    }
+    onCursorSectionChanged: {
+        root.cursorFromKeys = Cursor.ringAfter(root.cursorFromKeys, false, root.cursorActive);
+        Qt.callLater(root._syncCursorHalo);
+    }
     onIsOpenChanged: Qt.callLater(root._syncCursorHalo)
 
     function _syncCursorHalo() {
@@ -291,6 +314,7 @@ PanelWindow {
     function moveSection(direction) {
         root.cursorSection = Cursor.section(root.cursorSection, root.sectionCount, direction);
         root.cursorActive = true;
+        root.cursorFromKeys = Cursor.ringAfter(root.cursorFromKeys, true, root.cursorActive);
     }
 
     // Hands the keyboard back to the panel after an inline editor gave it
@@ -936,6 +960,10 @@ PanelWindow {
                     // here leaves its halo to `cursorHalo` below.
                     property bool ownsCursorHalo: true
 
+                    // And what every row reads for whether its ring draws at
+                    // all (cursor.js's `ringOwner` walk).
+                    property bool cursorFromKeys: root.cursorFromKeys
+
                     onMoveRequested: (dx, dy) => root.moveCursor(dx, dy)
                     onActivateRequested: root.activateCursor()
                     onDeleteRequested: root.deleteCursor()
@@ -950,7 +978,7 @@ PanelWindow {
                         id: cursorHalo
                         property Item row: null
                         z: -1
-                        visible: cursorHalo.row !== null
+                        visible: cursorHalo.row !== null && root.cursorFromKeys
                         // The table's own cursor ring (M59 T6), the same
                         // layer a row draws for itself when no list owns
                         // one, so the two never disagree.

@@ -72,8 +72,8 @@ Box {
     // is elsewhere, so a groove taking it draws a line rather than fading
     // one up out of nothing.
     box: {
-        if (root.cursor)
-            return Theme.withCursor(root._grooveBox, root.cursor, !root._haloOwned);
+        if (root._cursorRing)
+            return Theme.withCursor(root._grooveBox, root._cursorRing, !root._haloOwned);
         var rest = {};
         for (var key in root._grooveBox)
             rest[key] = root._grooveBox[key];
@@ -88,7 +88,18 @@ Box {
     // built.
     property bool _haloOwned: false
 
-    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+    // Whether the ring draws for this groove at all (DESIGN.md §1 "Ring"): the
+    // list above it hands the ring to the keyboard and the wash to the
+    // pointer, and a groove with no such list above it draws both. cursor.js
+    // carries the walk, resolved on the same hop `_haloOwned` is.
+    property Item _ringOwner: null
+    readonly property bool _cursorRing: root.cursor
+        && (!root._ringOwner || root._ringOwner.cursorFromKeys)
+
+    onCursorChanged: if (root.cursor) {
+        root._haloOwned = Cursor.haloOwned(root);
+        root._ringOwner = Cursor.ringOwner(root);
+    }
 
     Loader {
         anchors.fill: parent
