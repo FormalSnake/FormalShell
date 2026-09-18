@@ -19,10 +19,11 @@
 # the duet-lit poll waits for is built to still be true minutes later rather
 # than sized to a guessed setup time. Track2's
 # cache has line timing only and no `words`, so `LyricsService.lines`
-# synthesises them client-side (P4): the same four-word line repeats every
-# 20s for the length of the file, so whichever repeat happens to be active
-# once this leg gets around to selecting it, `position` minus that line's
-# own `time` is what the poll below reads, not a wall-clock guess. Track3
+# synthesises them client-side (P4): the same two-word line repeats every
+# 20s for the length of the file, held alternately for 16s and for 4s, so
+# whichever repeat happens to be active once this leg gets around to
+# selecting it, the fraction of its own span the shell reports is what the
+# polls below read, not a wall-clock guess. Track3
 # gets an empty `.miss` marker, the seven-day fresh-miss path, never asked
 # of a provider at all.
 #
@@ -34,8 +35,8 @@
 # rect (found the same way the panel-width check already does, a pixel diff
 # between a bare frame and one with the panel open) takes `follow` to false,
 # and selecting track2 re-arms it; track2 reaches `quality:1` with every
-# line `estimated:true` and its wipe visibly partway in a frame, read off
-# the row's own left/right halves rather than trusted from IPC alone;
+# words line `estimated:true` and its wipe partway along a row in a frame,
+# read off the row's own ink rather than trusted from IPC alone;
 # track3 reaches `none` with the panel narrower, as M55 already proved;
 # selecting track1 back grows the panel again across a burst of frames that
 # all share the narrow card's own centre, which is the centre of the bar
@@ -61,6 +62,38 @@
 # still drifting. A row that resized itself as it lit moved every row under
 # it and the scroll's own target with them, so the column was still chasing
 # a line seconds after it had started singing (owner, 2026-09-18).
+#
+# Four more since M71, all four owner-reported on a real host on 2026-09-18.
+#
+# The wrapped-line claim: track1's line3 runs one row of words and then a
+# chunk the pane cannot hold across two more, and the tail of the run pauses
+# the player at 27.5s and at 30.6s to photograph the wipe on the first row
+# and on the second. Every patch is measured against its own row's ink, and
+# the two levels are taken from the same frame, so what is asserted is the
+# order the rows light in: rows above the wipe fully sung, the row it is on
+# sung to the wipe and no further, rows under it untouched. One gradient
+# over the whole block instead lit every row left of a single x, so a word on
+# the second row read as sung before the first row had finished.
+#
+# The room claim: the rows the pane draws against the rows its own height
+# holds, counted off the frame as bands of ink and compared with the crop's
+# height over the row pitch. A depth ramp that bottomed out three rows from
+# the anchor left everything past it at the floor, so a pane with room for
+# ten lines drew four and emptied out under them.
+#
+# The note claim: track2's 4s gaps are past the seamless carry and under
+# kopuz's own instrumental threshold, which is the stretch that used to leave
+# the pane with no lit row and no note at all; its 16s gaps are past both.
+# Both now carry one, `media lyrics` reports the note itself as the active
+# row for the stretch, and three frames show a line of words, then the note
+# alone centred in the column, then the next line with nothing behind it
+# still filled in.
+#
+# The rate claim: the same two words held for 16s and for 4s, each
+# photographed at the same fraction of its own span, with the sung ink read
+# as a fraction of the row's own ink. A wipe capped at WIPE_MAX_SECONDS a
+# chunk snapped each word and waited, so the long line sat a whole word ahead
+# of its own clock while the short one landed on the beat.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
 leg_lyrics_needs="mpv ffmpeg convert jq wlrctl"
@@ -97,6 +130,21 @@ lyrics_return_narrow_path="$shot_dir/lyrics-return-narrow.png"
 lyrics_edge_rects_path="$shot_dir/lyrics-edge-rects.txt"
 lyrics_status_reopen_path="$shot_dir/lyrics-status-reopen.json"
 lyrics_reopen_png_path="$shot_dir/lyrics-reopen.png"
+lyrics_rate_long_png_path="$shot_dir/lyrics-rate-long.png"
+lyrics_rate_long_json_path="$shot_dir/lyrics-rate-long.json"
+lyrics_rate_short_png_path="$shot_dir/lyrics-rate-short.png"
+lyrics_rate_short_json_path="$shot_dir/lyrics-rate-short.json"
+lyrics_note_before_png_path="$shot_dir/lyrics-note-before.png"
+lyrics_note_before_json_path="$shot_dir/lyrics-note-before.json"
+lyrics_note_during_png_path="$shot_dir/lyrics-note-during.png"
+lyrics_note_during_json_path="$shot_dir/lyrics-note-during.json"
+lyrics_note_after_png_path="$shot_dir/lyrics-note-after.png"
+lyrics_note_after_json_path="$shot_dir/lyrics-note-after.json"
+lyrics_wrap_early_png_path="$shot_dir/lyrics-wrap-early.png"
+lyrics_wrap_early_json_path="$shot_dir/lyrics-wrap-early.json"
+lyrics_wrap_late_png_path="$shot_dir/lyrics-wrap-late.png"
+lyrics_wrap_late_json_path="$shot_dir/lyrics-wrap-late.json"
+lyrics_rows_path="$shot_dir/lyrics-rows.txt"
 lyrics_burst_index_path="$shot_dir/lyrics-burst-index.txt"
 lyrics_burst_profile_path="$shot_dir/lyrics-burst-profile.txt"
 lyrics_sock1_path="$shot_dir/lyrics-mpv1.sock"
@@ -123,8 +171,11 @@ leg_lyrics_timing() {
   # common case. Track1 stays on MPRIS through the whole thing (mpv drops
   # off MPRIS the moment a track ends), hence its file being far longer
   # than the session that plays it. The reopen check and the two line-change
-  # bursts add about a minute on the tail.
-  leg_timing 100 430 2
+  # bursts add about a minute on the tail, and track2's three waits are each
+  # for a window inside one 26s turn of its own pattern. The first number is
+  # when the run's own frame is taken, which is also when the session is torn
+  # down, so it has to outlast everything the chain below drives.
+  leg_timing 260 700 2
 }
 
 leg_lyrics_fixture() {
@@ -218,9 +269,11 @@ EOF
   # the active main line at 25s: P5's rule judges a background line on its
   # own timing, so it stays lit into that next main line for effectively the
   # rest of the session, which is what the duet-lit poll below waits for.
-  # Line3 ends on one word longer than the pane is wide, so the lit form has
-  # to break inside a chunk the way the plain one does; the return burst's
-  # own settled frame is where that line is read.
+  # Line3 ends on one word half again as long as the pane is wide, so the lit
+  # form has to break inside a chunk the way the plain one does and the whole
+  # line lands on three rows: a row of words, then two rows of the one chunk.
+  # The return burst's own settled frame is where the break is read, and the
+  # paused pair at the tail is where the wipe crossing it is.
   cat > "$shot_dir/lyrics-track1-cache.json" <<'JSON'
 {"source": "apple", "lines": [
 {"time": 2.0, "end": 15.0, "text": "Paper lantern morning", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
@@ -234,29 +287,41 @@ EOF
 {"time": 16.0, "end": 100000.0, "text": "steady now", "parent": 1, "background": true, "oppositeTurn": false, "estimated": false, "words": [
   {"time": 16.0, "text": "stea", "joinsNext": true}, {"time": 16.8, "text": "dy", "joinsNext": false},
   {"time": 17.6, "text": "now", "joinsNext": false}]},
-{"time": 25.0, "end": 100000.0, "text": "Answer from the other shore lanternlightacrossthewholeharbourmouth", "parent": null, "background": false, "oppositeTurn": true, "estimated": false, "words": [
+{"time": 25.0, "end": 100000.0, "text": "Answer from the other shore lanternlightacrossthewholeharbourmouthandbackagaintwiceoverbeforedawn", "parent": null, "background": false, "oppositeTurn": true, "estimated": false, "words": [
   {"time": 25.0, "text": "Answer", "joinsNext": false}, {"time": 26.2, "text": "from", "joinsNext": false},
   {"time": 27.2, "text": "the", "joinsNext": false}, {"time": 28.2, "text": "other", "joinsNext": false},
   {"time": 29.2, "text": "shore", "joinsNext": false},
-  {"time": 30.2, "text": "lanternlightacrossthewholeharbourmouth", "joinsNext": false}]}
+  {"time": 30.2, "text": "lanternlightacrossthewholeharbourmouthandbackagaintwiceoverbeforedawn", "joinsNext": false}]}
 ]}
 JSON
 
   # Line timing only, no `words`, so LyricsService synthesises them (P4).
-  # The same four-word line ("Amber light falls low") repeats every 20s for
-  # the length of the file: each repeat's own 16s span is wide enough that
-  # "Amber"/"light" wipe fully (and their glow decays) by 5.64s in, while
-  # "falls"/"low" have not started until 8.89s in, so [5.8, 8.7] relative to
-  # whichever repeat is active is nearly three seconds of margin, not one
-  # exact frame, and it holds regardless of which repeat this leg happens to
-  # land on once it gets around to selecting this track.
+  # The same two-word line ("Amber lantern") repeats every 20s for the length
+  # of the file, alternately held for 16s and for 4s. Two words rather than
+  # four because the wipe's rate is what this track now reads: a chunk capped
+  # at WIPE_MAX_SECONDS is wrong by at most one word's width, so four short
+  # words hide the difference between a wipe spread over the line's own span
+  # and one that snaps each word in 1.2s and waits, while two wide ones put
+  # it at a third of the row.
+  #
+  # The pattern is 26s long and repeats for the length of the file: a line
+  # held 12s, a 4s gap, the same words held 4s, a 6s gap. It gives three
+  # things at once. A long line and a short one carrying identical text, so
+  # the same fraction of each line's own span can be read off the frame at
+  # the same fraction of the row. The 4s gap, which is past the seamless
+  # carry and under kopuz's own instrumental threshold: the stretch that used
+  # to leave the pane with no lit row and no note at all (owner,
+  # 2026-09-18). And the 6s gap, past both thresholds and wide enough to
+  # photograph a note while it is the one being played.
   {
     printf '{"source": "lrclib", "lines": ['
     local i sep="" t
-    for i in $(seq 0 18); do
-      t=$((4 + i * 20))
-      printf '%s{"time": %s.0, "end": %s.0, "text": "Amber light falls low", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": []}' \
-        "$sep" "$t" "$((t + 16))"
+    for i in $(seq 0 14); do
+      t=$((4 + i * 26))
+      printf '%s{"time": %s.0, "end": %s.0, "text": "Amber lantern", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": []}' \
+        "$sep" "$t" "$((t + 12))"
+      printf ',{"time": %s.0, "end": %s.0, "text": "Amber lantern", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": []}' \
+        "$((t + 16))" "$((t + 20))"
       sep=","
     done
     printf ']}'
@@ -418,6 +483,10 @@ sleep 1
 "$wlrctl_bin" pointer scroll 10 0 >> "$lyrics_wheel_dispatch_path" 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_postwheel_path" 2>&1
+# The pointer leaves the pane again: a row under it keeps its own hover fill
+# and is lifted clear of the depth ramp, which is a band of light across
+# every frame the rest of this leg reads.
+"$wlrctl_bin" pointer move -4000 -4000 >> "$lyrics_wheel_dispatch_path" 2>&1
 
 # The reopen: the wheel has the column, the panel is shut with track1 still
 # playing, and it comes back with no track change anywhere in between, so
@@ -464,20 +533,69 @@ done
 # lands mid-morph and the pinned fractions read a card that is still moving.
 sleep 1
 
+# Waits for the active line to be a words line of the span this caller wants
+# (long or short), at a fraction of its own span inside [lo, hi], then leaves
+# the dump it stopped on beside the frame: every fraction asserted later is
+# read back out of that dump rather than assumed from a wall clock. The two
+# spans are 16s and 4s, so 10 tells them apart with room either side.
+lyrics_wait_fraction() {
+  local out_json="\$1" want_long="\$2" lo="\$3" hi="\$4" timeout="\$5"
+  local waited=0 active span
+  while [ "\$waited" -lt "\$timeout" ]; do
+    "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$out_json" 2>&1
+    active=\$("$jq_bin" -r '.active' "\$out_json" 2>/dev/null)
+    if [ -n "\$active" ] && [ "\$active" != "-1" ] && [ "\$active" != "null" ]; then
+      if "$jq_bin" -e ".lines[\$active].interlude != true" "\$out_json" > /dev/null 2>&1; then
+        if "$jq_bin" -r "[.position, .lines[\$active].time, .lines[\$active].end] | @tsv" "\$out_json" 2>/dev/null \
+          | awk -v want="\$want_long" -v lo="\$lo" -v hi="\$hi" \
+            '{ span = \$3 - \$2; f = (\$1 - \$2) / span;
+               long = (span > 10) ? 1 : 0;
+               exit !(long == want && f >= lo && f <= hi) }'; then
+          return 0
+        fi
+      fi
+    fi
+    sleep 0.5
+    waited=\$((waited + 1))
+  done
+  return 1
+}
+
+# The long line at roughly three quarters of its own 16s span, which is the
+# frame the estimated-track status claims are read off as well.
+lyrics_wait_fraction "$lyrics_status_estimated_path" 1 0.55 0.82 90
+"$grim_bin" "$lyrics_estimated_png_path" > /dev/null 2>&1
+cp "$lyrics_status_estimated_path" "$lyrics_rate_long_json_path"
+cp "$lyrics_estimated_png_path" "$lyrics_rate_long_png_path"
+
+# The same text held for 4s instead of 16, at the same fraction of its own
+# span. The window is a second of wall clock, so this polls at the same 0.5s
+# resolution over as many repeats as it needs.
+lyrics_wait_fraction "$lyrics_rate_short_json_path" 0 0.55 0.82 120
+"$grim_bin" "$lyrics_rate_short_png_path" > /dev/null 2>&1
+
+# The instrumental note, before, during and after. The short line's own frame
+# above is the "before": every words line in this fixture is followed by a
+# gap, so it is one, and waiting for another costs a whole pattern.
+cp "$lyrics_rate_short_json_path" "$lyrics_note_before_json_path"
+cp "$lyrics_rate_short_png_path" "$lyrics_note_before_png_path"
 SECONDS=0
-while [ "\$SECONDS" -lt 30 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_estimated_path" 2>&1
-  active=\$("$jq_bin" -r '.active' "$lyrics_status_estimated_path" 2>/dev/null)
+while [ "\$SECONDS" -lt 40 ]; do
+  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_note_during_json_path" 2>&1
+  active=\$("$jq_bin" -r '.active' "$lyrics_note_during_json_path" 2>/dev/null)
   if [ -n "\$active" ] && [ "\$active" != "-1" ] && [ "\$active" != "null" ]; then
-    pos=\$("$jq_bin" -r '.position' "$lyrics_status_estimated_path" 2>/dev/null)
-    linetime=\$("$jq_bin" -r ".lines[\$active].time" "$lyrics_status_estimated_path" 2>/dev/null)
-    if awk -v p="\${pos:--1}" -v t="\${linetime:--1}" 'BEGIN { r = p - t; exit !(r >= 5.8 && r <= 8.7) }'; then
+    if "$jq_bin" -e ".lines[\$active].interlude == true and (.lines[\$active].end - .lines[\$active].time) > 5" \
+      "$lyrics_note_during_json_path" > /dev/null 2>&1; then
       break
     fi
   fi
   sleep 0.5
 done
-"$grim_bin" "$lyrics_estimated_png_path" > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$lyrics_note_during_png_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_note_during_json_path" 2>&1
+lyrics_wait_fraction "$lyrics_note_after_json_path" 1 0.05 0.9 60
+"$grim_bin" "$lyrics_note_after_png_path" > /dev/null 2>&1
 touch "$lyrics_marker_track2"
 EOF
 
@@ -552,6 +670,40 @@ for phase in a b; do
     sleep 0.3
   done
 done
+
+# The wrapped lit line, read in reading order. Line3 runs "Answer from the
+# other shore" across one row and then one chunk the pane cannot hold across
+# two more, so it is the one line in this fixture carrying both kinds of row
+# break. mpv is paused for these two: the pane's own clock stops with the
+# player (MediaPanel's FrameAnimation), so an absolute seek followed by a
+# poll on the position the shell reports puts the wipe exactly where this
+# leg wants it rather than wherever the next screenshot lands.
+lyrics_wait_position() {
+  local out_json="\$1" want="\$2" waited=0
+  while [ "\$waited" -lt 30 ]; do
+    "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$out_json" 2>&1
+    if "$jq_bin" -e ".position > (\$want - 0.35) and .position < (\$want + 0.35)" "\$out_json" > /dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+    waited=\$((waited + 1))
+  done
+  return 1
+}
+
+lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","pause",true]}'
+sleep 1
+# 27.5s: the wipe is inside "the", a third of the way along the first row,
+# with every row under it still to come.
+lyrics_mpv "$lyrics_sock1_path" '{"command":["seek",27.5,"absolute"]}'
+lyrics_wait_position "$lyrics_wrap_early_json_path" 27.5
+"$grim_bin" "$lyrics_wrap_early_png_path" > /dev/null 2>&1
+# 30.6s: a third of the way into the chunk that wraps, so the row above it is
+# done, the row it is on is half sung, and the row under it has not started.
+lyrics_mpv "$lyrics_sock1_path" '{"command":["seek",30.6,"absolute"]}'
+lyrics_wait_position "$lyrics_wrap_late_json_path" 30.6
+"$grim_bin" "$lyrics_wrap_late_png_path" > /dev/null 2>&1
+lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","pause",false]}'
 EOF
 
   write_script "$kill_script" <<EOF
@@ -606,6 +758,165 @@ ink = [y for y, v in vals if v > floor]
 peak = max(vals, key=lambda p: p[1])[0]
 print("%d %d %d" % (peak, max(ink) if ink else -1, len(ink)))
 '
+}
+
+# The inked rows inside a crop, as "top:bottom:peak" triples in order. The
+# brightest pixel in each row rather than the row's mean, which is what lets
+# a row of words 99px wide and a note glyph 17px wide register the same way
+# in a 400px column; the floor is the card's own fill plus a margin, since
+# the fill is flat and a row at the far end of the depth ramp lifts it by
+# only a few levels. `peak` is that brightest level, so a caller can read how
+# far down the ramp a row sits as well as that it is there.
+lyrics_row_bands() {
+  "$convert_bin" "$1" -crop "$2" +repage -colorspace Gray -statistic Maximum "$(printf '%s' "${2%%x*}")x1" \
+    -resize 1x! -depth 8 txt:- 2>/dev/null \
+    | python3 -c '
+import re, sys
+vals = []
+for line in sys.stdin:
+    m = re.match(r"0,(\d+): \((\d+)", line)
+    if m:
+        vals.append((int(m.group(1)), int(m.group(2))))
+if not vals:
+    raise SystemExit
+levels = sorted(v for _, v in vals)
+base = levels[len(levels) // 10]
+floor = base + 5
+runs = []
+start = None
+peak = 0
+for y, v in vals:
+    if v > floor:
+        if start is None:
+            start = y
+            peak = v
+        peak = max(peak, v)
+    elif start is not None:
+        runs.append((start, y - 1, peak))
+        start = None
+if start is not None:
+    runs.append((start, vals[-1][0], peak))
+print(" ".join("%d:%d:%d" % r for r in runs if r[1] - r[0] >= 2))
+'
+}
+
+# The ink box inside a crop at a given threshold, as "x y w h": 70% is the
+# sung half of a lit line and nothing else on the pane, 35% is the whole line
+# including its unsung half. Echoes "0 0 0 0" for a crop with no ink.
+lyrics_ink_box() {
+  local box w h x y rest
+  box=$("$convert_bin" "$1" -crop "$2" +repage -colorspace Gray -threshold "$3" -format '%@' info: 2>/dev/null)
+  case "$box" in
+    *x*+*+*)
+      w=${box%%x*}
+      rest=${box#*x}
+      h=${rest%%+*}
+      rest=${rest#*+}
+      x=${rest%%+*}
+      y=${rest#*+}
+      printf '%s %s %s %s\n' "$x" "$y" "$w" "$h"
+      ;;
+    *) printf '0 0 0 0\n' ;;
+  esac
+}
+
+lyrics_patch_mean() {
+  "$convert_bin" "$1" -crop "$2" +repage -colorspace Gray -format '%[fx:mean]' info: 2>/dev/null
+}
+
+# The lyrics pane's own crop inside a frame, past the header and short of the
+# card's far padding, as "cropGeometry bodyImage". The two columns split the
+# card's content evenly (MediaPanel's `contentRow._paneWidth`), so the card's
+# own midpoint falls in the gap between them whatever the card is wide;
+# `popupWidthWide` as an offset instead cut into the lyrics text, which reads
+# as a row starting at the crop's own edge and measures every fraction of it
+# against a truncated width.
+lyrics_pane_crop() {
+  local px py pw ph body
+  read -r px py pw ph body < <(lyrics_pane_rect "$lyrics_bare_path" "$1" "$convert_bin")
+  printf '%sx%s+%s+%s %s\n' "$((pw / 2 - 16))" "$((ph - 116))" "$((px + pw / 2))" "$((py + 100))" "$body"
+}
+
+# One frame's wipe, as "fractionOfTheRow fractionOfTheSpan". The row is the
+# pane's own brightest ink, which is the lit line and nothing else, since
+# every other row draws in `mutedForeground` under the depth ramp; the sung
+# half is that ink at 70% and the whole line is the same band at 35%.
+# The lit line's own rows in one frame, as "top:bottom" pairs: the band
+# carrying the pane's brightest ink and every band under it, which on this
+# fixture is the last display line and the rows it wrapped onto.
+lyrics_lit_rows() {
+  lyrics_row_bands "$1" "$2" | python3 -c '
+import sys
+bands = [b.split(":") for b in sys.stdin.read().split() if b]
+if not bands:
+    raise SystemExit
+tops = [int(b[0]) for b in bands]
+peaks = [int(b[2]) for b in bands]
+# The brightest row is somewhere inside the lit line, but not necessarily its
+# first: a line whose second row carries more ink than its first peaks there.
+# One line leads its own wrapped rows closer together than the cell pitch
+# between two display rows, which is what tells where the line starts and
+# ends.
+lit = peaks.index(max(peaks))
+lo = hi = lit
+while lo > 0 and tops[lo] - tops[lo - 1] <= 28:
+    lo -= 1
+while hi + 1 < len(tops) and tops[hi + 1] - tops[hi] <= 28:
+    hi += 1
+print(" ".join("%s:%s" % (b[0], b[1]) for b in bands[lo:hi + 1]))
+'
+}
+
+# The mean gray over a slice of one row's own ink: "0 0.22" is the row's
+# start and "0.78 1" its end, measured against the ink that row actually
+# carries rather than against the pane, so a row of five words and a row of
+# one are read at the same places in their own text.
+lyrics_row_slice_mean() {
+  local body="$1" crop="$2" band="$3" from="$4" to="$5"
+  local cw cx cy rest top bottom bh ax ay aw ah sx sw
+  cw=${crop%%x*}
+  rest=${crop#*+}
+  cx=${rest%%+*}
+  cy=${rest#*+}
+  top=${band%%:*}
+  bottom=${band#*:}
+  bh=$((bottom - top + 1))
+  read -r ax ay aw ah < <(lyrics_ink_box "$body" "${cw}x${bh}+${cx}+$((cy + top))" "35%")
+  if [ "${aw:-0}" -lt 8 ]; then
+    printf '0\n'
+    return
+  fi
+  sx=$(awk -v a="$ax" -v w="$aw" -v f="$from" 'BEGIN { printf "%d", a + w * f }')
+  sw=$(awk -v w="$aw" -v f="$from" -v t="$to" 'BEGIN { d = int(w * (t - f)); print (d < 4) ? 4 : d }')
+  lyrics_patch_mean "$body" "${sw}x${bh}+$((cx + sx))+$((cy + top))"
+}
+
+lyrics_wipe_reading() {
+  local frame="$1" json="$2" crop body lx ly lw lh ax ay aw ah row_crop cw
+  read -r crop body < <(lyrics_pane_crop "$frame")
+  cw=${crop%%x*}
+  read -r lx ly lw lh < <(lyrics_ink_box "$body" "$crop" "70%")
+  if [ "${lw:-0}" -lt 4 ]; then
+    printf '%s %s\n' "-1" "-1"
+    return
+  fi
+  local band_top=$((ly - 2)) band_h=$((lh + 6)) crop_x crop_y rest
+  rest=${crop#*+}
+  crop_x=${rest%%+*}
+  crop_y=${rest#*+}
+  row_crop="${cw}x${band_h}+${crop_x}+$((crop_y + band_top))"
+  read -r ax ay aw ah < <(lyrics_ink_box "$body" "$row_crop" "35%")
+  awk -v lx="$lx" -v lw="$lw" -v ax="${ax:-0}" -v aw="${aw:-0}" \
+    -v p="$("$jq_bin" -r '.position' "$json" 2>/dev/null)" \
+    -v t="$("$jq_bin" -r '.lines[.active].time' "$json" 2>/dev/null)" \
+    -v e="$("$jq_bin" -r '.lines[.active].end' "$json" 2>/dev/null)" \
+    'BEGIN {
+       frac = (aw > 0) ? (lx + lw - ax) / aw : -1;
+       if (frac > 1) frac = 1;
+       span = e - t;
+       f = (span > 0) ? (p - t) / span : -1;
+       printf "%.3f %.3f\n", frac, f;
+     }'
 }
 
 # The panel's own width off a bare/open pair (panel_emerge.sh's own trick),
@@ -741,7 +1052,8 @@ leg_lyrics_assert() {
   if ! grep -qF '"quality":1' "$lyrics_status_estimated_path"; then
     fail "the line-timing track did not report quality 1, got: $(cat "$lyrics_status_estimated_path")"
   fi
-  if ! "$jq_bin" -e 'all(.lines[]; .estimated == true and (.words | length) > 0)' "$lyrics_status_estimated_path" > /dev/null 2>&1; then
+  if ! "$jq_bin" -e 'all(.lines[] | select(.interlude != true); .estimated == true and (.words | length) > 0)' \
+    "$lyrics_status_estimated_path" > /dev/null 2>&1; then
     fail "not every line synthesised words and reported estimated:true, got: $(cat "$lyrics_status_estimated_path")"
   fi
   if ! "$jq_bin" -e '.follow == true' "$lyrics_status_estimated_path" > /dev/null 2>&1; then
@@ -753,29 +1065,135 @@ leg_lyrics_assert() {
   [ -f "$lyrics_estimated_png_path" ] || fail "no lyrics-estimated screenshot produced"
   echo "SMOKE_LYRICS_ESTIMATED $lyrics_estimated_png_path"
 
-  # The wipe read off the frame itself, not trusted from IPC alone: the
-  # active line's own row, split left/right over "Amber light" (both fully
-  # sung by the polled position) and "falls low" (neither started). The
-  # fractions of the pane's own rect (measured once against a pulled frame
-  # from this exact fixture and pinned here, since the row's exact position
-  # depends on font metrics this leg has no other way to ask for) land
-  # inside those two words with margin either side: x 53-62% for the sung
-  # half, 63-74% for the unsung one, y 54-63% for the row itself, all three
-  # players this leg always runs together (M55's own "PLAYERS (3)" line)
-  # holding the card's own height stable between this check and track1's.
-  read -r ex ey ew eh ebody < <(lyrics_pane_rect "$lyrics_bare_path" "$lyrics_estimated_png_path" "$convert_bin")
-  local band_y=$((ey + eh * 54 / 100)) band_h=$((eh * 9 / 100))
-  local left_x=$((ex + ew * 53 / 100)) left_w=$((ew * 9 / 100))
-  local right_x=$((ex + ew * 63 / 100)) right_w=$((ew * 11 / 100))
-  local left_mean right_mean
-  left_mean=$("$convert_bin" "$ebody" -crop "${left_w}x${band_h}+${left_x}+${band_y}" +repage \
-    -colorspace Gray -format '%[fx:mean]' info: 2>/dev/null)
-  right_mean=$("$convert_bin" "$ebody" -crop "${right_w}x${band_h}+${right_x}+${band_y}" +repage \
-    -colorspace Gray -format '%[fx:mean]' info: 2>/dev/null)
-  echo "SMOKE_LYRICS_WIPE left=${left_mean:-0} right=${right_mean:-0} (rect: x=$ex y=$ey w=$ew h=$eh)"
-  if ! awk -v l="${left_mean:-0}" -v r="${right_mean:-0}" 'BEGIN { exit !(l > r + 0.03) }'; then
-    fail "the estimated track's wipe did not read brighter on its sung (left) half than its unsung (right) half: left=$left_mean right=$right_mean"
+  # The wipe read off the frame itself, not trusted from IPC alone, and read
+  # as a rate rather than as a left/right pair: the lit row's sung ink as a
+  # fraction of the whole row's ink, against the fraction of its own span the
+  # same dump says the line is through. A wipe that snapped each word in
+  # WIPE_MAX_SECONDS and then waited sat a whole word ahead of its line on the
+  # 16s repeat and on the beat on the 4s one, which is what reads as one rate
+  # for every line however long it is held (owner, 2026-09-18). Nothing is
+  # pinned: the row is found as the pane's own brightest band and measured
+  # against its own ink.
+  local rate_long_fraction rate_long_f rate_short_fraction rate_short_f
+  read -r rate_long_fraction rate_long_f < <(lyrics_wipe_reading "$lyrics_rate_long_png_path" "$lyrics_rate_long_json_path")
+  read -r rate_short_fraction rate_short_f < <(lyrics_wipe_reading "$lyrics_rate_short_png_path" "$lyrics_rate_short_json_path")
+  echo "SMOKE_LYRICS_WIPE long=${rate_long_fraction} of the row at ${rate_long_f} of its span, short=${rate_short_fraction} at ${rate_short_f}"
+  [ -f "$lyrics_rate_long_png_path" ] || fail "no long-line wipe frame produced"
+  [ -f "$lyrics_rate_short_png_path" ] || fail "no short-line wipe frame produced"
+  if ! awk -v a="${rate_long_fraction:--1}" -v b="${rate_long_f:--1}" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(a >= 0 && d <= 0.18) }'; then
+    fail "the 16s line's wipe is not where its own clock puts it: $rate_long_fraction of the row at $rate_long_f of the span"
   fi
+  if ! awk -v a="${rate_short_fraction:--1}" -v b="${rate_short_f:--1}" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(a >= 0 && d <= 0.18) }'; then
+    fail "the 4s line's wipe is not where its own clock puts it: $rate_short_fraction of the row at $rate_short_f of the span"
+  fi
+  # The same claim across the two: each poll stops on the first frame inside
+  # its own window, so the two land at slightly different fractions of their
+  # spans and what has to agree is how far each wipe is from its own clock,
+  # not where the two happen to sit. A wipe running at one rate whatever the
+  # line is held for reads a third of a row ahead of itself on the 12s line
+  # and on the beat on the 4s one.
+  if ! awk -v la="${rate_long_fraction:--1}" -v lf="${rate_long_f:--1}" \
+    -v sa="${rate_short_fraction:--1}" -v sf="${rate_short_f:--1}" \
+    'BEGIN { d = (la - lf) - (sa - sf); if (d < 0) d = -d; exit !(d <= 0.15) }'; then
+    fail "the same words held for 12s and for 4s do not track their own spans the same way: long=$rate_long_fraction at $rate_long_f, short=$rate_short_fraction at $rate_short_f"
+  fi
+
+  # The pane reads as much of the song as it has room for (owner,
+  # 2026-09-18): the rows it actually draws against the rows its own height
+  # holds. A ramp that bottomed out three rows from the anchor left
+  # everything past it at the floor, so a pane with room for ten lines drew
+  # four and emptied out under them.
+  local rows_crop rows_body rows_hh rows_bands rows_count rows_pitch rows_fit rows_ramp
+  local rows_above rows_below
+  read -r rows_crop rows_body < <(lyrics_pane_crop "$lyrics_rate_long_png_path")
+  rows_hh=$(printf '%s' "${rows_crop#*x}"); rows_hh=${rows_hh%%+*}
+  rows_bands=$(lyrics_row_bands "$rows_body" "$rows_crop")
+  printf '%s\n' "$rows_bands" > "$lyrics_rows_path"
+  rows_count=$(printf '%s' "$rows_bands" | wc -w | tr -d ' ')
+  rows_pitch=$(printf '%s' "$rows_bands" | tr ' ' '\n' | cut -d: -f1 | python3 -c '
+import sys
+tops = [int(v) for v in sys.stdin.read().split() if v]
+steps = sorted(b - a for a, b in zip(tops, tops[1:]))
+print(steps[len(steps) // 2] if steps else 0)
+')
+  rows_fit=$(awk -v h="$rows_hh" -v p="${rows_pitch:-0}" 'BEGIN { if (p <= 0) { print 0; exit } print int((h - 2 * p) / p) }')
+  echo "SMOKE_LYRICS_ROWS $rows_count rows drawn, pitch ${rows_pitch}px, ${rows_fit} clear of both edge fades in ${rows_hh}px ($rows_bands)"
+  if [ "${rows_pitch:-0}" -lt 8 ]; then
+    fail "no row pitch could be read off the pane: bands '$rows_bands'"
+  fi
+  if [ "$rows_count" -lt $((rows_fit - 1)) ]; then
+    fail "the pane drew $rows_count rows where its own height holds $rows_fit: something stops before the pane's own edge does"
+  fi
+
+  # And the song carries on under the line being sung rather than running out
+  # two rows past it, which is the half of this the owner could see: the lit
+  # row rests 42% down the viewport, so most of the room is below it and the
+  # rows that fit there have to be drawn. How dim each one is down the ramp
+  # is `depthOpacity`'s own arithmetic, which the model tests pin; what a
+  # frame can say is how many of them are there at all.
+  rows_ramp=$(printf '%s' "$rows_bands" | tr ' ' '\n' | python3 -c '
+import sys
+peaks = [int(b.split(":")[2]) for b in sys.stdin.read().split() if b]
+lit = peaks.index(max(peaks))
+print("%d %d" % (lit, len(peaks) - lit - 1))
+')
+  read -r rows_above rows_below < <(printf '%s\n' "$rows_ramp")
+  echo "SMOKE_LYRICS_RAMP $rows_above rows over the lit one and $rows_below under it"
+  if [ "${rows_below:-0}" -lt 4 ] || [ "${rows_above:-0}" -lt 2 ]; then
+    fail "the pane drew $rows_above rows over the lit one and $rows_below under it, so it empties out inside its own height: bands '$rows_bands'"
+  fi
+
+  # The instrumental note (owner, 2026-09-18). The 16s gap after every short
+  # line is past both thresholds and the 4s gap after every long one is past
+  # neither of kopuz's, only past the seamless carry: both now carry a note,
+  # so the pane is never between two lines with nothing lit at all. `media
+  # lyrics` reports the note as the active row for the whole stretch, which
+  # is the same answer `lineActiveAt` gives the row that just went dark.
+  local note_phase note_json note_png note_crop note_body nx ny nw nh
+  for note_phase in before during after; do
+    eval "note_json=\$lyrics_note_${note_phase}_json_path"
+    eval "note_png=\$lyrics_note_${note_phase}_png_path"
+    [ -s "$note_json" ] || fail "no media lyrics status produced for the note's $note_phase frame"
+    [ -f "$note_png" ] || fail "no $note_phase-the-note frame produced"
+    echo "SMOKE_LYRICS_NOTE_${note_phase} $note_png"
+  done
+  if ! "$jq_bin" -e '.lines[.active].interlude == true' "$lyrics_note_during_json_path" > /dev/null 2>&1; then
+    fail "the instrumental stretch never became the active row, got: $(cat "$lyrics_note_during_json_path")"
+  fi
+  if ! "$jq_bin" -e '.lines[.active].interlude != true' "$lyrics_note_before_json_path" > /dev/null 2>&1 \
+    || ! "$jq_bin" -e '.lines[.active].interlude != true' "$lyrics_note_after_json_path" > /dev/null 2>&1; then
+    fail "a frame either side of the stretch was taken on the note rather than on a line of words"
+  fi
+  if ! "$jq_bin" -e 'any(.lines[]; .interlude == true and (.end - .time) < 5)' "$lyrics_note_during_json_path" > /dev/null 2>&1; then
+    fail "the 4s gaps carry no note, so the pane still goes dark between two lines with nothing drawn: $(cat "$lyrics_note_during_json_path")"
+  fi
+
+  # And what it draws. While the stretch is playing no line of words is sung
+  # at all, which is the difference between the note being the row the pane
+  # is on and the note being a decoration under one; the frames either side
+  # carry a sung line. And the notes reach the middle of the column, where a
+  # row of words only ever covers its own left quarter, which is kopuz's own
+  # centring.
+  local note_pane_w note_reach
+  read -r note_crop note_body < <(lyrics_pane_crop "$lyrics_note_during_png_path")
+  note_pane_w=${note_crop%%x*}
+  read -r nx ny nw nh < <(lyrics_ink_box "$note_body" "$note_crop" "70%")
+  echo "SMOKE_LYRICS_NOTE_INK sung ink ${nw}x${nh} while the stretch is the active row"
+  if [ "${nw:-0}" -gt 24 ]; then
+    fail "a line of words is still being sung over the instrumental stretch: ${nw}px of sung ink"
+  fi
+  read -r nx ny nw nh < <(lyrics_ink_box "$note_body" "$note_crop" "35%")
+  note_reach=$((nx + nw))
+  echo "SMOKE_LYRICS_NOTE_CENTRE ink reaches x=$note_reach of the pane's own $note_pane_w"
+  if [ "$note_reach" -lt $((note_pane_w * 42 / 100)) ]; then
+    fail "nothing in the pane reaches its middle, so the note is not centred in the column: ink to $note_reach of $note_pane_w"
+  fi
+  read -r note_crop note_body < <(lyrics_pane_crop "$lyrics_note_after_png_path")
+  read -r nx ny nw nh < <(lyrics_ink_box "$note_body" "$note_crop" "70%")
+  if [ "${nh:-0}" -gt $((rows_pitch * 3 / 2)) ]; then
+    fail "the note the song has passed is still filled in: the sung ink spans ${nh}px, over a row pitch of ${rows_pitch}px"
+  fi
+  echo "SMOKE_LYRICS_NOTE_PAST sung ink ${nw}x${nh} once the next line took over"
 
   # Measured here rather than in the session: eight diffs cost more time
   # than the run has left once the burst itself is done.
@@ -892,6 +1310,68 @@ leg_lyrics_assert() {
   echo "SMOKE_LYRICS_FIT lit ink ends at x=$((ix + iw)) of the pane's own $pane_w, over $ih rows of it (ink ${ink})"
   if [ $((ix + iw)) -gt $((pane_w - 14)) ]; then
     fail "the lit line ran to the pane's own clip: ink ends at $((ix + iw)) of $pane_w, so a chunk wider than the pane never broke"
+  fi
+
+  # The wrapped lit line, read in reading order (owner, 2026-09-18). One
+  # gradient over the whole block lit every row of it left of a single x, so
+  # a word on the second row read as sung while the first row was still being
+  # sung. Both frames are taken with the player paused at an absolute
+  # position, so the wipe is where this leg put it and not where the next
+  # screenshot happened to land. Every patch is measured against its own
+  # row's ink, and the two levels are taken from the same frame: a place that
+  # is sung under either implementation, and one that is unsung under either.
+  local wrap_crop wrap_body wrap_rows wrap_phase wrap_png r1 r2 r3
+  local w_lit w_dim w_mid w_r1end w_r2start w_r2end w_r3start
+  for wrap_phase in early late; do
+    eval "wrap_png=\$lyrics_wrap_${wrap_phase}_png_path"
+    [ -f "$wrap_png" ] || fail "no wrapped-line frame produced for the $wrap_phase sample"
+    echo "SMOKE_LYRICS_WRAP_${wrap_phase} $wrap_png"
+  done
+  cat "$lyrics_wrap_early_json_path"; echo
+  cat "$lyrics_wrap_late_json_path"; echo
+
+  read -r wrap_crop wrap_body < <(lyrics_pane_crop "$lyrics_wrap_early_png_path")
+  wrap_rows=$(lyrics_lit_rows "$wrap_body" "$wrap_crop")
+  r1=$(printf '%s' "$wrap_rows" | cut -d' ' -f1)
+  r2=$(printf '%s' "$wrap_rows" | cut -d' ' -f2)
+  [ -n "$r2" ] || fail "the lit line did not wrap onto a second row in the early frame: bands '$wrap_rows'"
+  w_lit=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r1" 0 0.22)
+  w_dim=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r1" 0.8 1)
+  w_r2start=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r2" 0 0.25)
+  w_mid=$(awk -v a="$w_lit" -v b="$w_dim" 'BEGIN { printf "%.4f", (a + b) / 2 }')
+  echo "SMOKE_LYRICS_WRAP_EARLY rows '$wrap_rows' start=$w_lit end=$w_dim next-row=$w_r2start"
+  if ! awk -v a="$w_lit" -v b="$w_dim" 'BEGIN { exit !(a > b + 0.03) }'; then
+    fail "the early frame's wipe is not partway along its first row: start=$w_lit end=$w_dim"
+  fi
+  if ! awk -v a="$w_r2start" -v m="$w_mid" 'BEGIN { exit !(a < m) }'; then
+    fail "a row under the one being sung is already lit: second row's start=$w_r2start against the midpoint $w_mid"
+  fi
+
+  read -r wrap_crop wrap_body < <(lyrics_pane_crop "$lyrics_wrap_late_png_path")
+  wrap_rows=$(lyrics_lit_rows "$wrap_body" "$wrap_crop")
+  r1=$(printf '%s' "$wrap_rows" | cut -d' ' -f1)
+  r2=$(printf '%s' "$wrap_rows" | cut -d' ' -f2)
+  r3=$(printf '%s' "$wrap_rows" | cut -d' ' -f3)
+  [ -n "$r3" ] || fail "the lit line did not wrap onto three rows in the late frame: bands '$wrap_rows'"
+  w_lit=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r1" 0 0.22)
+  w_r1end=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r1" 0.8 1)
+  w_r2start=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r2" 0 0.25)
+  w_r2end=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r2" 0.8 1)
+  w_r3start=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r3" 0 0.3)
+  w_dim=$(lyrics_row_slice_mean "$wrap_body" "$wrap_crop" "$r3" 0.7 1)
+  w_mid=$(awk -v a="$w_lit" -v b="$w_dim" 'BEGIN { printf "%.4f", (a + b) / 2 }')
+  echo "SMOKE_LYRICS_WRAP_LATE rows '$wrap_rows' first=$w_lit/$w_r1end second=$w_r2start/$w_r2end third=$w_r3start/$w_dim midpoint=$w_mid"
+  if ! awk -v a="$w_r1end" -v m="$w_mid" 'BEGIN { exit !(a > m) }'; then
+    fail "the row above the wipe is not fully sung: first row's end=$w_r1end against the midpoint $w_mid"
+  fi
+  if ! awk -v a="$w_r2start" -v m="$w_mid" 'BEGIN { exit !(a > m) }'; then
+    fail "the wipe did not start the row it crossed onto: second row's start=$w_r2start against the midpoint $w_mid"
+  fi
+  if ! awk -v a="$w_r2end" -v m="$w_mid" 'BEGIN { exit !(a < m) }'; then
+    fail "the row the wipe is on is already sung to its end: second row's end=$w_r2end against the midpoint $w_mid"
+  fi
+  if ! awk -v a="$w_r3start" -v m="$w_mid" 'BEGIN { exit !(a < m) }'; then
+    fail "the row under the wipe is already lit, so the wipe is one cut across the block rather than a reading order: third row's start=$w_r3start against the midpoint $w_mid"
   fi
 
   # The reopen (M69): the wheel had the column, the panel was shut with the

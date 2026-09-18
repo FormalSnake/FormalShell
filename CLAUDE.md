@@ -188,10 +188,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   padding keeping its far edge there through a track change, lyrics
   synced before the panel ever opens with the first open landing on the
   split width, a close and reopen with no track change between putting
-  `follow` back, and two consecutive line changes photographed off mpv's own
+  `follow` back, two consecutive line changes photographed off mpv's own
   seeks (one into a line that fits a row, one into the line that wraps),
   the pane never emptying out mid-change and the lit row on one place across
-  the tail of both bursts.
+  the tail of both bursts, the wipe crossing a wrapped line's row break in
+  reading order with the rows under it untouched (two frames off a paused
+  player), the rows the pane draws counted against the rows its own height
+  holds, the instrumental note over a gap the seamless carry cannot hold and
+  empty again once the song is past it, and the same two words held for 16s
+  and for 4s wiping to the same place at the same fraction of each span.
 - `lyrics_blur.sh` `--lyrics-blur`: one real MPRIS player, `media.lyricsBlur`'s
   default true against a settings retarget to false, a crop over a far
   unlit row read by edge energy and lower with the blur on, the active

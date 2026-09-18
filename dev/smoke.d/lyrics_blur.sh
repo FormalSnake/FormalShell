@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, iso_home, the *_bin paths and fail()
 # --lyrics-blur (M56 P7/P10/P14): one real MPRIS player, a P3 cache seeded
-# with six main lines 8s apart so several sit well past the depth-of-field
-# ramp's 3-row cap once the first one is lit. The cache file is written
+# with six main lines 6s apart so several sit far enough down the
+# depth-of-field ramp, which is spent over the rows the pane has room for,
+# to carry most of the blur it can ask for once the first one is lit. The cache file is written
 # before the player is ever launched (spec P14: a lookup starts a second
 # after any key change, panel open or closed, so a live key with no file
 # behind it would otherwise reach the real providers), and `media playPause`
@@ -255,9 +256,9 @@ leg_lyrics_blur_assert() {
   read -r _ _ _ _ off_body < <(lyrics_blur_pane_rect "$lyrics_blur_bare_path" "$lyrics_blur_off_png_path" "$convert_bin")
   local lyrics_x0=$((rx + 480)) lyrics_w=$((rw - 480))
   # The bottom third of the pane's own viewport: with the first line lit and
-  # frozen, everything back there is at least 3 rows from the anchor, the
-  # blur ramp's own cap, so it is unambiguously the far end rather than a
-  # guess at exactly which row.
+  # frozen, everything back there is most of the way from the anchor to the
+  # pane's own edge, which is where the blur ramp reaches its cap, so it is
+  # unambiguously the far end rather than a guess at exactly which row.
   local band_y=$((ry + rh * 60 / 100)) band_h=$((rh * 30 / 100))
   local on_crop="$shot_dir/lyrics-blur-on-crop.png" off_crop="$shot_dir/lyrics-blur-off-crop.png"
   "$convert_bin" "$on_body" -crop "${lyrics_w}x${band_h}+${lyrics_x0}+${band_y}" +repage "$on_crop" > /dev/null 2>&1

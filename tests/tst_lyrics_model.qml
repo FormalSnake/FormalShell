@@ -7,8 +7,9 @@ TestCase {
 
     // -- fixtures (kopuz's own `line`/`background_line` helpers, ported) --
 
-    function _line(time, end) {
-        return { time: time, end: end === undefined ? null : end, text: "la", words: [],
+    function _line(time, end, text) {
+        return { time: time, end: end === undefined ? null : end,
+            text: text === undefined ? "la" : text, words: [],
             parent: null, background: false, oppositeTurn: false, estimated: false };
     }
 
@@ -610,6 +611,48 @@ TestCase {
         compare(Lyrics.chunkProgress(words, 0, 0.5, 0.25), 0.5);
     }
 
+    // The cap is a provider's own stamp held over a pause. A synthesised
+    // chunk has no pause in it, so it keeps its whole share of the line.
+    function test_chunk_progress_of_a_synthesised_chunk_is_not_capped() {
+        var words = [{ time: 0, text: "A" }, { time: 10, text: "B" }];
+        compare(Lyrics.chunkProgress(words, 0, undefined, 5, true), 0.5);
+        compare(Lyrics.chunkProgress(words, 0, undefined, 10, true), 1);
+    }
+
+    // The owner's report: two line-synced lines of the same words held for
+    // different lengths wipe at their own rates, each reaching the end of
+    // its text as the next line lights, rather than both running at one
+    // fixed rate (owner, 2026-09-18).
+    function _estimatedWipe(lineTime, nextTime, t) {
+        var lines = Lyrics.synthesiseWords([
+            _line(lineTime, null, "one two"),
+            _line(nextTime)
+        ]);
+        var words = lines[0].words;
+        var sum = 0;
+        for (var i = 0; i < words.length; i++)
+            sum += Lyrics.chunkProgress(words, i, nextTime, t, true);
+        return sum / words.length;
+    }
+
+    function test_an_estimated_wipe_tracks_the_line_it_is_held_for() {
+        // Held 2s and held 6s, each sampled at half its own span.
+        fuzzyCompare(_estimatedWipe(0, 2, 1), 0.5, 0.06);
+        fuzzyCompare(_estimatedWipe(0, 6, 3), 0.5, 0.06);
+        // At one wall-clock second the short line is half sung and the long
+        // one has barely started, which is the difference a fixed rate
+        // cannot draw.
+        verify(_estimatedWipe(0, 2, 1) > _estimatedWipe(0, 6, 1) + 0.25);
+        // And three quarters through the long line it is still travelling,
+        // where a capped chunk would have finished and be waiting.
+        verify(_estimatedWipe(0, 6, 4.5) < 0.9);
+    }
+
+    function test_an_estimated_wipe_lands_as_the_next_line_lights() {
+        compare(_estimatedWipe(0, 2, 2), 1);
+        compare(_estimatedWipe(0, 6, 6), 1);
+    }
+
     // synthesiseWords
 
     function test_synthesise_words_shares_the_span_by_character_count() {
@@ -833,6 +876,68 @@ TestCase {
         compare(Lyrics.displayLines([]).length, 0);
     }
 
+    // The dark rule (owner, 2026-09-18): a run that ends four seconds before
+    // the next line goes dark, since the seamless carry only reaches three,
+    // and a dark pane has to carry the note. kopuz's own five-second
+    // threshold would leave this one drawing nothing at all.
+    function test_marks_a_gap_the_seamless_carry_cannot_hold() {
+        var lines = [_line(1, 5), _line(9, 13)];
+        var display = Lyrics.displayLines(lines);
+
+        compare(display.map(function (l) { return l.interlude === true; }), [false, true, false]);
+        compare(display[1].time, 5);
+        compare(display[1].end, 9);
+    }
+
+    function test_leaves_a_gap_the_seamless_carry_holds() {
+        var lines = [_line(1, 5), _line(8, 12)];
+        compare(Lyrics.displayLines(lines).length, 2);
+    }
+
+    // The note lights exactly where the line before it goes dark, which is
+    // the whole point of the rule: the two answers can never disagree.
+    function test_a_marked_gap_starts_where_the_line_stops_being_lit() {
+        var display = Lyrics.displayLines([_line(1, 5), _line(9, 13)]);
+        var main = Lyrics.mainLineIndices(display);
+
+        compare(Lyrics.activeMainLineIndex(display, main, 4.9), 0);
+        compare(Lyrics.activeMainLineIndex(display, main, 5.1), 1);
+        compare(display[1].interlude, true);
+    }
+
+    // Nothing is lit before the first line either, so a run-in past the
+    // carry takes the note too.
+    function test_marks_a_run_in_past_the_seamless_carry() {
+        var display = Lyrics.displayLines([_line(4, 8)]);
+        compare(display.map(function (l) { return l.interlude === true; }), [true, false]);
+        compare(display[0].end, 4);
+        compare(Lyrics.displayLines([_line(3, 8)]).length, 1);
+    }
+
+    // A run with no end of its own never goes dark (`lineActiveAt` holds it
+    // to the next main line), so the dark rule has nothing to mark and only
+    // kopuz's own threshold speaks.
+    function test_a_run_with_no_end_takes_only_the_assumed_rule() {
+        compare(Lyrics.displayLines([_line(1), _line(5)]).length, 2);
+
+        var wide = Lyrics.displayLines([_line(1), _line(21)]);
+        compare(wide.map(function (l) { return l.interlude === true; }), [false, true, false]);
+        compare(wide[1].time, 1 + Lyrics.LINE_ASSUMED_SECONDS);
+    }
+
+    // Synthesised words are spread over the very estimate this reads, so
+    // taking them as the line's end would close every instrumental gap on a
+    // line-synced track to nothing and the note would never appear.
+    function test_synthesised_words_do_not_stand_in_for_a_line_end() {
+        var lines = Lyrics.synthesiseWords([_line(1, null, "one two three"), _line(21)]);
+        compare(lines[0].estimated, true);
+        compare(Lyrics.lineEndEstimate(lines[0]), 1 + Lyrics.LINE_ASSUMED_SECONDS);
+
+        var display = Lyrics.displayLines(lines);
+        compare(display.map(function (l) { return l.interlude === true; }), [false, true, false]);
+        compare(display[1].time, 1 + Lyrics.LINE_ASSUMED_SECONDS);
+    }
+
     // depthOpacity
 
     function test_depth_opacity_of_the_active_line_is_full() {
@@ -849,6 +954,43 @@ TestCase {
     function test_depth_opacity_floors_at_three_lines_away() {
         compare(Lyrics.depthOpacity(4), 0.25);
         compare(Lyrics.depthOpacity(-10), 0.25);
+    }
+
+    // A pane with room for nine rows under the anchor spends the same four
+    // table entries over those nine, so the sixth row down is still readable
+    // instead of sitting on the floor with three rows of the pane to spare.
+    function test_depth_opacity_spreads_over_the_rows_that_fit() {
+        compare(Lyrics.depthOpacity(3, 9), 0.7);
+        compare(Lyrics.depthOpacity(6, 9), 0.45);
+        compare(Lyrics.depthOpacity(9, 9), 0.25);
+    }
+
+    function test_depth_opacity_floors_at_the_end_of_its_span() {
+        compare(Lyrics.depthOpacity(12, 9), 0.25);
+    }
+
+    function test_depth_opacity_of_a_shallow_pane_falls_faster() {
+        compare(Lyrics.depthOpacity(1, 1.5), 0.45);
+    }
+
+    // rowSpans
+
+    function test_row_spans_split_the_viewport_at_the_comfort_offset() {
+        var spans = Lyrics.rowSpans(400, 40);
+        compare(spans.above, 4.2);
+        compare(spans.below, 5.8);
+    }
+
+    function test_row_spans_never_fall_under_one_row() {
+        var spans = Lyrics.rowSpans(40, 40);
+        compare(spans.above, 1);
+        compare(spans.below, 1);
+    }
+
+    function test_row_spans_of_an_unmeasured_pane_are_one() {
+        var spans = Lyrics.rowSpans(0, 0);
+        compare(spans.above, 1);
+        compare(spans.below, 1);
     }
 
     // edgeFraction
@@ -904,6 +1046,75 @@ TestCase {
 
     function test_blur_for_of_zero_strength_is_zero() {
         compare(Lyrics.blurFor(5, 0), 0);
+    }
+
+    function test_blur_for_caps_at_the_end_of_its_own_span() {
+        compare(Lyrics.blurFor(10, 100, 10), 6);
+        compare(Lyrics.blurFor(5, 100, 10), 3);
+    }
+
+    // chunkRowBands
+
+    function test_chunk_row_bands_of_an_unmeasured_chunk_cover_the_box() {
+        var bands = Lyrics.chunkRowBands([], 20, 120);
+        compare(bands.length, 1);
+        compare(bands[0].top, 0);
+        compare(bands[0].height, 20);
+        compare(bands[0].width, 120);
+    }
+
+    // The bands tile the box: the first starts at its top whatever the
+    // font's own first baseline offset is, and the last runs to its floor,
+    // so no sliver of a glyph is left outside the mask.
+    function test_chunk_row_bands_tile_the_whole_box() {
+        var bands = Lyrics.chunkRowBands([
+            { y: 2, height: 18, width: 300 },
+            { y: 20, height: 18, width: 140 }
+        ], 40, 320);
+        compare(bands.length, 2);
+        compare(bands[0].top, 0);
+        compare(bands[0].height, 20);
+        compare(bands[0].width, 300);
+        compare(bands[1].top, 20);
+        compare(bands[1].height, 20);
+        compare(bands[1].width, 140);
+    }
+
+    // rowWipe
+
+    function test_row_wipe_of_a_single_row_is_the_chunk_progress() {
+        compare(Lyrics.rowWipe([{ top: 0, height: 20, width: 120 }], 0, 0.4), 0.4);
+    }
+
+    // Reading order across a break: the first row is finishing while the
+    // second has not started, which is the whole defect.
+    function test_row_wipe_finishes_a_row_before_the_next_one_starts() {
+        var bands = [{ top: 0, height: 20, width: 300 }, { top: 20, height: 20, width: 100 }];
+        compare(Lyrics.rowWipe(bands, 0, 0.5), 2 / 3);
+        compare(Lyrics.rowWipe(bands, 1, 0.5), 0);
+    }
+
+    function test_row_wipe_starts_the_second_row_once_the_first_is_full() {
+        var bands = [{ top: 0, height: 20, width: 300 }, { top: 20, height: 20, width: 100 }];
+        compare(Lyrics.rowWipe(bands, 0, 0.75), 1);
+        compare(Lyrics.rowWipe(bands, 1, 0.75), 0);
+        compare(Lyrics.rowWipe(bands, 1, 0.875), 0.5);
+    }
+
+    // The edge travels at one speed over the chunk's whole ink, so a short
+    // last row takes proportionally less of the chunk's own span than a full
+    // one rather than an equal share of it.
+    function test_row_wipe_weights_a_row_by_its_own_ink_width() {
+        var bands = [{ top: 0, height: 20, width: 300 }, { top: 20, height: 20, width: 100 }];
+        compare(Lyrics.rowWipe(bands, 0, 1), 1);
+        compare(Lyrics.rowWipe(bands, 1, 1), 1);
+        compare(Lyrics.rowWipe(bands, 0, 0), 0);
+        compare(Lyrics.rowWipe(bands, 1, 0), 0);
+    }
+
+    function test_row_wipe_of_a_row_that_is_not_there_is_zero() {
+        compare(Lyrics.rowWipe([{ top: 0, height: 20, width: 120 }], 3, 1), 0);
+        compare(Lyrics.rowWipe([], 0, 1), 0);
     }
 
     // comfortY
