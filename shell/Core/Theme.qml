@@ -279,7 +279,17 @@ Singleton {
     // no frame at all, and `frame.radius` is the corner of the rounded
     // cut-out it leaves for the desktop, squared along with everything
     // else when the base radius is 0.
-    readonly property real frameThickness: Math.round(Tokens.clamp(Config.get("frame.thickness", 0), 0, Infinity, 0))
+    //
+    // A table says whether it wears one at all (`habits.frame`, owner
+    // 2026-09-18). pantheon's ring is transparent under the wingpanel band
+    // (M62) but reserves its band all the same, so a window sat
+    // `frame.thickness` in from an edge with nothing drawn there and the
+    // gaps read as too wide. A table that says no reads the key as 0
+    // whatever settings.json holds, rather than the key being ignored per
+    // surface. `debug dump`'s `frame` block reports both numbers.
+    readonly property bool frameHabit: root.habit.frame !== false
+    readonly property real frameRequested: Math.round(Tokens.clamp(Config.get("frame.thickness", 0), 0, Infinity, 0))
+    readonly property real frameThickness: root.frameHabit ? root.frameRequested : 0
     readonly property bool frameEnabled: root.frameThickness > 0
     readonly property real frameRadius: Math.round(Tokens.clamp(Config.get("frame.radius", root.radius > 0 ? 20 : 0), 0, Infinity, 0))
 

@@ -17,6 +17,12 @@
 # the zone it froze on is 0. That was the bar drawing its ring one bar
 # thickness in from the left edge and off the right one (e1504g,
 # 2026-08-26); -1 is the only value that holds either way.
+#
+# Ridden by --pantheon it proves the other half (M66): a look whose table
+# says it wears no ring (`habits.frame`) reads the same key as 0, so the
+# same fixture leaves the bar a strip, reserves nothing round the output and
+# reports why in the dump. The owner had 6px of nothing between every window
+# and the screen edge under this preset.
 leg_frame_flag="--frame"
 leg_frame_order=190
 leg_frame_needs="jq"
@@ -24,6 +30,7 @@ leg_frame_wayland_debug=1
 
 frame_layers_path="$shot_dir/frame-layers.json"
 frame_monitors_path="$shot_dir/frame-monitors.json"
+frame_dump_path="$shot_dir/frame-dump.json"
 
 leg_frame_fixture() {
   settings_fragment ', "frame": {"thickness": 10, "radius": 20}'
@@ -40,23 +47,45 @@ leg_frame_drive() {
 sleep 5
 "$hyprctl_bin" -j layers > "$frame_layers_path" 2>&1
 "$hyprctl_bin" -j monitors > "$frame_monitors_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call debug dump > "$frame_dump_path" 2>&1
 EOS
   echo "exec-once = bash $script"
 }
 
 leg_frame_assert() {
-  local box mw mh zones edge surface zone
+  local box mw mh zones edge surface zone state
   if [ ! -s "$frame_layers_path" ] || [ ! -s "$frame_monitors_path" ]; then
     fail "no layer or monitor dump produced for the frame check"
   fi
   box=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:bar")] | first | "\(.x) \(.y) \(.w) \(.h)"' "$frame_layers_path" 2>/dev/null)
   read -r mw mh <<< "$("$jq_bin" -r 'first | "\(.width / .scale | floor) \(.height / .scale | floor)"' "$frame_monitors_path")"
-  echo "framed bar window: $box on ${mw}x${mh}"
+  zones=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:frame-zone")] | length' "$frame_layers_path")
+  [ -s "$frame_dump_path" ] || fail "no debug dump produced for the frame check"
+  state=$("$jq_bin" -c '.frame' "$frame_dump_path" 2>/dev/null)
+  echo "bar window: $box on ${mw}x${mh}, frame zones: $zones, frame: $state"
+
+  # A look that wears no ring reads the key as 0, so the fixture's 10 buys
+  # nothing: the bar is back to a strip and no edge reserves anything.
+  if leg_on pantheon; then
+    "$jq_bin" -e '.frame.enabled == false and .frame.habit == false and .frame.requested == 10' \
+      "$frame_dump_path" > /dev/null 2>&1 \
+      || fail "under a table that wears no ring the dump should report frame.thickness 10 asked for and no frame drawn, got: $state"
+    if [ "$zones" -ne 0 ]; then
+      fail "a look with no ring still reserved $zones frame zones"
+    fi
+    if [ "$box" = "0 0 $mw $mh" ]; then
+      fail "a look with no ring left the bar's window covering the whole output: $box"
+    fi
+    echo "frame: no ring, no zones, $state"
+    return 0
+  fi
+
+  "$jq_bin" -e '.frame.enabled == true and .frame.habit == true and .frame.thickness == 10' \
+    "$frame_dump_path" > /dev/null 2>&1 \
+    || fail "the framed look should report a 10px ring it drew, got: $state"
   if [ "$box" != "0 0 $mw $mh" ]; then
     fail "with the frame on the bar's window should span the whole output, got: $box"
   fi
-  zones=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:frame-zone")] | length' "$frame_layers_path")
-  echo "frame zones: $zones"
   # One per edge, the bar's included: its window reserves nothing itself
   # while it is the whole output.
   if [ "$zones" -ne 4 ]; then

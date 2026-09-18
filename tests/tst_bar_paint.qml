@@ -172,6 +172,38 @@ TestCase {
         compare(Paint.decide(stats(230, 0, 0), "dark", true, "transparent"), "maximized");
     }
 
+    // --- One reading, every output ---------------------------------------
+
+    // Owner, 2026-09-18: wingpanel reads its panel per monitor, and a
+    // two-output desk then shows one bar in dark ink and the other in white.
+    // The reading is taken on the main display and every band wears it, so
+    // two outputs over the same wallpaper cannot disagree.
+    function test_every_output_wears_the_one_reading() {
+        var bright = stats(230, 0, 0);
+        compare(Paint.decideFor(bright, "dark", [], "HDMI-A-1", "auto"), "dark");
+        compare(Paint.decideFor(bright, "dark", [], "eDP-1", "auto"), "dark");
+
+        var busy = stats(120, 80, 0);
+        compare(Paint.decideFor(busy, "dark", [], "HDMI-A-1", "auto"), "translucentDark");
+        compare(Paint.decideFor(busy, "dark", [], "eDP-1", "auto"), "translucentDark");
+    }
+
+    // The one term the sharing leaves alone: a window covering an output
+    // blackens that band and no other.
+    function test_a_covered_output_blackens_its_own_band_alone() {
+        var bright = stats(230, 0, 0);
+        compare(Paint.decideFor(bright, "dark", ["eDP-1"], "eDP-1", "auto"), "maximized");
+        compare(Paint.decideFor(bright, "dark", ["eDP-1"], "HDMI-A-1", "auto"), "dark");
+    }
+
+    // A session with nothing fullscreen, and one asked before the compositor
+    // has answered at all: neither is a window over the output.
+    function test_no_fullscreen_set_is_no_window() {
+        var bright = stats(230, 0, 0);
+        compare(Paint.decideFor(bright, "dark", [], "eDP-1", "auto"), "dark");
+        compare(Paint.decideFor(bright, "dark", undefined, "eDP-1", "auto"), "dark");
+    }
+
     // --- The band's rect -------------------------------------------------
 
     // The bar's own edge and thickness against the output, scaled into the

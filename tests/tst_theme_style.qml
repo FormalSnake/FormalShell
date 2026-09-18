@@ -636,6 +636,14 @@ TestCase {
         compare(habits.switcher, true);
     }
 
+    // The screen frame is a habit, not a settings key alone (M66): under a
+    // table that wears no ring, `frame.thickness` reserves nothing, so the
+    // gaps a user sets are the whole margin round a window.
+    function test_only_the_framed_look_wears_a_ring() {
+        compare(Metamorphosis.STYLE.habits.frame, true);
+        compare(Pantheon.STYLE.habits.frame, false);
+    }
+
     // --- The resolver ----------------------------------------------------
 
     function test_a_state_absent_from_a_role_reads_as_its_base() {

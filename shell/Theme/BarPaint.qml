@@ -8,9 +8,10 @@ import "barpaint.js" as Paint
 // output, and the band's own rows read back out of that canvas.
 //
 // Not a singleton, and not in ThemeEngine: a Canvas paints only inside a
-// window, so the sampler lives in the bar's own window (one per output,
-// which is also the granularity the answer has) and the `strip` habit's
-// Loader never brings it up at all.
+// window, so the sampler lives in a bar's own window, the main display's
+// (BarPaintService.qml holds the reading it takes, for the bands on the
+// other outputs to wear), and the `strip` habit's Loader never brings it up
+// at all.
 //
 // It samples on a wallpaper change, on a change of band, and never on a
 // frame: `onPaint` runs when something calls `requestPaint`, and nothing
@@ -27,18 +28,12 @@ Item {
     property string edge: "top"
     property real thickness: 0
     property size screenSize: Qt.size(0, 0)
-    // `light` or `dark`, which picks between the two translucent paints.
-    property string mode: "dark"
-    // A window covering this output, which wins over everything the
-    // wallpaper says.
-    property bool fullscreen: false
-    // `bar.paint`, normalised: the rule, the rule with no fill in it, or one
-    // of the five paints pinned outright (barpaint.js's PINS).
-    property string pin: "auto"
 
+    // The three numbers and nothing else: which paint they ask for is the
+    // band's own question, since the mode, the pin and the window over an
+    // output all reach it without a pixel being read again
+    // (Surfaces/Bar/BarWingpanel.qml).
     readonly property var stats: root._stats
-    readonly property bool pinned: root.pin !== "auto"
-    readonly property string paint: Paint.decide(root._stats, root.mode, root.fullscreen, root.pin)
 
     property var _stats: ({ mean: 0, std: 0, acutance: 0, sampled: false })
 

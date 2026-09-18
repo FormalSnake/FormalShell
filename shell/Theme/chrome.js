@@ -3,8 +3,8 @@
 
 // The chrome a Hyprland config reads back out of
 // ~/.config/hypr/formalshell-chrome.{conf,lua}: the window rounding, whether
-// the compositor blurs behind the shell's surfaces, and the frame and cast
-// the theme table's `window` role asks for (M60 P7). Not a matugen template
+// the compositor blurs behind the shell's surfaces, and the gaps, frame and
+// cast the theme table's `window` role asks for (M60 P7). Not a matugen template
 // like the colours are, because a template only ever sees the wallpaper's
 // palette and none of this comes from there: the first two are settings.json
 // keys and the rest is the live table, so ThemeEngine renders and publishes
@@ -74,6 +74,12 @@ function _color(name, alpha) {
 //
 // A table with no frame at all loses the frame rather than the parse: the
 // size falls back to Hyprland's own default and the colour to nothing.
+//
+// The two gaps are the theme's own spacing between windows and round them
+// (owner, 2026-09-18), so a look that drops the screen frame closes the
+// margin it was leaving room for. `general:gaps_in` and `gaps_out` are a
+// custom gaps type rather than an option with a declared range, so the
+// 0..100 bound here is ours: past that a table has a typo, not a look.
 function _window(chrome) {
     var focused = chrome.window || {};
     var backdrop = chrome.windowInactive || {};
@@ -81,6 +87,8 @@ function _window(chrome) {
     var cast = focused.shadow || {};
     var backdropCast = backdrop.shadow || {};
     return {
+        gapsIn: _int(focused.gapsIn, 0, 100, 4),
+        gapsOut: _int(focused.gapsOut, 0, 100, 8),
         borderSize: _int(border.width, 0, 20, 1),
         borderColor: _color(border.color, border.alpha),
         enabled: _blur(cast.enabled),
@@ -100,6 +108,8 @@ function hyprlandChrome(chrome) {
         + "# hyprland.conf.\n"
         + "$rounding = " + _rounding(chrome.rounding) + "\n"
         + "$blur = " + _blur(chrome.blur) + "\n"
+        + "$gapsIn = " + w.gapsIn + "\n"
+        + "$gapsOut = " + w.gapsOut + "\n"
         + "$borderSize = " + w.borderSize + "\n"
         + "$borderColor = " + w.borderColor + "\n"
         + "$shadow = " + w.enabled + "\n"
@@ -125,6 +135,8 @@ function hyprlandChromeLua(chrome) {
         + "return {\n"
         + "  rounding = " + _rounding(chrome.rounding) + ",\n"
         + "  blur = " + _blur(chrome.blur) + ",\n"
+        + "  gapsIn = " + w.gapsIn + ",\n"
+        + "  gapsOut = " + w.gapsOut + ",\n"
         + "  borderSize = " + w.borderSize + ",\n"
         + "  borderColor = \"" + _luaColor(w.borderColor) + "\",\n"
         + "  shadow = " + w.enabled + ",\n"

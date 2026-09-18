@@ -561,6 +561,11 @@ var STYLE = {
         // instead of on a sheet of this material.
         "window": {
             rest: {
+                // No screen frame under this look (`habits.frame`), so the
+                // outer gap is the whole margin a window gets and 8 read as
+                // a wide one with nothing drawn in it (owner, 2026-09-18).
+                gapsIn: 4,
+                gapsOut: 6,
                 border: { color: "border", width: 1 },
                 shadow: {
                     enabled: true,
@@ -618,6 +623,11 @@ var STYLE = {
         notification: "bubble",
         launcher: "grid",
         switcher: true,
+        // No ring. elementary frames nothing, and under the band the ring
+        // is transparent anyway (M62), so all `frame.thickness` bought was
+        // a reserved band of nothing between every window and the screen
+        // edge (owner, 2026-09-18).
+        frame: false,
         // The panel elementary shows over a calm sky, on every wallpaper: the
         // owner's busy band tripped wingpanel's own rule into a black wash
         // and that is not the picture they were after.

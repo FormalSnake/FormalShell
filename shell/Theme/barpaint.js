@@ -122,6 +122,19 @@ function decide(s, mode, fullscreen, pinned) {
     return s.mean > LUMA_THRESHOLD ? "dark" : "light";
 }
 
+// What one output's band wears, given the reading taken on the main display
+// (owner, 2026-09-18). wingpanel decides its panel per monitor, which on a
+// two-output desk leaves one bar in dark ink and the other in white and
+// reads as a mismatch rather than as two honest answers. The wallpaper is
+// one picture across the session here, so the reading is shared
+// (Theme/BarPaintService.qml) and the only per-output term left is the
+// window: one covering an output blackens that band and leaves the rest
+// where they were.
+function decideFor(s, mode, fullscreenOutputs, name, pinned) {
+    var covered = !!fullscreenOutputs && fullscreenOutputs.indexOf(name) >= 0;
+    return decide(s, mode, covered, pinned);
+}
+
 // The band's rect inside a sample of the whole wallpaper: the bar's own
 // edge and thickness against the output's size, scaled and clamped so a
 // band thinner than one sample row still has a row to read.
