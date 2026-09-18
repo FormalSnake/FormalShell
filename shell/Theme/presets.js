@@ -9,20 +9,21 @@
 // stays the one file that reads a `theme.*` key: a surface reads `Theme.*`
 // and never learns which preset is live.
 //
-// `shadcn` is the shipped design language (2026-08-25 redesign). `retro` is
-// the one it replaced, square corners, one mono face, opaque surfaces with
-// no compositor blur, and the dither pass over content imagery. `pantheon`
-// is elementary OS 8's material and its habits (M60), raised controls over
-// sunken troughs on a 6px corner.
+// `metamorphosis` is the shipped design language (2026-08-25 redesign,
+// shadcn/ui chrome on Omarchy habits). `retro` is the one it replaced,
+// square corners, one mono face, opaque surfaces with no compositor blur,
+// and the dither pass over content imagery. `pantheon` is elementary OS
+// 8's material and its habits (M60), raised controls over sunken troughs
+// on a 6px corner.
 //
 // Since M59 a preset also names one chrome table, `shell/Theme/themes/`'s
 // own file per theme: the scalars above are what the user can still
 // override key by key, the table is not overridable at all.
 
-var NAMES = ["shadcn", "retro", "pantheon"];
+var NAMES = ["metamorphosis", "retro", "pantheon"];
 
 var _TABLE = {
-    shadcn: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
+    metamorphosis: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
         style: Metamorphosis.STYLE },
     retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true,
         style: Retro.STYLE },
@@ -33,12 +34,13 @@ var _TABLE = {
         style: Pantheon.STYLE }
 };
 
-// Anything that is not one of NAMES resolves to shadcn, the same
-// unknown-value habit icons.js keeps for an unknown icon set. Checked
-// against NAMES rather than against _TABLE, so a settings value naming an
-// inherited Object property ("constructor") reads as unknown too.
+// Anything that is not one of NAMES resolves to metamorphosis, the same
+// unknown-value habit icons.js keeps for an unknown icon set (a settings.json
+// still carrying the pre-M63 shadcn value takes this path too, no alias).
+// Checked against NAMES rather than against _TABLE, so a settings value
+// naming an inherited Object property ("constructor") reads as unknown too.
 function _name(name) {
-    return typeof name === "string" && NAMES.indexOf(name) !== -1 ? name : "shadcn";
+    return typeof name === "string" && NAMES.indexOf(name) !== -1 ? name : "metamorphosis";
 }
 
 // settings.json carries whatever the user typed, so a value that is not a

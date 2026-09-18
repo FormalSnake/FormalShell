@@ -26,7 +26,7 @@ import qs.Components
 // shows on the desktop layer) and never the screen. Never reintroduce
 // ScreencopyView here or anywhere lock-adjacent.
 //
-// That image draws plain under a 0.5 black scrim on the shadcn preset.
+// That image draws plain under a 0.5 black scrim on the metamorphosis preset.
 // `lock.dither` (M45 D2, defaulting to `theme.dither`, which the preset
 // sets) puts the retro dither pass back over it; nothing here has ever
 // blurred, and DESIGN.md's one named blur exception is spent and gone.

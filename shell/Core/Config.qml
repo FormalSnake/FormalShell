@@ -272,7 +272,7 @@ import QtQuick
 // match tier only, never across one: a better name match still leads.
 // False browses in Unicode's own file order. The ledger
 // (state.json's `emojiUses`) records either way.
-// menu.appGrid (bool, default false under shadcn and retro, true under
+// menu.appGrid (bool, default false under metamorphosis and retro, true under
 // pantheon, whose launcher habit is Slingshot's grid): the launcher draws
 // its app results as a grid of icons with the app's name under each one
 // instead of a row per app, macOS Launchpad's reading. The apps take the
@@ -290,16 +290,17 @@ import QtQuick
 // clipboard history, a screenshot included, goes straight over ssh to
 // clipssh.alias, which puts the remote path back on the clipboard. Off by
 // default because it turns every copied image into network traffic.
-// theme.preset (string, default "shadcn", one of "shadcn" | "retro"): a
-// table of chrome defaults, not a mode (M49 D1). It sets theme.radius,
-// theme.icons, theme.fonts, theme.surfaceOpacity, theme.blur and
-// theme.dither, and any of those written explicitly wins over it; an
-// unknown name resolves to "shadcn". theme.fonts (string, "pair" on
-// shadcn: sans for words and mono for values; "mono" on retro points both
-// aliases at the mono face, and an unrecognised value takes the preset's).
-// theme.blur (bool, true on shadcn): whether the compositor blurs behind
-// the bar, panels and launcher, the shell blurring nothing itself.
-// theme.dither (bool, false on shadcn): the one texture knob, on it renders
+// theme.preset (string, default "metamorphosis", one of "metamorphosis" |
+// "retro"): a table of chrome defaults, not a mode (M49 D1). It sets
+// theme.radius, theme.icons, theme.fonts, theme.surfaceOpacity, theme.blur
+// and theme.dither, and any of those written explicitly wins over it; an
+// unknown name resolves to "metamorphosis". theme.fonts (string, "pair" on
+// metamorphosis: sans for words and mono for values; "mono" on retro points
+// both aliases at the mono face, and an unrecognised value takes the
+// preset's). theme.blur (bool, true on metamorphosis): whether the
+// compositor blurs behind the bar, panels and launcher, the shell blurring
+// nothing itself.
+// theme.dither (bool, false on metamorphosis): the one texture knob, on it renders
 // content imagery through the retro dither pass, and it is the default for
 // wallpaper.dither and lock.dither above. Resolved by
 // shell/Theme/presets.js, read by Core/Theme.qml alone.

@@ -24,14 +24,14 @@ TestCase {
 
     function test_names_are_the_three_presets() {
         compare(Presets.NAMES.length, 3);
-        compare(Presets.NAMES[0], "shadcn");
+        compare(Presets.NAMES[0], "metamorphosis");
         compare(Presets.NAMES[1], "retro");
         compare(Presets.NAMES[2], "pantheon");
     }
 
-    function test_unknown_name_resolves_to_the_shadcn_table() {
+    function test_unknown_name_resolves_to_the_metamorphosis_table() {
         var t = Presets.resolve("brutalist", makeGet({}));
-        compare(t.preset, "shadcn");
+        compare(t.preset, "metamorphosis");
         compare(t.radius, 10);
         compare(t.icons, "lucide");
         compare(t.fonts, "pair");
@@ -42,10 +42,10 @@ TestCase {
         compare(t.lockDither, false);
     }
 
-    function test_a_name_that_is_not_a_string_resolves_to_shadcn() {
+    function test_a_name_that_is_not_a_string_resolves_to_metamorphosis() {
         compare(Presets.defaults(undefined).radius, 10);
         compare(Presets.defaults(42).icons, "lucide");
-        compare(Presets.resolve(null, makeGet({})).preset, "shadcn");
+        compare(Presets.resolve(null, makeGet({})).preset, "metamorphosis");
     }
 
     function test_retro_defaults_match_the_table() {
@@ -94,26 +94,26 @@ TestCase {
     }
 
     function test_theme_dither_carries_both_image_passes() {
-        var t = Presets.resolve("shadcn", makeGet({ theme: { dither: true } }));
+        var t = Presets.resolve("metamorphosis", makeGet({ theme: { dither: true } }));
         compare(t.dither, true);
         compare(t.wallpaperDither, true);
         compare(t.lockDither, true);
     }
 
     function test_an_unknown_fonts_value_takes_the_preset_default() {
-        compare(Presets.resolve("shadcn", makeGet({ theme: { fonts: "comic" } })).fonts, "pair");
+        compare(Presets.resolve("metamorphosis", makeGet({ theme: { fonts: "comic" } })).fonts, "pair");
         compare(Presets.resolve("retro", makeGet({ theme: { fonts: "comic" } })).fonts, "mono");
-        compare(Presets.resolve("shadcn", makeGet({ theme: { fonts: "mono" } })).fonts, "mono");
+        compare(Presets.resolve("metamorphosis", makeGet({ theme: { fonts: "mono" } })).fonts, "mono");
     }
 
     // A string or a number in a boolean's place is a malformed key, not a
     // truthy one, so it reads as absent rather than as off.
     function test_a_non_boolean_takes_the_preset_default() {
-        compare(Presets.resolve("shadcn", makeGet({ theme: { blur: "false" } })).blur, true);
-        compare(Presets.resolve("shadcn", makeGet({ theme: { blur: 0 } })).blur, true);
+        compare(Presets.resolve("metamorphosis", makeGet({ theme: { blur: "false" } })).blur, true);
+        compare(Presets.resolve("metamorphosis", makeGet({ theme: { blur: 0 } })).blur, true);
         compare(Presets.resolve("retro", makeGet({ theme: { blur: 1 } })).blur, false);
-        compare(Presets.resolve("shadcn", makeGet({ theme: { dither: "true" } })).dither, false);
-        compare(Presets.resolve("shadcn", makeGet({ theme: { blur: false } })).blur, false);
+        compare(Presets.resolve("metamorphosis", makeGet({ theme: { dither: "true" } })).dither, false);
+        compare(Presets.resolve("metamorphosis", makeGet({ theme: { blur: false } })).blur, false);
     }
 
     function test_defaults_hands_back_a_copy() {

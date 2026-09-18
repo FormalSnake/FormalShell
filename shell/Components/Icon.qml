@@ -4,7 +4,7 @@ import "../Theme/icons.js" as Icons
 
 // Named icon glyph (spec "Icons", D2): `Icon { name: "wifi" }`. The set is
 // `Theme.iconSet`, which the preset picks and `theme.icons` overrides
-// (`lucide` on shadcn, an installed icon font; `nerd` on retro, which
+// (`lucide` on metamorphosis, an installed icon font; `nerd` on retro, which
 // renders in the mono font itself). Surface files never contain a raw
 // codepoint here, which is the point: the glyph-corruption-on-rewrite
 // hazard (CLAUDE.md) only threatens files that carry raw codepoints at all.

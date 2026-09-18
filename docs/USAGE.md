@@ -692,15 +692,18 @@ when `HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed
 ### Presets
 
 `theme.preset` picks the table of defaults the keys in the next section
-fall back to. `shadcn` (the default) is the look documented here. `retro`
-is the shell's earlier language as a setting of this one: everything
-square, every word in the mono face, Nerd Font glyphs, opaque surfaces,
-no compositor blur, and dithered imagery. `pantheon` is elementary OS 8's
-material on the same palette: raised buttons and chips with a lit top line
-and a gradient face, sunken fields and troughs, cards and toasts on a soft
-cast, and elementary's own corners (3 on a control, 6 on a popover, 9 on a
-card). Any key you write explicitly wins over the preset, so `retro` with
-`"radius": 4` is the retro look on slightly rounded corners.
+fall back to. `metamorphosis` (the default) is the look documented here.
+`retro` is the shell's earlier language as a setting of this one:
+everything square, every word in the mono face, Nerd Font glyphs, opaque
+surfaces, no compositor blur, and dithered imagery. `pantheon` is
+elementary OS 8's material on the same palette: raised buttons and chips
+with a lit top line and a gradient face, sunken fields and troughs, cards
+and toasts on a soft cast, and elementary's own corners (3 on a control, 6
+on a popover, 9 on a card). Any key you write explicitly wins over the
+preset, so `retro` with `"radius": 4` is the retro look on slightly
+rounded corners. A settings.json still carrying the shell's old preset
+name, `shadcn`, resolves to `metamorphosis` the same way any unrecognised
+name does; there is no alias.
 
 `pantheon` also swaps four habits beyond the chrome table: panels, the
 launcher, the OSD and the notification centre drop straight out of the cell
@@ -720,7 +723,7 @@ every fill, border and radius and differ only in those scalars, while
 `pantheon` carries a table of its own. No new user-facing key landed with
 any of them, so the columns below are the whole of it.
 
-| key | `shadcn` | `retro` | `pantheon` |
+| key | `metamorphosis` | `retro` | `pantheon` |
 | --- | --- | --- | --- |
 | `theme.radius` | 10 | 0 | 6 |
 | `theme.icons` | `lucide` | `nerd` | `lucide` |
@@ -807,8 +810,8 @@ and the window frame and shadow the preset's theme table declares
 `$shadowOffset`, `$shadowColor`, `$shadowInactiveColor`), rewritten whenever
 any of them changes. The example config sources it and reads all of them, so
 window corners, the blur behind the shell's surfaces and the chrome round
-every window follow the preset: `shadcn` and `retro` cast no shadow and hang
-the wallpaper's `$primary` on the focused window, `pantheon` casts
+every window follow the preset: `metamorphosis` and `retro` cast no shadow
+and hang the wallpaper's `$primary` on the focused window, `pantheon` casts
 elementary's own (range 24, offset `0 6`) under a quiet 1px `$border` frame.
 
 ```conf
@@ -850,7 +853,7 @@ the limited-palette pass below, track grooves take a 1-bit checker, and
 `wallpaper.dither` and `lock.dither` default to on. Tray icons, the
 wallpaper picker and clipboard thumbnails stay true colour, since those
 exist to show a picture as it is. The `retro` preset turns it on; set it
-by hand under `shadcn` for the texture alone.
+by hand under `metamorphosis` for the texture alone.
 
 ```jsonc
 // ~/.config/formalshell/settings.json
@@ -874,8 +877,8 @@ the scale never introduces a color the file didn't have.
 
 matugen reads the wallpaper file itself, never this rendering, so the dither
 can't influence the color scheme. It follows `theme.dither`, so it is off
-under `shadcn` and on under `retro`; `wallpaper.dither` overrides that for
-the wallpaper alone. Turn it on for the limited-palette look, and raise the
+under `metamorphosis` and on under `retro`; `wallpaper.dither` overrides
+that for the wallpaper alone. Turn it on for the limited-palette look, and raise the
 palette for a subtler pass, since more colors means less of the image dithers
 at all:
 

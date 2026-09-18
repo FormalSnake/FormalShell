@@ -341,10 +341,10 @@ TestCase {
 
     function test_a_preset_hands_back_its_own_table() {
         function get(path, fallback) { return fallback; }
-        compare(Presets.resolve("shadcn", get).style, Metamorphosis.STYLE);
+        compare(Presets.resolve("metamorphosis", get).style, Metamorphosis.STYLE);
         compare(Presets.resolve("retro", get).style, Retro.STYLE);
         compare(Presets.resolve("pantheon", get).style, Pantheon.STYLE);
-        compare(Presets.defaults("shadcn").style, Metamorphosis.STYLE);
+        compare(Presets.defaults("metamorphosis").style, Metamorphosis.STYLE);
     }
 
     // --- Pantheon (M60 T1) ------------------------------------------------

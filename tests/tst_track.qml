@@ -74,7 +74,7 @@ TestCase {
     // one and then the groove fill, while the fill and the notch it holds
     // are in its content slot, in declaration order. Filtered on `radius` so
     // the hover tracker (a MouseArea) and the dither remainder (a Loader,
-    // inactive under the stub's shadcn preset) stay out of the count.
+    // inactive under the stub's metamorphosis preset) stay out of the count.
     function rects(item) {
         var out = [];
         for (var i = 0; i < item.children.length; i++) {
