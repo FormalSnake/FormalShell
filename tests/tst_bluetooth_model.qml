@@ -90,11 +90,11 @@ TestCase {
     }
 
     function test_activityText_pairing_beats_a_connecting_state() {
-        compare(BluetoothModel.activityText(dev("A", { pairing: true, state: BluetoothModel.DeviceState.Connecting })), "PAIRING…");
+        compare(BluetoothModel.activityText(dev("A", { pairing: true, state: BluetoothModel.DeviceState.Connecting })), "Pairing…");
     }
 
     function test_activityText_connecting_state() {
-        compare(BluetoothModel.activityText(dev("A", { state: BluetoothModel.DeviceState.Connecting })), "CONNECTING…");
+        compare(BluetoothModel.activityText(dev("A", { state: BluetoothModel.DeviceState.Connecting })), "Connecting…");
     }
 
     function test_activityText_blank_for_a_settled_device() {

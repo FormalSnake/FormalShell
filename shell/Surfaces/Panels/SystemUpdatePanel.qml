@@ -265,7 +265,7 @@ Panel {
             readonly property string _status: Update.rowStatus(inputCell.modelData, root.heads)
 
             cursor: root.cursorActive && root.cursorSection === 0 && root.cursorIndex === inputCell.index
-            warning: inputCell._status === "BEHIND"
+            warning: inputCell._status === "Behind"
 
             interactive: true
             acceptedButtons: Qt.NoButton
@@ -311,7 +311,7 @@ Panel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: inputCell._status
-                    color: inputCell._status === "BEHIND" ? Theme.color.warning : inputCell.dimForeground
+                    color: inputCell._status === "Behind" ? Theme.color.warning : inputCell.dimForeground
                 }
             }
         }
@@ -324,14 +324,14 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "INPUTS"
+            text: "Inputs"
             count: root.inputs.length
         }
 
         SectionLabel {
             visible: root.pollState === "ok" && root.counts.unknown > 0
             leftPadding: Theme.space.controlPaddingX
-            text: root.counts.unknown + " UNKNOWN"
+            text: root.counts.unknown + " unknown"
         }
 
         // A borderless row leaves no box for a gap to sit between, so the rows
@@ -385,7 +385,7 @@ Panel {
             }
 
             SectionLabel {
-                text: "BEHIND"
+                text: "Behind"
                 anchors.bottom: behindValue.bottom
                 anchors.bottomMargin: Theme.space.xs
             }

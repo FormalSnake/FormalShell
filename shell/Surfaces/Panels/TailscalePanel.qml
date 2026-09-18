@@ -232,19 +232,19 @@ Panel {
     SectionLabel {
         visible: root.pollState === "unknown"
         leftPadding: Theme.space.controlPaddingX
-        text: "LOADING"
+        text: "Loading"
     }
 
     SectionLabel {
         visible: root.pollState === "missing" || root.pollState === "error"
         leftPadding: Theme.space.controlPaddingX
-        text: "NO TAILSCALE"
+        text: "No Tailscale"
     }
 
     SectionLabel {
         visible: root.pollState === "needsLogin"
         leftPadding: Theme.space.controlPaddingX
-        text: "NEEDS LOGIN"
+        text: "Needs login"
     }
 
     // The panel's own subject: this machine's tailnet name and the backend's
@@ -422,14 +422,14 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "PEERS"
+            text: "Peers"
             count: root._peers.length
         }
 
         SectionLabel {
             visible: root._peers.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NONE"
+            text: "None"
         }
 
         // A borderless row leaves no box for a gap to sit between, so the rows

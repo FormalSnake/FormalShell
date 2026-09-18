@@ -58,11 +58,11 @@ Panel {
         out.push({ label: "CPU", figure: root._pct(cpu), fill: root._fill(cpu), state: "" });
 
         var memFraction = root._mem.available ? root._mem.usedFraction : null;
-        out.push({ label: "MEMORY", figure: root._pct(memFraction), fill: root._fill(memFraction), state: "" });
+        out.push({ label: "Memory", figure: root._pct(memFraction), fill: root._fill(memFraction), state: "" });
 
         var cards = GpuService.cards;
         if (cards.length === 0) {
-            out.push({ label: "GPU", figure: "", fill: -1, state: "NO GPU" });
+            out.push({ label: "GPU", figure: "", fill: -1, state: "No GPU" });
         } else {
             for (var i = 0; i < cards.length; i++) {
                 var m = cards[i].metrics;
@@ -71,7 +71,7 @@ Panel {
                     label: "GPU " + cards[i].name,
                     figure: measured ? root._pct(m.busy) : "",
                     fill: measured ? root._fill(m.busy) : -1,
-                    state: measured ? "" : "NO METRICS"
+                    state: measured ? "" : "No metrics"
                 });
             }
         }
@@ -180,7 +180,7 @@ Panel {
         width: parent.width
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "MAIN DISPLAY" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Main display" }
 
         Cell {
             id: mainOutputCell

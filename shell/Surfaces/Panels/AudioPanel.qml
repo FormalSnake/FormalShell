@@ -461,7 +461,7 @@ Panel {
     SectionLabel {
         visible: root._outputs.length === 0 && root._inputs.length === 0
         leftPadding: Theme.space.controlPaddingX
-        text: "NO DEVICES"
+        text: "No devices"
     }
 
     Column {
@@ -471,7 +471,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "OUTPUT"
+            text: "Output"
             count: root._outputPick ? root._outputs.length : root._outputRows.length
         }
 
@@ -601,7 +601,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "INPUT"
+            text: "Input"
             count: root._inputPick ? root._inputs.length : root._inputRows.length
         }
 
@@ -639,7 +639,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "APPS"
+            text: "Apps"
             count: root._streamRows.length
         }
 

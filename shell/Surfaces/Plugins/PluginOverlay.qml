@@ -188,7 +188,7 @@ PanelWindow {
                 Behavior on opacity {
                     Anim { kind: "effects" }
                 }
-                text: "PLUGIN ERROR"
+                text: "Plugin error"
             }
         }
     }

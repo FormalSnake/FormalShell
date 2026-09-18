@@ -211,13 +211,13 @@ Panel {
     SectionLabel {
         visible: root._noDaemon
         leftPadding: Theme.space.controlPaddingX
-        text: "NO DAEMON"
+        text: "No daemon"
     }
 
     SectionLabel {
         visible: root._noAirpods
         leftPadding: Theme.space.controlPaddingX
-        text: "NO AIRPODS"
+        text: "No AirPods"
     }
 
     PanelHero {
@@ -304,7 +304,7 @@ Panel {
         visible: root._batteryRows.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "BATTERY" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Battery" }
 
         // A borderless row leaves no box for a gap to sit between, so the rows
         // in a section abut and only `sectionGap` separates the sections.
@@ -324,7 +324,7 @@ Panel {
         visible: root._controlsVisible
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "LISTENING MODE" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Listening mode" }
 
         ButtonGroup {
             id: modeGroup
@@ -415,7 +415,7 @@ Panel {
         visible: root._togglesVisible
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "OPTIONS" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Options" }
 
         Column {
             width: parent.width
@@ -534,7 +534,7 @@ Panel {
         visible: root._heroVisible
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "EAR DETECTION" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Ear detection" }
 
         ButtonGroup {
             id: earGroup

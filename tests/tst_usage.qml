@@ -96,10 +96,10 @@ TestCase {
         }));
         compare(r.ok, true);
         compare(r.rows.length, 2);
-        compare(r.rows[0].label, "5-HOUR");
+        compare(r.rows[0].label, "5-hour");
         compare(r.rows[0].percent, 0.42);
         compare(r.rows[0].resetsAt, "2026-08-02T10:00:00Z");
-        compare(r.rows[1].label, "WEEKLY");
+        compare(r.rows[1].label, "Weekly");
         compare(r.rows[1].percent, 0.1);
     }
 
@@ -113,11 +113,11 @@ TestCase {
         }));
         compare(r.ok, true);
         compare(r.rows.length, 5);
-        compare(r.rows[0].label, "5-HOUR");
-        compare(r.rows[1].label, "WEEKLY");
-        compare(r.rows[2].label, "EXPERIMENTAL WINDOW");
-        compare(r.rows[3].label, "WEEKLY OPUS");
-        compare(r.rows[4].label, "WEEKLY SONNET");
+        compare(r.rows[0].label, "5-hour");
+        compare(r.rows[1].label, "Weekly");
+        compare(r.rows[2].label, "Experimental window");
+        compare(r.rows[3].label, "Weekly opus");
+        compare(r.rows[4].label, "Weekly sonnet");
         compare(r.rows[3].percent, 0.15);
         compare(r.rows[4].percent, 0.08);
     }
@@ -129,7 +129,7 @@ TestCase {
         }));
         compare(r.ok, true);
         compare(r.rows.length, 1);
-        compare(r.rows[0].label, "5-HOUR");
+        compare(r.rows[0].label, "5-hour");
     }
 
     function test_parse_usage_all_buckets_null_utilization_is_missing_fields() {
@@ -181,41 +181,27 @@ TestCase {
         compare(Usage.tierLabel("", ""), "");
     }
 
-    // sentenceLabel
-
-    function test_sentence_label_lowercases_a_bucket_label() {
-        compare(Usage.sentenceLabel("5-HOUR"), "5-hour");
-        compare(Usage.sentenceLabel("WEEKLY"), "Weekly");
-        compare(Usage.sentenceLabel("WEEKLY OPUS"), "Weekly opus");
-    }
-
-    function test_sentence_label_empty_for_nothing_to_say() {
-        compare(Usage.sentenceLabel(""), "");
-        compare(Usage.sentenceLabel(null), "");
-        compare(Usage.sentenceLabel(undefined), "");
-    }
-
     // formatReset
 
     function test_format_reset_hours_and_minutes() {
         var now = Date.parse("2026-08-02T10:00:00Z");
         var resets = "2026-08-02T12:14:00Z";
-        compare(Usage.formatReset(now, resets), "RESETS 2H 14M");
+        compare(Usage.formatReset(now, resets), "Resets 2H 14M");
     }
 
     function test_format_reset_minutes_only_under_an_hour() {
         var now = Date.parse("2026-08-02T10:00:00Z");
-        compare(Usage.formatReset(now, "2026-08-02T10:45:00Z"), "RESETS 45M");
+        compare(Usage.formatReset(now, "2026-08-02T10:45:00Z"), "Resets 45M");
     }
 
     function test_format_reset_days_and_hours_over_a_day() {
         var now = Date.parse("2026-08-02T10:00:00Z");
-        compare(Usage.formatReset(now, "2026-08-04T13:00:00Z"), "RESETS 2D 3H");
+        compare(Usage.formatReset(now, "2026-08-04T13:00:00Z"), "Resets 2D 3H");
     }
 
     function test_format_reset_now_when_already_past() {
         var now = Date.parse("2026-08-02T10:00:00Z");
-        compare(Usage.formatReset(now, "2026-08-02T09:00:00Z"), "RESETS NOW");
+        compare(Usage.formatReset(now, "2026-08-02T09:00:00Z"), "Resets now");
     }
 
     function test_format_reset_empty_for_no_timestamp() {
@@ -232,16 +218,16 @@ TestCase {
     }
 
     function test_refresh_hint_names_the_step_left_to_the_owner() {
-        compare(Usage.refreshHint("running"), "REFRESHING");
-        compare(Usage.refreshHint("nocli"), "NO CLAUDE CLI");
-        compare(Usage.refreshHint("failed"), "RUN CLAUDE AUTH LOGIN");
-        compare(Usage.refreshHint("idle"), "RUN CLAUDE TO REFRESH");
+        compare(Usage.refreshHint("running"), "Refreshing");
+        compare(Usage.refreshHint("nocli"), "No Claude CLI");
+        compare(Usage.refreshHint("failed"), "Run claude auth login");
+        compare(Usage.refreshHint("idle"), "Run claude to refresh");
     }
 
     // A clean helper run that left the token stale is not a refresh problem,
     // so it reads as the pre-refresh ask rather than as a success.
     function test_refresh_hint_treats_a_clean_run_that_changed_nothing_as_idle() {
-        compare(Usage.refreshHint("ok"), "RUN CLAUDE TO REFRESH");
+        compare(Usage.refreshHint("ok"), "Run claude to refresh");
     }
 
     // parseCodexAccount
@@ -286,9 +272,9 @@ TestCase {
         compare(r.ok, true);
         compare(r.planType, "team");
         compare(r.rows.length, 2);
-        compare(r.rows[0].label, "5H WINDOW");
+        compare(r.rows[0].label, "5h window");
         compare(r.rows[0].percent, 0.125);
-        compare(r.rows[1].label, "WEEKLY");
+        compare(r.rows[1].label, "Weekly");
         compare(r.rows[1].percent, 0.4);
     }
 
@@ -297,7 +283,7 @@ TestCase {
             id: 3,
             result: { rateLimits: { primary: { usedPercent: 5, windowDurationMins: 90 } } }
         }));
-        compare(r.rows[0].label, "90M WINDOW");
+        compare(r.rows[0].label, "90m window");
     }
 
     function test_parse_codex_rate_limits_missing_limits() {
@@ -313,6 +299,6 @@ TestCase {
         }));
         compare(r.ok, true);
         compare(r.rows.length, 1);
-        compare(r.rows[0].label, "WEEKLY");
+        compare(r.rows[0].label, "Weekly");
     }
 }

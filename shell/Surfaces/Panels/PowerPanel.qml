@@ -324,7 +324,7 @@ Panel {
         width: parent.width
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "BATTERY" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Battery" }
 
         Item {
             width: parent.width
@@ -334,7 +334,7 @@ Panel {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 leftPadding: Theme.space.controlPaddingX
-                text: "CAPACITY"
+                text: "Capacity"
             }
 
             Text {
@@ -358,7 +358,7 @@ Panel {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 leftPadding: Theme.space.controlPaddingX
-                text: "SIZE"
+                text: "Size"
             }
 
             Text {
@@ -424,7 +424,7 @@ Panel {
             }
         }
 
-        // What "HOLDING" is holding at. The rate row above says the battery
+        // What "Holding" is holding at. The rate row above says the battery
         // is parked; without the figure the panel never says where, and the
         // percentage in the hero reads like a battery that stopped charging
         // on its own. Absent entirely on a battery whose driver exposes no
@@ -438,7 +438,7 @@ Panel {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 leftPadding: Theme.space.controlPaddingX
-                text: "CHARGE LIMIT"
+                text: "Charge limit"
             }
 
             Text {
@@ -456,14 +456,14 @@ Panel {
     SectionLabel {
         visible: !root._hasBattery
         leftPadding: Theme.space.controlPaddingX
-        text: "AC POWER"
+        text: "AC power"
     }
 
     Column {
         width: parent.width
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "PROFILE" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Profile" }
 
         ButtonGroup {
             id: profileGroup

@@ -85,8 +85,8 @@ function buckets(devices, discovering) {
 // is doing to this device right now, or "" when it is doing nothing.
 function activityText(device) {
     if (!device) return "";
-    if (device.pairing === true) return "PAIRING…";
-    if (device.state === DeviceState.Connecting) return "CONNECTING…";
+    if (device.pairing === true) return "Pairing…";
+    if (device.state === DeviceState.Connecting) return "Connecting…";
     return "";
 }
 

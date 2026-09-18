@@ -17,7 +17,7 @@
 #             frame, and since the emerge's own displacement is a function of
 #             the card's height, the far edge jumps mid-travel rather than
 #             retargeting.
-#   media     and the now-playing card growing from NO PLAYER to a real
+#   media     and the now-playing card growing from "No player" to a real
 #             MPRIS track, the other surface the owner named, which is the
 #             same claim on a growth rather than a shrink.
 #

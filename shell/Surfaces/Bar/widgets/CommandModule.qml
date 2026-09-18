@@ -9,8 +9,9 @@ import "../../../Bar/commandOutput.js" as CommandOutput
 // interval and parses its stdout as Waybar-JSON-compatible
 // `{text, tooltip, class}`. `text` renders in the cell and `tooltip` goes
 // straight to Cell's hover tooltip verbatim, the module author's own
-// wording, never reformatted or uppercased here (SectionLabel's own
-// `font.capitalization` does the casing on the way out). `class` maps onto
+// wording, never reformatted or uppercased here (CellLabel's own
+// `font.capitalization` does the casing on the way out for a `meta` cell).
+// `class` maps onto
 // the two states Cell already has (DESIGN's accent/urgent are flat blocks,
 // not arbitrary CSS classes, so only "warning" and "critical"/"urgent" are
 // recognised; anything else renders plain). A non-zero exit, a timeout, or

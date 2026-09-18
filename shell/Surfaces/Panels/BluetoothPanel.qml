@@ -8,7 +8,7 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // Bluetooth panel (DESIGN.md §3 "Panel", spec "Panels"): the header carries
 // the adapter's power `Switch` and a rescan button, the hero names the one
 // connected device (or the adapter itself), and the rows split into
-// `PAIRED (n)` (connected first, each carrying a check) and `AVAILABLE (n)`.
+// `Paired (n)` (connected first, each carrying a check) and `Available (n)`.
 // Tab moves between those two lists, Enter connects or disconnects the row
 // under the cursor, and `x` forgets a paired one.
 //
@@ -63,14 +63,14 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // exact opposite of what actionTimeout means for
 // pair/connect/disconnect/forget. The toggle sits beside forget and only on
 // a device BlueZ reports `paired`; the row's status line carries the
-// persistent TRUSTED marker, hidden for as long as a write on that row is
+// persistent "Trusted" marker, hidden for as long as a write on that row is
 // still settling.
 //
 // Bound directly to Quickshell.Bluetooth, same as every other panel binds
 // its backend directly rather than through a Services wrapper. The test VM
 // has no adapter at all, so `Bluetooth.defaultAdapter` is null and the panel
-// renders the honest "NO ADAPTER" row; the adapter-off ("TURN ON TO SCAN")
-// and discovering-empty ("SCANNING…") states below it are exercised by the
+// renders the honest "No adapter" row; the adapter-off ("Turn on to scan")
+// and discovering-empty ("Scanning…") states below it are exercised by the
 // model.js bucket tests, not the smoke rig.
 Panel {
     id: root
@@ -97,8 +97,8 @@ Panel {
         ? (root._heroDevice.name || root._heroDevice.deviceName)
         : (root._adapter ? root._adapter.name : "")
     readonly property string _heroMeta: root._heroDevice
-        ? (BluetoothModel.activityText(root._heroDevice) || "CONNECTED")
-        : (root._adapter ? BluetoothAdapterState.toString(root._adapter.state).toUpperCase() : "")
+        ? (BluetoothModel.activityText(root._heroDevice) || "Connected")
+        : (root._adapter ? BluetoothAdapterState.toString(root._adapter.state) : "")
     readonly property string _heroBattery: root._heroDevice ? BluetoothModel.batteryText(root._heroDevice) : ""
     readonly property string _heroIcon: (!root._adapter || !root._adapter.enabled)
         ? "bluetooth-off"
@@ -507,12 +507,12 @@ Panel {
 
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionAddress === btCell._address) {
-                    if (root._actionKind === "pair") return "PAIRING…";
-                    if (root._actionKind === "connect") return "CONNECTING…";
-                    if (root._actionKind === "disconnect") return "DISCONNECTING…";
-                    if (root._actionKind === "trust") return "TRUSTING…";
-                    if (root._actionKind === "untrust") return "UNTRUSTING…";
-                    return "FORGETTING…";
+                    if (root._actionKind === "pair") return "Pairing…";
+                    if (root._actionKind === "connect") return "Connecting…";
+                    if (root._actionKind === "disconnect") return "Disconnecting…";
+                    if (root._actionKind === "trust") return "Trusting…";
+                    if (root._actionKind === "untrust") return "Untrusting…";
+                    return "Forgetting…";
                 }
                 if (root._failureAddress !== "" && root._failureAddress === btCell._address)
                     return root._failureText;
@@ -523,7 +523,7 @@ Panel {
                 // hidden for as long as a write on this row is inside its
                 // settle window, so it never asserts a state the panel
                 // hasn't finished verifying.
-                return (btCell._isTrusted && !btCell._trustPending) ? "TRUSTED" : "";
+                return (btCell._isTrusted && !btCell._trustPending) ? "Trusted" : "";
             }
             readonly property bool _isFailed: root._failureAddress !== "" && root._failureAddress === btCell._address && (root._actionKind === "" || root._actionAddress !== btCell._address)
 
@@ -581,7 +581,7 @@ Panel {
                             id: trustLabel
                             visible: btCell._canTrust
                             opacity: btCell._revealed ? 1 : 0
-                            text: btCell._isTrusted ? "UNTRUST" : "TRUST"
+                            text: btCell._isTrusted ? "Untrust" : "Trust"
                             color: trustHit.containsMouse ? Theme.color.foreground : btCell.dimForeground
 
                             Behavior on opacity {
@@ -648,7 +648,7 @@ Panel {
     SectionLabel {
         visible: !root._adapter
         leftPadding: Theme.space.controlPaddingX
-        text: "NO ADAPTER"
+        text: "No adapter"
     }
 
     // The panel's own subject (M28 Task 5): the one connected device, or
@@ -682,7 +682,7 @@ Panel {
     SectionLabel {
         visible: root._adapter !== null && !root._hasAnyRows
         leftPadding: Theme.space.controlPaddingX
-        text: (!root._adapter || !root._adapter.enabled) ? "TURN ON TO SCAN" : "SCANNING…"
+        text: (!root._adapter || !root._adapter.enabled) ? "Turn on to scan" : "Scanning…"
     }
 
     Column {
@@ -692,7 +692,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "PAIRED"
+            text: "Paired"
             count: root._pairedSection.length
         }
 
@@ -716,7 +716,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "AVAILABLE"
+            text: "Available"
             count: root._availableSection.length
         }
 

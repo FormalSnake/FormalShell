@@ -192,7 +192,7 @@ Panel {
     SectionLabel {
         visible: root._window === null
         leftPadding: Theme.space.controlPaddingX
-        text: "NO WINDOW"
+        text: "No window"
     }
 
     Component {
@@ -234,20 +234,20 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "ACTIONS"
+            text: "Actions"
             count: root._actions.length
         }
 
         SectionLabel {
             visible: root._entry === null
             leftPadding: Theme.space.controlPaddingX
-            text: "NO DESKTOP ENTRY"
+            text: "No desktop entry"
         }
 
         SectionLabel {
             visible: root._entry !== null && root._actions.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NO ACTIONS"
+            text: "No actions"
         }
 
         // A borderless row leaves no box for a gap to sit between, so the rows
@@ -270,7 +270,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "WINDOWS"
+            text: "Windows"
             count: root._appWindows.length
         }
 

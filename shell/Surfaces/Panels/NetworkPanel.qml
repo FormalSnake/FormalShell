@@ -964,9 +964,9 @@ Panel {
 
     readonly property string _speedStatusText: {
         if (root._stError !== "") return root._stError;
-        if (root._stPhase === "resolving") return "RESOLVING INTERFACE";
-        if (root._stPhase === "down") return "MEASURING DOWN";
-        if (root._stPhase === "up") return "MEASURING UP";
+        if (root._stPhase === "resolving") return "Resolving interface";
+        if (root._stPhase === "down") return "Measuring down";
+        if (root._stPhase === "up") return "Measuring up";
         return "";
     }
 
@@ -1112,9 +1112,9 @@ Panel {
             readonly property bool _canForget: wifiCell._network.known && !wifiCell._network.connected
             readonly property string _statusText: {
                 if (root._actionKind !== "" && root._actionSsid === wifiCell._ssid) {
-                    if (root._actionKind === "connect") return "CONNECTING";
-                    if (root._actionKind === "disconnect") return "DISCONNECTING";
-                    return "FORGETTING";
+                    if (root._actionKind === "connect") return "Connecting";
+                    if (root._actionKind === "disconnect") return "Disconnecting";
+                    return "Forgetting";
                 }
                 if (root._failureSsid !== "" && root._failureSsid === wifiCell._ssid)
                     return root._failureText;
@@ -1331,7 +1331,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "THROUGHPUT"
+            text: "Throughput"
         }
 
         Cell {
@@ -1351,7 +1351,7 @@ Panel {
                         width: (parent.width - parent.spacing) / 2
                         spacing: Theme.space.xxs
 
-                        SectionLabel { text: "DOWNLOAD" }
+                        SectionLabel { text: "Download" }
 
                         Row {
                             spacing: Theme.space.iconGap
@@ -1378,7 +1378,7 @@ Panel {
                         width: (parent.width - parent.spacing) / 2
                         spacing: Theme.space.xxs
 
-                        SectionLabel { text: "UPLOAD" }
+                        SectionLabel { text: "Upload" }
 
                         Row {
                             spacing: Theme.space.iconGap
@@ -1414,7 +1414,7 @@ Panel {
     SectionLabel {
         visible: root._wiredEntries.length === 0 && root._wifiEntries.length === 0
         leftPadding: Theme.space.controlPaddingX
-        text: "NO DEVICES"
+        text: "No devices"
     }
 
     Column {
@@ -1424,7 +1424,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "WIRED"
+            text: "Wired"
             count: root._wiredEntries.length
         }
 
@@ -1448,14 +1448,14 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "NETWORKS"
+            text: "Networks"
             count: root._wifiSorted.length
         }
 
         SectionLabel {
             visible: root._wifiSorted.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: Networking.wifiEnabled ? "SCANNING" : "RADIO OFF"
+            text: Networking.wifiEnabled ? "Scanning" : "Radio off"
         }
 
         Column {
@@ -1508,7 +1508,7 @@ Panel {
                 SectionLabel {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root._qrOpen ? "HIDE QR" : "QR"
+                    text: root._qrOpen ? "Hide QR" : "QR"
                     color: root._qrOpen ? Theme.color.primary : shareCell.dimForeground
                 }
             }
@@ -1517,7 +1517,7 @@ Panel {
         SectionLabel {
             visible: root._qrOpen && root._qrPhase !== "idle" && root._qrPhase !== "done"
             leftPadding: Theme.space.controlPaddingX
-            text: "GENERATING"
+            text: "Generating"
         }
 
         SectionLabel {
@@ -1632,7 +1632,7 @@ Panel {
                     SectionLabel {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: root._pwPhase === "idle" ? "SHOW" : "HIDE"
+                        text: root._pwPhase === "idle" ? "Show" : "Hide"
                         color: root._pwPhase !== "idle" ? Theme.color.primary : passwordCell.dimForeground
                     }
                 }
@@ -1655,7 +1655,7 @@ Panel {
 
                 SectionLabel {
                     visible: root._pwPhase === "reading" || root._pwError !== ""
-                    text: root._pwPhase === "reading" ? "READING" : root._pwError
+                    text: root._pwPhase === "reading" ? "Reading" : root._pwError
                     color: root._pwError !== "" ? Theme.color.destructive : passwordCell.dimForeground
                 }
             }
@@ -1700,7 +1700,7 @@ Panel {
             // The unit belongs to the figure beside it, so it takes the
             // figure's face rather than a section label's.
             SectionLabel {
-                text: "MBPS"
+                text: "Mbps"
                 font.family: Theme.fontFamilyMono
                 anchors.bottom: resultValue.bottom
                 anchors.bottomMargin: Theme.space.xs

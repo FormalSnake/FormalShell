@@ -39,7 +39,7 @@ Panel {
             chip: true
             radius: Theme.radiusSm
 
-            SectionLabel { text: "READ ONLY" }
+            SectionLabel { text: "Read only" }
         }
     ]
 
@@ -91,7 +91,7 @@ Panel {
     SectionLabel {
         visible: !root._present
         leftPadding: Theme.space.controlPaddingX
-        text: "NO CONTROLLER"
+        text: "No controller"
     }
 
     PanelHero {
@@ -122,7 +122,7 @@ Panel {
         visible: root._present && (root._lightbar !== null || root._playerLeds !== null)
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "STATUS" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Status" }
 
         Row {
             width: parent.width
@@ -149,7 +149,7 @@ Panel {
                     width: parent.width
                     spacing: Theme.space.xxs
 
-                    SectionLabel { text: "LIGHTBAR" }
+                    SectionLabel { text: "Lightbar" }
 
                     Item {
                         width: parent.width
@@ -211,7 +211,7 @@ Panel {
                     width: parent.width
                     spacing: Theme.space.xxs
 
-                    SectionLabel { text: "PLAYER LEDS" }
+                    SectionLabel { text: "Player LEDs" }
 
                     Item {
                         width: parent.width

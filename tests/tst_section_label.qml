@@ -4,7 +4,7 @@ import qs.Core
 import "../shell/Components"
 
 // SectionLabel's contract (DESIGN.md §2): caption, medium, mutedForeground,
-// uppercase, tracked by letterSpacing.meta, with an optional trailing count.
+// sentence case, with an optional trailing count.
 TestCase {
     id: testCase
     name: "SectionLabel"
@@ -56,9 +56,14 @@ TestCase {
         var text = labelOf(label);
         compare(text.font.pixelSize, Theme.fontSize.caption);
         compare(text.font.weight, Theme.weight.medium);
-        compare(text.font.capitalization, Font.AllUppercase);
-        compare(text.font.letterSpacing, Theme.letterSpacing.meta);
         verify(Qt.colorEqual(text.color, Theme.color.mutedForeground));
+    }
+
+    // Sentence case is the caller's job, not the component's (2026-09-18
+    // theme boundary): the text renders verbatim, whatever case it arrives in.
+    function test_does_not_recase_its_text() {
+        var label = make(labelComponent, { text: "Networks" });
+        compare(labelOf(label).text, "Networks");
     }
 
     // Sans, because a section label is words (DESIGN.md §1 "Type").

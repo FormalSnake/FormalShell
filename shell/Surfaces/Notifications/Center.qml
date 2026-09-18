@@ -571,7 +571,7 @@ PanelWindow {
                                 && !root._pendingSlots.some(s => s && s.departing)
                                 && !root._seenSlots.some(s => s && s.departing)
                                 && pendingSection._presence <= 0 && seenSection._presence <= 0
-                            text: "NO NOTIFICATIONS"
+                            text: "No notifications"
                         }
 
                         Column {
@@ -598,7 +598,7 @@ PanelWindow {
                             spacing: Theme.space.rowGap
 
                             SectionLabel {
-                                text: "PENDING"
+                                text: "Pending"
                                 count: NotificationService.pending.length
                             }
 
@@ -675,7 +675,7 @@ PanelWindow {
                             spacing: Theme.space.rowGap
 
                             SectionLabel {
-                                text: "SEEN"
+                                text: "Seen"
                                 count: NotificationService.past.length
                             }
 

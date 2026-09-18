@@ -114,13 +114,13 @@ function parseRaplUj(text) {
 }
 
 // The wattage stat, split so the words land in the label and the figures
-// in the mono value (DESIGN.md §1 "Type"). "HOLDING" is the charge
+// in the mono value (DESIGN.md §1 "Type"). "Holding" is the charge
 // threshold's own word: the rate is real but near zero there, and calling
 // it a draw would misread it.
 function rateRowLabel(charging, thresholdActive) {
     if (thresholdActive)
-        return "HOLDING";
-    return charging ? "CHARGING" : "DRAW";
+        return "Holding";
+    return charging ? "Charging" : "Draw";
 }
 
 // `cpuPackageW` is null whenever RAPL is unreadable or hasn't produced a
@@ -221,7 +221,7 @@ function parseChargeLimit(text) {
 }
 
 function timeRowLabel(charging) {
-    return charging ? "TIME FULL" : "TIME LEFT";
+    return charging ? "Time full" : "Time left";
 }
 
 // timeToFull/timeToEmpty are 0 whenever the other one applies (the pinned

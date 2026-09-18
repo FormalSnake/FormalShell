@@ -338,11 +338,11 @@ TestCase {
     // timeRowLabel / timeRowValue
 
     function test_time_row_label_charging() {
-        compare(Power.timeRowLabel(true), "TIME FULL");
+        compare(Power.timeRowLabel(true), "Time full");
     }
 
     function test_time_row_label_discharging() {
-        compare(Power.timeRowLabel(false), "TIME LEFT");
+        compare(Power.timeRowLabel(false), "Time left");
     }
 
     function test_time_row_value_charging() {
@@ -360,13 +360,13 @@ TestCase {
     // rateRowLabel / rateRowValue
 
     function test_rate_row_label_names_the_direction() {
-        compare(Power.rateRowLabel(true, false), "CHARGING");
-        compare(Power.rateRowLabel(false, false), "DRAW");
+        compare(Power.rateRowLabel(true, false), "Charging");
+        compare(Power.rateRowLabel(false, false), "Draw");
     }
 
     function test_rate_row_label_threshold_is_holding() {
-        compare(Power.rateRowLabel(true, true), "HOLDING");
-        compare(Power.rateRowLabel(false, true), "HOLDING");
+        compare(Power.rateRowLabel(true, true), "Holding");
+        compare(Power.rateRowLabel(false, true), "Holding");
     }
 
     function test_rate_row_value_is_the_magnitude() {

@@ -154,7 +154,7 @@ Panel {
     SectionLabel {
         visible: !LocationService.available
         leftPadding: Theme.space.controlPaddingX
-        text: "NO LOCATION"
+        text: "No location"
     }
 
     Cell {
@@ -166,7 +166,7 @@ Panel {
             width: parent.width
             spacing: Theme.space.xxs
 
-            SectionLabel { text: "UNAVAILABLE" }
+            SectionLabel { text: "Unavailable" }
 
             Text {
                 width: parent.width
@@ -182,7 +182,7 @@ Panel {
     SectionLabel {
         visible: LocationService.available && root._error === "" && root._result === null
         leftPadding: Theme.space.controlPaddingX
-        text: "LOADING"
+        text: "Loading"
     }
 
     // The panel's own subject: what it is doing outside right now.
@@ -211,7 +211,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "FORECAST"
+            text: "Forecast"
             count: root._forecast.length
         }
 

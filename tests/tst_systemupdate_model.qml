@@ -195,8 +195,8 @@ TestCase {
         var heads = {};
         heads["nixpkgs"] = upstreamRev;
         heads["quickshell"] = quickshellRev;
-        compare(SystemUpdate.rowStatus(_input("nixpkgs"), heads), "BEHIND");
-        compare(SystemUpdate.rowStatus(_input("quickshell"), heads), "CURRENT");
+        compare(SystemUpdate.rowStatus(_input("nixpkgs"), heads), "Behind");
+        compare(SystemUpdate.rowStatus(_input("quickshell"), heads), "Current");
         compare(SystemUpdate.rowStatus(_input("nixpkgs"), {}), "?");
     }
 

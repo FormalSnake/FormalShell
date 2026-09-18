@@ -115,17 +115,17 @@ function _rateWindowKeys(payload) {
     return head.concat(rest);
 }
 
-// five_hour -> 5-HOUR, seven_day -> WEEKLY, seven_day_<x> -> WEEKLY <X>
+// five_hour -> 5-hour, seven_day -> Weekly, seven_day_<x> -> Weekly <x>
 // (covers seven_day_opus/seven_day_sonnet and any future per-model window),
-// anything else -> uppercased with underscores turned to spaces.
+// anything else -> sentence case with underscores turned to spaces.
 function _bucketLabel(key) {
     if (key === "five_hour")
-        return "5-HOUR";
+        return "5-hour";
     if (key === "seven_day")
-        return "WEEKLY";
+        return "Weekly";
     if (key.indexOf("seven_day_") === 0)
-        return "WEEKLY " + key.slice("seven_day_".length).replace(/_/g, " ").toUpperCase();
-    return key.replace(/_/g, " ").toUpperCase();
+        return _capitalize("weekly " + key.slice("seven_day_".length).replace(/_/g, " "));
+    return _capitalize(key.replace(/_/g, " "));
 }
 
 // The endpoint has been observed to report both percent-scaled (37.0) and
@@ -173,16 +173,7 @@ function _capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// A window label as body copy rather than as a section label. `_bucketLabel`
-// answers uppercase because the panel's rows render it through
-// `SectionLabel`, and only a section label uppercases (DESIGN.md §5), so the
-// hero's own sentence-case meta line reads it back through this.
-function sentenceLabel(label) {
-    var s = String(label === undefined || label === null ? "" : label).toLowerCase();
-    return s === "" ? "" : _capitalize(s);
-}
-
-// "RESETS 2H 14M" / "RESETS 1D 3H" / "RESETS NOW" / "" for no timestamp.
+// "Resets 2H 14M" / "Resets 1D 3H" / "Resets now" / "" for no timestamp.
 function formatReset(nowMs, resetsAtIso) {
     if (!resetsAtIso)
         return "";
@@ -191,16 +182,16 @@ function formatReset(nowMs, resetsAtIso) {
         return "";
     var diffMs = reset - nowMs;
     if (diffMs <= 0)
-        return "RESETS NOW";
+        return "Resets now";
 
     var totalMins = Math.floor(diffMs / 60000);
     var hours = Math.floor(totalMins / 60);
     var mins = totalMins % 60;
     if (hours > 24)
-        return "RESETS " + Math.floor(hours / 24) + "D " + (hours % 24) + "H";
+        return "Resets " + Math.floor(hours / 24) + "D " + (hours % 24) + "H";
     if (hours > 0)
-        return "RESETS " + hours + "H " + mins + "M";
-    return "RESETS " + mins + "M";
+        return "Resets " + hours + "H " + mins + "M";
+    return "Resets " + mins + "M";
 }
 
 // ---- Claude token refresh (`claude auth status --json`) ----
@@ -224,13 +215,13 @@ function refreshStateForExit(exitCode) {
 function refreshHint(refreshState) {
     switch (refreshState) {
     case "running":
-        return "REFRESHING";
+        return "Refreshing";
     case "nocli":
-        return "NO CLAUDE CLI";
+        return "No Claude CLI";
     case "failed":
-        return "RUN CLAUDE AUTH LOGIN";
+        return "Run claude auth login";
     default:
-        return "RUN CLAUDE TO REFRESH";
+        return "Run claude to refresh";
     }
 }
 
@@ -303,14 +294,14 @@ function _codexWindowRow(window) {
         return null;
 
     var mins = Number(window.windowDurationMins);
-    var label = "WINDOW";
+    var label = "Window";
     if (isFinite(mins) && mins > 0) {
         if (mins === 10080)
-            label = "WEEKLY";
+            label = "Weekly";
         else if (mins % 60 === 0)
-            label = (mins / 60) + "H WINDOW";
+            label = (mins / 60) + "h window";
         else
-            label = mins + "M WINDOW";
+            label = mins + "m window";
     }
 
     var resetsAt = "";

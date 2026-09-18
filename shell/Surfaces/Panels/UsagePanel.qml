@@ -7,7 +7,7 @@ import "../../Usage/usage.js" as Usage
 
 // AI usage panel (DESIGN.md §3 "Panel", spec "Panels"): the popout behind
 // UsageWidget's bar cell. A hero promoting the window closest to its limit,
-// then a `CLAUDE` section (Anthropic OAuth usage) and a `CODEX` section
+// then a `Claude` section (Anthropic OAuth usage) and a `Codex` section
 // (`codex app-server` JSON-RPC), each a section label carrying the tier over
 // one `Cell` per rate-limit window: the window name as a section label, the
 // percentage as a `display` mono figure, a `Track` under it, and the reset
@@ -15,7 +15,7 @@ import "../../Usage/usage.js" as Usage
 // `destructive` border and ink rather than a fill.
 //
 // Keyboard (spec "Keyboard model"): the cursor walks both providers' windows
-// in one numeric space, CLAUDE first, and Enter re-polls (the header's
+// in one numeric space, Claude first, and Enter re-polls (the header's
 // refresh button does the same, forcing a stale Claude leg's own refresh).
 // The honest-state cells are not navigable.
 //
@@ -26,7 +26,7 @@ import "../../Usage/usage.js" as Usage
 // `usage.claude`/`usage.codex` (settings.json, default true) independently
 // gate each provider's section and polling entirely: a disabled provider
 // renders no section at all, and an enabled one that answered with no
-// windows renders `NO DATA` rather than an empty section.
+// windows renders "No data" rather than an empty section.
 //
 // Claude leg: `~/.claude/.credentials.json`'s `.claudeAiOauth.accessToken`
 // (never logged, never exposed on any IPC/debug surface, Constraints)
@@ -34,13 +34,13 @@ import "../../Usage/usage.js" as Usage
 // (`api.anthropic.com/api/oauth/usage`, headers `Authorization: Bearer
 // <token>` + `anthropic-beta: oauth-2025-04-20` + `Accept:
 // application/json`, WeatherPanel's own XMLHttpRequest idiom). Missing
-// credentials or an empty token render an honest `NO AUTH`.
+// credentials or an empty token render an honest "No auth".
 //
-// An *expired* access token is a third state, not `NO AUTH`: the file's
+// An *expired* access token is a third state, not "No auth": the file's
 // accessToken lives ~12h while its refreshToken lives ~10d, and only a Claude
 // Code run refreshes the pair on disk, so a machine that hasn't run `claude`
 // today is still fully logged in with a token this shell can't use. That
-// renders `STALE` and points at the fix. The shell deliberately does NOT
+// renders "Stale" and points at the fix. The shell deliberately does NOT
 // redeem the refresh token itself: Anthropic rotates it on use, so redeeming
 // it here would invalidate the copy Claude Code still holds and log the owner
 // out of their own CLI.
@@ -58,15 +58,15 @@ import "../../Usage/usage.js" as Usage
 // the CLI's word: the refreshed file arrives through `credentialsFile`'s watch
 // like any other write, and the server settles the state as it always did.
 //
-// A token that expires between two polls would otherwise sit `STALE` for up to
+// A token that expires between two polls would otherwise sit "Stale" for up to
 // `usage.intervalMs`, so `_applyCredentials` also arms a one-shot at the
 // token's own expiry to re-poll (and therefore refresh) right when it lapses.
 //
 // The local `expiresAt` is advisory, a skewed clock or a changed field
 // meaning must not be able to hide real usage numbers, so a probe fires
 // whenever a token exists at all and the server's own verdict settles the
-// state: 2xx wins outright, 401/403 falls back to `STALE` (refresh token
-// present) or `NO AUTH` (none), anything else is `ERROR`. `expiresAt` only
+// state: 2xx wins outright, 401/403 falls back to "Stale" (refresh token
+// present) or "No auth" (none), anything else is "Error". `expiresAt` only
 // picks the label shown while that probe is in flight.
 //
 // Codex leg: `codex -s read-only -a untrusted app-server` speaks
@@ -80,8 +80,8 @@ import "../../Usage/usage.js" as Usage
 // their JSON-RPC `id` rather than assumed in order, mirroring the
 // scanner's own id-checked `rpc_request()` rather than blind sequencing.
 // `codex` missing from PATH (`sh -c`'s `command -v` guard, exit 127)
-// renders `NO CODEX`; any RPC-level failure (timeout, malformed reply,
-// missing fields) renders `ERROR` rather than a fake number, this repo has
+// renders "No Codex"; any RPC-level failure (timeout, malformed reply,
+// missing fields) renders "Error" rather than a fake number, this repo has
 // no way to exercise a real codex binary in the VM rig, so this leg's
 // correctness rides on usage.js's own parser tests plus qmllint, stated
 // honestly in the commit, the same allowance BluetoothPanel's pairing flow
@@ -168,30 +168,30 @@ Panel {
 
     function claudeStatusText() {
         switch (root.claudeState) {
-        case "noauth": return "NO AUTH";
-        case "stale": return "STALE";
-        case "loading": return "LOADING";
-        case "error": return "ERROR";
+        case "noauth": return "No auth";
+        case "stale": return "Stale";
+        case "loading": return "Loading";
+        case "error": return "Error";
         default: return "";
         }
     }
 
     // The bar cell only has room for the status word, so the actionable half
-    // of the STALE state ("errors say how to fix") is rendered here, where
+    // of the Stale state ("errors say how to fix") is rendered here, where
     // there's width for it, and follows the refresh attempt as it runs.
     function claudeHintText() {
         if (root.claudeState === "unknown")
-            return "LOADING";
+            return "Loading";
         if (root.claudeState !== "stale")
             return root.claudeStatusText();
-        return "STALE / " + Usage.refreshHint(root.claudeRefreshState);
+        return "Stale / " + Usage.refreshHint(root.claudeRefreshState);
     }
 
     function codexStatusText() {
         switch (root.codexState) {
-        case "missing": return "NO CODEX";
-        case "loading": return "LOADING";
-        case "error": return "ERROR";
+        case "missing": return "No Codex";
+        case "loading": return "Loading";
+        case "error": return "Error";
         default: return "";
         }
     }
@@ -278,7 +278,7 @@ Panel {
     // Config.qml's own rewatch idiom, for the same reason: Claude Code
     // rewrites `.credentials.json` by rename, which both unhooks the watch
     // from the replaced inode and can land a poll on the gap between unlink
-    // and link. Without this a one-frame miss reads as NO AUTH until the next
+    // and link. Without this a one-frame miss reads as "No auth" until the next
     // `usage.intervalMs` tick a quarter of an hour later.
     //
     // BOUNDED, unlike Config.qml's and Theme.qml's copies of this idiom: those
@@ -286,7 +286,7 @@ Panel {
     // the file always eventually appears. Nothing here ever creates
     // `.credentials.json`, so an unbounded retry would be a permanent 3.3Hz
     // stat loop on every machine without Claude Code installed, including the
-    // VM smoke rig, and the honest NO AUTH state itself. A rename gap closes in
+    // VM smoke rig, and the honest "No auth" state itself. A rename gap closes in
     // milliseconds, so a short burst covers it; after that the normal poll and
     // the FileView's own watch are what pick the file up.
     property int _credentialsRetries: 0
@@ -317,7 +317,7 @@ Panel {
     }
 
     // One-shot re-poll the moment the token lapses, so the leg refreshes itself
-    // then instead of sitting STALE until the next `usage.intervalMs` tick. The
+    // then instead of sitting "Stale" until the next `usage.intervalMs` tick. The
     // 24h ceiling keeps a nonsense far-future expiry (or a clock skewed by
     // days) out of Timer's int millisecond interval; the normal poll covers
     // that case on its own.
@@ -337,7 +337,7 @@ Panel {
         onTriggered: if (root.claudeEnabled) root._poll()
     }
 
-    // `expiredLocally` only picks the in-flight label (STALE reads truer than
+    // `expiredLocally` only picks the in-flight label ("Stale" reads truer than
     // LOADING when the file already says the token is dead), the reply below
     // settles the state either way.
     function _probeClaudeUsage(expiredLocally) {
@@ -482,7 +482,7 @@ Panel {
     // Safety net for a codex binary that starts, authenticates, but never
     // replies to all three requests (a hung app-server, a permissions
     // prompt with nothing on the other end to answer it), clears a stuck
-    // "loading" state to an honest "ERROR" instead of forever.
+    // "loading" state to an honest "Error" instead of forever.
     Timer {
         id: codexTimeout
         interval: 20000
@@ -599,7 +599,7 @@ Panel {
         // that is; the sections below carry the provider-specific one.
         meta: {
             if (root._peakRow)
-                return Usage.sentenceLabel(root._peakRow.label);
+                return root._peakRow.label;
             if (!root.claudeEnabled && !root.codexEnabled)
                 return "Disabled";
             var pending = (root.claudeEnabled && root.claudeState === "unknown")
@@ -618,7 +618,7 @@ Panel {
         }
     }
 
-    // ---- CLAUDE section ----
+    // ---- Claude section ----
 
     Column {
         width: parent.width
@@ -627,7 +627,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: root.claudeTier !== "" ? "CLAUDE / " + root.claudeTier : "CLAUDE"
+            text: root.claudeTier !== "" ? "Claude / " + root.claudeTier : "Claude"
         }
 
         SectionLabel {
@@ -639,7 +639,7 @@ Panel {
         SectionLabel {
             visible: root.claudeState === "ok" && root._claudeVisibleRows.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NO DATA"
+            text: "No data"
         }
 
         // A borderless row leaves no box for a gap to sit between, so the rows
@@ -655,7 +655,7 @@ Panel {
         }
     }
 
-    // ---- CODEX section ----
+    // ---- Codex section ----
 
     Column {
         width: parent.width
@@ -664,19 +664,19 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: root.codexTier !== "" ? "CODEX / " + root.codexTier : "CODEX"
+            text: root.codexTier !== "" ? "Codex / " + root.codexTier : "Codex"
         }
 
         SectionLabel {
             visible: root.codexState !== "ok"
             leftPadding: Theme.space.controlPaddingX
-            text: root.codexState === "unknown" ? "LOADING" : root.codexStatusText()
+            text: root.codexState === "unknown" ? "Loading" : root.codexStatusText()
         }
 
         SectionLabel {
             visible: root.codexState === "ok" && root._codexVisibleRows.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NO DATA"
+            text: "No data"
         }
 
         Column {

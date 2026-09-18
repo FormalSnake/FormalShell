@@ -128,13 +128,13 @@ function parseStatus(text) {
 
 // One component's hint, fused " / " per DESIGN §2 item 10 (meta pairs
 // never take a colon). Case has no in-ear concept, so hasInEar is false
-// for it and only CHARGING can ever appear.
+// for it and only "Charging" can ever appear.
 function _hint(inEar, charging, hasInEar) {
     var parts = [];
     if (hasInEar && inEar)
-        parts.push("IN EAR");
+        parts.push("In ear");
     if (charging)
-        parts.push("CHARGING");
+        parts.push("Charging");
     return parts.join(" / ");
 }
 

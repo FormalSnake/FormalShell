@@ -116,9 +116,9 @@ Cell {
                     elide: Text.ElideRight
                 }
 
-                // Sentence case as well: only a SectionLabel uppercases
-                // (DESIGN.md §5), and a mode line read back as `1920X1080@60`
-                // is what that rule exists to stop.
+                // Sentence case as well, the same rule every surface writes
+                // to now (2026-09-18 theme boundary): a mode line read back
+                // as `1920X1080@60` is what that discipline exists to stop.
                 Text {
                     width: parent.width
                     visible: root.meta !== ""

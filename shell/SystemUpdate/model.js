@@ -245,9 +245,9 @@ function countBehind(inputs, headsByName) {
 function rowStatus(input, headsByName) {
     var counts = countBehind([input], headsByName);
     if (counts.behind > 0)
-        return "BEHIND";
+        return "Behind";
     if (counts.current > 0)
-        return "CURRENT";
+        return "Current";
     return "?";
 }
 

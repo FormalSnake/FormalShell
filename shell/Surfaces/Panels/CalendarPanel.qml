@@ -511,7 +511,7 @@ Panel {
                 anchors.verticalCenter: parent.verticalCenter
                 leftPadding: Core.Theme.space.controlPaddingX
                 text: root._selectedIsToday
-                    ? "TODAY"
+                    ? "Today"
                     : root._monthShort[root._selected.getMonth()] + " " + root._selected.getDate()
                 count: root._selectedEvents.length
             }
@@ -522,15 +522,15 @@ Panel {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root._agendaNow || root._agendaNext !== null
                 text: root._agendaNow
-                    ? "NOW"
-                    : root._agendaNext !== null ? "NEXT " + Agenda.clockTime(root._agendaNext.start, root._twelveHour) : ""
+                    ? "Now"
+                    : root._agendaNext !== null ? "Next " + Agenda.clockTime(root._agendaNext.start, root._twelveHour) : ""
             }
         }
 
         SectionLabel {
             visible: root._selectedEvents.length === 0
             leftPadding: Core.Theme.space.controlPaddingX
-            text: "NO EVENTS"
+            text: "No events"
         }
 
         // A borderless row leaves no box for a gap to sit between, so the rows
@@ -587,7 +587,7 @@ Panel {
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
                             visible: eventCell._status === "now"
-                            text: "NOW"
+                            text: "Now"
                             color: Core.Theme.color.primary
                         }
                     }
@@ -600,7 +600,7 @@ Panel {
         width: parent.width
         spacing: Core.Theme.space.rowGap
 
-        SectionLabel { leftPadding: Core.Theme.space.controlPaddingX; text: "PROGRESS" }
+        SectionLabel { leftPadding: Core.Theme.space.controlPaddingX; text: "Progress" }
 
         // Flat (DESIGN.md §1's ladder, rung 5): a label over a track reports
         // a value and answers no pointer, so it draws no box. The
@@ -624,7 +624,7 @@ Panel {
                         id: yearLabel
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "YEAR"
+                        text: "Year"
                     }
 
                     Text {
@@ -679,7 +679,7 @@ Panel {
                         id: lifeLabel
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "LIFE"
+                        text: "Life"
                     }
 
                     Text {

@@ -260,19 +260,19 @@ Panel {
 
                 SectionLabel {
                     visible: !outCell.modelData.enabled
-                    text: "DISABLED"
+                    text: "Disabled"
                     color: outCell.dimForeground
                 }
 
                 SectionLabel {
                     visible: outCell.modelData.mirrorOf !== ""
-                    text: "MIRRORS " + outCell.modelData.mirrorOf
+                    text: "Mirrors " + outCell.modelData.mirrorOf
                     color: outCell.dimForeground
                 }
 
                 SectionLabel {
                     visible: outCell._isMain
-                    text: "MAIN DISPLAY"
+                    text: "Main display"
                     color: outCell.dimForeground
                 }
 
@@ -442,16 +442,16 @@ Panel {
     }
 
     // An empty list means two different things and only one of them licenses
-    // NO OUTPUTS, see BackendBase's outputsState. A failed hyprctl query must
+    // "No outputs", see BackendBase's outputsState. A failed hyprctl query must
     // not tell a session with two lit monitors it has no displays.
     SectionLabel {
         visible: root._outputs.length === 0
         leftPadding: Theme.space.controlPaddingX
         text: {
             switch (root._backend.outputsState) {
-            case "failed": return "CANNOT READ OUTPUTS";
-            case "ok": return "NO OUTPUTS";
-            default: return "LOADING";
+            case "failed": return "Cannot read outputs";
+            case "ok": return "No outputs";
+            default: return "Loading";
             }
         }
     }
@@ -463,7 +463,7 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "OUTPUTS"
+            text: "Outputs"
             count: root._outputs.length
         }
 
@@ -486,14 +486,14 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "BRIGHTNESS"
+            text: "Brightness"
             count: root._brightnessCount
         }
 
         SectionLabel {
             visible: root._brightnessCount === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NO BACKLIGHT"
+            text: "No backlight"
         }
 
         Column {
@@ -512,18 +512,18 @@ Panel {
         visible: root._outputs.length > 0
         spacing: Theme.space.rowGap
 
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "MIRROR" }
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Mirror" }
 
         SectionLabel {
             visible: !root._backend.mirrorSupported
             leftPadding: Theme.space.controlPaddingX
-            text: "MIRROR UNSUPPORTED"
+            text: "Mirror unsupported"
         }
 
         SectionLabel {
             visible: root._backend.mirrorSupported && !root._mirrorPlan.ok
             leftPadding: Theme.space.controlPaddingX
-            text: "SINGLE DISPLAY"
+            text: "Single display"
         }
 
         // Flat (DESIGN.md §1's ladder, rung 5): the control on this row is

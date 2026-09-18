@@ -63,6 +63,6 @@ Panel {
     SectionLabel {
         visible: root.loadFailed
         leftPadding: Theme.space.controlPaddingX
-        text: "PLUGIN ERROR"
+        text: "Plugin error"
     }
 }

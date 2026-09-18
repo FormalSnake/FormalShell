@@ -534,7 +534,7 @@ PanelWindow {
 
                 SectionLabel {
                     anchors.centerIn: parent
-                    text: "NO WINDOWS"
+                    text: "No windows"
                 }
             }
 

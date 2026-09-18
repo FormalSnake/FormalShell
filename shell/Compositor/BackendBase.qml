@@ -28,7 +28,7 @@ QtObject {
     // "unknown" (no enumeration has answered yet) | "ok" | "failed". An empty
     // `outputs` is ambiguous on its own, "the compositor reports none" and
     // "the query failed" are different facts, and only the first one licenses
-    // the panel's NO OUTPUTS cell. Without this a transiently failing hyprctl
+    // the panel's "No outputs" cell. Without this a transiently failing hyprctl
     // query tells a session with two lit monitors it has none.
     property string outputsState: "unknown"
 

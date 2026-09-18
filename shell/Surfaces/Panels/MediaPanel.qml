@@ -370,7 +370,7 @@ Panel {
             SectionLabel {
                 visible: !MediaService.available
                 leftPadding: Theme.space.controlPaddingX
-                text: "NO PLAYER"
+                text: "No player"
             }
 
             // The now-playing block: the cover beside the source, the title,
@@ -680,7 +680,7 @@ Panel {
 
                 SectionLabel {
                     leftPadding: Theme.space.controlPaddingX
-                    text: "PLAYERS"
+                    text: "Players"
                     count: root._playerRows.length
                 }
 

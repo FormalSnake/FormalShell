@@ -175,19 +175,19 @@ Panel {
     SectionLabel {
         visible: root.pollState === "unknown"
         leftPadding: Theme.space.controlPaddingX
-        text: "LOADING"
+        text: "Loading"
     }
 
     SectionLabel {
         visible: root.pollState === "missing" || root.pollState === "error"
         leftPadding: Theme.space.controlPaddingX
-        text: "NO GH"
+        text: "No gh"
     }
 
     SectionLabel {
         visible: root.pollState === "noauth"
         leftPadding: Theme.space.controlPaddingX
-        text: "NO AUTH"
+        text: "No auth"
     }
 
     // The panel's own subject: the signed-in account, and how many things
@@ -267,14 +267,14 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "PULL REQUESTS"
+            text: "Pull requests"
             count: root.prCount
         }
 
         SectionLabel {
             visible: root.prRows.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NONE"
+            text: "None"
         }
 
         // A borderless row leaves no box for a gap to sit between, so the rows
@@ -297,14 +297,14 @@ Panel {
 
         SectionLabel {
             leftPadding: Theme.space.controlPaddingX
-            text: "ISSUES"
+            text: "Issues"
             count: root.issueCount
         }
 
         SectionLabel {
             visible: root.issueRows.length === 0
             leftPadding: Theme.space.controlPaddingX
-            text: "NONE"
+            text: "None"
         }
 
         Column {

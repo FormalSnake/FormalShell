@@ -88,7 +88,7 @@ Panel {
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "AUTHPROMPT / IDLE"
+                        text: "AuthPrompt / idle"
                     }
 
                     // inputEnabled: false is the component's own way of
@@ -118,7 +118,7 @@ Panel {
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "CELL"
+                            text: "Cell"
                         }
 
                         Repeater {
@@ -171,7 +171,7 @@ Panel {
                     // grid above instead of falling in line with it.
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "DIM / UNAVAILABLE"
+                        text: "Dim / unavailable"
                     }
 
                     Column {
@@ -180,7 +180,7 @@ Panel {
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "SHOULDERS / JOINED TO THE BAR"
+                            text: "Shoulders / joined to the bar"
                         }
 
                         Flow {
@@ -270,7 +270,7 @@ Panel {
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "TYPE SCALE"
+                        text: "Type scale"
                     }
 
                     Repeater {
@@ -326,7 +326,7 @@ Panel {
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "SEPARATOR"
+                            text: "Separator"
                         }
 
                         // Each variant is its own caption over its own rule
@@ -337,9 +337,9 @@ Panel {
                         // SectionLabel" clause is about.
                         Repeater {
                             model: [
-                                { name: "FULL BLEED", inset: 0, vertical: false },
-                                { name: "INSET", inset: Theme.space.controlPaddingX, vertical: false },
-                                { name: "VERTICAL", inset: 0, vertical: true }
+                                { name: "Full bleed", inset: 0, vertical: false },
+                                { name: "Inset", inset: Theme.space.controlPaddingX, vertical: false },
+                                { name: "Vertical", inset: 0, vertical: true }
                             ]
 
                             delegate: Column {
@@ -347,7 +347,7 @@ Panel {
                                 required property var modelData
 
                                 width: parent.width
-                                topPadding: sepSpec.modelData.name === "FULL BLEED" ? 0 : Theme.space.sectionGap - Theme.space.rowGap
+                                topPadding: sepSpec.modelData.name === "Full bleed" ? 0 : Theme.space.sectionGap - Theme.space.rowGap
                                 spacing: Theme.space.rowGap
 
                                 SectionLabel {
@@ -372,7 +372,7 @@ Panel {
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "COLOR TOKENS"
+                            text: "Color tokens"
                         }
 
                         Repeater {
@@ -429,18 +429,18 @@ Panel {
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "METALABEL"
+                            text: "Metalabel"
                         }
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "METALABEL / CAPTION"
+                            text: "Metalabel / caption"
                         }
 
                         // The wider variant the lock/greeter date row uses.
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
-                            text: "METALABEL / SUBTITLE"
+                            text: "Metalabel / subtitle"
                             font.pixelSize: Theme.fontSize.subtitle
                             font.letterSpacing: Theme.letterSpacing.wide
                         }
@@ -462,7 +462,7 @@ Panel {
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "SPACING SCALE"
+                        text: "Spacing scale"
                     }
 
                     Grid {
@@ -519,7 +519,7 @@ Panel {
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "MARQUEETEXT"
+                        text: "MarqueeText"
                     }
 
                     Cell {
@@ -530,7 +530,7 @@ Panel {
                         Column {
                             spacing: Theme.space.xxs
 
-                            SectionLabel { text: "FITS / NEVER MOVES" }
+                            SectionLabel { text: "Fits / never moves" }
 
                             MarqueeText {
                                 text: "A TITLE THAT FITS"
@@ -548,7 +548,7 @@ Panel {
                         Column {
                             spacing: Theme.space.xxs
 
-                            SectionLabel { text: "OVERFLOWS / SCROLLS" }
+                            SectionLabel { text: "Overflows / scrolls" }
 
                             // Half the column on purpose: the component only
                             // scrolls once the text genuinely overruns the
@@ -570,12 +570,12 @@ Panel {
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "SURFACES"
+                        text: "Surfaces"
                     }
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "PANEL / THIS SURFACE"
+                        text: "Panel / this surface"
                     }
 
                     // Panel.qml holds one DismissTwins for this surface,
@@ -584,7 +584,7 @@ Panel {
                     // honestly reports none rather than an invented one.
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "DISMISSTWINS / " + Math.max(0, Quickshell.screens.length - 1) + " TWINS"
+                        text: "DismissTwins / " + Math.max(0, Quickshell.screens.length - 1) + " twins"
                     }
 
                     // A real hover source, not just a `tooltipText` string:
@@ -602,14 +602,14 @@ Panel {
                         interactive: true
 
                         SectionLabel {
-                            text: "TOOLTIP / REAL TOOLTIPTEXT"
+                            text: "Tooltip / real tooltipText"
                             color: tooltipCell.foreground
                         }
                     }
 
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
-                        text: "TOOLTIP OPENS UNDER THE ROW ABOVE, OVER THIS PANEL"
+                        text: "Tooltip opens under the row above, over this panel"
                     }
                 }
             }

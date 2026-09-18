@@ -45,7 +45,7 @@ TestCase {
 
         var rows = AirpodsModel.batteryRows(s);
         compare(rowKeys(rows), "left,right,case");
-        compare(rows[0].hint, "IN EAR");
+        compare(rows[0].hint, "In ear");
         compare(rows[2].hint, "");
 
         var modes = AirpodsModel.modesFor(s);
@@ -68,7 +68,7 @@ TestCase {
         verify(modes.every(function (m) { return m.key !== "adaptive"; }));
 
         var rows = AirpodsModel.batteryRows(s);
-        compare(rows[1].hint, "IN EAR");
+        compare(rows[1].hint, "In ear");
         compare(AirpodsModel.stateLine(s), "Noise cancellation / Lid open");
     }
 
@@ -90,8 +90,8 @@ TestCase {
 
         var rows = AirpodsModel.batteryRows(s);
         compare(rowKeys(rows), "left,right,case");
-        compare(rows[0].hint, "CHARGING");
-        compare(rows[2].hint, "CHARGING");
+        compare(rows[0].hint, "Charging");
+        compare(rows[2].hint, "Charging");
 
         compare(AirpodsModel.stateLine(s), "Not connected / Lid closed");
     }

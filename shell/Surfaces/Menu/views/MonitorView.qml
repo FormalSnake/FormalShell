@@ -64,10 +64,10 @@ import "../../../Power/model.js" as Power
 //
 // Face rule for the whole file (spec "Type"): words take the sans section
 // label, values and identifiers take mono. A label this view WRITES (CPU,
-// OUTPUTS, NO GPU) is a `SectionLabel` and so uppercases; a label it is
-// HANDED (`eDP-2`, `/nix/store`, a hwmon chip name) is an identifier, so it
-// renders mono and verbatim. `eDP-2` uppercased names nothing the kernel or
-// the compositor would answer to.
+// Outputs, No GPU) is a `SectionLabel`, sentence case, a real acronym kept
+// as one; a label it is HANDED (`eDP-2`, `/nix/store`, a hwmon chip name)
+// is an identifier, so it renders mono and verbatim. Recasing `eDP-2` would
+// name something the kernel or the compositor does not answer to.
 Item {
     id: root
 
@@ -563,7 +563,7 @@ Item {
 
                     StatLine {
                         width: parent.width
-                        label: "TOTAL"
+                        label: "Total"
                         value: root._pct(SystemMonitorService.cpu.aggregate)
                     }
 
@@ -637,7 +637,7 @@ Item {
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
-                text: "MEMORY"
+                text: "Memory"
             }
 
             Cell {
@@ -675,13 +675,13 @@ Item {
                     // row says so rather than drawing an empty 0% track.
                     SectionLabel {
                         visible: !root._hasSwap
-                        text: "NO SWAP"
+                        text: "No swap"
                     }
 
                     StatLine {
                         width: parent.width
                         visible: root._hasSwap
-                        label: "SWAP"
+                        label: "Swap"
                         value: root._hasSwap
                             ? root._bytes(root._mem.swapTotalBytes - root._mem.swapFreeBytes) + " / " + root._bytes(root._mem.swapTotalBytes)
                             : "--"
@@ -706,7 +706,7 @@ Item {
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
-                text: "SYSTEM"
+                text: "System"
             }
 
             Cell {
@@ -719,7 +719,7 @@ Item {
 
                     StatLine {
                         width: parent.width
-                        label: "LOAD"
+                        label: "Load"
                         value: SystemMonitorService.load.available
                             ? SystemMonitorService.load.load1.toFixed(2) + " " + SystemMonitorService.load.load5.toFixed(2) + " " + SystemMonitorService.load.load15.toFixed(2)
                             : "--"
@@ -727,7 +727,7 @@ Item {
 
                     StatLine {
                         width: parent.width
-                        label: "PROCS"
+                        label: "Procs"
                         value: SystemMonitorService.load.available
                             ? SystemMonitorService.load.runningProcs + " / " + SystemMonitorService.load.totalProcs
                             : "--"
@@ -735,7 +735,7 @@ Item {
 
                     StatLine {
                         width: parent.width
-                        label: "UPTIME"
+                        label: "Uptime"
                         // Power/model.js's formatDuration, not a second
                         // copy of the same "1D 3H" arithmetic: it is a
                         // pure formatter that happens to live beside the
@@ -767,7 +767,7 @@ Item {
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
                 visible: GpuService.cards.length === 0
-                text: "NO GPU"
+                text: "No GPU"
             }
 
             Repeater {
@@ -807,13 +807,13 @@ Item {
                                 // its dGPU as card0.
                                 SectionLabel {
                                     id: cardKind
-                                    text: cardBlock.modelData.discrete ? "DISCRETE" : "INTEGRATED"
+                                    text: cardBlock.modelData.discrete ? "Discrete" : "Integrated"
                                 }
                             }
 
                             StatLine {
                                 width: parent.width
-                                label: "DRIVER"
+                                label: "Driver"
                                 value: cardBlock.modelData.driver
                             }
 
@@ -834,12 +834,12 @@ Item {
                             spacing: Core.Theme.space.xxs
 
                             SectionLabel {
-                                text: "OUTPUTS"
+                                text: "Outputs"
                             }
 
                             SectionLabel {
                                 visible: cardBlock.modelData.outputs.length === 0
-                                text: "NONE"
+                                text: "None"
                             }
 
                             Repeater {
@@ -892,13 +892,13 @@ Item {
                             // all, never an invented 0%.
                             SectionLabel {
                                 visible: !cardBlock.modelData.metrics.available
-                                text: "NO METRICS"
+                                text: "No metrics"
                             }
 
                             StatLine {
                                 width: parent.width
                                 visible: root._has(cardBlock.modelData.metrics.busy)
-                                label: "BUSY"
+                                label: "Busy"
                                 value: root._pct(cardBlock.modelData.metrics.busy)
                             }
 
@@ -931,7 +931,7 @@ Item {
                             StatLine {
                                 width: parent.width
                                 visible: root._has(cardBlock.modelData.metrics.clockMhz)
-                                label: "CLOCK"
+                                label: "Clock"
                                 value: root._mhz(cardBlock.modelData.metrics.clockMhz) + " / " + root._mhz(cardBlock.modelData.metrics.clockMaxMhz)
                             }
 
@@ -946,14 +946,14 @@ Item {
                             StatLine {
                                 width: parent.width
                                 visible: root._has(cardBlock.modelData.metrics.tempC)
-                                label: "TEMP"
+                                label: "Temp"
                                 value: root._degrees(cardBlock.modelData.metrics.tempC)
                             }
 
                             StatLine {
                                 width: parent.width
                                 visible: root._has(cardBlock.modelData.metrics.powerW)
-                                label: "POWER"
+                                label: "Power"
                                 value: root._watts(cardBlock.modelData.metrics.powerW)
                             }
 
@@ -964,7 +964,7 @@ Item {
                             StatLine {
                                 width: parent.width
                                 visible: root._has(cardBlock.modelData.metrics.fanPercent)
-                                label: "FAN"
+                                label: "Fan"
                                 value: root._pct(root._has(cardBlock.modelData.metrics.fanPercent)
                                     ? cardBlock.modelData.metrics.fanPercent / 100
                                     : null)
@@ -973,7 +973,7 @@ Item {
                             StatLine {
                                 width: parent.width
                                 visible: root._has(cardBlock.modelData.metrics.fanRpm)
-                                label: "FAN"
+                                label: "Fan"
                                 value: root._rpm(cardBlock.modelData.metrics.fanRpm)
                             }
                         }
@@ -992,13 +992,13 @@ Item {
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
-                text: "TEMPS"
+                text: "Temps"
             }
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
                 visible: root._tempGroups.length === 0
-                text: "NO SENSORS"
+                text: "No sensors"
             }
 
             Repeater {
@@ -1055,7 +1055,7 @@ Item {
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
-                text: "FANS"
+                text: "Fans"
             }
 
             // A machine with no tachometer at all (a fanless laptop, the
@@ -1065,7 +1065,7 @@ Item {
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
                 visible: root._fanGroups.length === 0
-                text: "NO FANS"
+                text: "No fans"
             }
 
             Repeater {
@@ -1119,7 +1119,7 @@ Item {
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
-                text: "NETWORK"
+                text: "Network"
             }
 
             // Two different empty states. No interface at all beyond
@@ -1130,7 +1130,7 @@ Item {
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
                 visible: root._netRows.length === 0
-                text: SystemMonitorService.net.available ? "NO TRAFFIC YET" : "NO INTERFACES"
+                text: SystemMonitorService.net.available ? "No traffic yet" : "No interfaces"
             }
 
             Repeater {
@@ -1182,13 +1182,13 @@ Item {
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
-                text: "DISK"
+                text: "Disk"
             }
 
             SectionLabel {
                 leftPadding: Core.Theme.space.controlPaddingX
                 visible: SystemMonitorService.disk.rows.length === 0
-                text: "NO MOUNTS"
+                text: "No mounts"
             }
 
             Repeater {

@@ -17,8 +17,7 @@
 //
 // Written the way a reader would type them (`Super+Ctrl+E`), not in
 // Hyprland's own uppercase (`SUPER+CTRL+E`): the launcher renders them as a
-// value in mono, and DESIGN.md §5 leaves uppercase to section labels and the
-// breadcrumb.
+// value in mono, and a chord is a key combination, never a section heading.
 var ROUTE_CHORDS = {
     "apps": "Super+Alt+Space",
     "calc": "Super+Ctrl+Q",

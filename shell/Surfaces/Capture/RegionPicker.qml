@@ -71,12 +71,12 @@ Scope {
     // cell and its 1-based position, so the legend, the Keys handler and the
     // headless `key` verb all read the same number.
     readonly property var _tools: [
-        { key: 1, action: "shot",   mode: "fullscreen", icon: "monitor",    label: "SCREEN" },
-        { key: 2, action: "shot",   mode: "windows",    icon: "app-window", label: "WINDOW" },
-        { key: 3, action: "shot",   mode: "smart",      icon: "crop",       label: "REGION" },
-        { key: 4, action: "record", mode: "fullscreen", icon: "monitor",    label: "SCREEN" },
-        { key: 5, action: "record", mode: "windows",    icon: "app-window", label: "WINDOW" },
-        { key: 6, action: "record", mode: "smart",      icon: "crop",       label: "REGION" }
+        { key: 1, action: "shot",   mode: "fullscreen", icon: "monitor",    label: "Screen" },
+        { key: 2, action: "shot",   mode: "windows",    icon: "app-window", label: "Window" },
+        { key: 3, action: "shot",   mode: "smart",      icon: "crop",       label: "Region" },
+        { key: 4, action: "record", mode: "fullscreen", icon: "monitor",    label: "Screen" },
+        { key: 5, action: "record", mode: "windows",    icon: "app-window", label: "Window" },
+        { key: 6, action: "record", mode: "smart",      icon: "crop",       label: "Region" }
     ]
 
     // Which toolbar cell the current action/mode pair lights. `region` (pure
@@ -869,7 +869,7 @@ Scope {
                     SectionLabel {
                         // The header carries the whole explanation rather than
                         // leaving the dimmed rows to imply it.
-                        text: "CANNOT CAPTURE: NO COMPOSITOR GEOMETRY"
+                        text: "Cannot capture: no compositor geometry"
                         color: Core.Theme.color.mutedForeground
                         // Lines up with the row text below rather than with the
                         // card edge: the rows are ghosts, so they draw no border
@@ -922,8 +922,8 @@ Scope {
                 y: toolbar.y - height - Core.Theme.space.md
 
                 SectionLabel {
-                    text: "RETURN " + (root._recording ? "RECORD" : "CAPTURE")
-                        + "  ·  CTRL+RETURN DISPLAY  ·  TAB CYCLE  ·  1-6 TOOL  ·  ESC CANCEL"
+                    text: "Return " + (root._recording ? "record" : "capture")
+                        + "  ·  Ctrl+Return display  ·  Tab cycle  ·  1-6 tool  ·  Esc cancel"
                     color: legend.dimForeground
                 }
             }
@@ -1130,7 +1130,7 @@ Scope {
 
                     SectionLabel {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "SHOT"
+                        text: "Shot"
                         color: Core.Theme.color.mutedForeground
                     }
 
@@ -1145,7 +1145,7 @@ Scope {
 
                     SectionLabel {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "REC"
+                        text: "Rec"
                         color: Core.Theme.color.mutedForeground
                     }
 
@@ -1176,7 +1176,7 @@ Scope {
                             }
                             SectionLabel {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: root._recording ? "RECORD" : "CAPTURE"
+                                text: root._recording ? "Record" : "Capture"
                                 color: commitCell.dimForeground
                             }
                         }

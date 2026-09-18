@@ -156,7 +156,7 @@ TestCase {
     }
 
     // One core of six, measured against the whole machine (Monitor/procs.js's
-    // own convention, matching the monitor view's machine-wide CPU TOTAL).
+    // own convention, matching the monitor view's machine-wide CPU Total).
     function test_cpu_fraction_is_the_share_of_the_whole_machine() {
         var row = _rowFor(_rows(), busyPid);
         verify(row !== null);

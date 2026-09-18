@@ -510,7 +510,7 @@ thing.
 | `Drawer` | the facade over two edge-anchored card recipes, picked by the live theme's `emerge` habit and never a theme name (§1 Motion, M57 D4, M60 T2): `join` (`Components/DrawerJoin.qml`, the metamorphosis) derives the line, the depth, the walls, the nested bud's span and the deform's two pivots, and assembles `Presence`, `Joint`, `Deform` and `Shoulders` underneath; `popover` (`Components/DrawerPopover.qml`, elementary's) drops the card straight out of the cell that opened it, with no line, no gap and no deform. Panel, the notification centre, the launcher, polkit, a plugin's overlay and the OSD all sit on it | attached, letting go, free |
 | `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
 | `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
-| `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
+| `SectionLabel` | `caption`, `medium`, `mutedForeground`, sentence case; optional trailing count `(3)` | none |
 | `Input` | the `input` role at `radiusMd`, `controlHeight`, placeholder `mutedForeground`; a dragged selection paints the `input.selection` role behind the text | `rest`, `focus` (ring), `error` (caption below) |
 | `Switch` | a 32x18 `switch.track` (`off`/`on`) holding a `switch.knob` | cursor (ring) |
 | `ButtonGroup` | a `trough` role at `radiusMd` holding one ghost `Button` per option, `xs` inside: a choice among several (power profiles, the audio device pick) when `exclusive`, a set of actions (the media transport) when not | selected (`button.selected`), active option (`primary` fill), cursor (ring on one button) |
@@ -708,9 +708,9 @@ no fill and no frame); rows with the cursor row in
 scrim. The split route's preview pane is the one card this surface spends
 inside its own frame (§1's ladder, rung 5): `radiusMd`, an `sm` gutter off
 the list, flat rows beside it. Nothing inside the pane draws a frame of its
-own, the preview picture included. `launcher: "grid"` (the pantheon habit)
-makes `menu.appGrid` default true instead of false, swapping app rows for
-Slingshot's icon grid; nothing else in this paragraph changes either way.
+own, the preview picture included. `menu.appGrid` defaults true under every
+theme (M72 T2), swapping app rows for Slingshot's icon grid; a user `false`
+still wins.
 
 **Toasts.** The sonner stack as built. `Card` chrome; critical is a
 `destructive` border and icon, not a fill. The card's icon slot resolves the
@@ -780,12 +780,15 @@ Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 - A card inside a card, and a resting fill-and-border around any block that
   only groups its children or only reports a value.
 - Foreground/background inversion for selection.
-- A trailing colon on a label. `NETWORKS (1)`, not `NETWORK:`.
+- A trailing colon on a label. `Networks (1)`, not `Network:`.
 - A full-bleed `primary` or `destructive` row. Colour goes on the border, the
   icon or the dot; fills are for buttons and the active toggle.
 - A hover fill that moves, or a cursor that slides between rows.
-- Uppercase anywhere but `SectionLabel`. The breadcrumb lost its carve-out
-  with its chips (2026-08-26): shadcn's breadcrumb is a path in natural case.
+- Uppercase anywhere. Headings are sentence case (2026-09-18 theme
+  boundary), same as the breadcrumb, which lost its own carve-out with its
+  chips (2026-08-26): shadcn's breadcrumb is a path in natural case. A real
+  acronym (CPU, IP, SSID) or an identifier handed in verbatim (`eDP-2`, a
+  device name) keeps its own case.
 
 ## 6. Verify
 
