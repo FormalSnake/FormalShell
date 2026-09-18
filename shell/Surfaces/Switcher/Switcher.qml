@@ -6,11 +6,11 @@ import qs.Compositor
 import qs.Components
 import "switcher.js" as Model
 
-// Gala's Alt+Tab (`lib/Widgets/WindowSwitcher.vala`,
+// Gala's Alt+Tab (`src/Widgets/WindowSwitcher/WindowSwitcher.vala`,
 // `WindowSwitcherIcon.vala`; the 2026-09-17 spec's Part 2, M60 T6): a row of
-// app icons on one card in the middle of the output, the selected one on a
-// quarter-strength `accent` tile with its title under the row. Keyboard
-// only, and summoned over IPC alone
+// the FOCUSED WORKSPACE's windows as app icons on one card in the middle of
+// the output, the selected one on a quarter-strength `accent` tile with its
+// title under the row. Keyboard only, and summoned over IPC alone
 // (`switcher next|prev|commit|cancel|state`), so the compositor's own bind
 // drives it: Alt+Tab advances, the release of the modifier commits, and
 // nothing here ever grabs a modifier of its own. That release bind has to
@@ -47,10 +47,27 @@ PanelWindow {
     // drops its focused window the moment this surface takes the keyboard,
     // and a live order would then reshuffle the row under the cursor.
     property var _openHistory: []
+    // And the workspace it runs against, taken at the same instant and for
+    // the same reason: the row is the windows on one workspace, and which
+    // one is decided when the card opens rather than followed afterwards.
+    property string _openWorkspaceId: ""
 
     property bool _focusPrimed: false
 
-    readonly property var entries: Model.entries(CompositorService.windows, root._openHistory)
+    // Set when a commit arrives with nothing open (M64 addendum, owner
+    // 2026-09-18): the compositor spawns `next` and `commit` as two
+    // independent `qs ipc call` processes, one per bind, with no ordering
+    // guarantee over which reaches the ipc socket first. A fast enough
+    // Alt+Tab can have the release's process win that race, and a commit
+    // that just failed silently would leave `next` to open the card on an
+    // Alt already gone, stuck until Esc or Enter. `_commitRaceTimer`'s
+    // window is far past any ipc scheduling jitter this rig or a real host
+    // has shown and far short of the gap between two distinct gestures, so
+    // it never couples an unrelated bare Alt tap to a later Alt+Tab.
+    property bool _commitPending: false
+
+    readonly property var entries: Model.entries(CompositorService.windows,
+        root._openHistory, root._openWorkspaceId)
     readonly property int count: root.entries.length
     readonly property var selected: (root.count > 0 && root.index < root.count)
         ? root.entries[root.index] : null
@@ -75,37 +92,82 @@ PanelWindow {
 
     // `next` and `prev` are the whole summon path: the first press opens the
     // card with the cursor one step along, which is the window before the
-    // focused one, and every press after that walks the row.
+    // focused one, and every press after that walks the row. A workspace
+    // holding one window wraps that step straight back onto it, so a tap too
+    // quick to read the card leaves focus where it already was rather than
+    // taking the compositor somewhere else.
     function step(direction) {
         if (!root.isOpen) {
             root._openHistory = root._history;
+            root._openWorkspaceId = CompositorService.focusedWorkspaceId;
             root.index = Model.advance(0, root.count, direction);
             root._focusPrimed = false;
             root.isOpen = true;
             root._beginFocusPrime();
             Qt.callLater(function () { backdrop.forceActiveFocus(); });
+            // The release that opened this got here first (see
+            // `_commitPending`'s header): commit against the row this open
+            // just built instead of leaving the card up with nothing
+            // holding the modifier any more.
+            if (root._commitPending) {
+                root._commitPending = false;
+                _commitRaceTimer.stop();
+                root._commitNow();
+            }
             return;
         }
         root.index = Model.advance(root.index, root.count, direction);
     }
 
+    Timer {
+        id: _commitRaceTimer
+        interval: 80
+        onTriggered: root._commitPending = false
+    }
+
     // The selected window through the backend's own focus verb, on the
     // opaque id the compositor handed over (CLAUDE.md: never parsed, never
     // compared numerically).
-    //
-    // Nothing at all while the card is closed: this is bound to the RELEASE
-    // of a modifier, so it arrives on every tap of that key, and a commit
-    // that ran anyway would move focus to whatever the last switch left the
-    // cursor on.
     function commit() {
-        if (!root.isOpen)
-            return false;
+        if (root.isOpen)
+            return root._commitNow();
+        // Bound to the release of a modifier, so it arrives on every tap of
+        // that key, open or not; a bare tap resolves as the no-op it always
+        // was once `_commitRaceTimer` runs out with no `next`/`prev` to
+        // catch.
+        root._commitPending = true;
+        _commitRaceTimer.restart();
+        return true;
+    }
+
+    function _commitNow() {
         var id = root.selectedId;
+        var primed = root._focusPrimed;
         root.close();
         if (id === "")
             return false;
         CompositorService.focusWindow(id);
+        // A commit inside the prime window lands while this layer still holds
+        // the keyboard exclusively, and Hyprland hands focus back to the
+        // window it came from once the layer lets go, undoing the switch. The
+        // second dispatch runs after that release has been processed.
+        if (!primed) {
+            root._refocusId = id;
+            _refocusTimer.restart();
+        }
         return true;
+    }
+
+    property string _refocusId: ""
+
+    Timer {
+        id: _refocusTimer
+        interval: 120
+        onTriggered: {
+            if (!root.isOpen && root._refocusId !== "")
+                CompositorService.focusWindow(root._refocusId);
+            root._refocusId = "";
+        }
     }
 
     function close() {

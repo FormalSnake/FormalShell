@@ -2,9 +2,10 @@ import QtQuick
 import QtTest
 import "../shell/Surfaces/Switcher/switcher.js" as Switcher
 
-// The window switcher's list and its cursor (M60 T6): Gala's order, the wrap
-// at either end of the row, the grid a row too long for the output breaks
-// into, and the empty case a session with nothing to switch between gives.
+// The window switcher's list and its cursor (M60 T6, M64): Gala's order, the
+// one workspace it lists, the wrap at either end of the row, the grid a row
+// too long for the output breaks into, and the empty case a session with
+// nothing to switch between gives.
 TestCase {
     name: "SwitcherModel"
 
@@ -51,6 +52,53 @@ TestCase {
         compare(out.length, 2);
         compare(out[0].id, "0xa");
         compare(out[1].id, "0xb");
+    }
+
+    // Gala lists the ACTIVE workspace's windows and no others
+    // (`handle_switch_windows` hands `get_active_workspace ()` to
+    // `collect_all_windows`). Ours does the same, which is what stops a quick
+    // Alt+Tab committing to a window somewhere else and taking the compositor
+    // there (owner, 2026-09-18).
+    function test_only_the_workspace_being_looked_at_is_offered() {
+        var windows = [win("0xa", "1"), win("0xelsewhere", "2"), win("0xb", "1")];
+        var out = Switcher.entries(windows, ["0xelsewhere", "0xb"], "1");
+        compare(out.length, 2);
+        compare(out[0].id, "0xb");
+        compare(out[1].id, "0xa");
+    }
+
+    // The history is the session's, not one workspace's, so an id on it that
+    // names a window elsewhere names nothing here rather than pulling that
+    // window onto the card.
+    function test_a_history_entry_from_another_workspace_offers_nothing() {
+        var windows = [win("0xa", "1"), win("0xelsewhere", "2")];
+        var out = Switcher.entries(windows, ["0xelsewhere"], "1");
+        compare(out.length, 1);
+        compare(out[0].id, "0xa");
+    }
+
+    // One window on the workspace is still a card, the way Gala shows one:
+    // the cursor's single step wraps onto it, so a tap leaves focus put.
+    function test_one_window_on_the_workspace_is_the_only_entry() {
+        var windows = [win("0xa", "1"), win("0xelsewhere", "2")];
+        var out = Switcher.entries(windows, [], "1");
+        compare(out.length, 1);
+        compare(Switcher.advance(0, out.length, 1), 0);
+    }
+
+    // A workspace whose windows have all gone offers none, which is the cell
+    // saying so rather than the rest of the session.
+    function test_an_empty_workspace_offers_none_of_the_others() {
+        var windows = [win("0xelsewhere", "2"), win("0xalso", "3")];
+        compare(Switcher.entries(windows, ["0xelsewhere"], "1").length, 0);
+    }
+
+    // No workspace named is no filter at all, the convention
+    // shell/Compositor/focus.js takes for the same value.
+    function test_an_empty_workspace_id_filters_nothing() {
+        var windows = [win("0xa", "1"), win("0xelsewhere", "2")];
+        compare(Switcher.entries(windows, [], "").length, 2);
+        compare(Switcher.entries(windows, []).length, 2);
     }
 
     function test_the_empty_case_is_an_empty_list() {

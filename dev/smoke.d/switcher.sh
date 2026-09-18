@@ -11,6 +11,13 @@
 # isolated home's icon theme (#CE5D97, which nothing else in a frame is) and
 # a cell carrying an icon is telling apart from an empty one by colour alone.
 #
+# A fourth window sits on workspace 2 and must not be offered (M64): Gala
+# lists the active workspace's windows alone, and offering the rest is what
+# made a quick Alt+Tab commit to a window elsewhere and take the compositor
+# to it. The compositor's own client list is read beside `switcher state`, so
+# a run where that fourth window never spawned cannot pass by having nothing
+# to exclude.
+#
 # What the frames are read for, without hardcoding a single colour the
 # palette owns: the icon's pink at all three cell centres (three icon cells,
 # not one card with a gap in it), and the 12px margin the icon leaves inside
@@ -38,6 +45,7 @@ switcher_first_png="$shot_dir/switcher-first.png"
 switcher_layers_open="$shot_dir/switcher-layers-open.json"
 switcher_layers_closed="$shot_dir/switcher-layers-closed.json"
 switcher_active_json="$shot_dir/switcher-active.json"
+switcher_clients_json="$shot_dir/switcher-clients.json"
 
 # The card's own geometry on this rig, off the tokens rather than off a
 # screenshot: a 64px icon inside `panelPadding` on all four sides is an 88px
@@ -73,7 +81,7 @@ leg_switcher_validate() {
 }
 
 leg_switcher_timing() {
-  leg_timing 34 90
+  leg_timing 40 100
 }
 
 leg_switcher_drive() {
@@ -86,7 +94,14 @@ sleep 4
 "$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke two' sh -c 'sleep 300'"
 sleep 2
 "$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke three' sh -c 'sleep 300'"
-sleep 4
+sleep 3
+# And one the card must not hold, moved off silently so the monitor stays on
+# the workspace the other three are on.
+"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-elsewhere --title='formalshell smoke elsewhere' sh -c 'sleep 300'"
+sleep 3
+"$hyprctl_bin" dispatch movetoworkspacesilent "2,class:formalshell-smoke-elsewhere"
+sleep 3
+"$hyprctl_bin" -j clients > "$switcher_clients_json" 2>&1
 
 # The first press opens the card on the window before the focused one; the
 # second walks on to the third entry.
@@ -150,7 +165,8 @@ _switcher_count_layers() {
 leg_switcher_assert() {
   local f
   for f in "$switcher_second_json" "$switcher_first_json" "$switcher_closed_json" \
-    "$switcher_layers_open" "$switcher_layers_closed" "$switcher_active_json"; do
+    "$switcher_layers_open" "$switcher_layers_closed" "$switcher_active_json" \
+    "$switcher_clients_json"; do
     [ -s "$f" ] || fail "no switcher reply produced at $f"
   done
   for f in "$switcher_second_png" "$switcher_first_png"; do
@@ -167,9 +183,27 @@ leg_switcher_assert() {
   selected_title=$("$jq_bin" -r '.title' "$switcher_second_json")
   echo "two presses: open=$open index=$index count=$count title='$selected_title'"
   [ "$open" = "true" ] || fail "the switcher is not open after two next calls: $(cat "$switcher_second_json")"
-  [ "$count" = "3" ] || fail "the switcher offers $count windows, not the session's three"
   [ "$index" = "2" ] || fail "the cursor is on entry $index, not the third"
   [ -n "$selected_id" ] || fail "the switcher reports no window under the cursor"
+
+  # The session holds four windows and the card holds three: the fourth is on
+  # workspace 2, and the card is the workspace being looked at.
+  local mapped_windows elsewhere elsewhere_workspace
+  mapped_windows=$("$jq_bin" -r 'length' "$switcher_clients_json")
+  elsewhere=$("$jq_bin" -r '[.[] | select(.class == "formalshell-smoke-elsewhere")] | length' \
+    "$switcher_clients_json")
+  elsewhere_workspace=$("$jq_bin" -r \
+    '[.[] | select(.class == "formalshell-smoke-elsewhere") | .workspace.id] | first' \
+    "$switcher_clients_json")
+  echo "session: $mapped_windows windows mapped, one on workspace $elsewhere_workspace"
+  [ "${mapped_windows:-0}" -ge 4 ] \
+    || fail "the session holds $mapped_windows windows, so the one for another workspace never spawned and there was nothing to exclude"
+  [ "${elsewhere:-0}" -eq 1 ] \
+    || fail "$elsewhere windows carry the other workspace's app id, expected exactly one"
+  [ "$elsewhere_workspace" = "2" ] \
+    || fail "the fourth window is on workspace $elsewhere_workspace, not the 2 it was moved to"
+  [ "$count" = "3" ] \
+    || fail "the switcher offers $count windows, not the three on this workspace: a window from somewhere else reached the card"
 
   # The surface itself, off the compositor's own layer list.
   local mapped
