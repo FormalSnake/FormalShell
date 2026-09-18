@@ -486,14 +486,8 @@ TestCase {
         var dark = Style.resolve(style, "bar", "dark", ctx("dark"));
         compare(dark.fill, Style.LITERAL_COLORS.transparent);
         compare(dark.ink, black + "@0.65");
-        // Dark ink takes the white pair, whose lower layer is an unblurred
-        // lip rather than a second halo.
-        compare(dark.inkShadow.length, 2);
-        compare(dark.inkShadow[0].color, white + "@0.3");
-        compare(dark.inkShadow[0].blur, 2);
-        compare(dark.inkShadow[1].color, white + "@0.25");
-        compare(dark.inkShadow[1].blur, 0);
-        compare(dark.inkShadow[1].y, 1);
+        // Dark ink carries no shadow.
+        compare(dark.inkShadow.length, 0);
 
         // A fill of its own under the ink steps the shadow back to
         // elementary's lighter pair, and white on white at 0.5 carries none

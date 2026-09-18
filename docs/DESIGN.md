@@ -594,9 +594,8 @@ elementary's own text shadow under it, both layers of it: the table's
 top) and `Components/InkGlow.qml` draws one `MultiEffect` per layer behind
 the cell's whole content box, so the blurred half is rendered rather than
 approximated. Black at 0.3 and 0.6 under white words on a bare band, 0.15
-and 0.3 once the band has a fill of its own, white at 0.3 and 0.25 under
-dark words, and none at all over white at 0.5, which instantiates no
-effect. `bar.paint` in settings.json overrules the reading: `transparent`
+and 0.3 once the band has a fill of its own, and none at all under dark
+words or over white at 0.5, which instantiates no effect. `bar.paint` in settings.json overrules the reading: `transparent`
 keeps the ink adaptive and drops the fill, and the five names pin one paint
 outright. `bar paint` and `debug dump` report the paint, whether it was
 pinned, the output it was read on, and the three numbers.

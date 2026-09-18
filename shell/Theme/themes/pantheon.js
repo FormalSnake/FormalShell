@@ -92,10 +92,10 @@ var CURSOR_LAYERS = [{ spread: 2, color: "ring", alpha: 0.3 }];
 // MultiEffect per layer behind the glyph, so the blurred half is rendered
 // rather than collapsed onto `Text.Raised`'s 1px offset.
 //
-// `bare` is the pair under white words drawn straight onto a wallpaper,
+// `bare` is the pair under white words drawn straight onto a wallpaper and
 // `filled` the lighter pair the translucent panel takes once it has a fill
-// of its own, and `white` what sits under dark words: a wide halo and an
-// unblurred lip a pixel down.
+// of its own. Dark words carry none: elementary's white pair under them
+// reads as a smear over a bright wallpaper (owner, 2026-09-18).
 var INK_SHADOW = {
     bare: [
         { blur: 2, color: "black", alpha: 0.3 },
@@ -104,10 +104,6 @@ var INK_SHADOW = {
     filled: [
         { blur: 2, color: "black", alpha: 0.15 },
         { y: 1, blur: 2, color: "black", alpha: 0.3 }
-    ],
-    white: [
-        { blur: 2, color: "white", alpha: 0.3 },
-        { y: 1, color: "white", alpha: 0.25 }
     ]
 };
 
@@ -163,9 +159,8 @@ var STYLE = {
             // A calm dark wallpaper: the base as it stands, white ink
             // straight onto the desktop with no band drawn at all.
             light: {},
-            // A calm bright one: the same bare band, dark ink, and the
-            // shadow turns white with it.
-            dark: { ink: ["black", 0.65], inkShadow: INK_SHADOW.white },
+            // A calm bright one: the same bare band, dark ink, no shadow.
+            dark: { ink: ["black", 0.65], inkShadow: [] },
             // The one paint whose ink carries no shadow at all: over white
             // at 0.5 the band is its own contrast, and elementary drops the
             // `text-shadow` on `panel.translucent.color-light`.
