@@ -392,11 +392,12 @@ TestCase {
         compare(focus.hairlines.length, 1);
     }
 
-    // The bubble (elementary's notification): the view at 0.8 on two casts,
-    // and a row inside the centre drops every one of them.
+    // The bubble (elementary's notification): the view on two casts, opaque
+    // since its namespace carries no blur (M62), and a row inside the centre
+    // drops every one of them.
     function test_the_pantheon_bubble_flattens_inside_the_centre() {
         var bubble = Style.resolve(Pantheon.STYLE, "notification", "rest", ctx("dark"));
-        compare(bubble.fill, "role:card@0.8");
+        compare(bubble.fill, "role:card");
         compare(bubble.radius, 9);
         compare(bubble.casts.length, 2);
         compare(bubble.casts[1].blur, 9);
@@ -440,13 +441,18 @@ TestCase {
         compare(dark.ink, black + "@0.65");
         compare(dark.inkShadow, white + "@0.25");
 
+        // A fill of its own under the ink steps the shadow back to
+        // elementary's lighter pair, and white on white at 0.5 carries none
+        // at all.
         var translucentDark = Style.resolve(style, "bar", "translucentDark", ctx("dark"));
         compare(translucentDark.fill, black + "@0.3");
         compare(translucentDark.ink, white);
+        compare(translucentDark.inkShadow, black + "@0.3");
 
         var translucentLight = Style.resolve(style, "bar", "translucentLight", ctx("dark"));
         compare(translucentLight.fill, white + "@0.5");
         compare(translucentLight.ink, black + "@0.65");
+        compare(translucentLight.inkShadow, Style.LITERAL_COLORS.transparent);
         compare(translucentLight.hairlines.length, 2);
         compare(translucentLight.hairlines[0].color, white + "@0.15");
         compare(translucentLight.hairlines[1].edge, "bottom");
@@ -459,6 +465,56 @@ TestCase {
         // Every band draws its own edge at width 0: wingpanel has no line
         // facing the desktop, and Bar reads the width either way.
         compare(Style.resolve(style, "bar", null, ctx("dark")).edge.width, 0);
+    }
+
+    // The screen frame's ring under the same habit (M62): with
+    // `frame.thickness` set the bar's band is a stretch of the ring, so the
+    // ring carries the band's own five paints. FrameRing draws a fill and a
+    // border and nothing else, so what wingpanel puts along the panel box's
+    // inside edge lands on the border and its cast is dropped.
+    function test_the_pantheon_ring_takes_the_bands_paint() {
+        var style = Pantheon.STYLE;
+        var white = Style.LITERAL_COLORS.white;
+        var black = Style.LITERAL_COLORS.black;
+        var clear = Style.LITERAL_COLORS.transparent;
+
+        // Both bare paints: nothing drawn at all, and a border that is
+        // present (FrameRing reads its width unguarded) and invisible.
+        var bare = ["light", "dark"];
+        for (var i = 0; i < bare.length; i++) {
+            var box = Style.resolve(style, "frame", bare[i], ctx("dark"));
+            compare(box.fill, clear, bare[i] + " draws a fill");
+            compare(box.border.color, clear, bare[i] + " draws a line");
+            compare(box.border.width, 1);
+        }
+
+        var translucentDark = Style.resolve(style, "frame", "translucentDark", ctx("dark"));
+        compare(translucentDark.fill, black + "@0.3");
+        compare(translucentDark.border.color, black + "@0.75");
+        compare(translucentDark.casts.length, 0);
+
+        var translucentLight = Style.resolve(style, "frame", "translucentLight", ctx("dark"));
+        compare(translucentLight.fill, white + "@0.5");
+        compare(translucentLight.border.color, white + "@0.15");
+
+        compare(Style.resolve(style, "frame", "maximized", ctx("dark")).fill, black);
+
+        // The base under all five, which is what a paint the sampler has
+        // not answered yet resolves to.
+        compare(Style.resolve(style, "frame", "", ctx("dark")).fill, clear);
+    }
+
+    // metamorphosis' ring has no states and is the card fill under the
+    // toplevel line whatever string it is handed: the frame role gained a
+    // `rest` with M62 and nothing about the shipped frame moved.
+    function test_the_metamorphosis_ring_ignores_a_paint() {
+        var rest = Style.resolve(Metamorphosis.STYLE, "frame", null, ctx("dark"));
+        compare(rest.fill, "role:card@0.85");
+        compare(rest.border.color, "role:border");
+        compare(rest.border.width, 1);
+        compare(rest.radius, 0);
+        compare(Style.resolve(Metamorphosis.STYLE, "frame", "translucentDark", ctx("dark")).fill,
+            "role:card@0.85");
     }
 
     // An open indicator fills instead of carrying a line along the band

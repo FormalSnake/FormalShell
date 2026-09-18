@@ -33,7 +33,7 @@
 // on screen.
 var ROLES = {
     "bar": ["rest"],
-    "frame": [],
+    "frame": ["rest"],
     "card": ["rest", "opaque"],
     "notification": ["rest", "critical", "flat", "flatCritical"],
     "popover": [],
@@ -81,10 +81,16 @@ var HABITS = {
 // validation test; a surface asks `hasState` before naming one, so a table
 // without it falls back to the state under it instead of to the role's
 // base.
+//
+// `frame` takes the same five (M62): with `frame.thickness` set the bar's
+// band is a stretch of the ring rather than a strip of its own, so the ring
+// has to wear the paint the band would have, or the habit disappears on
+// exactly the config that shows the most of it.
 var HABIT_STATES = {
     bar: {
         wingpanel: {
             "bar": ["light", "dark", "translucentLight", "translucentDark", "maximized"],
+            "frame": ["light", "dark", "translucentLight", "translucentDark", "maximized"],
             "cell": ["ghostOpen"]
         }
     }

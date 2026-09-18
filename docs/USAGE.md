@@ -182,6 +182,42 @@ Everything else is opt-in and never shows up until you name it: `chevron`,
 `keyboardLayout`, `systemUpdate`, `airpods`, `dualsense`, `display`,
 `monitor`.
 
+### The band's paint
+
+Under `theme.preset: "pantheon"` the bar is a wingpanel band rather than a
+strip card: it draws no card of its own and reads the wallpaper directly
+under it to decide what it wears. A calm wallpaper gets no fill at all, just
+white or dark words with a text shadow under them; a busy one gets a wash,
+black at 0.3 in dark mode and white at 0.5 in light, so the words stay
+readable. A window covering the output takes the band solid black. With
+`frame.thickness` set the screen frame's ring is that same band carried
+round the output, so it wears the same paint.
+
+`bar.paint` overrules the reading. `"auto"` (the default) is the rule above.
+`"transparent"` keeps the rule for the ink and drops the wash: a busy
+wallpaper then gets dark words over a bright band and light words over a
+dark one, with no fill anywhere, which is what you want if your wallpaper
+trips the busy rule and you would rather have the panel elementary shows
+over a calm sky. The five paint names, `"light"`, `"dark"`,
+`"translucentLight"`, `"translucentDark"` and `"maximized"`, pin one
+outright and stop the sampling mattering at all. Anything else reads as
+`"auto"`.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "theme": { "preset": "pantheon" }, "bar": { "paint": "transparent" } }
+```
+
+```nix
+# home-manager
+programs.formalshell.settings.bar.paint = "transparent";
+```
+
+`qs ipc call bar paint` reports what each band settled on, whether it was
+pinned, and the three numbers the rule read off the wallpaper. The key does
+nothing under the other presets, whose bar is a strip with nothing to
+sample.
+
 Naming a region replaces it wholesale, so spell out the builtins you still
 want alongside the new one. Two cells are easy to lose that way: `bell` in
 the right region, and `launcher` at the head of the left region, which is the
@@ -280,6 +316,7 @@ fs bar chevron status              # which regions collapse, and what is hidden 
 fs bar chevron toggle              # expand | collapse | toggle | status
 fs bar chevronAt expand right      # spell out the region when several regions have one
 fs bar room                        # per screen: slack, each region's cells/hidden, nowPlaying budget
+fs bar paint                       # per screen: the band's paint, whether it was pinned, and the numbers behind it
 ```
 
 **Room on the bar.** A crowded end region never cuts a cell in half. The
@@ -669,7 +706,10 @@ or edge that opened them instead of budding off the bar's line, toasts and
 the notification centre draw as elementary's own bubble instead of the
 shadcn card, the app grid is the launcher's default route instead of rows,
 and the bar paints as a wingpanel band that reads the wallpaper under it
-instead of a strip card.
+instead of a strip card (`bar.paint` in the Bar section overrules that
+reading). Its surfaces are opaque: elementary's popovers and dialogs have
+nothing behind them, and the one surface it makes translucent is the panel,
+whose alpha is part of the band's paint rather than `theme.surfaceOpacity`.
 
 Under the hood a preset is a table file, `shell/Theme/themes/<name>.js`,
 plus the scalar keys in the table below; `retro`'s file re-exports
@@ -683,7 +723,7 @@ any of them, so the columns below are the whole of it.
 | `theme.radius` | 10 | 0 | 6 |
 | `theme.icons` | `lucide` | `nerd` | `lucide` |
 | `theme.fonts` | `pair` | `mono` | `pair` |
-| `theme.surfaceOpacity` | 0.85 | 1 | 0.85 |
+| `theme.surfaceOpacity` | 0.85 | 1 | 1 |
 | `theme.blur` | true | false | true |
 | `theme.dither` | false | true | false |
 

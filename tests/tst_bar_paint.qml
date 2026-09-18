@@ -115,6 +115,63 @@ TestCase {
         compare(Paint.decide({ mean: 0, std: 0, acutance: 0, sampled: false }, "light", false), "light");
     }
 
+    // --- The pin ---------------------------------------------------------
+
+    // `bar.paint` (M62). The rule is the default and the answer to anything
+    // that is not one of the seven, the same unknown-value habit
+    // presets.js keeps for `theme.preset`.
+    function test_an_unknown_pin_reads_as_the_rule() {
+        compare(Paint.pin("auto"), "auto");
+        compare(Paint.pin("transparent"), "transparent");
+        compare(Paint.pin("translucentDark"), "translucentDark");
+        compare(Paint.pin("solid"), "auto");
+        compare(Paint.pin(""), "auto");
+        compare(Paint.pin(42), "auto");
+        compare(Paint.pin(null), "auto");
+        compare(Paint.pin(undefined), "auto");
+        // An inherited Object property is not a pin either.
+        compare(Paint.pin("constructor"), "auto");
+    }
+
+    // A pinned paint is the answer whatever is under the band, a window
+    // covering the output included: pinning is the user saying they have
+    // looked.
+    function test_a_pinned_paint_wins_over_the_sample() {
+        var busy = stats(120, 80, 0);
+        compare(Paint.decide(busy, "dark", false, "light"), "light");
+        compare(Paint.decide(stats(230, 0, 0), "dark", false, "translucentDark"), "translucentDark");
+        compare(Paint.decide(busy, "dark", true, "dark"), "dark");
+        compare(Paint.decide(null, "dark", false, "maximized"), "maximized");
+    }
+
+    // `auto` is what every session had before the key existed, so the four
+    // readings above are unchanged by it and by its absence alike.
+    function test_auto_samples_the_way_it_always_did() {
+        var busy = stats(120, 80, 0);
+        compare(Paint.decide(busy, "dark", false, "auto"), Paint.decide(busy, "dark", false));
+        compare(Paint.decide(busy, "light", false, "auto"), "translucentLight");
+        compare(Paint.decide(stats(230, 0, 0), "dark", false, "auto"), "dark");
+        compare(Paint.decide(stats(30, 0, 0), "dark", false, "auto"), "light");
+        compare(Paint.decide(stats(30, 0, 0), "dark", true, "auto"), "maximized");
+        // An unknown value falls back to the rule rather than to a paint.
+        compare(Paint.decide(busy, "dark", false, "solid"), "translucentDark");
+    }
+
+    // `transparent` is the rule with the busy branch taken out: no fill on a
+    // band the wallpaper would have filled, and the ink still follows the
+    // wallpaper's own mean rather than being pinned with it.
+    function test_transparent_drops_the_fill_and_keeps_the_ink_adaptive() {
+        compare(Paint.decide(stats(120, 80, 0), "dark", false, "transparent"), "light");
+        compare(Paint.decide(stats(230, 80, 0), "dark", false, "transparent"), "dark");
+        compare(Paint.decide(stats(200, 80, 20), "light", false, "transparent"), "dark");
+        compare(Paint.decide(stats(30, 0, 0), "dark", false, "transparent"), "light");
+        // Nothing sampled is still the bare band with light ink.
+        compare(Paint.decide(null, "dark", false, "transparent"), "light");
+        // A window over the output still takes it solid: none of the
+        // wallpaper is visible to be transparent over.
+        compare(Paint.decide(stats(230, 0, 0), "dark", true, "transparent"), "maximized");
+    }
+
     // --- The band's rect -------------------------------------------------
 
     // The bar's own edge and thickness against the output, scaled into the

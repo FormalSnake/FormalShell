@@ -3,6 +3,7 @@ import qs.Compositor
 import qs.Components
 import qs.Core as Core
 import qs.Theme
+import "../../Theme/barpaint.js" as Paint
 
 // The band under `bar.kind: wingpanel` (the 2026-09-17 spec's Part 2, M60
 // T3): no strip card, no hairline, no ghost cell borders. What the band is
@@ -32,6 +33,7 @@ Item {
     required property var owner
 
     readonly property string paint: sampler.paint
+    readonly property bool pinned: sampler.pinned
 
     readonly property var _box: Core.Theme.box("bar", root.paint)
 
@@ -52,6 +54,8 @@ Item {
         var s = sampler.stats;
         return {
             paint: root.paint,
+            pin: sampler.pin,
+            pinned: sampler.pinned,
             mean: s.mean,
             std: s.std,
             acutance: s.acutance,
@@ -69,6 +73,11 @@ Item {
             ? Qt.size(root.owner.screen.width, root.owner.screen.height)
             : Qt.size(0, 0)
         mode: Core.Theme.color.mode
+        // `bar.paint`: the rule by default, and the one thing on this
+        // surface a user can overrule. Read here rather than in Theme.qml
+        // because it decides a paint rather than a token, and the band is
+        // the only thing that resolves one.
+        pin: Paint.pin(Core.Config.get("bar.paint", "auto"))
         // The raw set, not `outputCoveredByFullscreen`: whether the chrome
         // hides is the auto-hide's business, and the band's paint is the
         // same question either way.

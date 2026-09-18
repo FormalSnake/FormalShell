@@ -32,9 +32,13 @@ Item {
     // A window covering this output, which wins over everything the
     // wallpaper says.
     property bool fullscreen: false
+    // `bar.paint`, normalised: the rule, the rule with no fill in it, or one
+    // of the five paints pinned outright (barpaint.js's PINS).
+    property string pin: "auto"
 
     readonly property var stats: root._stats
-    readonly property string paint: Paint.decide(root._stats, root.mode, root.fullscreen)
+    readonly property bool pinned: root.pin !== "auto"
+    readonly property string paint: Paint.decide(root._stats, root.mode, root.fullscreen, root.pin)
 
     property var _stats: ({ mean: 0, std: 0, acutance: 0, sampled: false })
 

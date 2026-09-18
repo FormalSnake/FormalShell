@@ -10,7 +10,14 @@ import QtQuick
 // bar.position (string, default "top", one of "top" / "bottom" / "left" /
 // "right": which output edge the bar runs along; on a left or right bar the
 // three bar.layout regions run top to bottom and every cell turns its
-// content along the strip, icons excepted), tray.maxVisible (number,
+// content along the strip, icons excepted), bar.paint (string, default
+// "auto", only read under a preset whose bar habit is wingpanel: which of
+// the band's paints it wears, and the screen frame's ring with it.
+// "auto" is wingpanel's own rule, the wallpaper under the band deciding;
+// "transparent" is that rule with the fill taken out, so a busy wallpaper
+// still gets ink read off its brightness rather than a black wash;
+// "light" / "dark" / "translucentLight" / "translucentDark" / "maximized"
+// pin one outright. Theme/barpaint.js), tray.maxVisible (number,
 // default 0: the most SNI icons the bar strip will carry before the WHOLE
 // tray moves to its second bar, Surfaces/Bar/TrayOverflow.qml. 0, the
 // default, is none, so the tray lives in that bar behind the strip's dots

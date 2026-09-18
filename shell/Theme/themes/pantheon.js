@@ -123,6 +123,12 @@ var STYLE = {
         // (`0 1px 3px black 0.15, 0 1px 1px black 0.3`) is not here: the
         // bar's window is exactly the band's thickness and reserves that
         // same thickness, so there is no row under the band to blur into.
+        //
+        // Each paint's ink carries ONE shadow where elementary writes two,
+        // the offset one: Qt draws a text shadow as `Text.Raised` with a
+        // 1px offset and has no blur to give the `0 0 2px` half, so the
+        // pair collapses to its lower member (black 0.6 bare, black 0.3
+        // under a fill of its own, white 0.25 for dark ink).
         "bar": {
             rest: {
                 fill: "transparent",
@@ -137,30 +143,63 @@ var STYLE = {
             // A calm bright one: the same bare band, dark ink, and the
             // shadow turns white with it.
             dark: { ink: ["black", 0.65], inkShadow: ["white", 0.25] },
+            // The one paint whose ink carries no shadow at all: over white
+            // at 0.5 the band is its own contrast, and elementary drops the
+            // `text-shadow` on `panel.translucent.color-light`.
             translucentLight: {
                 fill: "white",
                 fillAlpha: 0.5,
                 ink: ["black", 0.65],
-                inkShadow: ["white", 0.25],
+                inkShadow: ["transparent", 1],
                 layers: [
                     { inset: true, y: 1, color: "white", alpha: 0.15 },
                     { inset: true, y: -1, color: "white", alpha: 0.03 }
                 ]
             },
-            translucentDark: { fill: "black", fillAlpha: 0.3 },
+            // A fill of its own under the ink, so the shadow steps back to
+            // the lighter pair elementary gives the translucent panel
+            // (`0 0 2px black 0.15, 0 1px 2px black 0.3`).
+            translucentDark: { fill: "black", fillAlpha: 0.3, inkShadow: ["black", 0.3] },
             maximized: { fill: "black", fillAlpha: 1 }
         },
 
         // No elementary counterpart: a screen frame is ours. It is the bar's
-        // own band carried round the output, so it takes the band's paint,
-        // and the hairline along the cut-out is the toplevel border.
-        // FrameRing reads `border.width` unguarded, so this entry always
-        // carries one.
+        // own band carried round the output, so it takes the band's own five
+        // paints (M62) off the same sampler, and what wingpanel draws along
+        // the panel box's inside edge lands on the hairline the ring already
+        // has along its cut-out.
+        //
+        // FrameRing is a Shape rather than a Box: it reads `fill` and
+        // `border` and nothing else, so `translucentDark`'s cast has no
+        // layer list to go in and is dropped. It would fall on the desktop
+        // inside the cut-out, which is where windows are.
+        //
+        // FrameRing reads `border.width` unguarded, so every state here
+        // carries a border; the two bare paints carry a transparent one,
+        // since a ring with no fill has no edge to draw either.
         "frame": {
-            fill: "black",
-            fillAlpha: 0.3,
-            radius: 0,
-            border: { color: "black", alpha: BORDERS, width: 1 }
+            rest: {
+                fill: "transparent",
+                radius: 0,
+                border: { color: "transparent", width: 1 }
+            },
+            light: {},
+            dark: {},
+            translucentLight: {
+                fill: "white",
+                fillAlpha: 0.5,
+                border: { color: "white", alpha: 0.15, width: 1 }
+            },
+            translucentDark: {
+                fill: "black",
+                fillAlpha: 0.3,
+                border: { color: "black", alpha: BORDERS, width: 1 }
+            },
+            maximized: {
+                fill: "black",
+                fillAlpha: 1,
+                border: { color: "black", alpha: BORDERS, width: 1 }
+            }
         },
 
         // The card (`widgets/card.scss`): the view fill, the lit rim, a 1px
@@ -186,9 +225,12 @@ var STYLE = {
         },
 
         // The notification bubble (`notifications/data/application.css`,
-        // `src/AbstractBubble.vala`): the view at 0.8, radius 9, the
-        // `borders` line and two casts, the near one tight and the far one
-        // wide. The line is a border for the reason the card's is, which
+        // `src/AbstractBubble.vala`): the view, radius 9, the `borders` line
+        // and two casts, the near one tight and the far one wide. Opaque
+        // rather than elementary's 0.8 (M62): `formalshell:notifications`
+        // carries no blur layerrule, so an alpha there is a plain
+        // see-through card rather than the frosted one elementary's own
+        // compositor draws. The line is a border for the reason the card's is, which
         // also lets urgency swap it for `destructive` rather than draw a
         // second one inside it. `flat` is a row inside the notification
         // centre, which already carries a card of its own: it drops the
@@ -197,7 +239,7 @@ var STYLE = {
         "notification": {
             rest: {
                 fill: "card",
-                fillAlpha: 0.8,
+                fillAlpha: 1,
                 radius: R_CARD,
                 border: { color: "black", alpha: BORDERS, width: 1 },
                 layers: HIGHLIGHT.concat([
