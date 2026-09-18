@@ -290,6 +290,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the network panel.
 - `systemupdate.sh` `--systemupdate`: the flake-inputs-behind cell and panel
   reading this repo's own flake through one shared poll.
+- `theme_auto.sh` `--theme-auto`: `theme.mode: "auto"` resolving off the
+  fixture's own coordinates rather than the 20:00 to 06:00 fallback, the
+  sunrise/sunset pair read back out of `theme status` and checked against
+  the wall clock it was sampled at, and one toggle snoozing the schedule for
+  a cycle: the override reported, carried in state.json, and expiring on a
+  boundary.
 - `theme_toggle.sh` `--theme-toggle`: `theme mode toggle` both ways, and with
   `--wallpaper` that a toggle re-runs matugen instead of resetting to the
   fallback palette.

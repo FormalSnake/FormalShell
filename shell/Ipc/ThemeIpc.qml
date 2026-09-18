@@ -23,21 +23,25 @@ IpcHandler {
         return "ok";
     }
 
+    // Every mode write goes through the engine: under `theme.mode: "auto"`
+    // a flip is a snooze rather than a new resting mode, and a pinned key
+    // refuses one outright.
     function mode(m: string): string {
-        if (m === "toggle")
-            Core.State.toggleMode();
-        else if (m === "dark" || m === "light")
-            Core.State.setMode(m);
-        else
-            return "error: mode must be dark, light, or toggle";
-        return Core.State.mode;
+        return ThemeEngine.requestMode(m);
     }
 
+    // `mode` stays the live mode, the one this target flips; `modeKey` is
+    // what settings.json asked for and `effective` what that key resolves
+    // to now.
     function status(): string {
         return JSON.stringify({
             wallpaper: Core.State.wallpaper,
             mode: Core.State.mode,
-            themeJsonPresent: ThemeEngine.themeJsonPresent
+            themeJsonPresent: ThemeEngine.themeJsonPresent,
+            modeKey: ThemeEngine.modeKey,
+            effective: ThemeEngine.effectiveMode(),
+            schedule: ThemeEngine.scheduleStatus(),
+            override: Core.State.modeOverride ? Core.State.modeOverride : null
         });
     }
 }

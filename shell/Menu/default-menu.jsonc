@@ -7,7 +7,7 @@
 // Internal actions: an `action` value prefixed `@ipc:` is dispatched
 // in-process instead of spawned via `sh -c`, Menu.qml's activation switches
 // on the name after the prefix (e.g. "@ipc:theme.toggleMode" ->
-// Core.State.toggleMode()). Use this for anything that must run in the
+// ThemeEngine.requestMode("toggle")). Use this for anything that must run in the
 // shell's own process rather than as a detached command.
 //
 // Grouping: `section` is the heading the launcher draws above a run of rows

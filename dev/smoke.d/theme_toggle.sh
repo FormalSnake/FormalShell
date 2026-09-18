@@ -25,10 +25,13 @@ theme_json_dump3_path="$shot_dir/theme-json-3.json"
 theme_toggle_json="$iso_home/.local/state/formalshell/theme.json"
 
 # This leg's own clock. Both frames repaint the whole output, so under
-# --wallpaper it starts after that leg's last frame, which also puts a real
-# matugen-derived palette under the round trip instead of the fallback.
+# --wallpaper it starts after that leg's last read, which also puts a real
+# matugen-derived palette under the round trip instead of the fallback. That
+# read is its `hyprctl getoption general:col.active_border` at 16s, not its
+# last frame at 14s: a toggle landing on the same second re-runs matugen for
+# the other mode and the border answers in that mode's primary instead.
 theme_toggle_t0() {
-  if leg_on wallpaper; then echo 16; else echo 4; fi
+  if leg_on wallpaper; then echo 18; else echo 4; fi
 }
 
 leg_theme_toggle_timing() {

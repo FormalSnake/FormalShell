@@ -8,6 +8,7 @@ import qs.Compositor
 import qs.Components
 import qs.Services
 import qs.Notifications
+import qs.Theme
 import qs.Reminders
 import "../../Menu/model.js" as Model
 import "../../Menu/search.js" as Search
@@ -2066,7 +2067,7 @@ PanelWindow {
             LockService.lock();
             break;
         case "theme.toggleMode":
-            Core.State.toggleMode();
+            ThemeEngine.requestMode("toggle");
             break;
         case "nightlight.toggle":
             NightLightService.toggle();
