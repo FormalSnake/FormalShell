@@ -333,9 +333,16 @@ Panel {
             MediaService.setVolume(MediaService.volume + direction * root._volumeStep);
     }
 
+    // The wheel takeover is a reading session and closing the panel ends it
+    // (owner, 2026-09-18: a wheel, a close, minutes of playback, and the
+    // reopened pane still parked where the wheel had left it, which reads as
+    // the song having run ahead of the lyrics). Spec P9's own re-arms, the
+    // resync control, a new track and the keyboard cursor, all sit inside an
+    // open panel, so none of them can fire while it is shut.
     onIsOpenChanged: {
         if (!root.isOpen)
             return;
+        LyricsService.follow = true;
         root.cursorSection = 0;
         root.cursorIndex = 0;
     }

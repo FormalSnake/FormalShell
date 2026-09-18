@@ -185,9 +185,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   re-arming it, the none track's panel narrower, the card's centre held on
   its own bar cell's centre through a lyrics arrival, the lit line broken
   inside a chunk wider than the pane, a card resting on the screen's far
-  padding keeping its far edge there through a track change, and lyrics
+  padding keeping its far edge there through a track change, lyrics
   synced before the panel ever opens with the first open landing on the
-  split width.
+  split width, a close and reopen with no track change between putting
+  `follow` back, and two consecutive line changes photographed off mpv's own
+  seeks (one into a line that fits a row, one into the line that wraps),
+  the pane never emptying out mid-change and the lit row on one place across
+  the tail of both bursts.
 - `lyrics_blur.sh` `--lyrics-blur`: one real MPRIS player, `media.lyricsBlur`'s
   default true against a settings retarget to false, a crop over a far
   unlit row read by edge energy and lower with the blur on, the active
