@@ -2,6 +2,7 @@ import QtQuick
 import qs.Compositor
 import qs.Components
 import qs.Core as Core
+import qs.Services
 import qs.Theme
 import "../../Theme/barpaint.js" as Paint
 
@@ -14,6 +15,13 @@ import "../../Theme/barpaint.js" as Paint
 // sampling and the decision are shell/Theme/BarPaint.qml and its
 // barpaint.js; every number is in the table or in that library, and nothing
 // about either is in this file.
+//
+// One reading for the session, not one per monitor (owner, 2026-09-18):
+// wingpanel samples each panel against its own screen, and a two-output desk
+// then shows one bar in dark ink and the other in white. The sampler runs on
+// the main display alone and publishes to Theme/BarPaintService.qml; every
+// band here reads it back. The window over an output stays that output's
+// own, so a maximized window still blackens its own band and no other.
 //
 // The ink comes with the paint and is the one thing the band hands the cells
 // on it (Bar.qml passes it down, Components/Cell.qml resolves it): white
@@ -32,8 +40,17 @@ Item {
     // a property called `bar` shadows the window's own id.
     required property var owner
 
-    readonly property string paint: sampler.paint
-    readonly property bool pinned: sampler.pinned
+    readonly property string paint: Paint.decideFor(BarPaintService.stats,
+        Core.Theme.color.mode, CompositorService.fullscreenOutputs, root._output, root._pin)
+    readonly property bool pinned: root._pin !== "auto"
+
+    readonly property string _output: root.owner.modelData ? root.owner.modelData.name : ""
+
+    // `bar.paint`: the theme's own policy by default (pantheon says
+    // transparent), and the one thing on this surface a user can overrule.
+    // Read here rather than in Theme.qml because it decides a paint rather
+    // than a token, and the band is the only thing that resolves one.
+    readonly property string _pin: Paint.pin(Core.Config.get("bar.paint", Core.Theme.habit.paint))
 
     readonly property var _box: Core.Theme.box("bar", root.paint)
 
@@ -49,44 +66,48 @@ Item {
     // `bar paint` and `debug dump`'s `bar[].paint` (Ipc/BarIpc.qml,
     // Ipc/DebugIpc.qml): the paint and the three numbers behind it, so a rig
     // leg reads the decision off the shell rather than inferring it from a
-    // frame.
+    // frame. `source` is the output the numbers were read on, which is the
+    // same one in every entry of the list.
     function paintState() {
-        var s = sampler.stats;
+        var s = BarPaintService.stats;
         return {
             paint: root.paint,
-            pin: sampler.pin,
-            pinned: sampler.pinned,
+            source: BarPaintService.source,
+            pin: root._pin,
+            pinned: root.pinned,
             mean: s.mean,
             std: s.std,
             acutance: s.acutance,
             sampled: s.sampled,
-            fullscreen: sampler.fullscreen
+            fullscreen: CompositorService.fullscreenOutputs.indexOf(root._output) >= 0
         };
     }
 
-    BarPaint {
-        id: sampler
-        source: Core.State.wallpaper !== "" ? "file://" + Core.State.wallpaper : ""
-        edge: root.owner._position
-        thickness: root.owner._strip.thickness
-        screenSize: root.owner.screen
-            ? Qt.size(root.owner.screen.width, root.owner.screen.height)
-            : Qt.size(0, 0)
-        mode: Core.Theme.color.mode
-        // `bar.paint`: the theme's own policy by default (pantheon says
-        // transparent), and the one thing on this surface a user can
-        // overrule. Read here rather than in Theme.qml because it decides
-        // a paint rather than a token, and the band is the only thing that
-        // resolves one.
-        pin: Paint.pin(Core.Config.get("bar.paint", Core.Theme.habit.paint))
-        // The raw set, not `outputCoveredByFullscreen`: whether the chrome
-        // hides is the auto-hide's business, and the band's paint is the
-        // same question either way.
-        // The set is read first and the name second on purpose: a binding
-        // that short-circuits before reading `fullscreenOutputs` registers
-        // no dependency on it and never re-evaluates.
-        fullscreen: CompositorService.fullscreenOutputs
-            .indexOf(root.owner.modelData ? root.owner.modelData.name : "") >= 0
+    // The one sampler in the session. Every other output's bar loads nothing
+    // here and reads the service, so a four-monitor desk decodes the
+    // wallpaper once rather than four times.
+    Loader {
+        active: MainOutputService.isMain(root._output)
+        sourceComponent: samplerRecipe
+    }
+
+    Component {
+        id: samplerRecipe
+
+        BarPaint {
+            id: sampler
+
+            source: Core.State.wallpaper !== "" ? "file://" + Core.State.wallpaper : ""
+            edge: root.owner._position
+            thickness: root.owner._strip.thickness
+            screenSize: root.owner.screen
+                ? Qt.size(root.owner.screen.width, root.owner.screen.height)
+                : Qt.size(0, 0)
+            onStatsChanged: {
+                BarPaintService.source = root._output;
+                BarPaintService.stats = sampler.stats;
+            }
+        }
     }
 
     Box {

@@ -78,6 +78,12 @@ var HABITS = {
     notification: ["row", "bubble"],
     launcher: ["list", "grid"],
     switcher: [true, false],
+    // Whether the theme wears a screen frame at all (owner, 2026-09-18).
+    // A table that says no reads `frame.thickness` as 0, ring and
+    // reservation both (Core/Theme.qml's `frameHabit`): pantheon's ring is
+    // transparent under the wingpanel band and a band of nothing held every
+    // window that far off the edge.
+    frame: [true, false],
     // The band's paint policy under the wingpanel habit (M62, owner
     // 2026-09-18: "make it part of our theme"): what `bar.paint` falls back
     // to when settings.json says nothing, barpaint.js's own PINS.

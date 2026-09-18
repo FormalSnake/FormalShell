@@ -680,6 +680,16 @@ PanelWindow {
             readonly property bool _animate: bar._revealed
                 && !!entrySlot.parent && entrySlot.parent.animate !== false
 
+            // Whether the band's ink reaches this slot, asked of the same
+            // rail. The chevron's second bar is a popover card with a fill of
+            // its own (BarOverflow.qml), not the strip, so the band's reading
+            // of the wallpaper says nothing about what is readable on it: a
+            // `dark` band over a bright wallpaper handed its cells black ink
+            // and a card drew them in black on its own dark plate. A cell
+            // there resolves its ink from its state, which lands on the
+            // card's own foreground (Components/Cell.qml's `_ink`).
+            readonly property bool _onBand: !entrySlot.parent || entrySlot.parent.bandInk !== false
+
             // The cell's own presence (DESIGN.md §1 Motion, M53 D2): a
             // widget that turns on opens its slot along the strip and fades
             // up in it, one that turns off shrinks and fades out, and the
@@ -765,9 +775,14 @@ PanelWindow {
                     // decides it (M60 T3): a binding rather than a value,
                     // since the paint is re-read whenever the wallpaper
                     // under the band changes. Transparent under the strip
-                    // habit, where a cell's own state resolves its ink.
-                    entryLoader.item.barInk = Qt.binding(function () { return bar._cellInk; });
-                    entryLoader.item.barInkShadow = Qt.binding(function () { return bar._cellInkShadow; });
+                    // habit, where a cell's own state resolves its ink, and
+                    // off the band entirely (`_onBand` above).
+                    entryLoader.item.barInk = Qt.binding(function () {
+                        return entrySlot._onBand ? bar._cellInk : "transparent";
+                    });
+                    entryLoader.item.barInkShadow = Qt.binding(function () {
+                        return entrySlot._onBand ? bar._cellInkShadow : "transparent";
+                    });
                     // A binding, not a value: settings.json lands after the
                     // first cells exist, and whether this Repeater resets
                     // before or after Theme.barPosition moves is not ordered,

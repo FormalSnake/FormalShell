@@ -76,6 +76,18 @@ IpcHandler {
             // and the frame ring's on the other three: where a card's line is
             // on any edge, which is what lets one leg photograph the same
             // join under `bar.position` and `frame.thickness` alike.
+            // Whether a screen frame is up and what settled it (M66): a
+            // table that wears no ring reads `frame.thickness` as 0
+            // (Core/Theme.qml's `frameHabit`), so a leg reading the layer
+            // list can tell a look that dropped the frame from a session
+            // that never asked for one. `requested` is the key as
+            // settings.json holds it.
+            frame: {
+                enabled: Core.Theme.frameEnabled,
+                thickness: Core.Theme.frameThickness,
+                requested: Core.Theme.frameRequested,
+                habit: Core.Theme.frameHabit
+            },
             theme: {
                 radius: Core.Theme.radius,
                 radiusXl: Core.Theme.radiusXl,

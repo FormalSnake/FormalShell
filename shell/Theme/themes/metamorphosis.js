@@ -287,6 +287,11 @@ var STYLE = {
         // sees the window chrome it already had.
         "window": {
             rest: {
+                // The gaps Hyprland leaves between windows and round them
+                // (M66): the numbers omarchy's own config carries, which is
+                // what a session running this look already had.
+                gapsIn: 4,
+                gapsOut: 8,
                 border: { color: "primary", width: 1 },
                 shadow: NO_CAST
             },
@@ -321,6 +326,7 @@ var STYLE = {
         notification: "row",
         launcher: "list",
         switcher: false,
+        frame: true,
         paint: "auto"
     }
 };

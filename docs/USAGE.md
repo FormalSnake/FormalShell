@@ -189,9 +189,15 @@ strip card: it draws no card of its own and reads the wallpaper directly
 under it to decide what it wears. A calm wallpaper gets no fill at all, just
 white or dark words with a text shadow under them; a busy one gets a wash,
 black at 0.3 in dark mode and white at 0.5 in light, so the words stay
-readable. A window covering the output takes the band solid black. With
-`frame.thickness` set the screen frame's ring is that same band carried
-round the output, so it wears the same paint.
+readable. A window covering the output takes the band solid black. The
+reading is taken once, on the main display (`display.outputPriority`), and
+every output's band wears it, so two monitors never disagree; a window
+covering one output still blackens that band alone.
+
+`pantheon` draws no screen frame: its table says so, so `frame.thickness`
+reads as 0 under it whatever settings.json holds, and nothing is reserved
+round the output. `debug dump`'s `frame` block reports both the value asked
+for and the ring that was drawn.
 
 `bar.paint` overrules the reading, and the theme decides the default:
 `pantheon` says `"transparent"`, so the rule below is what you get by
@@ -802,14 +808,18 @@ fonts.fontconfig.defaultFonts.monospace = [ "Geist Mono" ];
 
 The shell publishes `formalshell-chrome.conf` next to the colours file,
 carrying `$rounding` (the value of `theme.radius`), `$blur` (`theme.blur`)
-and the window frame and shadow the preset's theme table declares
-(`$borderSize`, `$borderColor`, `$shadow`, `$shadowRange`, `$shadowPower`,
-`$shadowOffset`, `$shadowColor`, `$shadowInactiveColor`), rewritten whenever
-any of them changes. The example config sources it and reads all of them, so
-window corners, the blur behind the shell's surfaces and the chrome round
-every window follow the preset: `shadcn` and `retro` cast no shadow and hang
+and the window gaps, frame and shadow the preset's theme table declares
+(`$gapsIn`, `$gapsOut`, `$borderSize`, `$borderColor`, `$shadow`,
+`$shadowRange`, `$shadowPower`, `$shadowOffset`, `$shadowColor`,
+`$shadowInactiveColor`), rewritten whenever any of them changes. The example
+config sources it and reads all of them, so window corners, the blur behind
+the shell's surfaces and the chrome round every window follow the preset:
+`shadcn` and `retro` cast no shadow and hang
 the wallpaper's `$primary` on the focused window, `pantheon` casts
 elementary's own (range 24, offset `0 6`) under a quiet 1px `$border` frame.
+The gaps follow the same rule: 4 and 8 under `shadcn` and `retro`, 4 and 6
+under `pantheon`, which wears no screen frame and so has no band to leave
+room for.
 
 ```conf
 # ~/.config/hypr/hyprland.conf
@@ -831,6 +841,8 @@ decoration {
 }
 
 general {
+    gaps_in = $gapsIn
+    gaps_out = $gapsOut
     border_size = $borderSize
     col.active_border = $borderColor
 }

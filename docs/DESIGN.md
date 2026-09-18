@@ -481,10 +481,10 @@ active-window icons, notification images, album art) through `Picture`'s
 retro pass, paints a `Track` groove as `DitherFill`, and is the default
 for `wallpaper.dither` and `lock.dither`; tray icons, the picker grid and
 clipboard thumbnails stay true colour. Hyprland follows through
-`formalshell-chrome.conf` (`$rounding`, `$blur`), published beside the
-colours. A surface reads `Theme.radius*`, `Theme.fontFamilySans`,
-`Theme.iconSet`, `Theme.dither` and `Theme.pillRadius`, and never
-`Theme.preset`.
+`formalshell-chrome.conf` (`$rounding`, `$blur`, and the `window` role's own
+gaps, frame and cast), published beside the colours. A surface reads
+`Theme.radius*`, `Theme.fontFamilySans`, `Theme.iconSet`, `Theme.dither`
+and `Theme.pillRadius`, and never `Theme.preset`.
 
 ## 2. Primitives
 
@@ -589,11 +589,26 @@ a bare band, black 0.3 once the band has a fill of its own, white 0.25
 under dark words, and none at all over white at 0.5. `bar.paint` in
 settings.json overrules the reading: `transparent` keeps the ink adaptive
 and drops the fill, and the five names pin one paint outright. `bar paint`
-and `debug dump` report the paint, whether it was pinned, and the three
-numbers.
+and `debug dump` report the paint, whether it was pinned, the output it was
+read on, and the three numbers.
 
-**Frame.** Off by default (`frame.thickness` 0). On, the bar's own fill
-continues round the other three edges as a band `frame.thickness` wide, and
+One reading, not one per monitor: sampling each panel against its own
+screen left a two-output desk with one bar in dark ink and the other in
+white. The sampler runs on the main display alone
+(`display.outputPriority`) and every band and frame ring wears its answer.
+A window covering an output is the one term that stays that output's own.
+
+The ink goes where the band does and no further. A cell in the chevron's
+second bar or the tray's is on a popover card with a fill of its own, so it
+resolves its ink from its state against that card, never off the band's
+reading of a wallpaper it is not drawn on.
+
+**Frame.** A theme habit first (`habits.frame`): a table that says it wears
+no ring reads `frame.thickness` as 0 whatever settings.json holds, so the
+key reserves nothing and the `window` role's own gaps are the whole margin
+round a window. shadcn and retro frame, pantheon does not. Off by default
+(`frame.thickness` 0). On, the bar's own fill continues round the other
+three edges as a band `frame.thickness` wide, and
 a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut
 out of the whole for the desktop, so the bar reads as the thick side of one
 frame and the two corners beside it curve into the strip. The bar's window

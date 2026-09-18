@@ -135,6 +135,13 @@ Panel {
         // rail for the same gate.
         animate: root.settledOpen
 
+        // What this card is NOT, read by the same delegate (Bar.qml's
+        // `_onBand`): the strip's cells wear the ink the band read off the
+        // wallpaper under it, and this is a card with a fill of its own over
+        // that wallpaper, so its cells resolve their ink against the card. A
+        // rail that says nothing is the strip.
+        property bool bandInk: false
+
         Repeater {
             // Nothing to draw until a chevron has attached (a Repeater with a
             // null delegate is a warning per model row, not an empty rail),

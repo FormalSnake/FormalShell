@@ -44,6 +44,8 @@ TestCase {
         compare(body(out),
             "$rounding = 10\n"
             + "$blur = true\n"
+            + "$gapsIn = 4\n"
+            + "$gapsOut = 8\n"
             + "$borderSize = 1\n"
             + "$borderColor = $primary\n"
             + "$shadow = false\n"
@@ -60,6 +62,8 @@ TestCase {
         compare(body(Chrome.hyprlandChrome(chromeFor(Metamorphosis.STYLE, 0, false))),
             "$rounding = 0\n"
             + "$blur = false\n"
+            + "$gapsIn = 4\n"
+            + "$gapsOut = 8\n"
             + "$borderSize = 1\n"
             + "$borderColor = $primary\n"
             + "$shadow = false\n"
@@ -79,6 +83,8 @@ TestCase {
         compare(body(Chrome.hyprlandChrome(chromeFor(Pantheon.STYLE, 6, true))),
             "$rounding = 6\n"
             + "$blur = true\n"
+            + "$gapsIn = 4\n"
+            + "$gapsOut = 6\n"
             + "$borderSize = 1\n"
             + "$borderColor = $border\n"
             + "$shadow = true\n"
@@ -130,6 +136,8 @@ TestCase {
         compare(body(Chrome.hyprlandChrome(wild)),
             "$rounding = 0\n"
             + "$blur = false\n"
+            + "$gapsIn = 4\n"
+            + "$gapsOut = 8\n"
             + "$borderSize = 20\n"
             + "$borderColor = $primary\n"
             + "$shadow = false\n"
@@ -151,6 +159,8 @@ TestCase {
         compare(body(Chrome.hyprlandChrome(thin)),
             "$rounding = 0\n"
             + "$blur = false\n"
+            + "$gapsIn = 4\n"
+            + "$gapsOut = 8\n"
             + "$borderSize = 0\n"
             + "$borderColor = $border\n"
             + "$shadow = true\n"
@@ -168,6 +178,8 @@ TestCase {
         compare(body(Chrome.hyprlandChrome({ rounding: 10, blur: true })),
             "$rounding = 10\n"
             + "$blur = true\n"
+            + "$gapsIn = 4\n"
+            + "$gapsOut = 8\n"
             + "$borderSize = 1\n"
             + "$borderColor = rgba(00000000)\n"
             + "$shadow = false\n"
@@ -194,6 +206,8 @@ TestCase {
             "return {\n"
             + "  rounding = 6,\n"
             + "  blur = true,\n"
+            + "  gapsIn = 4,\n"
+            + "  gapsOut = 6,\n"
             + "  borderSize = 1,\n"
             + "  borderColor = \"border\",\n"
             + "  shadow = true,\n"
@@ -209,5 +223,38 @@ TestCase {
         compare(shipped.indexOf("blur = false,") >= 0, true);
         compare(shipped.indexOf("shadow = false,") >= 0, true);
         compare(shipped.indexOf("borderColor = \"primary\",") >= 0, true);
+        compare(shipped.indexOf("gapsIn = 4,") >= 0, true);
+        compare(shipped.indexOf("gapsOut = 8,") >= 0, true);
+    }
+
+    // The gaps come off the `window` role like the frame does (M66), so a
+    // look that wears no screen frame closes the outer margin it had
+    // nothing left to leave room for: 4 and 8 under shadcn, 4 and 6 under
+    // pantheon, and both files carry them.
+    function test_each_table_publishes_its_own_gaps() {
+        var shadcn = Chrome.hyprlandChrome(chromeFor(Metamorphosis.STYLE, 10, true));
+        compare(shadcn.indexOf("$gapsIn = 4\n") >= 0, true);
+        compare(shadcn.indexOf("$gapsOut = 8\n") >= 0, true);
+
+        var pantheon = Chrome.hyprlandChrome(chromeFor(Pantheon.STYLE, 6, true));
+        compare(pantheon.indexOf("$gapsOut = 6\n") >= 0, true);
+    }
+
+    // A table that says nothing keeps the shipped pair rather than failing
+    // the file's parse, and a number outside the bound lands on it: hyprlang
+    // rejects the whole config over one line.
+    function test_the_gaps_are_clamped_and_fall_back() {
+        var bare = { rounding: 0, blur: false, window: {}, windowInactive: {} };
+        compare(Chrome.hyprlandChrome(bare).indexOf("$gapsIn = 4\n") >= 0, true);
+        compare(Chrome.hyprlandChrome(bare).indexOf("$gapsOut = 8\n") >= 0, true);
+
+        var wild = {
+            rounding: 0,
+            blur: false,
+            window: { gapsIn: -5, gapsOut: 4000 },
+            windowInactive: {}
+        };
+        compare(Chrome.hyprlandChrome(wild).indexOf("$gapsIn = 0\n") >= 0, true);
+        compare(Chrome.hyprlandChrome(wild).indexOf("$gapsOut = 100\n") >= 0, true);
     }
 }
