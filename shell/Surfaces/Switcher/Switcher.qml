@@ -6,11 +6,11 @@ import qs.Compositor
 import qs.Components
 import "switcher.js" as Model
 
-// Gala's Alt+Tab (`lib/Widgets/WindowSwitcher.vala`,
+// Gala's Alt+Tab (`src/Widgets/WindowSwitcher/WindowSwitcher.vala`,
 // `WindowSwitcherIcon.vala`; the 2026-09-17 spec's Part 2, M60 T6): a row of
-// app icons on one card in the middle of the output, the selected one on a
-// quarter-strength `accent` tile with its title under the row. Keyboard
-// only, and summoned over IPC alone
+// the FOCUSED WORKSPACE's windows as app icons on one card in the middle of
+// the output, the selected one on a quarter-strength `accent` tile with its
+// title under the row. Keyboard only, and summoned over IPC alone
 // (`switcher next|prev|commit|cancel|state`), so the compositor's own bind
 // drives it: Alt+Tab advances, the release of the modifier commits, and
 // nothing here ever grabs a modifier of its own. That release bind has to
@@ -47,10 +47,15 @@ PanelWindow {
     // drops its focused window the moment this surface takes the keyboard,
     // and a live order would then reshuffle the row under the cursor.
     property var _openHistory: []
+    // And the workspace it runs against, taken at the same instant and for
+    // the same reason: the row is the windows on one workspace, and which
+    // one is decided when the card opens rather than followed afterwards.
+    property string _openWorkspaceId: ""
 
     property bool _focusPrimed: false
 
-    readonly property var entries: Model.entries(CompositorService.windows, root._openHistory)
+    readonly property var entries: Model.entries(CompositorService.windows,
+        root._openHistory, root._openWorkspaceId)
     readonly property int count: root.entries.length
     readonly property var selected: (root.count > 0 && root.index < root.count)
         ? root.entries[root.index] : null
@@ -75,10 +80,14 @@ PanelWindow {
 
     // `next` and `prev` are the whole summon path: the first press opens the
     // card with the cursor one step along, which is the window before the
-    // focused one, and every press after that walks the row.
+    // focused one, and every press after that walks the row. A workspace
+    // holding one window wraps that step straight back onto it, so a tap too
+    // quick to read the card leaves focus where it already was rather than
+    // taking the compositor somewhere else.
     function step(direction) {
         if (!root.isOpen) {
             root._openHistory = root._history;
+            root._openWorkspaceId = CompositorService.focusedWorkspaceId;
             root.index = Model.advance(0, root.count, direction);
             root._focusPrimed = false;
             root.isOpen = true;

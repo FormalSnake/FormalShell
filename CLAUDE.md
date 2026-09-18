@@ -289,14 +289,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `speedtest.sh` `--speedtest`: `network speedtest` settling both phases in
   the network panel.
 - `switcher.sh` `--switcher`: Gala's Alt+Tab under the pantheon habit, three
-  windows of the fixture's own app id in one session, `switcher next` twice
-  and `prev` once over IPC against `switcher state`, the frame read for the
-  fixture icon at three cell centres and for the accent fill travelling from
-  the third cell to the second, then a commit landing focus on the window
-  the card named (`hyprctl activewindow`).
+  windows of the fixture's own app id on the focused workspace and a fourth
+  on workspace 2 that must not be offered, `switcher next` twice and `prev`
+  once over IPC against `switcher state`, the frame read for the fixture icon
+  at three cell centres and for the accent fill travelling from the third
+  cell to the second, then a commit landing focus on the window the card
+  named (`hyprctl activewindow`).
 - `switcher_keys.sh` `--switcher-keys`: the same card driven by the
   compositor's own binds and real keys instead of IPC, one `wtype` process
-  holding Alt across two taps of Tab and letting go. Reads the card open on
+  holding Alt across two taps of Tab and letting go, with the same fourth
+  window on workspace 2 held out of the card. Reads the card open on
   the third entry mid-hold, closed with focus moved on the release, and two
   probe binds on the same key beside the shipped one: a plain `bindr` that
   must not fire (Hyprland shadows a held key's release bind once another

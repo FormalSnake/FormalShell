@@ -41,6 +41,13 @@
 leg_switcher_keys_flag="--switcher-keys"
 leg_switcher_keys_order=104
 leg_switcher_keys_needs="foot jq wtype"
+# A fourth window sits on workspace 2 throughout and must not reach the card
+# (M64): the owner's quick Alt+Tab was landing on a window elsewhere and
+# taking the compositor to its workspace, and Gala lists the active
+# workspace's windows alone. The compositor's own client list is read beside
+# `switcher state`, so a run where that window never spawned cannot pass by
+# having nothing to exclude.
+#
 # The base run's fixture window is the third of the three and the one the
 # commit lands on, exactly as in --switcher.
 leg_switcher_keys_fixture_window=keep
@@ -55,6 +62,7 @@ switcher_keys_closed_json="$shot_dir/switcher-keys-closed.json"
 switcher_keys_layers_held="$shot_dir/switcher-keys-layers-held.json"
 switcher_keys_layers_closed="$shot_dir/switcher-keys-layers-closed.json"
 switcher_keys_active_json="$shot_dir/switcher-keys-active.json"
+switcher_keys_clients_json="$shot_dir/switcher-keys-clients.json"
 switcher_keys_held_png="$shot_dir/switcher-keys-held.png"
 switcher_keys_closed_png="$shot_dir/switcher-keys-closed.png"
 
@@ -77,7 +85,7 @@ leg_switcher_keys_validate() {
 }
 
 leg_switcher_keys_timing() {
-  leg_timing 34 95
+  leg_timing 44 115
 }
 
 leg_switcher_keys_drive() {
@@ -125,7 +133,14 @@ sleep 4
 "$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke two' sh -c 'sleep 300'"
 sleep 2
 "$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke three' sh -c 'sleep 300'"
-sleep 4
+sleep 3
+# And one the card must not hold, moved off silently so the monitor stays on
+# the workspace the other three are on.
+"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-elsewhere --title='formalshell smoke elsewhere' sh -c 'sleep 300'"
+sleep 3
+"$hyprctl_bin" dispatch movetoworkspacesilent "2,class:formalshell-smoke-elsewhere"
+sleep 3
+"$hyprctl_bin" -j clients > "$switcher_keys_clients_json" 2>&1
 
 # The control: an ordinary key's release bind, then Alt down and straight
 # back up with no Tab in between, which is the one shape a plain release bind
@@ -174,7 +189,7 @@ leg_switcher_keys_assert() {
     "$switcher_keys_control_path" "$switcher_keys_after_path" \
     "$switcher_keys_held_json" "$switcher_keys_closed_json" \
     "$switcher_keys_layers_held" "$switcher_keys_layers_closed" \
-    "$switcher_keys_active_json"; do
+    "$switcher_keys_active_json" "$switcher_keys_clients_json"; do
     [ -f "$f" ] || fail "no switcher-keys artifact produced at $f"
   done
   for f in "$switcher_keys_held_png" "$switcher_keys_closed_png"; do
@@ -204,9 +219,23 @@ leg_switcher_keys_assert() {
   selected_title=$("$jq_bin" -r '.title' "$switcher_keys_held_json")
   echo "alt held, two tabs: open=$open index=$index count=$count title='$selected_title'"
   [ "$open" = "true" ] || fail "Alt+Tab did not open the card: $(cat "$switcher_keys_held_json")"
-  [ "$count" = "3" ] || fail "the switcher offers $count windows, not the session's three"
   [ "$index" = "2" ] || fail "two taps of Tab left the cursor on entry $index, not the third"
   [ -n "$selected_id" ] || fail "the switcher reports no window under the cursor"
+
+  # Four windows in the session, three on the card: the fourth is on
+  # workspace 2, and a held Alt walks the workspace being looked at.
+  local mapped_windows elsewhere_workspace
+  mapped_windows=$("$jq_bin" -r 'length' "$switcher_keys_clients_json")
+  elsewhere_workspace=$("$jq_bin" -r \
+    '[.[] | select(.class == "formalshell-smoke-elsewhere") | .workspace.id] | first' \
+    "$switcher_keys_clients_json")
+  echo "session: $mapped_windows windows mapped, one on workspace $elsewhere_workspace"
+  [ "${mapped_windows:-0}" -ge 4 ] \
+    || fail "the session holds $mapped_windows windows, so the one for another workspace never spawned and there was nothing to exclude"
+  [ "$elsewhere_workspace" = "2" ] \
+    || fail "the fourth window is on workspace $elsewhere_workspace, not the 2 it was moved to"
+  [ "$count" = "3" ] \
+    || fail "the switcher offers $count windows, not the three on this workspace: a window from somewhere else reached the card"
   mapped=$(_switcher_keys_layers "$switcher_keys_layers_held")
   echo "layers while held: formalshell:switcher=$mapped"
   [ "${mapped:-0}" -ge 1 ] || fail "no formalshell:switcher layer surface while Alt is held"

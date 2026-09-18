@@ -4,26 +4,43 @@
 // Part 2), pure so the order, the wrap and the empty state are testable
 // without a compositor (tests/tst_switcher_model.qml).
 
-// What the switcher offers, in Gala's order (`lib/Widgets/WindowSwitcher.vala`):
-// the most recently focused window first, the one before it second, and so on,
-// which is what makes a single Alt+Tab land on the window you just came from.
-// `history` is the ids the surface has watched take focus, newest first;
-// a window nothing has focused this session has no place in it and keeps the
-// compositor's own order behind the ones that have.
+// What the switcher offers, in Gala's order
+// (`src/Widgets/WindowSwitcher/WindowSwitcher.vala`): the most recently
+// focused window first, the one before it second, and so on, which is what
+// makes a single Alt+Tab land on the window you just came from. `history` is
+// the ids the surface has watched take focus, newest first; a window nothing
+// has focused this session has no place in it and keeps the compositor's own
+// order behind the ones that have.
 //
-// Special workspaces are dropped, the same rule the workspace model carries
-// (shell/Compositor/hyprland/model.js): they are overlays rather than places,
-// and the quake console lives on one permanently, so a switcher that offered
-// them would offer a window the user cannot see and never put there.
-function entries(windows, history) {
+// `workspaceId` is the one being looked at, and windows anywhere else are not
+// offered. Gala's own list is the active workspace's:
+// `handle_switch_windows` reads
+// `display.get_workspace_manager ().get_active_workspace ()` and hands it to
+// `collect_all_windows`, whose `display.get_tab_list (NORMAL, workspace)` is
+// filtered to it. Offering the rest is what made a quick Alt+Tab land on
+// another workspace and take the compositor there with it (owner,
+// 2026-09-18): Gala has a branch for that case
+// (`workspace.activate_with_focus`) and never reaches it, because the window
+// was not on the card to begin with. Empty means no filter, the same
+// convention `shell/Compositor/focus.js`'s hold takes for the same value.
+//
+// Special workspaces are dropped ahead of that, the same rule the workspace
+// model carries (shell/Compositor/hyprland/model.js): they are overlays
+// rather than places, and the quake console lives on one permanently, so a
+// switcher that offered them would offer a window the user cannot see and
+// never put there.
+function entries(windows, history, workspaceId) {
     var list = windows || [];
     var seen = history || [];
+    var here = workspaceId || "";
     var offered = [];
     for (var i = 0; i < list.length; i++) {
         var win = list[i];
         if (!win || !win.id)
             continue;
         if (String(win.workspaceId || "").indexOf("-") === 0)
+            continue;
+        if (here !== "" && win.workspaceId !== here)
             continue;
         offered.push(win);
     }
