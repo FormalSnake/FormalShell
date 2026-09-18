@@ -538,8 +538,19 @@ rather than passing silently.
 ```sh
 fs wallpaper set /path/to/image.jpg
 fs theme mode toggle          # dark <-> light
-fs theme status               # {"wallpaper":…,"mode":…,"themeJsonPresent":…}
+fs theme status               # {"wallpaper":…,"mode":…,"modeKey":…,"effective":…,"schedule":…,"override":…}
 ```
+
+`theme.mode` decides who owns light and dark: unset leaves it to the shell's
+own state, the mode a toggle flips and the session remembers; `"dark"` and
+`"light"` pin it, and a toggle then answers with the pin instead of moving;
+`"auto"` follows the sun, dark from sunset to sunrise at
+`location.latitude`/`location.longitude` (or wherever geoclue puts the
+machine), and 20:00 to 06:00 on a machine with no location at all. Under
+`"auto"` a toggle is a snooze of one cycle rather than a new resting mode: it
+flips now and the schedule takes the mode back at the next sunrise or sunset,
+which `theme status` reports as the pair, the mode it resolves to, and the
+live override.
 
 Every mode change also writes `org.gnome.desktop.interface/color-scheme` and
 `gtk-theme` over `dconf`, so GTK4/libadwaita, GTK3 (via the settings portal)
@@ -1648,7 +1659,10 @@ battery starts charging, so unplugging again while still low warns again.
 
 **Weather** shows current conditions and a forecast list, one row per
 daily period, falling back to `NO LOCATION` or `UNAVAILABLE` with the
-specific failure code rather than a stale forecast.
+specific failure code rather than a stale forecast. The location is
+geoclue's, or `location.latitude`/`location.longitude` when both are set,
+and it is the same pair `theme.mode: "auto"` above schedules the dark mode
+off.
 
 **GitHub** lists open PRs you authored and open issues assigned to you, the
 first 15 of each, every row a title plus a dimmed repo slug. Clicking opens

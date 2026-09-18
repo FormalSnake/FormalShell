@@ -12,6 +12,7 @@ Singleton {
 
     property alias wallpaper: adapter.wallpaper
     property alias mode: adapter.mode
+    property alias modeOverride: adapter.modeOverride
     property alias dnd: adapter.dnd
     property alias calendarBirthYear: adapter.calendarBirthYear
     property alias calendarLifeExpectancy: adapter.calendarLifeExpectancy
@@ -37,8 +38,13 @@ Singleton {
         stateFile.writeAdapter();
     }
 
-    function toggleMode() {
-        root.setMode(root.mode === "dark" ? "light" : "dark");
+    // `{ mode, untilMs }` while a manual flip is snoozing `theme.mode:
+    // "auto"`, null otherwise. ThemeEngine writes it and drops it once
+    // untilMs passes; it lives here rather than in the engine so a snooze
+    // survives a restart the way the mode itself does.
+    function setModeOverride(override) {
+        adapter.modeOverride = override;
+        stateFile.writeAdapter();
     }
 
     function setDnd(on) {
@@ -132,6 +138,7 @@ Singleton {
             id: adapter
             property string wallpaper: ""
             property string mode: "dark"
+            property var modeOverride: null
             property bool dnd: false
             property int calendarBirthYear: 0
             property int calendarLifeExpectancy: 0

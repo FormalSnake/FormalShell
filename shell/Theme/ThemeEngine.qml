@@ -9,10 +9,12 @@ import QtQuick
 // undefined at runtime instead of hitting the qs.Core singleton (verified
 // with a throwaway probe script). Core.State disambiguates it.
 import qs.Core as Core
+import qs.Services as Services
 import "chrome.js" as Chrome
 import "gtk.js" as Gtk
 import "matugen.js" as Matugen
 import "palette.js" as Palette
+import "sun.js" as Sun
 
 // Serializes matugen runs behind a running/pending queue: retheme() during a
 // run just sets pending, the run in flight is never killed mid-write, and a
@@ -142,6 +144,130 @@ Singleton {
     // (verified by reproducing the stuck-false read against a real run).
     // ThemeEngine is theme.json's only writer, so it can just say so itself.
     property bool themeJsonPresent: false
+
+    // `theme.mode` (settings.json): "" leaves the mode to state.json, the
+    // one `theme mode` flips; "dark" and "light" pin it; "auto" hands it to
+    // the dark schedule below. An unrecognised value reads as "".
+    readonly property string modeKey: {
+        var key = Core.Config.get("theme.mode", "");
+        return key === "dark" || key === "light" || key === "auto" ? key : "";
+    }
+
+    // How often "auto" is re-read. sun.js answers a whole day in one call,
+    // so the tick only has to be fine enough to land on a boundary and to
+    // notice the date rolling over.
+    readonly property int scheduleTickMs: 60000
+
+    // Today's pair under "auto", null with no location to compute one from
+    // (sun.js then answers the 20:00 to 06:00 window instead). Recomputed
+    // on every tick rather than cached per day: the calculation is a few
+    // dozen multiplications.
+    property var scheduleTimes: null
+
+    // Guarded rather than bound straight to the service: touching
+    // LocationService instantiates it, and with no location.latitude /
+    // location.longitude in settings.json that D-Bus-activates geoclue2, so
+    // only a session actually running the schedule pays for it.
+    readonly property var scheduleLocation: {
+        if (root.modeKey !== "auto" || !Core.Config.loaded)
+            return null;
+        if (!Services.LocationService.available)
+            return null;
+        var latitude = Services.LocationService.latitude;
+        var longitude = Services.LocationService.longitude;
+        if (!isFinite(latitude) || !isFinite(longitude))
+            return null;
+        return { latitude: latitude, longitude: longitude };
+    }
+
+    // Resolves the key and writes the mode through State.setMode(), whose
+    // own change signal re-runs matugen and crossfades every surface, so
+    // nothing downstream knows a schedule exists.
+    function _applyModeKey() {
+        var key = root.modeKey;
+        if (key === "")
+            return;
+        var now = new Date();
+        var location = root.scheduleLocation;
+        root.scheduleTimes = key === "auto" && location
+            ? Sun.sunTimes(now, location.latitude, location.longitude)
+            : null;
+        var override = Core.State.modeOverride;
+        if (override && (key !== "auto" || override.untilMs <= now.getTime())) {
+            Core.State.setModeOverride(null);
+            override = null;
+        }
+        var want = Sun.effectiveMode(key, now, root.scheduleTimes, override);
+        if (want && want !== Core.State.mode)
+            Core.State.setMode(want);
+    }
+
+    // `theme mode dark|light|toggle`. A pinned key says so rather than
+    // flipping and snapping back a tick later; under "auto" the write
+    // itself becomes the snooze, below.
+    function requestMode(m) {
+        var target = m === "toggle" ? (Core.State.mode === "dark" ? "light" : "dark") : m;
+        if (target !== "dark" && target !== "light")
+            return "error: mode must be dark, light, or toggle";
+        if (root.modeKey === "dark" || root.modeKey === "light")
+            return "error: theme.mode pins the mode to " + root.modeKey;
+        Core.State.setMode(target);
+        return Core.State.mode;
+    }
+
+    // Every mode write in the shell passes here, the picker's own Dark and
+    // Light sets included, so one that disagrees with "auto" is recorded as
+    // a snooze of one cycle (elementary's reading of a manual override: it
+    // expires at the next scheduled change and the schedule takes the mode
+    // back) instead of being reverted by the next tick. A pinned key takes
+    // the mode back immediately; that write lands here once more and agrees.
+    function _onModeWritten() {
+        var key = root.modeKey;
+        if (key === "")
+            return;
+        var now = new Date();
+        var resolved = Sun.effectiveMode(key, now, root.scheduleTimes, Core.State.modeOverride);
+        if (!resolved || resolved === Core.State.mode)
+            return;
+        if (key !== "auto") {
+            Core.State.setMode(key);
+            return;
+        }
+        Core.State.setModeOverride({
+            mode: Core.State.mode,
+            untilMs: Sun.nextChange(now, root.scheduleTimes).getTime()
+        });
+    }
+
+    // The schedule half of `theme status`, null under any key but "auto".
+    function scheduleStatus() {
+        if (root.modeKey !== "auto")
+            return null;
+        var times = root.scheduleTimes;
+        return {
+            sunrise: times ? Sun.hhmm(times.sunriseMinutes) : "",
+            sunset: times ? Sun.hhmm(times.sunsetMinutes) : "",
+            polar: times ? times.polar : "",
+            source: times ? "location" : "fallback"
+        };
+    }
+
+    // What the key resolves to right now, which is what State.mode already
+    // carries except in the instant between a boundary and its write.
+    function effectiveMode() {
+        var resolved = Sun.effectiveMode(root.modeKey, new Date(), root.scheduleTimes, Core.State.modeOverride);
+        return resolved ? resolved : Core.State.mode;
+    }
+
+    onModeKeyChanged: root._applyModeKey()
+    onScheduleLocationChanged: root._applyModeKey()
+
+    Timer {
+        interval: root.scheduleTickMs
+        repeat: true
+        running: root.modeKey === "auto"
+        onTriggered: root._applyModeKey()
+    }
 
     function retheme() {
         if (root.running) {
@@ -700,7 +826,10 @@ Singleton {
     Connections {
         target: Core.State
         function onWallpaperChanged() { root.retheme(); }
-        function onModeChanged() { root.retheme(); }
+        function onModeChanged() {
+            root._onModeWritten();
+            root.retheme();
+        }
     }
 
     // A live settings.json edit moves any of these without any wallpaper or
@@ -755,5 +884,6 @@ Singleton {
     Component.onCompleted: {
         if (Core.Config.loaded)
             root._armChromeConnections();
+        root._applyModeKey();
     }
 }

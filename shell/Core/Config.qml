@@ -295,6 +295,15 @@ import QtQuick
 // content imagery through the retro dither pass, and it is the default for
 // wallpaper.dither and lock.dither above. Resolved by
 // shell/Theme/presets.js, read by Core/Theme.qml alone.
+// theme.mode (string, default "", one of "" | "dark" | "light" | "auto"):
+// who owns light and dark. "" leaves it to state.json, the mode `theme
+// mode` and the launcher's toggle flip and the shell remembers. "dark" and
+// "light" pin it, and a flip then answers with the pin instead of moving.
+// "auto" follows the sun: dark from sunset to sunrise at
+// location.latitude/longitude (or wherever geoclue puts the machine), 20:00
+// to 06:00 with no location at all, re-read once a minute. A flip under
+// "auto" is a snooze until the next sunrise or sunset, not a new resting
+// mode. Read by shell/Theme/ThemeEngine.qml alone.
 // gtk.theme (string, default "adw-gtk3") and gtk.themeDark (string, default
 // "adw-gtk3-dark"): the GTK theme name ThemeEngine's _syncSystemScheme()
 // writes to org.gnome.desktop.interface/gtk-theme for light and dark mode,
