@@ -66,10 +66,10 @@ Singleton {
     readonly property real positionSeconds: Lyrics.ledPosition(MediaService.position, root.offsetSeconds)
 
     // Whether the lyrics column still follows the song (spec P9/P11). The
-    // panel writes it (a wheel takes it off, its resync button and the
-    // keyboard cursor entering the section put it back) and `media lyrics`
-    // reads it: the panel owns no state the IPC handler can reach, and this
-    // is the one fact about the pane a caller asks for.
+    // panel writes it (a wheel takes it off; its resync button, the keyboard
+    // cursor entering the section and the panel opening put it back) and
+    // `media lyrics` reads it: the panel owns no state the IPC handler can
+    // reach, and this is the one fact about the pane a caller asks for.
     property bool follow: true
 
     function _clampedConfigInt(path, fallback, min, max) {

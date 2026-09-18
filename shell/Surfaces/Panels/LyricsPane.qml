@@ -16,9 +16,18 @@ import "../../Lyrics/model.js" as Lyrics
 // clock led by the model's own lead with `media.lyricsOffsetMs` on top, and
 // the model answers the set; nothing here decides what is lit.
 //
-// A lit line draws its chunks, every other line plain text (spec P6). A
-// chunk is the `mutedForeground` word under a `foreground` copy masked by a
-// horizontal gradient sliding across it, the band between the two about a
+// Every line draws its chunks, lit or not (M69): a lit line is the same
+// chunks with the sung copy masked over them, never a second form of the
+// row. Drawing a dark line as one wrapped `Text` and a lit one as a `Flow`
+// of chunks wraps the two differently, since a chunk carries no kerning
+// across its own split, so a line change resized the row that lit and the
+// row that went dark, shifted every row under them and moved the scroll's
+// own target mid-travel (owner, 2026-09-18). `lineText` stays as the
+// measuring rod an opposite line's right alignment needs, and as the form a
+// line with no words at all falls back to.
+//
+// A chunk is the `mutedForeground` word under a `foreground` copy masked by
+// a horizontal gradient sliding across it, the band between the two about a
 // fifth of the chunk wide, so the wipe has a soft edge rather than the hard
 // clip M55 drew. kopuz reads its own unsung half at 0.45 of the sung alpha
 // and MultiEffect cannot: its mask thresholds rather than multiplies, so
@@ -46,9 +55,10 @@ import "../../Lyrics/model.js" as Lyrics
 //
 // Scroll (spec P9): the lit main line's top rests 42% down the viewport, not
 // at its centre. A wheel over the pane takes the column over, which parks the
-// song's own travel until the resync button, a new track, or the keyboard
-// cursor entering the section re-arms it. `LyricsService.follow` is where
-// that state lives, so `media lyrics` can report it.
+// song's own travel until the resync button, a new track, the keyboard
+// cursor entering the section, or the panel being opened again re-arms it.
+// `LyricsService.follow` is where that state lives, so `media lyrics` can
+// report it.
 Card {
     id: root
 
@@ -236,14 +246,29 @@ Card {
                     cursor: root.cursorOn && root.cursorIndex === lineCell.index
                     onClicked: root.seekRequested(lineCell.modelData.time)
 
+                    // The two terms that move every frame: the edge fade
+                    // tracks the column's own travel and the arrival fade is
+                    // an animation in its own right. They multiply in here,
+                    // uninterrupted, rather than inside `lineBox`'s animated
+                    // opacity: a `Behavior` retargeted on every frame of a
+                    // 500ms scroll never reaches a target, which read as the
+                    // rows under the lit one arriving late and all at once
+                    // (owner, 2026-09-18). `lineBox` keeps the Behavior for
+                    // the depth ramp, which steps once per line change.
+                    opacity: lineCell._edgeFraction * lineCell._arrival
+
                     readonly property bool _interlude: lineCell.modelData.interlude === true
                     readonly property bool _background: lineCell.modelData.background === true
                     readonly property bool _opposite: lineCell.modelData.oppositeTurn === true
                     readonly property bool _lit: lineCell.index === root._activeIndex
                         || root._secondary.indexOf(lineCell.index) !== -1
-                    readonly property bool _chunked: lineCell._lit && !lineCell._interlude
+                    // The row's own form, which never depends on `_lit`: the
+                    // chunks are laid out whether the line is lit or not, so
+                    // the row's height and its wrap are the same either way.
+                    readonly property bool _hasChunks: !lineCell._interlude
                         && lineCell.modelData.words && lineCell.modelData.words.length > 0
-                    readonly property var _wordGroups: lineCell._chunked
+                    readonly property bool _chunked: lineCell._lit && lineCell._hasChunks
+                    readonly property var _wordGroups: lineCell._hasChunks
                         ? root._chunkGroups(lineCell.modelData.words) : []
 
                     readonly property real _fontSize: lineCell._background
@@ -324,14 +349,13 @@ Card {
                         x: lineCell._opposite ? parent.width - width : 0
                         height: lineCell._interlude
                             ? interludeRow.implicitHeight
-                            : Math.max(lineText.implicitHeight, wordFlow.visible ? wordFlow.implicitHeight : 0)
+                            : Math.max(lineText.implicitHeight, wordFlow.implicitHeight)
 
                         // The ramp (spec P5/P7): 1 at the lit lines, then
                         // 0.7, 0.45, 0.25 and no lower, with a background
                         // line held at 0.7 of whatever its own rank gives it.
                         opacity: (lineCell._lit ? 1 : Lyrics.depthOpacity(lineCell.index - root._anchorIndex))
                             * (lineCell._background ? 0.7 : 1)
-                            * lineCell._edgeFraction * lineCell._arrival
                         // The lit/dark tell is a transform, never a relayout,
                         // so a line's box never changes shape on activation.
                         // A background line activates to 0.9 (spec P8).
@@ -384,14 +408,15 @@ Card {
                                 }
                             }
 
-                            // A lit line's chunks: a word is a `Row` of the
+                            // The line's chunks: a word is a `Row` of the
                             // chunks `chunkWords` grouped for it, no spacing
                             // between them, and the `Flow` spaces the words
-                            // at the font's own space advance so the lit and
-                            // the plain form wrap the same way.
+                            // at the font's own space advance. Laid out and
+                            // drawn whether the line is lit or not, so a line
+                            // change never rewraps a row or resizes it.
                             Flow {
                                 id: wordFlow
-                                visible: lineCell._chunked
+                                visible: lineCell._hasChunks
                                 // An opposite line is right-aligned, which a
                                 // Flow can only be by being no wider than the
                                 // text it holds: the plain copy below lays the
@@ -404,7 +429,7 @@ Card {
                                 spacing: lineCell._spaceWidth
 
                                 Repeater {
-                                    model: wordFlow.visible ? lineCell._wordGroups : []
+                                    model: lineCell._wordGroups
 
                                     delegate: Row {
                                         id: wordRow
@@ -418,12 +443,24 @@ Card {
                                                 id: chunkItem
                                                 required property var modelData
 
-                                                readonly property real _progress: Lyrics.chunkProgress(
-                                                    lineCell.modelData.words, chunkItem.modelData.chunkIndex,
-                                                    lineCell._lineEnd, root._position)
-                                                readonly property real _glow: Lyrics.chunkGlow(
-                                                    lineCell.modelData.words, chunkItem.modelData.chunkIndex,
-                                                    lineCell._lineEnd, root._position)
+                                                // Both read the per-frame
+                                                // position, so both are cut
+                                                // off it entirely on a line
+                                                // nobody is singing: the whole
+                                                // set of chunks is laid out
+                                                // now, and a dark line's own
+                                                // chunks have no clock to
+                                                // follow.
+                                                readonly property real _progress: lineCell._chunked
+                                                    ? Lyrics.chunkProgress(lineCell.modelData.words,
+                                                        chunkItem.modelData.chunkIndex,
+                                                        lineCell._lineEnd, root._position)
+                                                    : 0
+                                                readonly property real _glow: lineCell._chunked
+                                                    ? Lyrics.chunkGlow(lineCell.modelData.words,
+                                                        chunkItem.modelData.chunkIndex,
+                                                        lineCell._lineEnd, root._position)
+                                                    : 0
 
                                                 // A `Flow` breaks between
                                                 // its items and never inside
@@ -454,86 +491,103 @@ Card {
                                                     color: Theme.color.mutedForeground
                                                 }
 
-                                                // The sung copy, drawn only
-                                                // through the mask below.
-                                                Text {
-                                                    id: chunkSung
-                                                    text: chunkBase.text
-                                                    font: chunkBase.font
-                                                    width: chunkBase.width
-                                                    wrapMode: chunkBase.wrapMode
-                                                    color: Theme.color.foreground
-                                                    visible: false
-                                                }
-
-                                                // kopuz's own gradient: 2.2
-                                                // chunk widths with a band
-                                                // between 46% and 54% of it,
-                                                // so the edge between sung and
-                                                // unsung is about a fifth of
-                                                // the chunk wide, and sliding
-                                                // it from just off the leading
-                                                // edge to just past the
-                                                // trailing one is the wipe.
-                                                // It runs to 0 rather than to
-                                                // kopuz's 0.45: MultiEffect
-                                                // thresholds its mask rather
-                                                // than multiplying by it, so
-                                                // the unsung reading is the
-                                                // `mutedForeground` copy under
-                                                // this one.
-                                                Item {
-                                                    id: chunkMask
+                                                // The sung copy, its mask and
+                                                // the effect over the two:
+                                                // the whole wipe exists only
+                                                // while the line is lit, so a
+                                                // dark line's chunks cost the
+                                                // one `Text` above and no
+                                                // layer at all. The chunks
+                                                // themselves stay, which is
+                                                // what holds the row's shape
+                                                // across the change.
+                                                Loader {
+                                                    id: sungLayer
+                                                    active: lineCell._chunked
                                                     width: chunkItem.width
                                                     height: chunkItem.height
-                                                    layer.enabled: true
-                                                    visible: false
 
-                                                    Rectangle {
-                                                        width: chunkMask.width * 2.2
-                                                        height: chunkMask.height
-                                                        x: -1.2 * (0.99 - chunkItem._progress * 0.98) * chunkMask.width
-                                                        gradient: Gradient {
-                                                            orientation: Gradient.Horizontal
-                                                            GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 1) }
-                                                            GradientStop { position: 0.46; color: Qt.rgba(1, 1, 1, 1) }
-                                                            GradientStop { position: 0.54; color: Qt.rgba(1, 1, 1, 0) }
-                                                            GradientStop { position: 1; color: Qt.rgba(1, 1, 1, 0) }
+                                                    sourceComponent: Item {
+                                                    Text {
+                                                        id: chunkSung
+                                                        text: chunkBase.text
+                                                        font: chunkBase.font
+                                                        width: chunkBase.width
+                                                        wrapMode: chunkBase.wrapMode
+                                                        color: Theme.color.foreground
+                                                        visible: false
+                                                    }
+
+                                                    // kopuz's own gradient: 2.2
+                                                    // chunk widths with a band
+                                                    // between 46% and 54% of it,
+                                                    // so the edge between sung and
+                                                    // unsung is about a fifth of
+                                                    // the chunk wide, and sliding
+                                                    // it from just off the leading
+                                                    // edge to just past the
+                                                    // trailing one is the wipe.
+                                                    // It runs to 0 rather than to
+                                                    // kopuz's 0.45: MultiEffect
+                                                    // thresholds its mask rather
+                                                    // than multiplying by it, so
+                                                    // the unsung reading is the
+                                                    // `mutedForeground` copy under
+                                                    // this one.
+                                                    Item {
+                                                        id: chunkMask
+                                                        width: chunkItem.width
+                                                        height: chunkItem.height
+                                                        layer.enabled: true
+                                                        visible: false
+
+                                                        Rectangle {
+                                                            width: chunkMask.width * 2.2
+                                                            height: chunkMask.height
+                                                            x: -1.2 * (0.99 - chunkItem._progress * 0.98) * chunkMask.width
+                                                            gradient: Gradient {
+                                                                orientation: Gradient.Horizontal
+                                                                GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 1) }
+                                                                GradientStop { position: 0.46; color: Qt.rgba(1, 1, 1, 1) }
+                                                                GradientStop { position: 0.54; color: Qt.rgba(1, 1, 1, 0) }
+                                                                GradientStop { position: 1; color: Qt.rgba(1, 1, 1, 0) }
+                                                            }
                                                         }
                                                     }
-                                                }
 
-                                                MultiEffect {
-                                                    width: chunkItem.width
-                                                    height: chunkItem.height
-                                                    source: chunkSung
-                                                    maskEnabled: true
-                                                    maskSource: chunkMask
-                                                    // The mask's own alpha
-                                                    // ramp is what the edge is
-                                                    // made of: the threshold
-                                                    // sits at the middle of it
-                                                    // and the spread is wide
-                                                    // enough to cover the
-                                                    // whole 0..1, so the band
-                                                    // grades instead of
-                                                    // cutting (a spread of 0,
-                                                    // the default, is a step).
-                                                    maskThresholdMin: 0.5
-                                                    maskSpreadAtMin: 1
-                                                    // The glow is off rather
-                                                    // than transparent once
-                                                    // the chunk has decayed,
-                                                    // which is what keeps an
-                                                    // idle chunk on the plain
-                                                    // shader.
-                                                    shadowEnabled: chunkItem._glow > 0
-                                                    shadowColor: Theme.color.foreground
-                                                    shadowOpacity: 0.3 * chunkItem._glow
-                                                    shadowBlur: (4 + chunkItem._glow * 6) / root._blurMaxPx
-                                                    shadowHorizontalOffset: 0
-                                                    shadowVerticalOffset: 0
-                                                    blurMax: root._blurMaxPx
+                                                    MultiEffect {
+                                                        width: chunkItem.width
+                                                        height: chunkItem.height
+                                                        source: chunkSung
+                                                        maskEnabled: true
+                                                        maskSource: chunkMask
+                                                        // The mask's own alpha
+                                                        // ramp is what the edge is
+                                                        // made of: the threshold
+                                                        // sits at the middle of it
+                                                        // and the spread is wide
+                                                        // enough to cover the
+                                                        // whole 0..1, so the band
+                                                        // grades instead of
+                                                        // cutting (a spread of 0,
+                                                        // the default, is a step).
+                                                        maskThresholdMin: 0.5
+                                                        maskSpreadAtMin: 1
+                                                        // The glow is off rather
+                                                        // than transparent once
+                                                        // the chunk has decayed,
+                                                        // which is what keeps an
+                                                        // idle chunk on the plain
+                                                        // shader.
+                                                        shadowEnabled: chunkItem._glow > 0
+                                                        shadowColor: Theme.color.foreground
+                                                        shadowOpacity: 0.3 * chunkItem._glow
+                                                        shadowBlur: (4 + chunkItem._glow * 6) / root._blurMaxPx
+                                                        shadowHorizontalOffset: 0
+                                                        shadowVerticalOffset: 0
+                                                        blurMax: root._blurMaxPx
+                                                    }
+                                                    }
                                                 }
                                             }
                                         }
@@ -545,9 +599,12 @@ Card {
                                 id: lineText
                                 // Laid out even while the chunks are drawn:
                                 // its own content width is what an opposite
-                                // line's Flow is measured against, and the two
-                                // forms have to wrap alike.
-                                visible: !lineCell._interlude && !lineCell._chunked
+                                // line's Flow is measured against, and its
+                                // height is the floor the row's own box takes.
+                                // It only draws a line the provider gave no
+                                // words for at all, which the chunks cannot
+                                // render.
+                                visible: !lineCell._interlude && !lineCell._hasChunks
                                 width: lineContent.width
                                 wrapMode: Text.Wrap
                                 horizontalAlignment: lineCell._opposite ? Text.AlignRight : Text.AlignLeft

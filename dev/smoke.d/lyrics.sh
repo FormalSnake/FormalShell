@@ -42,6 +42,25 @@
 # cell that opened it (the growth travels both edges); and that burst's
 # settled frame carries the lit line broken inside a chunk wider than the
 # pane, read as the brightest ink stopping short of the viewport's clip.
+#
+# Two more since M69. The reopen claim: a wheel takes `follow` off, the panel
+# is closed with the track still playing and opened again with no track
+# change between, and the column is back on the song. Closing is the one way
+# out of the wheel takeover that leaves none of spec P9's own re-arms
+# reachable (they all live inside an open panel), which is what left a
+# reopened pane parked where the wheel had put it minutes earlier, reading as
+# the song having run ahead of the lyrics (owner, 2026-09-18).
+#
+# The line-change claim: track1 carries an mpv IPC socket, so the tail of the
+# run seeks it back over its own chained boundaries and photographs two
+# consecutive line changes, one into a line that fits on a row (15s) and one
+# into the line that wraps (25s). Each frame's ink is read as a column of row
+# means down the pane, and the two things that hold are that the pane never
+# empties out while a change is in flight, and that the brightest row, which
+# is the lit line, is on one place across the tail of each burst rather than
+# still drifting. A row that resized itself as it lit moved every row under
+# it and the scroll's own target with them, so the column was still chasing
+# a line seconds after it had started singing (owner, 2026-09-18).
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
 leg_lyrics_needs="mpv ffmpeg convert jq wlrctl"
@@ -76,6 +95,11 @@ lyrics_wheel_target_path="$shot_dir/lyrics-wheel-target.txt"
 lyrics_return_rects_path="$shot_dir/lyrics-return-rects.txt"
 lyrics_return_narrow_path="$shot_dir/lyrics-return-narrow.png"
 lyrics_edge_rects_path="$shot_dir/lyrics-edge-rects.txt"
+lyrics_status_reopen_path="$shot_dir/lyrics-status-reopen.json"
+lyrics_reopen_png_path="$shot_dir/lyrics-reopen.png"
+lyrics_burst_index_path="$shot_dir/lyrics-burst-index.txt"
+lyrics_burst_profile_path="$shot_dir/lyrics-burst-profile.txt"
+lyrics_sock1_path="$shot_dir/lyrics-mpv1.sock"
 lyrics_lib_path="$shot_dir/lyrics-lib.sh"
 lyrics_marker_seeded="$shot_dir/lyrics-marker-seeded"
 lyrics_marker_open1="$shot_dir/lyrics-marker-open1"
@@ -98,8 +122,9 @@ leg_lyrics_timing() {
   # this only has to outlast the sum of their own timeouts once, not the
   # common case. Track1 stays on MPRIS through the whole thing (mpv drops
   # off MPRIS the moment a track ends), hence its file being far longer
-  # than the session that plays it.
-  leg_timing 60 350 2
+  # than the session that plays it. The reopen check and the two line-change
+  # bursts add about a minute on the tail.
+  leg_timing 100 430 2
 }
 
 leg_lyrics_fixture() {
@@ -126,6 +151,19 @@ lyrics_cache_key() {
   slug=$(printf '%s' "$lower" | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
   seconds=$(awk -v v="$duration" 'BEGIN { if (v < 0) v = 0; printf "%d", (v - int(v) >= 0.5) ? int(v) + 1 : int(v) }')
   printf '%s-%s' "$slug" "$seconds"
+}
+
+# Track1's own mpv, for the absolute seeks the line-change bursts need: MPRIS
+# gives no verb for one and the shell's own seek would move the pane's state
+# as well as the player's.
+lyrics_mpv() {
+  python3 - "$1" "$2" <<'PY'
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect(sys.argv[1])
+s.sendall(sys.argv[2].encode() + b"\n")
+s.close()
+PY
 }
 
 lyrics_wait_marker() {
@@ -259,7 +297,7 @@ leg_lyrics_drive() {
   write_script "$play_all" <<EOF
 #!/usr/bin/env bash
 sleep 2
-"$mpv_bin" --no-video --really-quiet "$lyrics_track1_path" &
+"$mpv_bin" --no-video --really-quiet --input-ipc-server="$lyrics_sock1_path" "$lyrics_track1_path" &
 disown
 echo \$! > "$lyrics_pid1_path"
 sleep 2
@@ -358,7 +396,7 @@ EOF
   write_script "$duet_wheel" <<EOF
 #!/usr/bin/env bash
 . "$lyrics_lib_path"
-lyrics_wait_marker "$lyrics_marker_open1" 30
+lyrics_wait_marker "$lyrics_marker_open1" 60
 SECONDS=0
 while [ "\$SECONDS" -lt 50 ]; do
   "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_duet_path" 2>&1
@@ -380,6 +418,16 @@ sleep 1
 "$wlrctl_bin" pointer scroll 10 0 >> "$lyrics_wheel_dispatch_path" 2>&1
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_postwheel_path" 2>&1
+
+# The reopen: the wheel has the column, the panel is shut with track1 still
+# playing, and it comes back with no track change anywhere in between, so
+# nothing but the open itself can have re-armed follow.
+"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+sleep 6
+"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_reopen_path" 2>&1
+"$grim_bin" "$lyrics_reopen_png_path" > /dev/null 2>&1
 touch "$lyrics_marker_track1"
 EOF
 
@@ -393,7 +441,7 @@ EOF
   write_script "$track2" <<EOF
 #!/usr/bin/env bash
 . "$lyrics_lib_path"
-lyrics_wait_marker "$lyrics_marker_track1" 70
+lyrics_wait_marker "$lyrics_marker_track1" 120
 id2=\$(cat "$lyrics_id2_path" 2>/dev/null)
 "$qs_bin" ipc -p "$shell_path" call media select "\$id2" > /dev/null 2>&1
 # The anchorless open rests against the screen's far padding, so this track
@@ -436,7 +484,7 @@ EOF
   write_script "$track3" <<EOF
 #!/usr/bin/env bash
 . "$lyrics_lib_path"
-lyrics_wait_marker "$lyrics_marker_track2" 60
+lyrics_wait_marker "$lyrics_marker_track2" 160
 id3=\$(cat "$lyrics_id3_path" 2>/dev/null)
 "$qs_bin" ipc -p "$shell_path" call media select "\$id3" > /dev/null 2>&1
 SECONDS=0
@@ -468,7 +516,7 @@ EOF
   write_script "$return_script" <<EOF
 #!/usr/bin/env bash
 . "$lyrics_lib_path"
-lyrics_wait_marker "$lyrics_marker_track3" 40
+lyrics_wait_marker "$lyrics_marker_track3" 200
 id1=\$(cat "$lyrics_id1_path" 2>/dev/null)
 "$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
 sleep 1
@@ -485,6 +533,25 @@ for delay in 0.1 0.4 0.8 1.2 1.6; do
   echo "\$delay \$rx \$ry \$rw \$rh" >> "$lyrics_return_rects_path"
 done
 "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_return_path" 2>&1
+
+# The two line changes, photographed. Track1's own boundaries are at 15s
+# (line0 into line1, both a row tall) and 25s (line1 into line3, the one that
+# wraps), and both are chained edge to edge, so there is a lit line in every
+# frame of both bursts. The seeks are mpv's own: a shell seek would move the
+# pane's state along with the player's, and the run is well past 25s by now.
+: > "$lyrics_burst_index_path"
+for phase in a b; do
+  case "\$phase" in
+    a) lyrics_mpv "$lyrics_sock1_path" '{"command":["seek",12,"absolute"]}' ;;
+    b) lyrics_mpv "$lyrics_sock1_path" '{"command":["seek",22,"absolute"]}' ;;
+  esac
+  sleep 2
+  for n in 1 2 3 4 5 6 7 8 9 10; do
+    "$grim_bin" "$shot_dir/lyrics-burst-\${phase}-\${n}.png" > /dev/null 2>&1
+    echo "\${phase}-\${n}" >> "$lyrics_burst_index_path"
+    sleep 0.3
+  done
+done
 EOF
 
   write_script "$kill_script" <<EOF
@@ -503,6 +570,42 @@ EOF
   echo "exec-once = bash $track2"
   echo "exec-once = bash $track3"
   echo "exec-once = bash $return_script"
+}
+
+# A frame with the bar cropped off it, which is what every rect and crop in
+# this leg is measured against (`lyrics_pane_rect` makes its own for the two
+# frames it diffs; the burst reuses one rect over twenty frames and needs
+# theirs).
+lyrics_burst_body() {
+  local frame="$1" body="${1%.png}-body.png"
+  "$convert_bin" "$frame" -crop "1920x$((1080 - 60))+0+60" +repage "$body" > /dev/null 2>&1
+  printf '%s' "$body"
+}
+
+# One frame's ink down the lyrics pane, as a column of row means: the crop is
+# squeezed to a single pixel wide, so a row carrying text reads above the
+# card's own fill and a row carrying none reads as the fill itself. The floor
+# is taken from the frame rather than pinned, since the card's fill and the
+# depth ramp both come off the live palette. Echoes "peakRow lastInkRow rows".
+lyrics_ink_profile() {
+  "$convert_bin" "$1" -crop "$2" +repage -colorspace Gray -resize 1x! -depth 8 txt:- 2>/dev/null \
+    | python3 -c '
+import re, sys
+vals = []
+for line in sys.stdin:
+    m = re.match(r"0,(\d+): \((\d+)", line)
+    if m:
+        vals.append((int(m.group(1)), int(m.group(2))))
+if not vals:
+    print("-1 -1 0")
+    raise SystemExit
+lo = min(v for _, v in vals)
+hi = max(v for _, v in vals)
+floor = lo + (hi - lo) * 0.15
+ink = [y for y, v in vals if v > floor]
+peak = max(vals, key=lambda p: p[1])[0]
+print("%d %d %d" % (peak, max(ink) if ink else -1, len(ink)))
+'
 }
 
 # The panel's own width off a bare/open pair (panel_emerge.sh's own trick),
@@ -790,4 +893,66 @@ leg_lyrics_assert() {
   if [ $((ix + iw)) -gt $((pane_w - 14)) ]; then
     fail "the lit line ran to the pane's own clip: ink ends at $((ix + iw)) of $pane_w, so a chunk wider than the pane never broke"
   fi
+
+  # The reopen (M69): the wheel had the column, the panel was shut with the
+  # same track still playing and opened again, and nothing but the open
+  # itself could have put follow back.
+  if [ ! -s "$lyrics_status_reopen_path" ]; then
+    fail "no media lyrics status produced after the panel was closed and reopened"
+  fi
+  cat "$lyrics_status_reopen_path"; echo
+  echo "SMOKE_LYRICS_REOPEN $lyrics_status_reopen_path"
+  [ -f "$lyrics_reopen_png_path" ] && echo "SMOKE_LYRICS_REOPEN_PNG $lyrics_reopen_png_path"
+  if ! "$jq_bin" -e '.follow == true' "$lyrics_status_reopen_path" > /dev/null 2>&1; then
+    fail "closing and reopening the panel left the column parked where the wheel put it, got: $(cat "$lyrics_status_reopen_path")"
+  fi
+
+  # The two line changes. The band starts past the header for the same reason
+  # the fit check above does, and one rect serves every frame since the card
+  # does not move through either burst.
+  [ -s "$lyrics_burst_index_path" ] || fail "no line-change burst frames were taken"
+  local burst_name burst_frame burst_body bx by bw bh
+  burst_name=$(tail -1 "$lyrics_burst_index_path")
+  read -r bx by bw bh burst_body < <(lyrics_pane_rect "$lyrics_bare_path" "$shot_dir/lyrics-burst-${burst_name}.png" "$convert_bin")
+  local burst_crop="$((bw - 480 - 12))x$((bh - 116))+$((bx + 480))+$((by + 100))"
+  if [ "$((bw - 480 - 12))" -lt 200 ] || [ "$((bh - 116))" -lt 80 ]; then
+    fail "the line-change burst gave no lyrics pane to read: rect x=$bx y=$by w=$bw h=$bh"
+  fi
+  : > "$lyrics_burst_profile_path"
+  local burst_failures="" peak_row last_row ink_rows
+  while read -r burst_name; do
+    burst_frame="$shot_dir/lyrics-burst-${burst_name}.png"
+    [ -f "$burst_frame" ] || fail "line-change burst frame $burst_name was never taken"
+    read -r peak_row last_row ink_rows < <(lyrics_ink_profile "$(lyrics_burst_body "$burst_frame")" "$burst_crop")
+    printf '%s %s %s %s\n' "$burst_name" "$peak_row" "$last_row" "$ink_rows" >> "$lyrics_burst_profile_path"
+    # Eight inked rows is a third of what any of these frames carries: it
+    # separates a pane mid-change from one that has emptied out, and says
+    # nothing about how many lines happen to be under the lit one, which the
+    # fixture's own last line answers with none.
+    if [ "${ink_rows:-0}" -lt 8 ]; then
+      burst_failures="$burst_failures $burst_name(inkRows=$ink_rows)"
+    fi
+  done < "$lyrics_burst_index_path"
+  echo "SMOKE_LYRICS_BURST $lyrics_burst_profile_path"
+  cat "$lyrics_burst_profile_path"
+  [ -f "$shot_dir/lyrics-burst-a-5.png" ] && echo "SMOKE_LYRICS_BURST_A $shot_dir/lyrics-burst-a-5.png"
+  [ -f "$shot_dir/lyrics-burst-b-5.png" ] && echo "SMOKE_LYRICS_BURST_B $shot_dir/lyrics-burst-b-5.png"
+  [ -z "$burst_failures" ] || fail "a line change emptied the pane out at:$burst_failures"
+
+  # And the lit row is on one place across the tail of each burst: the last
+  # five frames of a burst span a second and a half, well past the 500ms the
+  # column's own travel takes, so a row still moving there is one whose own
+  # box is still settling under it.
+  local burst_phase tail_peaks first_peak
+  for burst_phase in a b; do
+    tail_peaks=$(grep "^${burst_phase}-" "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }')
+    first_peak=$(printf '%s\n' "$tail_peaks" | head -1)
+    [ -n "$first_peak" ] || fail "burst $burst_phase produced no ink profile at all"
+    while read -r peak_row; do
+      if [ "$((peak_row - first_peak))" -gt 2 ] || [ "$((first_peak - peak_row))" -gt 2 ]; then
+        fail "the lit row was still moving at the end of burst $burst_phase: peaks $(printf '%s' "$tail_peaks" | tr '\n' ' ')"
+      fi
+    done < <(printf '%s\n' "$tail_peaks")
+  done
+  echo "SMOKE_LYRICS_BURST_SETTLED a=$(grep '^a-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }' | tr '\n' ' ')b=$(grep '^b-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }' | tr '\n' ' ')"
 }
