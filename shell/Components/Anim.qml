@@ -12,10 +12,11 @@ import qs.Core
 // cursor), `effectsFast`, `effects`, `effectsSlow` for anything with
 // neither (opacity, blur, a progress that only drives alpha; colour takes
 // `CAnim`). `emphasized` is the workspace pill, `emphasizedDecel` a toast
-// arriving from off screen, `reveal` a full-screen fade. `emerge`, `arrive`
-// and `restack` are the three clocks the live theme's table names for
-// itself (shell/Theme/style.js's `MOTION_KEYS`): a drawer's entrance, a
-// notification's arrival and the pile closing up behind it.
+// arriving from off screen, `reveal` a full-screen fade. `emerge`,
+// `switcher`, `arrive` and `restack` are the four clocks the live theme's
+// table names for itself (shell/Theme/style.js's `MOTION_KEYS`): a drawer's
+// entrance, the window switcher's own fade, a notification's arrival and the
+// pile closing up behind it.
 //
 // The spatial curves carry a y control point above 1, so an x or a height
 // on one of them passes a few pixels beyond its target and settles back.

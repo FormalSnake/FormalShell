@@ -484,20 +484,46 @@ var STYLE = {
         // under the half shadcn takes.
         "scrim": { fill: "black", fillAlpha: 125 / 255, radius: 0 },
 
-        // Gala's window switcher (`lib/Widgets/WindowSwitcher.vala`, M60 T6):
-        // the background level at 0.6 over the compositor's blur, a toplevel
-        // rim, and one lit stroke a pixel and a half inside that rim at
-        // radius 8, which is what the ring's own band leaves under a radius
-        // of 9. The stroke is Gala's, drawn on a Clutter canvas rather than
-        // written as a GTK `alpha(@highlight_color, 0.3)`, so it carries
-        // 0.3 in both modes instead of the product every highlight in this
-        // file takes.
+        // Gala's window switcher (`lib/Widgets/AbstractSwitcher.vala`'s own
+        // `draw()`, M60 T6/M64): the background level at 0.6 over the
+        // compositor's blur, a toplevel rim, and one lit stroke a pixel and
+        // a half inside that rim at radius 8, which is what the ring's own
+        // band leaves under a radius of 9. The stroke is Gala's, drawn on a
+        // Clutter canvas rather than written as a GTK
+        // `alpha(@highlight_color, 0.3)`: `set_source_rgba` there takes the
+        // constant's RGB and a literal 0.3, dropping DARK_HIGHLIGHT's own
+        // alpha, so it is 0.3 in both modes and not the product every
+        // highlight in this file takes.
+        //
+        // The cast is `ShadowEffect ("window-switcher")`, a class its own
+        // table does not name and so the default size 9, at the switcher's
+        // `shadow_opacity = 100` of 255.
+        //
+        // The fill stays the live `background` rather than Gala's fixed
+        // #fafafa/#333333: every other role in this table is elementary's
+        // recipe over matugen's palette, and a card hardcoded to two greys
+        // would be the one surface that did not follow the wallpaper.
         "switcher": {
             fill: "background",
             fillAlpha: 0.6,
             radius: R_CARD,
             border: { color: "black", alpha: BORDERS, width: 1 },
-            layers: [{ inset: true, spread: 1.5, color: "white", alpha: 0.3 }]
+            layers: [
+                { blur: 9, color: "black", alpha: 100 / 255 },
+                { inset: true, spread: 1.5, color: "white", alpha: 0.3 }
+            ]
+        },
+
+        // One window's tile on that card (`WindowSwitcherIcon.vala`): the
+        // 3px corner every control here takes, nothing at rest, and the
+        // accent at `ACCENT_COLOR_ALPHA` under the cursor. A quarter rather
+        // than the solid fill `cell.selected` carries, which is the whole
+        // reason this is a role: Gala tints the icon's own tile and leaves
+        // the icon on top of it legible, where a solid accent under a 64px
+        // icon reads as the icon having been replaced by a swatch.
+        "switcher.cell": {
+            rest: { fill: "transparent", radius: R_CONTROL },
+            selected: { fill: "accent", fillAlpha: 64 / 255, radius: R_CONTROL }
         },
 
         // The window itself, which the shell does not draw: Hyprland does,
@@ -543,10 +569,18 @@ var STYLE = {
     // above because it is the one clock here that is a card travelling
     // rather than appearing, and it must not pass the place it is going to:
     // a bubble overshooting into its neighbour reads as the pile bouncing.
+    //
+    // The switcher is the fourth, and none of the three above: Gala fades
+    // its card on `AnimationDuration.HIDE` (200ms, `WindowSwitcher.vala`'s
+    // `set_easing_duration`) with no easing mode set, which leaves Clutter's
+    // own default for an implicit animation, ease-out-cubic, written here as
+    // its control points. Opacity and nothing else moves; the card does not
+    // drop, scale or slide.
     motion: {
         emerge: { duration: 150, curve: [0.4, 0, 0.2, 1, 1, 1] },
         arrive: { duration: 400, curve: [0.4, 0, 0.2, 1, 1, 1] },
-        restack: { duration: 200, curve: "emphasizedDecel", stagger: 150 }
+        restack: { duration: 200, curve: "emphasizedDecel", stagger: 150 },
+        switcher: { duration: 200, curve: [0.215, 0.61, 0.355, 1, 1, 1] }
     },
 
     // Pantheon's habits, the shapes that differ from Omarchy in more than

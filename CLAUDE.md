@@ -300,6 +300,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   fixture icon at three cell centres and for the accent fill travelling from
   the third cell to the second, then a commit landing focus on the window
   the card named (`hyprctl activewindow`).
+- `switcher_keys.sh` `--switcher-keys`: the same card driven by the
+  compositor's own binds and real keys instead of IPC, one `wtype` process
+  holding Alt across two taps of Tab and letting go. Reads the card open on
+  the third entry mid-hold, closed with focus moved on the release, and two
+  probe binds on the same key beside the shipped one: a plain `bindr` that
+  must not fire (Hyprland shadows a held key's release bind once another
+  bind consumes a press) and a no-mods `bindrt` that must not fire either
+  (the modifier is still held as far as the bind table is concerned). A bare
+  Alt tap first, which has to leave the plain probe's marker.
 - `switcher_off.sh` `--switcher-off`: the same target under the shipped
   preset, where the habit is off: all five verbs answering the error string
   and no switcher surface mapped at all.

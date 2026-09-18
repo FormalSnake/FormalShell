@@ -24,6 +24,13 @@
 // A table whose `switcher` habit is off still declares it, so the role list
 // stays one list; nothing instantiates the surface there.
 //
+// `switcher.cell` is one icon's own tile inside that card, and not `cell`
+// because Gala marks the selected window with the accent at a QUARTER
+// (`Drawing/StyleManager.vala`'s `ACCENT_COLOR_ALPHA`) where every list and
+// bar cell in this shell fills solid. One role rather than a state on
+// `cell` for the same reason the card is not `card`: the two live in
+// different material.
+//
 // `window` is the one role nothing in the shell draws. Hyprland does, off
 // the variables ThemeEngine publishes into formalshell-chrome.conf
 // (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
@@ -57,6 +64,7 @@ var ROLES = {
     "cursor": [],
     "scrim": [],
     "switcher": [],
+    "switcher.cell": ["rest", "selected"],
     "window": ["rest", "inactive"]
 };
 
@@ -132,7 +140,11 @@ function hasState(style, role, state) {
 // key, `stagger`, the whole window a restack is spread across before each
 // card takes its share of it; absent reads as no stagger at all, which is
 // the metamorphosis pile moving as one.
-var MOTION_KEYS = ["emerge", "arrive", "restack"];
+// `switcher` is the window switcher's own card, which is not on the drawer's
+// clock even under the habit that owns both: Gala maps a menu on
+// `MENU_MAP` and fades the switcher on `HIDE` (`lib/Constants.vala`), two
+// different constants, so the table names them separately.
+var MOTION_KEYS = ["emerge", "arrive", "restack", "switcher"];
 
 // The washes a pointer paints, one entry per state (T3). Kept beside the
 // roles rather than inside them: every role that takes a pointer takes the

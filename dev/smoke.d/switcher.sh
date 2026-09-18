@@ -13,13 +13,13 @@
 #
 # What the frames are read for, without hardcoding a single colour the
 # palette owns: the icon's pink at all three cell centres (three icon cells,
-# not one card with a gap in it), and the 6px margin the icon leaves inside
-# its cell sampled on each of them. The selected cell fills with `accent`, so
-# its margin differs from the other two while theirs match each other, and
-# after one `switcher prev` that difference has moved one cell left. A patch
-# read per cell rather than a colour compared against a constant: the fill is
-# the wallpaper's own accent under matugen, and a leg naming a hex would be
-# asserting the palette rather than the cursor.
+# not one card with a gap in it), and the 12px margin the icon leaves inside
+# its cell sampled on each of them. The selected cell takes a quarter-strength
+# `accent` tint, so its margin differs from the other two while theirs match
+# each other, and after one `switcher prev` that difference has moved one cell
+# left. A patch read per cell rather than a colour compared against a
+# constant: the fill is the wallpaper's own accent under matugen, and a leg
+# naming a hex would be asserting the palette rather than the cursor.
 #
 # It pins `theme.preset` itself, so it needs no --pantheon (and does not
 # fight one): the switcher is a habit, and no other preset has it.
@@ -40,18 +40,18 @@ switcher_layers_closed="$shot_dir/switcher-layers-closed.json"
 switcher_active_json="$shot_dir/switcher-active.json"
 
 # The card's own geometry on this rig, off the tokens rather than off a
-# screenshot: a 64px icon in a cell with `md` around it is 76, the gap
-# between cells is `md`, three cells make a 240px row, and the card floors
-# its content at `popupWidthNarrow` (320) so a single-window card still gives
-# its caption a line. That puts the card at 344 wide, centred on 1920, with
-# the row centred inside it: cells at x 840, 922 and 1004.
+# screenshot: a 64px icon inside `panelPadding` on all four sides is an 88px
+# cell, the cells touch (Gala sets no spacing on its flow layout), three of
+# them make a 264px row, and the card is exactly as wide as that row plus its
+# own padding, with no floor under it. That puts the card at 288 wide,
+# centred on 1920, with cells at x 828, 916 and 1004.
 #
 # The y is the output's own centre minus half a card whose height carries one
-# line of body text, so it moves by a pixel or two with the font. Every patch
-# below is 20 rows tall about the middle of a 76px cell, which is inside the
-# icon in any of those cases.
-switcher_icon_patches="20x20+868+515 20x20+950+515 20x20+1032+515"
-switcher_margin_patches="4x20+841+515 4x20+923+515 4x20+1005+515"
+# line of `heading`, so it moves by a pixel or two with the font. Every patch
+# below is 20 rows tall about the middle of an 88px cell, which leaves 20
+# rows of slack against the 64px icon inside it.
+switcher_icon_patches="20x20+862+512 20x20+950+512 20x20+1038+512"
+switcher_margin_patches="4x20+831+512 4x20+919+512 4x20+1007+512"
 
 leg_switcher_fixture() {
   # --pantheon pins the same preset; two "theme" keys in one settings.json

@@ -392,17 +392,21 @@ Singleton {
     // whole entrance, so a mid-flight pose can only be photographed slowed
     // down. Never read from settings.json.
     property real motionScale: 1
-    // The clocks a theme's table names for itself (M60 T2, T4): a drawer's
-    // entrance, which the popover habit takes at Gala's 150ms while the
-    // metamorphosis names the spatial family it has always ridden, and the
-    // toast stack's arrival and restack. All resolved against the unzeroed
-    // tokens, since the reduced-motion switch and the rig's scale are
-    // applied below with every other duration.
+    // The clocks a theme's table names for itself (M60 T2, T4, M64): a
+    // drawer's entrance, which the popover habit takes at Gala's 150ms while
+    // the metamorphosis names the spatial family it has always ridden, the
+    // toast stack's arrival and restack, and the window switcher's own fade,
+    // which under the habit that draws it is a second Gala constant rather
+    // than the drawer's. All resolved against the unzeroed tokens, since the
+    // reduced-motion switch and the rig's scale are applied below with every
+    // other duration.
     readonly property var _emerge: Style.motion(root.style, "emerge",
         Tokens.motionTokens(true), Tokens.MOTION_CURVES)
     readonly property var _arrive: Style.motion(root.style, "arrive",
         Tokens.motionTokens(true), Tokens.MOTION_CURVES)
     readonly property var _restack: Style.motion(root.style, "restack",
+        Tokens.motionTokens(true), Tokens.MOTION_CURVES)
+    readonly property var _switcher: Style.motion(root.style, "switcher",
         Tokens.motionTokens(true), Tokens.MOTION_CURVES)
 
     readonly property var motion: {
@@ -413,6 +417,7 @@ Singleton {
             emerge: (root.motionEnabled ? root._emerge.duration : 0) * s,
             arrive: (root.motionEnabled ? root._arrive.duration : 0) * s,
             restack: (root.motionEnabled ? root._restack.duration : 0) * s,
+            switcher: (root.motionEnabled ? root._switcher.duration : 0) * s,
             // The window a staggered restack is spread over, for the one
             // consumer that divides it by the number of cards moving
             // (Surfaces/Notifications/Toasts.qml). Zero is a pile that
@@ -437,6 +442,7 @@ Singleton {
                 emphasizedDecel: c.emphasizedDecel,
                 reveal: c.effectsSlow,
                 emerge: root._emerge.curve,
+                switcher: root._switcher.curve,
                 arrive: root._arrive.curve,
                 restack: root._restack.curve
             },

@@ -272,6 +272,13 @@ var STYLE = {
             border: { color: "border", width: 1 }
         },
 
+        // And one icon's tile inside it, the cursor filling solid the way
+        // every other selected cell in this table does.
+        "switcher.cell": {
+            rest: { fill: "transparent", radius: "md" },
+            selected: { fill: "accent", fillAlpha: 1, radius: "md" }
+        },
+
         // The one role the shell does not draw: Hyprland does, off
         // formalshell-chrome.conf (chrome.js). The frame is the wallpaper's
         // own colour at the compositor's default width, which is what
@@ -294,11 +301,15 @@ var STYLE = {
     // the clock everything else with a position or a size travels on,
     // overshoot included, a toast arrives from off screen on the decelerating
     // curve M3 defines for exactly that, and the pile closes up behind it on
-    // the spatial family again, as one, with no stagger.
+    // the spatial family again, as one, with no stagger. The switcher's card
+    // is a plain fade, so it takes the effects family; this table's habit
+    // leaves the surface uninstantiated, and the entry is here for the same
+    // reason its role above is.
     motion: {
         emerge: { duration: "spatial", curve: "spatial" },
         arrive: { duration: "spatial", curve: "emphasizedDecel" },
-        restack: { duration: "spatial", curve: "spatial" }
+        restack: { duration: "spatial", curve: "spatial" },
+        switcher: { duration: "effects", curve: "effects" }
     },
 
     // Omarchy's own habits (T7): the strip along one edge, a card that buds
