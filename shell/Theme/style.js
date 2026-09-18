@@ -18,6 +18,12 @@
 // `button` disabled is not here: it is opacity 0.5 on the whole control
 // rather than a box of its own, and it stays in the primitive.
 //
+// `switcher` is the window switcher's card (M60 T6), a role of its own
+// rather than the `card` above because Gala draws it in its own material: a
+// lower alpha over the compositor's blur and one lit stroke inside the rim.
+// A table whose `switcher` habit is off still declares it, so the role list
+// stays one list; nothing instantiates the surface there.
+//
 // `window` is the one role nothing in the shell draws. Hyprland does, off
 // the variables ThemeEngine publishes into formalshell-chrome.conf
 // (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
@@ -50,6 +56,7 @@ var ROLES = {
     "segmented.chip": [],
     "cursor": [],
     "scrim": [],
+    "switcher": [],
     "window": ["rest", "inactive"]
 };
 
@@ -150,6 +157,7 @@ function _defaults() {
         inkShadow: LITERAL_COLORS.transparent,
         hairlines: [],
         rings: [],
+        insetRings: [],
         casts: []
     };
 }
@@ -262,7 +270,10 @@ function hairline(layer) {
 
 // The layer list split by kind, in the table's own order. Box draws casts
 // under the fill and rings and hairlines around it, so each list is walked
-// by its own Repeater and a box with none instantiates nothing.
+// by its own Repeater and a box with none instantiates nothing. A ring
+// marked `inset` is separated again in `resolve` below: CSS draws an inset
+// spread as a band of that thickness along the INSIDE of the box, which is
+// a border rather than a plate under the fill.
 //
 // A cast is drawn outside the silhouette alone: MultiEffect casts a shadow
 // of what it is given and masks the silhouette back out, so an INSET cast
@@ -330,10 +341,14 @@ function resolve(style, role, state, ctx) {
         out.hairlines.push(line);
     }
     for (var r = 0; r < split.rings.length; r++) {
-        out.rings.push({
+        var ring = {
             spread: split.rings[r].spread,
             color: paint(split.rings[r].color, split.rings[r].alpha, ctx)
-        });
+        };
+        if (split.rings[r].inset)
+            out.insetRings.push(ring);
+        else
+            out.rings.push(ring);
     }
     for (var c = 0; c < split.casts.length; c++) {
         var cast = split.casts[c];

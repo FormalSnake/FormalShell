@@ -259,6 +259,17 @@ var STYLE = {
         // blur behind the card above it.
         "scrim": { fill: "black", fillAlpha: 0.5, radius: 0 },
 
+        // The window switcher's card (M60 T6). This table's `switcher` habit
+        // is off, so nothing instantiates that surface here and the entry is
+        // the plain card: the role list is one list, and a preset that turned
+        // the habit on would get shadcn's own chrome rather than a hole.
+        "switcher": {
+            fill: "card",
+            fillAlpha: "surface",
+            radius: "xl",
+            border: { color: "border", width: 1 }
+        },
+
         // The one role the shell does not draw: Hyprland does, off
         // formalshell-chrome.conf (chrome.js). The frame is the wallpaper's
         // own colour at the compositor's default width, which is what

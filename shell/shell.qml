@@ -19,6 +19,7 @@ import qs.Surfaces.Osd
 import qs.Surfaces.Panels
 import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
+import qs.Surfaces.Switcher
 import qs.Surfaces.HotCorners
 import qs.Surfaces.Capture
 import qs.Surfaces.Plugins
@@ -178,6 +179,21 @@ ShellRoot {
     // trigger time.
     Osd { id: osd }
 
+    // Gala's Alt+Tab, and only under a theme that has one (M60 T6): the
+    // `switcher` habit decides whether the surface exists at all, so a
+    // session on a table without it carries no window for it and
+    // SwitcherIpc answers that instead of a silent no-op. Same "one
+    // instance, on the focused output at summon time" reasoning as Menu
+    // and Osd above.
+    Loader {
+        id: switcherLoader
+        active: Theme.habit.switcher
+
+        sourceComponent: Component {
+            Switcher {}
+        }
+    }
+
     // WlSessionLock manages its own per-screen surfaces internally (see
     // Lock.qml's header comment), one instance here covers every output.
     Lock { id: lock }
@@ -302,6 +318,7 @@ ShellRoot {
     MenuIpc { menu: menuInstance }
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
+    SwitcherIpc { switcher: switcherLoader.item }
     // The static seventeen merged with every plugin surface that has
     // registered itself. Plugin keys carry manifest.js's "plugin:" prefix, so
     // a plugin can never shadow a builtin name and PanelIpc needs no

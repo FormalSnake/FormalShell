@@ -88,7 +88,8 @@ TestCase {
             "formalshell:tooltip",
             "formalshell:polkit",
             "formalshell:plugin-overlay",
-            "formalshell:osd"
+            "formalshell:osd",
+            "formalshell:switcher"
         ];
         for (var i = 0; i < translucent.length; i++) {
             var rule = _byNamespace(translucent[i]);

@@ -11,8 +11,8 @@ import qs.Core
 //
 // Draw order, outermost first: the casts under everything (`z: -1`), the
 // rings under the fill, the fill with its border, the face gradient and the
-// inset hairlines inside it, the pointer's wash over the lot, and the
-// content over that. The border rides on the fill's own Rectangle rather
+// inset hairlines inside it, an inset ring inside those, the pointer's wash
+// over the lot, and the content over that. The border rides on the fill's own Rectangle rather
 // than being a layer of its own, which is what keeps a box with no layers
 // and no face costing one Rectangle: the face and the hairlines sit a
 // border in from the edge so they never paint over it.
@@ -247,6 +247,28 @@ Item {
                 height: hairline._sideways ? parent.height : hairline.modelData.thickness
                 color: hairline.modelData.color
             }
+        }
+    }
+
+    // One stroked rounded rectangle per inset ring: CSS draws an inset spread
+    // with no blur as a band of that thickness along the inside of the box,
+    // which is Gala's own lit stroke a pixel and a half inside the switcher
+    // card's rim. A border rather than a fill, so the card's translucency
+    // still shows the desktop between the stroke and the middle, and drawn
+    // over the face and the hairlines because it is the innermost edge of the
+    // rim rather than a layer under it.
+    Repeater {
+        model: root.box.insetRings
+
+        delegate: Rectangle {
+            id: insetRing
+            required property var modelData
+
+            anchors.fill: parent
+            radius: root._radius
+            color: "transparent"
+            border.width: insetRing.modelData.spread
+            border.color: insetRing.modelData.color
         }
     }
 

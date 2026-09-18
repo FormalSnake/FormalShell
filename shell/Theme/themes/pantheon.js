@@ -442,6 +442,22 @@ var STYLE = {
         // under the half shadcn takes.
         "scrim": { fill: "black", fillAlpha: 125 / 255, radius: 0 },
 
+        // Gala's window switcher (`lib/Widgets/WindowSwitcher.vala`, M60 T6):
+        // the background level at 0.6 over the compositor's blur, a toplevel
+        // rim, and one lit stroke a pixel and a half inside that rim at
+        // radius 8, which is what the ring's own band leaves under a radius
+        // of 9. The stroke is Gala's, drawn on a Clutter canvas rather than
+        // written as a GTK `alpha(@highlight_color, 0.3)`, so it carries
+        // 0.3 in both modes instead of the product every highlight in this
+        // file takes.
+        "switcher": {
+            fill: "background",
+            fillAlpha: 0.6,
+            radius: R_CARD,
+            border: { color: "black", alpha: BORDERS, width: 1 },
+            layers: [{ inset: true, spread: 1.5, color: "white", alpha: 0.3 }]
+        },
+
         // The window itself, which the shell does not draw: Hyprland does,
         // off the variables ThemeEngine publishes into
         // formalshell-chrome.conf (chrome.js, M60 P7). elementary's focused

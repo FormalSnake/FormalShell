@@ -1482,6 +1482,37 @@ binds {
 }
 ```
 
+## Window switcher
+
+One card in the middle of the output: a row of 64px app icons, one per
+mapped window across every workspace, the most recently focused first, the
+selected one on an accent fill with its title under the row. A window on a
+special workspace (the quake console) is not offered, since it is an overlay
+rather than a place. A session with nothing to switch between says
+`NO WINDOWS`. More windows than fit one row wrap onto balanced rows.
+
+It only exists under a preset whose `switcher` habit is on, which today is
+`pantheon`; on every other preset the target below answers
+`error: switcher is off under this theme` rather than doing nothing quietly.
+
+```sh
+fs switcher next     # open on the window before this one, or walk on
+fs switcher prev     # the other way, wrapping at either end
+fs switcher commit   # focus the selected window and close
+fs switcher cancel   # close, focus untouched
+fs switcher state    # {"open":…,"index":…,"count":…,"id":…,"title":…}
+```
+
+The card takes the keyboard while it is open and never a modifier: Tab,
+Right and Down walk the row, Shift+Tab, Left and Up walk it back, Enter
+commits, Escape cancels, and nothing else types anywhere. Holding a modifier
+is the compositor's job, so the shipped Hyprland example binds Alt+Tab to
+`switcher next`, Alt+Shift+Tab to `switcher prev` and the release of Alt to
+`switcher commit` (`docs/examples/hyprland/formalshell.conf`). A release bind
+takes the modifier as a keysym (`Alt_L`), so it fires on every Alt release,
+open or not; a commit with nothing open is a no-op that says so. Where a
+release bind cannot be made to fire, Enter commits from the card itself.
+
 ## Panels
 
 Sixteen popouts share one component: a card on the top layer,

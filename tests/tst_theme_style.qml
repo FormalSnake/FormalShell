@@ -473,6 +473,43 @@ TestCase {
             Style.LITERAL_COLORS.white + "@0.12");
     }
 
+    // The switcher's card (M60 T6): Gala's background level at 0.6, the
+    // toplevel rim, and the lit stroke inside it, which is the one inset
+    // ring in any table and so the one layer that lands in `insetRings`
+    // rather than under the fill. Gala draws it on a canvas rather than
+    // through GTK's `alpha()`, so unlike every highlight in this material it
+    // carries 0.3 in dark too.
+    function test_the_pantheon_switcher_is_galas_card() {
+        var card = Style.resolve(Pantheon.STYLE, "switcher", null, ctx("dark"));
+        compare(card.fill, "role:background@0.6");
+        compare(card.radius, 9);
+        compare(card.border.color, "#000000@0.75");
+        compare(card.rings.length, 0);
+        compare(card.insetRings.length, 1);
+        compare(card.insetRings[0].spread, 1.5);
+        compare(card.insetRings[0].color, "#ffffff@0.3");
+        compare(Style.resolve(Pantheon.STYLE, "switcher", null, ctx("light")).insetRings[0].color,
+            "#ffffff@0.3");
+
+        // The selected cell is a fill rather than the cursor's ring, which
+        // is what Gala marks the window you are about to focus with.
+        var selected = Style.resolve(Pantheon.STYLE, "cell", "selected", ctx("dark"));
+        compare(selected.fill, "role:accent");
+        compare(selected.radius, 3);
+    }
+
+    // The table on the habit the switcher is off under still carries the
+    // role, so the role list is one list; it is the plain card there.
+    function test_the_metamorphosis_switcher_is_the_plain_card() {
+        var card = Style.resolve(Metamorphosis.STYLE, "switcher", null, ctx("dark"));
+        var plain = Style.resolve(Metamorphosis.STYLE, "card", "rest", ctx("dark"));
+        compare(card.fill, plain.fill);
+        compare(card.radius, plain.radius);
+        compare(card.border.color, plain.border.color);
+        compare(card.insetRings.length, 0);
+        compare(Metamorphosis.STYLE.habits.switcher, false);
+    }
+
     // The habits Part 2 names, which the surfaces read from M60 T2 on.
     function test_pantheon_declares_pantheon_habits() {
         var habits = Pantheon.STYLE.habits;

@@ -288,6 +288,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   bar.layout, pgrep proving it appears on open and dies on close.
 - `speedtest.sh` `--speedtest`: `network speedtest` settling both phases in
   the network panel.
+- `switcher.sh` `--switcher`: Gala's Alt+Tab under the pantheon habit, three
+  windows of the fixture's own app id in one session, `switcher next` twice
+  and `prev` once over IPC against `switcher state`, the frame read for the
+  fixture icon at three cell centres and for the accent fill travelling from
+  the third cell to the second, then a commit landing focus on the window
+  the card named (`hyprctl activewindow`).
+- `switcher_off.sh` `--switcher-off`: the same target under the shipped
+  preset, where the habit is off: all five verbs answering the error string
+  and no switcher surface mapped at all.
 - `systemupdate.sh` `--systemupdate`: the flake-inputs-behind cell and panel
   reading this repo's own flake through one shared poll.
 - `theme_toggle.sh` `--theme-toggle`: `theme mode toggle` both ways, and with

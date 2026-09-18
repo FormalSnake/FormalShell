@@ -80,6 +80,10 @@ var SPACING_BASE = {
 // (`notifications/data/application.css`, M60 T4). It is beside the snap
 // points rather than on the ladder: a transcribed number that happens to
 // sit between `Narrow` and `Default`, and only the bubble takes it.
+// `switcherIcon` and `switcherInset` are Gala's two window-switcher numbers
+// (`lib/Widgets/WindowSwitcherIcon.vala`, M60 T6): the app icon a cell
+// carries, and the room the card keeps off every edge of the output, which
+// is also what caps how many cells fit across before the row wraps.
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
     controlHeight: 32, barCellHeight: 28, barCellWidth: 44, barMargin: 6,
@@ -88,7 +92,8 @@ var SEMANTIC_SPACING_BASE = {
     trackThickness: 6,
     popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900,
-    popupWidthBubble: 332
+    popupWidthBubble: 332,
+    switcherIcon: 64, switcherInset: 64
 };
 
 function spacingTokens(scale) {

@@ -144,7 +144,7 @@ TestCase {
     function resolved(extra) {
         var box = {
             fill: "transparent", radius: 8, border: null, face: null,
-            wash: null, edge: null, hairlines: [], rings: [], casts: []
+            wash: null, edge: null, hairlines: [], rings: [], insetRings: [], casts: []
         };
         for (var key in extra)
             box[key] = extra[key];
