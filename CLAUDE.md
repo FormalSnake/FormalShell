@@ -73,8 +73,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   covering a 64px cell rather than a row's glyph, with real arrow keys
   moving the cursor one cell across and a column count down, a real Enter
   launching through the row path, apps and a ranked route sharing the card,
-  and the key deleted underneath the running shell putting the row list
-  back.
+  and the key deleted underneath the running shell putting the launcher
+  habit's own route back: the row list, or the grid under `--pantheon`.
 - `bar_adaptive.sh` `--bar-adaptive`: the wingpanel band reading its own
   paint off the wallpaper under it, four wallpapers in one session (a flat
   bright field, a flat dark one, a half-and-half field, and the dark one

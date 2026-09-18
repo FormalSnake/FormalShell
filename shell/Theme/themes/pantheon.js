@@ -440,7 +440,32 @@ var STYLE = {
 
         // Gala's modal dim (`lib/Constants.vala`): 125 of 255, a touch
         // under the half shadcn takes.
-        "scrim": { fill: "black", fillAlpha: 125 / 255, radius: 0 }
+        "scrim": { fill: "black", fillAlpha: 125 / 255, radius: 0 },
+
+        // The window itself, which the shell does not draw: Hyprland does,
+        // off the variables ThemeEngine publishes into
+        // formalshell-chrome.conf (chrome.js, M60 P7). elementary's focused
+        // window is a 1px `borders` frame over `shadow(4)` and a backdrop
+        // one drops to `shadow(2)`, and what a compositor can take of that
+        // is one cast: the range, the power and the offset below are the
+        // focused numbers, and a backdrop window differs by its colour
+        // alone. The frame takes the `border` role rather than the literal
+        // black the cards carry, since a window's rim lies on the wallpaper
+        // instead of on a sheet of this material.
+        "window": {
+            rest: {
+                border: { color: "border", width: 1 },
+                shadow: {
+                    enabled: true,
+                    range: 24,
+                    renderPower: 3,
+                    offset: [0, 6],
+                    color: "black",
+                    alpha: 0.35
+                }
+            },
+            inactive: { shadow: { color: "black", alpha: 0.25 } }
+        }
     },
 
     wash: WASH,

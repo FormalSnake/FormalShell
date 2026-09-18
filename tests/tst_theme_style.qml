@@ -626,4 +626,66 @@ TestCase {
         compare(Style.wash(Metamorphosis.STYLE, "nonsense", ctx("dark")),
             Style.LITERAL_COLORS.transparent);
     }
+
+    // --- The window (M60 P7) ---------------------------------------------
+    //
+    // The one role nothing in the shell draws: Hyprland does, off the
+    // variables chrome.js renders, so the entry is read raw rather than
+    // resolved and its shape is what has to hold. Every number is checked
+    // against the range Hyprland's own option carries
+    // (src/config/values/ConfigValues.cpp, 0.56), since a value outside one
+    // takes the whole config's parse with it.
+    function test_every_table_declares_a_window_hyprland_can_draw() {
+        var names = tableNames();
+        for (var t = 0; t < names.length; t++) {
+            var name = names[t];
+            var focused = Style.entry(tables[name], "window", "rest");
+            var backdrop = Style.entry(tables[name], "window", "inactive");
+
+            verify(!!focused.border, name + " declares no window frame");
+            verify(focused.border.width >= 0 && focused.border.width <= 20,
+                name + " frames a window at " + focused.border.width + "px");
+            verify(typeof focused.border.color === "string");
+
+            var cast = focused.shadow;
+            verify(!!cast, name + " declares no window shadow");
+            compare(typeof cast.enabled, "boolean");
+            verify(cast.range >= 0 && cast.range <= 100, name + " casts at range " + cast.range);
+            verify(cast.renderPower >= 1 && cast.renderPower <= 4,
+                name + " casts at power " + cast.renderPower);
+            compare(cast.offset.length, 2);
+            for (var o = 0; o < 2; o++) {
+                verify(cast.offset[o] >= -250 && cast.offset[o] <= 250,
+                    name + " casts at offset " + cast.offset.join(" "));
+            }
+
+            // A backdrop window differs by its colour alone, which is all a
+            // compositor with one range and one offset can take of
+            // elementary's second elevation.
+            verify(!!backdrop.shadow && typeof backdrop.shadow.color === "string",
+                name + " declares no backdrop shadow colour");
+        }
+    }
+
+    function test_the_shipped_window_casts_nothing() {
+        var focused = Style.entry(Metamorphosis.STYLE, "window", "rest");
+        compare(focused.shadow.enabled, false);
+        compare(focused.border.color, "primary");
+        compare(focused.border.width, 1);
+        compare(Style.entry(Retro.STYLE, "window", "rest").shadow.enabled, false);
+    }
+
+    // elementary's focused window: `shadow(4)` as Hyprland draws it, under a
+    // 1px `borders` frame, which under matugen is the `border` role.
+    function test_the_pantheon_window_is_elementarys_shadow() {
+        var focused = Style.entry(Pantheon.STYLE, "window", "rest");
+        compare(focused.border.color, "border");
+        compare(focused.border.width, 1);
+        compare(focused.shadow.enabled, true);
+        compare(focused.shadow.range, 24);
+        compare(focused.shadow.renderPower, 3);
+        compare(focused.shadow.offset[1], 6);
+        compare(focused.shadow.alpha, 0.35);
+        compare(Style.entry(Pantheon.STYLE, "window", "inactive").shadow.alpha, 0.25);
+    }
 }

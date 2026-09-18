@@ -185,12 +185,18 @@ Singleton {
     // dofiles the Lua one on the reload below, so neither can be caught half
     // written. Creates the parent directory too, since ~/.config/hypr need
     // not exist on a fresh install.
+    //
+    // The staging name carries the writing shell's own pid: two publishes of
+    // the same path can overlap (a startup probe against an arming one), and
+    // on one fixed `.tmp` the second `mv` finds the file the first already
+    // renamed and exits 1, which is what "failed to write
+    // formalshell-chrome.lua, code 1" was in the rig's session logs.
     function _publishFile(path, content, onDone) {
         var proc = writeFileProcComponent.createObject(root, {
             _onDone: onDone
         });
         proc.command = ["sh", "-c",
-            'mkdir -p "$(dirname "$1")" && printf \'%s\' "$2" > "$1.tmp" && mv -f "$1.tmp" "$1"',
+            'mkdir -p "$(dirname "$1")" && printf \'%s\' "$2" > "$1.tmp.$$" && mv -f "$1.tmp.$$" "$1"',
             "sh", path, content];
         proc.running = true;
     }
@@ -211,11 +217,12 @@ Singleton {
         });
     }
 
-    // The rounding and blur twin of _publishHyprColors, and the reason it sits
-    // outside the matugen pipeline: both values come from settings.json, which
-    // no matugen template can read, and neither has anything to do with the
-    // wallpaper. Runs on startup as well as on change so a hyprland config
-    // reading $rounding/$blur finds them from the shell's first run, the same
+    // The chrome twin of _publishHyprColors, and the reason it sits outside
+    // the matugen pipeline: every value comes from settings.json or the theme
+    // table, which no matugen template can read, and none of it has anything
+    // to do with the wallpaper. Runs on startup as well as on change so a
+    // hyprland config reading them finds them from the shell's first run, the
+    // same
     // guarantee the colours file gives. Deliberately clear of running/pending:
     // _publishFile is atomic per file, so two overlapping writes of the same
     // content cannot tear, and queueing them behind a matugen run would only
@@ -244,7 +251,9 @@ Singleton {
     function _publishHyprChrome(onDone) {
         var chrome = {
             rounding: Core.Theme.radius,
-            blur: Core.Theme.blurBehind
+            blur: Core.Theme.blurBehind,
+            window: Core.Theme.windowChrome.focused,
+            windowInactive: Core.Theme.windowChrome.backdrop
         };
         var confText = Chrome.hyprlandChrome(chrome);
         var luaText = Chrome.hyprlandChromeLua(chrome);
@@ -694,10 +703,11 @@ Singleton {
         function onModeChanged() { root.retheme(); }
     }
 
-    // A live settings.json edit moves these two without any wallpaper or mode
-    // change behind it, so the chrome file has its own trigger rather than
-    // riding the retheme one. Held disabled until Config.loaded (IdleService.
-    // qml's own gate pattern, ~:66): Theme.radius/blurBehind read straight off
+    // A live settings.json edit moves any of these without any wallpaper or
+    // mode change behind it, so the chrome file has its own trigger rather
+    // than riding the retheme one. Held disabled until Config.loaded
+    // (IdleService.qml's own gate pattern, ~:66): Theme.radius, blurBehind
+    // and the table behind windowChrome read straight off
     // Config.get(), so the jump from their pre-load defaults to the real
     // settings.json values would otherwise fire this the moment Config.loaded
     // flips, right on top of themeProbe's own startup publish above.
@@ -716,6 +726,11 @@ Singleton {
             });
         }
         function onBlurBehindChanged() {
+            root._publishHyprChrome(function () {
+                root._reloadHyprland();
+            });
+        }
+        function onWindowChromeChanged() {
             root._publishHyprChrome(function () {
                 root._reloadHyprland();
             });

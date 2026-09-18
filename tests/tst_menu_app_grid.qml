@@ -1,6 +1,8 @@
 import QtQuick
 import QtTest
 import "../shell/Menu/appgrid.js" as AppGrid
+import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
+import "../shell/Theme/themes/pantheon.js" as Pantheon
 
 // The launcher's app grid (M58): the column maths and the cursor walk, the
 // two things the view cannot state for itself. What a cell draws is the
@@ -84,6 +86,16 @@ TestCase {
     function test_an_empty_level_moves_nothing() {
         compare(AppGrid.verticalStep(4, 0, 0, 0), 4);
         compare(AppGrid.verticalStep(0, 3, 6, 9), 0);
+    }
+
+    // M60 P6: the route the launcher opens on follows the theme table's
+    // launcher habit, which is what Menu.qml passes as the default of its
+    // `menu.appGrid` read, so an explicit key in settings.json still wins
+    // over both.
+    function test_the_grid_is_the_default_the_launcher_habit_asks_for() {
+        compare(AppGrid.defaultFor(Pantheon.STYLE.habits.launcher), true);
+        compare(AppGrid.defaultFor(Metamorphosis.STYLE.habits.launcher), false);
+        compare(AppGrid.defaultFor(undefined), false);
     }
 
     // A few hundred installed apps is the real case, and the split runs on

@@ -20,6 +20,21 @@
 // ring layer rather than a rectangle each primitive drew for itself.
 var CURSOR_LAYERS = [{ spread: 3, color: "ring", alpha: 0.5 }];
 
+// The cast Hyprland is asked for round a window (M60 P7): none. Nothing in
+// this look shadows anything (docs/DESIGN.md "Chrome"), so the numbers
+// beside the switch are the compositor's own defaults and the published
+// file asks it for nothing it was not already doing. Its default colour is
+// `rgba(1a1a1aee)`, so plain black at that opacity is the nearest this
+// table can name.
+var NO_CAST = {
+    enabled: false,
+    range: 4,
+    renderPower: 3,
+    offset: [0, 0],
+    color: "black",
+    alpha: 0.93
+};
+
 // What the pointer paints. `hover` and `press` are a wash of the surface's
 // own ink, never an opaque `accent` chip: every surface that takes a hover
 // is drawn at the surface alpha, so an opaque fill on top of it lands at a
@@ -242,7 +257,21 @@ var STYLE = {
         // The modal backdrop: plain black over the live desktop, the
         // compositor's `ignore_alpha` for the modal namespaces keeping the
         // blur behind the card above it.
-        "scrim": { fill: "black", fillAlpha: 0.5, radius: 0 }
+        "scrim": { fill: "black", fillAlpha: 0.5, radius: 0 },
+
+        // The one role the shell does not draw: Hyprland does, off
+        // formalshell-chrome.conf (chrome.js). The frame is the wallpaper's
+        // own colour at the compositor's default width, which is what
+        // docs/examples/hyprland/formalshell.conf has hung on
+        // `col.active_border` since it shipped, so a host on this table
+        // sees the window chrome it already had.
+        "window": {
+            rest: {
+                border: { color: "primary", width: 1 },
+                shadow: NO_CAST
+            },
+            inactive: { shadow: NO_CAST }
+        }
     },
 
     wash: WASH,

@@ -598,8 +598,8 @@ PanelWindow {
 
     // --- App grid (M58 G1-G4) --------------------------------------------
     //
-    // `menu.appGrid` off (the default) leaves every level exactly the row
-    // list it has always been; on, wherever the launcher would draw rows and
+    // `menu.appGrid` off leaves every level exactly the row list it has
+    // always been; on, wherever the launcher would draw rows and
     // some of them are apps, those apps draw as a grid of icons with their
     // names under them and whatever else ranked draws as rows beneath
     // (Surfaces/Menu/views/AppGridView.qml). The owner asked for their app
@@ -616,7 +616,13 @@ PanelWindow {
     // nothing and `_appGridCount` is 0. An app view is the exception worth
     // naming, since a query there still falls through to whole-tree ranking
     // under a body that is not the row list at all.
-    readonly property bool _appGridWanted: Core.Config.get("menu.appGrid", false)
+    //
+    // What the key defaults to is the launcher habit's (M60 P6): the grid
+    // under a table whose launcher is Slingshot's pages, the row list under
+    // one whose launcher is Omarchy's, and an explicit `menu.appGrid` either
+    // way over both.
+    readonly property bool _appGridWanted: Core.Config.get("menu.appGrid",
+            AppGrid.defaultFor(Core.Theme.habit.launcher))
         && root._mode === "menu" && !root._isAppView
     readonly property var _appGrid: root._appGridWanted
         ? AppGrid.partition(root._rankedRows)

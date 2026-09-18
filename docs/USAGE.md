@@ -737,13 +737,18 @@ fonts.fontconfig.defaultFonts.sansSerif = [ "Geist" ];
 fonts.fontconfig.defaultFonts.monospace = [ "Geist Mono" ];
 ```
 
-### Hyprland rounding and blur
+### Hyprland rounding, blur and window chrome
 
 The shell publishes `formalshell-chrome.conf` next to the colours file,
-carrying `$rounding` (the value of `theme.radius`) and `$blur`
-(`theme.blur`), rewritten whenever either changes. The example config
-sources it and reads both, so window corners and the blur behind the
-shell's surfaces follow the preset:
+carrying `$rounding` (the value of `theme.radius`), `$blur` (`theme.blur`)
+and the window frame and shadow the preset's theme table declares
+(`$borderSize`, `$borderColor`, `$shadow`, `$shadowRange`, `$shadowPower`,
+`$shadowOffset`, `$shadowColor`, `$shadowInactiveColor`), rewritten whenever
+any of them changes. The example config sources it and reads all of them, so
+window corners, the blur behind the shell's surfaces and the chrome round
+every window follow the preset: `shadcn` and `retro` cast no shadow and hang
+the wallpaper's `$primary` on the focused window, `pantheon` casts
+elementary's own (range 24, offset `0 6`) under a quiet 1px `$border` frame.
 
 ```conf
 # ~/.config/hypr/hyprland.conf
@@ -754,11 +759,27 @@ decoration {
     blur {
         enabled = $blur
     }
+    shadow {
+        enabled = $shadow
+        range = $shadowRange
+        render_power = $shadowPower
+        offset = $shadowOffset
+        color = $shadowColor
+        color_inactive = $shadowInactiveColor
+    }
+}
+
+general {
+    border_size = $borderSize
+    col.active_border = $borderColor
 }
 ```
 
-`formalshell-chrome.lua` is the same two values as a table for a
-`hyprland.lua`, published and reloaded the way the colours table is.
+`formalshell-chrome.lua` is the same values as a table for a `hyprland.lua`,
+published and reloaded the way the colours table is, one key per variable
+above. A colour there is either an `rgba(...)` literal or the name of a role
+in `formalshell-colors.lua`, since Lua has no variable to substitute, so
+`colors[c] or c` reads both.
 
 ### Dither
 
@@ -964,9 +985,9 @@ all that is actually known: a slow cold start, a second instance handing its
 argv to an existing window, and an `Exec` line that died instantly look
 identical from outside. Success is never claimed, and neither is failure.
 
-`menu.appGrid` (bool, default false) swaps the app rows for a grid of
-icons, the app's name centred underneath each one, macOS Launchpad's
-reading. It only touches app results: root's frecency-ordered list and an
+`menu.appGrid` (bool, default false, `true` under `pantheon`) swaps the app
+rows for a grid of icons, the app's name centred underneath each one, macOS
+Launchpad's reading. It only touches app results: root's frecency-ordered list and an
 app search draw as the grid, with anything else the same query ranked
 still drawing as rows underneath. Arrows move the cursor by cell instead of
 by row; every other key, the ranking and the launch path stay what they are

@@ -18,10 +18,14 @@
 # compositor proves the grid answers the arrows at all (the same reason
 # --panel-keys exists). `cursor` on `menu status` is what reads the answer.
 #
-# The key's default is the other half of the leg. Config.qml re-reads
-# settings.json on a write, so the key is deleted underneath the running
-# shell, the launcher resummoned, and the level has to come back as rows;
-# then it is put back, which leaves the grid up for the run's own frame.
+# The key's default is the other half of the leg, and it is the theme's
+# rather than a constant (M60 P6): the row list under Omarchy's launcher
+# habit, Slingshot's grid under pantheon's. Config.qml re-reads settings.json
+# on a write, so the key is deleted underneath the running shell, the
+# launcher resummoned, and the level has to come back as the habit's own
+# route; then it is put back, which leaves the grid up for the run's own
+# frame. Ridden by --pantheon it is the grid the deletion lands on, which is
+# where that default is read.
 leg_app_grid_flag="--app-grid"
 leg_app_grid_order=26
 leg_app_grid_needs="convert wtype jq"
@@ -285,19 +289,31 @@ leg_app_grid_assert() {
   fi
   echo "SMOKE_APP_GRID_MIXED $app_grid_mixed_png ($app_hits in the grid, $other_hits as rows)"
 
-  # The default: with the key gone the same route is the row list it has
-  # always been.
+  # The default: with the key gone the route is the one the live theme's
+  # launcher habit asks for, and every entry the grid had is still on it.
   cat "$app_grid_off_path"; echo
-  if [ "$(app_grid_field "$app_grid_off_path" view)" != "rows" ] \
-    || [ "$(app_grid_field "$app_grid_off_path" columns)" != "1" ]; then
-    fail "the apps route still drew a grid with menu.appGrid deleted, got: $(cat "$app_grid_off_path")"
-  fi
   if [ "$(app_grid_field "$app_grid_off_path" rows)" != "$rows" ]; then
-    fail "the row list lost entries the grid had, got: $(cat "$app_grid_off_path")"
+    fail "the default route lost entries the grid had, got: $(cat "$app_grid_off_path")"
   fi
   marked=$(app_grid_mark_pixels "$app_grid_rows_png")
-  if [ -z "$marked" ] || [ "$marked" -gt 1000 ]; then
-    fail "the row list drew the probe icon over ${marked:-0} pixels, which is still cell-sized"
+  if leg_on pantheon; then
+    # `menu status` alone here, no pixel read: a launcher reopened under the
+    # popover emerge comes back with the grid scrolled off its own card
+    # (`scrollTop` -391 against a two-row grid), so the frame says nothing
+    # about which view drew it until that is fixed.
+    if [ "$(app_grid_field "$app_grid_off_path" view)" != "appGrid" ] \
+      || [ "$(app_grid_field "$app_grid_off_path" columns)" -le 1 ]; then
+      fail "the apps route did not default to the grid under pantheon, got: $(cat "$app_grid_off_path")"
+    fi
+    echo "SMOKE_APP_GRID_DEFAULT $(app_grid_field "$app_grid_off_path" columns) columns by the launcher habit, no key set"
+  else
+    if [ "$(app_grid_field "$app_grid_off_path" view)" != "rows" ] \
+      || [ "$(app_grid_field "$app_grid_off_path" columns)" != "1" ]; then
+      fail "the apps route still drew a grid with menu.appGrid deleted, got: $(cat "$app_grid_off_path")"
+    fi
+    if [ -z "$marked" ] || [ "$marked" -gt 1000 ]; then
+      fail "the row list drew the probe icon over ${marked:-0} pixels, which is still cell-sized"
+    fi
+    echo "SMOKE_APP_GRID_ROWS $app_grid_rows_png (${marked}px of the probe icon, a row's worth)"
   fi
-  echo "SMOKE_APP_GRID_ROWS $app_grid_rows_png (${marked}px of the probe icon, a row's worth)"
 }

@@ -17,6 +17,14 @@
 //
 // `button` disabled is not here: it is opacity 0.5 on the whole control
 // rather than a box of its own, and it stays in the primitive.
+//
+// `window` is the one role nothing in the shell draws. Hyprland does, off
+// the variables ThemeEngine publishes into formalshell-chrome.conf
+// (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
+// rather than the layer list a Box would: `{ enabled, range, renderPower,
+// offset, color, alpha }`, and its `inactive` state is read for the colour
+// alone, since a compositor has one range and one offset for every window
+// on screen.
 var ROLES = {
     "bar": ["rest"],
     "frame": [],
@@ -41,7 +49,8 @@ var ROLES = {
     "trough": [],
     "segmented.chip": [],
     "cursor": [],
-    "scrim": []
+    "scrim": [],
+    "window": ["rest", "inactive"]
 };
 
 // The habits (T7): what a surface reads instead of testing a theme name.
@@ -420,6 +429,8 @@ function colorNames(style) {
             take(box.ink[0]);
         if (box.inkShadow)
             take(box.inkShadow[0]);
+        if (box.shadow)
+            take(box.shadow.color);
         for (var i = 0; box.layers && i < box.layers.length; i++)
             take(box.layers[i].color);
     }
@@ -470,6 +481,8 @@ function alphaValues(style) {
             take(path + ".edge.alpha", box.edge.alpha);
         if (box.tint)
             take(path + ".tint", box.tint[1]);
+        if (box.shadow)
+            take(path + ".shadow.alpha", box.shadow.alpha);
         for (var i = 0; box.layers && i < box.layers.length; i++)
             take(path + ".layers[" + i + "]", box.layers[i].alpha);
     }

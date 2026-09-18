@@ -159,6 +159,16 @@ Singleton {
         return Style.resolve(root.style, role, state, root._styleCtx());
     }
 
+    // The `window` role's two states, unresolved (M60 P7): ThemeEngine
+    // publishes them to Hyprland as hyprlang variables, where a palette
+    // role names the variable formalshell-colors.conf carries rather than a
+    // colour this palette could hand over, so the compositor's frame keeps
+    // following the wallpaper without the chrome file being rewritten.
+    readonly property var windowChrome: ({
+        focused: Style.entry(root.style, "window", "rest"),
+        backdrop: Style.entry(root.style, "window", "inactive")
+    })
+
     // Whether the live table describes a state at all, for a state only one
     // habit's surfaces draw (M60 T3): a bar cell marking an open panel by
     // filling itself under wingpanel still has to fall back to the ghost's
