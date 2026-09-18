@@ -28,10 +28,10 @@ import qs.Core as Core
 // session. The queued request replaces any earlier one and is applied the
 // moment the in-flight promote actually lands.
 //
-// Plain on the shadcn preset (M45 D2, owner 2026-08-25): the wallpaper
-// draws as the file has it. The default follows `theme.dither`, which the
-// preset sets (off on shadcn, on on retro), and `wallpaper.dither`
-// overrides it either way. On, both
+// Plain on the metamorphosis preset (M45 D2, owner 2026-08-25): the
+// wallpaper draws as the file has it. The default follows `theme.dither`,
+// which the preset sets (off on metamorphosis, on on retro), and
+// `wallpaper.dither` overrides it either way. On, both
 // crossfade layers render through the `DitherImage` retro pass instead,
 // sampling the two Images above rather than decoding the file twice each.
 // The crossfade and its promote bookkeeping are identical either way, the

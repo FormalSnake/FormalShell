@@ -60,10 +60,11 @@ QtObject {
         property color chart5: root._bootFallback.chart5
     }
 
-    // The shadcn preset's own table, written out: this stub cannot import
-    // Config, and shell/Theme/presets.js resolves against it. A component
-    // under test therefore sees exactly what an unconfigured shell renders.
-    readonly property string preset: "shadcn"
+    // The metamorphosis preset's own table, written out: this stub cannot
+    // import Config, and shell/Theme/presets.js resolves against it. A
+    // component under test therefore sees exactly what an unconfigured
+    // shell renders.
+    readonly property string preset: "metamorphosis"
     readonly property string iconSet: "lucide"
     readonly property string fonts: "pair"
     readonly property bool dither: false
@@ -71,9 +72,9 @@ QtObject {
     readonly property bool lockDither: false
     readonly property bool blurBehind: true
 
-    // The shadcn preset's chrome table, straight off the theme file rather
-    // than through presets.js, which resolves against a Config this stub
-    // cannot import. Not readonly: tst_drawer.qml swaps in another theme's
+    // The metamorphosis preset's chrome table, straight off the theme file
+    // rather than through presets.js, which resolves against a Config this
+    // stub cannot import. Not readonly: tst_drawer.qml swaps in another theme's
     // table per test to drive the habits, the same way tst_presence.qml
     // reassigns `motionEnabled` below.
     property var style: Metamorphosis.STYLE

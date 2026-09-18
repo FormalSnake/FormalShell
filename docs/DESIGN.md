@@ -470,8 +470,9 @@ selects (`lucide` default, `nerd`) in `shell/Theme/icons.js`. Size equals
 the neighbouring text's font size. No raw codepoints in surface files.
 
 **Presets** (`theme.preset`): a table of defaults for the chrome knobs,
-never a mode a surface can read. `shadcn` (the default) is everything
-above. `retro` is the shell's earlier language as a setting of this one:
+never a mode a surface can read. `metamorphosis` (the default) is
+everything above. `retro` is the shell's earlier language as a setting of
+this one:
 `theme.radius` 0, `theme.icons` `nerd`, `theme.fonts` `mono` (words take
 the mono face too), `theme.surfaceOpacity` 1, `theme.blur` false,
 `theme.dither` true. An explicit key wins over the preset. `radius` 0

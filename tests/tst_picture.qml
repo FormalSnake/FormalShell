@@ -6,10 +6,11 @@ import "../shell/Components"
 // Picture's contract (M49 D3, shell/Components/Picture.qml): a plain `Image`
 // with the dither layer loaded only while `theme.dither` is on, so a surface
 // reaches for this instead of branching on the knob itself. The stub Theme
-// carries the shadcn preset's own table, where `dither` is off, which is the
-// case asserted here: the Loader stays inactive, nothing constructs a
-// DitherImage, and the image renders exactly as a bare `Image` would. The on
-// path needs a real Theme reading a settings file, so it is proven in the
+// carries the metamorphosis preset's own table, where `dither` is off,
+// which is the case asserted here: the Loader stays inactive, nothing
+// constructs a DitherImage, and the image renders exactly as a bare
+// `Image` would. The on path needs a real Theme reading a settings file,
+// so it is proven in the
 // rig's `--retro` runs rather than here.
 TestCase {
     id: testCase

@@ -121,8 +121,8 @@ Singleton {
     // the table, and no surface ever reads a `theme.*` key or the preset
     // name itself. `_presetDefaults` is what a malformed number falls back
     // to, since the preset's own value is the right answer there, not
-    // shadcn's.
-    readonly property var _preset: Presets.resolve(Config.get("theme.preset", "shadcn"), Config.get)
+    // metamorphosis's.
+    readonly property var _preset: Presets.resolve(Config.get("theme.preset", "metamorphosis"), Config.get)
     readonly property var _presetDefaults: Presets.defaults(root._preset.preset)
     readonly property string preset: root._preset.preset
 
@@ -205,10 +205,10 @@ Singleton {
     }
 
     // shadcn's border width (spec "Depth", 2026-08-25): 1px everywhere.
-    // `radius` is the preset's base (10 on shadcn, shadcn's own `--radius: 0.625rem`;
-    // 0 on retro) with an explicit `theme.radius` winning over it;
-    // radiusSm/Md/Lg/Xl derive from it per `Tokens.radiusTokens`, which
-    // squares every step at a base of 0.
+    // `radius` is the preset's base (10 on metamorphosis, shadcn's own
+    // `--radius: 0.625rem`; 0 on retro) with an explicit `theme.radius`
+    // winning over it; radiusSm/Md/Lg/Xl derive from it per
+    // `Tokens.radiusTokens`, which squares every step at a base of 0.
     readonly property int borderWidth: 1
     readonly property int radius: Math.round(Tokens.clamp(root._preset.radius, 0, Infinity, root._presetDefaults.radius))
     readonly property var _radiusTokens: Tokens.radiusTokens(radius)
@@ -228,7 +228,7 @@ Singleton {
     // pill, the bell badge, the LED pips, the calendar and unread dots) are
     // half their own extent while the base radius is positive, and square at
     // 0 (M49 D2). Tied to the radius rather than the preset, so
-    // `theme.radius: 0` squares them on shadcn too.
+    // `theme.radius: 0` squares them on metamorphosis too.
     function pillRadius(extent) {
         return root.radius > 0 ? extent / 2 : 0;
     }
