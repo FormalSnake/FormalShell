@@ -97,7 +97,7 @@ Rail {
     property bool ghost: false
     property string barEdge: ""
     property color barInk: "transparent"
-    property color barInkShadow: "transparent"
+    property var barInkShadow: []
 
     // The rail follows the bar: a column on a left or right bar, where
     // Bar.qml's region delegate sizes it across the strip by width rather

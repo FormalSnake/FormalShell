@@ -86,6 +86,31 @@ var R_TRACK = 16;     // the switch track, round at any height it is given
 // which is what reserves the room a clipping list leaves around a row.
 var CURSOR_LAYERS = [{ spread: 2, color: "ring", alpha: 0.3 }];
 
+// wingpanel's `text-shadow` (`data/styles/Application.css`), a layer list in
+// CSS's own order, first on top: `{ x, y, blur, color, alpha }` per layer,
+// the same shape the box layers above take. Components/InkGlow.qml draws one
+// MultiEffect per layer behind the glyph, so the blurred half is rendered
+// rather than collapsed onto `Text.Raised`'s 1px offset.
+//
+// `bare` is the pair under white words drawn straight onto a wallpaper,
+// `filled` the lighter pair the translucent panel takes once it has a fill
+// of its own, and `white` what sits under dark words: a wide halo and an
+// unblurred lip a pixel down.
+var INK_SHADOW = {
+    bare: [
+        { blur: 2, color: "black", alpha: 0.3 },
+        { y: 1, blur: 2, color: "black", alpha: 0.6 }
+    ],
+    filled: [
+        { blur: 2, color: "black", alpha: 0.15 },
+        { y: 1, blur: 2, color: "black", alpha: 0.3 }
+    ],
+    white: [
+        { blur: 2, color: "white", alpha: 0.3 },
+        { y: 1, color: "white", alpha: 0.25 }
+    ]
+};
+
 // What the pointer paints. elementary states two of these and not the other
 // two: a menu row's hover and a list's selection are both `alpha(fg, 0.15)`
 // (`widgets/menu.scss`, `widgets/list.scss`), and a button's hover is
@@ -124,25 +149,23 @@ var STYLE = {
         // bar's window is exactly the band's thickness and reserves that
         // same thickness, so there is no row under the band to blur into.
         //
-        // Each paint's ink carries ONE shadow where elementary writes two,
-        // the offset one: Qt draws a text shadow as `Text.Raised` with a
-        // 1px offset and has no blur to give the `0 0 2px` half, so the
-        // pair collapses to its lower member (black 0.6 bare, black 0.3
-        // under a fill of its own, white 0.25 for dark ink).
+        // Each paint carries elementary's own text shadow, both layers of
+        // it (INK_SHADOW above, O6): a wide halo and an offset one under it,
+        // deepest on the bare band and lighter once the band has a fill.
         "bar": {
             rest: {
                 fill: "transparent",
                 radius: 0,
                 edge: { color: "black", alpha: 0.3, width: 0 },
                 ink: ["white", 1],
-                inkShadow: ["black", 0.6]
+                inkShadow: INK_SHADOW.bare
             },
             // A calm dark wallpaper: the base as it stands, white ink
             // straight onto the desktop with no band drawn at all.
             light: {},
             // A calm bright one: the same bare band, dark ink, and the
             // shadow turns white with it.
-            dark: { ink: ["black", 0.65], inkShadow: ["white", 0.25] },
+            dark: { ink: ["black", 0.65], inkShadow: INK_SHADOW.white },
             // The one paint whose ink carries no shadow at all: over white
             // at 0.5 the band is its own contrast, and elementary drops the
             // `text-shadow` on `panel.translucent.color-light`.
@@ -150,7 +173,7 @@ var STYLE = {
                 fill: "white",
                 fillAlpha: 0.5,
                 ink: ["black", 0.65],
-                inkShadow: ["transparent", 1],
+                inkShadow: [],
                 layers: [
                     { inset: true, y: 1, color: "white", alpha: 0.15 },
                     { inset: true, y: -1, color: "white", alpha: 0.03 }
@@ -159,7 +182,7 @@ var STYLE = {
             // A fill of its own under the ink, so the shadow steps back to
             // the lighter pair elementary gives the translucent panel
             // (`0 0 2px black 0.15, 0 1px 2px black 0.3`).
-            translucentDark: { fill: "black", fillAlpha: 0.3, inkShadow: ["black", 0.3] },
+            translucentDark: { fill: "black", fillAlpha: 0.3, inkShadow: INK_SHADOW.filled },
             maximized: { fill: "black", fillAlpha: 1 }
         },
 

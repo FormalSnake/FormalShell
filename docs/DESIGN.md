@@ -582,15 +582,18 @@ decided by the band's own mean luminance, standard deviation and acutance
 against wingpanel's own thresholds (mean 180, spread 45, acutance 8, plus
 the 1.645-sigma rule for a band whose mean falls short but whose spread
 puts a twentieth of it past 180) and Hyprland's fullscreen state, which
-forces `maximized` outright. Each paint carries its own ink and one text
-shadow under it, elementary's two collapsed to the offset one (Qt draws a
-text shadow as `Text.Raised` with no blur): black 0.6 under white words on
-a bare band, black 0.3 once the band has a fill of its own, white 0.25
-under dark words, and none at all over white at 0.5. `bar.paint` in
-settings.json overrules the reading: `transparent` keeps the ink adaptive
-and drops the fill, and the five names pin one paint outright. `bar paint`
-and `debug dump` report the paint, whether it was pinned, and the three
-numbers.
+forces `maximized` outright. Each paint carries its own ink and
+elementary's own text shadow under it, both layers of it: the table's
+`inkShadow` is a CSS layer list (`{ x, y, blur, color, alpha }`, first on
+top) and `Components/InkGlow.qml` draws one `MultiEffect` per layer behind
+the cell's whole content box, so the blurred half is rendered rather than
+approximated. Black at 0.3 and 0.6 under white words on a bare band, 0.15
+and 0.3 once the band has a fill of its own, white at 0.3 and 0.25 under
+dark words, and none at all over white at 0.5, which instantiates no
+effect. `bar.paint` in settings.json overrules the reading: `transparent`
+keeps the ink adaptive and drops the fill, and the five names pin one paint
+outright. `bar paint` and `debug dump` report the paint, whether it was
+pinned, and the three numbers.
 
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's own fill
 continues round the other three edges as a band `frame.thickness` wide, and

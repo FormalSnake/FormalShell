@@ -23,7 +23,7 @@ Item {
     // What a band hands its cells (BarWingpanel.qml): a strip hands them
     // nothing, and each cell's own state resolves its ink as it always has.
     readonly property color ink: "transparent"
-    readonly property color inkShadow: "transparent"
+    readonly property var inkShadow: []
 
     // The strip's own box in the theme's table: its fill, and the one line
     // it draws along the edge facing the desktop rather than a border round

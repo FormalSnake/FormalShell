@@ -61,7 +61,7 @@ Rail {
     property bool ghost: false
     property string barEdge: ""
     property color barInk: "transparent"
-    property color barInkShadow: "transparent"
+    property var barInkShadow: []
 
     // A column on a left or right bar (Tray.qml's rail does the same).
     vertical: root.barEdge === "left" || root.barEdge === "right"

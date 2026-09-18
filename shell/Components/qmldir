@@ -18,6 +18,7 @@ DrawerPopover DrawerPopover.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
 Icon Icon.qml
+InkGlow InkGlow.qml
 IconButton IconButton.qml
 Input Input.qml
 Joint Joint.qml

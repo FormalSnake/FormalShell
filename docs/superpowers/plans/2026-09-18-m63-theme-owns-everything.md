@@ -132,3 +132,22 @@ lock, rebuild e1504g then g815.
 ## Evidence
 
 Filled per task.
+
+**Task 3b, the ink glow (O6).** `--pantheon --bar-adaptive`, the clock read
+over the busy band's bright half: the band is 178 with nothing on it, 177.2
+on the row above the glyph (min 175) and 164.9 then 173.8 on the two rows
+under it (min 145.9), which is the black pair, deepest a pixel down where
+the offset layer lands. Over the bright band the same columns read 230
+plain against 232.7 above the glyph and 243.7 then 236.5 under it (max
+255), the white pair under dark ink. `--frame-adaptive` passes on all five
+paints (bright=dark/230, dark=light/30, busy=translucentDark/178,
+maximized=maximized/36, pinned=light/255), and `--bar-layout` is the
+metamorphosis strip unchanged.
+
+`SMOKE_MEM` off `--bar-room`: 385780 kB rss and 12856 kB of JS heap under
+pantheon, against 361740 and 10480 under metamorphosis, whose table
+declares no shadow and instantiates no effect at all (`--bar-layout` runs
+at 363108 and 10320). Both effects sample the content box's own layer, so a
+cell redraws them when its glyphs change rather than per frame; a scrolling
+now-playing title is the exception, and that re-render is the marquee's
+own.

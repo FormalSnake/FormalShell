@@ -173,10 +173,12 @@ function _defaults() {
         // The ink the material decides rather than the palette, and the
         // shadow that lifts it off what it sits on: wingpanel's band paints
         // white words on a wallpaper, so the colour belongs beside the fill
-        // under them. Transparent is "the material says nothing", which
-        // leaves every consumer's own ink standing.
+        // under them. Transparent ink is "the material says nothing", which
+        // leaves every consumer's own ink standing, and an empty shadow list
+        // is a glyph that needs nothing behind it, which is what keeps
+        // Components/InkGlow.qml from instantiating anything.
         ink: LITERAL_COLORS.transparent,
-        inkShadow: LITERAL_COLORS.transparent,
+        inkShadow: [],
         hairlines: [],
         rings: [],
         insetRings: [],
@@ -351,8 +353,15 @@ function resolve(style, role, state, ctx) {
         out.edge = { color: paint(raw.edge.color, raw.edge.alpha, ctx), width: raw.edge.width };
     if (raw.ink)
         out.ink = paint(raw.ink[0], raw.ink[1], ctx);
-    if (raw.inkShadow)
-        out.inkShadow = paint(raw.inkShadow[0], raw.inkShadow[1], ctx);
+    for (var k = 0; raw.inkShadow && k < raw.inkShadow.length; k++) {
+        var glow = raw.inkShadow[k];
+        out.inkShadow.push({
+            x: glow.x || 0,
+            y: glow.y || 0,
+            blur: glow.blur || 0,
+            color: paint(glow.color, glow.alpha, ctx)
+        });
+    }
 
     var split = layers(raw.layers);
     for (var h = 0; h < split.hairlines.length; h++) {
@@ -434,6 +443,35 @@ function withCursor(box, cursor, halo) {
     return out;
 }
 
+// Every ink-shadow layer a table names, as `{ path, layer }` pairs, for the
+// validation test: a layer is a CSS text-shadow written as
+// `{ x, y, blur, color, alpha }`, and one carrying something else would
+// reach InkGlow as a NaN offset or a blur MultiEffect cannot take.
+function inkShadowLayers(style) {
+    var out = [];
+
+    function takeBox(path, box) {
+        for (var g = 0; box.inkShadow && g < box.inkShadow.length; g++)
+            out.push({ path: path + ".inkShadow[" + g + "]", layer: box.inkShadow[g] });
+    }
+
+    for (var role in ROLES) {
+        var declared = style.roles[role];
+        if (!declared)
+            continue;
+        var states = declaredStates(style, role);
+        if (states.length === 0) {
+            takeBox(role, declared);
+            continue;
+        }
+        for (var s = 0; s < states.length; s++) {
+            if (declared[states[s]])
+                takeBox(role + "." + states[s], declared[states[s]]);
+        }
+    }
+    return out;
+}
+
 // Every colour name a table references, for the validation test: a name
 // that is neither a literal nor a palette role would resolve to nothing at
 // draw time and paint an invisible surface.
@@ -464,8 +502,8 @@ function colorNames(style) {
             take(box.tint[0]);
         if (box.ink)
             take(box.ink[0]);
-        if (box.inkShadow)
-            take(box.inkShadow[0]);
+        for (var g = 0; box.inkShadow && g < box.inkShadow.length; g++)
+            take(box.inkShadow[g].color);
         if (box.shadow)
             take(box.shadow.color);
         for (var i = 0; box.layers && i < box.layers.length; i++)
@@ -522,6 +560,8 @@ function alphaValues(style) {
             take(path + ".shadow.alpha", box.shadow.alpha);
         for (var i = 0; box.layers && i < box.layers.length; i++)
             take(path + ".layers[" + i + "]", box.layers[i].alpha);
+        for (var g = 0; box.inkShadow && g < box.inkShadow.length; g++)
+            take(path + ".inkShadow[" + g + "]", box.inkShadow[g].alpha);
     }
 
     for (var role in ROLES) {
