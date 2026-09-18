@@ -6,6 +6,12 @@
 # and travels out from under it, so its visible height grows from nothing to
 # the whole card and no part of it is ever drawn inside the bar's own band.
 #
+# Ridden by --pantheon it reads the other habit instead (M60 T2): a card that
+# drops out of its cell has no line to unroll from, so the ladder is whole or
+# empty on every frame and never a fraction of the card, and the sampling
+# rides that habit's own 150ms clock. The bar's band stays the claim it is
+# under either habit, since a popover opens no gap in the line at all.
+#
 # Measured down the card's own centre column, and a probe is "covered" when it
 # is NOT byte-identical to the same probe in the closed output: something the
 # desktop does not draw is being drawn there, which is the card.
@@ -63,21 +69,28 @@ panel_emerge_mid_paths=(
   "$shot_dir/panel-emerge-mid-9.png"
   "$shot_dir/panel-emerge-mid-10.png"
 )
-# The emerge's own clock (Theme.motion.spatial, M54 D2) and the moment this
-# rig has the window up, both in milliseconds; every sample is the map plus a
+# The emerge's own clock (the live table's `motion.emerge`: the spatial family
+# under metamorphosis, Gala's menu map under pantheon) and the moment this rig
+# has the window up, both in milliseconds; every sample is the map plus a
 # fraction of that clock, so a change to the token moves the sampling with it
 # rather than leaving the ladder pinned to a duration that has gone. The
 # negative fractions are the samples that land before the window is up, which
 # is where the ladder's first rungs come from, and the last one is well past
-# the end so the ladder has to have landed by it.
-panel_emerge_clock_ms=500
+# the end so the ladder has to have landed by it. Built in the drive, since
+# the legs are sourced before the flags are read.
 panel_emerge_map_ms=200
 panel_emerge_mid_fractions=(-36 -24 -18 -12 -6 0 12 24 48 150)
 panel_emerge_mid_sleeps=()
-for panel_emerge_f in "${panel_emerge_mid_fractions[@]}"; do
-  panel_emerge_at=$((panel_emerge_map_ms + panel_emerge_f * panel_emerge_clock_ms / 100))
-  panel_emerge_mid_sleeps+=("$(printf '%d.%03d' $((panel_emerge_at / 1000)) $((panel_emerge_at % 1000)))")
-done
+
+panel_emerge_build_sleeps() {
+  local clock=500 f at
+  if leg_on pantheon; then clock=150; fi
+  panel_emerge_mid_sleeps=()
+  for f in "${panel_emerge_mid_fractions[@]}"; do
+    at=$((panel_emerge_map_ms + f * clock / 100))
+    panel_emerge_mid_sleeps+=("$(printf '%d.%03d' $((at / 1000)) $((at % 1000)))")
+  done
+}
 
 # Where the card's own rect starts under the bar, past the strip (40), the
 # `barMargin` the card hangs off it by and the fillets' own reach.
@@ -106,6 +119,7 @@ leg_panel_emerge_timing() {
 
 leg_panel_emerge_drive() {
   local script="$shot_dir/panel-emerge-drive.sh" i arm=""
+  panel_emerge_build_sleeps
   for i in "${!panel_emerge_mid_paths[@]}"; do
     arm+="( sleep ${panel_emerge_mid_sleeps[$i]}; \"$grim_bin\" \"${panel_emerge_mid_paths[$i]}\" > /dev/null 2>&1 ) &"$'\n'
   done
@@ -245,7 +259,11 @@ leg_panel_emerge_assert() {
   for i in "${!panel_emerge_mid_paths[@]}"; do
     depth=$(panel_emerge_depth "${panel_emerge_mid_paths[$i]}" "mid-$((i + 1))")
     ladder+=" $depth"
-    if [ "$depth" -lt "$previous" ]; then
+    if leg_on pantheon; then
+      if [ "$depth" -ne 0 ] && [ "$depth" -ne "$settled_depth" ]; then
+        fail "sample $((i + 1)) drew part of the card (depths$ladder): a popover drops whole out of its cell, it does not unroll from the line"
+      fi
+    elif [ "$depth" -lt "$previous" ]; then
       fail "the card went back up between samples $i and $((i + 1)): depths$ladder"
     fi
     previous=$depth
@@ -253,7 +271,7 @@ leg_panel_emerge_assert() {
     last_depth=$depth
   done
   echo "SMOKE_PANEL_EMERGE_LADDER$ladder settled=$settled_depth"
-  if [ "$first_depth" -ge "$settled_depth" ]; then
+  if ! leg_on pantheon && [ "$first_depth" -ge "$settled_depth" ]; then
     fail "the first sample already showed the whole card (depths$ladder): the panel appeared rather than emerging"
   fi
   if [ "$last_depth" -ne "$settled_depth" ]; then

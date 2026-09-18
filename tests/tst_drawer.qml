@@ -1,8 +1,13 @@
 import QtQuick
 import QtTest
+import qs.Core
+import "../shell/Components"
 import "../shell/Components/drawer.js" as Drawer
+import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
+import "../shell/Theme/themes/pantheon.js" as Pantheon
 
-// Components/Drawer.qml's derived geometry (M57 D4): a consumer states the
+// Components/Drawer.qml's derived geometry (M57 D4) and, from M60 T2, the
+// facade over its two recipes. The geometry half: a consumer states the
 // edge it comes out of and its resting rect, and the line, the depth back to
 // it and the band the card is cut at all follow. The tokens are spelled out
 // rather than read off Theme so a token change has to be a deliberate edit
@@ -11,6 +16,10 @@ import "../shell/Components/drawer.js" as Drawer
 TestCase {
     id: testCase
     name: "Drawer"
+    width: 400
+    height: 300
+    visible: true
+    when: windowShown
 
     readonly property real barThickness: 40
     readonly property real barMargin: 6
@@ -210,6 +219,107 @@ TestCase {
         compare(bud.y, 0);
         compare(bud.width, 400);
         compare(bud.height, 300);
+    }
+
+    // --- The facade and its two recipes -----------------------------------
+    //
+    // The habit is driven by swapping the live table, which is how the shell
+    // picks a recipe: no test here names a preset, and none of them reaches
+    // into a recipe for anything a consumer cannot read off the drawer.
+
+    Component {
+        id: drawerComponent
+
+        Drawer {
+            property alias probe: probeItem
+
+            anchors.fill: parent
+            owner: testCase
+            edge: "top"
+            role: "card"
+            screen: ({ width: 1920, height: 1080, name: "TEST" })
+            rect: Qt.rect(400, 60, 200, 120)
+
+            Item {
+                id: probeItem
+                anchors.fill: parent
+            }
+        }
+    }
+
+    property var _originalStyle
+
+    function init() {
+        testCase._originalStyle = Theme.style;
+    }
+
+    function cleanup() {
+        Theme.style = testCase._originalStyle;
+    }
+
+    function drawerOn(table) {
+        Theme.style = table;
+        return createTemporaryObject(drawerComponent, testCase);
+    }
+
+    function test_the_contract_holds_under_both_habits() {
+        var tables = [Metamorphosis.STYLE, Pantheon.STYLE];
+        for (var i = 0; i < tables.length; i++) {
+            var drawer = testCase.drawerOn(tables[i]);
+            verify(drawer.presence !== null);
+            verify(drawer.joint !== null);
+            verify(drawer.frameItem !== null);
+            compare(drawer.frameRect.x, 400);
+            compare(drawer.frameRect.y, 60);
+            compare(drawer.frameRect.width, 200);
+            compare(drawer.frameRect.height, 120);
+        }
+    }
+
+    // The join's own read-out, and the neutral one a card with no line hands
+    // back in its place: `Scrim` binds to it without asking which habit is
+    // live, and a popover publishes no gap for the bar to open.
+    function test_a_popover_has_no_join_to_attach_to() {
+        compare(testCase.drawerOn(Metamorphosis.STYLE).joint.attach, 1);
+        compare(testCase.drawerOn(Pantheon.STYLE).joint.attach, 0);
+    }
+
+    // The popover's frame is the table's box for the consumer's own role,
+    // drawn by the one chrome renderer: a `Box`, not a `Shoulders`.
+    function test_the_popover_frame_is_a_box_of_the_consumers_role() {
+        var drawer = testCase.drawerOn(Pantheon.STYLE);
+        var frame = drawer.frameItem;
+        compare(frame.role, "card");
+        compare(frame.box.fill, Theme.box("card").fill);
+        compare(frame.radius, Math.round(drawer.radius));
+        compare(frame.padding, drawer.padding);
+    }
+
+    // The travel each recipe hands the shared `Presence`: the whole shape
+    // behind the line for a join, the few pixels a popover drops through.
+    function test_each_recipe_states_its_own_travel() {
+        compare(testCase.drawerOn(Pantheon.STYLE).presence.extent, Theme.space.md);
+        verify(testCase.drawerOn(Metamorphosis.STYLE).presence.extent > 120);
+    }
+
+    // And the clock both of them ride, which is the table's own: Gala's menu
+    // map under pantheon, the shared spatial family under metamorphosis.
+    function test_the_emerge_clock_comes_off_the_table() {
+        Theme.style = Pantheon.STYLE;
+        compare(Theme.motion.emerge, 150);
+        Theme.style = Metamorphosis.STYLE;
+        compare(Theme.motion.emerge, Theme.motion.spatial);
+    }
+
+    // The contents land inside the card's own padding whichever recipe drew
+    // it, which is what every consumer's layout is written against.
+    function test_the_contents_sit_inside_the_cards_padding() {
+        var tables = [Metamorphosis.STYLE, Pantheon.STYLE];
+        for (var i = 0; i < tables.length; i++) {
+            var drawer = testCase.drawerOn(tables[i]);
+            compare(drawer.probe.width, 200 - drawer.padding * 2);
+            compare(drawer.probe.height, 120 - drawer.padding * 2);
+        }
     }
 
     // --- The card's own axes ----------------------------------------------

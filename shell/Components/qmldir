@@ -13,6 +13,8 @@ Cover Cover.qml
 Deform Deform.qml
 DismissTwins DismissTwins.qml
 Drawer Drawer.qml
+DrawerJoin DrawerJoin.qml
+DrawerPopover DrawerPopover.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
 Icon Icon.qml

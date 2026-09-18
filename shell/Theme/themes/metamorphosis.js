@@ -243,6 +243,14 @@ var STYLE = {
 
     wash: WASH,
 
+    // The drawer rides the shared spatial family (DESIGN.md §1 "Motion"):
+    // the card budding off the line travels on the clock everything else
+    // with a position or a size travels on, overshoot included, so it is
+    // named here rather than transcribed.
+    motion: {
+        emerge: { duration: "spatial", curve: "spatial" }
+    },
+
     // Omarchy's own habits (T7): the strip along one edge, a card that buds
     // off the line it came out of, one notification row per card, a list
     // launcher, and no window switcher.

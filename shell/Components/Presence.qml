@@ -18,6 +18,16 @@ import qs.Core
 //   that floats in the middle of the output takes it too (M57 D5): the
 //   launcher, the polkit request and a plugin's overlay come out of the top
 //   line the same way a panel comes out of the bar's.
+// - `popover` (M60 T2): the same drawer under a theme whose `emerge` habit
+//   drops a card out of its cell instead of budding one off the line. The
+//   card fades from nothing over a short travel toward rest, `extent` being
+//   that travel rather than the card's own size, and its contents come with
+//   it: there is no clip to hide a card still on its way, so what would
+//   arrive behind one is the card itself, see-through.
+//
+// Both drawer modes take their clock from the live theme's table
+// (`Theme.motion.emerge`, shell/Theme/style.js), which is the one number
+// and curve a habit brings with it.
 //
 // The spatial curves overshoot by design (M54 D1): `emergeX`/`emergeY` pass
 // rest by a few pixels and settle back, and `scale` passes 1 the same way.
@@ -47,12 +57,14 @@ QtObject {
     // no emerge.
     property string edge: "center"
 
-    // "fade" or "emerge"; see the header.
+    // "fade", "emerge" or "popover"; see the header.
     property string mode: "fade"
 
-    // `emerge` only: the card's own size on the anchored axis (its height
-    // under a top or bottom bar, its width beside a vertical one), which is
-    // how far behind the edge a closed card sits.
+    // The drawer modes only: how far behind the edge a closed card sits,
+    // toward the anchor. `emerge` takes the card's own size on that axis
+    // (its height under a top or bottom bar, its width beside a vertical
+    // one), since the whole card is behind the line; `popover` takes the
+    // few pixels it drops through.
     property real extent: 0
 
     // Set while a surface is entering or leaving by some other means than
@@ -89,9 +101,9 @@ QtObject {
     readonly property bool shown: root.open || root._pose > 0
         || (root._twoClock && root._morphPose > 0)
 
-    // Whether the second clock is running. `emerge` is the one mode without
-    // one: the travel IS the enter, and its contents ride the same pose.
-    readonly property bool _twoClock: root.mode !== "emerge"
+    // Whether the second clock is running. The drawer modes are the ones
+    // without: the travel IS the enter, and the contents ride the same pose.
+    readonly property bool _twoClock: root.mode === "fade"
 
     // The pose everything that is not geometry reads: the card's own opacity
     // in `fade`, the travel in `emerge`.
@@ -99,7 +111,7 @@ QtObject {
     Behavior on _progress {
         Anim {
             id: _progressAnimation
-            kind: root.mode === "emerge" ? "spatial" : "effects"
+            kind: root.mode === "fade" ? "effects" : "emerge"
         }
     }
 
@@ -144,7 +156,10 @@ QtObject {
     // never by its own alpha, so nothing about it is see-through on the way
     // in (a translucent card fading over a translucent card is what made the
     // M51 open read as a flicker rather than as an arrival).
-    readonly property real opacity: root.mode === "emerge" ? 1 : root._pose
+    // A `popover` has no clip and fades instead, clamped: an opacity may
+    // not follow a pose past its own ends.
+    readonly property real opacity: root.mode === "emerge"
+        ? 1 : Math.max(0, Math.min(1, root._pose))
 
     // The zoom a modal surface arrives on. Its own clock, so the scale
     // overshoots 1 and settles while the opacity underneath it does not.
@@ -166,13 +181,11 @@ QtObject {
     // closed, 0 open, so a frame's own translate needs no Behavior of its
     // own. The pose passes 1 on the way in, which carries the card a few
     // pixels past rest and back. 0 on both axes for `edge: "center"` and in
-    // any mode but `emerge`.
-    readonly property real emergeX: root.mode === "emerge"
-        ? (1 - root._pose) * root.extent * root._direction.x
-        : 0
-    readonly property real emergeY: root.mode === "emerge"
-        ? (1 - root._pose) * root.extent * root._direction.y
-        : 0
+    // `fade`.
+    readonly property real emergeX: root.mode === "fade"
+        ? 0 : (1 - root._pose) * root.extent * root._direction.x
+    readonly property real emergeY: root.mode === "fade"
+        ? 0 : (1 - root._pose) * root.extent * root._direction.y
 
     // The pose itself, for a consumer whose own geometry is a function of it
     // (Components/Joint.qml's let-go mark). It overshoots 1; a consumer that
@@ -186,7 +199,7 @@ QtObject {
     // nothing is heading for any more. Clamped, since the pose it reads
     // overshoots and an opacity may not.
     readonly property real contentOpacity: {
-        if (root.mode === "fade")
+        if (root.mode !== "emerge")
             return 1;
         return Math.max(0, Math.min(1, (root._pose - 0.3) / 0.7));
     }

@@ -73,8 +73,10 @@ QtObject {
 
     // The shadcn preset's chrome table, straight off the theme file rather
     // than through presets.js, which resolves against a Config this stub
-    // cannot import.
-    readonly property var style: Metamorphosis.STYLE
+    // cannot import. Not readonly: tst_drawer.qml swaps in another theme's
+    // table per test to drive the habits, the same way tst_presence.qml
+    // reassigns `motionEnabled` below.
+    property var style: Metamorphosis.STYLE
     readonly property var habit: root.style.habits
 
     readonly property int borderWidth: 1
@@ -194,10 +196,17 @@ QtObject {
 
     // The real singleton's `motion` object, key for key (M54 D5): the two
     // families and the curves per kind.
+    // The one clock the live table names for itself (M60 T2), resolved
+    // against the unzeroed tokens: the reduced-motion switch is applied
+    // below with every other duration.
+    readonly property var _emerge: Style.motion(root.style, "emerge",
+        Tokens.motionTokens(true), Tokens.MOTION_CURVES)
+
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
         var c = Tokens.MOTION_CURVES;
         return {
+            emerge: root.motionEnabled ? root._emerge.duration : 0,
             spatialFast: m.spatialFast,
             spatial: m.spatial,
             spatialSlow: m.spatialSlow,
@@ -215,7 +224,8 @@ QtObject {
                 effectsSlow: c.effectsSlow,
                 emphasized: c.emphasized,
                 emphasizedDecel: c.emphasizedDecel,
-                reveal: c.effectsSlow
+                reveal: c.effectsSlow,
+                emerge: root._emerge.curve
             },
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,

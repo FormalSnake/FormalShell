@@ -406,6 +406,16 @@ var STYLE = {
 
     wash: WASH,
 
+    // Gala's menu map (`lib/Constants.vala`) on elementary's own curve
+    // (`_animate.scss`): 150ms, and the one easing every transition in the
+    // stylesheet rides, written as the control points plus the end point
+    // Qt's `easing.bezierCurve` wants. It never overshoots, which is what a
+    // popover dropping out of its cell asks for: the card arrives and stops
+    // rather than settling back onto the bar.
+    motion: {
+        emerge: { duration: 150, curve: [0.4, 0, 0.2, 1, 1, 1] }
+    },
+
     // Pantheon's habits, the shapes that differ from Omarchy in more than
     // chrome: wingpanel's band, a popover that drops out of its cell rather
     // than budding off the line, elementary's notification bubble,

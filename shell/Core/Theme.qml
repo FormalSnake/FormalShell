@@ -374,11 +374,20 @@ Singleton {
     // whole entrance, so a mid-flight pose can only be photographed slowed
     // down. Never read from settings.json.
     property real motionScale: 1
+    // The one clock a theme's table names for itself (M60 T2): a drawer's
+    // entrance, which the popover habit takes at Gala's 150ms while the
+    // metamorphosis names the spatial family it has always ridden.
+    // Resolved against the unzeroed tokens, since the reduced-motion switch
+    // and the rig's scale are applied below with every other duration.
+    readonly property var _emerge: Style.motion(root.style, "emerge",
+        Tokens.motionTokens(true), Tokens.MOTION_CURVES)
+
     readonly property var motion: {
         var m = Tokens.motionTokens(root.motionEnabled);
         var c = Tokens.MOTION_CURVES;
         var s = root.motionScale;
         return {
+            emerge: (root.motionEnabled ? root._emerge.duration : 0) * s,
             spatialFast: m.spatialFast * s,
             spatial: m.spatial * s,
             spatialSlow: m.spatialSlow * s,
@@ -396,7 +405,8 @@ Singleton {
                 effectsSlow: c.effectsSlow,
                 emphasized: c.emphasized,
                 emphasizedDecel: c.emphasizedDecel,
-                reveal: c.effectsSlow
+                reveal: c.effectsSlow,
+                emerge: root._emerge.curve
             },
             pulseDuration: 900,
             pulseEasing: Easing.InOutQuad,

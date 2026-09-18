@@ -56,6 +56,15 @@ var HABITS = {
     switcher: [true, false]
 };
 
+// The clocks a habit brings with it (M60 T2), one entry per key: a
+// duration and a curve, each either a number (a curve is the control
+// points `easing.bezierCurve` wants) or the name of one of the shell's own
+// motion families (shell/Theme/tokens.js), which is how a table whose
+// emerge rides the shipped clock says so instead of transcribing it.
+// `emerge` paces a drawer's entrance and its exit: the metamorphosis card
+// budding off the line, the pantheon popover dropping out of its cell.
+var MOTION_KEYS = ["emerge"];
+
 // The washes a pointer paints, one entry per state (T3). Kept beside the
 // roles rather than inside them: every role that takes a pointer takes the
 // same four, and `Theme.hoverFill` and friends derive from here.
@@ -267,6 +276,25 @@ function resolve(style, role, state, ctx) {
         });
     }
     return out;
+}
+
+// One clock, resolved: `{ duration, curve }` with a family name on either
+// side standing for that family's own value. `m` and `c` are the motion
+// tokens and the curve table, passed in for the same reason the palette is
+// (this file holds no numbers of its own), unzeroed: `Theme.motion` owns
+// the reduced-motion switch and the rig's scale. A key no table carries
+// rides the spatial family, which is what a drawer rode before the tables
+// named its clock.
+function motion(style, key, m, c) {
+    var raw = style && style.motion ? style.motion[key] : null;
+    var duration = raw ? raw.duration : null;
+    var curve = raw ? raw.curve : null;
+    return {
+        duration: typeof duration === "number" ? duration
+            : (m[duration] !== undefined ? m[duration] : m.spatial),
+        curve: (curve && curve.length !== undefined && typeof curve !== "string") ? curve
+            : (c[curve] !== undefined ? c[curve] : c.spatial)
+    };
 }
 
 // One wash, resolved: `Theme.hoverFill` and the two `*Filled()` helpers are

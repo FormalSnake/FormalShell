@@ -3,6 +3,7 @@ import QtTest
 import "../shell/Theme/palette.js" as Palette
 import "../shell/Theme/presets.js" as Presets
 import "../shell/Theme/style.js" as Style
+import "../shell/Theme/tokens.js" as Tokens
 import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
 import "../shell/Theme/themes/retro.js" as Retro
 import "../shell/Theme/themes/pantheon.js" as Pantheon
@@ -111,6 +112,38 @@ TestCase {
                         continue;
                     var ok = typeof value === "number" || Style.RADIUS_STEPS.indexOf(value) !== -1;
                     verify(ok, names[t] + " " + roles[r] + " has the radius " + value);
+                }
+            }
+        }
+    }
+
+    // The clocks a table names for itself (M60 T2): a duration and a curve,
+    // each either its own number or the name of one of the shell's motion
+    // families, so a typo lands here rather than on a surface running at
+    // Qt's linear default.
+    function test_every_table_declares_a_clock_for_every_habit_that_has_one() {
+        var names = tableNames();
+        var families = Tokens.motionTokens(true);
+        var curves = Tokens.MOTION_CURVES;
+        for (var t = 0; t < names.length; t++) {
+            var style = tables[names[t]];
+            for (var k = 0; k < Style.MOTION_KEYS.length; k++) {
+                var key = Style.MOTION_KEYS[k];
+                var entry = style.motion ? style.motion[key] : null;
+                verify(!!entry, names[t] + " is missing the clock " + key);
+                var duration = entry.duration;
+                verify(typeof duration === "number"
+                    ? duration > 0 : families[duration] !== undefined,
+                    names[t] + " " + key + " has the duration " + duration);
+                var curve = entry.curve;
+                if (typeof curve === "string") {
+                    verify(curves[curve] !== undefined,
+                        names[t] + " " + key + " names the unknown curve " + curve);
+                } else {
+                    verify(curve.length === 6 || curve.length === 12,
+                        names[t] + " " + key + " has " + curve.length + " control numbers");
+                    compare(curve[curve.length - 1], 1);
+                    compare(curve[curve.length - 2], 1);
                 }
             }
         }

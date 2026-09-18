@@ -27,6 +27,11 @@
 # `--bar-position bottom --osd` and `--frame --osd` photograph the two cases
 # with a real line under the pill and leave them out; those combinations are
 # read by eye.
+#
+# Ridden by --pantheon the claim turns over (M60 T2): a popover has no line to
+# come out of, so the pill fades in a few pixels under its rest and the
+# output's last row stays bare through the whole entrance. Both habits are
+# then read against the same resting pose.
 leg_osd_flag="--osd"
 leg_osd_order=50
 leg_osd_needs="wpctl convert"
@@ -145,7 +150,9 @@ leg_osd_assert() {
   # The entrance: the pill comes out of the bottom line, so on at least one
   # frame its ink reaches the output's own last row at the pill's centre
   # column. A pill that appeared at its resting place instead would leave
-  # every one of those rows bare.
+  # every one of those rows bare. Under the popover habit that is exactly the
+  # claim, the other way up: the pill drops into place a few pixels under its
+  # rest and never reaches the edge at all.
   local out=-1 hit=""
   for i in $(seq 1 $osd_frames); do
     path="$shot_dir/osd-emerge-$i.png"
@@ -155,18 +162,28 @@ leg_osd_assert() {
       break
     fi
   done
-  [ -n "$hit" ] || fail \
-    "no entrance frame among osd-emerge-1..$osd_frames reaches row $osd_last_row at column $osd_column_probe: the pill never touches the output's bottom edge on its way out"
-  echo "SMOKE_OSD_EMERGE ok row $osd_last_row at column $osd_column_probe $hit"
+  if leg_on pantheon; then
+    [ -z "$hit" ] || fail \
+      "$hit has ink on row $osd_last_row at column $osd_column_probe: a popover drops out of nothing, it does not come off the output's bottom edge"
+    echo "SMOKE_OSD_EMERGE ok row $osd_last_row stayed bare at column $osd_column_probe through osd-emerge-1..$osd_frames"
+  else
+    [ -n "$hit" ] || fail \
+      "no entrance frame among osd-emerge-1..$osd_frames reaches row $osd_last_row at column $osd_column_probe: the pill never touches the output's bottom edge on its way out"
+    echo "SMOKE_OSD_EMERGE ok row $osd_last_row at column $osd_column_probe $hit"
+  fi
 
   # And at rest it is the plain pill at its resting rect, one screenPadding
-  # of bare desktop between its own bottom and the output's edge.
-  local rest gap
+  # of bare desktop between its own bottom and the output's edge. A table
+  # whose pill carries a cast lands nearer the edge by the few rows that cast
+  # reaches past the rect, which is the card's own ink and not the pill
+  # sitting lower.
+  local rest gap floor=9
+  if leg_on pantheon; then floor=5; fi
   rest=$(osd_ink_bottom "$osd_rest_path" "$osd_column_probe")
   [ "$rest" -ge 0 ] || fail \
     "column $osd_column_probe of $osd_rest_path is bare desktop from top to bottom: the pill never settled"
   gap=$((osd_last_row - rest))
-  if [ "$gap" -lt 9 ] || [ "$gap" -gt 16 ]; then
+  if [ "$gap" -lt "$floor" ] || [ "$gap" -gt 16 ]; then
     fail "the pill's own bottom sits ${gap}px off the output's last row in $osd_rest_path against the screenPadding (12) it rests at: it has not let go of the line"
   fi
   echo "SMOKE_OSD_RESTING ok ${gap}px of desktop under the pill at column $osd_column_probe"
