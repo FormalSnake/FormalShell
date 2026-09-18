@@ -31,32 +31,34 @@ WheelHandler {
     // past the bound and back: the flickable only enforces its bounds at the
     // end of its own drag or flick, so a contentY written from here is free
     // to overshoot.
-    // The animated value
-    // lives here and is written into the flickable, rather than the
-    // flickable carrying a `Behavior on contentY`, because a drag and a
-    // flick write that property themselves and neither may be animated
-    // behind the finger. `_target` is where the last notch asked to be, so a
-    // second notch mid-glide accumulates from that destination instead of
-    // from wherever the animation has reached, which is what keeps a held
-    // wheel at the wheel's pace.
+    //
+    // A standalone animation on contentY rather than a Behavior, because
+    // everything else that moves the view has to be able to end it: a drag
+    // or a flick (movementStarted below), and a surface's own keyboard
+    // cursor following its current item (`cancel()`). A glide left running
+    // under either writes its next frame over the position they just set.
+    // `_target` is where the last notch asked to be, so a second notch
+    // mid-glide accumulates from that destination instead of from wherever
+    // the animation has reached, which is what keeps a held wheel at the
+    // wheel's pace.
     property real _target: 0
-    property real _glide: 0
-    // Set for the one write that resyncs `_glide` with a contentY something
-    // else moved, which has to land instantly.
-    property bool _sync: false
 
-    Behavior on _glide {
-        enabled: !root._sync && root.flickable && !root.flickable.dragging && !root.flickable.flicking
-        Anim {
-            id: glideAnimation
-            kind: "spatialFast"
-        }
+    // Held in properties: a pointer handler has no default property to
+    // parent children to.
+    readonly property Anim _glide: Anim {
+        id: glide
+        target: root.flickable
+        property: "contentY"
+        kind: "spatialFast"
     }
 
-    on_GlideChanged: {
-        var flick = root.flickable;
-        if (flick && !flick.dragging && !flick.flicking)
-            flick.contentY = root._glide;
+    function cancel() {
+        glide.stop();
+    }
+
+    readonly property Connections _movement: Connections {
+        target: root.flickable
+        function onMovementStarted() { glide.stop(); }
     }
 
     onWheel: event => {
@@ -69,15 +71,10 @@ WheelHandler {
         var delta = event.pixelDelta.y !== 0
             ? event.pixelDelta.y
             : (event.angleDelta.y / 120) * root.step;
-        var base = flick.contentY;
-        if (glideAnimation.running) {
-            base = root._target;
-        } else {
-            root._sync = true;
-            root._glide = flick.contentY;
-            root._sync = false;
-        }
+        var base = glide.running ? root._target : flick.contentY;
         root._target = Math.max(0, Math.min(max, base - delta));
-        root._glide = root._target;
+        glide.stop();
+        glide.to = root._target;
+        glide.start();
     }
 }

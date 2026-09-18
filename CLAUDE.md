@@ -75,6 +75,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   launching through the row path, apps and a ranked route sharing the card,
   and the key deleted underneath the running shell putting the launcher
   habit's own route back: the row list, or the grid under `--pantheon`.
+  Then typing on real keys: `cursorId` agreeing with the view's own
+  `viewCursor` after a re-rank and a Backspace, a query no app matches
+  keeping the grid with no rows in it, Escape clearing the query and
+  leaving the launcher open, and a held Backspace climbing one level.
 - `bar_adaptive.sh` `--bar-adaptive`: the wingpanel band reading its own
   paint off the wallpaper under it, four wallpapers in one session (a flat
   bright field, a flat dark one, a half-and-half field, and the dark one
@@ -212,7 +216,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   measured off the frame against the position `media status` reports at
   every sample.
 - `menu.sh` `--menu`: the launcher at root, its fuzzy ranking against the
-  live tree, and the select round trip.
+  live tree, and the select round trip, with every status read's
+  `cursorId` checked against the row the live view holds its current item
+  on (`viewCursor`).
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
   sampled frame by frame under `debug motionScale`: card fill under the line
   with nothing at its resting floor, the bar's own band undimmed while it is

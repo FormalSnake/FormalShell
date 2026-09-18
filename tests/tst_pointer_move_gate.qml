@@ -82,4 +82,21 @@ TestCase {
         compare(gate.movedTo(300, 300), true);
         compare(gate.movedTo(300, 300), false);
     }
+
+    // `live` gates the hover wash: a row sliding under a parked pointer is
+    // hovered as far as Qt is concerned, and must not light up.
+    function test_live_follows_accepted_moves_and_drops_on_reset() {
+        var gate = newGate();
+        compare(gate.live, false);
+        gate.movedTo(100, 100);
+        compare(gate.live, false);
+        gate.movedTo(100, 130);
+        compare(gate.live, true);
+        gate.movedTo(100, 130);
+        compare(gate.live, true);
+        gate.reset();
+        compare(gate.live, false);
+        gate.movedTo(100, 130);
+        compare(gate.live, false);
+    }
 }

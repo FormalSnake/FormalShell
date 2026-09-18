@@ -40,6 +40,10 @@ Item {
     readonly property var node: modelData
 
     property bool current: false
+    // Whether the pointer's hover counts right now (PointerMoveGate's
+    // `live`): Qt reports a row sliding under a parked pointer as hovered,
+    // and that row must not light up.
+    property bool hoverLive: true
     property bool checkedState: false
     property bool confirming: false
 
@@ -84,7 +88,7 @@ Item {
         ? ""
         : MenuHints.hintFor(root.node)
 
-    readonly property bool _hovered: pointer.containsMouse
+    readonly property bool _hovered: pointer.containsMouse && root.hoverLive
     readonly property bool _filled: root.current || root._hovered
     readonly property bool _hasTrailIcon: !root.confirming && (root.checkedState || root.isBranch)
 

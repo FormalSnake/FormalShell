@@ -14,9 +14,15 @@ import QtQuick
 //
 // Contract:
 //  - reset() after anything that moves rows without the pointer: a search
-//    keystroke, arrow-key navigation, a level change.
+//    keystroke, arrow-key navigation, a level change. The baseline goes with
+//    it on purpose: a list growing under a pointer parked on the scrim below
+//    it reports a point far from the last one a row saw, which only a fresh
+//    baseline reads as the churn it is. A real move is a stream of samples,
+//    so it costs the first one and is accepted on the next.
 //  - moved() from the row MouseArea's onPositionChanged, and act only when it
 //    answers true.
+//  - `live` gates the hover wash: true from an accepted move until the next
+//    reset(), so a row sliding under a parked pointer is not lit.
 //  - allowStationarySample() re-arms exactly one stationary sample for a
 //    transition the pointer itself caused (a click that opens a new level), so
 //    the row landing under the still-parked cursor takes it.
@@ -31,12 +37,15 @@ QtObject {
     // scene point) while still passing the smallest real move.
     property real threshold: 1
 
+    property bool live: false
+
     property bool _primed: false
     property bool _stationaryAllowed: false
     property real _lastX: 0
     property real _lastY: 0
 
     function reset() {
+        root.live = false;
         root._primed = false;
         root._stationaryAllowed = false;
         root._lastX = 0;
@@ -64,6 +73,8 @@ QtObject {
         }
         root._primed = true;
         root._stationaryAllowed = false;
+        if (didMove)
+            root.live = true;
         return didMove;
     }
 

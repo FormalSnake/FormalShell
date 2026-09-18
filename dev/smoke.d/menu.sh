@@ -15,6 +15,12 @@
 # eight cells of a grid or one wide row of a list. Whether a search heading
 # names one block or two comes off `debug query`'s per-row `section`
 # instead, since `menu status` lists each heading once.
+#
+# Every status read here also checks the cursor against the view (M72 T1):
+# `cursorId` is the row Enter acts on, and `viewCursor` is where the live
+# view itself holds its current item and which row id its own model has
+# there. A re-rank used to move the view's current item without moving the
+# cursor, which put the fill on one row and Enter on another.
 leg_menu_flag="--menu"
 leg_menu_order=20
 leg_menu_needs="jq"
@@ -93,6 +99,18 @@ menu_field() {
   sed -n 's/.*"'"$2"'":\([0-9-]*\).*/\1/p' "$1"
 }
 
+menu_cursor_agrees() {
+  local f="$1" what="$2" id view_id index view_index
+  id=$("$jq_bin" -r '.cursorId // ""' "$f" 2>/dev/null)
+  view_id=$("$jq_bin" -r '.viewCursor.id // ""' "$f" 2>/dev/null)
+  index=$("$jq_bin" -r '.cursor' "$f" 2>/dev/null)
+  view_index=$("$jq_bin" -r '.viewCursor.index' "$f" 2>/dev/null)
+  if [ -z "$id" ] || [ "$id" != "$view_id" ] || [ "$index" != "$view_index" ]; then
+    fail "$what: the cursor is on row $index ($id) but the view holds $view_index (${view_id:-nothing})"
+  fi
+  echo "SMOKE_MENU_CURSOR $what: row $index ($id)"
+}
+
 leg_menu_assert() {
   if [ -s "$query_path" ]; then
     cat "$query_path"
@@ -120,6 +138,7 @@ leg_menu_assert() {
   if ! grep -q '"columns":1' "$menu_status_root_path"; then
     fail "the root level reported a grid rather than a row list, got: $(cat "$menu_status_root_path")"
   fi
+  menu_cursor_agrees "$menu_status_root_path" "root"
   # The emoji route: a grid, filtered, with the route's own prompt in the
   # field. More columns than one is the whole claim, and it is not readable
   # off the frame.
@@ -150,6 +169,7 @@ leg_menu_assert() {
   if [ -z "$search_sections" ] || [ "$search_sections" -lt 2 ]; then
     fail "a root query for 'e' grouped into ${search_sections:-0} heading(s), got: $(cat "$menu_status_search_path")"
   fi
+  menu_cursor_agrees "$menu_status_search_path" "root query"
   if [ ! -s "$menu_status_emoji_path" ]; then
     fail "no emoji menu status produced"
   fi
@@ -172,6 +192,7 @@ leg_menu_assert() {
     fail "the filtered emoji grid holds $emoji_rows cell(s), too few to fill a row of $emoji_columns"
   fi
   echo "SMOKE_MENU_GRID $emoji_rows emoji in $emoji_columns columns"
+  menu_cursor_agrees "$menu_status_emoji_path" "emoji grid"
   if [ -s "$selection_path" ] && grep -q '"cancelled":true' "$selection_path"; then
     cat "$selection_path"
   else

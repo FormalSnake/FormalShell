@@ -15,7 +15,14 @@ import "../../../Menu/toggles.js" as Toggles
 // as ordinary `MenuRow`s in the view's footer, under a rule, which is why
 // Menu/appgrid.js partitions the row list before it ever reaches here: the
 // cells are rows 0..appCount-1 and the footer is the rest, so a cell's index
-// IS its index in the launcher's own list. Enter, Shift+Enter and the action
+// IS its index in the launcher's own list. A query no app matches leaves
+// the grid with no cells and the rows alone, with no rule over them: the
+// view stays the level's view rather than handing over to the row list.
+//
+// Both halves are Menu.qml's keyed models (ids only, `rowsById` for the
+// rows), never a fresh array per keystroke, so a cell survives a re-rank,
+// the grid keeps its scroll, and the footer's rows are not rebuilt from
+// nothing every time a letter lands. Enter, Shift+Enter and the action
 // bar all act on Menu.qml's own cursor index and never on a view-local row,
 // which is what keeps an app's secondary action (Shift+Enter onto the
 // discrete card) reachable from a cell without this file knowing it exists.
@@ -28,11 +35,18 @@ import "../../../Menu/toggles.js" as Toggles
 Item {
     id: root
 
-    // The launcher's own `_displayRows`, already partitioned, and where the
-    // apps stop in it.
-    property var rows: []
+    // Menu.qml's keyed models: the app cells, and the rows under them.
+    property var cellsModel: null
+    property var tailModel: null
+    // Menu.qml's rows by id (this sync and the one before), and what an id
+    // resolving to neither draws.
+    property var rowsById: ({})
+    property var rowsPrev: ({})
+    property var blankRow: ({})
+    // Where the apps stop in the launcher's row list.
     property int appCount: 0
-    property int cursor: 0
+    // Written by placeCursor() alone, after the models it indexes changed.
+    property int cursor: -1
 
     // Menu.qml's one gate, passed in rather than rebuilt: filtering
     // re-renders cells under a parked pointer and Qt delivers that as a
@@ -67,11 +81,46 @@ Item {
     readonly property real _cellGutter: Core.Theme.space.sm
 
     readonly property int columns: AppGrid.columnsFor(root.width, root._cellMin)
-    readonly property var appRows: root.rows.slice(0, root.appCount)
-    readonly property var tailRows: root.rows.slice(root.appCount)
+    readonly property int tailCount: root.tailModel ? root.tailModel.count : 0
 
     readonly property real contentHeight: grid.contentHeight
     readonly property real contentY: grid.contentY
+    readonly property real cellHeight: grid.cellHeight
+
+    function _rowFor(id) {
+        var entry = root.rowsById[id] || root.rowsPrev[id];
+        return entry ? entry.row : root.blankRow;
+    }
+
+    // The cursor's one way in. The grid's currentIndex is set here rather
+    // than bound: a keyed model moves it along with its current cell on an
+    // insert, and a binding whose value did not change would never put it
+    // back. -1 while the cursor is in the footer, or the view would scroll
+    // a cell back into sight over the row the reader is on.
+    function placeCursor(index) {
+        root.cursor = index;
+        grid.currentIndex = index >= 0 && index < root.appCount ? index : -1;
+    }
+
+    // What the view draws the cursor on, by index and by the id its own
+    // model holds there, for `menu status`.
+    function cursorReport() {
+        if (grid.currentIndex >= 0 && root.cellsModel && grid.currentIndex < root.cellsModel.count)
+            return { index: grid.currentIndex, id: root.cellsModel.get(grid.currentIndex).rowId };
+        var k = root.cursor - root.appCount;
+        if (root.tailModel && k >= 0 && k < root.tailModel.count)
+            return { index: root.cursor, id: root.tailModel.get(k).rowId };
+        return { index: -1, id: "" };
+    }
+
+    function cancelGlide() {
+        wheel.cancel();
+    }
+
+    function scrollHome() {
+        if (root.cellsModel)
+            grid.positionViewAtBeginning();
+    }
 
     // The name's own band, measured rather than guessed: a GridView's cell
     // height is a number on the view and cannot be a child's implicit one.
@@ -103,13 +152,10 @@ Item {
         reuseItems: true
         anchors.fill: parent
         clip: true
-        model: root.appRows
+        model: root.cellsModel
         cellWidth: root.columns > 0 ? root.width / root.columns : root.width
         cellHeight: root._contentHeight + Core.Theme.space.controlPaddingY * 2
             + root._cellGutter * 2
-        // -1 while the cursor is in the footer: the view would otherwise
-        // scroll a cell back into sight over the row the reader is on.
-        currentIndex: root.cursor < root.appCount ? root.cursor : -1
         // Same hard-jump follow the launcher's other views take: held arrow
         // keys outrun the default animated highlight move and the cursor
         // cell ends up off-viewport.
@@ -117,6 +163,7 @@ Item {
 
         // A row here is a row of icons, not a text line.
         WheelScroll {
+            id: wheel
             flickable: grid
             step: grid.cellHeight
         }
@@ -127,7 +174,8 @@ Item {
         delegate: Item {
             id: appSlot
             required property int index
-            required property var modelData
+            required property string rowId
+            readonly property var modelData: root._rowFor(appSlot.rowId)
 
             width: grid.cellWidth
             height: grid.cellHeight
@@ -142,6 +190,7 @@ Item {
                 // two states every other cell in the shell draws.
                 ghost: true
                 cursor: appSlot.index === root.cursor
+                hovered: appCell.containsPointer && (!root.hoverGate || root.hoverGate.live)
                 interactive: true
                 // The name in full, and only where the cell had to cut it.
                 tooltipText: appName.truncated ? appSlot.modelData.label : ""
@@ -219,10 +268,10 @@ Item {
         footer: Item {
             id: tailFooter
             width: grid.width
-            height: root.tailRows.length > 0
+            height: root.tailCount > 0
                 ? tailColumn.y + tailColumn.height + Core.Theme.space.rowGap
                 : 0
-            visible: root.tailRows.length > 0
+            visible: root.tailCount > 0
 
             // Brings the footer row the cursor has landed on into view. The
             // grid's own `currentIndex` does this for the cells; the footer
@@ -240,7 +289,7 @@ Item {
             // the view has to scroll.
             function revealCursorRow() {
                 var index = root.cursor - root.appCount;
-                if (!grid.contentItem || index < 0 || index >= root.tailRows.length)
+                if (!grid.contentItem || index < 0 || index >= root.tailCount)
                     return;
                 var row = tailRepeater.itemAt(index);
                 if (!row)
@@ -255,12 +304,15 @@ Item {
                 anchors.topMargin: Core.Theme.space.rowGap
                 anchors.left: parent.left
                 anchors.right: parent.right
+                visible: root.appCount > 0
             }
 
+            // With no cells above them the rows start where the cells would
+            // have: there is no second half for a rule to separate them from.
             Column {
                 id: tailColumn
-                anchors.top: tailRule.bottom
-                anchors.topMargin: Core.Theme.space.rowGap
+                anchors.top: root.appCount > 0 ? tailRule.bottom : parent.top
+                anchors.topMargin: root.appCount > 0 ? Core.Theme.space.rowGap : 0
                 anchors.left: parent.left
                 anchors.leftMargin: root._cellGutter
                 anchors.right: parent.right
@@ -268,12 +320,13 @@ Item {
 
                 Repeater {
                     id: tailRepeater
-                    model: root.tailRows
+                    model: root.tailModel
 
                     delegate: Item {
                         id: tailSlot
                         required property int index
-                        required property var modelData
+                        required property string rowId
+                        readonly property var modelData: root._rowFor(tailSlot.rowId)
 
                         readonly property int rowIndex: root.appCount + tailSlot.index
                         readonly property bool isCursor: root.cursor === tailSlot.rowIndex
@@ -308,6 +361,7 @@ Item {
                             modelData: tailSlot.modelData
                             index: tailSlot.rowIndex
                             current: tailSlot.isCursor
+                            hoverLive: !root.hoverGate || root.hoverGate.live
                             checkedState: Toggles.checkedFor(tailSlot.modelData,
                                 root.stateSnapshot, root.checkedResults)
                             confirming: root.confirmPendingId === tailSlot.modelData.id

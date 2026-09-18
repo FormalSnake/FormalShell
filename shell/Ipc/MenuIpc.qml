@@ -103,6 +103,11 @@ IpcHandler {
     // (`rows`|`picker`|`emoji`|`appGrid`|`app`, M58 G5), for the same reason:
     // a grid of app icons and a row list carrying icons are the same picture
     // from outside.
+    //
+    // `cursorId` is the row the cursor is on, and `viewCursor` where the
+    // live view itself puts its current item and which row id its own model
+    // holds there (M72 T1). The two agreeing is the claim that the row the
+    // fill is drawn on is the row Enter acts on, which no frame can make.
     function status(): string {
         if (!menu)
             return "error: menu not ready";
@@ -115,6 +120,8 @@ IpcHandler {
             view: menu.viewKind,
             columns: menu.cursorColumns,
             cursor: menu.cursorIndex,
+            cursorId: menu.cursorId,
+            viewCursor: menu.viewCursor(),
             rows: menu.rowCount
         });
     }

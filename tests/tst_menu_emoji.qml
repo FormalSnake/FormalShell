@@ -100,7 +100,7 @@ TestCase {
     function test_trigger_query() {
         compare(Providers.emojiTriggerQuery(":e thumbs"), "thumbs");
         compare(Providers.emojiTriggerQuery(":e "), "");
-        compare(Providers.emojiTriggerQuery(":e"), "");
+        verify(Providers.emojiTriggerQuery(":e") === null);
         verify(Providers.emojiTriggerQuery("thumbs") === null);
         verify(Providers.emojiTriggerQuery(":ex") === null);
         verify(Providers.emojiTriggerQuery("") === null);

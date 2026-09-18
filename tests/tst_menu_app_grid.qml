@@ -4,10 +4,9 @@ import "../shell/Menu/appgrid.js" as AppGrid
 import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
 import "../shell/Theme/themes/pantheon.js" as Pantheon
 
-// The launcher's app grid (M58): the column maths and the cursor walk, the
-// two things the view cannot state for itself. What a cell draws is the
-// rig's job (`--app-grid`); what the cursor does when the level is half a
-// grid and half a list is this file's.
+// The launcher's app grid (M58): the column maths and the split, the two
+// things the view cannot state for itself. What a cell draws is the rig's
+// job (`--app-grid`), and the cursor walk is tst_menu_nav.qml's.
 TestCase {
     name: "MenuAppGrid"
 
@@ -54,38 +53,6 @@ TestCase {
     function test_an_empty_level_partitions_to_nothing() {
         compare(AppGrid.partition([]).appCount, 0);
         compare(AppGrid.partition(null).rows.length, 0);
-    }
-
-    // Inside the cells a vertical press is a whole row of them.
-    function test_a_press_inside_the_grid_moves_by_a_column_count() {
-        compare(AppGrid.verticalStep(4, 0, 8, 8), 4);
-        compare(AppGrid.verticalStep(-4, 7, 8, 8), -4);
-    }
-
-    // Down out of the last row of cells lands on the first row under the
-    // grid rather than skipping past three of them.
-    function test_down_out_of_the_grid_lands_on_the_first_row_under_it() {
-        compare(AppGrid.verticalStep(4, 5, 6, 9), 1);
-        compare(AppGrid.verticalStep(4, 4, 6, 9), 2);
-    }
-
-    // With nothing under the grid the step is unchanged, so the caller's own
-    // wrap carries the cursor back to the top of the cells.
-    function test_down_off_a_grid_with_no_rows_under_it_still_wraps() {
-        compare(AppGrid.verticalStep(4, 5, 6, 6), 4);
-    }
-
-    // Under the grid the rows are a list, so they move by a row either way,
-    // and up out of the first one lands back on the cell above it.
-    function test_the_rows_under_the_grid_move_by_a_row() {
-        compare(AppGrid.verticalStep(4, 6, 6, 9), 1);
-        compare(AppGrid.verticalStep(-4, 6, 6, 9), -1);
-        compare(AppGrid.verticalStep(-4, 8, 6, 9), -1);
-    }
-
-    function test_an_empty_level_moves_nothing() {
-        compare(AppGrid.verticalStep(4, 0, 0, 0), 4);
-        compare(AppGrid.verticalStep(0, 3, 6, 9), 0);
     }
 
     // M60 P6: the route the launcher opens on follows the theme table's

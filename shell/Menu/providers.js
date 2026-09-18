@@ -345,12 +345,14 @@ function previewLabel(text, maxLen) {
 }
 
 
-// ":e" root trigger (M12 Task 6, the DMS muscle-memory prefix): returns the
-// emoji query after it, "" for the bare ":e" (browse mode), or null when
-// `text` is not the trigger at all.
+// ":e " root trigger (M12 Task 6, the DMS muscle-memory prefix): returns the
+// emoji query after it, "" for ":e " alone (browse mode), or null when
+// `text` is not the trigger at all. The space is part of the trigger: the
+// trigger swaps the whole view for the emoji grid, and a bare ":e" also
+// starts ":ex..." and every other word, which swapped to the grid and
+// straight back on the next letter.
 function emojiTriggerQuery(text) {
     var t = String(text || "");
-    if (t === ":e") return "";
     if (t.indexOf(":e ") === 0) return t.slice(3);
     return null;
 }

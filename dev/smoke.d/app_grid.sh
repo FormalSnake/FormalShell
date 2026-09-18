@@ -29,6 +29,15 @@
 # its own card: the popover emerge cuts nothing at the card's edge, so a view
 # scrolled to a negative offset paints its cells up the output instead of
 # being clipped away.
+#
+# The typing half (M72 T1), on real keys where it can be: after a re-rank
+# and a real Backspace the cursor's row and the row the view holds its
+# current item on have to be the same one (`cursorId` against `viewCursor`);
+# a query no app matches keeps the grid as the level's view with no rows in
+# it rather than swapping to the row list; Escape on a query clears it and
+# leaves the launcher open; and Backspace held on an empty field for longer
+# than the key repeat delay climbs one level, never every level and then
+# out of the launcher.
 leg_app_grid_flag="--app-grid"
 leg_app_grid_order=26
 leg_app_grid_needs="convert wtype jq"
@@ -57,6 +66,11 @@ app_grid_mixed_path="$shot_dir/app-grid-status-mixed.json"
 app_grid_off_path="$shot_dir/app-grid-status-off.json"
 app_grid_probe_path="$shot_dir/app-grid-probe.json"
 app_grid_mixed_query_path="$shot_dir/app-grid-mixed-query.json"
+app_grid_typed_path="$shot_dir/app-grid-status-typed.json"
+app_grid_backspace_path="$shot_dir/app-grid-status-backspace.json"
+app_grid_empty_path="$shot_dir/app-grid-status-empty.json"
+app_grid_escape_path="$shot_dir/app-grid-status-escape.json"
+app_grid_hold_path="$shot_dir/app-grid-status-hold.json"
 
 # The icon the frame is read by, and the one every other entry wears so the
 # green count is one cell's worth and not five.
@@ -130,7 +144,7 @@ EOF
 leg_app_grid_timing() {
   local t0
   t0=$(app_grid_t0)
-  leg_timing $((t0 + 29)) $((t0 + 64))
+  leg_timing $((t0 + 37)) $((t0 + 72))
 }
 
 leg_app_grid_drive() {
@@ -173,8 +187,22 @@ sleep 2
 "$wtype_bin" -k Down
 "$qs_bin" ipc -p "$shell_path" call menu filter ap > /dev/null 2>&1
 "$wtype_bin" -k Down
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_typed_path" 2>&1
+"$wtype_bin" -k BackSpace
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_backspace_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu filter zzzz > /dev/null 2>&1
 sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_empty_path" 2>&1
+"$wtype_bin" -k Escape
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_escape_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
+sleep 1
+"$wtype_bin" -P BackSpace -s 1500 -p BackSpace
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_hold_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 # The key deleted underneath the running shell. Written back through the same
 # inode rather than moved over, so the config watch sees a write and not a
@@ -209,11 +237,25 @@ app_grid_field() {
   "$jq_bin" -r ".$2 // empty" "$1" 2>/dev/null
 }
 
+app_grid_cursor_agrees() {
+  local f="$1" what="$2" id view_id index view_index
+  id=$(app_grid_field "$f" cursorId)
+  view_id=$(app_grid_field "$f" viewCursor.id)
+  index=$(app_grid_field "$f" cursor)
+  view_index=$(app_grid_field "$f" viewCursor.index)
+  if [ -z "$id" ] || [ "$id" != "$view_id" ] || [ "$index" != "$view_index" ]; then
+    fail "$what: the cursor is on row $index ($id) but the view holds $view_index (${view_id:-nothing})"
+  fi
+  echo "SMOKE_APP_GRID_CURSOR $what: row $index ($id)"
+}
+
 leg_app_grid_assert() {
   local f
   for f in "$app_grid_open_path" "$app_grid_right_path" "$app_grid_down_path" \
     "$app_grid_narrow_path" "$app_grid_mixed_path" "$app_grid_off_path" \
-    "$app_grid_probe_path" "$app_grid_mixed_query_path"; do
+    "$app_grid_probe_path" "$app_grid_mixed_query_path" "$app_grid_typed_path" \
+    "$app_grid_backspace_path" "$app_grid_empty_path" "$app_grid_escape_path" \
+    "$app_grid_hold_path"; do
     [ -s "$f" ] || fail "no app-grid artifact produced at $f"
   done
   for f in "$app_grid_png" "$app_grid_mixed_png" "$app_grid_rows_png"; do
@@ -309,6 +351,37 @@ leg_app_grid_assert() {
     fail "'app' ranked ${app_hits:-0} app(s) and ${other_hits:-0} other row(s), so nothing here is mixed"
   fi
   echo "SMOKE_APP_GRID_MIXED $app_grid_mixed_png ($app_hits in the grid, $other_hits as rows)"
+
+  app_grid_cursor_agrees "$app_grid_open_path" "apps route"
+  app_grid_cursor_agrees "$app_grid_down_path" "after Right, Down"
+  app_grid_cursor_agrees "$app_grid_mixed_path" "root query"
+  cat "$app_grid_typed_path"; echo
+  app_grid_cursor_agrees "$app_grid_typed_path" "re-ranked, then Down"
+  cat "$app_grid_backspace_path"; echo
+  app_grid_cursor_agrees "$app_grid_backspace_path" "a real Backspace"
+
+  # No app matches: the level keeps its grid, with nothing in it.
+  cat "$app_grid_empty_path"; echo
+  if [ "$(app_grid_field "$app_grid_empty_path" view)" != "appGrid" ] \
+    || [ "$(app_grid_field "$app_grid_empty_path" rows)" != "0" ]; then
+    fail "a query no app matches swapped the view or kept rows, got: $(cat "$app_grid_empty_path")"
+  fi
+  # Escape on a query clears it: still open, still at the root, the root's
+  # own rows back.
+  cat "$app_grid_escape_path"; echo
+  if [ "$(app_grid_field "$app_grid_escape_path" isOpen)" != "true" ] \
+    || [ -n "$(app_grid_field "$app_grid_escape_path" level)" ] \
+    || [ "$(app_grid_field "$app_grid_escape_path" rows)" -lt 1 ]; then
+    fail "Escape on a query did not just clear it, got: $(cat "$app_grid_escape_path")"
+  fi
+  app_grid_cursor_agrees "$app_grid_escape_path" "query cleared"
+  # A held Backspace on the apps route's empty field: one level up.
+  cat "$app_grid_hold_path"; echo
+  if [ "$(app_grid_field "$app_grid_hold_path" isOpen)" != "true" ] \
+    || [ -n "$(app_grid_field "$app_grid_hold_path" level)" ]; then
+    fail "a held Backspace did not stop at the root, got: $(cat "$app_grid_hold_path")"
+  fi
+  echo "SMOKE_APP_GRID_KEYS empty query kept the grid, Escape cleared, a held Backspace climbed one level"
 
   # The default: with the key gone the route is the one the live theme's
   # launcher habit asks for, and every entry the grid had is still on it.

@@ -22,6 +22,7 @@ import "../../Menu/appgrid.js" as AppGrid
 import "views"
 import "../../Compositor/keybinds.js" as Keybinds
 import "../../Menu/rowsync.js" as RowSync
+import "../../Menu/nav.js" as Nav
 import "../../Compositor/appmatch.js" as AppMatch
 
 // The unified menu, drawn as shadcn's Command palette (DESIGN.md §3
@@ -31,9 +32,9 @@ import "../../Compositor/appmatch.js" as AppMatch
 // search icon, the field, a rule under it), then the breadcrumb, then
 // rows that are either search.rank() matches (query non-empty) or
 // model.visibleChildren() of the current level (query empty), then the
-// footer hint line. Whole-tree search, cursor wraps,
-// Escape/backspace-on-empty pop one level, confirm-gated actions need a
-// second Enter.
+// footer hint line. Whole-tree search, cursor wraps, Escape clears the
+// query and then pops one level, Backspace on an empty field pops one level
+// per press, confirm-gated actions need a second Enter.
 //
 // The list is cmdk's (M48 D6): inset `xs` inside the card, rows at
 // `radiusSm`, a `SectionLabel` heading wherever the group changes
@@ -54,7 +55,25 @@ PanelWindow {
 
     property bool isOpen: false
     property var currentNodeId: null
+
+    // The cursor (M72 T1): the id of the row it is on, and where that row
+    // sits in `_displayRows` right now. Both are written by `_placeCursor`
+    // alone, and `_syncRows` re-derives them (Menu/nav.js's `rederive`)
+    // every time the rows change, for whatever reason they changed.
+    // `_cursorKey` is the query, level and mode the cursor was last placed
+    // for: a different one is a fresh list, which starts on its first row.
     property int _cursorIndex: 0
+    property string _cursorId: ""
+    property var _cursorNode: null
+    property string _cursorKey: ""
+    // Whether a key or the pointer has moved the cursor since the list was
+    // fresh, and the row it put the cursor on (Menu/nav.js's `rederive`).
+    // Kept apart from `_cursorId`, which is whatever row the cursor is on
+    // now: a row can leave and come back (the desktop entries reload one at
+    // a time), and the cursor goes back to it rather than staying on
+    // whichever row it was clamped to while it was gone.
+    property bool _cursorPlaced: false
+    property string _cursorWant: ""
     // Whether the ring draws on the cell the cursor is on (DESIGN.md §1
     // "Ring", §4): it is the keyboard's mark, so a cell the pointer named
     // keeps its hover wash alone. The row list marks its cursor with the
@@ -492,10 +511,9 @@ PanelWindow {
             return false;
         var next = variant === "light" ? "light" : "dark";
         if (root._pickerVariant !== next) {
+            // The other variant is a different listing, so it is a fresh one
+            // for the cursor too: the variant is part of `_cursorKey`.
             root._pickerVariant = next;
-            // The other variant is a different listing of a different length:
-            // the old index would land on an unrelated image, or past the end.
-            root._cursorIndex = 0;
             root._cursorFromKeys = true;
             pointerGate.reset();
         }
@@ -596,81 +614,66 @@ PanelWindow {
     //
     // The emoji route is the picker's grid over a different cell: 3,944
     // glyphs are something you hunt for by eye, not something you read down
-    // a column one name per line (owner, 2026-08-26). The ":e" trigger draws
+    // a column one name per line (owner, 2026-08-26). The ":e " trigger draws
     // the same grid from any level, because it lists the same rows; the
-    // route-local surfaces that are checked ahead of it in _displayRows (the
-    // picker's own grid, the clipboard split) keep their rows, so the guard
-    // here mirrors that order rather than restating it.
+    // route-local surfaces that are checked ahead of it (the picker's own
+    // grid, the clipboard split, an app view) keep their rows, which is the
+    // order `_resolve` checks them in.
     readonly property int emojiColumns: 8
-    readonly property bool _isEmojiGrid: root._mode === "menu"
-        && !root._isPickerRoute && !root._isSplitRoute && !root._isAppView
-        && (root.currentNodeId === "emoji" || Providers.emojiTriggerQuery(searchInput.text) !== null)
 
     // --- App grid (M58 G1-G4) --------------------------------------------
     //
-    // `menu.appGrid` off leaves every level exactly the row list it has
-    // always been; on, wherever the launcher would draw rows and
-    // some of them are apps, those apps draw as a grid of icons with their
-    // names under them and whatever else ranked draws as rows beneath
+    // `menu.appGrid` on draws a level's app rows as a grid of icons with
+    // their names under them and whatever else ranked as rows beneath
     // (Surfaces/Menu/views/AppGridView.qml). The owner asked for their app
     // icons (2026-09-17: "similar to what macOS does").
     //
     // The ranking is untouched: `AppGrid.partition` is a stable split of the
-    // rows this level already resolved, so both blocks keep the order the
-    // score gave them and a cell's index is still an index into
-    // `_displayRows`. That is what lets Enter, Shift+Enter and the action
-    // bar act on the cursor without knowing which view drew it.
+    // rows the level resolved, so both blocks keep the order the score gave
+    // them and a cell's index is still an index into `_displayRows`. That is
+    // what lets Enter, Shift+Enter and the action bar act on the cursor
+    // without knowing which view drew it.
     //
-    // Every route-local surface is excluded by construction rather than by
-    // name: none of them produces an "app" row, so the partition finds
-    // nothing and `_appGridCount` is 0. An app view is the exception worth
-    // naming, since a query there still falls through to whole-tree ranking
-    // under a body that is not the row list at all.
+    // The grid is the level's view, not the query's (M72 T1): every level
+    // that draws the tree's own rows draws them through the grid, with no
+    // cells at all when nothing ranked is an app, so typing never swaps the
+    // card's whole body between two views. The route-local levels (the
+    // clipboard split, nix, keybinds, calc) never produce an app row and
+    // keep the row list.
     //
-    // What the key defaults to is the launcher habit's (M60 P6): the grid
-    // under a table whose launcher is Slingshot's pages, the row list under
-    // one whose launcher is Omarchy's, and an explicit `menu.appGrid` either
-    // way over both.
+    // What the key defaults to is the launcher habit's (M60 P6).
     readonly property bool _appGridWanted: Core.Config.get("menu.appGrid",
             AppGrid.defaultFor(Core.Theme.habit.launcher))
-        && root._mode === "menu" && !root._isAppView
-    readonly property var _appGrid: root._appGridWanted
-        ? AppGrid.partition(root._rankedRows)
-        : ({ rows: root._rankedRows, appCount: 0 })
-    readonly property int _appGridCount: root._appGrid.appCount
-    readonly property bool _isAppGrid: root._appGridCount > 0
 
-    readonly property bool _isGrid: root._isPickerRoute || root._isEmojiGrid || root._isAppGrid
+    // Which of the five views draws the level: `rows`, `picker`, `emoji`,
+    // `appGrid` or `app`. Committed by `_syncRows` with the rows it draws,
+    // never ahead of them. Public because `menu status` reports it (M58 G5):
+    // a frame cannot tell a grid of app icons from a row list that happens
+    // to carry icons.
+    property string viewKind: "rows"
+    // Where the app cells stop in `_displayRows`, committed with them.
+    property int _appGridCount: 0
+
+    readonly property bool _isPickerGrid: root.viewKind === "picker"
+    readonly property bool _isEmojiGrid: root.viewKind === "emoji"
+    readonly property bool _isAppGrid: root.viewKind === "appGrid"
+    readonly property bool _isGrid: root._isPickerGrid || root._isEmojiGrid || root._isAppGrid
 
     // Whether the cursor is sitting on a cell rather than on a row, which on
-    // the app grid changes with the cursor instead of with the level: ←→ and
-    // the footer's own key legend belong to the grid half of it and the rows
-    // under it keep ↑↓ alone.
+    // the app grid changes with the cursor instead of with the level: the
+    // footer's key legend belongs to the grid half of it.
     readonly property bool _gridCursor: root._isAppGrid
         ? root._cursorIndex < root._appGridCount
         : root._isGrid
 
-    // How far one Up/Down press moves the cursor: a row list moves a row, a
-    // grid moves a whole row of cells. On `menu status` because a grid and a
-    // list are otherwise indistinguishable in a JSON dump.
-    readonly property int cursorColumns: root._isPickerRoute
+    // How many cells one row of the level holds, 1 for a row list. On `menu
+    // status` because a grid and a list are otherwise indistinguishable in a
+    // JSON dump.
+    readonly property int cursorColumns: root._isPickerGrid
         ? root.pickerColumns
         : (root._isEmojiGrid
             ? root.emojiColumns
             : (root._isAppGrid ? appGrid.columns : 1))
-
-    // True while the rows are a whole-tree ranked list rather than one
-    // level's own children: every route-local surface (the picker grid, the
-    // clipboard split, emoji, nix, keybinds, calc) filters its own data
-    // instead of falling through to Search.rank, and its rows belong to that
-    // level rather than to a set of results.
-    readonly property bool _searching: root._mode === "menu"
-        && searchInput.text.length > 0
-        && !root._isPickerRoute && !root._isSplitRoute && !root._isEmojiGrid
-        && root.currentNodeId !== "nix" && Providers.nixTriggerQuery(searchInput.text) === null
-        && root.currentNodeId !== "keybinds" && Keybinds.triggerQuery(searchInput.text) === null
-        && root.currentNodeId !== "calc"
-        && root.currentNodeId !== "calc"
 
     // Mirrors ClipboardService.items ONLY while the menu is actually open
     // (M17 review finding, M-polish batch item G, owner: low-end laptop),
@@ -840,35 +843,78 @@ PanelWindow {
         return root._appIconCache[name];
     }
 
-    // True while the current level's own node carries an unsatisfied (or
-    // not-yet-resolved) `when` gate, see _displayRows' own comment for why
-    // this only matters for the direct-summon path.
-    readonly property bool _currentNodeGated: {
-        if (root.currentNodeId === null) return false;
-        var node = root._nodes[root.currentNodeId];
+    // True while `level`'s own node carries an unsatisfied (or not yet
+    // resolved) `when` gate, see `_levelRows`' own comment for why this only
+    // matters for the direct-summon path.
+    function _levelGated(level) {
+        if (level === null) return false;
+        var node = root._nodes[level];
         return node ? !Model.isWhenVisible(node, root._condResults) : false;
     }
 
-    // What the level resolved, before the app grid's own split: every branch
-    // below is this file's original row resolution and nothing in it knows
-    // about the grid. `_displayRows` is that list with the apps moved to the
-    // front when the grid is live, which is the one arrangement both views
-    // can share an index into.
-    readonly property var _rankedRows: {
-        if (root._mode === "select") {
-            var query = searchInput.text.toLowerCase();
+    // What the level resolves to, in one pass over the field, the mode and
+    // the level (M72 T1): which view draws it, its rows, where the app cells
+    // stop, and the key the cursor is placed for. One evaluation answers all
+    // of them from the same three inputs, which is what keeps them agreeing:
+    // every one of them used to be its own binding over a different mix of
+    // those inputs and of each other, and `_syncRows` read them while some
+    // had caught up with a keystroke and some had not.
+    readonly property var _resolved: root._resolve(searchInput.text, root._mode, root.currentNodeId)
+
+    function _resolve(q, mode, level) {
+        var menu = mode === "menu";
+        var picker = menu && level === root._pickerRouteId;
+        var split = menu && (level === "clipboard" || level === "share.history");
+        var appView = menu && AppViews.viewFor(level) !== "";
+        var emojiQuery = menu ? Providers.emojiTriggerQuery(q) : null;
+        var nixQuery = menu ? Providers.nixTriggerQuery(q) : null;
+        var keysQuery = menu ? Keybinds.triggerQuery(q) : null;
+        var emoji = menu && !picker && !split && !appView && (level === "emoji" || emojiQuery !== null);
+        var routeRows = level === "nix" || level === "keybinds" || level === "calc";
+        var kind = appView ? "app"
+            : (picker ? "picker"
+                : (emoji ? "emoji"
+                    : (menu && root._appGridWanted && !split && !routeRows ? "appGrid" : "rows")));
+        var rows = root._levelRows(q, mode, level, picker, split, emojiQuery, nixQuery, keysQuery);
+        var appCount = 0;
+        if (kind === "appGrid") {
+            var parts = AppGrid.partition(rows);
+            rows = parts.rows;
+            appCount = parts.appCount;
+        }
+        return {
+            key: [mode, level === null ? "" : level, q, picker ? root._pickerVariant : ""].join("\u0001"),
+            mode: mode,
+            level: level,
+            kind: kind,
+            rows: rows,
+            appCount: appCount,
+            // A whole-tree ranked list rather than one level's own children:
+            // every route-local surface filters its own data instead of
+            // falling through to Search.rank, and its rows belong to that
+            // level rather than to a set of results.
+            searching: menu && q.length > 0 && !picker && !split && !emoji && !routeRows
+                && nixQuery === null && keysQuery === null
+        };
+    }
+
+    // The level's own rows, before the app grid's split: every branch below
+    // is this file's original row resolution and nothing in it knows about
+    // the grid.
+    function _levelRows(q, mode, level, picker, split, emojiQuery, nixQuery, keysQuery) {
+        if (mode === "select") {
+            var query = q.toLowerCase();
             return root._selectOptions
                 .map(function (opt, i) { return { id: "select." + i, label: String(opt), icon: "", kind: "option" }; })
                 .filter(function (n) { return query.length === 0 || n.label.toLowerCase().indexOf(query) >= 0; });
         }
-        if (root._mode === "input")
+        if (mode === "input")
             return [];
-        var q = searchInput.text;
         // The wallpaper route is the picker's grid (M23): route-local rows
         // built from the scanned directory and filtered by filename, never
         // whole-tree ranking, a wallpapers directory would drown a root
         // query exactly the way the emoji dataset would.
-        if (root._isPickerRoute)
+        if (picker)
             return Providers.imageRows(root._pickerImages, q);
         // The clipboard/share-history route is route-local too (M30), for
         // the same reason the picker route above is: typing here narrows
@@ -876,8 +922,8 @@ PanelWindow {
         // the trigger routes below (checked here, ahead of them, on
         // purpose, a ":e"/":nix"/":k"-prefixed clipboard entry is filter
         // text on this level, not a trigger).
-        if (root._isSplitRoute) {
-            var historyRows = Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
+        if (split) {
+            var historyRows = Model.visibleChildren(root._nodes, level, root._condResults);
             if (historyRows.length === 0)
                 return [Providers.clipboardEmptyRow()];
             var matchedRows = Providers.clipboardSearch(historyRows, q);
@@ -888,25 +934,22 @@ PanelWindow {
         // ":e " trigger narrows to the same rows from any level (M12
         // Task 6). Neither ever falls through to whole-tree ranking: 3,944
         // emoji in the tree would drown every root search.
-        var emojiQuery = Providers.emojiTriggerQuery(q);
         var emojiPaste = Core.Config.get("clipboard.paste", true);
-        if (root.currentNodeId === "emoji" || emojiQuery !== null)
+        if (level === "emoji" || emojiQuery !== null)
             root._ensureEmojiLoaded();
-        if (root.currentNodeId === "emoji")
+        if (level === "emoji")
             return Providers.emojiRows(root._emojiList, emojiQuery !== null ? emojiQuery : q, emojiPaste, root._emojiUses, Date.now());
         if (emojiQuery !== null)
             return Providers.emojiRows(root._emojiList, emojiQuery, emojiPaste, root._emojiUses, Date.now());
         // The nix route/":nix" trigger works the same way, except the rows
         // come from the debounced-Process cache (see the state block above)
         // rather than a pure function over local data.
-        var nixQuery = Providers.nixTriggerQuery(q);
-        if (root.currentNodeId === "nix" || nixQuery !== null)
+        if (level === "nix" || nixQuery !== null)
             return root._nixRowsFor(nixQuery !== null ? nixQuery : q);
         // The keybinds route is route-local for the same reason: its own
         // tiered search, never Search.rank, so a hundred-odd chords cannot
         // drown a root query.
-        var keysQuery = Keybinds.triggerQuery(q);
-        if (root.currentNodeId === "keybinds" || keysQuery !== null)
+        if (level === "keybinds" || keysQuery !== null)
             return root._keybindRowsFor(keysQuery !== null ? keysQuery : q);
         if (q.length === 0) {
             // Route-summon when-gate guard (M17 review finding, item F):
@@ -915,29 +958,31 @@ PanelWindow {
             // (e.g. "share" without localsend_app) from ever appearing as
             // a row in the first place, without this, landing on that
             // level here would still list its children as if the gate
-            // never existed. `root._currentNodeGated` covers "not yet
+            // never existed. `_levelGated` covers "not yet
             // resolved" the same as "resolved false": _condResults starts
             // empty every open()/_enterLevel(), so a level entered before
             // its own condition Process has exited must not flash
             // actionable rows it may end up refusing a moment later.
-            if (root._currentNodeGated)
-                return [Model.gatedNoteRow(root._nodes[root.currentNodeId])];
-            return Model.visibleChildren(root._nodes, root.currentNodeId, root._condResults);
+            if (root._levelGated(level))
+                return [Model.gatedNoteRow(root._nodes[level])];
+            return Model.visibleChildren(root._nodes, level, root._condResults);
         }
         // A query that parses as an expression leads with the CALC result row
         // (M12 Task 5). At the dedicated calc level the result row is the
         // whole surface, whole-tree matches would just be root search noise
         // there. Parse failures are silent: calcRow is null, nothing renders.
         var calcRow = Calc.resultNode(q);
-        if (root.currentNodeId === "calc")
+        if (level === "calc")
             return calcRow ? [calcRow] : [];
-        var ranked = Search.rank(root._nodes, q, root._condResults, root.currentNodeId);
+        var ranked = Search.rank(root._nodes, q, root._condResults, level);
         return calcRow ? [calcRow].concat(ranked) : ranked;
     }
 
-    readonly property var _displayRows: root._appGrid.rows
-
-    readonly property var _cursorNode: root._displayRows[root._cursorIndex] || null
+    // What the views draw and what Enter acts on, committed together by
+    // `_syncRows` from one `_resolved`. Plain properties rather than
+    // bindings, so nothing downstream can see the rows of one keystroke with
+    // the cursor, the headings or the view of another.
+    property var _displayRows: []
 
     readonly property int rowCount: root._displayRows.length
 
@@ -945,6 +990,7 @@ PanelWindow {
     // frame shows the ring, but only a number says an arrow press moved by
     // one cell rather than by a whole row of them.
     readonly property int cursorIndex: root._cursorIndex
+    readonly property string cursorId: root._cursorId
 
     // One heading per row (M48 D6), index-aligned with _displayRows: the
     // delegate draws its `SectionLabel` wherever this array changes value,
@@ -952,38 +998,40 @@ PanelWindow {
     // group comes back blank, since its breadcrumb already names it, and so
     // do the grids, which have nowhere to put a full-width band between two
     // cells of a row.
-    readonly property var rowSections: Model.sectionsFor(root._displayRows, {
-        mode: root._mode,
-        grid: root._isGrid,
-        searching: root._searching,
-        level: root.currentNodeId,
-        levelLabel: (root.currentNodeId !== null && root._nodes[root.currentNodeId])
-            ? root._nodes[root.currentNodeId].label
-            : "",
-        nodes: root._nodes
-    })
+    property var rowSections: []
 
     // The distinct headings, in order, for `menu status`: what a heading
     // says is otherwise only observable by reading pixels off a frame.
     readonly property var sectionNames: Model.sectionNames(root.rowSections)
 
-    // --- The keyed row model (M53 D6) ------------------------------------
+    // --- The keyed row models (M53 D6, M72 T1) ---------------------------
     //
-    // `_displayRows` is a fresh JS array every keystroke, and a JS array
-    // handed to a ListView is a model reset: no row survives a re-rank, so
-    // nothing in the list can move, appear or leave. This model carries the
-    // same rows' ids in the same order, synced by Menu/rowsync.js's diff, so
-    // the delegate that was already drawing a row stays that row's delegate
-    // and the view's own add/displaced/move/remove transitions have
-    // something true to say.
+    // A JS array handed to a view is a model reset: no row survives a
+    // re-rank, so nothing in the list can move, appear or leave, a grid
+    // loses its scroll, and the view's current item is rebuilt under the
+    // cursor on every keystroke. These carry the same rows' ids in the same
+    // order, synced by Menu/rowsync.js's diff, so the delegate that was
+    // already drawing a row stays that row's delegate.
+    //
+    // `rowsModel` feeds whichever view is on screen (the row list, the
+    // picker or emoji grid, the app grid's cells) and `tailModel` the rows
+    // under the app grid. Only the live view is attached (`_attachViews`),
+    // so a hidden view holds no delegates and measures 0.
     //
     // Ids only. The row objects themselves stay in `_displayRows` and reach
-    // the delegate through `_rowsById` below, which keeps this model out of
-    // the business of copying every field of every row into ListElement
+    // the delegate through `_rowsById` below, which keeps these models out
+    // of the business of copying every field of every row into ListElement
     // roles on every keystroke.
     ListModel {
         id: rowsModel
     }
+
+    ListModel {
+        id: tailModel
+    }
+
+    property var _rowsModelIds: []
+    property var _tailModelIds: []
 
     // Rows by id, this sync and the one before it. The delegate reads its
     // own row out of these rather than off `_displayRows[index]`, because a
@@ -1003,29 +1051,60 @@ PanelWindow {
     // What a delegate draws when its id resolves to neither generation,
     // which nothing in the sync can produce and a stale delegate would
     // otherwise answer with undefined in every band.
-    readonly property var _blankRow: ({ id: "", label: "", kind: "note", icon: "", desc: "", meta: "", dim: true })
+    readonly property var _blankRow: ({ id: "", label: "", kind: "note", icon: "", desc: "", meta: "", dim: true, path: "" })
 
     // Above this many rows leaving, arriving or changing places, the change
     // is a rebuild rather than a story about what moved (M53 D6), and the
     // model is refilled with no transitions at all.
     readonly property int _rowResetLimit: 64
 
-    // Armed for an incremental sync, disarmed for a refill. Cleared before a
-    // reset and set again by the next incremental sync rather than restored
-    // on a timer: the view applies a model change on its own polish pass,
-    // which is not ordered against anything this file could schedule, and
-    // the next sync is always at least a frame away.
+    // Armed for an incremental sync, disarmed for a refill, read by the row
+    // list's transitions. Set before the ops it describes: `_placeCursor`
+    // sets the view's currentIndex straight after, which makes the view
+    // apply the pending changes then and there, under this value.
     property bool _rowsAnimate: false
 
+    // Set for the length of an open() (and the select/input opens): every
+    // sync inside it refills without transitions and puts the cursor on the
+    // first row, so the card arrives settled rather than replaying last
+    // session's rows into it.
+    property bool _rowsSettle: false
+
+    // The mode and level the models were last synced for.
+    property string _rowsLevel: ""
+
     // Whether the cursor travels to where it is going or is simply there
-    // (M53 D4). One arrow step travels; a wrap, a re-rank, a level change
-    // and the pointer all snap, since nothing meaningful connects the two
-    // positions.
+    // (M53 D4). One arrow step travels; a wrap, a page, a re-rank, a level
+    // change and the pointer all snap, since nothing meaningful connects the
+    // two positions.
     property bool _cursorTravels: false
 
+    on_ResolvedChanged: root._syncRows()
+
+    // The one sync step (M72 T1), synchronous: commits the resolved rows,
+    // walks the live view's models to them, re-derives the cursor and
+    // asserts every view's currentIndex, in that order and in one call. It
+    // can run more than once for one keystroke while the bindings under
+    // `_resolved` settle; every run commits a consistent snapshot and the
+    // last one is the settled answer.
     function _syncRows() {
-        var rows = root._displayRows;
-        var sections = root.rowSections;
+        var r = root._resolved;
+        var rows = r.rows;
+        var kindChanged = r.kind !== root.viewKind;
+        var fresh = root._rowsSettle || r.key !== root._cursorKey;
+        // A new level is a new list: `levelEnter` is its arrival, and rows
+        // sliding about under that fade would be a second one.
+        var levelKey = r.mode + "\u0001" + (r.level === null ? "" : r.level);
+        var sameLevel = levelKey === root._rowsLevel;
+        root._rowsLevel = levelKey;
+        var sections = Model.sectionsFor(rows, {
+            mode: r.mode,
+            grid: r.kind === "picker" || r.kind === "emoji" || r.kind === "appGrid",
+            searching: r.searching,
+            level: r.level,
+            levelLabel: (r.level !== null && root._nodes[r.level]) ? root._nodes[r.level].label : "",
+            nodes: root._nodes
+        });
         var byId = {};
         var ids = [];
         for (var i = 0; i < rows.length; i++) {
@@ -1033,46 +1112,136 @@ PanelWindow {
             if (band === (i > 0 ? (sections[i - 1] || "") : ""))
                 band = "";
             byId[rows[i].id] = { row: rows[i], section: band, sectionFirst: i === 0 };
-            ids.push(rows[i].id);
+            ids.push(String(rows[i].id));
         }
-        root._rowsPrev = root._rowsById;
+        var animate = sameLevel && !kindChanged && !root._rowsSettle;
+        root._rowsPrev = animate ? root._rowsById : ({});
         root._rowsById = byId;
+        root._displayRows = rows;
+        root.rowSections = sections;
+        root._appGridCount = r.appCount;
 
-        var held = [];
-        for (i = 0; i < rowsModel.count; i++)
-            held.push(rowsModel.get(i).rowId);
+        // A view swap detaches first, so the view going away never builds
+        // delegates for the rows that are arriving for the other one.
+        if (kindChanged)
+            root._attachViews("");
+        var grid = r.kind === "appGrid";
+        var cellIds = r.kind === "app" ? [] : (grid ? ids.slice(0, r.appCount) : ids);
+        var tailIds = grid ? ids.slice(r.appCount) : [];
+        root._applyIds(rowsModel, root._rowsModelIds, cellIds, animate);
+        root._rowsModelIds = cellIds;
+        root._applyIds(tailModel, root._tailModelIds, tailIds, animate);
+        root._tailModelIds = tailIds;
+        root.viewKind = r.kind;
+        root._attachViews(r.kind);
 
+        if (fresh) {
+            root._cursorPlaced = false;
+            root._cursorWant = "";
+        }
+        var index = Nav.rederive(root._cursorWant, root._cursorIndex, ids, fresh, root._cursorPlaced);
+        root._cursorKey = r.key;
+        root._placeCursor(index, false);
+        if (kindChanged || root._rowsSettle)
+            root._scrollViewsHome();
+    }
+
+    // `held` is the ids the model holds, kept beside it rather than read
+    // back out of it: a `get()` per row is an object per row, 3,944 of them
+    // on every keystroke of an emoji browse.
+    function _applyIds(model, held, ids, animate) {
         var plan = RowSync.plan(held, ids, root._rowResetLimit);
-        if (plan.reset) {
-            root._rowsAnimate = false;
-            rowsModel.clear();
-            for (i = 0; i < ids.length; i++)
-                rowsModel.append({ rowId: ids[i] });
+        if (!plan.reset && plan.ops.length === 0)
+            return;
+        if (plan.reset || !animate) {
+            if (model === rowsModel)
+                root._rowsAnimate = false;
+            model.clear();
+            // One append for the whole list rather than one per row: the
+            // emoji route's browse is 3,944 of them.
+            if (ids.length > 0)
+                model.append(ids.map(function (id) { return { rowId: id }; }));
             return;
         }
-        if (plan.ops.length === 0)
-            return;
-        root._rowsAnimate = true;
-        for (i = 0; i < plan.ops.length; i++) {
+        if (model === rowsModel)
+            root._rowsAnimate = true;
+        for (var i = 0; i < plan.ops.length; i++) {
             var op = plan.ops[i];
             if (op.op === "remove")
-                rowsModel.remove(op.index);
+                model.remove(op.index);
             else if (op.op === "insert")
-                rowsModel.insert(op.index, { rowId: op.id });
+                model.insert(op.index, { rowId: op.id });
             else
-                rowsModel.move(op.from, op.to, 1);
+                model.move(op.from, op.to, 1);
         }
     }
 
-    on_DisplayRowsChanged: {
-        // A new row set is a new arrangement, never a step through the old
-        // one, so whatever the cursor lands on it lands on outright.
-        root._cursorTravels = false;
-        // Deferred, because this handler runs while the bindings that read
-        // the same rows are still catching up: `rowSections` is one of them,
-        // and syncing against the headings of the row set before this one
-        // put every band on the wrong row.
-        Qt.callLater(root._syncRows);
+    // Only the view on screen holds a model. Assigned here rather than
+    // bound, so the model a view holds and the rows in it change in the
+    // one step that also places the cursor on them.
+    function _attachViews(kind) {
+        rowsView.model = kind === "rows" ? rowsModel : null;
+        gridView.model = kind === "picker" ? rowsModel : null;
+        emojiGrid.model = kind === "emoji" ? rowsModel : null;
+        appGrid.cellsModel = kind === "appGrid" ? rowsModel : null;
+        appGrid.tailModel = kind === "appGrid" ? tailModel : null;
+    }
+
+    // The cursor's one writer. Every view's currentIndex is set here, after
+    // the models it reads have changed: a keyed model moves a view's
+    // currentIndex along with its current item on an insert or a move, and a
+    // bound `currentIndex: _cursorIndex` never re-fires while the number
+    // itself stays the same, which left the fill on one row and Enter on
+    // another.
+    function _placeCursor(index, travels) {
+        var rows = root._displayRows;
+        var valid = index >= 0 && index < rows.length;
+        var k = root.viewKind;
+        root._cursorTravels = travels;
+        root._cursorIndex = valid ? index : 0;
+        root._cursorId = valid ? String(rows[index].id) : "";
+        root._cursorNode = valid ? rows[index] : null;
+        rowsView.currentIndex = k === "rows" && valid ? index : -1;
+        gridView.currentIndex = k === "picker" && valid ? index : -1;
+        emojiGrid.currentIndex = k === "emoji" && valid ? index : -1;
+        appGrid.placeCursor(k === "appGrid" && valid ? index : -1);
+    }
+
+    function _scrollViewsHome() {
+        if (rowsView.model)
+            rowsView.positionViewAtBeginning();
+        if (gridView.model)
+            gridView.positionViewAtBeginning();
+        if (emojiGrid.model)
+            emojiGrid.positionViewAtBeginning();
+        appGrid.scrollHome();
+    }
+
+    // A wheel glide still running writes contentY on every frame, over the
+    // position a keyboard move just scrolled its view to.
+    function _cancelGlides() {
+        rowsWheel.cancel();
+        gridWheel.cancel();
+        emojiWheel.cancel();
+        appGrid.cancelGlide();
+    }
+
+    // Where the live view's current item actually is, and which row its
+    // model says that is, for `menu status`: the rig's check that what the
+    // view draws the cursor on is the row Enter acts on.
+    function viewCursor() {
+        var k = root.viewKind;
+        var view = k === "rows" ? rowsView : (k === "picker" ? gridView : (k === "emoji" ? emojiGrid : null));
+        if (view) {
+            var i = view.currentIndex;
+            var id = (view.model === rowsModel && i >= 0 && i < rowsModel.count) ? rowsModel.get(i).rowId : "";
+            return { view: k, index: i, id: id };
+        }
+        if (k === "appGrid") {
+            var cell = appGrid.cursorReport();
+            return { view: k, index: cell.index, id: cell.id };
+        }
+        return { view: k, index: -1, id: "" };
     }
 
     // shadcn's `CommandEmpty`. Never in input mode, whose row list is empty
@@ -1247,7 +1416,7 @@ PanelWindow {
     // loader reports its item's own implicit height, which is what an app
     // view's content wants before this caps it, and the view scrolls
     // inside whatever it gets.
-    readonly property real _viewContentHeight: root._isPickerRoute
+    readonly property real _viewContentHeight: root._isPickerGrid
         ? gridView.contentHeight
         : (root._isEmojiGrid
             ? emojiGrid.contentHeight
@@ -1275,7 +1444,7 @@ PanelWindow {
     // level. On `menu status` because a wheel notch is otherwise
     // unobservable from the rig: a screenshot shows different rows, but
     // nothing says the cursor stayed put rather than moved with them.
-    readonly property real scrollTop: root._isPickerRoute
+    readonly property real scrollTop: root._isPickerGrid
         ? gridView.contentY
         : (root._isEmojiGrid
             ? emojiGrid.contentY
@@ -1394,6 +1563,7 @@ PanelWindow {
     }
 
     function open(route) {
+        root._rowsSettle = true;
         root._abandonPendingSelect();
         // Fresh session: last session's condition results must not leak
         // into this one (a `when`/`checked` shell command can change
@@ -1425,33 +1595,44 @@ PanelWindow {
         if (prefill !== "")
             searchInput.text = prefill;
         root.isOpen = true;
+        root._arrive();
+    }
+
+    // The last step of every open: one settled sync (the rows as they are
+    // now, the cursor on the first of them, every view at its top) and the
+    // field focused. isOpen has already flipped by here, which is what swaps
+    // the closed launcher's empty clipboard and window lists for the live
+    // ones, so the rows this commits are the ones the card arrives with.
+    function _arrive() {
+        root._syncRows();
+        root._rowsSettle = false;
         Qt.callLater(function () { searchInput.forceActiveFocus(); });
     }
 
     function openSelect(prompt, options, token) {
+        root._rowsSettle = true;
         root._beginSelectionRequest();
         root._mode = "select";
         root._selectPrompt = prompt;
         root._selectOptions = options;
         root._selectToken = token;
-        root._cursorIndex = 0;
         root._confirmPendingId = "";
         searchInput.text = "";
         root.isOpen = true;
-        Qt.callLater(function () { searchInput.forceActiveFocus(); });
+        root._arrive();
     }
 
     function openInput(prompt, token) {
+        root._rowsSettle = true;
         root._beginSelectionRequest();
         root._mode = "input";
         root._selectPrompt = prompt;
         root._selectOptions = [];
         root._selectToken = token;
-        root._cursorIndex = 0;
         root._confirmPendingId = "";
         searchInput.text = "";
         root.isOpen = true;
-        Qt.callLater(function () { searchInput.forceActiveFocus(); });
+        root._arrive();
     }
 
     function close() {
@@ -1714,7 +1895,6 @@ PanelWindow {
         var changingLevel = id !== root.currentNodeId;
         var leavingPicker = root.currentNodeId === root._pickerRouteId && id !== root._pickerRouteId;
         root.currentNodeId = id;
-        root._cursorIndex = 0;
         root._confirmPendingId = "";
         root._cursorFromKeys = true;
         searchInput.text = "";
@@ -1751,41 +1931,15 @@ PanelWindow {
     // navigation from queuing: the previous play is simply abandoned.
     property real _levelEnterOpacity: 1
 
-    // Which of the five views stands in for the row list. A level change is
-    // not the only way one of them arrives: `:e`, a wallpaper directory's own
-    // trigger and every app view are reached by typing, so the whole body of
-    // the card can swap under a field that never left the level it was on
-    // (M53 Task 6). That is the same seam entering a level is, so it takes
-    // the same entrance.
-    // Public because `menu status` reports it (M58 G5): a frame cannot tell
-    // a grid of app icons from a row list that happens to carry icons.
-    readonly property string viewKind: root._isAppView
-        ? "app"
-        : (root._isPickerRoute
-            ? "picker"
-            : (root._isEmojiGrid ? "emoji" : (root._isAppGrid ? "appGrid" : "rows")))
-
-    onViewKindChanged: {
-        // Gated on the card sitting open at rest: a view resolved while the
-        // card is still arriving is part of that arrival, not a change to it.
-        // A level change plays its own entrance from _enterLevel; this handler
-        // only ever runs ahead of that, because the bindings feeding viewKind
-        // settle before _enterLevel reaches its last line, and the later
-        // restart wins.
-        if (root.isOpen && drawer.presence.settled)
-            root._playLevelEnter();
-    }
-
     function _playLevelEnter() {
         levelEnter.restart();
     }
 
-    // The swap's out half is not here: every path into `_playLevelEnter` has
-    // already changed what the level body draws by the time it runs, and a
-    // route reached by typing (`:e`, a wallpaper directory, an app view)
-    // cannot be made to wait for one, since the query that resolves it is the
-    // keystroke itself. Fading out from here would take the arriving level off
-    // screen and bring it straight back.
+    // The swap's out half is not here: `_playLevelEnter` runs once the level
+    // has already changed what the body draws. Only a level change plays it
+    // (M72 T1): a view reached by typing (`:e `) swaps in place, since the
+    // query that resolves it is the keystroke itself, and fading the body
+    // out and back on a keystroke read as the launcher flickering.
     Anim {
         id: levelEnter
         target: root
@@ -1801,41 +1955,110 @@ PanelWindow {
     // indistinguishable from a real one, which used to yank the keyboard
     // cursor to wherever the mouse happened to be sitting. Every keyboard
     // path below re-arms the gate; the first genuine pointer movement takes
-    // the cursor straight back.
+    // the cursor straight back. The hover wash reads the gate's `live` for
+    // the same reason, so a row sliding under the parked pointer is not lit
+    // either.
     PointerMoveGate {
         id: pointerGate
     }
 
-    // `delta` is ±1 for the row list and ±`cursorColumns` for a grid's
-    // vertical moves, so the wrap has to survive a step larger than the row
-    // count itself, the old `(i + delta + n) % n` only ever saw ±1 and
-    // returns a negative index the moment |delta| > n.
-    function _moveCursor(delta) {
+    // One navigation key's move (Menu/nav.js's `step`, which owns the
+    // wraps). The cells are the whole list on the picker and emoji grids,
+    // the app cells on the app grid, and none on a row list.
+    function _moveCursor(dir) {
         var n = root._displayRows.length;
         if (n === 0) return;
-        // The app grid is half a grid: below the cells the rows are a list
-        // and a list moves by a row, so the column step only applies while
-        // the cursor is still in the cells (Menu/appgrid.js).
-        if (root._isAppGrid)
-            delta = AppGrid.verticalStep(delta, root._cursorIndex, root._appGridCount, n);
-        var raw = root._cursorIndex + delta;
-        // A step travels, a wrap does not (M53 D4): the top of the list and
-        // the bottom of it are not next to each other, and a fill sliding
-        // the whole way between them says they are.
-        root._cursorTravels = raw >= 0 && raw < n;
-        var next = raw % n;
-        root._cursorIndex = next < 0 ? next + n : next;
+        var cells = root._isAppGrid ? root._appGridCount : (root._isGrid ? n : 0);
+        var next = Nav.step(root._cursorIndex, dir, n, cells, root.cursorColumns, root._pageStep());
+        root._cancelGlides();
+        root._placeCursor(next.index, next.travels);
+        root._cursorPlaced = true;
+        root._cursorWant = root._cursorId;
         root._confirmPendingId = "";
         root._cursorFromKeys = true;
         pointerGate.reset();
+    }
+
+    function _runKey(action) {
+        // A page keeps one row of overlap on an app view, so the reader
+        // carries context across the jump.
+        var row = Core.Theme.space.popupRowHeight;
+        var page = root._appViewScroll ? Math.max(row, root._appViewScroll.height - row) : row;
+        switch (action) {
+        case "up":
+        case "down":
+        case "left":
+        case "right":
+        case "pageUp":
+        case "pageDown":
+        case "home":
+        case "end":
+            root._moveCursor(action);
+            break;
+        case "scrollUp":
+            root._scrollAppViewBy(-row);
+            break;
+        case "scrollDown":
+            root._scrollAppViewBy(row);
+            break;
+        case "scrollPageUp":
+            root._scrollAppViewBy(-page);
+            break;
+        case "scrollPageDown":
+            root._scrollAppViewBy(page);
+            break;
+        case "scrollHome":
+            root._scrollAppViewTo(0);
+            break;
+        case "scrollEnd":
+            root._scrollAppViewTo(root._appViewScroll.contentHeight);
+            break;
+        case "activate":
+            root._activateRow(root._cursorIndex);
+            break;
+        case "activateAlternate":
+            root._activateRowAlternate(root._cursorIndex);
+            break;
+        case "submit":
+            root._submitInput();
+            break;
+        case "clear":
+            searchInput.text = "";
+            break;
+        case "pop":
+            root._pop();
+            break;
+        // select/input have no tree level to pop out of: close() writes the
+        // caller's {cancelled:true} record via _abandonPendingSelect().
+        case "close":
+            root.close();
+            break;
+        case "variant":
+            root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
+            break;
+        }
+    }
+
+    // How many entries one PageUp/PageDown moves: as many rows as the view
+    // shows, or as many whole rows of cells.
+    function _pageStep() {
+        var h = root._rowsAreaHeight;
+        if (root._isPickerGrid)
+            return Math.max(1, Math.floor(h / gridView.cellHeight)) * root.pickerColumns;
+        if (root._isEmojiGrid)
+            return Math.max(1, Math.floor(h / emojiGrid.cellHeight)) * root.emojiColumns;
+        if (root._isAppGrid && root._cursorIndex < root._appGridCount)
+            return Math.max(1, Math.floor(h / appGrid.cellHeight)) * appGrid.columns;
+        return Math.max(1, Math.floor(h / Core.Theme.space.controlHeight));
     }
 
     function _setCursor(index) {
         if (index === root._cursorIndex) return;
         // The pointer names a row outright rather than stepping to it, and
         // it can arrive on any row in the list from outside it.
-        root._cursorTravels = false;
-        root._cursorIndex = index;
+        root._placeCursor(index, false);
+        root._cursorPlaced = true;
+        root._cursorWant = root._cursorId;
         root._confirmPendingId = "";
         root._cursorFromKeys = false;
     }
@@ -2363,7 +2586,6 @@ PanelWindow {
                 }
 
                 onTextChanged: {
-                    root._cursorIndex = 0;
                     root._confirmPendingId = "";
                     // Typing re-ranks the rows under a pointer that hasn't
                     // moved, the churn the gate exists for.
@@ -2381,6 +2603,10 @@ PanelWindow {
                     }
                 }
 
+                // Menu/nav.js's `keyAction` decides what a key means;
+                // whatever it passes is the field's own, which is how
+                // Ctrl+Left/Right and Ctrl+Backspace edit the query while the
+                // plain arrows walk the results.
                 Keys.onPressed: event => {
                     // An app view with its own cursor gets first refusal
                     // on every key (root._appViewKey's own note).
@@ -2388,104 +2614,18 @@ PanelWindow {
                         event.accepted = true;
                         return;
                     }
-                    switch (event.key) {
-                    // An app view has no row cursor, so the same two keys
-                    // scroll its content by a row instead. Claimed
-                    // either way: letting them through would only reach
-                    // the search field's own text cursor.
-                    case Qt.Key_Up:
-                        if (root._isAppView)
-                            root._scrollAppViewBy(-Core.Theme.space.popupRowHeight);
-                        else
-                            root._moveCursor(-root.cursorColumns);
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Down:
-                        if (root._isAppView)
-                            root._scrollAppViewBy(Core.Theme.space.popupRowHeight);
-                        else
-                            root._moveCursor(root.cursorColumns);
-                        event.accepted = true;
-                        break;
-                    // Left/Right belong to the search field's own text
-                    // cursor everywhere except a grid, so they're
-                    // claimed only there, never accepted otherwise.
-                    case Qt.Key_Left:
-                        if (root._gridCursor) {
-                            root._moveCursor(-1);
-                            event.accepted = true;
-                        }
-                        break;
-                    case Qt.Key_Right:
-                        if (root._gridCursor) {
-                            root._moveCursor(1);
-                            event.accepted = true;
-                        }
-                        break;
-                    // Page/Home/End are the search field's own text
-                    // navigation everywhere else, so they are claimed
-                    // only where an app view declares something to
-                    // scroll. A page keeps one row of overlap, so the
-                    // reader carries context across the jump.
-                    case Qt.Key_PageUp:
-                    case Qt.Key_PageDown:
-                        if (root._appViewScroll) {
-                            var page = Math.max(Core.Theme.space.popupRowHeight,
-                                root._appViewScroll.height - Core.Theme.space.popupRowHeight);
-                            root._scrollAppViewBy(event.key === Qt.Key_PageUp ? -page : page);
-                            event.accepted = true;
-                        }
-                        break;
-                    case Qt.Key_Home:
-                        if (root._appViewScroll) {
-                            root._scrollAppViewTo(0);
-                            event.accepted = true;
-                        }
-                        break;
-                    case Qt.Key_End:
-                        if (root._appViewScroll) {
-                            root._scrollAppViewTo(root._appViewScroll.contentHeight);
-                            event.accepted = true;
-                        }
-                        break;
-                    case Qt.Key_Return:
-                    case Qt.Key_Enter:
-                        if (root._mode === "input")
-                            root._submitInput();
-                        else if ((event.modifiers & Qt.ShiftModifier) !== 0)
-                            root._activateRowAlternate(root._cursorIndex);
-                        else
-                            root._activateRow(root._cursorIndex);
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Escape:
-                        // select/input have no tree level to pop out of:
-                        // Escape just cancels the request and closes (close()
-                        // writes the {cancelled:true} record via
-                        // _abandonPendingSelect()).
-                        if (root._mode !== "menu")
-                            root.close();
-                        else
-                            root._pop();
-                        event.accepted = true;
-                        break;
-                    case Qt.Key_Backspace:
-                        if (root._mode === "menu" && searchInput.text.length === 0) {
-                            root._pop();
-                            event.accepted = true;
-                        }
-                        break;
-                    // Two variants, so Tab and Shift+Tab are the same
-                    // switch. Claimed only where the switcher is actually
-                    // up, so Tab keeps whatever it does everywhere else.
-                    case Qt.Key_Tab:
-                    case Qt.Key_Backtab:
-                        if (root._isPickerRoute && root._pickerHasVariants) {
-                            root.setPickerVariant(root._pickerVariant === "dark" ? "light" : "dark");
-                            event.accepted = true;
-                        }
-                        break;
-                    }
+                    var action = Nav.keyAction(event.key, event.modifiers, event.isAutoRepeat, {
+                        mode: root._mode,
+                        query: searchInput.text.length > 0,
+                        grid: root._isGrid,
+                        appView: root._isAppView,
+                        scrollable: root._appViewScroll !== null,
+                        variants: root._isPickerRoute && root._pickerHasVariants
+                    });
+                    if (action === "pass")
+                        return;
+                    event.accepted = true;
+                    root._runKey(action);
                 }
             }
         }
@@ -2670,13 +2810,12 @@ PanelWindow {
                 // half. Every other route is unchanged, full width.
                 width: root._listWidth
                 height: root._morphRowsHeight
-                visible: !root._isGrid && !root._isAppView
+                visible: root.viewKind === "rows"
                 clip: true
-                // Unread, not merely hidden, on the grids' and an app view's
-                // routes: an unread model keeps its delegates alive, and
-                // _viewContentHeight above needs the idle view to measure 0.
-                model: (root._isGrid || root._isAppView) ? null : rowsModel
-                currentIndex: root._cursorIndex
+                // `model` and `currentIndex` are `_syncRows`' to set: null
+                // off this view's levels, since an attached model keeps its
+                // delegates alive and _viewContentHeight above needs the
+                // idle view to measure 0.
                 // ListView tracks the cursor through its (always present, even
                 // with no `highlight` component) highlight item, and the
                 // default `highlightMoveDuration: -1` moves that item at
@@ -2697,7 +2836,10 @@ PanelWindow {
                 displaced: MoveTransition { enabled: root._rowsAnimate }
                 move: MoveTransition { enabled: root._rowsAnimate }
 
-                WheelScroll { flickable: rowsView }
+                WheelScroll {
+                    id: rowsWheel
+                    flickable: rowsView
+                }
 
                 // The cursor (M53 D4): one fill that travels between rows on an
                 // arrow step, drawn here rather than per row so there is one of
@@ -2742,6 +2884,7 @@ PanelWindow {
 
                     modelData: entry ? entry.row : root._blankRow
                     current: root._cursorIndex === index
+                    hoverLive: pointerGate.live
                     checkedState: Toggles.checkedFor(node, root._stateSnapshot, root._checkedResults)
                     confirming: root._confirmPendingId === node.id
                     // A heading rides the row that opens its group, so a row
@@ -2803,12 +2946,10 @@ PanelWindow {
                 anchors.left: parent.left
                 width: root._contentWidth
                 height: root._morphRowsHeight
-                visible: root._isPickerRoute
+                visible: root._isPickerGrid
                 clip: true
-                model: root._isPickerRoute ? root._displayRows : []
                 cellWidth: root._contentWidth / root.pickerColumns
                 cellHeight: gridView.cellWidth
-                currentIndex: root._cursorIndex
                 // Same hard-jump follow as rowsView, for the same reason: held
                 // arrow keys outrun the default animated highlight move and the
                 // cursor cell ends up off-viewport.
@@ -2816,6 +2957,7 @@ PanelWindow {
 
                 // A row here is a row of thumbnails, not a text line.
                 WheelScroll {
+                    id: gridWheel
                     flickable: gridView
                     step: gridView.cellHeight
                 }
@@ -2827,7 +2969,9 @@ PanelWindow {
                 delegate: Item {
                     id: imageSlot
                     required property int index
-                    required property var modelData
+                    required property string rowId
+                    readonly property var entry: root._rowsById[imageSlot.rowId] || root._rowsPrev[imageSlot.rowId] || null
+                    readonly property string path: imageSlot.entry ? (imageSlot.entry.row.path || "") : ""
 
                     width: gridView.cellWidth
                     height: gridView.cellHeight
@@ -2841,6 +2985,7 @@ PanelWindow {
                         // thumbnail covers the cell, so a fill would sit under
                         // the picture and never be seen.
                         cursor: imageSlot.index === root._cursorIndex
+                        hovered: imageCell.containsPointer && pointerGate.live
 
                         // The thumbnail is inset far enough that its square corners
                         // sit inside the cell's rounded ones, which is what lets an
@@ -2881,8 +3026,8 @@ PanelWindow {
                             // what this cell did before the cache existed: a
                             // cold cache, an install with no ffmpeg, and a
                             // format ffmpeg cannot decode all land on it.
-                            readonly property string cachedUrl: ThumbnailService.urlFor(imageSlot.modelData.path, "cover")
-                            source: thumb.cachedUrl !== "" ? thumb.cachedUrl : "file://" + imageSlot.modelData.path
+                            readonly property string cachedUrl: imageSlot.path !== "" ? ThumbnailService.urlFor(imageSlot.path, "cover") : ""
+                            source: thumb.cachedUrl !== "" ? thumb.cachedUrl : (imageSlot.path !== "" ? "file://" + imageSlot.path : "")
                             fillMode: Image.PreserveAspectCrop
                             // PreserveAspectCrop paints past its own bounds
                             // without this, over the cells beside it.
@@ -2925,16 +3070,15 @@ PanelWindow {
                 height: root._morphRowsHeight
                 visible: root._isEmojiGrid
                 clip: true
-                model: root._isEmojiGrid ? root._displayRows : []
                 cellWidth: root._contentWidth / root.emojiColumns
                 cellHeight: emojiGrid.cellWidth
-                currentIndex: root._cursorIndex
                 // Same hard-jump follow as the two views above, for the same
                 // reason: held arrow keys outrun the default animated highlight
                 // move and the cursor cell ends up off-viewport.
                 highlightMoveDuration: 0
 
                 WheelScroll {
+                    id: emojiWheel
                     flickable: emojiGrid
                     step: emojiGrid.cellHeight
                 }
@@ -2945,7 +3089,8 @@ PanelWindow {
                 delegate: Item {
                     id: emojiSlot
                     required property int index
-                    required property var modelData
+                    required property string rowId
+                    readonly property var entry: root._rowsById[emojiSlot.rowId] || root._rowsPrev[emojiSlot.rowId] || null
 
                     width: emojiGrid.cellWidth
                     height: emojiGrid.cellHeight
@@ -2960,6 +3105,7 @@ PanelWindow {
                         // ring, the same two states every other cell draws.
                         ghost: true
                         cursor: emojiSlot.index === root._cursorIndex
+                        hovered: emojiCell.containsPointer && pointerGate.live
                         interactive: true
                         // Same gate as the row list: filtering re-renders cells
                         // under a parked pointer, and Qt delivers that as a
@@ -2978,7 +3124,7 @@ PanelWindow {
                         // picture to pick from (read off menu-emoji.png).
                         Text {
                             anchors.centerIn: parent
-                            text: emojiSlot.modelData.icon
+                            text: emojiSlot.entry ? emojiSlot.entry.row.icon : ""
                             color: Core.Theme.color.foreground
                             font.family: Core.Theme.fontFamilyMono
                             font.pixelSize: Core.Theme.fontSize.display
@@ -3005,9 +3151,10 @@ PanelWindow {
                 width: root._contentWidth
                 height: root._morphRowsHeight
                 visible: root._isAppGrid
-                rows: root._isAppGrid ? root._displayRows : []
+                rowsById: root._rowsById
+                rowsPrev: root._rowsPrev
+                blankRow: root._blankRow
                 appCount: root._appGridCount
-                cursor: root._cursorIndex
                 hoverGate: pointerGate
                 stateSnapshot: root._stateSnapshot
                 checkedResults: root._checkedResults
